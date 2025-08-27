@@ -3,7 +3,7 @@ import { makeStyles } from "@material-ui/core/styles";
 import { PlayArrow, Pause } from "@material-ui/icons";
 import React, { useRef, useEffect, useState } from "react";
 import ContactAvatar from "../ContactAvatar";
-import api from "../../services/api";
+import { openApi } from "../../services/api";
 
 const LS_NAME = 'audioMessageRate';
 
@@ -181,7 +181,7 @@ const AudioModal = ({ url, contact, fromMe }) => {
     const src = isIOS ? (url || "").replace(".ogg", ".mp3") : url;
     const load = async () => {
       try {
-        const { data, headers } = await api.get(src, { responseType: "arraybuffer" });
+        const { data } = await openApi.get(src, { responseType: "arraybuffer", withCredentials: false });
         // Decodifica sem depender de gesto do usuário
         const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
         let buffer;
