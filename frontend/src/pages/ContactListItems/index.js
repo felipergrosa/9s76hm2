@@ -32,6 +32,7 @@ import useContactLists from "../../hooks/useContactLists";
 import { Chip, Typography, Tooltip } from "@material-ui/core";
 import ContactAvatar from "../../components/ContactAvatar";
 import { Search, List as ListIcon, Upload as UploadIcon, Filter as FilterIcon, Plus as PlusIcon, Edit, Trash2, CheckCircle, Ban, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import LoadingOverlay from "../../components/LoadingOverlay";
 
 import planilhaExemplo from "../../assets/planilha.xlsx";
 import ForbiddenPage from "../../components/ForbiddenPage";
@@ -553,6 +554,7 @@ const ContactListItems = () => {
   return (
     <MainContainer useWindowScroll>
       <div className="w-full p-4 md:p-6 lg:p-8 bg-gray-50 dark:bg-gray-900 overflow-x-hidden">
+        <LoadingOverlay open={loading} message="Aguarde..." />
         <ContactListItemModal
           open={contactListItemModalOpen}
           onClose={handleCloseContactListItemModal}

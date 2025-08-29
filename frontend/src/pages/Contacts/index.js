@@ -48,6 +48,7 @@ import { TagsFilter } from "../../components/TagsFilter";
 import PopupState, { bindTrigger, bindMenu } from "material-ui-popup-state";
 import formatSerializedId from '../../utils/formatSerializedId';
 import { v4 as uuidv4 } from "uuid";
+import LoadingOverlay from "../../components/LoadingOverlay";
 
 import ContactImportWpModal from "../../components/ContactImportWpModal";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
@@ -265,7 +266,6 @@ const Contacts = () => {
                                     dispatch({ type: "SET_CONTACTS", payload: data.contacts });
                                     setHasMore(data.hasMore);
                                     setTotalContacts(typeof data.count === 'number' ? data.count : (data.total || data.contacts.length));
-                                    setLoading(false);
 
                                     // Atualizar o estado do "Selecionar Tudo" baseado nos contatos carregados e selecionados
                                     const allCurrentContactIds = data.contacts.map(c => c.id);
@@ -275,6 +275,8 @@ const Contacts = () => {
 
                                 } catch (err) {
                                     toastError(err);
+                                } finally {
+                                    setLoading(false);
                                 }
                             };
                             fetchContacts();
@@ -603,6 +605,7 @@ const Contacts = () => {
     return (
         <MainContainer useWindowScroll>
 <div className="w-full p-4 md:p-6 lg:p-8 bg-gray-50 dark:bg-gray-900 overflow-x-hidden">
+                <LoadingOverlay open={loading} message="Aguarde..." />
                 <NewTicketModal
                     modalOpen={newTicketModalOpen}
                     initialContact={contactTicket}

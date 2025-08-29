@@ -165,9 +165,10 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		<div className={classes.root}>
 			<Dialog open={open} onClose={handleClose} maxWidth="sm" scroll="paper">
 				<DialogTitle id="form-dialog-title">
-					{contactId
-						? `${i18n.t("contactModal.title.edit")}`
-						: `${i18n.t("contactModal.title.add")}`}
+				{i18n.t("contactModal.form.mainInfo")} > &nbsp; 
+									{contactId
+										? `${i18n.t("contactModal.title.edit")}`
+										: `${i18n.t("contactModal.title.add")}`}
 				</DialogTitle>
 				<Formik
 					initialValues={contact}
@@ -179,13 +180,11 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 							actions.setSubmitting(false);
 						}, 400);
 					}}
+					
 				>
 					{({ values, errors, touched, isSubmitting, setFieldValue }) => (
 						<Form>
 							<DialogContent dividers>
-								<Typography variant="subtitle1" gutterBottom>
-									{i18n.t("contactModal.form.mainInfo")}
-								</Typography>
 								<Grid container spacing={2}>
 									<Grid item xs={12}>
 										<Field
@@ -386,22 +385,30 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											as={TextField}
 											label="Segmento de Mercado"
 											name="segment"
+											InputLabelProps={{
+												shrink: true,
+											}}
 											variant="outlined"
 											margin="dense"
 											fullWidth
 										/>
 									</Grid>
-								</Grid>
-								{contact?.id ? (
-									<>
-										<Typography variant="subtitle1" gutterBottom style={{ marginTop: 12 }}>
-											Tags
-										</Typography>
-										<div style={{ marginBottom: 8 }}>
+									<Grid item xs={12} md={6}>
+										{contact?.id ? (
 											<TagsContainer contact={contact} />
-										</div>
-									</>
-								) : null}
+										) : (
+											<TextField
+												label="Tags"
+												variant="outlined"
+												margin="dense"
+												fullWidth
+												disabled
+												InputLabelProps={{ shrink: true }}
+												placeholder="Salve o contato para gerenciar tags"
+											/>
+										)}
+									</Grid>
+								</Grid>
 								<Typography
 									style={{ marginBottom: 8, marginTop: 12 }}
 									variant="subtitle1"

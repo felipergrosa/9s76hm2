@@ -470,8 +470,8 @@ const messages = {
           extraName: "Nome do campo",
           extraValue: "Valor",
           chatBotContact: "Desabilitar chatbot",
-          termsLGDP: "Termos LGPD aceito em:",
-          whatsapp: "Conexão Origem: "
+          termsLGDP: "Termos LGPD:",
+          whatsapp: "Conexão: "
         },
         buttons: {
           addExtraInfo: "Adicionar informação",

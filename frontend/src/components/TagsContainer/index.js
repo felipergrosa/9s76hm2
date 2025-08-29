@@ -1,4 +1,4 @@
-import { Chip, Paper, TextField } from "@material-ui/core";
+import { Chip, TextField, Checkbox } from "@material-ui/core";
 import Autocomplete from "@material-ui/lab/Autocomplete";
 import React, { useEffect, useRef, useState } from "react";
 import { isArray, isString } from "lodash";
@@ -96,48 +96,102 @@ export function TagsContainer({ contact }) {
     }
 
     return (
-        <Paper style={{ padding: 2 }}>
-            <Autocomplete
-                multiple
-                size="small"
-                options={tags}
-                value={selecteds}
-                freeSolo
-                onChange={(e, v, r) => onChange(v, r)}
-                getOptionLabel={(option) => option.name}
-                renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                        <Chip
-                            variant="outlined"
-                            style={{
-                                backgroundColor: option.color || '#eee',
-                                color: "#FFF",
-                                marginRight: 1,
-                                padding: 1,
-                                fontWeight: 'bold',
-                                paddingLeft: 5,
-                                paddingRight: 5,
-                                borderRadius: 3,
-                                fontSize: "0.8em",
-                                whiteSpace: "nowrap"
-                            }}
-                            label={option.name}
-                            {...getTagProps({ index })}
-                            size="small"
-                        />
-                    ))
-                }
-                renderInput={(params) => (
-                    <TextField {...params} variant="outlined" placeholder="Tags" />
-                )}
-                PaperComponent={({ children }) => (
-                    <Paper
-                        style={{ width: 400, marginLeft: 6 }}
-                    >
-                        {children}
-                    </Paper>
-                )}
-            />
-        </Paper>
+        <Autocomplete
+            multiple
+            size="small"
+            options={tags}
+            value={selecteds}
+            freeSolo
+            fullWidth
+            style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
+            disableCloseOnSelect
+            onChange={(e, v, r) => onChange(v, r)}
+            getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
+            getOptionSelected={(option, value) => {
+                const optLabel = typeof option === 'string' ? option : option?.name;
+                const valLabel = typeof value === 'string' ? value : value?.name;
+                if (option?.id && value?.id) return option.id === value.id;
+                return optLabel === valLabel;
+            }}
+            renderOption={(option, { selected }) => (
+                <>
+                    <Checkbox
+                        color="primary"
+                        checked={selected}
+                        style={{ marginRight: 8 }}
+                    />
+                    {typeof option === 'string' ? option : option.name}
+                </>
+            )}
+            renderTags={(value, getTagProps) => {
+                const shown = value.slice(0, 2);
+                const more = value.length - shown.length;
+                return (
+                    <div style={{ display: 'flex', flexWrap: 'nowrap', overflow: 'hidden', alignItems: 'center', maxWidth: '100%', flexShrink: 1 }}>
+                        {shown.map((option, index) => (
+                            <Chip
+                                key={`tag-${index}`}
+                                variant="outlined"
+                                style={{
+                                    backgroundColor: option.color || '#eee',
+                                    color: option.color ? '#FFF' : '#333',
+                                    marginRight: 2,                                    
+                                    fontWeight: 600,
+                                    borderRadius: 9999,
+                                    fontSize: "0.75rem",
+                                    whiteSpace: "nowrap",
+                                    height: 24,
+                                }}
+                                label={(
+                                    <span style={{ display: 'block', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {typeof option === 'string' ? option : option.name}
+                                    </span>
+                                )}
+                                {...getTagProps({ index })}
+                                size="small"
+                            />
+                        ))}
+                        {more > 0 && (
+                            <Chip
+                                variant="outlined"
+                                size="small"
+                                label="..."
+                                style={{ borderRadius: 9999, height: 24, padding: '0 8px', marginTop: 0, marginBottom: 0 }}
+                                tabIndex={-1}
+                            />
+                        )}
+                    </div>
+                );
+            }}
+            renderInput={(params) => (
+                <TextField
+                    {...params}
+                    variant="outlined"
+                    label="Tags"
+                    InputLabelProps={{ shrink: true }}
+                    margin="dense"
+                    fullWidth
+                    InputProps={{
+                        ...params.InputProps,
+                        style: {
+                            ...(params.InputProps?.style || {}),
+                            height: 40,
+                            paddingTop: 4,
+                            paddingBottom: 4,
+                            alignItems: 'center',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            flexWrap: 'nowrap',
+                            whiteSpace: 'nowrap',
+                            boxSizing: 'border-box',
+                        }
+                    }}
+                    inputProps={{
+                        ...params.inputProps,
+                        style: { ...(params.inputProps?.style || {}), padding: 0, minWidth: 8, flex: '0 0 8px' }
+                    }}
+                />
+            )}
+        />
     )
 }
