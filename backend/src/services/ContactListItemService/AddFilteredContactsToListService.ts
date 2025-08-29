@@ -9,6 +9,7 @@ interface FilterParams {
   channel?: string[];
   representativeCode?: string[];
   city?: string[];
+  segment?: string[];
   situation?: string[];
   foundationMonths?: number[]; // 1-12
   minCreditLimit?: string;
@@ -50,6 +51,55 @@ const AddFilteredContactsToListService = async ({
     logger.info(`Iniciando adição de contatos filtrados à lista ${contactListId}`);
     logger.info(`Filtros recebidos: ${JSON.stringify(filters)}`);
 
+    // Normalização defensiva dos filtros para aceitar string, array e JSON string
+    const normalizeStringArray = (val: any): string[] => {
+      if (val == null) return [];
+      if (Array.isArray(val)) {
+        return val
+          .map(v => (v == null ? "" : String(v).trim()))
+          .filter(Boolean);
+      }
+      if (typeof val === "string") {
+        const trimmed = val.trim();
+        if (!trimmed) return [];
+        // Tenta JSON.parse se vier como '["A","B"]'
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            return parsed
+              .map(v => (v == null ? "" : String(v).trim()))
+              .filter(Boolean);
+          }
+        } catch { /* ignore */ }
+        // CSV simples "A,B"
+        if (trimmed.includes(",")) {
+          return trimmed.split(",").map(s => s.trim()).filter(Boolean);
+        }
+        return [trimmed];
+      }
+      return [];
+    };
+
+    // Aplica normalização nos principais filtros multi-valor
+    filters.channel = normalizeStringArray((filters as any).channel);
+    filters.representativeCode = normalizeStringArray((filters as any).representativeCode);
+    filters.city = normalizeStringArray((filters as any).city);
+    filters.segment = normalizeStringArray((filters as any).segment);
+    filters.situation = normalizeStringArray((filters as any).situation);
+
+    // tags: garantir array numérico
+    if ((filters as any).tags) {
+      try {
+        (filters as any).tags = (Array.isArray((filters as any).tags) ? (filters as any).tags : [ (filters as any).tags ])
+          .map((t: any) => typeof t === "string" ? parseInt(t, 10) : t)
+          .filter((t: any) => Number.isInteger(t));
+      } catch (e) {
+        logger.warn(`Falha ao normalizar tags`, { tags: (filters as any).tags, error: (e as any)?.message });
+      }
+    }
+
+    logger.info(`Filtros após normalização: ${JSON.stringify(filters)}`);
+
     // Construir condições de filtro para a consulta principal
     const whereConditions: any[] = [{ companyId }];
 
@@ -66,6 +116,11 @@ const AddFilteredContactsToListService = async ({
     // Filtro de cidade
     if (filters.city && filters.city.length > 0) {
       whereConditions.push({ city: { [Op.in]: filters.city } });
+    }
+
+    // Filtro de segmento
+    if (filters.segment && filters.segment.length > 0) {
+      whereConditions.push({ segment: { [Op.in]: filters.segment } });
     }
 
     // Filtro de situação
@@ -282,8 +337,31 @@ const AddFilteredContactsToListService = async ({
             newItem.number = formattedNumber;
           }
           await newItem.save();
-        } catch (e) {
-          logger.error(`Número de contato inválido: ${newItem.number}`);
+        } catch (e: any) {
+          const msg = e?.message || "";
+          if (
+            msg === "invalidNumber" ||
+            msg === "ERR_WAPP_INVALID_CONTACT" ||
+            /não está cadastrado/i.test(msg)
+          ) {
+            newItem.isWhatsappValid = false as any;
+            await newItem.save();
+            logger.info(`[AddFilteredContacts] número inválido`, {
+              number: newItem.number,
+              contactListId,
+              companyId
+            });
+          } else {
+            // Falha transitória (ex.: sessão/token inválido). Não marcar como falso.
+            newItem.isWhatsappValid = null as any;
+            await newItem.save();
+            logger.warn(`[AddFilteredContacts] falha ao validar número no WhatsApp; mantendo isWhatsappValid=null`, {
+              number: newItem.number,
+              contactListId,
+              companyId,
+              error: msg
+            });
+          }
         }
 
         // Atualiza caches locais para evitar nova inserção duplicada no mesmo loop

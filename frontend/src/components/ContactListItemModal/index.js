@@ -98,7 +98,8 @@ const ContactListItemModal = ({
         });
       }
 
-      if (!contactId) return;
+      // Só buscar quando o modal estiver aberto e houver contactId (edição de item)
+      if (!open || !contactId) return;
 
       try {
         const { data } = await api.get(`/contact-list-items/${contactId}`);

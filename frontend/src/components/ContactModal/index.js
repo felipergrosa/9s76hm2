@@ -271,6 +271,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 																label="CPF/CNPJ"
 																variant="outlined"
 																margin="dense"
+															
 																fullWidth
 																error={touched.cpfCnpj && Boolean(errors.cpfCnpj)}
 																helperText={touched.cpfCnpj && errors.cpfCnpj}
@@ -288,6 +289,9 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											name="representativeCode"
 											variant="outlined"
 											margin="dense"
+											InputLabelProps={{
+												shrink: true,
+											}}
 											fullWidth
 										/>
 									</Grid>
@@ -298,6 +302,9 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											name="city"
 											variant="outlined"
 											margin="dense"
+											InputLabelProps={{
+												shrink: true,
+											}}
 											fullWidth
 										/>
 									</Grid>
@@ -308,6 +315,9 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											name="instagram"
 											variant="outlined"
 											margin="dense"
+											InputLabelProps={{
+												shrink: true,
+											}}
 											fullWidth
 										/>
 									</Grid>
@@ -363,6 +373,9 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											as={TextField}
 											label="Limite de Crédito"
 											name="creditLimit"
+											InputLabelProps={{
+												shrink: true,
+											}}
 											variant="outlined"
 											margin="dense"
 											fullWidth
@@ -371,7 +384,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 									<Grid item xs={12} md={6}>
 										<Field
 											as={TextField}
-											label="Segmento"
+											label="Segmento de Mercado"
 											name="segment"
 											variant="outlined"
 											margin="dense"

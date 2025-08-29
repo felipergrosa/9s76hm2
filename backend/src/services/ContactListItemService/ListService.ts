@@ -1,6 +1,7 @@
 import { Sequelize, Op } from "sequelize";
 import ContactListItem from "../../models/ContactListItem";
 import Contact from "../../models/Contact";
+import Tag from "../../models/Tag";
 
 interface Request {
   searchParam?: string;
@@ -48,8 +49,28 @@ const ListService = async ({
       {
         model: Contact,
         as: "contact",
-        attributes: ["id", "name", "number", "email", "profilePicUrl"],
-        required: false
+        attributes: [
+          "id",
+          "name",
+          "number",
+          "email",
+          "profilePicUrl",
+          "city",
+          "segment",
+          "situation",
+          "creditLimit",
+          "channel",
+          "representativeCode"
+        ],
+        required: false,
+        include: [
+          {
+            model: Tag,
+            as: "tags",
+            attributes: ["id", "name", "color"],
+            through: { attributes: [] }
+          }
+        ]
       }
     ]
   });

@@ -3,6 +3,8 @@ import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
 import { head } from "lodash";
 
+import { Op } from "sequelize";
+
 // Interface estendida para incluir o usuário autenticado
 interface AuthenticatedRequest extends Request {
   user: {
@@ -57,7 +59,7 @@ type IndexQuery = {
   limit?: string;
   orderBy?: string;
   order?: string;
-  segment?: string;
+  segment?: string | string[];
 };
 
 type IndexGetContactQuery = {
@@ -175,6 +177,38 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     tagsIds = JSON.parse(tagIdsStringified);
   }
 
+  // Parse robusto do parâmetro 'segment' (aceita string, array, JSON ou CSV)
+  const parseSegment = (q: any): string | string[] | undefined => {
+    const pick = (q && (q as any).segment !== undefined) ? (q as any).segment : (q && (q as any)["segment[]"]);
+    const raw = pick;
+    const norm = (v: any) => typeof v === "string" ? v.trim() : v;
+    if (Array.isArray(raw)) {
+      const arr = raw.map(norm).filter((s: any) => typeof s === 'string' ? s !== '' : !!s);
+      return arr.length > 0 ? arr : undefined;
+    }
+    if (typeof raw === 'string') {
+      const s = raw.trim();
+      if (!s) return undefined;
+      if (s.startsWith('[') && s.endsWith(']')) {
+        try {
+          const arr = JSON.parse(s);
+          if (Array.isArray(arr)) {
+            const clean = arr.map(norm).filter((x: any) => typeof x === 'string' ? x !== '' : !!x);
+            return clean.length > 0 ? clean : undefined;
+          }
+        } catch (_) { /* ignora */ }
+      }
+      if (s.includes(',')) {
+        const arr = s.split(',').map(t => t.trim()).filter(Boolean);
+        return arr.length > 0 ? arr : undefined;
+      }
+      return s;
+    }
+    return undefined;
+  };
+
+  const segment = parseSegment(req.query);
+
   const { contacts, count, hasMore } = await ListContactsService({
     searchParam,
     pageNumber,
@@ -186,7 +220,7 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     limit,
     orderBy,
     order,
-    segment: (req.query as IndexQuery).segment
+    segment
   });
 
   // Dispara validações em background sem bloquear a resposta
@@ -231,7 +265,40 @@ export const getContact = async (
   return res.status(200).json(contact);
 };
 
-  export const store = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+// Retorna uma lista simples de contatos (nome opcional), usada por "/contacts/list"
+export const list = async (req: Request, res: Response): Promise<Response> => {
+  const { name } = req.query as unknown as SearchContactParams;
+  const { companyId } = req.user;
+
+  const contacts = await SimpleListService({ name, companyId });
+
+  return res.json(contacts);
+};
+
+// Lista distintos segmentos para a empresa autenticada
+export const segments = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+
+  const rows = await Contact.findAll({
+    where: {
+      companyId,
+      segment: { [Op.ne]: null }
+    },
+    attributes: ["segment"],
+    raw: true
+  });
+
+  const set = new Set<string>();
+  for (const r of rows as any[]) {
+    const s = (r.segment || "").trim();
+    if (s) set.add(s);
+  }
+
+  const list = Array.from(set).sort((a, b) => a.localeCompare(b));
+  return res.json({ count: list.length, segments: list });
+};
+
+export const store = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
   const { companyId } = req.user;
   const newContact: ContactData = req.body;
 
@@ -562,21 +629,7 @@ export const bulkRemove = async (req: Request, res: Response): Promise<Response>
     return res.status(500).json({ error: "Erro interno do servidor." });
   }
 };
-
-
-export const list = async (req: Request, res: Response): Promise<Response> => {
-  const { name } = req.query as unknown as SearchContactParams;
-  const { companyId } = req.user;
-
-  const contacts = await SimpleListService({ name, companyId });
-
-  return res.json(contacts);
-};
-
-export const toggleAcceptAudio = async (
-  req: Request,
-  res: Response
-): Promise<Response> => {
+export const toggleAcceptAudio = async (req: Request, res: Response): Promise<Response> => {
   var { contactId } = req.params;
   const { companyId } = req.user;
   const contact = await ToggleAcceptAudioContactService({ contactId });

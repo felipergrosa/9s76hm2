@@ -135,6 +135,20 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
     }
   }, [open, savedFilter, tags]);
 
+  // Garante que segmentos do savedFilter apareçam no Autocomplete mesmo que não existam na API
+  useEffect(() => {
+    if (open && savedFilter && Array.isArray(savedFilter.segment) && savedFilter.segment.length) {
+      setSegments(prev => {
+        const set = new Set(prev);
+        savedFilter.segment.forEach(s => {
+          const v = (s == null ? "" : String(s).trim());
+          if (v) set.add(v);
+        });
+        return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+      });
+    }
+  }, [open, savedFilter]);
+
   const loadChannels = async () => {
     try {
       // Pagina por todos os contatos para coletar todos os canais
@@ -183,9 +197,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
       }
       if (!companyId) return;
 
-      const { data } = await api.get("/contacts/segments", {
-        params: { companyId }
-      });
+      const { data } = await api.get("/contacts/segments");
       const list = Array.isArray(data) ? data : (Array.isArray(data?.segments) ? data.segments : []);
       const normalized = list
         .map(s => (s == null ? "" : String(s).trim()))
@@ -596,8 +608,8 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                           <TextField
                             {...params}
                             variant="outlined"
-                            label="Segmento"
-                            placeholder="Segmento"
+                            label="Segmento de Mercado"
+                            placeholder="Segmento de Mercado"
                             fullWidth
                             margin="dense"
                           />

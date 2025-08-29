@@ -12,6 +12,7 @@ import SyncContactListBySavedFilterService from "../services/ContactListService/
 import { head } from "lodash";
 
 import ContactList from "../models/ContactList";
+import ContactListItem from "../models/ContactListItem";
 
 import AppError from "../errors/AppError";
 import { ImportContacts } from "../services/ContactListService/ImportContacts";
@@ -182,4 +183,29 @@ export const upload = async (req: Request, res: Response) => {
     });
 
   return res.status(200).json(response);
+};
+
+export const clearItems = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+  const { companyId } = req.user;
+
+  await ContactListItem.destroy({
+    where: { contactListId: Number(id), companyId: Number(companyId) }
+  });
+
+  const io = getIO();
+  io.of(String(companyId))
+    .emit(`company-${companyId}-ContactListItem`, {
+      action: "reload"
+    });
+  // Emitir também no canal específico da lista para compatibilidade com outras operações
+  io.of(String(companyId))
+    .emit(`company-${companyId}-ContactListItem-${Number(id)}`, {
+      action: "reload"
+    });
+
+  return res.status(200).json({ message: "Contact list items cleared" });
 };

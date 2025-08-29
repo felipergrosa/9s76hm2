@@ -21,7 +21,7 @@ interface Request {
   limit?: string;
   orderBy?: string;
   order?: string;
-  segment?: string;
+  segment?: string | string[];
 }
 
 interface Response {
@@ -99,6 +99,13 @@ const ListContactsService = async ({
             "LIKE",
             `%${sanitizedSearchParam}%`
           )
+        },
+        {
+          segment: where(
+            fn("LOWER", fn("unaccent", col("Contact.segment"))),
+            "LIKE",
+            `%${sanitizedSearchParam}%`
+          )
         }
       ]
     };
@@ -110,14 +117,23 @@ const ListContactsService = async ({
   };
 
   if (typeof segment !== "undefined") {
-    const seg = typeof segment === 'string' ? segment.trim() : segment;
-    if (seg && seg !== "") {
+    const normalize = (v: any) => (typeof v === "string" ? v.trim() : v);
+    const segNorm = Array.isArray(segment)
+      ? segment.map(s => normalize(s)).filter(Boolean)
+      : normalize(segment);
+
+    if (Array.isArray(segNorm) && segNorm.length > 0) {
       whereCondition = {
         ...whereCondition,
-        segment: seg
+        segment: { [Op.in]: segNorm }
+      };
+    } else if (typeof segNorm === "string" && segNorm !== "") {
+      whereCondition = {
+        ...whereCondition,
+        segment: segNorm
       };
     } else {
-      // quando vier vazio, não filtra por segmento
+      // vazio/indefinido: não aplica filtro de segmento
     }
   }
 

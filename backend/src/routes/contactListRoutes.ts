@@ -17,5 +17,10 @@ routes.post("/contact-lists/:id/upload",isAuth,upload.array("file"),ContactListC
 routes.post("/contact-lists/:id/sync", isAuth, ContactListController.syncNow);
 routes.put("/contact-lists/:id", isAuth, ContactListController.update);
 routes.delete("/contact-lists/:id", isAuth, ContactListController.remove);
+routes.delete(
+  "/contact-lists/:id/items",
+  isAuth,
+  ContactListController.clearItems
+);
 
 export default routes;

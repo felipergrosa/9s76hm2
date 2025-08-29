@@ -4,6 +4,7 @@ import React, {
   useReducer,
   useContext,
   useRef,
+  useMemo,
 } from "react";
 
 import { toast } from "react-toastify";
@@ -17,6 +18,7 @@ import Button from "@material-ui/core/Button";
 import api from "../../services/api";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 import ContactListItemModal from "../../components/ContactListItemModal";
+import ContactModal from "../../components/ContactModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import AddFilteredContactsModal from "../../components/AddFilteredContactsModal";
 
@@ -29,7 +31,7 @@ import { Can } from "../../components/Can";
 import useContactLists from "../../hooks/useContactLists";
 import { Chip, Typography, Tooltip } from "@material-ui/core";
 import ContactAvatar from "../../components/ContactAvatar";
-import { Search, List as ListIcon, Upload as UploadIcon, Filter as FilterIcon, Plus as PlusIcon, Edit, Trash2, CheckCircle, Ban } from "lucide-react";
+import { Search, List as ListIcon, Upload as UploadIcon, Filter as FilterIcon, Plus as PlusIcon, Edit, Trash2, CheckCircle, Ban, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
 import planilhaExemplo from "../../assets/planilha.xlsx";
 import ForbiddenPage from "../../components/ForbiddenPage";
@@ -46,6 +48,10 @@ const CustomTooltipProps = {
 };
 
 const reducer = (state, action) => {
+  if (action.type === "SET_CONTACTS") {
+    // Substitui completamente a lista (paginação por página)
+    return Array.isArray(action.payload) ? [...action.payload] : [];
+  }
   if (action.type === "LOAD_CONTACTS") {
     const incoming = Array.isArray(action.payload)
       ? action.payload
@@ -113,14 +119,21 @@ const ContactListItems = () => {
   const [selectedContactId, setSelectedContactId] = useState(null);
   const [contactListItemModalOpen, setContactListItemModalOpen] =
     useState(false);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
   const [deletingContact, setDeletingContact] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmClearListOpen, setConfirmClearListOpen] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [contactList, setContactList] = useState({});
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [allTags, setAllTags] = useState([]);
   const fileUploadRef = useRef(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [totalContacts, setTotalContacts] = useState(0);
+  const [contactsPerPage, setContactsPerPage] = useState(20); // espelha backend (ListService.limit)
+  // Ordenação
+  const [sortField, setSortField] = useState("name");
+  const [sortDirection, setSortDirection] = useState("asc"); // 'asc' | 'desc'
   
 
   const { findById: findContactList } = useContactLists();
@@ -166,8 +179,10 @@ const ContactListItems = () => {
           const { data } = await api.get(`contact-list-items`, {
             params: { searchParam, pageNumber, contactListId },
           });
-          dispatch({ type: "LOAD_CONTACTS", payload: data.contacts });
+          // Substitui a lista pelo resultado da página atual
+          dispatch({ type: "SET_CONTACTS", payload: data.contacts });
           setHasMore(data.hasMore);
+          setTotalContacts(typeof data.count === 'number' ? data.count : (data.total || data.contacts.length || 0));
         } catch (err) {
           toastError(err);
         } finally {
@@ -175,9 +190,21 @@ const ContactListItems = () => {
         }
       };
       fetchContacts();
-    }, 500);
+    }, 400);
     return () => clearTimeout(delayDebounceFn);
   }, [searchParam, pageNumber, contactListId, refreshKey]);
+
+  // Persistência da ordenação por usuário/lista
+  useEffect(() => {
+    const key = `contactListItemsSort:${user?.id || "anon"}:${contactListId}`;
+    try {
+      const saved = JSON.parse(localStorage.getItem(key));
+      if (saved && saved.field) {
+        setSortField(saved.field);
+        setSortDirection(saved.direction === "desc" ? "desc" : "asc");
+      }
+    } catch (_) { /* ignora */ }
+  }, [user?.id, contactListId]);
 
 
   useEffect(() => {
@@ -201,6 +228,8 @@ const ContactListItems = () => {
       }
     }
     socket.on(`company-${companyId}-ContactListItem`, onCompanyContactLists);
+    // Canal específico da lista (usado por upload/clear)
+    socket.on(`company-${companyId}-ContactListItem-${contactListId}`, onCompanyContactLists);
 
     // Atualiza metadados da lista (ex.: savedFilter) quando houver atualizações na ContactList
     const onCompanyContactList = (data) => {
@@ -212,6 +241,7 @@ const ContactListItems = () => {
 
     return () => {
       socket.off(`company-${companyId}-ContactListItem`, onCompanyContactLists);
+      socket.off(`company-${companyId}-ContactListItem-${contactListId}`, onCompanyContactLists);
       socket.off(`company-${companyId}-ContactList`, onCompanyContactList);
     };
   }, [contactListId]);
@@ -230,9 +260,20 @@ const ContactListItems = () => {
     setContactListItemModalOpen(false);
   };
 
+  const handleCloseContactModal = () => {
+    setSelectedContactId(null);
+    setContactModalOpen(false);
+    // Recarregar lista para refletir alterações do contato
+    dispatch({ type: "RESET" });
+    setSearchParam("");
+    setPageNumber(1);
+    setRefreshKey((k) => k + 1);
+  };
+
   const hadleEditContact = (contactId) => {
+    if (!contactId) return;
     setSelectedContactId(contactId);
-    setContactListItemModalOpen(true);
+    setContactModalOpen(true);
   };
 
   const handleDeleteContact = async (contactId) => {
@@ -246,6 +287,22 @@ const ContactListItems = () => {
     setDeletingContact(null);
     setSearchParam("");
     setPageNumber(1);
+  };
+
+  const handleClearListItems = async () => {
+    try {
+      await api.delete(`/contact-lists/${contactListId}/items`);
+      // Resetar e recarregar a lista
+      dispatch({ type: "RESET" });
+      setSearchParam("");
+      setPageNumber(1);
+      setRefreshKey((k) => k + 1);
+      toast.success("Itens da lista removidos.");
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setConfirmClearListOpen(false);
+    }
   };
 
   const handleImportContacts = async () => {
@@ -278,21 +335,102 @@ const ContactListItems = () => {
     setFilterModalOpen(false);
   };
 
-  const loadMore = () => {
-    setPageNumber((prevState) => prevState + 1);
+  // Persistência de ordenação (por usuário/lista)
+  const persistSort = (field, direction) => {
+    const key = `contactListItemsSort:${user?.id || "anon"}:${contactListId}`;
+    try {
+      localStorage.setItem(key, JSON.stringify({ field, direction }));
+    } catch (_) { /* ignora */ }
   };
 
-  useEffect(() => {
-    const handleWindowScroll = () => {
-      if (loading || !hasMore) return;
-      const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
-      if (scrollHeight - (scrollTop + clientHeight) < 100) {
-        loadMore();
+  // Handler de ordenação
+  const handleSort = (field) => {
+    setSortField((prevField) => {
+      const nextField = field;
+      setSortDirection((prevDir) => {
+        const nextDir = prevField === field ? (prevDir === "asc" ? "desc" : "asc") : "asc";
+        persistSort(nextField, nextDir);
+        setPageNumber(1);
+        return nextDir;
+      });
+      return nextField;
+    });
+  };
+
+  // Ordenação client-side (por página)
+  const sortedContacts = useMemo(() => {
+    const normalize = (v) => {
+      if (v === null || v === undefined) return "";
+      if (typeof v === "string") return v.toLowerCase();
+      return v;
+    };
+    const getFieldValue = (c) => {
+      switch (sortField) {
+        case "name":
+          return c.name || (c.contact && c.contact.name) || "";
+        case "number":
+          return c.number || (c.contact && c.contact.number) || "";
+        case "email":
+          return c.email || (c.contact && c.contact.email) || "";
+        case "city":
+          return (c.contact && c.contact.city) || "";
+        case "segment":
+          return (c.contact && c.contact.segment) || "";
+        case "situation":
+          return (c.contact && c.contact.situation) || "";
+        case "creditLimit":
+          return (c.contact && c.contact.creditLimit) ?? 0;
+        case "tags":
+          return Array.isArray(c.contact && c.contact.tags) ? (c.contact.tags || []).length : 0;
+        default:
+          return c.name || (c.contact && c.contact.name) || "";
       }
     };
-    window.addEventListener("scroll", handleWindowScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleWindowScroll);
-  }, [loading, hasMore]);
+    const cmp = (a, b) => {
+      const va = normalize(getFieldValue(a));
+      const vb = normalize(getFieldValue(b));
+      if (typeof va === "number" && typeof vb === "number") {
+        return va - vb;
+      }
+      return String(va).localeCompare(String(vb), "pt-BR", { sensitivity: "base" });
+    };
+    const sorted = [...contacts].sort(cmp);
+    return sortDirection === "desc" ? sorted.reverse() : sorted;
+  }, [contacts, sortField, sortDirection]);
+
+  // Paginação fixa (sem infinite scroll), espelhando /contatos
+  const handlePageChange = (page) => {
+    const pages = totalContacts === 0 ? 1 : Math.ceil(totalContacts / contactsPerPage);
+    if (page >= 1 && page <= pages) {
+      setPageNumber(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+  const totalPages = totalContacts === 0 ? 1 : Math.ceil(totalContacts / contactsPerPage);
+  const renderPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 3) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1, 2, 3, "...");
+    }
+    return pages.map((page, index) => (
+      <li key={index}>
+        {page === "..." ? (
+          <span className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 dark:bg-gray-800 dark:border-gray-700">...</span>
+        ) : (
+          <button
+            onClick={() => handlePageChange(page)}
+            className={`flex items-center justify-center px-3 h-8 leading-tight border ${page === pageNumber
+              ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
+              : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"}`}
+          >
+            {page}
+          </button>
+        )}
+      </li>
+    ));
+  };
 
   const goToContactLists = () => {
     history.push("/contact-lists");
@@ -326,6 +464,8 @@ const ContactListItems = () => {
     if (Array.isArray(f.channel) && f.channel.length) parts.push({ label: 'Canal', values: f.channel });
     if (Array.isArray(f.representativeCode) && f.representativeCode.length) parts.push({ label: 'Representante', values: f.representativeCode });
     if (Array.isArray(f.city) && f.city.length) parts.push({ label: 'Cidade', values: f.city });
+    const segmentValues = Array.isArray(f.segment) ? f.segment : (typeof f.segment === 'string' && f.segment ? [f.segment] : []);
+    if (segmentValues.length) parts.push({ label: 'Segmento', values: segmentValues });
     if (Array.isArray(f.situation) && f.situation.length) parts.push({ label: 'Situação', values: f.situation });
     if (Array.isArray(f.foundationMonths) && f.foundationMonths.length) parts.push({ label: 'Fundação', values: f.foundationMonths.map(m => monthsPT[m-1]).filter(Boolean) });
     if (f.minCreditLimit || f.maxCreditLimit) {
@@ -343,7 +483,12 @@ const ContactListItems = () => {
         await api.put(`/contact-lists/${contactListId}`, { savedFilter: null });
         const updated = await findContactList(contactListId);
         setContactList(updated);
-        toast.success('Autoatualização desativada.');
+        // Recarregar lista sem filtro salvo
+        dispatch({ type: "RESET" });
+        setSearchParam("");
+        setPageNumber(1);
+        setRefreshKey(k => k + 1);
+        toast.success('Filtro salvo limpo.');
       } catch (err) {
         toastError(err);
       }
@@ -384,11 +529,20 @@ const ContactListItems = () => {
           ))}
           <Chip size="small" label="Auto-atualiza diariamente" color="primary" variant="outlined" />
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => setConfirmClearListOpen(true)}
+              style={{ backgroundColor: '#dc2626', color: '#fff' }}
+              startIcon={<Trash2 size={16} />}
+            >
+              Limpar itens da lista
+            </Button>
             <Button size="small" variant="outlined" color="primary" onClick={handleSyncNow}>
               Sincronizar agora
             </Button>
             <Button size="small" variant="outlined" color="secondary" onClick={handleDisableAutoUpdate}>
-              Desativar autoatualização
+              Limpar filtro
             </Button>
           </div>
         </div>
@@ -421,6 +575,27 @@ const ContactListItems = () => {
           refreshContactList();
         }}
       />
+        <ContactModal
+          open={contactModalOpen}
+          onClose={handleCloseContactModal}
+          contactId={selectedContactId}
+          onSave={() => {
+            // Em criação/edição, forçar recarregar lista
+            dispatch({ type: "RESET" });
+            setSearchParam("");
+            setPageNumber(1);
+            setRefreshKey((k) => k + 1);
+          }}
+        />
+      {/* Confirmação para limpar todos os itens da lista */}
+      <ConfirmationModal
+        title={"Limpar itens da lista"}
+        open={confirmClearListOpen}
+        onClose={setConfirmClearListOpen}
+        onConfirm={handleClearListItems}
+      >
+        Tem certeza que deseja remover todos os itens desta lista? Esta ação não pode ser desfeita.
+      </ConfirmationModal>
       <ConfirmationModal
         title={
           deletingContact
@@ -455,7 +630,7 @@ const ContactListItems = () => {
             {/* Cabeçalho */}
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
               <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">
-                {contactList.name}
+               Lista de Contatos > {contactList.name}
               </h1>
             </header>
 
@@ -476,31 +651,31 @@ const ContactListItems = () => {
               </div>
 
               {/* Ações (Direita) */}
-              <div className="w-full md:w-auto flex flex-col sm:flex-row gap-2 flex-none whitespace-nowrap items-center">
+              <div className="w-full md:w-auto flex flex-row gap-2 flex-wrap flex-none items-center justify-start">
                 <button
                   onClick={goToContactLists}
-                  className="px-4 py-2 text-sm font-semibold uppercase text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center"
+                  className="shrink-0 px-4 py-2 text-sm font-semibold uppercase text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center"
                 >
                   <ListIcon className="w-4 h-4 mr-2" />
                   {i18n.t("contactListItems.buttons.lists")}
                 </button>
                 <button
                   onClick={() => { fileUploadRef.current.value = null; fileUploadRef.current.click(); }}
-                  className="px-4 py-2 text-sm font-semibold uppercase text-white bg-pink-300 hover:bg-pink-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-400 flex items-center"
+                  className="shrink-0 px-4 py-2 text-sm font-semibold uppercase text-white bg-pink-300 hover:bg-pink-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-400 flex items-center"
                 >
                   <UploadIcon className="w-4 h-4 mr-2" />
                   {i18n.t("contactListItems.buttons.import")}
                 </button>
                 <button
                   onClick={handleOpenFilterModal}
-                  className="px-4 py-2 text-sm font-semibold uppercase text-white bg-green-600 hover:bg-green-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 flex items-center"
+                  className="shrink-0 px-4 py-2 text-sm font-semibold uppercase text-white bg-green-600 hover:bg-green-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 flex items-center"
                 >
                   <FilterIcon className="w-4 h-4 mr-2" />
                   Filtrar
                 </button>
                 <button
                   onClick={handleOpenContactListItemModal}
-                  className="px-4 py-2 text-sm font-semibold uppercase text-white bg-green-400 hover:bg-green-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 flex items-center"
+                  className="shrink-0 px-4 py-2 text-sm font-semibold uppercase text-white bg-green-400 hover:bg-green-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 flex items-center"
                 >
                   <PlusIcon className="w-4 h-4 mr-2" />
                   {i18n.t("contactListItems.buttons.add")}
@@ -526,53 +701,155 @@ const ContactListItems = () => {
 
             {/* Tabela (Desktop) */}
             <div className="hidden md:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+              <div className="overflow-x-hidden">
+                <table className="w-full table-auto text-sm text-left text-gray-500 dark:text-gray-400">
                   <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 sticky top-0 z-10">
                     <tr>
-                      <th scope="col" className="px-2 py-3 text-center">#</th>
-                      <th scope="col" className="px-6 py-3">Nome</th>
-                      <th scope="col" className="px-2 py-3 text-center">WhatsApp</th>
-                      <th scope="col" className="px-6 py-3">Email</th>
-                      <th scope="col" className="px-2 py-3 text-center">Ações</th>
+                      <th scope="col" className="w-[44px] p-2 text-center">#</th>
+                      <th scope="col" className="pl-3 pr-3 py-2 w-[220px]">
+                        <button onClick={() => handleSort('name')} className="flex items-center gap-1 select-none">
+                          Nome
+                          <span className="text-[15px] opacity-70">{sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </button>
+                      </th>
+                      <th scope="col" className="pl-3 pr-3 py-2 w-[140px] text-center">
+                        <button onClick={() => handleSort('number')} className="flex items-center justify-center gap-1 select-none w-full">
+                          WhatsApp
+                          <span className="text-[15px] opacity-70">{sortField === 'number' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </button>
+                      </th>
+                      <th scope="col" className="hidden xl:table-cell pl-3 pr-3 py-2 w-[160px]">
+                        <button onClick={() => handleSort('email')} className="flex items-center gap-1 select-none">
+                          Email
+                          <span className="text-[15px] opacity-70">{sortField === 'email' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </button>
+                      </th>
+                      <th scope="col" className="pl-3 pr-3 py-2 w-[120px]">
+                        <button onClick={() => handleSort('city')} className="flex items-center gap-1 select-none">
+                          Cidade
+                          <span className="text-[15px] opacity-70">{sortField === 'city' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </button>
+                      </th>
+                      <th scope="col" className="pl-3 pr-3 py-2 w-[120px]">
+                        <button onClick={() => handleSort('segment')} className="flex items-center gap-1 select-none">
+                          Segmento
+                          <span className="text-[15px] opacity-70">{sortField === 'segment' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </button>
+                      </th>
+                      <th scope="col" className="pl-3 pr-3 py-2 w-[110px]">
+                        <button onClick={() => handleSort('situation')} className="flex items-center gap-1 select-none">
+                          Situação
+                          <span className="text-[15px] opacity-70">{sortField === 'situation' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </button>
+                      </th>
+                      <th scope="col" className="pl-3 pr-3 py-2 w-[110px]">
+                        <button onClick={() => handleSort('creditLimit')} className="flex items-center gap-1 select-none">
+                          Limite
+                          <span className="text-[15px] opacity-70">{sortField === 'creditLimit' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </button>
+                      </th>
+                      <th scope="col" className="pl-3 pr-3 py-2 text-center w-[70px]">
+                        <button onClick={() => handleSort('tags')} className="flex items-center justify-center gap-1 w-full select-none">
+                          Tags
+                          <span className="text-[15px] opacity-70">{sortField === 'tags' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </button>
+                      </th>
+                      <th scope="col" className="px-2 py-2 text-center w-[100px]">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {contacts.map((contact) => (
+                    {sortedContacts.map((contact) => (
                       <tr key={contact.id} className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                        <td className="px-2 py-4 text-center">
+                        <td className="px-2 py-3 text-center">
                           {contact.isWhatsappValid ? (
-                            <CheckCircle className="w-5 h-5 text-green-600" />
+                            <CheckCircle className="w-4 h-4 text-green-600" />
                           ) : (
-                            <Ban className="w-5 h-5 text-gray-400" />
+                            <Ban className="w-4 h-4 text-gray-400" />
                           )}
                         </td>
-                        <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white flex items-center gap-3 max-w-[200px] overflow-hidden text-ellipsis">
+                        <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap dark:text-white flex items-center gap-2 max-w-[180px] overflow-hidden text-ellipsis">
                           <Tooltip {...CustomTooltipProps} title={contact.name}>
-                            <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 flex-shrink-0 overflow-hidden">
+                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 flex-shrink-0 overflow-hidden">
                               <ContactAvatar 
                                 contact={contact.contact || contact}
-                                className="w-10 h-10 rounded-full object-cover"
+                                className="w-8 h-8 rounded-full object-cover"
                               />
                             </div>
                           </Tooltip>
                           <Tooltip {...CustomTooltipProps} title={contact.name}>
-                            <span className="truncate" style={{maxWidth: 'calc(100% - 40px)'}}>
+                            <span className="truncate" style={{maxWidth: 'calc(100% - 32px)'}}>
                               {contact.name}
                             </span>
                           </Tooltip>
                         </td>
-                        <td className="px-2 py-4 text-center">{formatPhoneNumber(contact.number)}</td>
-                        <td className="px-6 py-4 max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap">
+                        <td className="pl-3 pr-3 py-2 text-center">
+                          <div className="flex items-center justify-center gap-1 text-[14px] leading-tight">
+                            <span className="truncate max-w-[110px]">{formatPhoneNumber(contact.number)}</span>
+                            {!!contact.isWhatsappValid ? (
+                              <Tooltip {...CustomTooltipProps} title={`WhatsApp válido${contact.validatedAt ? ` • ${new Date(contact.validatedAt).toLocaleString('pt-BR')}` : ""}`}>
+                                <CheckCircle className="w-4 h-4 text-green-700 flex-shrink-0" />
+                              </Tooltip>
+                            ) : (
+                              <Tooltip {...CustomTooltipProps} title={`WhatsApp inválido${contact.validatedAt ? ` • ${new Date(contact.validatedAt).toLocaleString('pt-BR')}` : ""}`}>
+                                <Ban className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              </Tooltip>
+                            )}
+                          </div>
+                        </td>
+                        <td className="hidden xl:table-cell px-3 py-2 max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap">
                           <Tooltip {...CustomTooltipProps} title={contact.email}>
                             <span className="truncate">{contact.email}</span>
                           </Tooltip>
                         </td>
-                        <td className="px-2 py-4 text-center">
+                        {/* Cidade */}
+                        <td className="px-3 py-2 max-w-[140px] overflow-hidden text-ellipsis whitespace-nowrap">
+                          <Tooltip {...CustomTooltipProps} title={(contact.contact && contact.contact.city) || ""}>
+                            <span className="truncate">{(contact.contact && contact.contact.city) || ""}</span>
+                          </Tooltip>
+                        </td>
+                        {/* Segmento */}
+                        <td className="px-3 py-2 max-w-[140px] overflow-hidden text-ellipsis whitespace-nowrap">
+                          <Tooltip {...CustomTooltipProps} title={(contact.contact && contact.contact.segment) || ""}>
+                            <span className="truncate">{(contact.contact && contact.contact.segment) || ""}</span>
+                          </Tooltip>
+                        </td>
+                        {/* Situação */}
+                        <td className="px-3 py-2 max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap">
+                          <Tooltip {...CustomTooltipProps} title={(contact.contact && contact.contact.situation) || ""}>
+                            <span className="truncate">{(contact.contact && contact.contact.situation) || ""}</span>
+                          </Tooltip>
+                        </td>
+                        {/* Limite de Crédito */}
+                        <td className="px-3 py-2 max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap">
+                          <Tooltip {...CustomTooltipProps} title={contact.contact && contact.contact.creditLimit ? formatCurrency(contact.contact.creditLimit) : ""}>
+                            <span className="truncate">{contact.contact && contact.contact.creditLimit ? formatCurrency(contact.contact.creditLimit) : ""}</span>
+                          </Tooltip>
+                        </td>
+                        {/* Tags - estilo pontos coloridos */}
+                        <td className="pl-3 pr-3 py-2 text-center w-[70px]">
+                          <div className="flex justify-center gap-1">
+                            {Array.isArray(contact.contact && contact.contact.tags) && (contact.contact.tags || []).slice(0, 4).map((tag) => (
+                              <Tooltip {...CustomTooltipProps} title={tag.name} key={tag.id}>
+                                <span
+                                  className="inline-block w-[8px] h-[8px] rounded-full"
+                                  style={{ backgroundColor: tag.color || '#9CA3AF' }}
+                                ></span>
+                              </Tooltip>
+                            ))}
+                            {Array.isArray(contact.contact && contact.contact.tags) && (contact.contact.tags || []).length > 4 && (
+                              <Tooltip {...CustomTooltipProps} title={(contact.contact.tags || []).slice(4).map(t => t.name).join(", ") }>
+                                <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-semibold text-white rounded-full bg-gray-400 dark:bg-gray-600 select-none">
+                                  +{(contact.contact.tags || []).length - 4}
+                                </span>
+                              </Tooltip>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 text-center">
                           <div className="flex items-center justify-center gap-2">
                             <Tooltip {...CustomTooltipProps} title="Editar">
-                              <button onClick={() => hadleEditContact(contact.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                                <Edit className="w-5 h-5" />
+                              <button onClick={() => hadleEditContact(contact?.contact?.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                                <Edit className="w-4 h-4" />
                               </button>
                             </Tooltip>
                             <Can
@@ -581,7 +858,7 @@ const ContactListItems = () => {
                               yes={() => (
                                 <Tooltip {...CustomTooltipProps} title="Excluir">
                                   <button onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
-                                    <Trash2 className="w-5 h-5" />
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 </Tooltip>
                               )}
@@ -590,52 +867,137 @@ const ContactListItems = () => {
                         </td>
                       </tr>
                     ))}
-                    {loading && <TableRowSkeleton avatar columns={5} />}
+                    {loading && <TableRowSkeleton avatar columns={10} />}
                   </tbody>
                 </table>
               </div>
             </div>
 
+            {/* Paginação (Desktop) */}
+            <div className="hidden md:flex justify-between items-center mt-4">
+              <div className="text-sm text-gray-600 dark:text-gray-300">
+                Página {pageNumber} de {totalPages} • {totalContacts} itens
+              </div>
+              <nav>
+                <ul className="inline-flex -space-x-px">
+                  <li>
+                    <button onClick={() => handlePageChange(1)} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
+                      <ChevronsLeft className="w-4 h-4" />
+                    </button>
+                  </li>
+                  <li>
+                    <button onClick={() => handlePageChange(pageNumber - 1)} disabled={pageNumber === 1} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                  </li>
+                  {renderPageNumbers()}
+                  <li>
+                    <button onClick={() => handlePageChange(pageNumber + 1)} disabled={pageNumber === totalPages} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </li>
+                  <li>
+                    <button onClick={() => handlePageChange(totalPages)} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
+                      <ChevronsRight className="w-4 h-4" />
+                    </button>
+                  </li>
+                </ul>
+              </nav>
+            </div>
+
             {/* Lista (Mobile) */}
-            <div className="md:hidden flex flex-col gap-2 mt-4">
-              {contacts.map((contact) => (
-                <div key={contact.id} className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 flex items-center gap-4">
+            <div className="md:hidden flex flex-col gap-2 mt-4 items-center">
+              {sortedContacts.map((contact) => (
+                <div key={contact.id} className="bg-white dark:bg-gray-800 shadow rounded-lg p-3 flex items-center gap-3 w-full max-w-[375px] mx-auto">
                   <div className="flex items-center justify-center">
                     {contact.isWhatsappValid ? (
-                      <CheckCircle className="w-5 h-5 text-green-600" />
+                      <CheckCircle className="w-4 h-4 text-green-600" />
                     ) : (
-                      <Ban className="w-5 h-5 text-gray-400" />
+                      <Ban className="w-4 h-4 text-gray-400" />
                     )}
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 overflow-hidden flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 overflow-hidden flex-shrink-0">
                     <ContactAvatar 
                       contact={contact.contact || contact}
-                      className="w-10 h-10 rounded-full object-cover"
+                      className="w-8 h-8 rounded-full object-cover"
                     />
                   </div>
                   <div className="flex flex-col flex-1 min-w-0">
-                    <span className="font-medium text-gray-900 dark:text-white truncate" title={contact.name}>
+                    <span className="font-medium text-gray-900 dark:text-white truncate text-[13px]" title={contact.name}>
                       {contact.name}
                     </span>
-                    <span className="text-sm text-gray-500 dark:text-gray-400 truncate" title={contact.email}>
-                      {contact.email}
-                    </span>
-                    <span className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                    {contact.email && (
+                      <span className="text-[12px] text-gray-500 dark:text-gray-400 truncate" title={contact.email}>
+                        {contact.email}
+                      </span>
+                    )}
+                    <span className="text-[12px] text-gray-500 dark:text-gray-400 truncate">
                       {formatPhoneNumber(contact.number)}
                     </span>
+                    {(contact.contact && (contact.contact.city || contact.contact.segment)) && (
+                      <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                        {contact.contact.city ? `${contact.contact.city}` : ""}
+                        {contact.contact.city && contact.contact.segment ? " • " : ""}
+                        {contact.contact.segment ? `${contact.contact.segment}` : ""}
+                      </span>
+                    )}
+                    {Array.isArray(contact.contact && contact.contact.tags) && (contact.contact.tags || []).length > 0 && (
+                      <div className="mt-1 flex items-center gap-1 flex-wrap">
+                        {(contact.contact.tags || []).slice(0, 3).map(tag => (
+                          <span key={tag.id} className="inline-block w-[8px] h-[8px] rounded-full" style={{ backgroundColor: tag.color || '#9CA3AF' }} title={tag.name}></span>
+                        ))}
+                        {(contact.contact.tags || []).length > 3 && (
+                          <span className="inline-flex items-center justify-center px-1.5 h-4 text-[10px] font-semibold text-white rounded-full bg-gray-400 dark:bg-gray-600">
+                            +{(contact.contact.tags || []).length - 3}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => hadleEditContact(contact.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"><Edit className="w-5 h-5" /></button>
+                  <div className="flex items-center gap-2 flex-nowrap whitespace-nowrap shrink-0">
+                    <button onClick={() => hadleEditContact(contact?.contact?.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"><Edit className="w-4 h-4" /></button>
                     <Can
                       role={user.profile}
                       perform="contacts-page:deleteContact"
                       yes={() => (
-                        <button onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"><Trash2 className="w-5 h-5" /></button>
+                        <button onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"><Trash2 className="w-4 h-4" /></button>
                       )}
                     />
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Paginação (Mobile) */}
+            <div className="md:hidden flex justify-between items-center mt-4">
+              <div className="text-sm text-gray-600 dark:text-gray-300">
+                Página {pageNumber} de {totalPages}
+              </div>
+              <nav>
+                <ul className="inline-flex -space-x-px">
+                  <li>
+                    <button onClick={() => handlePageChange(1)} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
+                      <ChevronsLeft className="w-4 h-4" />
+                    </button>
+                  </li>
+                  <li>
+                    <button onClick={() => handlePageChange(pageNumber - 1)} disabled={pageNumber === 1} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                  </li>
+                  {renderPageNumbers()}
+                  <li>
+                    <button onClick={() => handlePageChange(pageNumber + 1)} disabled={pageNumber === totalPages} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </li>
+                  <li>
+                    <button onClick={() => handlePageChange(totalPages)} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
+                      <ChevronsRight className="w-4 h-4" />
+                    </button>
+                  </li>
+                </ul>
+              </nav>
             </div>
           </>
       }

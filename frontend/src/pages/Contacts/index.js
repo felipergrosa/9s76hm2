@@ -7,7 +7,7 @@ import React, {
     useMemo,
 } from "react";
 import { toast } from "react-toastify";
-import { useHistory } from "react-router-dom";
+import { useHistory, useLocation } from "react-router-dom";
 import useContactUpdates from "../../hooks/useContactUpdates";
 
 import {
@@ -111,6 +111,7 @@ const reducer = (state, action) => {
 
 const Contacts = () => {
     const history = useHistory();
+    const location = useLocation();
 
     const { user, socket } = useContext(AuthContext);
 
@@ -135,6 +136,7 @@ const Contacts = () => {
     const [contactTicket, setContactTicket] = useState({});
     const fileUploadRef = useRef(null);
     const [selectedTags, setSelectedTags] = useState([]);
+    const [segmentFilter, setSegmentFilter] = useState([]); // array de segmentos vindos da URL
     const { setCurrentTicket } = useContext(TicketsContext);
 
     const [importWhatsappId, setImportWhatsappId] = useState()
@@ -200,7 +202,46 @@ const Contacts = () => {
         setPageNumber(1);
         setSelectedContactIds([]); // Limpar seleção ao mudar filtro/pesquisa
         setIsSelectAllChecked(false); // Desmarcar "Selecionar Tudo"
-    }, [searchParam, selectedTags]);
+    }, [searchParam, selectedTags, segmentFilter]);
+
+    // Lê 'segment' da URL e normaliza para array
+    useEffect(() => {
+        const params = new URLSearchParams(location.search || "");
+        const norm = (v) => (typeof v === "string" ? v.trim() : v);
+        let arr = [];
+
+        // Prioriza múltiplos valores repetidos: ?segment=a&segment=b
+        const repeated = params.getAll("segment");
+        if (repeated && repeated.length > 1) {
+            arr = repeated.map(norm).filter(Boolean);
+        } else {
+            // Suporta segment[]
+            const bracketed = params.getAll("segment[]");
+            if (bracketed && bracketed.length > 0) {
+                arr = bracketed.map(norm).filter(Boolean);
+            } else {
+                // Único valor: pode ser JSON ou CSV
+                const single = params.get("segment") || params.get("segment[]");
+                if (single && typeof single === "string") {
+                    const s = single.trim();
+                    if (s.startsWith("[") && s.endsWith("]")) {
+                        try {
+                            const parsed = JSON.parse(s);
+                            if (Array.isArray(parsed)) {
+                                arr = parsed.map(norm).filter(Boolean);
+                            }
+                        } catch (_) { /* ignora */ }
+                    } else if (s.includes(",")) {
+                        arr = s.split(",").map((t) => t.trim()).filter(Boolean);
+                    } else if (s) {
+                        arr = [s];
+                    }
+                }
+            }
+        }
+
+        setSegmentFilter(arr);
+    }, [location.search]);
 
                     useEffect(() => {
                         setLoading(true);
@@ -217,6 +258,7 @@ const Contacts = () => {
                                             // 'tags' não é suportado no backend; usa 'name' como fallback
                                             orderBy: sortField === 'tags' ? 'name' : sortField,
                                             order: sortDirection,
+                                            segment: segmentFilter,
                                         },
                                     });
                                     // Substitui a lista pelo resultado da página atual
@@ -238,7 +280,7 @@ const Contacts = () => {
                             fetchContacts();
                         }, 500);
                         return () => clearTimeout(delayDebounceFn);
-                    }, [searchParam, pageNumber, selectedTags, contactsPerPage, sortField, sortDirection]);
+                    }, [searchParam, pageNumber, selectedTags, contactsPerPage, sortField, sortDirection, segmentFilter]);
 
     // Hook para atualização em tempo real de avatares
     useContactUpdates((updatedContact) => {
@@ -531,22 +573,19 @@ const Contacts = () => {
         return sortDirection === "desc" ? sorted.reverse() : sorted;
     }, [contacts, sortField, sortDirection]);
 
-    // Função para renderizar os números de página com limite
+    // Função para renderizar os números de página (sempre 3, janela deslizante)
 
         const renderPageNumbers = () => {
             const pages = [];
             if (totalPages <= 3) {
-                for (let i = 1; i <= totalPages; i++) {
-                    pages.push(i);
-                }
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
             } else {
-                pages.push(1, 2, 3, "...");
+                const start = Math.max(1, Math.min(pageNumber - 1, totalPages - 2));
+                const end = Math.min(totalPages, start + 2);
+                for (let i = start; i <= end; i++) pages.push(i);
             }
             return pages.map((page, index) => (
-            <li key={index}>
-                {page === "..." ? (
-                    <span className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 dark:bg-gray-800 dark:border-gray-700">...</span>
-                ) : (
+                <li key={index}>
                     <button
                         onClick={() => handlePageChange(page)}
                         className={`flex items-center justify-center px-3 h-8 leading-tight border
@@ -557,10 +596,9 @@ const Contacts = () => {
                     >
                         {page}
                     </button>
-                )}
-            </li>
-        ));
-    };
+                </li>
+            ));
+        };
 
     return (
         <MainContainer useWindowScroll>
@@ -657,19 +695,19 @@ const Contacts = () => {
                 </header>
 
                 {/* Barra de Ações e Filtros - Mobile (2 linhas) */}
-                <div className="min-[1200px]:hidden flex flex-col gap-2 w-full max-w-md mx-auto">
+                <div className="min-[1200px]:hidden flex flex-col gap-2 w-full max-w-[375px] mx-auto">
                     {/* Linha 1: Filtros + Botões */}
                     <div className="w-full flex items-center gap-2 flex-wrap">
                         <div className="relative flex-1 min-w-0">
                             <TagsFilter onFiltered={handleSelectedTags} />
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-2 flex-wrap">
                             <PopupState variant="popover" popupId="contacts-import-export-menu-mobile">
                                 {(popupState) => (
                                     <>
                                         <Tooltip {...CustomTooltipProps} title="Importar/Exportar">
                                             <button
-                                                className="w-10 h-10 flex items-center justify-center text-gray-700 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                className="shrink-0 w-10 h-10 flex items-center justify-center text-gray-700 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                 aria-label="Importar/Exportar"
                                                 {...bindTrigger(popupState)}
                                             >
@@ -711,7 +749,7 @@ const Contacts = () => {
                             <Tooltip {...CustomTooltipProps} title="Novo Contato">
                                 <button
                                     onClick={handleOpenContactModal}
-                                    className="w-10 h-10 flex items-center justify-center text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     aria-label="Novo Contato"
                                 >
                                     <UserPlus className="w-6 h-6" />
@@ -791,7 +829,7 @@ const Contacts = () => {
                                         <button
                                             onClick={() => setConfirmDeleteManyOpen(true)}
                                             disabled={loading}
-                                            className="w-10 h-10 flex items-center justify-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                                            className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
                                             aria-label={`Deletar ${selectedContactIds.length} contato(s)`}
                                         >
                                             <Trash2 className="w-4 h-4" />
@@ -831,7 +869,7 @@ const Contacts = () => {
                                             <span className="text-[15px] opacity-70">{sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                                         </button>
                                     </th>
-                                    <th scope="col" className="pl-3 pr-3 py-3 w-[173px]">
+                                    <th scope="col" className="pl-3 pr-3 py-3 w-[167px]">
                                         <button onClick={() => handleSort('number')} className="flex items-center gap-1 select-none">
                                             WhatsApp
                                             <span className="text-[15px] opacity-70">{sortField === 'number' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
@@ -855,7 +893,7 @@ const Contacts = () => {
                                             <span className="text-[15px] opacity-70">{sortField === 'tags' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                                         </button>
                                     </th>
-                                    <th scope="col" className="pl-3 pr-3 py-3 text-center w-[70px]">
+                                    <th scope="col" className="pl-3 pr-3 py-3 text-center w-[80px]">
                                         <button onClick={() => handleSort('status')} className="flex items-center justify-center gap-1 w-full select-none">
                                             Status
                                             <span className="text-[15px] opacity-70">{sortField === 'status' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
@@ -1044,7 +1082,7 @@ const Contacts = () => {
                 </div>
 
                 {/* Lista de Contatos (Mobile) */}
-                <div className="min-[1200px]:hidden flex flex-col gap-1.5 mt-3 w-full max-w-md mx-auto">
+                <div className="min-[1200px]:hidden flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
                     {sortedContacts.map((contact) => (
                         <div key={contact.id} className="w-full bg-white dark:bg-gray-800 shadow rounded-lg p-3 flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 overflow-hidden flex-shrink-0">
@@ -1084,6 +1122,53 @@ const Contacts = () => {
                         </div>
                     ))}
                 </div>
+                {/* Paginação (Mobile) */}
+                <nav className="min-[1200px]:hidden flex items-center justify-between p-3 mt-2 w-full max-w-[375px] mx-auto" aria-label="Mobile navigation">
+                    <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                        Página <span className="font-semibold text-gray-900 dark:text-white">{pageNumber}</span>
+                        {" "} de {" "}
+                        <span className="font-semibold text-gray-900 dark:text-white">{totalPages}</span>
+                    </span>
+                    <ul className="inline-flex items-center -space-x-px">
+                        <li>
+                            <button
+                                onClick={() => handlePageChange(1)}
+                                disabled={pageNumber === 1}
+                                className="flex items-center justify-center px-3 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <ChevronsLeft className="w-5 h-5" />
+                            </button>
+                        </li>
+                        <li>
+                            <button
+                                onClick={() => handlePageChange(pageNumber - 1)}
+                                disabled={pageNumber === 1}
+                                className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                        </li>
+                        {renderPageNumbers()}
+                        <li>
+                            <button
+                                onClick={() => handlePageChange(pageNumber + 1)}
+                                disabled={pageNumber === totalPages}
+                                className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <ChevronRight className="w-5 h-5" />
+                            </button>
+                        </li>
+                        <li>
+                            <button
+                                onClick={() => handlePageChange(totalPages)}
+                                disabled={pageNumber === totalPages}
+                                className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <ChevronsRight className="w-5 h-5" />
+                            </button>
+                        </li>
+                    </ul>
+                </nav>
             </div>
         </MainContainer>
     );
