@@ -53,6 +53,7 @@ import LoadingOverlay from "../../components/LoadingOverlay";
 import ContactImportWpModal from "../../components/ContactImportWpModal";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
+import BulkEditContactsModal from "../../components/BulkEditContactsModal";
 
 const CustomTooltipProps = {
   arrow: true,
@@ -146,6 +147,7 @@ const Contacts = () => {
     const [selectedContactIds, setSelectedContactIds] = useState([]); // Array de IDs dos contatos selecionados
     const [isSelectAllChecked, setIsSelectAllChecked] = useState(false); // Estado para o checkbox "Selecionar Tudo"
     const [confirmDeleteManyOpen, setConfirmDeleteManyOpen] = useState(false); // Estado para o modal de confirmação de deleção em massa
+    const [bulkEditOpen, setBulkEditOpen] = useState(false); // Modal de edição em massa
 
     const { getAll: getAllSettings } = useCompanySettings();
     const [hideNum, setHideNum] = useState(false);
@@ -625,6 +627,17 @@ const Contacts = () => {
                     handleClose={() => setImportContactModalOpen(false)}
                 />
 
+                <BulkEditContactsModal
+                    open={bulkEditOpen}
+                    onClose={() => setBulkEditOpen(false)}
+                    selectedContactIds={selectedContactIds}
+                    onSuccess={() => {
+                        // Apenas limpa a seleção; a lista será atualizada via socket (eventos "update")
+                        setSelectedContactIds([]);
+                        setIsSelectAllChecked(false);
+                    }}
+                />
+
                 <ConfirmationModal
                     title={
                         deletingContact
@@ -836,6 +849,26 @@ const Contacts = () => {
                                             aria-label={`Deletar ${selectedContactIds.length} contato(s)`}
                                         >
                                             <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </Tooltip>
+                                ) : null
+                            )}
+                            no={() => null}
+                        />
+
+                        <Can
+                            role={user.profile}
+                            perform="contacts-page:bulkEdit"
+                            yes={() => (
+                                selectedContactIds.length > 0 ? (
+                                    <Tooltip {...CustomTooltipProps} title={`Editar em massa (${selectedContactIds.length})`}>
+                                        <button
+                                            onClick={() => setBulkEditOpen(true)}
+                                            disabled={loading}
+                                            className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                            aria-label={`Editar em massa ${selectedContactIds.length} contato(s)`}
+                                        >
+                                            <Edit className="w-4 h-4" />
                                         </button>
                                     </Tooltip>
                                 ) : null

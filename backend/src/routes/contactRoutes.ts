@@ -20,6 +20,8 @@ contactRoutes.get("/contacts/segments", isAuth, ContactController.segments);
 contactRoutes.get("/contacts/profile/:number", isAuth, ContactController.getContactProfileURL);
 contactRoutes.get("/contacts/:contactId(\\d+)", isAuth, ContactController.show);
 contactRoutes.post("/contacts", isAuth, ContactController.store);
+// Rota de atualização em massa DEVE vir antes de "/contacts/:contactId"
+contactRoutes.put("/contacts/batch-update", isAuth, ContactController.bulkUpdate);
 contactRoutes.put("/contacts/:contactId(\\d+)", isAuth, ContactController.update);
 
 // Mova a rota de deleção em massa ANTES da rota de deleção de ID único.

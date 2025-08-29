@@ -39,6 +39,7 @@ import { ImportContactsService } from "../services/ContactServices/ImportContact
 import NumberSimpleListService from "../services/ContactServices/NumberSimpleListService";
 import CreateOrUpdateContactServiceForImport from "../services/ContactServices/CreateOrUpdateContactServiceForImport";
 import UpdateContactWalletsService from "../services/ContactServices/UpdateContactWalletsService";
+import BulkUpdateContactsService from "../services/ContactServices/BulkUpdateContactsService";
 
 import FindContactTags from "../services/ContactServices/FindContactTags";
 import { log } from "console";
@@ -594,6 +595,33 @@ export const remove = async (
     });
 
   return res.status(200).json({ message: "Contact deleted" });
+};
+
+// ATUALIZAÇÃO EM MASSA DE CONTATOS (apenas admin)
+export const bulkUpdate = async (req: Request, res: Response): Promise<Response> => {
+  const { contactIds, data } = req.body as { contactIds: number[]; data: { tagIds?: number[]; situation?: 'Ativo' | 'Baixado' | 'Ex-Cliente' | 'Excluido' | 'Futuro' | 'Inativo'; whatsappId?: number | null } };
+  const { companyId, profile } = req.user;
+
+  if (profile !== "admin") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
+  if (!Array.isArray(contactIds) || contactIds.length === 0) {
+    throw new AppError("Nenhum ID de contato fornecido para atualização em massa.", 400);
+  }
+
+  const updated = await BulkUpdateContactsService({ companyId, contactIds, data: data || {} });
+
+  const io = getIO();
+  updated.forEach(contact => {
+    io.of(String(companyId))
+      .emit(`company-${companyId}-contact`, {
+        action: "update",
+        contact
+      });
+  });
+
+  return res.status(200).json({ updated: updated.map(c => c.id), count: updated.length });
 };
 
 // NOVA FUNÇÃO: DELETAR MÚLTIPLOS CONTATOS
