@@ -51,6 +51,10 @@ class CampaignShipping extends Model<CampaignShipping> {
   @Column
   deliveredAt: Date;
 
+  // Índice da mensagem escolhida (1..5) para suportar mídia por mensagem
+  @Column
+  messageIndex: number;
+
   @CreatedAt
   createdAt: Date;
 

@@ -23,13 +23,16 @@ import {
   Select,
   Typography,
   TextField,
-  Tooltip
+  Tooltip,
+  InputAdornment,
+  FormHelperText
 } from "@material-ui/core";
 import InfoOutlinedIcon from "@material-ui/icons/InfoOutlined";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import ForbiddenPage from "../../components/ForbiddenPage";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
+import AIIntegrationSelector from "../../components/AIIntegrationSelector";
 
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
@@ -92,9 +95,10 @@ const CampaignsConfig = () => {
 
   const { getPlanCompany } = usePlans();
 
-  // --- Integração OpenAI ---
-  const [openAI, setOpenAI] = useState({ id: null, name: "OpenAI Principal", apiKey: "", model: "gpt-4o-mini" });
-  const [savingOpenAI, setSavingOpenAI] = useState(false);
+  // --- Integração IA Global + Prompt Base ---
+  const [aiIntegrationId, setAiIntegrationId] = useState("");
+  const [aiIntegrationObj, setAiIntegrationObj] = useState(null);
+  const [aiBasePrompt, setAiBasePrompt] = useState("");
   const [encryptionEnabled, setEncryptionEnabled] = useState(true);
 
   useEffect(() => {
@@ -148,28 +152,17 @@ const CampaignsConfig = () => {
     loadEncryptionStatus();
   }, []);
 
-  // Carrega integração OpenAI existente
+  // Carregar integração IA preferida e prompt base dos settings
   useEffect(() => {
-    const loadOpenAI = async () => {
+    api.get("/campaign-settings").then(({ data }) => {
       try {
-        const { data } = await api.get('/queueIntegration', { params: { searchParam: '', pageNumber: 1 } });
-        const items = Array.isArray(data?.queueIntegrations) ? data.queueIntegrations : [];
-        const found = items.find((it) => it.type === 'openai');
-        if (found) {
-          let parsed = {};
-          try { parsed = found.jsonContent ? JSON.parse(found.jsonContent) : {}; } catch (_) {}
-          setOpenAI({
-            id: found.id,
-            name: found.name || 'OpenAI Principal',
-            apiKey: parsed.apiKey || '',
-            model: parsed.model || 'gpt-4o-mini'
-          });
-        }
-      } catch (err) {
-        // silencioso
-      }
-    };
-    loadOpenAI();
+        const map = new Map((Array.isArray(data) ? data : []).map(it => [it.key, it.value]));
+        const savedIntegrationId = map.get("aiIntegrationId");
+        const savedPrompt = map.get("aiBasePrompt");
+        if (savedIntegrationId) setAiIntegrationId(savedIntegrationId);
+        if (typeof savedPrompt === "string") setAiBasePrompt(savedPrompt);
+      } catch (_) {}
+    });
   }, []);
 
   const handleOnChangeVariable = (e) => {
@@ -180,29 +173,10 @@ const CampaignsConfig = () => {
     }
   };
 
-  const saveOpenAIIntegration = async () => {
-    try {
-      setSavingOpenAI(true);
-      const payload = {
-        type: 'openai',
-        name: openAI.name || 'OpenAI Principal',
-        projectName: 'openai',
-        language: 'pt-BR',
-        jsonContent: JSON.stringify({ apiKey: openAI.apiKey || '', model: openAI.model || 'gpt-4o-mini' })
-      };
-      if (openAI.id) {
-        const { data } = await api.put(`/queueIntegration/${openAI.id}`, payload);
-        toast.success('Integração OpenAI atualizada');
-      } else {
-        const { data } = await api.post(`/queueIntegration`, payload);
-        setOpenAI((prev) => ({ ...prev, id: data?.id }));
-        toast.success('Integração OpenAI criada');
-      }
-    } catch (err) {
-      toastError(err);
-    } finally {
-      setSavingOpenAI(false);
-    }
+  // Handler do seletor de integração IA
+  const handleAIIntegrationChange = (id, integrationObj) => {
+    setAiIntegrationId(id || "");
+    setAiIntegrationObj(integrationObj || null);
   };
 
   const handleOnChangeSettings = (e) => {
@@ -259,6 +233,10 @@ const CampaignsConfig = () => {
         .filter((s) => s.length > 0);
       payload.suppressionTagNames = Array.from(new Set(list));
     }
+
+    // Persistir integração IA e prompt base
+    payload.aiIntegrationId = aiIntegrationId || "";
+    payload.aiBasePrompt = aiBasePrompt || "";
 
     await api.post("/campaign-settings", { settings: payload });
     toast.success("Configurações salvas");
@@ -365,89 +343,83 @@ const CampaignsConfig = () => {
 
               <Box className={classes.tabPanelsContainer}>
                 <Grid spacing={1} container>
+                  {/* IA para campanhas (integração global + prompt base) */}
                   <Grid xs={12} item>
-                    <Typography component={"h1"} style={{ marginBottom: 8 }}>Integrações &nbsp;</Typography>
+                    <Typography component={"h1"} style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      IA para campanhas
+                      <Tooltip
+                        title={
+                          <span>
+                            Selecione uma integração global (OpenAI/Gemini) e defina um prompt base para gerar mensagens aleatórias e variações nas campanhas.<br/>
+                            Dicas: inclua contexto do negócio, persona do público, objetivo e restrições (ex.: evitar termos sensíveis).
+                          </span>
+                        }
+                        placement="right"
+                      >
+                        <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
+                      </Tooltip>
+                    </Typography>
                   </Grid>
-                  <Grid xs={12} item>
-                    {!encryptionEnabled && (
+                  {!encryptionEnabled && (
+                    <Grid xs={12} item>
                       <Paper className={classes.paper} variant="outlined" style={{ background: '#fff8e1', borderColor: '#ffb300', alignItems: 'stretch', flexDirection: 'column' }}>
                         <Typography style={{ fontWeight: 600, marginBottom: 4 }}>Atenção: criptografia de API Key não habilitada</Typography>
                         <Typography variant="body2">
                           Defina a variável de ambiente <b>OPENAI_ENCRYPTION_KEY</b> (ou <b>DATA_KEY</b>) no backend para que a sua API Key seja armazenada de forma criptografada.
                         </Typography>
                       </Paper>
-                    )}
-                    <Paper className={classes.paper} variant="outlined" style={{ alignItems: 'stretch', flexDirection: 'column' }}>
-                      <Typography component={"h2"} style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        OpenAI
-                        <Tooltip
-                          title={
-                            <span>
-                              Configure a integração para usar a API da OpenAI no atendimento e nas campanhas.<br/>
-                              • A API Key é armazenada com criptografia e não será exibida novamente.<br/>
-                              • O Modelo define qual modelo será usado (ex.: gpt-4o-mini).<br/>
-                              • Em atendimento WhatsApp, usamos essas credenciais via serviço OpenAI já existente.
-                            </span>
-                          }
-                          placement="right"
-                        >
-                          <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
-                        </Tooltip>
-                      </Typography>
-                      <Grid container spacing={2}>
-                        <Grid item xs={12} md={4}>
-                          <TextField
-                            label="Nome da Integração"
-                            variant="outlined"
-                            value={openAI.name}
-                            onChange={(e) => setOpenAI((p) => ({ ...p, name: e.target.value }))}
-                            fullWidth
-                            helperText="Um rótulo para identificar esta integração (ex.: OpenAI Principal)"
-                          />
-                        </Grid>
-                        <Grid item xs={12} md={5}>
-                          <TextField
-                            label="API Key"
-                            variant="outlined"
-                            value={openAI.apiKey}
-                            onChange={(e) => setOpenAI((p) => ({ ...p, apiKey: e.target.value }))}
-                            fullWidth
-                            type="password"
-                            placeholder="sk-..."
-                            helperText="Cole sua chave da OpenAI (https://platform.openai.com). Ela será criptografada e não será exibida novamente. Se aparecer ********, manteremos a chave atual."
-                          />
-                        </Grid>
-                        <Grid item xs={12} md={3}>
-                          <TextField
-                            label="Modelo"
-                            variant="outlined"
-                            value={openAI.model}
-                            onChange={(e) => setOpenAI((p) => ({ ...p, model: e.target.value }))}
-                            fullWidth
-                            placeholder="gpt-4o-mini"
-                            helperText="Modelo recomendado: gpt-4o-mini (custo/benefício). Outros: gpt-4o, gpt-4.1, etc."
-                          />
-                        </Grid>
-                        <Grid item xs={12}>
-                          <Typography variant="body2" style={{ opacity: 0.8 }}>
-                            Como funciona: o Whaticket usa essa integração para responder mensagens via WhatsApp (serviço OpenAI) e para gerar variações de campanhas quando não houver outra configuração específica. A chave é usada apenas no servidor.
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12} className={classes.textRight}>
-                          <Button
-                            onClick={saveOpenAIIntegration}
-                            color="primary"
-                            variant="contained"
-                            disabled={savingOpenAI}
-                          >
-                            {savingOpenAI ? 'Salvando...' : 'Salvar Integração OpenAI'}
-                          </Button>
-                        </Grid>
-                      </Grid>
-                    </Paper>
+                    </Grid>
+                  )}
+                  <Grid xs={12} md={6} item>
+                    <AIIntegrationSelector
+                      value={aiIntegrationId}
+                      onChange={handleAIIntegrationChange}
+                      label="Integração IA (OpenAI/Gemini)"
+                      required
+                      helperText="Selecione qual integração usar para gerar variações e mensagens aleatórias"
+                    />
                   </Grid>
                   <Grid xs={12} item>
-                    <Typography component={"h1"}>Intervalos &nbsp;</Typography>
+                    <TextField
+                      label="Prompt base para geração de mensagens"
+                      variant="outlined"
+                      fullWidth
+                      multiline
+                      rows={5}
+                      value={aiBasePrompt}
+                      onChange={(e) => setAiBasePrompt(e.target.value)}
+                      placeholder={`Você é um assistente de marketing que cria mensagens curtas, claras e personalizadas para WhatsApp.\nInstruções:\n- Use linguagem natural, tom profissional e amigável.\n- Inclua variação de abertura, CTA e urgência suave.\n- Adapte-se ao contexto do negócio, público e oferta.\n- Evite palavras de spam e termos proibidos.\n- Nunca inclua links encurtados sem autorização.\n- Mensagens de 200-350 caracteres.\n- Personalize usando variáveis {nome}, {empresa}, {vendedor}.`}
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Tooltip
+                              title={
+                                <span>
+                                  Dicas de uso:<br/>
+                                  • Descreva público-alvo, oferta, objetivo e restrições.<br/>
+                                  • Liste 2-3 exemplos de mensagens que você gosta (estilo).<br/>
+                                  • Indique palavras que devem/ não devem aparecer.<br/>
+                                  • Informe variáveis disponíveis: {`{nome}`}, {`{empresa}`}, {`{cidade}`}.<br/>
+                                  Ideias: follow-up, confirmação, recuperação de carrinho, reativação, lançamento.
+                                </span>
+                              }
+                              placement="left"
+                            >
+                              <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7, cursor: 'help' }} />
+                            </Tooltip>
+                          </InputAdornment>
+                        )
+                      }}
+                      helperText="Use este prompt como base. O criador de campanhas poderá adaptar/combinar com instruções específicas"
+                    />
+                  </Grid>
+                  <Grid xs={12} item>
+                    <Typography component={"h1"} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      Intervalos
+                      <Tooltip title="Defina pausas entre envios para reduzir risco de bloqueio e melhorar taxa de entrega" placement="right">
+                        <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
+                      </Tooltip>
+                    </Typography>
                   </Grid>
 
                   {/* TEMPO ENTRE DISPAROS */}
@@ -506,6 +478,14 @@ const CampaignsConfig = () => {
                         <MenuItem value={100}>100 segundos</MenuItem>
                         <MenuItem value={120}>120 segundos</MenuItem>
                       </Select>
+                      <FormHelperText>
+                        <Box display="flex" alignItems="center" gridGap={6}>
+                          <Tooltip title="Intervalo aplicado entre mensagens para cada conexão. Variações maiores reduzem risco de bloqueio.">
+                            <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
+                          </Tooltip>
+                          Sugestão: 10-30s para contas aquecidas
+                        </Box>
+                      </FormHelperText>
                     </FormControl>
                   </Grid>
                   <Grid xs={12} md={3} item>
@@ -535,6 +515,14 @@ const CampaignsConfig = () => {
                         <MenuItem value={50}>50 {i18n.t("campaigns.settings.messages")}</MenuItem>
                         <MenuItem value={60}>60 {i18n.t("campaigns.settings.messages")}</MenuItem>
                       </Select>
+                      <FormHelperText>
+                        <Box display="flex" alignItems="center" gridGap={6}>
+                          <Tooltip title="A cada N mensagens, aplicamos um intervalo maior (abaixo). Ajuda a reduzir padrões repetitivos.">
+                            <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
+                          </Tooltip>
+                          Ex.: após 20 mensagens, aplicar pausa maior
+                        </Box>
+                      </FormHelperText>
                     </FormControl>
                   </Grid>
                   <Grid xs={12} md={3} item>
@@ -573,6 +561,14 @@ const CampaignsConfig = () => {
                         <MenuItem value={170}>170 segundos</MenuItem>
                         <MenuItem value={180}>180 segundos</MenuItem>
                       </Select>
+                      <FormHelperText>
+                        <Box display="flex" alignItems="center" gridGap={6}>
+                          <Tooltip title="Intervalo maior aplicado quando a regra acima é atingida (após N mensagens).">
+                            <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
+                          </Tooltip>
+                          Ex.: 60-120s
+                        </Box>
+                      </FormHelperText>
                     </FormControl>
                   </Grid>
                   {/* Limites e Backoff */}
@@ -603,6 +599,15 @@ const CampaignsConfig = () => {
                       onChange={handleOnChangeSettings}
                       fullWidth
                       inputProps={{ min: 10 }}
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Tooltip title="Evita picos por conexão. Comece conservador e aumente gradualmente.">
+                              <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7, cursor: 'help' }} />
+                            </Tooltip>
+                          </InputAdornment>
+                        )
+                      }}
                       helperText="Sugestão: iniciar entre 100 e 300 por hora e ajustar conforme desempenho"
                     />
                   </Grid>
@@ -616,6 +621,15 @@ const CampaignsConfig = () => {
                       onChange={handleOnChangeSettings}
                       fullWidth
                       inputProps={{ min: 50 }}
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Tooltip title="Limite diário por conexão. Aumente após aquecimento da conta.">
+                              <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7, cursor: 'help' }} />
+                            </Tooltip>
+                          </InputAdornment>
+                        )
+                      }}
                       helperText="Sugestão: 800 a 2000 por dia por conexão; evite picos"
                     />
                   </Grid>
@@ -629,6 +643,15 @@ const CampaignsConfig = () => {
                       onChange={handleOnChangeSettings}
                       fullWidth
                       inputProps={{ min: 1 }}
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Tooltip title="Número de erros consecutivos para acionar pausa automática.">
+                              <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7, cursor: 'help' }} />
+                            </Tooltip>
+                          </InputAdornment>
+                        )
+                      }}
                       helperText="Ao atingir este número de erros seguidos, pausamos o envio (backoff)"
                     />
                   </Grid>
@@ -642,6 +665,15 @@ const CampaignsConfig = () => {
                       onChange={handleOnChangeSettings}
                       fullWidth
                       inputProps={{ min: 1 }}
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Tooltip title="Duração da pausa quando o backoff é acionado.">
+                              <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7, cursor: 'help' }} />
+                            </Tooltip>
+                          </InputAdornment>
+                        )
+                      }}
                       helperText="Tempo de pausa após acionar o backoff; aumente se persistirem erros"
                     />
                   </Grid>
@@ -669,6 +701,15 @@ const CampaignsConfig = () => {
                       value={suppressionTagNamesStr}
                       onChange={(e) => setSuppressionTagNamesStr(e.target.value)}
                       fullWidth
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Tooltip title="Evite enviar para contatos com opt-out/bloqueio. Ex.: DNC, SAIR, CANCELAR.">
+                              <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7, cursor: 'help' }} />
+                            </Tooltip>
+                          </InputAdornment>
+                        )
+                      }}
                       helperText="Separe por vírgulas; usamos correspondência exata das tags do contato"
                     />
                   </Grid>

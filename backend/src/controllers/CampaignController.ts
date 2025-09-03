@@ -44,6 +44,17 @@ type StoreData = {
   openTicket: string;
   dispatchStrategy?: string; // 'single' | 'round_robin'
   allowedWhatsappIds?: number[] | string | null;
+  // Mídia por mensagem (1..5)
+  mediaUrl1?: string | null;
+  mediaName1?: string | null;
+  mediaUrl2?: string | null;
+  mediaName2?: string | null;
+  mediaUrl3?: string | null;
+  mediaName3?: string | null;
+  mediaUrl4?: string | null;
+  mediaName4?: string | null;
+  mediaUrl5?: string | null;
+  mediaName5?: string | null;
 };
 
 type FindParams = {

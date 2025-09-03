@@ -18,12 +18,18 @@ import CircularProgress from "@material-ui/core/CircularProgress";
 import AttachFileIcon from "@material-ui/icons/AttachFile";
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import Chip from '@material-ui/core/Chip';
+import Tooltip from '@material-ui/core/Tooltip';
+import Typography from '@material-ui/core/Typography';
+import Link from '@material-ui/core/Link';
+import ClickAwayListener from '@material-ui/core/ClickAwayListener';
+import Popover from '@material-ui/core/Popover';
 import { isNil } from "lodash";
 import { i18n } from "../../translate/i18n";
 import moment from "moment";
 
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
+import AIIntegrationSelector from "../AIIntegrationSelector";
 import {
   Box,
   FormControl,
@@ -106,6 +112,17 @@ const CampaignModal = ({
     confirmationMessage3: "",
     confirmationMessage4: "",
     confirmationMessage5: "",
+    // Anexos por mensagem (1..5)
+    mediaUrl1: "",
+    mediaName1: "",
+    mediaUrl2: "",
+    mediaName2: "",
+    mediaUrl3: "",
+    mediaName3: "",
+    mediaUrl4: "",
+    mediaName4: "",
+    mediaUrl5: "",
+    mediaName5: "",
     status: "INATIVA", // INATIVA, PROGRAMADA, EM_ANDAMENTO, CANCELADA, FINALIZADA,
     confirmation: false,
     scheduledAt: "",
@@ -116,7 +133,109 @@ const CampaignModal = ({
     statusTicket: "closed",
     openTicket: "disabled",
     dispatchStrategy: "single",
-    allowedWhatsappIds: []
+    allowedWhatsappIds: [],
+    // IA - metadados opcionais por campanha
+    aiIntegrationId: null,
+    aiPrompt1: "",
+    aiPrompt2: "",
+    aiPrompt3: "",
+    aiPrompt4: "",
+    aiPrompt5: ""
+  };
+
+  // Validação de mídia permitida
+  const isAllowedMedia = (opt) => {
+    const fileUrl = (opt?.url || opt?.path || "").toLowerCase();
+    const mime = (opt?.mediaType || "").toLowerCase();
+    const allowedExt = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".mp4", ".mp3", ".ogg", ".opus", ".wav"];
+    const allowedMime = ["image/", "video/", "audio/", "application/pdf"]; // prefixos
+    const okExt = allowedExt.some(ext => fileUrl.endsWith(ext));
+    const okMime = allowedMime.some(prefix => mime.startsWith(prefix));
+    return okExt || okMime;
+  };
+
+  const [tagsTargetField, setTagsTargetField] = useState(null);
+  const insertTagIntoField = (targetField, setFieldValue, values) => (label) => {
+    const field = targetField;
+    const insertion = `{${label}}`;
+    const prev = (values && values[field]) || "";
+    setFieldValue(field, prev + insertion);
+  };
+
+  const isImage = (url = "") => /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
+  const isVideo = (url = "") => /\.(mp4|webm|ogg)$/i.test(url);
+  const isAudio = (url = "") => /\.(mp3|wav|ogg|opus)$/i.test(url);
+  const isPdf = (url = "") => /\.(pdf)$/i.test(url);
+
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewName, setPreviewName] = useState("");
+  const openPreview = (url, name) => { setPreviewUrl(url); setPreviewName(name || "Arquivo"); setPreviewOpen(true); };
+  const closePreview = () => { setPreviewOpen(false); setPreviewUrl(""); setPreviewName(""); };
+
+  const renderMediaPreview = (url, name) => {
+    if (!url) return null;
+    const wrapperStyle = { cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 };
+    if (isImage(url)) {
+      return (
+        <div style={wrapperStyle} onClick={() => openPreview(url, name)}>
+          <img
+            src={url}
+            alt={name || 'preview'}
+            style={{ maxWidth: 120, maxHeight: 90, borderRadius: 4, border: '1px solid #eee' }}
+          />
+        </div>
+      );
+    }
+    if (isVideo(url) || isAudio(url) || isPdf(url)) {
+      return (
+        <Button size="small" variant="outlined" onClick={() => openPreview(url, name)}>Pré-visualizar</Button>
+      );
+    }
+    return (
+      <Button size="small" variant="outlined" onClick={() => openPreview(url, name)}>Pré-visualizar</Button>
+    );
+  };
+
+  const renderTagsToolbar = (values, setFieldValue, targetField) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 8px' }}>
+      <Button size="small" variant="outlined" onClick={(e) => { setTagsTargetField(targetField); handleOpenTags(e); }}>Inserir #Tags</Button>
+      <Tooltip title="Use variáveis como {nome}, {empresa}, {ticket}. Elas serão substituídas no envio.">
+        <Typography variant="body2" style={{ opacity: 0.8 }}>
+          Dica: personalize sua mensagem com variáveis.
+        </Typography>
+      </Tooltip>
+    </div>
+  );
+
+  const renderTabAttachment = (idx, values, disabled) => {
+    const nameField = getMediaNameFieldByTab(idx);
+    const urlField = getMediaUrlFieldByTab(idx);
+    const currentName = values[nameField];
+    const currentUrl = values[urlField];
+    const hasFile = !!currentName;
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '8px 0' }}>
+        <Button
+          size="small"
+          variant="outlined"
+          color="primary"
+          onClick={() => { setFileLibraryTargetIndex(idx); setFileLibraryOpen(true); }}
+          disabled={disabled}
+        >
+          {hasFile ? `Trocar anexo (aba ${idx + 1})` : `Selecionar anexo (aba ${idx + 1})`}
+        </Button>
+        {hasFile && (
+          <>
+            <Chip size="small" label={currentName} />
+            <IconButton size="small" onClick={() => clearTabMedia(idx)} disabled={disabled}>
+              <DeleteOutlineIcon color="secondary" />
+            </IconButton>
+            {renderMediaPreview(currentUrl, currentName)}
+          </>
+        )}
+      </div>
+    );
   };
 
   const [campaign, setCampaign] = useState(initialState);
@@ -157,6 +276,50 @@ const CampaignModal = ({
   const [aiLoading, setAiLoading] = useState(false);
   const [aiGenerated, setAiGenerated] = useState([]);
   const [aiTargetField, setAiTargetField] = useState("message1");
+  // Biblioteca de arquivos (FileManager)
+  const [fileLibraryOpen, setFileLibraryOpen] = useState(false);
+  const [fileLists, setFileLists] = useState([]);
+  const [expandedFileIds, setExpandedFileIds] = useState({});
+  const [filesSearch, setFilesSearch] = useState("");
+  const [fileLibraryTargetIndex, setFileLibraryTargetIndex] = useState(null); // 0..4
+  const setFieldValueRef = useRef(null);
+
+  // Tags (#tags) - semelhante ao PromptModal
+  const [tagsAnchorEl, setTagsAnchorEl] = useState(null);
+  const [tagsSearch, setTagsSearch] = useState("");
+  const mustacheVars = [
+    { key: "firstName", label: "primeiro-nome", desc: "Primeiro nome do contato", category: "Contato" },
+    { key: "name", label: "nome", desc: "Nome completo do contato", category: "Contato" },
+    { key: "email", label: "email", desc: "Email do contato", category: "Contato" },
+    { key: "cpfCnpj", label: "cnpj-cpf", desc: "CPF/CNPJ do contato", category: "Contato" },
+    { key: "representativeCode", label: "codigo-representante", desc: "Código do representante", category: "Contato" },
+    { key: "city", label: "cidade", desc: "Cidade", category: "Contato" },
+    { key: "situation", label: "situacao", desc: "Situação do cliente", category: "Contato" },
+    { key: "fantasyName", label: "fantasia", desc: "Nome fantasia", category: "Contato" },
+    { key: "foundationDate", label: "data-fundacao", desc: "Data de fundação (DD-MM-YYYY)", category: "Contato" },
+    { key: "creditLimit", label: "limite-credito", desc: "Limite de crédito", category: "Contato" },
+    { key: "segment", label: "segmento", desc: "Segmento de mercado", category: "Contato" },
+    { key: "ticket_id", label: "ticket", desc: "ID do ticket", category: "Atendimento" },
+    { key: "userName", label: "atendente", desc: "Nome do atendente", category: "Atendimento" },
+    { key: "queue", label: "fila", desc: "Nome da fila", category: "Atendimento" },
+    { key: "connection", label: "conexao", desc: "Nome da conexão/WhatsApp", category: "Atendimento" },
+    { key: "protocol", label: "protocolo", desc: "Protocolo único da conversa", category: "Atendimento" },
+    { key: "date", label: "data", desc: "Data atual (DD-MM-YYYY)", category: "Data/Hora" },
+    { key: "hour", label: "hora", desc: "Hora atual (HH:MM:SS)", category: "Data/Hora" },
+    { key: "data_hora", label: "data-hora", desc: "Data e hora juntas", category: "Data/Hora" },
+    { key: "ms", label: "saudacao", desc: "Saudação contextual", category: "Saudação/Contexto" },
+    { key: "periodo_dia", label: "periodo-dia", desc: "Período do dia", category: "Saudação/Contexto" },
+    { key: "name_company", label: "empresa", desc: "Nome da empresa", category: "Empresa" },
+  ];
+  const groupedVars = mustacheVars.reduce((acc, v) => {
+    const cat = v.category || "Outros";
+    acc[cat] = acc[cat] || [];
+    acc[cat].push(v);
+    return acc;
+  }, {});
+  const openTags = Boolean(tagsAnchorEl);
+  const handleOpenTags = (event) => setTagsAnchorEl(event.currentTarget);
+  const handleCloseTags = () => setTagsAnchorEl(null);
 
   const getMessageFieldByTab = (tabIdx) => {
     switch (tabIdx) {
@@ -167,6 +330,32 @@ const CampaignModal = ({
       case 4: return "message5";
       default: return "message1";
     }
+  };
+  const getMediaUrlFieldByTab = (tabIdx) => {
+    switch (tabIdx) {
+      case 0: return "mediaUrl1";
+      case 1: return "mediaUrl2";
+      case 2: return "mediaUrl3";
+      case 3: return "mediaUrl4";
+      case 4: return "mediaUrl5";
+      default: return "mediaUrl1";
+    }
+  };
+  const getMediaNameFieldByTab = (tabIdx) => {
+    switch (tabIdx) {
+      case 0: return "mediaName1";
+      case 1: return "mediaName2";
+      case 2: return "mediaName3";
+      case 3: return "mediaName4";
+      case 4: return "mediaName5";
+      default: return "mediaName1";
+    }
+  };
+  const clearTabMedia = (idx) => {
+    const setFieldValue = setFieldValueRef.current;
+    if (!setFieldValue) return;
+    setFieldValue(getMediaUrlFieldByTab(idx), null);
+    setFieldValue(getMediaNameFieldByTab(idx), null);
   };
   const extractPlaceholders = (text = "") => {
     const matches = text.match(/\{[^}]+\}/g) || [];
@@ -297,6 +486,19 @@ const CampaignModal = ({
     }
   }, [campaignId, open, initialValues, companyId]);
 
+  // Carregar listas simples de arquivos para a biblioteca (quando abrir)
+  useEffect(() => {
+    if (!fileLibraryOpen) return;
+    let active = true;
+    (async () => {
+      try {
+        const { data } = await api.get(`/files/list`, { params: { searchParam: filesSearch } });
+        if (active) setFileLists(Array.isArray(data) ? data : []);
+      } catch (_) {}
+    })();
+    return () => { active = false; };
+  }, [fileLibraryOpen, filesSearch]);
+
   useEffect(() => {
     const now = moment();
     const scheduledAt = moment(campaign.scheduledAt);
@@ -366,6 +568,47 @@ const CampaignModal = ({
     } catch (err) {
       console.log(err);
       toastError(err);
+    }
+  };
+
+  const getCurrentAiPromptField = () => {
+    switch (messageTab) {
+      case 0: return "aiPrompt1";
+      case 1: return "aiPrompt2";
+      case 2: return "aiPrompt3";
+      case 3: return "aiPrompt4";
+      case 4: return "aiPrompt5";
+      default: return "aiPrompt1";
+    }
+  };
+
+  const handleChooseFromLibrary = async (opt) => {
+    try {
+      const idx = Number.isInteger(fileLibraryTargetIndex) ? fileLibraryTargetIndex : messageTab;
+      const fileUrl = opt.url || opt.path;
+      if (!fileUrl) {
+        toast.error("Arquivo sem URL disponível");
+        return;
+      }
+      if (!isAllowedMedia(opt)) {
+        toast.error("Tipo de arquivo não suportado para envio. Permitidos: imagens, áudio, vídeo e PDF.");
+        return;
+      }
+      const filename = opt.name || (opt.path ? opt.path.split("/").pop() : null) || "arquivo.bin";
+      const setFieldValue = setFieldValueRef.current;
+      if (setFieldValue) {
+        setFieldValue(getMediaUrlFieldByTab(idx), fileUrl);
+        setFieldValue(getMediaNameFieldByTab(idx), filename);
+        setFileLibraryOpen(false);
+        setFileLibraryTargetIndex(null);
+        toast.success(`Anexo da aba ${idx + 1} definido: "${filename}"`);
+        return;
+      }
+      // fallback (não esperado): mantém comportamento antigo
+      setAttachment(null);
+      setFileLibraryOpen(false);
+    } catch (e) {
+      toastError(e);
     }
   };
 
@@ -491,6 +734,7 @@ const CampaignModal = ({
         >
           {({ values, errors, touched, isSubmitting, setFieldValue }) => (
             <Form>
+              {(() => { setFieldValueRef.current = setFieldValue; return null; })()}
               <DialogContent dividers>
                 <Grid spacing={2} container>
                   {/* Botão IA - aplica na mensagem da aba atual */}
@@ -507,6 +751,84 @@ const CampaignModal = ({
                     >
                       Gerar variações com IA (aba atual)
                     </Button>
+                  </Grid>
+                  {/* Popover de #Tags */}
+                  <Popover
+                    open={openTags}
+                    anchorEl={tagsAnchorEl}
+                    onClose={handleCloseTags}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                  >
+                    <div style={{ padding: 12, maxWidth: 380 }}>
+                      <TextField
+                        value={tagsSearch}
+                        onChange={(e) => setTagsSearch(e.target.value)}
+                        placeholder="Buscar #tags..."
+                        variant="outlined"
+                        size="small"
+                        fullWidth
+                        style={{ marginBottom: 8 }}
+                      />
+                      <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+                        {Object.keys(groupedVars).map(cat => {
+                          const items = groupedVars[cat].filter(v =>
+                            (v.label || '').toLowerCase().includes((tagsSearch || '').toLowerCase()) ||
+                            (v.desc || '').toLowerCase().includes((tagsSearch || '').toLowerCase())
+                          );
+                          if (items.length === 0) return null;
+                          return (
+                            <div key={cat} style={{ marginBottom: 8 }}>
+                              <Typography variant="subtitle2" style={{ opacity: 0.8, marginBottom: 4 }}>{cat}</Typography>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                {items.map(item => (
+                                  <Chip
+                                    key={item.key}
+                                    label={`#${item.label}`}
+                                    onClick={() => {
+                                      if (tagsTargetField) {
+                                        insertTagIntoField(tagsTargetField, setFieldValue, values)(item.label);
+                                      }
+                                      handleCloseTags();
+                                    }}
+                                    variant="default"
+                                    clickable
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {/* Dica */}
+                        <Typography variant="caption" style={{ display: 'block', marginTop: 8, opacity: 0.8 }}>
+                          As tags serão inseridas no campo selecionado (mensagem ou prompt da aba atual) no formato {`{tag}`}. Ex.: {`{nome}`}, {`{empresa}`}
+                        </Typography>
+                      </div>
+                    </div>
+                  </Popover>
+                  {/* Integração IA (override) e Prompt por aba */}
+                  <Grid xs={12} item>
+                    <AIIntegrationSelector
+                      value={values.aiIntegrationId}
+                      onChange={(integrationId) => setFieldValue('aiIntegrationId', integrationId)}
+                      helperText="Selecione uma integração IA para esta campanha (opcional)"
+                    />
+                  </Grid>
+                  <Grid xs={12} item>
+                    {renderTagsToolbar(values, setFieldValue, getCurrentAiPromptField())}
+                    <TextField
+                      label="Prompt da campanha (aba atual)"
+                      placeholder="Descreva o contexto, objetivo e restrições para gerar as variações desta aba."
+                      variant="outlined"
+                      margin="dense"
+                      fullWidth
+                      multiline
+                      rows={4}
+                      value={values[getCurrentAiPromptField()] || ""}
+                      onChange={(e) => setFieldValue(getCurrentAiPromptField(), e.target.value)}
+                      helperText="Dica: use variáveis como {nome}, {empresa}, {pedido}."
+                      disabled={!campaignEditable}
+                    />
                   </Grid>
                   <Grid xs={12} md={4} item>
                     <Field
@@ -902,6 +1224,7 @@ const CampaignModal = ({
                     <Box style={{ paddingTop: 20, border: "none" }}>
                       {messageTab === 0 && (
                         <>
+                          {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(0))}
                           {values.confirmation ? (
                             <Grid spacing={2} container>
                               <Grid xs={12} md={8} item>
@@ -918,10 +1241,12 @@ const CampaignModal = ({
                           ) : (
                             <>{renderMessageField("message1")}</>
                           )}
+                          {renderTabAttachment(0, values, !campaignEditable)}
                         </>
                       )}
                       {messageTab === 1 && (
                         <>
+                          {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(1))}
                           {values.confirmation ? (
                             <Grid spacing={2} container>
                               <Grid xs={12} md={8} item>
@@ -938,10 +1263,12 @@ const CampaignModal = ({
                           ) : (
                             <>{renderMessageField("message2")}</>
                           )}
+                          {renderTabAttachment(1, values, !campaignEditable)}
                         </>
                       )}
                       {messageTab === 2 && (
                         <>
+                          {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(2))}
                           {values.confirmation ? (
                             <Grid spacing={2} container>
                               <Grid xs={12} md={8} item>
@@ -958,10 +1285,12 @@ const CampaignModal = ({
                           ) : (
                             <>{renderMessageField("message3")}</>
                           )}
+                          {renderTabAttachment(2, values, !campaignEditable)}
                         </>
                       )}
                       {messageTab === 3 && (
                         <>
+                          {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(3))}
                           {values.confirmation ? (
                             <Grid spacing={2} container>
                               <Grid xs={12} md={8} item>
@@ -978,10 +1307,12 @@ const CampaignModal = ({
                           ) : (
                             <>{renderMessageField("message4")}</>
                           )}
+                          {renderTabAttachment(3, values, !campaignEditable)}
                         </>
                       )}
                       {messageTab === 4 && (
                         <>
+                          {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(4))}
                           {values.confirmation ? (
                             <Grid spacing={2} container>
                               <Grid xs={12} md={8} item>
@@ -998,6 +1329,7 @@ const CampaignModal = ({
                           ) : (
                             <>{renderMessageField("message5")}</>
                           )}
+                          {renderTabAttachment(4, values, !campaignEditable)}
                         </>
                       )}
                     </Box>
@@ -1057,13 +1389,14 @@ const CampaignModal = ({
                                 setAiGenerated([]);
                                 const baseText = values[aiTargetField] || "";
                                 const variables = extractPlaceholders(baseText);
+                                const promptExtra = values[getCurrentAiPromptField()] || "";
                                 const { data } = await api.post('/ai/generate-campaign-messages', {
                                   baseText,
                                   variables,
                                   tone: aiTone,
                                   numVariations: aiNumVariations,
                                   language: 'pt-BR',
-                                  businessContext: aiBusinessContext
+                                  businessContext: [promptExtra, aiBusinessContext].filter(Boolean).join('\n')
                                 });
                                 setAiGenerated(Array.isArray(data?.variations) ? data.variations : []);
                               } catch (err) {
@@ -1111,6 +1444,91 @@ const CampaignModal = ({
                       <Button onClick={() => setAiDialogOpen(false)} color="primary" variant="outlined">Fechar</Button>
                     </DialogActions>
                   </Dialog>
+                  {/* Dialog de Pré-visualização de Mídia */}
+                  <Dialog open={previewOpen} onClose={closePreview} maxWidth="md" fullWidth>
+                    <DialogTitle>{previewName || 'Pré-visualização'}</DialogTitle>
+                    <DialogContent dividers>
+                      {isImage(previewUrl) && (
+                        <img src={previewUrl} alt={previewName || 'preview'} style={{ maxWidth: '100%', borderRadius: 4 }} />
+                      )}
+                      {isVideo(previewUrl) && (
+                        <video src={previewUrl} controls style={{ width: '100%', borderRadius: 4 }} />
+                      )}
+                      {isAudio(previewUrl) && (
+                        <audio src={previewUrl} controls style={{ width: '100%' }} />
+                      )}
+                      {isPdf(previewUrl) && (
+                        <iframe title="pdf" src={previewUrl} style={{ width: '100%', height: '70vh', border: 'none' }} />
+                      )}
+                      {!isImage(previewUrl) && !isVideo(previewUrl) && !isAudio(previewUrl) && !isPdf(previewUrl) && (
+                        <Typography variant="body2">Pré-visualização não disponível para este tipo de arquivo.</Typography>
+                      )}
+                    </DialogContent>
+                    <DialogActions>
+                      <Button onClick={closePreview} color="primary" variant="outlined">Fechar</Button>
+                    </DialogActions>
+                  </Dialog>
+                  {/* Dialog Biblioteca de Arquivos */}
+                  <Dialog open={fileLibraryOpen} onClose={() => setFileLibraryOpen(false)} maxWidth="md" fullWidth scroll="paper">
+                    <DialogTitle>Selecionar arquivo da biblioteca</DialogTitle>
+                    <DialogContent dividers>
+                      <TextField
+                        value={filesSearch}
+                        onChange={(e) => setFilesSearch(e.target.value)}
+                        placeholder="Buscar listas de arquivos..."
+                        variant="outlined"
+                        size="small"
+                        fullWidth
+                        style={{ marginBottom: 8 }}
+                      />
+                      <div>
+                        {(fileLists || []).map(fl => {
+                          const open = !!expandedFileIds[fl.id];
+                          return (
+                            <div key={fl.id} style={{ border: '1px solid #eee', borderRadius: 6, marginBottom: 8 }}>
+                              <div style={{ padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                                   onClick={async () => {
+                                     setExpandedFileIds(prev => ({ ...prev, [fl.id]: !open }));
+                                     if (!open) {
+                                       try {
+                                         const { data } = await api.get(`/files/${fl.id}`);
+                                         setExpandedFileIds(prev => ({ ...prev, [fl.id]: data }));
+                                       } catch (_) {}
+                                     }
+                                   }}>
+                                <strong>{fl.name}</strong>
+                                <span style={{ fontSize: 12, opacity: 0.7 }}>{open ? 'Ocultar' : 'Mostrar'}</span>
+                              </div>
+                              {open && (
+                                <div style={{ padding: 8 }}>
+                                  {((expandedFileIds[fl.id] && expandedFileIds[fl.id].options) || []).map(opt => (
+                                    <div key={opt.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 4px', borderBottom: '1px dashed #eee' }}>
+                                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <span style={{ fontSize: 14 }}>{opt.name || opt.path || `Opção ${opt.id}`}</span>
+                                        <span style={{ fontSize: 12, opacity: 0.7 }}>{opt.mediaType || ''}</span>
+                                      </div>
+                                      <Button size="small" variant="outlined" color="primary" onClick={() => handleChooseFromLibrary(opt)}>
+                                        Usar este arquivo
+                                      </Button>
+                                    </div>
+                                  ))}
+                                  {(!expandedFileIds[fl.id] || !expandedFileIds[fl.id].options || expandedFileIds[fl.id].options.length === 0) && (
+                                    <div style={{ padding: 8, fontSize: 12, opacity: 0.7 }}>Sem opções nesta lista.</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {(!fileLists || fileLists.length === 0) && (
+                          <div style={{ padding: 12, textAlign: 'center', opacity: 0.7 }}>Nenhuma lista encontrada.</div>
+                        )}
+                      </div>
+                    </DialogContent>
+                    <DialogActions>
+                      <Button onClick={() => setFileLibraryOpen(false)} color="primary" variant="outlined">Fechar</Button>
+                    </DialogActions>
+                  </Dialog>
                   
                   {(campaign.mediaPath || attachment) && (
                     <Grid xs={12} item>
@@ -1153,7 +1571,7 @@ const CampaignModal = ({
                 {!attachment && !campaign.mediaPath && campaignEditable && (
                   <Button
                     color="primary"
-                    onClick={() => attachmentFile.current.click()}
+                    onClick={() => setFileLibraryOpen(true)}
                     disabled={isSubmitting}
                     variant="outlined"
                   >

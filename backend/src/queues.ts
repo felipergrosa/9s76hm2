@@ -1006,6 +1006,8 @@ async function handlePrepareContact(job) {
       );
 
       campaignShipping.message = message === null ? "" : `\u200c ${message}`;
+      // Salva o índice da mensagem (1..5) para uso de mídia por mensagem
+      campaignShipping.messageIndex = (radomIndex || 0) + 1;
     }
     if (campaign.confirmation) {
       const confirmationMessages =
@@ -1201,7 +1203,38 @@ async function handleDispatchCampaign(job) {
           await campaignShipping.update({ confirmationRequestedAt: moment() });
         } else {
 
-          if (!campaign.mediaPath) {
+          // Seleciona mídia por mensagem (prioridade) ou global (fallback)
+          const msgIdx: number | undefined = (campaignShipping as any).messageIndex;
+          const perUrl: string | null = msgIdx ? (campaign as any)[`mediaUrl${msgIdx}`] : null;
+          const perName: string | null = msgIdx ? (campaign as any)[`mediaName${msgIdx}`] : null;
+
+          const publicFolder = path.resolve(__dirname, "..", "public");
+          const urlToLocalPath = (url: string | null | undefined): string | null => {
+            try {
+              if (!url) return null;
+              let p = url as string;
+              if (/^https?:\/\//i.test(p)) {
+                const u = new URL(p);
+                p = u.pathname;
+              }
+              const marker = "/public/";
+              const idx = p.indexOf(marker);
+              if (idx >= 0) {
+                const rel = p.substring(idx + marker.length);
+                return path.join(publicFolder, rel);
+              }
+              // casos: "/companyX/arquivo" ou "companyX/arquivo"
+              p = p.replace(/^\/+/, "");
+              return path.join(publicFolder, p);
+            } catch {
+              return null;
+            }
+          };
+
+          const perMessageFilePath = urlToLocalPath(perUrl);
+          const hasPerMessageMedia = Boolean(perMessageFilePath && perName);
+
+          if (!hasPerMessageMedia && !campaign.mediaPath) {
             const sentMessage = await wbot.sendMessage(chatId, {
               text: `\u200c ${campaignShipping.message}`
             });
@@ -1209,13 +1242,13 @@ async function handleDispatchCampaign(job) {
             await verifyMessage(sentMessage, ticket, contact, null, true, false);
           }
 
+          if (hasPerMessageMedia || campaign.mediaPath) {
+            const filePath = hasPerMessageMedia
+              ? (perMessageFilePath as string)
+              : path.join(publicFolder, `company${campaign.companyId}`, campaign.mediaPath);
 
-          if (campaign.mediaPath) {
-
-            const publicFolder = path.resolve(__dirname, "..", "public");
-            const filePath = path.join(publicFolder, `company${campaign.companyId}`, campaign.mediaPath);
-
-            const options = await getMessageOptions(campaign.mediaName, filePath, String(campaign.companyId), `\u200c ${campaignShipping.message}`);
+            const fileName = hasPerMessageMedia ? (perName as string) : campaign.mediaName;
+            const options = await getMessageOptions(fileName, filePath, String(campaign.companyId), `\u200c ${campaignShipping.message}`);
             if (Object.keys(options).length) {
               if (options.mimetype === "audio/mp4") {
                 const audioMessage = await wbot.sendMessage(chatId, {
@@ -1259,17 +1292,47 @@ async function handleDispatchCampaign(job) {
 
       } else {
 
-        if (!campaign.mediaPath) {
+        // Seleciona mídia por mensagem (prioridade) ou global (fallback)
+        const msgIdx: number | undefined = (campaignShipping as any).messageIndex;
+        const perUrl: string | null = msgIdx ? (campaign as any)[`mediaUrl${msgIdx}`] : null;
+        const perName: string | null = msgIdx ? (campaign as any)[`mediaName${msgIdx}`] : null;
+
+        const publicFolder = path.resolve(__dirname, "..", "public");
+        const urlToLocalPath = (url: string | null | undefined): string | null => {
+          try {
+            if (!url) return null;
+            let p = url as string;
+            if (/^https?:\/\//i.test(p)) {
+              const u = new URL(p);
+              p = u.pathname;
+            }
+            const marker = "/public/";
+            const idx = p.indexOf(marker);
+            if (idx >= 0) {
+              const rel = p.substring(idx + marker.length);
+              return path.join(publicFolder, rel);
+            }
+            p = p.replace(/^\/+/, "");
+            return path.join(publicFolder, p);
+          } catch { return null; }
+        };
+        const perMessageFilePath = urlToLocalPath(perUrl);
+        const hasPerMessageMedia = Boolean(perMessageFilePath && perName);
+
+        if (!hasPerMessageMedia && !campaign.mediaPath) {
           await wbot.sendMessage(chatId, {
             text: campaignShipping.message
           });
         }
 
-        if (campaign.mediaPath) {
-          const publicFolder = path.resolve(__dirname, "..", "public");
-          const filePath = path.join(publicFolder, `company${campaign.companyId}`, campaign.mediaPath);
+        if (hasPerMessageMedia || campaign.mediaPath) {
+          const filePath = hasPerMessageMedia
+            ? (perMessageFilePath as string)
+            : path.join(publicFolder, `company${campaign.companyId}`, campaign.mediaPath);
 
-          const options = await getMessageOptions(campaign.mediaName, filePath, String(campaign.companyId), campaignShipping.message);
+          const fileName = hasPerMessageMedia ? (perName as string) : campaign.mediaName;
+
+          const options = await getMessageOptions(fileName, filePath, String(campaign.companyId), campaignShipping.message);
           if (Object.keys(options).length) {
             if (options.mimetype === "audio/mp4") {
               await wbot.sendMessage(chatId, {

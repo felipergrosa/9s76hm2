@@ -131,6 +131,37 @@ class Campaign extends Model<Campaign> {
 
   @Column({ type: DataType.TEXT, allowNull: true })
   allowedWhatsappIds: string; // JSON array de IDs permitidos para rodízio por campanha
+
+  // Campos de mídia por mensagem (1..5)
+  @Column
+  mediaUrl1: string;
+
+  @Column
+  mediaName1: string;
+
+  @Column
+  mediaUrl2: string;
+
+  @Column
+  mediaName2: string;
+
+  @Column
+  mediaUrl3: string;
+
+  @Column
+  mediaName3: string;
+
+  @Column
+  mediaUrl4: string;
+
+  @Column
+  mediaName4: string;
+
+  @Column
+  mediaUrl5: string;
+
+  @Column
+  mediaName5: string;
 }
 
 export default Campaign;
