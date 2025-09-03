@@ -31,7 +31,9 @@ fi
 # Aplica migrations (idempotente: se não houver novas, não fará nada)
 echo "[auto-migrate] Executando migrations..."
 if ! npx sequelize db:migrate; then
-  echo "[auto-migrate] Aviso: Falha ao aplicar migrations. Verifique logs/variáveis de ambiente. Prosseguindo com start do servidor."
+  echo "[auto-migrate] ERRO: Falha ao aplicar migrations."
+  npx sequelize db:migrate # Executa novamente para exibir o erro no log
+  echo "[auto-migrate] Verifique logs/variáveis de ambiente. Prosseguindo com start do servidor."
 fi
 
 # Inicia a aplicação

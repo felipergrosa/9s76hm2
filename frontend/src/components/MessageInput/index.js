@@ -41,7 +41,8 @@ import {
   Timer,
 } from "@material-ui/icons";
 import AddIcon from "@material-ui/icons/Add";
-import BoltIcon from '@mui/icons-material/FlashOn';
+import ChatIcon from '@material-ui/icons/Chat';
+import FlashOnIcon from '@material-ui/icons/FlashOn';
 import { CameraAlt } from "@material-ui/icons";
 import MicRecorder from "mic-recorder-to-mp3";
 import clsx from "clsx";
@@ -65,6 +66,7 @@ import MessageUploadMedias from "../MessageUploadMedias";
 import { EditMessageContext } from "../../context/EditingMessage/EditingMessageContext";
 import ScheduleModal from "../ScheduleModal";
 import { useParams } from "react-router-dom/cjs/react-router-dom.min";
+import ChatAssistantPanel from "../ChatAssistantPanel";
 
 
 const Mp3Recorder = new MicRecorder({ bitRate: 128 });
@@ -377,6 +379,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   const { setEditingMessage, editingMessage } = useContext(EditMessageContext);
   const { user } = useContext(AuthContext);
   const [appointmentModalOpen, setAppointmentModalOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
 
   const [signMessagePar, setSignMessagePar] = useState(false);
   const { get: getSetting } = useCompanySettings();
@@ -1037,8 +1040,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
         <Paper
           square
           elevation={0}
-          className={classes.mainWrapper}
-          onDragEnter={() => setOnDragEnter(true)}
+          className={classes.messageInputWrapper}
           onDrop={(e) => handleInputDrop(e)}
         >
           {(replyingMessage && renderReplyingMessage(replyingMessage)) || (editingMessage && renderReplyingMessage(editingMessage))}
@@ -1052,6 +1054,21 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
               >
                 <Mood className={classes.sendMessageIcons} />
               </IconButton>
+              <Tooltip title="Assistente de Chat">
+                <span>
+                  <IconButton
+                    aria-label="assistant"
+                    component="span"
+                    disabled={disableOption()}
+                    onClick={() => {
+                      console.log('Clicou no assistente, alterando estado para:', !assistantOpen);
+                      setAssistantOpen(prev => !prev);
+                    }}
+                  >
+                    <ChatIcon className={classes.sendMessageIcons} />
+                  </IconButton>
+                </span>
+              </Tooltip>
               {showEmoji ? (
                 <div className={classes.emojiBox}>
                   <ClickAwayListener onClickAway={(e) => setShowEmoji(true)}>
@@ -1381,13 +1398,13 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
             </div>
             {!privateMessageInputVisible && (
               <>
-              <Tooltip title={i18n.t("tickets.buttons.quickmessageflash")}>
+                <Tooltip title={i18n.t("tickets.buttons.quickmessageflash")}>
                   <IconButton
                     aria-label="flash"
                     component="span"
                     onClick={() => setInputMessage('/')}
                   >
-                    <BoltIcon className={classes.sendMessageIcons} />
+                    <FlashOnIcon className={classes.sendMessageIcons} />
                   </IconButton>
                 </Tooltip>
                 <Tooltip title={i18n.t("tickets.buttons.scredule")}>
@@ -1477,8 +1494,15 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
               <ScheduleModal
                 open={appointmentModalOpen}
                 onClose={() => setAppointmentModalOpen(false)}
-                message={inputMessage}
-                contactId={contactId}
+                ticketId={ticketId}
+              />
+            )}
+            {assistantOpen && (
+              <ChatAssistantPanel
+                open={assistantOpen}
+                onClose={() => setAssistantOpen(false)}
+                inputMessage={inputMessage}
+                setInputMessage={setInputMessage}
               />
             )}
           </div>

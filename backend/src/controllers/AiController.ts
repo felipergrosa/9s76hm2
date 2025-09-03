@@ -1,12 +1,130 @@
 import { Request, Response } from "express";
 import OpenAI from "openai";
 import GetIntegrationByTypeService from "../services/QueueIntegrationServices/GetIntegrationByTypeService";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const extractVariables = (text: string): string[] => {
   if (!text) return [];
   const matches = text.match(/\{[^}]+\}/g) || [];
   // normalize: remove duplicates and keep original braces
   return Array.from(new Set(matches));
+};
+
+// Unified text transform endpoint (translate, spellcheck, enhance)
+export const transformText = async (req: Request, res: Response) => {
+  try {
+    const { companyId } = req.user;
+    const {
+      mode,
+      text,
+      targetLang,
+      integrationType
+    }: { mode: "translate" | "spellcheck" | "enhance"; text: string; targetLang?: string; integrationType?: "openai" | "gemini" } = req.body || {};
+
+    if (!text || typeof text !== "string") {
+      return res.status(400).json({ error: "text é obrigatório" });
+    }
+    if (!mode || !["translate", "spellcheck", "enhance"].includes(mode)) {
+      return res.status(400).json({ error: "mode inválido" });
+    }
+
+    // Pick integration type: explicit or prefer openai then gemini
+    let pickedType: "openai" | "gemini" | null = null;
+    if (integrationType === "openai" || integrationType === "gemini") pickedType = integrationType;
+    let integration: any = null;
+
+    if (pickedType) {
+      try { integration = await GetIntegrationByTypeService({ companyId, type: pickedType }); } catch { /* ignore */ }
+    } else {
+      try { integration = await GetIntegrationByTypeService({ companyId, type: "openai" }); pickedType = integration ? "openai" : null; } catch { /* ignore */ }
+      if (!integration) {
+        try { integration = await GetIntegrationByTypeService({ companyId, type: "gemini" }); pickedType = integration ? "gemini" : null; } catch { /* ignore */ }
+      }
+    }
+
+    // Early check: if no provider available at all (no integrations nor env keys), return clear message
+    try {
+      let hasOpenAIIntegration = false;
+      let hasGeminiIntegration = false;
+      try {
+        const openaiInt = await GetIntegrationByTypeService({ companyId, type: "openai" });
+        hasOpenAIIntegration = Boolean(openaiInt?.jsonContent?.apiKey);
+      } catch {}
+      try {
+        const geminiInt = await GetIntegrationByTypeService({ companyId, type: "gemini" });
+        hasGeminiIntegration = Boolean(geminiInt?.jsonContent?.apiKey);
+      } catch {}
+      const hasAnyEnv = Boolean(process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY);
+      if (!hasOpenAIIntegration && !hasGeminiIntegration && !hasAnyEnv) {
+        return res.status(400).json({ error: "Nenhuma integração de IA disponível. Configure uma API (OpenAI ou Gemini) nas Configurações Globais." });
+      }
+    } catch {}
+
+    const cfg = integration?.jsonContent || {};
+    const model = String(cfg.model || (pickedType === "gemini" ? "gemini-2.0-pro" : process.env.OPENAI_MODEL || "gpt-4o-mini"));
+    const temperature = typeof cfg.temperature === "number" ? cfg.temperature : 0.7;
+    const max_tokens = typeof cfg.maxTokens === "number" ? cfg.maxTokens : 400;
+
+    // Prompts
+    const keepVars = "Mantenha intactos placeholders como {nome}, URLs e emojis. Responda somente com o texto final, sem explicações.";
+    const tLang = targetLang || "pt-BR";
+    let systemMsg = "";
+    let userMsg = "";
+    if (mode === "translate") {
+      systemMsg = `Você é um tradutor profissional.`;
+      userMsg = `Traduza para ${tLang}. ${keepVars}\n\nTexto:\n"""${text}"""`;
+    } else if (mode === "spellcheck") {
+      systemMsg = `Você corrige ortografia e gramática em pt-BR sem mudar o sentido.`;
+      userMsg = `${keepVars}\n\nTexto:\n"""${text}"""`;
+    } else {
+      systemMsg = `Você aprimora mensagens para WhatsApp (claras, naturais, sem SPAM).`;
+      userMsg = `${keepVars}\n\nTexto:\n"""${text}\n"""`;
+    }
+
+    // Try OpenAI then Gemini if no explicit type
+    const tryOpenAI = async () => {
+      let apiKey: string | undefined = cfg.apiKey || process.env.OPENAI_API_KEY;
+      if (!apiKey) throw new Error("OPENAI_API_KEY não configurada");
+      const client = new OpenAI({ apiKey });
+      const completion = await client.chat.completions.create({
+        model,
+        messages: [
+          { role: "system" as const, content: systemMsg },
+          { role: "user" as const, content: userMsg },
+        ],
+        temperature,
+        max_tokens,
+      });
+      return completion.choices?.[0]?.message?.content?.trim() || "";
+    };
+
+    const tryGemini = async () => {
+      const apiKey: string | undefined = cfg.apiKey || process.env.GEMINI_API_KEY;
+      if (!apiKey) throw new Error("GEMINI_API_KEY não configurada");
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const modelClient = genAI.getGenerativeModel({ model, systemInstruction: systemMsg });
+      const chat = modelClient.startChat({ history: [] });
+      const result = await chat.sendMessage(userMsg);
+      return result.response.text().trim();
+    };
+
+    let out = "";
+    if (pickedType === "openai") {
+      out = await tryOpenAI();
+    } else if (pickedType === "gemini") {
+      out = await tryGemini();
+    } else {
+      try {
+        out = await tryOpenAI();
+      } catch (_) {
+        out = await tryGemini();
+      }
+    }
+
+    return res.status(200).json({ result: out || "" });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || "Erro ao transformar texto" });
+  }
 };
 
 const buildPrompt = (
@@ -127,4 +245,4 @@ export const encryptionStatus = async (_req: Request, res: Response) => {
   }
 };
 
-export default { generateCampaignMessages, encryptionStatus };
+export default { generateCampaignMessages, encryptionStatus, transformText };
