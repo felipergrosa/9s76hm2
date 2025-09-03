@@ -16,16 +16,23 @@ class SocketWorker {
   }
 
   configureSocket() {
-    this.socket = io(`${process.env.REACT_APP_BACKEND_URL}/${this?.companyId}` , {
+    const token = localStorage.getItem("public-token");
+    const nsUrl = `${process.env.REACT_APP_BACKEND_URL}/workspace-${this?.companyId}`;
+    // Importante: o backend valida namespaces como /workspace-<id> e exige query.token (JWT)
+    this.socket = io(nsUrl, {
+      transports: ["websocket"],
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: Infinity,
-      query: { userId: this.userId }
+      pingTimeout: 20000,
+      pingInterval: 25000,
+      query: token ? { token, userId: this.userId } : { userId: this.userId }
+      // auth: token ? { token } : undefined, // opcional, backend lê de query.token
     });
 
     this.socket.on("connect", () => {
-      console.log("Conectado ao servidor Socket.IO");
+      console.log("Socket conectado:", { namespace: `workspace-${this?.companyId}`, hasToken: !!token });
     });
 
     this.socket.on("disconnect", () => {

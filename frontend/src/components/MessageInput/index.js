@@ -1022,6 +1022,16 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   else {
     return (
       <>
+        {assistantOpen && (
+          <div style={{ width: '100%' }}>
+            <ChatAssistantPanel 
+              open={assistantOpen}
+              inputMessage={inputMessage}
+              setInputMessage={setInputMessage}
+              onClose={() => setAssistantOpen(false)}
+            />
+          </div>
+        )}
         {modalCameraOpen && (
           <CameraModal
             isOpen={modalCameraOpen}
@@ -1495,14 +1505,6 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                 open={appointmentModalOpen}
                 onClose={() => setAppointmentModalOpen(false)}
                 ticketId={ticketId}
-              />
-            )}
-            {assistantOpen && (
-              <ChatAssistantPanel
-                open={assistantOpen}
-                onClose={() => setAssistantOpen(false)}
-                inputMessage={inputMessage}
-                setInputMessage={setInputMessage}
               />
             )}
           </div>

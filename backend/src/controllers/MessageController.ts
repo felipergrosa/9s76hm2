@@ -115,9 +115,10 @@ export const addReaction = async (req: Request, res: Response): Promise<Response
     });
 
     const io = getIO();
-    io.to(message.ticketId.toString()).emit(`company-${companyId}-appMessage`, {
+    io.of(`/workspace-${companyId}`).to(message.ticketId.toString()).emit(`company-${companyId}-appMessage`, {
       action: "update",
       message,
+      ticket, // inclui ticket com uuid para o frontend filtrar
     });
 
     return res.status(200).json({
@@ -154,53 +155,38 @@ export const sendListMessage = async (req: Request, res: Response): Promise<Resp
       throw new AppError("Número de WhatsApp não encontrado", 404);
     }
 
-    const number = `${contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
     const botNumber = whatsapp.number;
     const wbot = await GetTicketWbot(ticket);
-
-    // Validate input
-    if (!sections || !Array.isArray(sections) || sections.length === 0) {
-      throw new AppError("Sections must be a non-empty array", 400);
-    }
-    if (!sections.every((section: any) => Array.isArray(section.rows) && section.rows.length > 0)) {
-      throw new AppError("Each section must have at least one row", 400);
-    }
-
-    // Format sections for Baileys MD
-    const formattedSections = sections.map((section: any) => ({
-      title: section.title || "Section",
-      rows: section.rows.map((row: any) => ({
-        rowId: row.id || generateRandomCode(10),
-        title: row.title || "Option",
-        description: row.description || "",
-      })),
-    }));
-
+    const number = `${contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
     const listMessage: proto.IMessage = {
       listMessage: {
         title: title || "Lista de Opções",
         description: text || "Selecione uma opção",
         buttonText: buttonText || "Selecionar",
         footerText: footer || "",
-        sections: formattedSections,
+        sections: sections.map((section: any) => ({
+          title: section.title || "Section",
+          rows: section.rows.map((row: any) => ({
+            rowId: row.id || generateRandomCode(10),
+            title: row.title || "Option",
+            description: row.description || "",
+          })),
+        })),
         listType: 1, // Single-select list
       },
     };
 
     console.debug("Sending list message:", JSON.stringify(listMessage, null, 2));
 
-    // Ensure timestamp is a number
     const timestamp = Number(Math.round(Date.now() / 1000));
     console.debug("Timestamp:", timestamp);
 
     const newMsg = generateWAMessageFromContent(number, listMessage, {
       userJid: botNumber,
-      
     });
 
     await wbot.relayMessage(number, newMsg.message, { messageId: newMsg.key.id! });
 
-    // Preencher o campo body para salvar no banco
     const messageBody = text || title || "Lista interativa";
     const messageData = {
       wid: newMsg.key.id,
@@ -282,7 +268,6 @@ export const sendCopyMessage = async (req: Request, res: Response): Promise<Resp
     const newMsg = generateWAMessageFromContent(number, copyMessage, { userJid: botNumber });
     await wbot.relayMessage(number, newMsg.message, { messageId: newMsg.key.id! });
 
-    // Preencher o campo body para salvar no banco
     const messageBody = title || "Mensagem de cópia interativa";
     const messageData = {
       wid: newMsg.key.id,
@@ -364,7 +349,6 @@ export const sendCALLMessage = async (req: Request, res: Response): Promise<Resp
     const newMsg = generateWAMessageFromContent(number, callMessage, { userJid: botNumber });
     await wbot.relayMessage(number, newMsg.message, { messageId: newMsg.key.id! });
 
-    // Preencher o campo body para salvar no banco
     const messageBody = title || "Mensagem de chamada interativa";
     const messageData = {
       wid: newMsg.key.id,
@@ -493,7 +477,6 @@ export const sendURLMessage = async (req: Request, res: Response): Promise<Respo
     const newMsg = generateWAMessageFromContent(number, urlMessage, { userJid: botNumber });
     await wbot.relayMessage(number, newMsg.message, { messageId: newMsg.key.id! });
 
-    // Preencher o campo body para salvar no banco
     const messageBody = title || "Mensagem URL interativa";
     const messageData = {
       wid: newMsg.key.id,
@@ -525,7 +508,6 @@ export const sendURLMessage = async (req: Request, res: Response): Promise<Respo
 };
 
 // Enviar mensagem PIX
-// Enviar mensagem PIX
 export const sendPIXMessage = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
   const {
@@ -556,12 +538,6 @@ export const sendPIXMessage = async (req: Request, res: Response): Promise<Respo
       throw new AppError("Número de WhatsApp não encontrado", 404);
     }
 
-    // Validate input
-    if (!sendKey || !title) {
-      throw new AppError("Title and PIX key are required", 400);
-    }
-
-    // Validate PIX key format
     const validatePixKey = (key: string): boolean => {
       return (
         /^\+55\d{10,11}$/.test(key) || // PHONE
@@ -609,7 +585,6 @@ export const sendPIXMessage = async (req: Request, res: Response): Promise<Respo
     const newMsg = generateWAMessageFromContent(number, interactiveMsg, { userJid: botNumber });
     await wbot.relayMessage(number, newMsg.message, { messageId: newMsg.key.id! });
 
-    // Preencher o campo body para salvar no banco
     const messageBody = title || "Mensagem PIX interativa";
     const messageData = {
       wid: newMsg.key.id,
@@ -642,28 +617,17 @@ export const sendPIXMessage = async (req: Request, res: Response): Promise<Respo
     return res.status(500).json({ message: "Erro interno ao enviar a mensagem PIX", error: String(error) });
   }
 };
+
 // Transcrição de áudio
 
 export const transcribeAudioMessage = async (req: Request, res: Response): Promise<Response> => {
   const { fileName } = req.params;
   const { companyId } = req.user;
 
-  // Validação de entrada
-  if (!fileName || typeof fileName !== 'string') {
-    return res.status(400).json({ error: "fileName é obrigatório e deve ser uma string." });
-  }
-  if (!companyId || typeof companyId !== 'number') {
-    return res.status(400).json({ error: "companyId é obrigatório e deve ser um número." });
-  }
-
   try {
-    // Criar uma instância da classe TranscribeAudioMessageToText
     const transcribeService = new TranscribeAudioMessageToText();
-    
-    // Chamar o método execute na instância
     const transcribedText = await transcribeService.execute(fileName, companyId);
 
-    // Resposta bem-sucedida
     return res.json({ transcribedText });
   } catch (error) {
     console.error(`Erro ao transcrever a mensagem de áudio: ${error}`);
@@ -889,7 +853,6 @@ export const forwardMessage = async (req: Request, res: Response): Promise<Respo
       body = "";
     }
 
-    // Usar o diretório público correto em runtime (aponta para /app/public após build)
     const publicFolder = path.resolve(__dirname, "..", "..", "public");
     const filePath = path.join(publicFolder, `company${createTicket.companyId}`, fileName);
 
@@ -918,15 +881,19 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
 
   if (message.isPrivate) {
     await Message.destroy({ where: { id: message.id } });
-    io.of(String(companyId)).emit(`company-${companyId}-appMessage`, {
+    const ticket = await Ticket.findByPk(message.ticketId, { include: ["contact"] });
+    io.of(`/workspace-${companyId}`).emit(`company-${companyId}-appMessage`, {
       action: "delete",
       message,
+      ticket,
     });
   }
 
-  io.of(String(companyId)).emit(`company-${companyId}-appMessage`, {
+  const ticketUpd = await Ticket.findByPk(message.ticketId, { include: ["contact"] });
+  io.of(`/workspace-${companyId}`).emit(`company-${companyId}-appMessage`, {
     action: "update",
     message,
+    ticket: ticketUpd,
   });
 
   return res.status(200).json({ message: "Mensagem removida com sucesso" });
@@ -1034,12 +1001,12 @@ export const edit = async (req: Request, res: Response): Promise<Response> => {
     const { ticket, message } = await EditWhatsAppMessage({ messageId, body });
 
     const io = getIO();
-    io.of(String(companyId)).emit(`company-${companyId}-appMessage`, {
+    io.of(`/workspace-${companyId}`).emit(`company-${companyId}-appMessage`, {
       action: "update",
       message,
     });
 
-    io.of(String(companyId)).emit(`company-${companyId}-ticket`, {
+    io.of(`/workspace-${companyId}`).emit(`company-${companyId}-ticket`, {
       action: "update",
       ticket,
     });

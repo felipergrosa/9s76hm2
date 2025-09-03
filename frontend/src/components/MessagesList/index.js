@@ -750,34 +750,69 @@ const MessagesList = ({
     const companyId = user.companyId;
 
     const connectEventMessagesList = () => {
-      socket.emit("joinChatBox", `${ticketId}`);
-    }
+      try {
+        console.debug("[MessagesList] socket connect - joinChatBox", { ticketId });
+        socket.emit("joinChatBox", `${ticketId}`);
+      } catch (e) {
+        console.debug("[MessagesList] error emitting joinChatBox", e);
+      }
+    };
 
     const onAppMessageMessagesList = (data) => {
-      if (data.action === "create" && data.ticket.uuid === ticketId) {
-        dispatch({ type: "ADD_MESSAGE", payload: data.message });
-        scrollToBottom();
-      }
+      try {
+        const evtUuid = data?.message?.ticket?.uuid || data?.ticket?.uuid;
+        if (data?.action && evtUuid) {
+          console.debug("[MessagesList] appMessage", { action: data.action, evtUuid, ticketId, msgId: data?.message?.id });
+        } else {
+          console.debug("[MessagesList] appMessage (no uuid)", data);
+        }
 
-      if (data.action === "update" && data?.message?.ticket?.uuid === ticketId) {
-        dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
-      }
+        if (data.action === "create" && evtUuid === ticketId) {
+          dispatch({ type: "ADD_MESSAGE", payload: data.message });
+          scrollToBottom();
+        }
 
-      if (data.action == "delete" && data.message.ticket?.uuid === ticketId) {
-        dispatch({ type: "DELETE_MESSAGE", payload: data.messageId });
+        if (data.action === "update" && evtUuid === ticketId) {
+          dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
+        }
+
+        if (data.action == "delete" && evtUuid === ticketId) {
+          dispatch({ type: "DELETE_MESSAGE", payload: data.messageId });
+        }
+      } catch (e) {
+        console.debug("[MessagesList] error handling appMessage", e, data);
       }
-    }
+    };
+
     socket.on("connect", connectEventMessagesList);
     socket.on(`company-${companyId}-appMessage`, onAppMessageMessagesList);
 
-    return () => {
+    // Se já estiver conectado, entra na sala imediatamente
+    try {
+      if (socket && socket.connected) {
+        connectEventMessagesList();
+      }
+    } catch {}
 
-      socket.emit("joinChatBoxLeave", `${ticketId}`)
+    // Logs auxiliares de conexão
+    socket.on("disconnect", (reason) => console.debug("[MessagesList] disconnect", reason));
+    socket.on("reconnect", (attempt) => console.debug("[MessagesList] reconnect", attempt));
+    socket.on("reconnect_attempt", (attempt) => console.debug("[MessagesList] reconnect_attempt", attempt));
+    socket.on("connect_error", (err) => console.debug("[MessagesList] connect_error", err?.message || err));
+
+    return () => {
+      try {
+        console.debug("[MessagesList] cleanup - leave room", { ticketId });
+        socket.emit("joinChatBoxLeave", `${ticketId}`);
+      } catch {}
 
       socket.off("connect", connectEventMessagesList);
       socket.off(`company-${companyId}-appMessage`, onAppMessageMessagesList);
+      socket.off("disconnect");
+      socket.off("reconnect");
+      socket.off("reconnect_attempt");
+      socket.off("connect_error");
     };
-
   }, [ticketId]);
 
   const loadMore = () => {

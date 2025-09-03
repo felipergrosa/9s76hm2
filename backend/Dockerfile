@@ -37,6 +37,7 @@ RUN npm ci --omit=dev --legacy-peer-deps \
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/public ./public
 COPY --from=build /app/certs ./certs
+COPY --from=build /app/scripts ./scripts
 RUN mkdir -p ./private
 
 EXPOSE 8080

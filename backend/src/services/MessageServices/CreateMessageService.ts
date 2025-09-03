@@ -95,7 +95,7 @@ const CreateMessageService = async ({
   if (!messageData?.ticketImported) {
     // console.log("emitiu socket 96", message.ticketId)
 
-    io.of(String(companyId))
+    io.of(`/workspace-${companyId}`)
       // .to(message.ticketId.toString())
       // .to(message.ticket.status)
       // .to("notification")
