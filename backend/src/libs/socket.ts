@@ -11,7 +11,8 @@ const ALLOWED_NAMESPACES = /^\/workspace-\d+$/;
 // Funções de validação simples
 const isValidUUID = (str: string): boolean => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(str);
+  // Permite que IDs numéricos também sejam considerados válidos
+  return uuidRegex.test(str) || /^\d+$/.test(str);
 };
 
 const isValidStatus = (status: string): boolean => {
@@ -119,7 +120,7 @@ export const initIO = (httpServer: Server): SocketIO => {
 
     // Valida userId
     const userId = socket.handshake.query.userId as string;
-    if (userId && !isValidUUID(userId)) {
+    if (userId && userId !== "undefined" && !isValidUUID(userId)) { // Adicionado verificação para "undefined" string
       socket.disconnect(true);
       logger.warn(`userId inválido de ${clientIp}`);
       return;
@@ -127,54 +128,54 @@ export const initIO = (httpServer: Server): SocketIO => {
 
     logger.info(`Cliente conectado ao namespace ${socket.nsp.name} (IP: ${clientIp})`);
 
-    socket.on("joinChatBox", (ticketId: string, callback: (error?: string) => void) => {
+    socket.on("joinChatBox", (ticketId: string, callback?: (error?: string) => void) => {
       if (!isValidUUID(ticketId)) {
         logger.warn(`ticketId inválido: ${ticketId}`);
-        callback("ID de ticket inválido");
+        callback?.("ID de ticket inválido");
         return;
       }
       socket.join(ticketId);
       logger.info(`Cliente entrou no canal de ticket ${ticketId} no namespace ${socket.nsp.name}`);
-      callback();
+      callback?.();
     });
 
-    socket.on("joinNotification", (callback: (error?: string) => void) => {
+    socket.on("joinNotification", (callback?: (error?: string) => void) => {
       socket.join("notification");
       logger.info(`Cliente entrou no canal de notificações no namespace ${socket.nsp.name}`);
-      callback();
+      callback?.();
     });
 
-    socket.on("joinTickets", (status: string, callback: (error?: string) => void) => {
+    socket.on("joinTickets", (status: string, callback?: (error?: string) => void) => {
       if (!isValidStatus(status)) {
         logger.warn(`Status inválido: ${status}`);
-        callback("Status inválido");
+        callback?.("Status inválido");
         return;
       }
       socket.join(status);
       logger.info(`Cliente entrou no canal ${status} no namespace ${socket.nsp.name}`);
-      callback();
+      callback?.();
     });
 
-    socket.on("joinTicketsLeave", (status: string, callback: (error?: string) => void) => {
+    socket.on("joinTicketsLeave", (status: string, callback?: (error?: string) => void) => {
       if (!isValidStatus(status)) {
         logger.warn(`Status inválido: ${status}`);
-        callback("Status inválido");
+        callback?.("Status inválido");
         return;
       }
       socket.leave(status);
       logger.info(`Cliente saiu do canal ${status} no namespace ${socket.nsp.name}`);
-      callback();
+      callback?.();
     });
 
-    socket.on("joinChatBoxLeave", (ticketId: string, callback: (error?: string) => void) => {
+    socket.on("joinChatBoxLeave", (ticketId: string, callback?: (error?: string) => void) => {
       if (!isValidUUID(ticketId)) {
         logger.warn(`ticketId inválido: ${ticketId}`);
-        callback("ID de ticket inválido");
+        callback?.("ID de ticket inválido");
         return;
       }
       socket.leave(ticketId);
       logger.info(`Cliente saiu do canal de ticket ${ticketId} no namespace ${socket.nsp.name}`);
-      callback();
+      callback?.();
     });
 
     socket.on("disconnect", () => {

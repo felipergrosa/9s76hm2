@@ -107,7 +107,7 @@ const UpdateTicketService = async ({
         status: "closed"
       });
 
-      io.of(String(companyId))
+      io.of(`/workspace-${companyId}`)
         // .to(oldStatus)
         // .to(ticketId.toString())
         .emit(`company-${ticket.companyId}-ticket`, {
@@ -171,12 +171,14 @@ const UpdateTicketService = async ({
           if (ticket.channel === "whatsapp" && ticket.whatsapp.status === 'CONNECTED') {
             const msg = await SendWhatsAppMessage({ body: bodyRatingMessage, ticket, isForwarded: false });
             await verifyMessage(msg, ticket, ticket.contact);
-          } else
-            if (["facebook", "instagram"].includes(ticket.channel)) {
 
-              const msg = await sendFaceMessage({ body: bodyRatingMessage, ticket });
-              await verifyMessageFace(msg, bodyRatingMessage, ticket, ticket.contact);
-            }
+          }
+
+          if (["facebook", "instagram"].includes(ticket.channel)) {
+
+            const msg = await sendFaceMessage({ body: bodyRatingMessage, ticket });
+            await verifyMessageFace(msg, bodyRatingMessage, ticket, ticket.contact);
+          }
 
           await ticketTraking.update({
             userId: ticket.userId,
@@ -216,7 +218,7 @@ const UpdateTicketService = async ({
             amountUsedBotQueuesNPS: 1
           })
 
-          io.of(String(companyId))
+          io.of(`/workspace-${companyId}`)
             // .to(oldStatus)
             // .to(ticketId.toString())
             .emit(`company-${ticket.companyId}-ticket`, {
@@ -302,7 +304,7 @@ const UpdateTicketService = async ({
         hashFlowId: null,
       });
 
-      io.of(String(companyId))
+      io.of(`/workspace-${companyId}`)
         // .to(oldStatus)
         // .to(ticketId.toString())
         .emit(`company-${ticket.companyId}-ticket`, {
@@ -328,7 +330,7 @@ const UpdateTicketService = async ({
 
           await ticket.reload();
 
-          io.of(String(companyId))
+          io.of(`/workspace-${companyId}`)
             // .to(oldStatus)
             // .to(ticketId.toString())
             .emit(`company-${ticket.companyId}-ticket`, {
@@ -384,7 +386,7 @@ const UpdateTicketService = async ({
 
         if (settings.sendMsgTransfTicket === "enabled") {
           // Mensagem de transferencia da FILA
-          if ((oldQueueId !== queueId || oldUserId !== userId) && !isNil(oldQueueId) && !isNil(queueId) && !isNil(queueId) && ticket.whatsapp.status === 'CONNECTED') {
+          if ((oldQueueId !== queueId || oldUserId !== userId) && !isNil(oldQueueId) && !isNil(queueId) && ticket.whatsapp.status === 'CONNECTED') {
 
             const wbot = await GetTicketWbot(ticket);
             const msgtxt = formatBody(`\u200e ${settings.transferMessage.replace("${queue.name}", queue?.name)}`, ticket);
@@ -440,7 +442,6 @@ const UpdateTicketService = async ({
           //         );
           //         await verifyMessage(queueChangedMessage, ticket, ticket.contact);
           //       }
-
         }
 
         if (oldUserId !== userId && oldQueueId === queueId && !isNil(oldUserId) && !isNil(userId)) {
@@ -500,7 +501,7 @@ const UpdateTicketService = async ({
             userId: newTicketTransfer.userId
           })
           // console.log("emitiu socket 497", ticket.id, newTicketTransfer.id)
-          io.of(String(companyId))
+          io.of(`/workspace-${companyId}`)
             // .to(oldStatus)
             .emit(`company-${companyId}-ticket`, {
               action: "delete",
@@ -508,7 +509,7 @@ const UpdateTicketService = async ({
             });
         }
 
-        io.of(String(companyId))
+        io.of(`/workspace-${companyId}`)
           // .to(newTicketTransfer.status)
           // .to("notification")
           // .to(newTicketTransfer.id.toString())
@@ -516,6 +517,7 @@ const UpdateTicketService = async ({
             action: "update",
             ticket: newTicketTransfer
           });
+
 
         return { ticket: newTicketTransfer, oldStatus, oldUserId };
 
@@ -527,7 +529,7 @@ const UpdateTicketService = async ({
 
             const wbot = await GetTicketWbot(ticket);
             const msgtxt = formatBody(`\u200e ${settings.transferMessage.replace("${queue.name}", queue?.name)}`, ticket);
-            // const msgtxt = `\u200e*Mensagem Automática*:\nVocê foi transferido(a) para o departamento *${queue?.name}"*\nAguarde um momento, iremos atende-lo(a)!`;
+            // const msgtxt = `\u200e *Mensagem Automática*:\nVocê foi transferido(a) para o departamento *${queue?.name}"*\nAguarde um momento, iremos atende-lo(a)!`;
 
             const queueChangedMessage = await wbot.sendMessage(
               `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`,
@@ -743,7 +745,7 @@ const UpdateTicketService = async ({
     if (ticket.status !== oldStatus || ticket.user?.id !== oldUserId || ticket.queueId !== oldQueueId) {
       // console.log("emitiu socket 739", ticket.id)
 
-      io.of(String(companyId))
+      io.of(`/workspace-${companyId}`)
         // .to(oldStatus)
         .emit(`company-${companyId}-ticket`, {
           action: "delete",
@@ -752,7 +754,7 @@ const UpdateTicketService = async ({
     }
     // console.log("emitiu socket 746", ticket.id)
 
-    io.of(String(companyId))
+    io.of(`/workspace-${companyId}`)
       // .to(ticket.status)
       // .to("notification")
       // .to(ticketId.toString())

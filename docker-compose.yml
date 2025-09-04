@@ -14,19 +14,20 @@ services:
       DB_PASS: efe487b6a861100fb704ad9f5c160cb8 # senha igual à do seu banco
       TZ: America/Sao_Paulo
       FRONTEND_URL: http://localhost
-      REDIS_URI_ACK: redis://redis:6379
+      BACKEND_URL: http://localhost:8080
+      REDIS_URI: redis://redis:6379/0
+      REDIS_URI_ACK: redis://redis:6379/0
       BULL_USER: admin
       BULL_PASS: admin
       JWT_SECRET: supersecret
       JWT_REFRESH_SECRET: supersecretrefresh
     networks:
       - nobreluminarias
-    depends_on:
-      - postgres
     ports:
       - "8080:8080"
     volumes:
-      - ./backend:/app
+      # Persistir apenas uploads e arquivos públicos, sem sobrescrever a aplicação
+      - backend-public:/app/public
 
   frontend:
     build: ./frontend
@@ -41,6 +42,22 @@ services:
     volumes:
       - ./frontend:/app
 
+  redis:
+    image: redis:6.2-alpine
+    container_name: whaticket-redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    networks:
+      - nobreluminarias
+    volumes:
+      - redis-data:/data
+
 networks:
   nobreluminarias:
     external: true
+
+volumes:
+  redis-data:
+  backend-public:

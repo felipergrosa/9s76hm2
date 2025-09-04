@@ -27,7 +27,7 @@ class SocketWorker {
       reconnectionAttempts: Infinity,
       pingTimeout: 20000,
       pingInterval: 25000,
-      query: token ? { token, userId: this.userId } : { userId: this.userId }
+      query: token ? { token, userId: String(this.userId) } : { userId: String(this.userId) }
       // auth: token ? { token } : undefined, // opcional, backend lê de query.token
     });
 

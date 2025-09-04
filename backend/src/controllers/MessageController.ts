@@ -157,6 +157,13 @@ export const sendListMessage = async (req: Request, res: Response): Promise<Resp
 
     const botNumber = whatsapp.number;
     const wbot = await GetTicketWbot(ticket);
+    // Validações de sections e rows para evitar payload inválido
+    if (!sections || !Array.isArray(sections) || sections.length === 0) {
+      throw new AppError("Sections must be a non-empty array", 400);
+    }
+    if (!sections.every((section: any) => Array.isArray(section.rows) && section.rows.length > 0)) {
+      throw new AppError("Each section must have at least one row", 400);
+    }
     const number = `${contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
     const listMessage: proto.IMessage = {
       listMessage: {
