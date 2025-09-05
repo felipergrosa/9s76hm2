@@ -166,8 +166,6 @@ if (!isGroup) {
 
     let updateImage = (!contact || contact?.profilePicUrl !== profilePicUrl && profilePicUrl !== "") && wbot || false;
 
-    console.log(93, "CreateUpdateContactService", { updateImage })
-
     if (contact) {
       contact.remoteJid = remoteJid;
       contact.profilePicUrl = profilePicUrl || null;
@@ -188,7 +186,7 @@ if (!isGroup) {
           where: { id: whatsappId, companyId }
         });
 
-        console.log(104, "CreateUpdateContactService")
+        
 
         if (whatsapp) {
           contact.whatsappId = whatsappId;
@@ -198,7 +196,6 @@ if (!isGroup) {
 
       let fileName, oldPath = "";
       if (contact.urlPicture) {
-        console.log(114, "CreateUpdateContactService")
 
         oldPath = path.resolve(contact.urlPicture.replace(/\\/g, '/'));
         fileName = path.join(folder, oldPath.split('\\').pop());
@@ -207,7 +204,6 @@ if (!isGroup) {
       if (!contact.urlPicture || !fs.existsSync(fileName) || contact.profilePicUrl === "") {
         if (wbot && ['whatsapp'].includes(channel)) {
           try {
-            console.log(120, "CreateUpdateContactService")
             profilePicUrl = await wbot.profilePictureUrl(remoteJid, "image");
           } catch (e) {
             Sentry.captureException(e);

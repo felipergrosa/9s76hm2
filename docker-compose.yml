@@ -21,6 +21,8 @@ services:
       BULL_PASS: admin
       JWT_SECRET: supersecret
       JWT_REFRESH_SECRET: supersecretrefresh
+      SESSIONS_DRIVER: fs
+      SESSIONS_DIR: private/sessions
     networks:
       - nobreluminarias
     ports:
@@ -28,6 +30,8 @@ services:
     volumes:
       # Persistir apenas uploads e arquivos públicos, sem sobrescrever a aplicação
       - backend-public:/app/public
+      # Persistir arquivos privados (inclui sessões do Baileys)
+      - backend-private:/app/private
 
   frontend:
     build: ./frontend
@@ -61,3 +65,4 @@ networks:
 volumes:
   redis-data:
   backend-public:
+  backend-private:

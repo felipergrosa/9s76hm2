@@ -27,7 +27,8 @@
     "type:diagnostics": "ts-node src/utils/type-diagnostics.ts",
     "type:comprehensive": "ts-node src/utils/comprehensive-type-check.ts",
     "auth:comprehensive": "ts-node src/utils/comprehensive-auth-diagnostic.ts",
-    "auth:compatibility": "ts-node src/utils/auth-compatibility-check.ts"
+    "auth:compatibility": "ts-node src/utils/auth-compatibility-check.ts",
+    "media:migrate": "ts-node src/utils/migrateLegacyMedia.ts"
   },
   "license": "MIT",
   "dependencies": {

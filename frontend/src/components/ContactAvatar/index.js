@@ -28,10 +28,11 @@ const ContactAvatar = ({ contact, ...props }) => {
 
   // Se tem contact.contact (estrutura de ContactListItems)
   if (contact.contact) {
-    imageUrl = contact.contact.profilePicUrl || contact.contact.urlPicture;
+    // Prefira sempre urlPicture (servida pelo backend), depois profilePicUrl (externa)
+    imageUrl = contact.contact.urlPicture || contact.contact.profilePicUrl;
     contactName = contact.contact.name || contact.name;
   } else {
-    // Estrutura normal de contatos
+    // Estrutura normal de contatos: prefira urlPicture
     imageUrl = contact.urlPicture || contact.profilePicUrl;
   }
 

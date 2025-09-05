@@ -236,11 +236,11 @@ export const ActionsWebhookFacebookService = async (
 
                 if (elementNowSelected.includes("img")) {
                     const mediaPath = process.env.BACKEND_URL === "http://localhost:8090"
-                        ? `${__dirname.split("src")[0].split("\\").join("/")}public/${nodeSelected.data.elements.filter(
+                        ? `${__dirname.split("src")[0].split("\\").join("/")}public/company${companyId}/${nodeSelected.data.elements.filter(
                             item => item.number === elementNowSelected
                         )[0].value
                         }`
-                        : `${__dirname.split("dist")[0].split("\\").join("/")}public/${nodeSelected.data.elements.filter(
+                        : `${__dirname.split("dist")[0].split("\\").join("/")}public/company${companyId}/${nodeSelected.data.elements.filter(
                             item => item.number === elementNowSelected
                         )[0].value
                         }`
@@ -259,7 +259,7 @@ export const ActionsWebhookFacebookService = async (
                     //Obtendo o tipo do arquivo
                     const mimeType = mime.lookup(mediaPath);
 
-                    const domain = `${process.env.BACKEND_URL}/public/${fileNameWithoutExtension}${fileExtension}`
+                    const domain = `${process.env.BACKEND_URL}/public/company${companyId}/${fileNameWithoutExtension}${fileExtension}`
 
 
                     await showTypingIndicator(
@@ -295,11 +295,11 @@ export const ActionsWebhookFacebookService = async (
                 if (elementNowSelected.includes("audio")) {
                     const mediaDirectory =
                         process.env.BACKEND_URL === "http://localhost:8090"
-                            ? `${__dirname.split("src")[0].split("\\").join("/")}public/${nodeSelected.data.elements.filter(
+                            ? `${__dirname.split("src")[0].split("\\").join("/")}public/company${companyId}/${nodeSelected.data.elements.filter(
                                 item => item.number === elementNowSelected
                             )[0].value
                             }`
-                            : `${__dirname.split("dist")[0].split("\\").join("/")}public/${nodeSelected.data.elements.filter(
+                            : `${__dirname.split("dist")[0].split("\\").join("/")}public/company${companyId}/${nodeSelected.data.elements.filter(
                                 item => item.number === elementNowSelected
                             )[0].value
                             }`;
@@ -317,14 +317,14 @@ export const ActionsWebhookFacebookService = async (
                     //Obtendo o tipo do arquivo
                     const mimeType = mime.lookup(mediaDirectory);
 
-                    const fileNotExists = path.resolve(__dirname, "..", "..", "..", "..", "public", fileNameWithoutExtension + ".mp4");
+                    const fileNotExists = path.resolve(__dirname, "..", "..", "..", "..", "public", `company${companyId}`, fileNameWithoutExtension + ".mp4");
 
                     if (fileNotExists) {
-                        const folder = path.resolve(__dirname, "..", "..", "..", "..", "public", fileNameWithoutExtension + fileExtension);
+                        const folder = path.resolve(__dirname, "..", "..", "..", "..", "public", `company${companyId}`, fileNameWithoutExtension + fileExtension);
                         await convertAudio(folder)
                     }
 
-                    const domain = `${process.env.BACKEND_URL}/public/${fileNameWithoutExtension}.mp4`
+                    const domain = `${process.env.BACKEND_URL}/public/company${companyId}/${fileNameWithoutExtension}.mp4`
 
 
                     await showTypingIndicator(
@@ -361,11 +361,11 @@ export const ActionsWebhookFacebookService = async (
                 if (elementNowSelected.includes("video")) {
                     const mediaDirectory =
                         process.env.BACKEND_URL === "http://localhost:8090"
-                            ? `${__dirname.split("src")[0].split("\\").join("/")}public/${nodeSelected.data.elements.filter(
+                            ? `${__dirname.split("src")[0].split("\\").join("/")}public/company${companyId}/${nodeSelected.data.elements.filter(
                                 item => item.number === elementNowSelected
                             )[0].value
                             }`
-                            : `${__dirname.split("dist")[0].split("\\").join("/")}public/${nodeSelected.data.elements.filter(
+                            : `${__dirname.split("dist")[0].split("\\").join("/")}public/company${companyId}/${nodeSelected.data.elements.filter(
                                 item => item.number === elementNowSelected
                             )[0].value
                             }`;
@@ -384,7 +384,7 @@ export const ActionsWebhookFacebookService = async (
                     //Obtendo o tipo do arquivo
                     const mimeType = mime.lookup(mediaDirectory);
 
-                    const domain = `${process.env.BACKEND_URL}/public/${fileNameWithoutExtension}${fileExtension}`
+                    const domain = `${process.env.BACKEND_URL}/public/company${companyId}/${fileNameWithoutExtension}${fileExtension}`
 
 
                     await showTypingIndicator(
@@ -418,9 +418,9 @@ export const ActionsWebhookFacebookService = async (
 
         if (nodeSelected.type === "img") {
             const mediaPath = process.env.BACKEND_URL === "http://localhost:8090"
-                ? `${__dirname.split("src")[0].split("\\").join("/")}public/${nodeSelected.data.url
+                ? `${__dirname.split("src")[0].split("\\").join("/")}public/company${companyId}/${nodeSelected.data.url
                 }`
-                : `${__dirname.split("dist")[0].split("\\").join("/")}public/${nodeSelected.data.url
+                : `${__dirname.split("dist")[0].split("\\").join("/")}public/company${companyId}/${nodeSelected.data.url
                 }`
 
 
@@ -433,7 +433,7 @@ export const ActionsWebhookFacebookService = async (
             //Obtendo o tipo do arquivo
             const mimeType = mime.lookup(mediaPath);
 
-            const domain = `${process.env.BACKEND_URL}/public/${fileNameWithoutExtension}${fileExtension}`
+            const domain = `${process.env.BACKEND_URL}/public/company${companyId}/${fileNameWithoutExtension}${fileExtension}`
 
             const contact = await Contact.findOne({
                 where: { number: numberPhrase.number, companyId }
@@ -470,9 +470,9 @@ export const ActionsWebhookFacebookService = async (
         if (nodeSelected.type === "audio") {
             const mediaDirectory =
                 process.env.BACKEND_URL === "http://localhost:8090"
-                    ? `${__dirname.split("src")[0].split("\\").join("/")}public/${nodeSelected.data.url
+                    ? `${__dirname.split("src")[0].split("\\").join("/")}public/company${companyId}/${nodeSelected.data.url
                     }`
-                    : `${__dirname.split("dist")[0].split("\\").join("/")}public/${nodeSelected.data.url
+                    : `${__dirname.split("dist")[0].split("\\").join("/")}public/company${companyId}/${nodeSelected.data.url
                     }`;
 
             const contact = await Contact.findOne({
@@ -488,7 +488,7 @@ export const ActionsWebhookFacebookService = async (
             //Obtendo o tipo do arquivo
             const mimeType = mime.lookup(mediaDirectory);
 
-            const domain = `${process.env.BACKEND_URL}/public/${fileNameWithoutExtension}${fileExtension}`
+            const domain = `${process.env.BACKEND_URL}/public/company${companyId}/${fileNameWithoutExtension}${fileExtension}`
 
 
             const sendMessage = await sendAttachmentFromUrl(
@@ -512,9 +512,9 @@ export const ActionsWebhookFacebookService = async (
         if (nodeSelected.type === "video") {
             const mediaDirectory =
                 process.env.BACKEND_URL === "http://localhost:8090"
-                    ? `${__dirname.split("src")[0].split("\\").join("/")}public/${nodeSelected.data.url
+                    ? `${__dirname.split("src")[0].split("\\").join("/")}public/company${companyId}/${nodeSelected.data.url
                     }`
-                    : `${__dirname.split("dist")[0].split("\\").join("/")}public/${nodeSelected.data.url
+                    : `${__dirname.split("dist")[0].split("\\").join("/")}public/company${companyId}/${nodeSelected.data.url
                     }`;
 
 
@@ -531,7 +531,7 @@ export const ActionsWebhookFacebookService = async (
             //Obtendo o tipo do arquivo
             const mimeType = mime.lookup(mediaDirectory);
 
-            const domain = `${process.env.BACKEND_URL}/public/${fileNameWithoutExtension}${fileExtension}`
+            const domain = `${process.env.BACKEND_URL}/public/company${companyId}/${fileNameWithoutExtension}${fileExtension}`
 
 
             await showTypingIndicator(

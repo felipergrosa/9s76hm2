@@ -30,6 +30,8 @@ import { getTypeMessage, isValidMsg } from "../services/WbotServices/wbotMessage
 import { addLogs } from "../helpers/addLogs";
 import NodeCache from 'node-cache';
 import { Store } from "./store";
+import fs from "fs";
+import path from "path";
 
 const msgRetryCounterCache = new NodeCache({
   stdTTL: 600,
@@ -352,6 +354,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
                 await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
+                // remove sessão em filesystem se existir
+                try {
+                  const baseDir = path.resolve(
+                    process.cwd(),
+                    process.env.SESSIONS_DIR || "private/sessions",
+                    String(whatsapp.companyId || "0"),
+                    String(whatsapp.id)
+                  );
+                  await fs.promises.rm(baseDir, { recursive: true, force: true });
+                } catch {}
                 io.of(String(companyId))
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",
@@ -372,6 +384,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
                 await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
+                // remove sessão em filesystem se existir
+                try {
+                  const baseDir = path.resolve(
+                    process.cwd(),
+                    process.env.SESSIONS_DIR || "private/sessions",
+                    String(whatsapp.companyId || "0"),
+                    String(whatsapp.id)
+                  );
+                  await fs.promises.rm(baseDir, { recursive: true, force: true });
+                } catch {}
                 io.of(String(companyId))
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",

@@ -17,7 +17,7 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const AvatarUploader = ({ setAvatar, avatar }) => {
+const AvatarUploader = ({ setAvatar, avatar, companyId }) => {
   const classes = useStyles();
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
@@ -48,7 +48,7 @@ const AvatarUploader = ({ setAvatar, avatar }) => {
       {!previewImage && avatar ? (
         <Avatar
           key={avatar || 'default'}
-          src={`${process.env.REACT_APP_BACKEND_URL}/public/avatar/${avatar}?v=${new Date().getTime()}`}
+          src={`${process.env.REACT_APP_BACKEND_URL}/public/company${companyId}/${avatar}?v=${new Date().getTime()}`}
           style={{ width: 120, height: 120 }}
           className={classes.avatar}
         />

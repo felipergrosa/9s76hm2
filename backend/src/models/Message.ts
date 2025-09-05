@@ -49,9 +49,18 @@ class Message extends Model<Message> {
   @Column(DataType.STRING)
   get mediaUrl(): string | null {
     if (this.getDataValue("mediaUrl")) {
-      
-      return `${process.env.BACKEND_URL}${process.env.PROXY_PORT ?`:${process.env.PROXY_PORT}`:""}/public/company${this.companyId}/${this.getDataValue("mediaUrl")}`;
-
+      const fileRel = this.getDataValue("mediaUrl");
+      const be = (process.env.BACKEND_URL || '').trim();
+      const fe = (process.env.FRONTEND_URL || '').trim();
+      const proxyPort = (process.env.PROXY_PORT || '').trim();
+      const devFallback = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8080';
+      const origin = be
+        ? `${be}${proxyPort ? `:${proxyPort}` : ''}`
+        : (fe || devFallback);
+      const base = origin
+        ? `${origin}/public/company${this.companyId}/${fileRel}`
+        : `/public/company${this.companyId}/${fileRel}`;
+      return base;
     }
     return null;
   }

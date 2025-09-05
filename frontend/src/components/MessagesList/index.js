@@ -562,7 +562,7 @@ const MessagesList = ({
       if (msg?.fromMe) {
         const imageName = user?.profileImage;
         const url = imageName
-          ? `${backendUrl}/public/avatar/${imageName}`
+          ? `${backendUrl}/public/company${companyId}/${imageName}`
           : `${process.env.FRONTEND_URL}/nopicture.png`;
         return { name: user?.name, urlPicture: url };
       }
@@ -708,7 +708,7 @@ const MessagesList = ({
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
       const fetchMessages = async () => {
-        if (ticketId === "undefined") {
+        if (!ticketId || ticketId === "undefined") {
           history.push("/tickets");
           return;
         }
@@ -743,7 +743,7 @@ const MessagesList = ({
   }, [pageNumber, ticketId, selectedQueuesMessage]);
 
   useEffect(() => {
-    if (ticketId === "undefined") {
+    if (!ticketId || ticketId === "undefined") {
       return;
     }
 
@@ -751,8 +751,13 @@ const MessagesList = ({
 
     const connectEventMessagesList = () => {
       try {
-        console.debug("[MessagesList] socket connect - joinChatBox", { ticketId });
-        socket.emit("joinChatBox", `${ticketId}`);
+        const normalizedId = (ticketId ?? "").toString().trim();
+        if (!normalizedId || normalizedId === "undefined") {
+          console.debug("[MessagesList] skip joinChatBox - invalid ticketId", { ticketId });
+          return;
+        }
+        console.debug("[MessagesList] socket connect - joinChatBox", { ticketId: normalizedId });
+        socket.emit("joinChatBox", normalizedId);
       } catch (e) {
         console.debug("[MessagesList] error emitting joinChatBox", e);
       }
@@ -802,8 +807,13 @@ const MessagesList = ({
 
     return () => {
       try {
-        console.debug("[MessagesList] cleanup - leave room", { ticketId });
-        socket.emit("joinChatBoxLeave", `${ticketId}`);
+        const normalizedId = (ticketId ?? "").toString().trim();
+        if (!normalizedId || normalizedId === "undefined") {
+          console.debug("[MessagesList] skip leave room - invalid ticketId", { ticketId });
+        } else {
+          console.debug("[MessagesList] cleanup - leave room", { ticketId: normalizedId });
+          socket.emit("joinChatBoxLeave", normalizedId);
+        }
       } catch {}
 
       socket.off("connect", connectEventMessagesList);

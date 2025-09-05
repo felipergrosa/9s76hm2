@@ -503,15 +503,15 @@ export const ActionsWebhookService = async (
               body: "",
               mediaPath:
                 process.env.BACKEND_URL === "https://localhost:8090"
-                  ? `${__dirname.split("src")[0].split("\\").join("/")}public/${
-                      nodeSelected.data.elements.filter(
-                        item => item.number === elementNowSelected
-                      )[0].value
+                  ? `${__dirname.split("src")[0].split("\\").join("/")}public/company${companyId}/${
+                    nodeSelected.data.elements.filter(
+                      item => item.number === elementNowSelected
+                    )[0].value
                     }`
                   : `${__dirname
                       .split("dist")[0]
                       .split("\\")
-                      .join("/")}public/${
+                      .join("/")}public/company${companyId}/${
                       nodeSelected.data.elements.filter(
                         item => item.number === elementNowSelected
                       )[0].value
@@ -523,12 +523,12 @@ export const ActionsWebhookService = async (
           if (elementNowSelected.includes("audio")) {
             const mediaDirectory =
               process.env.BACKEND_URL === "https://localhost:8090"
-                ? `${__dirname.split("src")[0].split("\\").join("/")}public/${
+                ? `${__dirname.split("src")[0].split("\\").join("/")}public/company${companyId}/${
                     nodeSelected.data.elements.filter(
                       item => item.number === elementNowSelected
                     )[0].value
                   }`
-                : `${__dirname.split("dist")[0].split("\\").join("/")}public/${
+                : `${__dirname.split("dist")[0].split("\\").join("/")}public/company${companyId}/${
                     nodeSelected.data.elements.filter(
                       item => item.number === elementNowSelected
                     )[0].value

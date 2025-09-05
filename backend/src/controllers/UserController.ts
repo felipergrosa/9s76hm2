@@ -27,6 +27,12 @@ import Setting from "../models/Setting";
 import fs from "fs";
 import path from "path";
 import multer from "multer";
+import {
+  buildCompanyBase,
+  buildUserBase,
+  buildUserAvatarRelativePath,
+  sanitizeFileName
+} from "../utils/publicPath";
 
 type IndexQuery = {
   searchParam: string;
@@ -311,8 +317,37 @@ export const mediaUpload = async (
 
   try {
     let user = await User.findByPk(userId);
-    user.profileImage = file.filename.replace('/', '-');
+    if (!user) throw new AppError("ERR_NO_USER_FOUND", 404);
 
+    // Deriva username a partir do nome do usuário, sanetizando
+    const username = sanitizeFileName(String(user.name || `user-${user.id}`)).toLowerCase();
+    const ext = path.extname(file.originalname) || path.extname(file.filename) || ".jpg";
+    const targetFileName = `avatar${ext}`;
+
+    const relativeDir = buildUserBase(companyId, username); // company{}/users/{username}
+    const relativePath = buildUserAvatarRelativePath(companyId, username, targetFileName);
+
+    const publicRoot = path.resolve(__dirname, "..", "..", "public");
+    const absDir = path.resolve(publicRoot, relativeDir);
+    const absPath = path.resolve(publicRoot, relativePath);
+
+    if (!fs.existsSync(absDir)) {
+      fs.mkdirSync(absDir, { recursive: true });
+    }
+
+    // Remove avatar anterior se existir e for diferente
+    if (user.profileImage) {
+      const oldAbs = path.resolve(publicRoot, buildCompanyBase(companyId), user.profileImage.startsWith("company") ? user.profileImage : path.posix.join("", user.profileImage));
+      try {
+        if (fs.existsSync(oldAbs)) fs.unlinkSync(oldAbs);
+      } catch {}
+    }
+
+    // Move o arquivo do tmp para o destino final
+    fs.renameSync(file.path, absPath);
+
+    // Armazena caminho relativo a partir de company{}/
+    user.profileImage = path.posix.join("users", username, targetFileName);
     await user.save();
 
     user = await ShowUserService(userId, companyId);
@@ -323,7 +358,6 @@ export const mediaUpload = async (
         action: "update",
         user
       });
-
 
     return res.status(200).json({ user, message: "Imagem atualizada" });
   } catch (err: any) {
@@ -347,6 +381,7 @@ export const toggleChangeWidht = async (req: Request, res: Response): Promise<Re
 
   return res.status(200).json(user);
 };
+
 export const getUserCreationStatus = async (
   req: Request,
   res: Response
@@ -370,6 +405,7 @@ export const getUserCreationStatus = async (
       .json({ error: "Failed to fetch user creation status" });
   }
 };
+
 export const updateLanguage = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { userId } = req.params;
@@ -398,18 +434,19 @@ export const updateLanguage = async (req: Request, res: Response): Promise<Respo
     return res.status(500).json({ error: error.message });
   }
 };
-// Configuração do multer
+
+// Configuração do multer (salva em TMP antes de mover para a estrutura final)
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadPath = path.resolve(__dirname, "..", "..", "public", "avatar");
+    const uploadPath = path.resolve(__dirname, "..", "..", "public", "tmp");
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }
     cb(null, uploadPath);
   },
   filename: function (req, file, cb) {
-    const ext = path.extname(file.originalname);
-    const fileName = `${Date.now()}-${file.fieldname}${ext}`;
+    const ext = path.extname(file.originalname) || ".jpg";
+    const fileName = `${Date.now()}-${sanitizeFileName(file.fieldname)}${ext}`;
     cb(null, fileName);
   }
 });
@@ -431,7 +468,33 @@ export const uploadAvatar = async (req: Request, res: Response): Promise<Respons
       return res.status(404).json({ error: "Usuário não encontrado." });
     }
 
-    user.profileImage = `avatar/${file.filename}`;
+    const { companyId } = req.user;
+    const username = sanitizeFileName(String(user.name || `user-${user.id}`)).toLowerCase();
+    const ext = path.extname(file.originalname) || path.extname(file.filename) || ".jpg";
+    const targetFileName = `avatar${ext}`;
+
+    const relativeDir = buildUserBase(companyId, username);
+    const relativePath = buildUserAvatarRelativePath(companyId, username, targetFileName);
+
+    const publicRoot = path.resolve(__dirname, "..", "..", "public");
+    const absDir = path.resolve(publicRoot, relativeDir);
+    const absPath = path.resolve(publicRoot, relativePath);
+
+    if (!fs.existsSync(absDir)) {
+      fs.mkdirSync(absDir, { recursive: true });
+    }
+
+    // Remove avatar anterior se existir
+    if (user.profileImage) {
+      try {
+        const oldAbs = path.resolve(publicRoot, buildCompanyBase(companyId), user.profileImage.startsWith("company") ? user.profileImage : path.posix.join("", user.profileImage));
+        if (fs.existsSync(oldAbs)) fs.unlinkSync(oldAbs);
+      } catch {}
+    }
+
+    fs.renameSync(file.path, absPath);
+
+    user.profileImage = path.posix.join("users", username, targetFileName);
     await user.save();
 
     return res.status(200).json({ success: true, profileImage: user.profileImage });

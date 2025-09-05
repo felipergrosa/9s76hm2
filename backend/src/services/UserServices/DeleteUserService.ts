@@ -2,6 +2,9 @@ import User from "../../models/User";
 import AppError from "../../errors/AppError";
 import Ticket from "../../models/Ticket";
 import UpdateDeletedUserOpenTicketsStatus from "../../helpers/UpdateDeletedUserOpenTicketsStatus";
+import fs from "fs";
+import path from "path";
+import { buildCompanyBase } from "../../utils/publicPath";
 
 const DeleteUserService = async (
   id: string | number,
@@ -21,6 +24,20 @@ const DeleteUserService = async (
 
   if (userOpenTickets.length > 0) {
     UpdateDeletedUserOpenTicketsStatus(userOpenTickets, companyId);
+  }
+
+  // Remove pasta do avatar do usuário se existir
+  try {
+    if (user.profileImage) {
+      const publicRoot = path.resolve(__dirname, "..", "..", "..", "public");
+      const userDirRelative = path.posix.dirname(user.profileImage); // ex: users/username
+      const absUserDir = path.resolve(publicRoot, buildCompanyBase(companyId), userDirRelative);
+      if (fs.existsSync(absUserDir)) {
+        fs.rmSync(absUserDir, { recursive: true, force: true });
+      }
+    }
+  } catch (e) {
+    // silencioso
   }
 
   await user.destroy();

@@ -370,7 +370,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
 
       const ImageUrl = user.profileImage;
       if (ImageUrl !== undefined && ImageUrl !== null)
-      setProfileUrl(`${backendUrl}/public/avatar/${ImageUrl}`);
+      setProfileUrl(`${backendUrl}/public/company${user.companyId}/${ImageUrl}`);
       else setProfileUrl(`${process.env.FRONTEND_URL}/nopicture.png`);
 
       const onCompanyAuthLayout = (data) => {

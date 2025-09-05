@@ -6,6 +6,7 @@ import Whatsapp from "../models/Whatsapp";
 import { isEmpty, isNil } from "lodash";
 import { ParamsDictionary } from 'express-serve-static-core';
 import { ParsedQs } from 'qs';
+import { getBucketByMime, buildContactAvatarPath, buildContactMediaBucketPath, buildFilemanagerBucketPath, sanitizeFileName } from "../utils/publicPath";
 
 // Interface de Request estendido
 interface UploadRequest extends Request {
@@ -64,23 +65,48 @@ export default {
       }
 
       // Determinar pasta de destino
-      const { typeArch, fileId } = req.body;
+      const { typeArch, fileId, contactUuid, category } = req.body as any;
       let folder: string;
 
       switch (typeArch) {
-        case "announcements":
+        case "announcements": {
           folder = path.resolve(publicFolder, typeArch);
           break;
-        case "logo":
+        }
+        case "logo": {
           folder = path.resolve(publicFolder);
           break;
-        default:
+        }
+        case "contact": {
+          if (!contactUuid) {
+            const err = new Error("Faltou contactUuid para upload de contato");
+            return cb(err, null);
+          }
+          if (category === "avatar") {
+            const rel = buildContactAvatarPath(companyId!, contactUuid);
+            folder = path.resolve(publicFolder, rel);
+          } else {
+            const bucket = getBucketByMime(file.mimetype);
+            const rel = buildContactMediaBucketPath(companyId!, contactUuid, bucket);
+            folder = path.resolve(publicFolder, rel);
+          }
+          break;
+        }
+        case "filemanager": {
+          const bucket = getBucketByMime(file.mimetype);
+          const rel = buildFilemanagerBucketPath(companyId!, bucket);
+          folder = path.resolve(publicFolder, rel);
+          break;
+        }
+        default: {
+          // Compatibilidade com estrutura antiga
           folder = path.resolve(
             publicFolder,
             `company${companyId}`,
             typeArch || '',
             fileId || ''
           );
+        }
       }
 
       // Criar pasta de forma segura
@@ -94,17 +120,20 @@ export default {
       }
     },
     filename(req: UploadRequest, file, cb) {
-      const { typeArch } = req.body;
+      const { typeArch, category } = req.body as any;
 
-      // Função de sanitização de nome de arquivo
-      const sanitizeFileName = (name: string) =>
-        name.replace(/[/\s]/g, '_')
-          .replace(/[^a-zA-Z0-9._-]/g, '');
+      // Nome determinístico para avatar de contato
+      if (typeArch === "contact" && category === "avatar") {
+        const ext = path.extname(file.originalname) || ".jpg";
+        const fileName = `avatar${ext.toLowerCase()}`;
+        return cb(null, sanitizeFileName(fileName));
+      }
 
-      // Geração do nome do arquivo
+      // Geração do nome do arquivo (timestamp para announcements, original para demais)
+      const baseName = sanitizeFileName(file.originalname);
       const fileName = typeArch && typeArch !== "announcements"
-        ? sanitizeFileName(file.originalname)
-        : `${Date.now()}_${sanitizeFileName(file.originalname)}`;
+        ? baseName
+        : `${Date.now()}_${baseName}`;
 
       return cb(null, fileName);
     }
@@ -125,10 +154,13 @@ export default {
       'image/png',
       'image/gif',
       'image/webp',
+      'image/heic',
+      'image/heif',
 
       // Documentos
       'application/pdf',
       'text/plain',
+      'application/octet-stream',
 
       // Áudio (permitir formatos comuns usados por navegadores e celulares)
       'audio/mpeg',
@@ -149,7 +181,9 @@ export default {
       'video/mp4',
       'video/3gpp',
       'video/webm',
-      'video/quicktime'
+      'video/quicktime',
+      'video/mpeg',
+      'video/avi'
     ];
 
     if (allowedMimes.includes(file.mimetype)) {

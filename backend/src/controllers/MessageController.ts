@@ -696,7 +696,12 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const medias = req.files as Express.Multer.File[];
   const { companyId } = req.user;
 
-  const ticket = await ShowTicketService(ticketId, companyId);
+  let ticket;
+  try {
+    ticket = await ShowTicketService(ticketId, companyId);
+  } catch (e: any) {
+    return res.status(404).json({ error: "Ticket não encontrado" });
+  }
 
   if (ticket.channel === "whatsapp" && ticket.whatsappId) {
     await SetTicketMessagesAsRead(ticket);

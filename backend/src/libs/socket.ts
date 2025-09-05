@@ -16,7 +16,7 @@ const isValidUUID = (str: string): boolean => {
 };
 
 const isValidStatus = (status: string): boolean => {
-  return ["open", "closed", "pending"].includes(status);
+  return ["open", "closed", "pending", "group"].includes(status);
 };
 
 const validateJWTPayload = (payload: any): { userId: string; iat?: number; exp?: number } => {
@@ -129,12 +129,13 @@ export const initIO = (httpServer: Server): SocketIO => {
     logger.info(`Cliente conectado ao namespace ${socket.nsp.name} (IP: ${clientIp})`);
 
     socket.on("joinChatBox", (ticketId: string, callback?: (error?: string) => void) => {
-      if (!isValidUUID(ticketId)) {
-        logger.warn(`ticketId inválido: ${ticketId}`);
+      const normalizedId = (ticketId ?? "").toString().trim();
+      if (!normalizedId || normalizedId === "undefined" || !isValidUUID(normalizedId)) {
+        logger.warn(`ticketId inválido: ${normalizedId || "vazio"}`);
         callback?.("ID de ticket inválido");
         return;
       }
-      socket.join(ticketId);
+      socket.join(normalizedId);
       logger.info(`Cliente entrou no canal de ticket ${ticketId} no namespace ${socket.nsp.name}`);
       callback?.();
     });
@@ -168,12 +169,13 @@ export const initIO = (httpServer: Server): SocketIO => {
     });
 
     socket.on("joinChatBoxLeave", (ticketId: string, callback?: (error?: string) => void) => {
-      if (!isValidUUID(ticketId)) {
-        logger.warn(`ticketId inválido: ${ticketId}`);
+      const normalizedId = (ticketId ?? "").toString().trim();
+      if (!normalizedId || normalizedId === "undefined" || !isValidUUID(normalizedId)) {
+        logger.warn(`ticketId inválido: ${normalizedId || "vazio"}`);
         callback?.("ID de ticket inválido");
         return;
       }
-      socket.leave(ticketId);
+      socket.leave(normalizedId);
       logger.info(`Cliente saiu do canal de ticket ${ticketId} no namespace ${socket.nsp.name}`);
       callback?.();
     });

@@ -1,4 +1,3 @@
-import logger from "../../utils/logger";
 import Contact from "../../models/Contact";
 import RefreshContactAvatarService from "./RefreshContactAvatarService";
 
@@ -14,11 +13,6 @@ const BulkRefreshContactAvatarsService = async ({
   limit = 50 
 }: Request): Promise<void> => {
   try {
-    logger.info({
-      companyId,
-      contactIds: contactIds?.length || "all",
-      limit
-    }, "[BulkRefreshAvatars] iniciando atualização em lote");
 
     const whereClause: any = { companyId };
     if (contactIds && contactIds.length > 0) {
@@ -30,11 +24,7 @@ const BulkRefreshContactAvatarsService = async ({
       limit,
       order: [['updatedAt', 'ASC']] // Prioriza contatos mais antigos
     });
-
-    logger.info({
-      companyId,
-      contactsFound: contacts.length
-    }, "[BulkRefreshAvatars] contatos encontrados");
+    
 
     // Processa contatos em paralelo (máximo 5 por vez para não sobrecarregar)
     const batchSize = 5;
@@ -50,10 +40,7 @@ const BulkRefreshContactAvatarsService = async ({
               whatsappId: contact.whatsappId
             });
           } catch (error) {
-            logger.warn({
-              contactId: contact.id,
-              error: error.message
-            }, "[BulkRefreshAvatars] erro ao atualizar avatar do contato");
+            // silencioso
           }
         })
       );
@@ -64,16 +51,10 @@ const BulkRefreshContactAvatarsService = async ({
       }
     }
 
-    logger.info({
-      companyId,
-      processedContacts: contacts.length
-    }, "[BulkRefreshAvatars] atualização em lote concluída");
+    // silencioso
 
   } catch (error) {
-    logger.error({
-      companyId,
-      error: error.message
-    }, "[BulkRefreshAvatars] erro na atualização em lote");
+    // silencioso
     throw error;
   }
 };

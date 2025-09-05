@@ -121,7 +121,16 @@ const Ticket = () => {
       //    const socket = socketManager.GetSocket();
 
       const onConnectTicket = () => {
-        socket.emit("joinChatBox", `${ticket.uuid}`);
+        try {
+          const normalizedId = (ticket?.uuid ?? "").toString().trim();
+          if (!normalizedId || normalizedId === "undefined") {
+            console.debug("[Ticket] skip joinChatBox - invalid ticket.uuid", { uuid: ticket?.uuid, ticketId });
+            return;
+          }
+          socket.emit("joinChatBox", normalizedId);
+        } catch (e) {
+          console.debug("[Ticket] error emitting joinChatBox", e);
+        }
       }
 
       const onCompanyTicket = (data) => {
@@ -152,8 +161,14 @@ const Ticket = () => {
       socket.on(`company-${companyId}-contact`, onCompanyContactTicket);
 
       return () => {
-
-        socket.emit("joinChatBoxLeave", `${ticket.uuid}`);
+        try {
+          const normalizedId = (ticket?.uuid ?? "").toString().trim();
+          if (!normalizedId || normalizedId === "undefined") {
+            console.debug("[Ticket] skip joinChatBoxLeave - invalid ticket.uuid", { uuid: ticket?.uuid, ticketId });
+          } else {
+            socket.emit("joinChatBoxLeave", normalizedId);
+          }
+        } catch {}
         socket.off("connect", onConnectTicket);
         socket.off(`company-${companyId}-ticket`, onCompanyTicket);
         socket.off(`company-${companyId}-contact`, onCompanyContactTicket);

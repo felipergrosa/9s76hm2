@@ -12,7 +12,8 @@ import {
   HasMany,
   ForeignKey,
   BelongsTo,
-  BelongsToMany
+  BelongsToMany,
+  DataType
 } from "sequelize-typescript";
 import ContactCustomField from "./ContactCustomField";
 import Ticket from "./Ticket";
@@ -38,6 +39,13 @@ class Contact extends Model<Contact> {
   @Unique
   @Column
   number: string;
+
+  @Column({
+    type: DataType.UUID,
+    allowNull: true,
+    defaultValue: DataType.UUIDV4
+  })
+  uuid: string;
 
   @AllowNull(false)
   @Default("")
@@ -199,7 +207,19 @@ class Contact extends Model<Contact> {
       if (file === 'nopicture.png') {
         return `${process.env.FRONTEND_URL}/nopicture.png`;
       }
-      const base = `${process.env.BACKEND_URL}${process.env.PROXY_PORT ?`:${process.env.PROXY_PORT}`:""}/public/company${this.companyId}/contacts/${file}`;
+      // Se já vier com subpastas, considerar relativo à raiz da company
+      const relative = file.includes('/') ? file : `contacts/${file}`;
+      // Monta origem preferindo sempre o backend (que serve /public)
+      const be = (process.env.BACKEND_URL || '').trim();
+      const fe = (process.env.FRONTEND_URL || '').trim();
+      const proxyPort = (process.env.PROXY_PORT || '').trim();
+      const devFallback = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8080';
+      const origin = be
+        ? `${be}${proxyPort ? `:${proxyPort}` : ''}`
+        : (fe || devFallback);
+      const base = origin
+        ? `${origin}/public/company${this.companyId}/${relative}`
+        : `/public/company${this.companyId}/${relative}`;
       const version = this.updatedAt ? new Date(this.updatedAt).getTime() : '';
       return version ? `${base}?v=${version}` : base;
     }

@@ -166,7 +166,7 @@ const UserModal = ({ open, onClose, userId }) => {
 				});
 
 				const { profileImage } = data;
-				setProfileUrl(`${backendUrl}/public/company${data.companyId}/user/${profileImage}`);
+				setProfileUrl(`${backendUrl}/public/company${data.companyId}/${profileImage}`);
 
 				const userQueueIds = data.queues?.map(queue => queue.id);
 				setSelectedQueueIds(userQueueIds);
