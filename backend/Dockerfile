@@ -19,7 +19,6 @@ RUN apt-get update \
 # Instala dependências baseadas no package-lock (mais reprodutível) com diagnóstico detalhado e fallback
 RUN set -eux; \
   node -v; npm -v; \
-  npm config set python /usr/bin/python3; \
   npm config set fund false; \
   npm config set audit false; \
   npm config set jobs 1; \
