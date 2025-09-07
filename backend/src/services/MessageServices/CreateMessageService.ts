@@ -33,6 +33,7 @@ const CreateMessageService = async ({
   messageData,
   companyId
 }: Request): Promise<Message> => {
+  console.log("[DEBUG] Entrou em CreateMessageService", { messageData, companyId });
   await Message.upsert({ ...messageData, companyId });
 
   const message = await Message.findOne({
