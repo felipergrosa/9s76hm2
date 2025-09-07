@@ -711,25 +711,30 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   try {
     if (medias) {
+      console.log("[DEBUG] store: enviando mídia(s)", { medias });
       await Promise.all(
         medias.map(async (media: Express.Multer.File, index) => {
           if (ticket.channel === "whatsapp") {
+            console.log("[DEBUG] store: antes de SendWhatsAppMedia (whatsapp)");
             await SendWhatsAppMedia({
               media,
               ticket,
               body: Array.isArray(body) ? body[index] : body,
               isPrivate: isPrivate === "true",
-              isForwarded: false,
+              isForwarded: false
             });
+            console.log("[DEBUG] store: depois de SendWhatsAppMedia (whatsapp)");
           }
 
           if (["facebook", "instagram"].includes(ticket.channel)) {
             try {
+              console.log("[DEBUG] store: antes de sendFacebookMessageMedia");
               const sentMedia = await sendFacebookMessageMedia({
                 media,
                 ticket,
                 body: Array.isArray(body) ? body[index] : body,
               });
+              console.log("[DEBUG] store: depois de sendFacebookMessageMedia");
 
               if (ticket.channel === "facebook") {
                 await verifyMessageMedia(sentMedia, ticket, ticket.contact, true);
@@ -748,7 +753,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       );
     } else {
       if (ticket.channel === "whatsapp" && isPrivate === "false") {
+        console.log("[DEBUG] store: antes de SendWhatsAppMessage");
         await SendWhatsAppMessage({ body, ticket, quotedMsg, vCard });
+        console.log("[DEBUG] store: depois de SendWhatsAppMessage");
       } else if (ticket.channel === "whatsapp" && isPrivate === "true") {
         const messageData = {
           wid: `PVT${ticket.updatedAt.toString().replace(" ", "")}`,
@@ -769,10 +776,13 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
           createdAt: new Date(),
           updatedAt: new Date(),
         };
-
+        console.log("[DEBUG] store: antes de CreateMessageService (privado)");
         await CreateMessageService({ messageData, companyId: ticket.companyId });
+        console.log("[DEBUG] store: depois de CreateMessageService (privado)");
       } else if (["facebook", "instagram"].includes(ticket.channel)) {
+        console.log("[DEBUG] store: antes de sendFaceMessage");
         const sendText = await sendFaceMessage({ body, ticket, quotedMsg });
+        console.log("[DEBUG] store: depois de sendFaceMessage");
 
         if (ticket.channel === "facebook") {
           await verifyMessageFace(sendText, body, ticket, ticket.contact, true);
