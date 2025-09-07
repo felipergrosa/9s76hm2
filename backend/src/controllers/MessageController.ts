@@ -115,7 +115,7 @@ export const addReaction = async (req: Request, res: Response): Promise<Response
     });
 
     const io = getIO();
-    io.of(`/workspace-${companyId}`).to(message.ticketId.toString()).emit(`company-${companyId}-appMessage`, {
+    io.of(`/workspace-${companyId}`).to(ticket.uuid).emit(`company-${companyId}-appMessage`, {
       action: "update",
       message,
       ticket, // inclui ticket com uuid para o frontend filtrar
@@ -737,10 +737,11 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
             }
           }
 
-          const filePath = path.resolve("public", `company${companyId}`, media.filename);
-          if (fs.existsSync(filePath) && isPrivate === "false") {
-            fs.unlinkSync(filePath);
-          }
+          // Não remover o arquivo após envio: ele é servido em /public/company<id>/... para exibição no frontend
+          // const filePath = path.resolve("public", `company${companyId}`, media.filename);
+          // if (fs.existsSync(filePath) && isPrivate === "false") {
+          //   fs.unlinkSync(filePath);
+          // }
         })
       );
     } else {
@@ -894,7 +895,7 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
   if (message.isPrivate) {
     await Message.destroy({ where: { id: message.id } });
     const ticket = await Ticket.findByPk(message.ticketId, { include: ["contact"] });
-    io.of(`/workspace-${companyId}`).emit(`company-${companyId}-appMessage`, {
+    io.of(`/workspace-${companyId}`).to(ticket.uuid).emit(`company-${companyId}-appMessage`, {
       action: "delete",
       message,
       ticket,
@@ -902,7 +903,7 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
   }
 
   const ticketUpd = await Ticket.findByPk(message.ticketId, { include: ["contact"] });
-  io.of(`/workspace-${companyId}`).emit(`company-${companyId}-appMessage`, {
+  io.of(`/workspace-${companyId}`).to(ticketUpd.uuid).emit(`company-${companyId}-appMessage`, {
     action: "update",
     message,
     ticket: ticketUpd,
@@ -1013,9 +1014,10 @@ export const edit = async (req: Request, res: Response): Promise<Response> => {
     const { ticket, message } = await EditWhatsAppMessage({ messageId, body });
 
     const io = getIO();
-    io.of(`/workspace-${companyId}`).emit(`company-${companyId}-appMessage`, {
+    io.of(`/workspace-${companyId}`).to(ticket.uuid).emit(`company-${companyId}-appMessage`, {
       action: "update",
       message,
+      ticket,
     });
 
     io.of(`/workspace-${companyId}`).emit(`company-${companyId}-ticket`, {

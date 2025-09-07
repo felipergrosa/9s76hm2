@@ -96,9 +96,7 @@ const CreateMessageService = async ({
     // console.log("emitiu socket 96", message.ticketId)
 
     io.of(`/workspace-${companyId}`)
-      // .to(message.ticketId.toString())
-      // .to(message.ticket.status)
-      // .to("notification")
+      .to(message.ticket.uuid)
       .emit(`company-${companyId}-appMessage`, {
         action: "create",
         message,
