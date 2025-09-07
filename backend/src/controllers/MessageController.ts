@@ -1014,6 +1014,13 @@ export const edit = async (req: Request, res: Response): Promise<Response> => {
     const { ticket, message } = await EditWhatsAppMessage({ messageId, body });
 
     const io = getIO();
+    console.log(`[SOCKET] Emitindo appMessage`, {
+      namespace: `/workspace-${companyId}`,
+      sala: ticket.uuid,
+      evento: `company-${companyId}-appMessage`,
+      action: "update",
+      messageId: message.id
+    });
     io.of(`/workspace-${companyId}`).to(ticket.uuid).emit(`company-${companyId}-appMessage`, {
       action: "update",
       message,

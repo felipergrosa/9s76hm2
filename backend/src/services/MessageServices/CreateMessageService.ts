@@ -93,8 +93,13 @@ const CreateMessageService = async ({
   const io = getIO();
 
   if (!messageData?.ticketImported) {
-    // console.log("emitiu socket 96", message.ticketId)
-
+    console.log(`[SOCKET] Emitindo appMessage`, {
+      namespace: `/workspace-${companyId}`,
+      sala: message.ticket.uuid,
+      evento: `company-${companyId}-appMessage`,
+      action: "create",
+      messageId: message.id
+    });
     io.of(`/workspace-${companyId}`)
       .to(message.ticket.uuid)
       .emit(`company-${companyId}-appMessage`, {

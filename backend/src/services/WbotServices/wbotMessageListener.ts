@@ -4265,6 +4265,13 @@ const handleMessage = async (
 
         console.log("log... 3094");
 
+        console.log(`[SOCKET] Emitindo appMessage`, {
+          namespace: `/workspace-${companyId}`,
+          sala: ticket.uuid,
+          evento: `company-${companyId}-appMessage`,
+          action: "update",
+          messageId: messageToUpdate.id
+        });
         io.of(`/workspace-${companyId}`)
           .to(ticket.uuid)
           .emit(`company-${companyId}-appMessage`, {
@@ -4272,6 +4279,13 @@ const handleMessage = async (
             message: messageToUpdate
           });
 
+        console.log(`[SOCKET] Emitindo ticket`, {
+          namespace: String(companyId),
+          sala: ticket.status,
+          evento: `company-${companyId}-ticket`,
+          action: "update",
+          ticketId: ticket.id
+        });
         io.of(String(companyId))
           // .to(ticket.status)
           // .to("notification")
@@ -5012,6 +5026,13 @@ const handleMsgAck = async (
     if (!messageToUpdate || messageToUpdate.ack > chat) return;
 
     await messageToUpdate.update({ ack: chat });
+    console.log(`[SOCKET] Emitindo appMessage`, {
+      namespace: `/workspace-${messageToUpdate.companyId}`,
+      sala: messageToUpdate.ticket.uuid,
+      evento: `company-${messageToUpdate.companyId}-appMessage`,
+      action: "update",
+      messageId: messageToUpdate.id
+    });
     io.of(`/workspace-${messageToUpdate.companyId}`)
       .to(messageToUpdate.ticket.uuid)
       .emit(`company-${messageToUpdate.companyId}-appMessage`, {
