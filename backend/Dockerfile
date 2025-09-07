@@ -57,6 +57,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/public ./public
 COPY --from=build /app/certs ./certs
 COPY --from=build /app/scripts ./scripts
+COPY --from=build /app/.sequelizerc ./.sequelizerc
 RUN mkdir -p ./private
 
 EXPOSE 8080
