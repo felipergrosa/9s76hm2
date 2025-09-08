@@ -118,16 +118,18 @@ const Ticket = () => {
     }
 
     if (user.companyId) {
-      //    const socket = socketManager.GetSocket();
-
       const onConnectTicket = () => {
         try {
-          const normalizedId = (ticket?.uuid ?? "").toString().trim();
-          if (!normalizedId || normalizedId === "undefined") {
-            console.debug("[Ticket] skip joinChatBox - invalid ticket.uuid", { uuid: ticket?.uuid, ticketId });
+          // Usa imediatamente o UUID presente na URL como fallback, para evitar janela sem sala
+          const candidate = (ticket?.uuid || ticketId || "").toString().trim();
+          if (!candidate || candidate === "undefined") {
+            console.debug("[Ticket] skip joinChatBox - invalid id", { uuid: ticket?.uuid, ticketId });
             return;
           }
-          socket.emit("joinChatBox", normalizedId);
+          socket.emit("joinChatBox", candidate, (err) => {
+            if (err) console.debug("[Ticket] joinChatBox ack error", err);
+            else console.debug("[Ticket] joinChatBox ok", { room: candidate });
+          });
         } catch (e) {
           console.debug("[Ticket] error emitting joinChatBox", e);
         }
@@ -162,11 +164,14 @@ const Ticket = () => {
 
       return () => {
         try {
-          const normalizedId = (ticket?.uuid ?? "").toString().trim();
-          if (!normalizedId || normalizedId === "undefined") {
-            console.debug("[Ticket] skip joinChatBoxLeave - invalid ticket.uuid", { uuid: ticket?.uuid, ticketId });
+          const candidate = (ticket?.uuid || ticketId || "").toString().trim();
+          if (!candidate || candidate === "undefined") {
+            console.debug("[Ticket] skip joinChatBoxLeave - invalid id", { uuid: ticket?.uuid, ticketId });
           } else {
-            socket.emit("joinChatBoxLeave", normalizedId);
+            socket.emit("joinChatBoxLeave", candidate, (err) => {
+              if (err) console.debug("[Ticket] joinChatBoxLeave ack error", err);
+              else console.debug("[Ticket] joinChatBoxLeave ok", { room: candidate });
+            });
           }
         } catch {}
         socket.off("connect", onConnectTicket);

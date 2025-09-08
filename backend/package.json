@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/package.json",
   "name": "backend",
   "version": "2.2.2v-26",
   "description": "",
@@ -39,6 +40,7 @@
     "@hapi/boom": "^9.1.4",
     "@sentry/node": "^6.18.1",
     "@socket.io/admin-ui": "0.5.1",
+    "@socket.io/redis-adapter": "^8.2.0",
     "@supabase/supabase-js": "^2.33.2",
     "@whiskeysockets/baileys": "^6.7.16",
     "adm-zip": "^0.5.10",

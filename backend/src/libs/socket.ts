@@ -4,6 +4,7 @@ import AppError from "../errors/AppError";
 import logger from "../utils/logger";
 import { instrument } from "@socket.io/admin-ui";
 import jwt from "jsonwebtoken";
+import Redis from "ioredis";
 
 // Define namespaces permitidos
 const ALLOWED_NAMESPACES = /^\/workspace-\d+$/;
@@ -64,6 +65,31 @@ export const initIO = (httpServer: Server): SocketIO => {
     pingTimeout: 20000,
     pingInterval: 25000,
   });
+
+  // Configura o adapter Redis para suportar múltipliplas instâncias (carregamento dinâmico)
+  try {
+    const redisUrl = process.env.SOCKET_REDIS_URL || process.env.REDIS_URI_ACK || process.env.REDIS_URI;
+    if (redisUrl) {
+      const pubClient = new Redis(redisUrl, {
+        maxRetriesPerRequest: null,
+        enableAutoPipelining: true
+      });
+      const subClient = pubClient.duplicate();
+      try {
+        // Requer dinamicamente para evitar erro de tipos quando o pacote ainda não estiver instalado no dev
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { createAdapter } = require("@socket.io/redis-adapter");
+        io.adapter(createAdapter(pubClient as any, subClient as any));
+        logger.info(`Socket.IO Redis adapter habilitado (${redisUrl})`);
+      } catch (innerErr) {
+        logger.warn("Pacote '@socket.io/redis-adapter' não encontrado. Prosseguindo sem adapter.");
+      }
+    } else {
+      logger.warn("Socket.IO Redis adapter desabilitado: defina SOCKET_REDIS_URL ou REDIS_URI/REDIS_URI_ACK");
+    }
+  } catch (err) {
+    logger.error("Falha ao configurar Socket.IO Redis adapter", err);
+  }
 
   // Middleware de autenticação JWT
   io.use((socket, next) => {

@@ -785,7 +785,10 @@ const MessagesList = ({
           return;
         }
         console.debug("[MessagesList] socket connect - joinChatBox", { room: roomToJoin });
-        socket.emit("joinChatBox", roomToJoin);
+        socket.emit("joinChatBox", roomToJoin, (err) => {
+          if (err) console.debug("[MessagesList] joinChatBox ack error", err);
+          else console.debug("[MessagesList] joinChatBox ok", { room: roomToJoin });
+        });
       } catch (e) {
         console.debug("[MessagesList] error emitting joinChatBox", e);
       }
@@ -848,7 +851,10 @@ const MessagesList = ({
           console.debug("[MessagesList] skip leave room - invalid ticketId", { ticketId });
         } else {
           console.debug("[MessagesList] cleanup - leave room", { room: roomToLeave });
-          socket.emit("joinChatBoxLeave", roomToLeave);
+          socket.emit("joinChatBoxLeave", roomToLeave, (err) => {
+            if (err) console.debug("[MessagesList] joinChatBoxLeave ack error", err);
+            else console.debug("[MessagesList] joinChatBoxLeave ok", { room: roomToLeave });
+          });
         }
       } catch {}
 
