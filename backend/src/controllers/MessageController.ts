@@ -4,6 +4,7 @@ import fs from "fs";
 import GetTicketWbot from "../helpers/GetTicketWbot";
 import SetTicketMessagesAsRead from "../helpers/SetTicketMessagesAsRead";
 import { getIO } from "../libs/socket";
+import { emitToCompanyRoom } from "../libs/socketEmit";
 import Message from "../models/Message";
 import Ticket from "../models/Ticket";
 import Queue from "../models/Queue";
@@ -115,11 +116,16 @@ export const addReaction = async (req: Request, res: Response): Promise<Response
     });
 
     const io = getIO();
-    io.of(`/workspace-${companyId}`).to(ticket.uuid).emit(`company-${companyId}-appMessage`, {
-      action: "update",
-      message,
-      ticket, // inclui ticket com uuid para o frontend filtrar
-    });
+    await emitToCompanyRoom(
+      companyId,
+      ticket.uuid,
+      `company-${companyId}-appMessage`,
+      {
+        action: "update",
+        message,
+        ticket,
+      }
+    );
 
     return res.status(200).json({
       message: "Reação adicionada com sucesso!",
@@ -894,19 +900,29 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
   if (message.isPrivate) {
     await Message.destroy({ where: { id: message.id } });
     const ticket = await Ticket.findByPk(message.ticketId, { include: ["contact"] });
-    io.of(`/workspace-${companyId}`).to(ticket.uuid).emit(`company-${companyId}-appMessage`, {
-      action: "delete",
-      message,
-      ticket,
-    });
+    await emitToCompanyRoom(
+      companyId,
+      ticket.uuid,
+      `company-${companyId}-appMessage`,
+      {
+        action: "delete",
+        message,
+        ticket,
+      }
+    );
   }
 
   const ticketUpd = await Ticket.findByPk(message.ticketId, { include: ["contact"] });
-  io.of(`/workspace-${companyId}`).to(ticketUpd.uuid).emit(`company-${companyId}-appMessage`, {
-    action: "update",
-    message,
-    ticket: ticketUpd,
-  });
+  await emitToCompanyRoom(
+    companyId,
+    ticketUpd.uuid,
+    `company-${companyId}-appMessage`,
+    {
+      action: "update",
+      message,
+      ticket: ticketUpd,
+    }
+  );
 
   return res.status(200).json({ message: "Mensagem removida com sucesso" });
 };

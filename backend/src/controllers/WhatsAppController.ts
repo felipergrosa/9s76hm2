@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
+import { emitToCompanyNamespace } from "../libs/socketEmit";
 import cacheLayer from "../libs/cache";
 import { removeWbot, restartWbot } from "../libs/wbot";
 import Whatsapp from "../models/Whatsapp";
@@ -132,9 +133,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     });
   }
 
-  console.log("================ WhatsAppController ==============")
-  console.log(req.body)
-  console.log("==================================================")
+  // logs de debug removidos
 
   const { whatsapp, oldDefaultWhatsapp } = await CreateWhatsAppService({
     name,
@@ -178,18 +177,24 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   StartWhatsAppSession(whatsapp, companyId);
 
   const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-whatsapp`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-whatsapp`,
+    {
       action: "update",
       whatsapp
-    });
+    }
+  );
 
   if (oldDefaultWhatsapp) {
-    io.of(`/workspace-${companyId}`)
-      .emit(`company-${companyId}-whatsapp`, {
+    await emitToCompanyNamespace(
+      companyId,
+      `company-${companyId}-whatsapp`,
+      {
         action: "update",
         whatsapp: oldDefaultWhatsapp
-      });
+      }
+    );
   }
 
   return res.status(200).json(whatsapp);
@@ -313,11 +318,14 @@ export const storeFacebook = async (
       if (!exist) {
         const { whatsapp } = await CreateWhatsAppService(pageConection);
 
-        io.of(`/workspace-${companyId}`)
-          .emit(`company-${companyId}-whatsapp`, {
+        await emitToCompanyNamespace(
+          companyId,
+          `company-${companyId}-whatsapp`,
+          {
             action: "update",
             whatsapp
-          });
+          }
+        );
 
       }
     }
@@ -395,7 +403,7 @@ export const remove = async (
   if (profile !== "admin") {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
-  console.log("REMOVING WHATSAPP", whatsappId)
+  // log de debug removido
   const whatsapp = await ShowWhatsAppService(whatsappId, companyId);
 
 
@@ -405,11 +413,14 @@ export const remove = async (
     await cacheLayer.delFromPattern(`sessions:${whatsappId}:*`);
     removeWbot(+whatsappId);
 
-    io.of(`/workspace-${companyId}`)
-      .emit(`company-${companyId}-whatsapp`, {
+    await emitToCompanyNamespace(
+      companyId,
+      `company-${companyId}-whatsapp`,
+      {
         action: "delete",
         whatsappId: +whatsappId
-      });
+      }
+    );
 
   }
 
@@ -429,11 +440,14 @@ export const remove = async (
     });
 
     for await (const whatsapp of getAllSameToken) {
-      io.of(`/workspace-${companyId}`)
-        .emit(`company-${companyId}-whatsapp`, {
+      await emitToCompanyNamespace(
+        companyId,
+        `company-${companyId}-whatsapp`,
+        {
           action: "delete",
           whatsappId: whatsapp.id
-        });
+        }
+      );
     }
 
   }

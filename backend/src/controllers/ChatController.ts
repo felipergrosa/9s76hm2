@@ -1,6 +1,7 @@
 import * as Yup from "yup";
 import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
+import { emitToCompanyNamespace } from "../libs/socketEmit";
 
 import CreateService from "../services/ChatService/CreateService";
 import ListService from "../services/ChatService/ListService";
@@ -55,13 +56,15 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   const io = getIO();
 
-  record.users.forEach(user => {
-    console.log(user.id);
-    io.of(`/workspace-${companyId}`)
-      .emit(`company-${companyId}-chat-user-${user.id}`, {
+  record.users.forEach(async user => {
+    await emitToCompanyNamespace(
+      companyId,
+      `company-${companyId}-chat-user-${user.id}`,
+      {
         action: "create",
         record
-      });
+      }
+    );
   });
 
   return res.status(200).json(record);
@@ -82,13 +85,16 @@ export const update = async (
 
   const io = getIO();
 
-  record.users.forEach(user => {
-    io.of(`/workspace-${companyId}`)
-      .emit(`company-${companyId}-chat-user-${user.id}`, {
+  record.users.forEach(async user => {
+    await emitToCompanyNamespace(
+      companyId,
+      `company-${companyId}-chat-user-${user.id}`,
+      {
         action: "update",
         record,
         userId: user.userId
-      });
+      }
+    );
   });
 
   return res.status(200).json(record);
@@ -112,11 +118,14 @@ export const remove = async (
   await DeleteService(id);
 
   const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-chat`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-chat`,
+    {
       action: "delete",
       id
-    });
+    }
+  );
 
   return res.status(200).json({ message: "Chat deleted" });
 };
@@ -145,19 +154,25 @@ export const saveMessage = async (
   });
 
   const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-chat-${chatId}`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-chat-${chatId}`,
+    {
       action: "new-message",
       newMessage,
       chat
-    });
+    }
+  );
 
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-chat`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-chat`,
+    {
       action: "new-message",
       newMessage,
       chat
-    });
+    }
+  );
 
   return res.json(newMessage);
 };
@@ -181,17 +196,23 @@ export const checkAsRead = async (
   });
 
   const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-chat-${id}`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-chat-${id}`,
+    {
       action: "update",
       chat
-    });
+    }
+  );
 
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-chat`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-chat`,
+    {
       action: "update",
       chat
-    });
+    }
+  );
 
   return res.json(chat);
 };

@@ -1,6 +1,8 @@
 import * as Yup from "yup";
 import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
+import { emitToCompanyNamespace } from "../libs/socketEmit";
+
 import { head } from "lodash";
 
 import { Op } from "sequelize";
@@ -152,15 +154,14 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
       }
     }
   }
-  const io = getIO();
-
-
-
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-contact`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-contact`,
+    {
       action: "create",
       contact
-    });
+    }
+  );
 
   return res.status(200).json(contact);
 };
@@ -170,7 +171,6 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   // <<-- ALTERAÇÃO 1: Adicionado 'profile' para obter o perfil do usuário
   const { id: userId, companyId, profile } = req.user;
 
-  console.log("index", { companyId, userId, searchParam, profile });
 
   let tagsIds: number[] = [];
 
@@ -255,7 +255,6 @@ export const getContact = async (
   const { name, number } = req.body as IndexGetContactQuery;
   const { companyId } = req.user;
 
-  console.log("getContact", { companyId, name, number })
 
   const contact = await GetContactService({
     name,
@@ -310,7 +309,6 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
 
   const newRemoteJid = newContact.number;
 
-  console.log("store", { companyId, newContact })
 
   const findContact = await Contact.findOne({
     where: {
@@ -420,7 +418,7 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
    */
   // const profilePicUrl = await GetProfilePicUrl(validNumber.jid, companyId);
 
-  console.log("Creating contact with user:", req.user); // Log para depuração
+
 
   const contact = await CreateContactService({
     ...newContact,
@@ -430,12 +428,14 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
     userId: req.user.id // Adicionando o userId ao criar o contato
   });
 
-  const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-contact`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-contact`,
+    {
       action: "create",
       contact
-    });
+    }
+  );
 
   return res.status(200).json(contact);
 };
@@ -564,12 +564,14 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
     userId: req.user?.id ? parseInt(req.user.id, 10) : undefined
   });
 
-  const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-contact`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-contact`,
+    {
       action: "update",
       contact
-    });
+    }
+  );
 
   return res.status(200).json(contact);
 };
@@ -585,12 +587,14 @@ export const remove = async (
 
   await DeleteContactService(contactId);
 
-  const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-contact`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-contact`,
+    {
       action: "delete",
       contactId
-    });
+    }
+  );
 
   return res.status(200).json({ message: "Contact deleted" });
 };
@@ -610,14 +614,16 @@ export const bulkUpdate = async (req: Request, res: Response): Promise<Response>
 
   const updated = await BulkUpdateContactsService({ companyId, contactIds, data: data || {} });
 
-  const io = getIO();
-  updated.forEach(contact => {
-    io.of(`/workspace-${companyId}`)
-      .emit(`company-${companyId}-contact`, {
+  for (const contact of updated) {
+    await emitToCompanyNamespace(
+      companyId,
+      `company-${companyId}-contact`,
+      {
         action: "update",
         contact
-      });
-  });
+      }
+    );
+  }
 
   return res.status(200).json({ updated: updated.map(c => c.id), count: updated.length });
 };
@@ -635,15 +641,17 @@ export const bulkRemove = async (req: Request, res: Response): Promise<Response>
     // Chamar o novo serviço para deletar múltiplos contatos
     await BulkDeleteContactsService(contactIds, companyId); // Passa contactIds e companyId
 
-    const io = getIO();
     // Emitir evento para cada ID deletado para atualizar o frontend em tempo real
-    contactIds.forEach(id => {
-      io.of(`/workspace-${companyId}`)
-        .emit(`company-${companyId}-contact`, {
+    for (const id of contactIds) {
+      await emitToCompanyNamespace(
+        companyId,
+        `company-${companyId}-contact`,
+        {
           action: "delete",
           contactId: id
-        });
-    });
+        }
+      );
+    }
 
     return res.status(200).json({ message: `${contactIds.length} contatos deletados com sucesso.` });
   } catch (error: any) {
@@ -660,12 +668,14 @@ export const toggleAcceptAudio = async (req: Request, res: Response): Promise<Re
   const { companyId } = req.user;
   const contact = await ToggleAcceptAudioContactService({ contactId });
 
-  const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-contact`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-contact`,
+    {
       action: "update",
       contact
-    });
+    }
+  );
 
   return res.status(200).json(contact);
 };
@@ -698,12 +708,14 @@ export const upload = async (req: Request, res: Response) => {
   const response = await ImportContactsService(companyId, file);
 
   const io = getIO();
-
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-contact`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-contact`,
+    {
       action: "reload",
       records: response
-    });
+    }
+  );
 
   return res.status(200).json(response);
 };
@@ -712,7 +724,6 @@ export const getContactProfileURL = async (req: Request, res: Response) => {
   const { number } = req.params
   const { companyId } = req.user;
 
-  console.log("getContactProfileURL", { number, companyId })
   if (number) {
     const validNumber = await CheckContactNumber(number, companyId);
 
@@ -752,10 +763,8 @@ export const getContactProfileURL = async (req: Request, res: Response) => {
     const numberUser = vNumber.toString().substr(-8, 8);
 
     if (numberDDD <= '30' && numberDDI === '55') {
-      console.log("menor 30")
       vNumber = `${numberDDI + numberDDD + 9 + numberUser}@s.whatsapp.net`;
     } else if (numberDDD > '30' && numberDDI === '55') {
-      console.log("maior 30")
       vNumber = `${numberDDI + numberDDD + numberUser}@s.whatsapp.net`;
     } else {
       vNumber = `${number}@s.whatsapp.net`;

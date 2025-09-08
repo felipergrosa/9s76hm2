@@ -25,4 +25,5 @@ ReactDOM.render(
 	}
 );
 
-serviceworker.register();
+// Desabilita o Service Worker para evitar cache agressivo e erro de MIME em dev/prod
+serviceworker.unregister();

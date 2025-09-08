@@ -796,13 +796,7 @@ const verifyContact = async (
   companyId: number,
   userId: number = null
 ): Promise<Contact> => {
-  let profilePicUrl = "";
-  // try {
-  //   profilePicUrl = await wbot.profilePictureUrl(msgContact.id, "image");
-  // } catch (e) {
-  //   Sentry.captureException(e);
-  //   profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
-  // }
+  let profilePicUrl = ""; // Busca de avatar é feita por serviço dedicado, não aqui.
   // Remove caracteres não numéricos do JID
   const cleaned = msgContact.id.replace(/\D/g, "");
   const isGroup = msgContact.id.includes("g.us");

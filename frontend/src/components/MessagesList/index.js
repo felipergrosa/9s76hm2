@@ -744,12 +744,41 @@ const MessagesList = ({
               try {
                 const prevRoom = currentRoomIdRef.current;
                 if (prevRoom && prevRoom !== newRoomId) {
-                  socket.emit("joinChatBoxLeave", prevRoom);
+                  if (typeof socket.leaveRoom === "function") {
+                    socket.leaveRoom(prevRoom, (err) => {
+                      if (err) console.log("[MessagesList] leave prev room ack error", err);
+                      else console.log("[MessagesList] left prev room", { room: prevRoom });
+                    });
+                  } else {
+                    socket.emit("joinChatBoxLeave", prevRoom, (err) => {
+                      if (err) console.log("[MessagesList] leave prev room ack error", err);
+                      else console.log("[MessagesList] left prev room", { room: prevRoom });
+                    });
+                  }
                 }
                 if (prevRoom !== newRoomId) {
                   currentRoomIdRef.current = newRoomId;
-                  socket.emit("joinChatBox", newRoomId);
-                  console.debug("[MessagesList] joined room by uuid after fetch", { room: newRoomId });
+                  if (typeof socket.joinRoom === "function") {
+                    socket.joinRoom(newRoomId, (err) => {
+                      if (err) console.log("[MessagesList] join after fetch ack error", err);
+                      else {
+                        console.log("[MessagesList] joined room by uuid after fetch", { room: newRoomId });
+                        if (typeof socket.checkRoom === "function") {
+                          socket.checkRoom(newRoomId, (res) => console.log("[MessagesList] checkRoom after fetch join", res));
+                        }
+                      }
+                    });
+                  } else {
+                    socket.emit("joinChatBox", newRoomId, (err) => {
+                      if (err) console.log("[MessagesList] join after fetch ack error", err);
+                      else {
+                        console.log("[MessagesList] joined room by uuid after fetch", { room: newRoomId });
+                        if (typeof socket.checkRoom === "function") {
+                          socket.checkRoom(newRoomId, (res) => console.log("[MessagesList] checkRoom after fetch join", res));
+                        }
+                      }
+                    });
+                  }
                 }
               } catch {}
             }
@@ -773,22 +802,49 @@ const MessagesList = ({
       return;
     }
 
+    // Aguarda socket e user.companyId disponíveis
+    if (!socket || typeof socket.on !== "function") {
+      return;
+    }
+    if (!user || !user.companyId) {
+      return;
+    }
+
     const companyId = user.companyId;
 
     const connectEventMessagesList = () => {
       try {
         // Prioriza entrar pela sala UUID se já conhecida
         const normalizedId = (ticketId ?? "").toString().trim();
-        const roomToJoin = (currentRoomIdRef.current || normalizedId || "").toString().trim();
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        const candidateFromUrl = uuidRegex.test(normalizedId) ? normalizedId : "";
+        const roomToJoin = (currentRoomIdRef.current || candidateFromUrl || "").toString().trim();
         if (!roomToJoin || roomToJoin === "undefined") {
           console.debug("[MessagesList] skip joinChatBox - invalid ticketId", { ticketId });
           return;
         }
-        console.debug("[MessagesList] socket connect - joinChatBox", { room: roomToJoin });
-        socket.emit("joinChatBox", roomToJoin, (err) => {
-          if (err) console.debug("[MessagesList] joinChatBox ack error", err);
-          else console.debug("[MessagesList] joinChatBox ok", { room: roomToJoin });
-        });
+        console.log("[MessagesList] socket connect - joinChatBox", { room: roomToJoin, hasJoinRoom: typeof socket.joinRoom === "function", connected: !!socket.connected });
+        if (typeof socket.joinRoom === "function") {
+          socket.joinRoom(roomToJoin, (err) => {
+            if (err) console.log("[MessagesList] joinChatBox ack error", err);
+            else {
+              console.log("[MessagesList] joinChatBox ok", { room: roomToJoin });
+              if (typeof socket.checkRoom === "function") {
+                socket.checkRoom(roomToJoin, (res) => console.log("[MessagesList] checkRoom after connect join", res));
+              }
+            }
+          });
+        } else {
+          socket.emit("joinChatBox", roomToJoin, (err) => {
+            if (err) console.log("[MessagesList] joinChatBox ack error", err);
+            else {
+              console.log("[MessagesList] joinChatBox ok", { room: roomToJoin });
+              if (typeof socket.checkRoom === "function") {
+                socket.checkRoom(roomToJoin, (res) => console.log("[MessagesList] checkRoom after connect join", res));
+              }
+            }
+          });
+        }
       } catch (e) {
         console.debug("[MessagesList] error emitting joinChatBox", e);
       }
@@ -851,10 +907,17 @@ const MessagesList = ({
           console.debug("[MessagesList] skip leave room - invalid ticketId", { ticketId });
         } else {
           console.debug("[MessagesList] cleanup - leave room", { room: roomToLeave });
-          socket.emit("joinChatBoxLeave", roomToLeave, (err) => {
-            if (err) console.debug("[MessagesList] joinChatBoxLeave ack error", err);
-            else console.debug("[MessagesList] joinChatBoxLeave ok", { room: roomToLeave });
-          });
+          if (typeof socket.leaveRoom === "function") {
+            socket.leaveRoom(roomToLeave, (err) => {
+              if (err) console.debug("[MessagesList] joinChatBoxLeave ack error", err);
+              else console.debug("[MessagesList] joinChatBoxLeave ok", { room: roomToLeave });
+            });
+          } else {
+            socket.emit("joinChatBoxLeave", roomToLeave, (err) => {
+              if (err) console.debug("[MessagesList] joinChatBoxLeave ack error", err);
+              else console.debug("[MessagesList] joinChatBoxLeave ok", { room: roomToLeave });
+            });
+          }
         }
       } catch {}
 
@@ -865,7 +928,7 @@ const MessagesList = ({
       socket.off("reconnect_attempt");
       socket.off("connect_error");
     };
-  }, [ticketId]);
+  }, [ticketId, socket, user?.companyId]);
 
   const loadMore = () => {
     if (loadingMore) return;

@@ -1,6 +1,7 @@
 import * as Yup from "yup";
 import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
+import { emitToCompanyNamespace } from "../libs/socketEmit";
 
 import ListService from "../services/ContactListService/ListService";
 import CreateService from "../services/ContactListService/CreateService";
@@ -70,11 +71,14 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   });
 
   const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-ContactList`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-ContactList`,
+    {
       action: "create",
       record
-    });
+    }
+  );
 
   return res.status(200).json(record);
 };
@@ -113,11 +117,14 @@ export const update = async (
   });
 
   const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-ContactList`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-ContactList`,
+    {
       action: "update",
       record
-    });
+    }
+  );
 
   return res.status(200).json(record);
 };
@@ -132,11 +139,14 @@ export const remove = async (
   await DeleteService(id);
 
   const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-ContactList`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-ContactList`,
+    {
       action: "delete",
       id
-    });
+    }
+  );
 
   return res.status(200).json({ message: "Contact list deleted" });
 };
@@ -175,12 +185,14 @@ export const upload = async (req: Request, res: Response) => {
   const response = await ImportContacts(+id, companyId, file);
 
   const io = getIO();
-
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-ContactListItem-${+id}`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-ContactListItem-${+id}`,
+    {
       action: "reload",
       records: response
-    });
+    }
+  );
 
   return res.status(200).json(response);
 };
@@ -197,15 +209,21 @@ export const clearItems = async (
   });
 
   const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-ContactListItem`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-ContactListItem`,
+    {
       action: "reload"
-    });
+    }
+  );
   // Emitir também no canal específico da lista para compatibilidade com outras operações
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-ContactListItem-${Number(id)}`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-${companyId}-ContactListItem-${Number(id)}`,
+    {
       action: "reload"
-    });
+    }
+  );
 
   return res.status(200).json({ message: "Contact list items cleared" });
 };

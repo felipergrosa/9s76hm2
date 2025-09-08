@@ -57,9 +57,7 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
         await cacheLayer.set(`contacts:${ticket.contactId}:unreads`, "0");
 
         const io = getIO();
-
-        io.of(ticket.companyId.toString())
-          // .to(ticket.status).to("notification")
+        io.of(`/workspace-${ticket.companyId}`)
           .emit(`company-${ticket.companyId}-ticket`, {
             action: "updateUnread",
             ticketId: ticket.id

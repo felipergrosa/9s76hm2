@@ -1,4 +1,5 @@
 import io from "socket.io-client";
+import { getBackendUrl } from "../config";
 
 class SocketWorker {
   constructor(companyId , userId) {
@@ -8,11 +9,29 @@ class SocketWorker {
       this.socket = null;
       this.configureSocket();
       this.eventListeners = {}; // Armazena os ouvintes de eventos registrados
+      this.joinBuffer = new Set(); // Rooms pendentes de join
       SocketWorker.instance = this;
 
     } 
 
     return SocketWorker.instance;
+  }
+
+  // Checa presença do socket na sala (diagnóstico)
+  checkRoom(room, cb) {
+    try {
+      const normalized = (room || "").toString().trim();
+      if (!normalized || normalized === "undefined") return cb?.({ error: "invalid room" });
+      this.connect();
+      this.socket.emit("debugCheckRoom", normalized, cb);
+    } catch (e) {
+      cb?.({ error: e?.message || String(e) });
+    }
+  }
+
+  // Proxy da flag de conexão
+  get connected() {
+    return !!this.socket && !!this.socket.connected;
   }
 
   configureSocket() {
@@ -24,7 +43,8 @@ class SocketWorker {
     } catch (_) {
       token = null;
     }
-    const nsUrl = `${process.env.REACT_APP_BACKEND_URL}/workspace-${this?.companyId}`;
+    const backendUrl = getBackendUrl() || process.env.REACT_APP_BACKEND_URL;
+    const nsUrl = `${backendUrl}/workspace-${this?.companyId}`;
     // Importante: o backend valida namespaces como /workspace-<id> e exige query.token (JWT)
     this.socket = io(nsUrl, {
       transports: ["polling", "websocket"],
@@ -38,13 +58,41 @@ class SocketWorker {
       // auth: token ? { token } : undefined, // opcional, backend lê de query.token
     });
 
+    // Expondo para debug manual no console do navegador
+    try {
+      if (typeof window !== "undefined") {
+        window.__SOCKET_WORKER__ = this;
+        window.__SOCKET_IO__ = this.socket;
+      }
+    } catch {}
+
     this.socket.on("connect", () => {
-      console.log("Socket conectado:", { namespace: `workspace-${this?.companyId}`, hasToken: !!token });
+      console.log("Socket conectado:", { namespace: `workspace-${this?.companyId}`, id: this.socket?.id, hasToken: !!token });
+      // Envia joins pendentes
+      try {
+        this.joinBuffer.forEach((room) => {
+          try {
+            this.socket.emit("joinChatBox", room, (err) => {
+              if (err) console.log("[SocketWorker] buffered join ack error", { room, err });
+              else console.log("[SocketWorker] buffered join ok", { room });
+            });
+          } catch (e) {}
+        });
+      } finally {
+        this.joinBuffer.clear();
+      }
     });
 
     this.socket.on("disconnect", () => {
       console.log("Desconectado do servidor Socket.IO");
       this.reconnectAfterDelay();
+    });
+
+    this.socket.on("connect_error", (err) => {
+      console.log("Socket connect_error:", err?.message || err);
+    });
+    this.socket.on("error", (err) => {
+      console.log("Socket error:", err?.message || err);
     });
   }
 
@@ -61,9 +109,42 @@ class SocketWorker {
   }
 
   // Emite um evento
-  emit(event, data) {
+  emit(event, ...args) {
     this.connect();
-    this.socket.emit(event, data);
+    this.socket.emit(event, ...args);
+  }
+
+  // Join de sala com buffer automático
+  joinRoom(room, cb) {
+    try {
+      const normalized = (room || "").toString().trim();
+      if (!normalized || normalized === "undefined") return cb?.("invalid room");
+      if (this.connected) {
+        this.socket.emit("joinChatBox", normalized, cb);
+      } else {
+        this.joinBuffer.add(normalized);
+        cb?.();
+      }
+    } catch (e) {
+      cb?.(e?.message || String(e));
+    }
+  }
+
+  // Leave de sala com segurança
+  leaveRoom(room, cb) {
+    try {
+      const normalized = (room || "").toString().trim();
+      if (!normalized || normalized === "undefined") return cb?.("invalid room");
+      if (this.connected) {
+        this.socket.emit("joinChatBoxLeave", normalized, cb);
+      } else {
+        // Se desconectado, apenas remove do buffer
+        this.joinBuffer.delete(normalized);
+        cb?.();
+      }
+    } catch (e) {
+      cb?.(e?.message || String(e));
+    }
   }
 
   // Desconecta um ou mais ouvintes de eventos

@@ -1,4 +1,5 @@
 import { getIO } from "../../libs/socket";
+import { emitToCompanyRoom } from "../../libs/socketEmit";
 import Contact from "../../models/Contact";
 import Message from "../../models/Message";
 import Queue from "../../models/Queue";
@@ -93,14 +94,17 @@ const CreateMessageService = async ({
   const io = getIO();
 
   if (!messageData?.ticketImported) {
-    io.of(`/workspace-${companyId}`)
-      .to(message.ticket.uuid)
-      .emit(`company-${companyId}-appMessage`, {
+    await emitToCompanyRoom(
+      companyId,
+      message.ticket.uuid,
+      `company-${companyId}-appMessage`,
+      {
         action: "create",
         message,
         ticket: message.ticket,
         contact: message.ticket.contact
-      });
+      }
+    );
   }
 
 

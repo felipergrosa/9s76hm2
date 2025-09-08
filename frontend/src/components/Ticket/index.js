@@ -95,6 +95,20 @@ const Ticket = () => {
             // setWhatsapp(data.whatsapp);
             // setQueueId(data.queueId);
             setTicket(data);
+            // Faz join imediato na sala do ticket pelo UUID (se o socket já estiver pronto)
+            try {
+              const candidate = (data?.uuid || ticketId || "").toString().trim();
+              if (candidate && candidate !== "undefined" && socket && typeof socket.emit === "function") {
+                socket.emit("joinChatBox", candidate, (err) => {
+                  if (err) console.debug("[Ticket] immediate joinChatBox ack error", err);
+                  else console.debug("[Ticket] immediate joinChatBox ok", { room: candidate });
+                });
+              } else {
+                console.debug("[Ticket] immediate join skipped - invalid id or socket not ready", { uuid: data?.uuid, ticketId, hasSocket: !!socket });
+              }
+            } catch (e) {
+              console.debug("[Ticket] immediate join error", e);
+            }
             if (["pending", "open", "group"].includes(data.status)) {
               setTabOpen(data.status);
             }
@@ -110,13 +124,17 @@ const Ticket = () => {
     }, 500);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [ticketId, user, history]);
+  }, [ticketId, user, history, socket]);
 
   useEffect(() => {
     if (!ticket && !ticket.id && ticket.uuid !== ticketId && ticketId === "undefined") {
       return;
     }
 
+    // Aguarda socket e companyId disponíveis
+    if (!socket || typeof socket.on !== "function") {
+      return;
+    }
     if (user.companyId) {
       const onConnectTicket = () => {
         try {
@@ -162,6 +180,13 @@ const Ticket = () => {
       socket.on(`company-${companyId}-ticket`, onCompanyTicket);
       socket.on(`company-${companyId}-contact`, onCompanyContactTicket);
 
+      // Se já estiver conectado, entra na sala imediatamente
+      try {
+        if (socket && socket.connected) {
+          onConnectTicket();
+        }
+      } catch {}
+
       return () => {
         try {
           const candidate = (ticket?.uuid || ticketId || "").toString().trim();
@@ -179,7 +204,7 @@ const Ticket = () => {
         socket.off(`company-${companyId}-contact`, onCompanyContactTicket);
       };
     }
-  }, [ticketId, ticket, history]);
+  }, [ticketId, ticket, history, socket, user?.companyId]);
 
   const handleDrawerOpen = useCallback(() => {
     setDrawerOpen(true);

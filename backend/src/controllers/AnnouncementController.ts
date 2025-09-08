@@ -1,6 +1,7 @@
 import * as Yup from "yup";
 import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
+import { emitToCompanyNamespace } from "../libs/socketEmit";
 import { head } from "lodash";
 import fs from "fs";
 import path from "path";
@@ -66,12 +67,14 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     companyId
   });
 
-  const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-announcement`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-announcement`,
+    {
       action: "create",
       record
-    });
+    }
+  );
 
   return res.status(200).json(record);
 };
@@ -107,12 +110,14 @@ export const update = async (
     id
   });
 
-  const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-announcement`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-announcement`,
+    {
       action: "update",
       record
-    });
+    }
+  );
 
   return res.status(200).json(record);
 };
@@ -126,12 +131,14 @@ export const remove = async (
 
   await DeleteService(id);
 
-  const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-announcement`, {
+  await emitToCompanyNamespace(
+    companyId,
+    `company-announcement`,
+    {
       action: "delete",
       id
-    });
+    }
+  );
 
   return res.status(200).json({ message: "Announcement deleted" });
 };
@@ -164,12 +171,14 @@ export const mediaUpload = async (
     });
     await announcement.reload();
 
-    const io = getIO();
-    io.of(`/workspace-${companyId}`)
-      .emit(`company-announcement`, {
+    await emitToCompanyNamespace(
+      companyId,
+      `company-announcement`,
+      {
         action: "update",
         record: announcement
-      });
+      }
+    );
 
     return res.send({ mensagem: "Mensagem enviada" });
   } catch (err: any) {
