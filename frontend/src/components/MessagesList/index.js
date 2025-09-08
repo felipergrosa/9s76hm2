@@ -549,6 +549,8 @@ const MessagesList = ({
   const { selectedQueuesMessage } = useContext(QueueSelectedContext);
 
   const { user, socket } = useContext(AuthContext);
+  // Armazena a sala atual (idealmente ticket.uuid). Antes de sabermos o uuid, usa-se ticketId como fallback.
+  const currentRoomIdRef = useRef(null);
 
   const { showSelectMessageCheckbox } = useContext(ForwardMessageContext);
 
@@ -723,6 +725,21 @@ const MessagesList = ({
             setHasMore(data.hasMore);
             setLoading(false);
             setLoadingMore(false);
+
+            // Assim que receber a primeira página, tenta descobrir o UUID do ticket
+            const firstMsg = data?.messages?.[0];
+            const newRoomId = firstMsg?.ticket?.uuid || null;
+            if (pageNumber === 1 && newRoomId) {
+              try {
+                const prevRoom = currentRoomIdRef.current;
+                if (prevRoom && prevRoom !== newRoomId) {
+                  socket.emit("joinChatBoxLeave", prevRoom);
+                }
+                currentRoomIdRef.current = newRoomId;
+                socket.emit("joinChatBox", newRoomId);
+                console.debug("[MessagesList] joined room by uuid after fetch", { room: newRoomId });
+              } catch {}
+            }
           }
 
           if (pageNumber === 1 && data.messages.length > 1) {
@@ -751,13 +768,15 @@ const MessagesList = ({
 
     const connectEventMessagesList = () => {
       try {
+        // Prioriza entrar pela sala UUID se já conhecida
         const normalizedId = (ticketId ?? "").toString().trim();
-        if (!normalizedId || normalizedId === "undefined") {
+        const roomToJoin = (currentRoomIdRef.current || normalizedId || "").toString().trim();
+        if (!roomToJoin || roomToJoin === "undefined") {
           console.debug("[MessagesList] skip joinChatBox - invalid ticketId", { ticketId });
           return;
         }
-        console.debug("[MessagesList] socket connect - joinChatBox", { ticketId: normalizedId });
-        socket.emit("joinChatBox", normalizedId);
+        console.debug("[MessagesList] socket connect - joinChatBox", { room: roomToJoin });
+        socket.emit("joinChatBox", roomToJoin);
       } catch (e) {
         console.debug("[MessagesList] error emitting joinChatBox", e);
       }
@@ -767,21 +786,21 @@ const MessagesList = ({
       try {
         const evtUuid = data?.message?.ticket?.uuid || data?.ticket?.uuid;
         if (data?.action && evtUuid) {
-          console.debug("[MessagesList] appMessage", { action: data.action, evtUuid, ticketId, msgId: data?.message?.id });
+          console.debug("[MessagesList] appMessage", { action: data.action, evtUuid, currentRoom: currentRoomIdRef.current, msgId: data?.message?.id });
         } else {
           console.debug("[MessagesList] appMessage (no uuid)", data);
         }
 
-        if (data.action === "create" && evtUuid === ticketId) {
+        if (data.action === "create" && evtUuid && evtUuid === currentRoomIdRef.current) {
           dispatch({ type: "ADD_MESSAGE", payload: data.message });
           scrollToBottom();
         }
 
-        if (data.action === "update" && evtUuid === ticketId) {
+        if (data.action === "update" && evtUuid && evtUuid === currentRoomIdRef.current) {
           dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
         }
 
-        if (data.action == "delete" && evtUuid === ticketId) {
+        if (data.action == "delete" && evtUuid && evtUuid === currentRoomIdRef.current) {
           dispatch({ type: "DELETE_MESSAGE", payload: data.messageId });
         }
       } catch (e) {
@@ -807,12 +826,12 @@ const MessagesList = ({
 
     return () => {
       try {
-        const normalizedId = (ticketId ?? "").toString().trim();
-        if (!normalizedId || normalizedId === "undefined") {
+        const roomToLeave = (currentRoomIdRef.current || (ticketId ?? "")).toString().trim();
+        if (!roomToLeave || roomToLeave === "undefined") {
           console.debug("[MessagesList] skip leave room - invalid ticketId", { ticketId });
         } else {
-          console.debug("[MessagesList] cleanup - leave room", { ticketId: normalizedId });
-          socket.emit("joinChatBoxLeave", normalizedId);
+          console.debug("[MessagesList] cleanup - leave room", { room: roomToLeave });
+          socket.emit("joinChatBoxLeave", roomToLeave);
         }
       } catch {}
 
