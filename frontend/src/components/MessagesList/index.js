@@ -509,6 +509,9 @@ const reducer = (state, action) => {
 
     if (messageIndex !== -1) {
       state[messageIndex] = messageToUpdate;
+    } else {
+      // Upsert: se não existe ainda (ex.: recebemos UPDATE antes do CREATE), adiciona
+      state.push(messageToUpdate);
     }
 
     return [...state];
@@ -516,6 +519,12 @@ const reducer = (state, action) => {
 
   if (action.type === "RESET") {
     return [];
+  }
+
+  if (action.type === "DELETE_MESSAGE") {
+    const idToRemove = action.payload;
+    const filtered = state.filter((m) => m.id !== idToRemove);
+    return [...filtered];
   }
 };
 
@@ -708,8 +717,7 @@ const MessagesList = ({
 
   useEffect(() => {
     setLoading(true);
-    const delayDebounceFn = setTimeout(() => {
-      const fetchMessages = async () => {
+    const fetchMessages = async () => {
         if (!ticketId || ticketId === "undefined") {
           history.push("/tickets");
           return;
@@ -726,18 +734,23 @@ const MessagesList = ({
             setLoading(false);
             setLoadingMore(false);
 
-            // Assim que receber a primeira página, tenta descobrir o UUID do ticket
+            // Descobre o UUID do ticket diretamente do payload (mais confiável)
+            const ticketUuid = data?.ticket?.uuid || null;
+            // Fallback: tenta pegar da primeira mensagem caso necessário
             const firstMsg = data?.messages?.[0];
-            const newRoomId = firstMsg?.ticket?.uuid || null;
-            if (pageNumber === 1 && newRoomId) {
+            const firstMsgUuid = firstMsg?.ticket?.uuid || null;
+            const newRoomId = ticketUuid || firstMsgUuid || null;
+            if (newRoomId) {
               try {
                 const prevRoom = currentRoomIdRef.current;
                 if (prevRoom && prevRoom !== newRoomId) {
                   socket.emit("joinChatBoxLeave", prevRoom);
                 }
-                currentRoomIdRef.current = newRoomId;
-                socket.emit("joinChatBox", newRoomId);
-                console.debug("[MessagesList] joined room by uuid after fetch", { room: newRoomId });
+                if (prevRoom !== newRoomId) {
+                  currentRoomIdRef.current = newRoomId;
+                  socket.emit("joinChatBox", newRoomId);
+                  console.debug("[MessagesList] joined room by uuid after fetch", { room: newRoomId });
+                }
               } catch {}
             }
           }
@@ -750,13 +763,9 @@ const MessagesList = ({
           toastError(err);
           setLoadingMore(false);
         }
-      };
-
-      fetchMessages();
-    }, 500);
-    return () => {
-      clearTimeout(delayDebounceFn);
     };
+
+    fetchMessages();
   }, [pageNumber, ticketId, selectedQueuesMessage]);
 
   useEffect(() => {
@@ -785,22 +794,30 @@ const MessagesList = ({
     const onAppMessageMessagesList = (data) => {
       try {
         const evtUuid = data?.message?.ticket?.uuid || data?.ticket?.uuid;
-        if (data?.action && evtUuid) {
-          console.debug("[MessagesList] appMessage", { action: data.action, evtUuid, currentRoom: currentRoomIdRef.current, msgId: data?.message?.id });
-        } else {
-          console.debug("[MessagesList] appMessage (no uuid)", data);
-        }
+        const hasUuid = Boolean(evtUuid);
+        console.debug("[MessagesList] appMessage", {
+          action: data?.action,
+          evtUuid,
+          hasUuid,
+          currentRoom: currentRoomIdRef.current,
+          msgId: data?.message?.id,
+        });
 
-        if (data.action === "create" && evtUuid && evtUuid === currentRoomIdRef.current) {
+        // Se não houver UUID no evento, ainda assim tratamos, pois o servidor emite para a sala (room) correta
+        const shouldHandle = hasUuid ? (evtUuid === currentRoomIdRef.current) : true;
+
+        if (!shouldHandle) return;
+
+        if (data.action === "create") {
           dispatch({ type: "ADD_MESSAGE", payload: data.message });
           scrollToBottom();
         }
 
-        if (data.action === "update" && evtUuid && evtUuid === currentRoomIdRef.current) {
+        if (data.action === "update") {
           dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
         }
 
-        if (data.action == "delete" && evtUuid && evtUuid === currentRoomIdRef.current) {
+        if (data.action == "delete") {
           dispatch({ type: "DELETE_MESSAGE", payload: data.messageId });
         }
       } catch (e) {
