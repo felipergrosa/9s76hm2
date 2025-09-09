@@ -65,6 +65,7 @@
     "dotenv": "^16.6.1",
     "express": "^4.17.3",
     "express-async-errors": "^3.1.1",
+    "ffmpeg": "^0.0.4",
     "ffmpeg-static": "^5.2.0",
     "file-type": "^18.7.0",
     "fluent-ffmpeg": "^2.1.2",
@@ -72,6 +73,7 @@
     "googleapis": "^113.0.0",
     "helmet": "^7.1.0",
     "http-graceful-shutdown": "^3.1.6",
+    "ioredis": "^5.4.1",
     "jimp": "^0.16.1",
     "jsonwebtoken": "^8.5.1",
     "link-preview-js": "^3.0.5",
@@ -101,8 +103,7 @@
     "winston": "^3.13.0",
     "xlsx": "^0.18.3",
     "yup": "^0.32.11",
-    "zod": "^4.0.17",
-    "ioredis": "^5.4.1"
+    "zod": "^4.0.17"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.4.34",
