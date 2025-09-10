@@ -578,7 +578,30 @@ const Contacts = () => {
             return String(va).localeCompare(String(vb), "pt-BR", { sensitivity: "base" });
         };
         const sorted = [...arr].sort(cmp);
-        return sortDirection === "desc" ? sorted.reverse() : sorted;
+        const ordered = sortDirection === "desc" ? sorted.reverse() : sorted;
+        
+        // Aplicar filtro de busca se houver
+        const filtered = ordered.filter(contact => {
+            if (!searchParam) return true;
+            const searchLower = searchParam.toLowerCase();
+            return (
+                (contact.name && contact.name.toLowerCase().includes(searchLower)) ||
+                (contact.number && contact.number.includes(searchParam)) ||
+                (contact.email && contact.email.toLowerCase().includes(searchLower))
+            );
+        });
+        
+        // Atualizar o total de contatos para refletir a busca
+        if (searchParam) {
+            setTotalContacts(filtered.length);
+        } else {
+            setTotalContacts(contacts.length);
+        }
+        
+        // Aplicar paginação
+        const startIndex = (pageNumber - 1) * contactsPerPage;
+        const endIndex = startIndex + contactsPerPage;
+        return filtered.slice(startIndex, endIndex);
     }, [contacts, sortField, sortDirection]);
 
     // Função para renderizar os números de página (sempre 3, janela deslizante)
@@ -609,8 +632,9 @@ const Contacts = () => {
         };
 
     return (
-        <MainContainer useWindowScroll>
-<div className="w-full p-4 md:p-6 lg:p-8 bg-gray-50 dark:bg-gray-900 overflow-x-hidden">
+        <div className="flex-1 bg-gray-50 dark:bg-gray-900 min-h-full">
+            <MainContainer useWindowScroll>
+                <div className="w-full p-4 md:p-6 lg:p-8 overflow-x-hidden">
                 <LoadingOverlay open={loading} message="Aguarde..." />
                 <NewTicketModal
                     modalOpen={newTicketModalOpen}
@@ -895,52 +919,52 @@ const Contacts = () => {
                 <div className="hidden min-[1200px]:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
                     <div className="overflow-x-hidden">
                         <table className="w-full table-fixed text-sm text-left text-gray-500 dark:text-gray-400">
-                            <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 sticky top-0 z-10">
+                            <thead className="uppercase text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400 tracking-wider">
                                 <tr>
-                                    <th scope="col" className="w-[48px] p-4">
+                                    <th scope="col" className="w-[48px] p-2 text-center">
                                         <input type="checkbox"
                                             checked={isSelectAllChecked}
                                             onChange={handleSelectAllContacts}
                                             className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
                                     </th>
-                                    <th scope="col" className="pl-0 pr-3 py-3 w-[300px]">
-                                        <button onClick={() => handleSort('name')} className="flex items-center gap-1 select-none">
-                                            Nome
+                                    <th scope="col" className="pl-14 pr-3 py-2 w-[300px]">
+                                        <button onClick={() => handleSort('name')} className="flex items-center gap-1 select-none font-medium">
+NOME
                                             <span className="text-[15px] opacity-70">{sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                                         </button>
                                     </th>
                                     {/* Colunas 'Nome do Contato' e 'Encomenda' removidas conforme solicitação */}
-                                    <th scope="col" className="pl-3 pr-3 py-3 w-[167px]">
-                                        <button onClick={() => handleSort('number')} className="flex items-center gap-1 select-none">
-                                            WhatsApp
+                                    <th scope="col" className="pl-3 pr-3 py-2 w-[167px]">
+                                        <button onClick={() => handleSort('number')} className="flex items-center gap-1 select-none w-full font-medium">
+WHATSAPP
                                             <span className="text-[15px] opacity-70">{sortField === 'number' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                                         </button>
                                     </th>
-                                    <th scope="col" className="hidden lg:table-cell pl-1 pr-1 py-3 w-[140px]">
-                                        <button onClick={() => handleSort('email')} className="flex items-center gap-1 select-none">
-                                            Email
+                                    <th scope="col" className="hidden lg:table-cell pl-1 pr-3 py-2 w-[140px]">
+                                        <button onClick={() => handleSort('email')} className="flex items-center gap-1 select-none font-medium">
+EMAIL
                                             <span className="text-[15px] opacity-70">{sortField === 'email' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                                         </button>
                                     </th>
-                                    <th scope="col" className="pl-3 pr-3 py-3 w-[100px]">
-                                        <button onClick={() => handleSort('city')} className="flex items-center gap-1 select-none">
-                                            Cidade/UF
+                                    <th scope="col" className="pl-3 pr-3 py-2 w-[100px]">
+                                        <button onClick={() => handleSort('city')} className="flex items-center gap-1 select-none font-medium">
+CIDADE/UF
                                             <span className="text-[15px] opacity-70">{sortField === 'city' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                                         </button>
                                     </th>
-                                    <th scope="col" className="pl-3 pr-3 py-3 text-center w-[50px]">
-                                        <button onClick={() => handleSort('tags')} className="flex items-center justify-center gap-1 w-full select-none">
-                                            Tags
+                                    <th scope="col" className="pl-3 pr-3 py-2 text-center w-[50px]">
+                                        <button onClick={() => handleSort('tags')} className="flex items-center justify-center gap-1 w-full select-none font-medium">
+TAGS
                                             <span className="text-[15px] opacity-70">{sortField === 'tags' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                                         </button>
                                     </th>
-                                    <th scope="col" className="pl-3 pr-3 py-3 text-center w-[80px]">
-                                        <button onClick={() => handleSort('status')} className="flex items-center justify-center gap-1 w-full select-none">
-                                            Status
+                                    <th scope="col" className="pl-4 pr-3 py-2 text-center w-[80px]">
+                                        <button onClick={() => handleSort('status')} className="flex items-center justify-center gap-1 w-full select-none font-medium">
+STATUS
                                             <span className="text-[15px] opacity-70">{sortField === 'status' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                                         </button>
                                     </th>
-                                    <th scope="col" className="pl-3 pr-3 py-3 text-center w-[120px]">Ações</th>
+                                    <th scope="col" className="pl-3 pr-3 py-2 text-center w-[120px] font-medium">AÇÕES</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1213,8 +1237,9 @@ const Contacts = () => {
                         </li>
                     </ul>
                 </nav>
-            </div>
-        </MainContainer>
+                </div>
+            </MainContainer>
+        </div>
     );
 };
 

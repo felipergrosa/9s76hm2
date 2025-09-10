@@ -72,6 +72,20 @@ const useStyles = makeStyles((theme) => ({
   chip: {
     margin: 2,
   },
+  activeFilter: {
+    "& .MuiOutlinedInput-root": {
+      "& .MuiOutlinedInput-notchedOutline": {
+        borderColor: green[500],
+        borderWidth: '2px',
+      },
+    },
+  },
+  activeFilterBox: {
+    border: `2px solid ${green[500]}`,
+    borderRadius: theme.shape.borderRadius,
+    padding: theme.spacing(1),
+    height: '100%',
+  }
 }));
 
 const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedFilter }) => {
@@ -513,6 +527,37 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
         tags: selectedTags.map(tag => tag.id)
       };
 
+      // Normalizar representativeCode: remover vazios e '00000'
+      if (Array.isArray(filters.representativeCode)) {
+        filters.representativeCode = filters.representativeCode
+          .map(v => String(v ?? '').trim())
+          .filter(v => v !== '' && v !== '00000');
+        if (filters.representativeCode.length === 0) delete filters.representativeCode;
+      } else if (typeof filters.representativeCode === 'string') {
+        const v = String(filters.representativeCode ?? '').trim();
+        if (v === '' || v === '00000') delete filters.representativeCode;
+      }
+
+      // Normalizar channel, city, segment, situation removendo placeholders
+      const invalidSet = new Set(['', '0', '000', '00000']);
+      const sanitizeList = (val) => {
+        if (!val) return undefined;
+        if (Array.isArray(val)) {
+          const list = val.map(v => String(v ?? '').trim()).filter(v => !invalidSet.has(v));
+          return list.length ? list : undefined;
+        }
+        const s = String(val ?? '').trim();
+        return (!s || invalidSet.has(s)) ? undefined : s;
+      };
+      const ch = sanitizeList(filters.channel);
+      const ct = sanitizeList(filters.city);
+      const sg = sanitizeList(filters.segment);
+      const st = sanitizeList(filters.situation);
+      if (typeof ch === 'undefined') delete filters.channel; else filters.channel = ch;
+      if (typeof ct === 'undefined') delete filters.city; else filters.city = ct;
+      if (typeof sg === 'undefined') delete filters.segment; else filters.segment = sg;
+      if (typeof st === 'undefined') delete filters.situation; else filters.situation = st;
+
       // Mapear meses selecionados (strings) para números (1-12)
       if (Array.isArray(values.foundationMonths) && values.foundationMonths.length > 0) {
         filters.foundationMonths = values.foundationMonths
@@ -547,8 +592,13 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
       }
 
       // Incluir range de valor da última compra
-      if (typeof values.minVlUltCompra !== 'undefined') filters.minVlUltCompra = Number(values.minVlUltCompra);
-      if (typeof values.maxVlUltCompra !== 'undefined') filters.maxVlUltCompra = Number(values.maxVlUltCompra);
+      // Somente incluir se realmente definido (evita Number(null) -> 0)
+      if (values.minVlUltCompra !== null && values.minVlUltCompra !== "") {
+        filters.minVlUltCompra = Number(values.minVlUltCompra);
+      }
+      if (values.maxVlUltCompra !== null && values.maxVlUltCompra !== "") {
+        filters.maxVlUltCompra = Number(values.maxVlUltCompra);
+      }
 
       // Remover filtros vazios
       Object.keys(filters).forEach(key => {
@@ -634,18 +684,18 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
           foundationMonths: (savedFilter && Array.isArray(savedFilter.foundationMonths))
             ? savedFilter.foundationMonths.map(n => monthsPT[n - 1]).filter(Boolean)
             : [],
-          minCreditLimit: (savedFilter && savedFilter.minCreditLimit) ? savedFilter.minCreditLimit : "",
-          maxCreditLimit: (savedFilter && savedFilter.maxCreditLimit) ? savedFilter.maxCreditLimit : "",
-          minVlUltCompra: (savedFilter && savedFilter.minVlUltCompra) ? Number(savedFilter.minVlUltCompra) : 0,
-          maxVlUltCompra: (savedFilter && savedFilter.maxVlUltCompra) ? Number(savedFilter.maxVlUltCompra) : 30000,
+          minCreditLimit: (savedFilter && savedFilter.minCreditLimit) ? savedFilter.minCreditLimit : null,
+          maxCreditLimit: (savedFilter && savedFilter.maxCreditLimit) ? savedFilter.maxCreditLimit : null,
+          minVlUltCompra: (savedFilter && savedFilter.minVlUltCompra) ? Number(savedFilter.minVlUltCompra) : null,
+          maxVlUltCompra: (savedFilter && savedFilter.maxVlUltCompra) ? Number(savedFilter.maxVlUltCompra) : null,
           vlUltCompraNoMax: false,
           creditLimitNoMax: false,
           // Novos filtros
           florder: (savedFilter && (typeof savedFilter.florder !== 'undefined'))
             ? (savedFilter.florder === true ? 'Sim' : savedFilter.florder === false ? 'Não' : '')
             : '',
-          dtUltCompraStart: (savedFilter && savedFilter.dtUltCompraStart) ? savedFilter.dtUltCompraStart : "",
-          dtUltCompraEnd: (savedFilter && savedFilter.dtUltCompraEnd) ? savedFilter.dtUltCompraEnd : "",
+          dtUltCompraStart: (savedFilter && savedFilter.dtUltCompraStart) ? savedFilter.dtUltCompraStart : null,
+          dtUltCompraEnd: (savedFilter && savedFilter.dtUltCompraEnd) ? savedFilter.dtUltCompraEnd : null,
         }}
         enableReinitialize={true}
         onSubmit={(values, actions) => {
@@ -679,6 +729,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             placeholder={i18n.t("contactListItems.filterDialog.channel")}
                             fullWidth
                             margin="dense"
+                            className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
                             InputProps={{
                               ...params.InputProps,
                               endAdornment: (
@@ -716,6 +767,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             placeholder={i18n.t("contactListItems.filterDialog.representativeCode")}
                             fullWidth
                             margin="dense"
+                            className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
                             InputProps={{
                               ...params.InputProps,
                               endAdornment: (
@@ -753,6 +805,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             placeholder={i18n.t("contactListItems.filterDialog.city")}
                             fullWidth
                             margin="dense"
+                            className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
                             InputProps={{
                               ...params.InputProps,
                               endAdornment: (
@@ -790,6 +843,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             placeholder="Segmento de Mercado"
                             fullWidth
                             margin="dense"
+                            className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
                             InputProps={{
                               ...params.InputProps,
                               endAdornment: (
@@ -827,6 +881,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             placeholder={i18n.t("contactListItems.filterDialog.situation")}
                             fullWidth
                             margin="dense"
+                            className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
                             InputProps={{
                               ...params.InputProps,
                               endAdornment: (
@@ -860,6 +915,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             placeholder={i18n.t("contactListItems.filterDialog.monthYear")}
                             fullWidth
                             margin="dense"
+                            className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
                           />
                         )}
                       />
@@ -869,9 +925,10 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
 
                 {/* Linha 1: Limite de Crédito (faixa) + Valor da Última Compra (faixa) */}
                 <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2">Limite de Crédito (faixa)</Typography>
-                  <Box px={1} display="flex" flexDirection="column">
-                    <Field name="minCreditLimit">
+                  <Box className={((values.minCreditLimit && Number(values.minCreditLimit) > 0) || (values.maxCreditLimit && Number(values.maxCreditLimit) < 100000) || values.creditLimitNoMax) ? classes.activeFilterBox : ""}>
+                    <Typography variant="subtitle2">Limite de Crédito (faixa)</Typography>
+                    <Box px={1} display="flex" flexDirection="column">
+                      <Field name="minCreditLimit">
                       {({ form }) => (
                         <Slider
                           value={[Number(values.minCreditLimit || 0), values.creditLimitNoMax ? 100000 : Number(values.maxCreditLimit || 100000)]}
@@ -898,11 +955,12 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             {editMinCredit ? (
                               <InputBase
                                 autoFocus
-                                defaultValue={Number(values.minCreditLimit || 0)}
+                                defaultValue={values.minCreditLimit !== null ? Number(values.minCreditLimit) : ""}
                                 onBlur={(e) => {
+                                  const val = e.target.value.trim();
                                   const maxAllowed = form.values.creditLimitNoMax ? 100000 : Number(form.values.maxCreditLimit || 100000);
-                                  let v = parseCurrency(e.target.value, maxAllowed);
-                                  if (v > maxAllowed) v = maxAllowed;
+                                  let v = val === "" ? null : parseCurrency(val, maxAllowed);
+                                  if (v !== null && v > maxAllowed) v = maxAllowed;
                                   form.setFieldValue('minCreditLimit', v);
                                   setEditMinCredit(false);
                                 }}
@@ -910,7 +968,9 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                                 style={{ width: 90 }}
                               />
                             ) : (
-                              <span style={{ cursor: 'pointer' }} onClick={() => setEditMinCredit(true)}>{formatBRL0(values.minCreditLimit || 0)}</span>
+                              <span style={{ cursor: 'pointer' }} onClick={() => setEditMinCredit(true)}>
+                                {values.minCreditLimit !== null ? formatBRL0(values.minCreditLimit) : "Não definido"}
+                              </span>
                             )}
                             {' — '}
                             {values.creditLimitNoMax ? (
@@ -918,10 +978,11 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             ) : editMaxCredit ? (
                               <InputBase
                                 autoFocus
-                                defaultValue={Number(values.maxCreditLimit || 100000)}
+                                defaultValue={values.maxCreditLimit !== null ? Number(values.maxCreditLimit) : ""}
                                 onBlur={(e) => {
-                                  let v = parseCurrency(e.target.value, 100000);
-                                  if (v < Number(form.values.minCreditLimit || 0)) v = Number(form.values.minCreditLimit || 0);
+                                  const val = e.target.value.trim();
+                                  let v = val === "" ? null : parseCurrency(val, 100000);
+                                  if (v !== null && v < Number(form.values.minCreditLimit || 0)) v = Number(form.values.minCreditLimit || 0);
                                   form.setFieldValue('maxCreditLimit', v);
                                   setEditMaxCredit(false);
                                 }}
@@ -929,7 +990,9 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                                 style={{ width: 90 }}
                               />
                             ) : (
-                              <span style={{ cursor: 'pointer' }} onClick={() => setEditMaxCredit(true)}>{formatBRL0(values.maxCreditLimit || 100000)}</span>
+                              <span style={{ cursor: 'pointer' }} onClick={() => setEditMaxCredit(true)}>
+                                {values.maxCreditLimit !== null ? formatBRL0(values.maxCreditLimit) : "Não definido"}
+                              </span>
                             )}
                           </Typography>
                           <Field name="creditLimitNoMax">
@@ -955,12 +1018,14 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                         </Box>
                       )}
                     </Field>
+                    </Box>
                   </Box>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2">Valor da Última Compra (faixa)</Typography>
-                  <Box px={1} display="flex" flexDirection="column">
-                    <Field name="minVlUltCompra">
+                  <Box className={((values.minVlUltCompra && Number(values.minVlUltCompra) > 0) || (values.maxVlUltCompra && Number(values.maxVlUltCompra) < 30000) || values.vlUltCompraNoMax) ? classes.activeFilterBox : ""}>
+                    <Typography variant="subtitle2">Valor da Última Compra (faixa)</Typography>
+                    <Box px={1} display="flex" flexDirection="column">
+                      <Field name="minVlUltCompra">
                       {({ form }) => (
                         <Slider
                           value={[Number(values.minVlUltCompra || 0), values.vlUltCompraNoMax ? 30000 : Number(values.maxVlUltCompra || 30000)]}
@@ -986,11 +1051,12 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             {editMinVl ? (
                               <InputBase
                                 autoFocus
-                                defaultValue={Number(values.minVlUltCompra || 0)}
+                                defaultValue={values.minVlUltCompra !== null ? Number(values.minVlUltCompra) : ""}
                                 onBlur={(e) => {
+                                  const val = e.target.value.trim();
                                   const maxAllowed = form.values.vlUltCompraNoMax ? 30000 : Number(form.values.maxVlUltCompra || 30000);
-                                  let v = parseCurrency(e.target.value, maxAllowed);
-                                  if (v > maxAllowed) v = maxAllowed;
+                                  let v = val === "" ? null : parseCurrency(val, maxAllowed);
+                                  if (v !== null && v > maxAllowed) v = maxAllowed;
                                   form.setFieldValue('minVlUltCompra', v);
                                   setEditMinVl(false);
                                 }}
@@ -998,7 +1064,9 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                                 style={{ width: 90 }}
                               />
                             ) : (
-                              <span style={{ cursor: 'pointer' }} onClick={() => setEditMinVl(true)}>{formatBRL0(values.minVlUltCompra || 0)}</span>
+                              <span style={{ cursor: 'pointer' }} onClick={() => setEditMinVl(true)}>
+                                {values.minVlUltCompra !== null ? formatBRL0(values.minVlUltCompra) : "Não definido"}
+                              </span>
                             )}
                             {' — '}
                             {values.vlUltCompraNoMax ? (
@@ -1006,10 +1074,11 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             ) : editMaxVl ? (
                               <InputBase
                                 autoFocus
-                                defaultValue={Number(values.maxVlUltCompra || 30000)}
+                                defaultValue={values.maxVlUltCompra !== null ? Number(values.maxVlUltCompra) : ""}
                                 onBlur={(e) => {
-                                  let v = parseCurrency(e.target.value, 30000);
-                                  if (v < Number(form.values.minVlUltCompra || 0)) v = Number(form.values.minVlUltCompra || 0);
+                                  const val = e.target.value.trim();
+                                  let v = val === "" ? null : parseCurrency(val, 30000);
+                                  if (v !== null && v < Number(form.values.minVlUltCompra || 0)) v = Number(form.values.minVlUltCompra || 0);
                                   form.setFieldValue('maxVlUltCompra', v);
                                   setEditMaxVl(false);
                                 }}
@@ -1017,7 +1086,9 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                                 style={{ width: 90 }}
                               />
                             ) : (
-                              <span style={{ cursor: 'pointer' }} onClick={() => setEditMaxVl(true)}>{formatBRL0(values.maxVlUltCompra || 30000)}</span>
+                              <span style={{ cursor: 'pointer' }} onClick={() => setEditMaxVl(true)}>
+                                {values.maxVlUltCompra !== null ? formatBRL0(values.maxVlUltCompra) : "Não definido"}
+                              </span>
                             )}
                           </Typography>
                           <Field name="vlUltCompraNoMax">
@@ -1043,12 +1114,13 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                         </Box>
                       )}
                     </Field>
+                    </Box>
                   </Box>
                 </Grid>
 
                 {/* Linha 2: Encomenda + Range de Data da Última Compra */}
                 <Grid item xs={12} md={6}>
-                  <FormControl variant="outlined" margin="dense" fullWidth>
+                  <FormControl variant="outlined" margin="dense" fullWidth className={values.florder ? classes.activeFilter : ""}>
                     <InputLabel id="florder-select-label">Encomenda</InputLabel>
                     <Field as={Select} labelId="florder-select-label" id="florder-select" name="florder" label="Encomenda">
                       <MenuItem value=""><em>—</em></MenuItem>
@@ -1060,18 +1132,19 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                 <Grid item xs={12} md={6}>
                   <Field name="dtUltCompraStart">
                     {({ form }) => {
-                      const start = form.values.dtUltCompraStart || format(new Date(), 'yyyy-MM-dd');
-                      const end = form.values.dtUltCompraEnd || format(new Date(), 'yyyy-MM-dd');
+                      const start = form.values.dtUltCompraStart;
+                      const end = form.values.dtUltCompraEnd;
+                      const hasDateFilter = start && end;
                       return (
                         <>
-                          <Button fullWidth variant="outlined" size="small" style={{ height: 43 }} onClick={(e)=>{ setRangeAnchor(e.currentTarget); setRangeOpen(true); }}>
-                            {`Última Compra: ${format(parseISO(start), 'dd/MM')} — ${format(parseISO(end), 'dd/MM/yy')}`}
+                          <Button fullWidth variant="outlined" size="small" style={{ height: 43, ...(hasDateFilter && { borderColor: green[500], borderWidth: '2px' }) }} onClick={(e)=>{ setRangeAnchor(e.currentTarget); setRangeOpen(true); }}>
+                            {hasDateFilter ? `Última Compra: ${format(parseISO(start), 'dd/MM')} — ${format(parseISO(end), 'dd/MM/yy')}` : 'Filtrar por Data da Última Compra'}
                           </Button>
                           <Popover open={rangeOpen} anchorEl={rangeAnchor} onClose={()=> setRangeOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} transformOrigin={{ vertical: 'top', horizontal: 'left' }}>
                             <DateRangePicker
                               open
                               toggle={() => setRangeOpen(false)}
-                              initialDateRange={{ startDate: parseISO(start), endDate: parseISO(end) }}
+                              initialDateRange={{ startDate: hasDateFilter ? parseISO(start) : new Date(), endDate: hasDateFilter ? parseISO(end) : new Date() }}
                               definedRanges={[
                                 { label: 'Hoje', startDate: new Date(), endDate: new Date() },
                                 { label: 'Últimos 7 dias', startDate: addDays(new Date(), -6), endDate: new Date() },
@@ -1123,6 +1196,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                         placeholder={i18n.t("contactListItems.filterDialog.tags")}
                         fullWidth
                         margin="dense"
+                        className={selectedTags && selectedTags.length > 0 ? classes.activeFilter : ""}
                       />
                     )}
                   />

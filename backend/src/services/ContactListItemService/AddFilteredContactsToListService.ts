@@ -355,9 +355,9 @@ const AddFilteredContactsToListService = async ({
       attributes: ['number', 'email'],
       raw: true
     });
-    logger.info(`Encontrados ${existingItems.length} contatos já existentes na lista (checando por number/email)`);
+    logger.info(`Encontrados ${existingItems.length} contatos já existentes na lista (checando por número e email)`);
 
-    // Extrair chaves de comparação (número e email) dos contatos existentes
+    // Criar conjuntos para verificação rápida de duplicatas
     const existingNumbers = new Set((existingItems as any[]).map(item => item.number).filter(Boolean));
     const existingNumbersDigits = new Set(
       (existingItems as any[])
@@ -377,10 +377,13 @@ const AddFilteredContactsToListService = async ({
         const rawNumber = contact.number || "";
         const normalizedCandidate = String(rawNumber).replace(/\D/g, "");
         const isDuplicateByNumber =
-          (rawNumber && existingNumbers.has(rawNumber)) ||
+          (rawNumber && (existingNumbers.has(rawNumber) || existingNumbersDigits.has(normalizedCandidate))) ||
           (normalizedCandidate && existingNumbersDigits.has(normalizedCandidate));
+          
         const isDuplicateByEmail = contact.email && existingEmails.has(contact.email);
+        
         if (isDuplicateByNumber || isDuplicateByEmail) {
+          logger.debug(`Contato duplicado por ${isDuplicateByNumber ? 'número' : 'email'}: ${contact.name} (${contact.number || contact.email})`);
           duplicated++;
           continue;
         }
@@ -393,6 +396,14 @@ const AddFilteredContactsToListService = async ({
           email: contact.email,
           companyId
         });
+        
+        // Atualizar os conjuntos de verificação para evitar duplicatas na mesma execução
+        if (contact.number) {
+          existingNumbers.add(contact.number);
+          const normalized = String(contact.number).replace(/\D/g, "");
+          if (normalized) existingNumbersDigits.add(normalized);
+        }
+        if (contact.email) existingEmails.add(contact.email);
 
         // Validar número WhatsApp imediatamente (mesma lógica do ImportContacts)
         try {

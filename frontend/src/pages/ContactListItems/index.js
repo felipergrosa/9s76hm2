@@ -647,8 +647,9 @@ const ContactListItems = () => {
   };
 
   return (
-    <MainContainer useWindowScroll>
-      <div className="w-full p-4 md:p-6 lg:p-8 bg-gray-50 dark:bg-gray-900 overflow-x-hidden">
+    <div className="flex-1 bg-gray-50 dark:bg-gray-900 min-h-full">
+      <MainContainer useWindowScroll>
+        <div className="w-full p-4 md:p-6 lg:p-8 overflow-x-hidden">
         <LoadingOverlay open={loading} message="Aguarde..." />
         <ContactListItemModal
           open={contactListItemModalOpen}
@@ -781,53 +782,53 @@ const ContactListItems = () => {
               <div className="overflow-x-hidden">
                 <table className="w-full table-auto text-sm text-left text-gray-500 dark:text-gray-400">
                   <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 sticky top-0 z-10">
-                    <tr>
+                    <tr className="uppercase text-xs text-gray-500 dark:text-gray-400 tracking-wider">
                       <th scope="col" className="w-[44px] p-2 text-center">#</th>
                       <th scope="col" className="pl-3 pr-3 py-2 w-[220px]">
-                        <button onClick={() => handleSort('name')} className="flex items-center gap-1 select-none">
-                          Nome
+                        <button onClick={() => handleSort('name')} className="flex items-center gap-1 select-none font-medium">
+                          NOME
                           <span className="text-[15px] opacity-70">{sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                         </button>
                       </th>
-                      <th scope="col" className="pl-3 pr-3 py-2 w-[140px] text-center">
-                        <button onClick={() => handleSort('number')} className="flex items-center justify-center gap-1 select-none w-full">
-                          WhatsApp
+                      <th scope="col" className="pl-3 pr-3 py-2 w-[140px]">
+                        <button onClick={() => handleSort('number')} className="flex items-center gap-1 select-none w-full font-medium">
+                          WHATSAPP
                           <span className="text-[15px] opacity-70">{sortField === 'number' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                         </button>
                       </th>
                       <th scope="col" className="hidden xl:table-cell pl-3 pr-3 py-2 w-[160px]">
-                        <button onClick={() => handleSort('email')} className="flex items-center gap-1 select-none">
-                          Email
+                        <button onClick={() => handleSort('email')} className="flex items-center gap-1 select-none font-medium">
+                          EMAIL
                           <span className="text-[15px] opacity-70">{sortField === 'email' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                         </button>
                       </th>
                       <th scope="col" className="pl-3 pr-3 py-2 w-[120px]">
-                        <button onClick={() => handleSort('city')} className="flex items-center gap-1 select-none">
-                          Cidade
+                        <button onClick={() => handleSort('city')} className="flex items-center gap-1 select-none font-medium">
+                          CIDADE
                           <span className="text-[15px] opacity-70">{sortField === 'city' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                         </button>
                       </th>
                       <th scope="col" className="pl-3 pr-3 py-2 w-[120px]">
-                        <button onClick={() => handleSort('segment')} className="flex items-center gap-1 select-none">
-                          Segmento
+                        <button onClick={() => handleSort('segment')} className="flex items-center gap-1 select-none font-medium">
+                          SEGMENTO
                           <span className="text-[15px] opacity-70">{sortField === 'segment' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                         </button>
                       </th>
                       <th scope="col" className="pl-3 pr-3 py-2 w-[110px]">
-                        <button onClick={() => handleSort('situation')} className="flex items-center gap-1 select-none">
-                          Situação
+                        <button onClick={() => handleSort('situation')} className="flex items-center gap-1 select-none font-medium">
+                          SITUAÇÃO
                           <span className="text-[15px] opacity-70">{sortField === 'situation' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                         </button>
                       </th>
                       <th scope="col" className="pl-3 pr-3 py-2 w-[110px]">
                         <button onClick={() => handleSort('creditLimit')} className="flex items-center gap-1 select-none">
-                          Limite
+                          LIMITE
                           <span className="text-[15px] opacity-70">{sortField === 'creditLimit' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                         </button>
                       </th>
                       <th scope="col" className="pl-3 pr-3 py-2 text-center w-[70px]">
                         <button onClick={() => handleSort('tags')} className="flex items-center justify-center gap-1 w-full select-none">
-                          Tags
+                          TAGS
                           <span className="text-[15px] opacity-70">{sortField === 'tags' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                         </button>
                       </th>
@@ -859,8 +860,8 @@ const ContactListItems = () => {
                             </span>
                           </Tooltip>
                         </td>
-                        <td className="pl-3 pr-3 py-2 text-center">
-                          <div className="flex items-center justify-center gap-1 text-[14px] leading-tight">
+                        <td className="pl-3 pr-3 py-2">
+                          <div className="flex items-center gap-1 text-[14px] leading-tight">
                             <span className="truncate max-w-[110px]">{formatPhoneNumber(contact.number)}</span>
                             {!!contact.isWhatsappValid ? (
                               <Tooltip {...CustomTooltipProps} title={`WhatsApp válido${contact.validatedAt ? ` • ${new Date(contact.validatedAt).toLocaleString('pt-BR')}` : ""}`}>
@@ -891,9 +892,19 @@ const ContactListItems = () => {
                           </Tooltip>
                         </td>
                         {/* Situação */}
-                        <td className="px-3 py-2 max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap">
+                        <td className="px-3 py-2 text-center w-[110px]">
                           <Tooltip {...CustomTooltipProps} title={(contact.contact && contact.contact.situation) || ""}>
-                            <span className="truncate">{(contact.contact && contact.contact.situation) || ""}</span>
+                            <span className={`px-1.5 py-0.5 text-xs font-semibold rounded-full ${
+                              (contact.contact?.situation || '').toLowerCase() === 'ativo' 
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 
+                                : (contact.contact?.situation || '').toLowerCase() === 'inativo' 
+                                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                                  : (contact.contact?.situation || '').toLowerCase() === 'suspenso'
+                                    ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                    : 'bg-gray-300 text-gray-800 dark:bg-gray-600 dark:text-gray-200'
+                            }`}>
+                              {(contact.contact && contact.contact.situation) || ""}
+                            </span>
                           </Tooltip>
                         </td>
                         {/* Limite de Crédito */}
@@ -1078,8 +1089,9 @@ const ContactListItems = () => {
             </div>
           </>
       }
-      </div>
-    </MainContainer>
+        </div>
+      </MainContainer>
+    </div>
   );
 };
 

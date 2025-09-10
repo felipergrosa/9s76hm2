@@ -115,9 +115,43 @@ const ContactLists = () => {
   const [detailsFilter, setDetailsFilter] = useState(null);
   const openDetails = (event, sf) => {
     setDetailsAnchorEl(event.currentTarget);
-    setDetailsFilter(sf || null);
+    // Limpa chaves com valores vazios ou compostos apenas por zeros para evitar "linhas fantasma"
+    const clean = (obj) => {
+      try {
+        if (!obj || typeof obj !== 'object') return obj;
+        const isZeroOnly = (val) => {
+          const s = String(val ?? '').trim();
+          return s === '' || /^0+$/.test(s);
+        };
+        const out = {};
+        for (const [k, v] of Object.entries(obj)) {
+          if (Array.isArray(v)) {
+            const arr = v.map(x => (x == null ? '' : String(x).trim())).filter(x => !isZeroOnly(x));
+            if (arr.length) out[k] = arr;
+          } else if (v != null && !isZeroOnly(v)) {
+            out[k] = v;
+          }
+        }
+        return out;
+      } catch { return obj; }
+    };
+    const cleaned = clean(sf || null);
+    setDetailsFilter(cleaned || null);
+    try {
+      // Diagnóstico: inspeciona o conteúdo real vindo do backend
+      // Remova depois que identificarmos o(s) campo(s) responsável(is) por '0000'
+      console.log('[SavedFilter - details RAW]', sf);
+      console.log('[SavedFilter - details CLEAN]', cleaned);
+    } catch (_) {}
   };
+  
+  // Log sempre que o estado mudar (garante diagnóstico mesmo sem evento do botão)
+  useEffect(() => {
+    try { console.log('[SavedFilter - state]', detailsFilter); } catch(_) {}
+  }, [detailsFilter]);
   const closeDetails = () => {
+    // Restaura o foco para o botão/anchor para não manter o foco em um elemento que poderá ficar oculto
+    try { detailsAnchorEl && typeof detailsAnchorEl.focus === 'function' && detailsAnchorEl.focus(); } catch(_) {}
     setDetailsAnchorEl(null);
     setDetailsFilter(null);
   };
@@ -341,6 +375,7 @@ const ContactLists = () => {
                           size="small"
                           variant="outlined"
                           onMouseEnter={(e) => openDetails(e, sf)}
+                          onClick={(e) => openDetails(e, sf)}
                           startIcon={<FilterIcon size={16} color="#059669" />}
                         >
                           Filtro salvo
@@ -393,7 +428,7 @@ const ContactLists = () => {
         onClose={closeDetails}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-        PaperProps={{ onMouseLeave: closeDetails }}
+        PaperProps={{ onMouseLeave: closeDetails, tabIndex: -1, role: 'tooltip', 'aria-live': 'polite' }}
         disableAutoFocus
         disableEnforceFocus
         disableRestoreFocus
@@ -402,41 +437,132 @@ const ContactLists = () => {
           <Typography variant="subtitle2" gutterBottom>Detalhes do filtro salvo</Typography>
           {detailsFilter ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {Array.isArray(detailsFilter.channel) && detailsFilter.channel.length && (
-                <div><strong>Canal:</strong> {detailsFilter.channel.join(', ')}</div>
+              {(() => {
+                // Debug visual: lista chaves cujo valor é apenas zeros (string) ou contém apenas zeros (em arrays)
+                try {
+                  const zeroOnly = Object.entries(detailsFilter || {})
+                    .filter(([key, val]) => {
+                      if (val == null) return false;
+                      if (Array.isArray(val)) return val.some(v => /^0+$/.test(String(v ?? '').trim()));
+                      return /^0+$/.test(String(val ?? '').trim());
+                    })
+                    .map(([key]) => key);
+                  return zeroOnly.length ? (
+                    <Typography variant="caption" color="textSecondary">Debug: campos com zeros = {zeroOnly.join(', ')}</Typography>
+                  ) : null;
+                } catch (_) { return null; }
+              })()}
+              {(() => {
+                const isInv = (val) => { const s = String(val ?? '').trim(); return !s || /^0+$/.test(s); };
+                const ch = detailsFilter.channel;
+                if (!ch) return null;
+                if (Array.isArray(ch)) {
+                  const list = ch.map(v => String(v ?? '').trim()).filter(v => !isInv(v));
+                  return list.length ? (
+                    <div><strong>Canal:</strong> {list.join(', ')}</div>
+                  ) : null;
+                }
+                const s = String(ch ?? '').trim();
+                if (isInv(s)) return null;
+                return (<div><strong>Canal:</strong> {s}</div>);
+              })()}
+              {(() => {
+                const isInv = (val) => { const s = String(val ?? '').trim(); return !s || /^0+$/.test(s); };
+                const rc = detailsFilter.representativeCode;
+                if (!rc) return null;
+                if (Array.isArray(rc)) {
+                  const list = rc.map(v => String(v ?? '').trim()).filter(v => !isInv(v));
+                  return list.length ? (
+                    <div><strong>Representante:</strong> {list.join(', ')}</div>
+                  ) : null;
+                }
+                const s = String(rc ?? '').trim();
+                if (isInv(s)) return null;
+                return (<div><strong>Representante:</strong> {s}</div>);
+              })()}
+              {(() => {
+                const isInv = (val) => { const s = String(val ?? '').trim(); return !s || /^0+$/.test(s); };
+                const ct = detailsFilter.city;
+                if (!ct) return null;
+                if (Array.isArray(ct)) {
+                  const list = ct.map(v => String(v ?? '').trim()).filter(v => !isInv(v));
+                  return list.length ? (
+                    <div><strong>Cidade:</strong> {list.join(', ')}</div>
+                  ) : null;
+                }
+                const s = String(ct ?? '').trim();
+                if (isInv(s)) return null;
+                return (<div><strong>Cidade:</strong> {s}</div>);
+              })()}
+              {(() => {
+                const isInv = (val) => { const s = String(val ?? '').trim(); return !s || /^0+$/.test(s); };
+                const sg = detailsFilter.segment;
+                if (!sg) return null;
+                if (Array.isArray(sg)) {
+                  const list = sg.map(v => String(v ?? '').trim()).filter(v => !isInv(v));
+                  return list.length ? (
+                    <div><strong>Segmento:</strong> {list.join(', ')}</div>
+                  ) : null;
+                }
+                const s = String(sg ?? '').trim();
+                if (isInv(s)) return null;
+                return (<div><strong>Segmento:</strong> {s}</div>);
+              })()}
+              {(() => {
+                const isInv = (val) => { const s = String(val ?? '').trim(); return !s || /^0+$/.test(s); };
+                const st = detailsFilter.situation;
+                if (!st) return null;
+                if (Array.isArray(st)) {
+                  const list = st.map(v => String(v ?? '').trim()).filter(v => !isInv(v));
+                  return list.length ? (
+                    <div><strong>Situação:</strong> {list.join(', ')}</div>
+                  ) : null;
+                }
+                const s = String(st ?? '').trim();
+                if (isInv(s)) return null;
+                return (<div><strong>Situação:</strong> {s}</div>);
+              })()}
+              {(() => {
+                const fm = detailsFilter.foundationMonths;
+                if (!fm) return null;
+                if (Array.isArray(fm)) {
+                  const list = fm.filter(v => v != null && String(v).trim() !== '' && !/^0+$/.test(String(v).trim()));
+                  return list.length ? (
+                    <div><strong>Fundação (mês):</strong> {list.join(', ')}</div>
+                  ) : null;
+                }
+                const s = String(fm ?? '').trim();
+                if (!s || /^0+$/.test(s)) return null;
+                return (<div><strong>Fundação (mês):</strong> {s}</div>);
+              })()}
+              {(((detailsFilter.minCreditLimit !== null && detailsFilter.minCreditLimit !== "") || (detailsFilter.maxCreditLimit !== null && detailsFilter.maxCreditLimit !== "")) && !((detailsFilter.minCreditLimit === 0 || detailsFilter.minCreditLimit === "0") && (detailsFilter.maxCreditLimit === 0 || detailsFilter.maxCreditLimit === "0"))) && (
+                <div>
+                  <strong>Crédito:</strong> 
+                  {detailsFilter.minCreditLimit !== null && detailsFilter.minCreditLimit !== "" ? fmtCurrency(detailsFilter.minCreditLimit) : '0,00'}
+                  {' – '}
+                  {detailsFilter.maxCreditLimit !== null && detailsFilter.maxCreditLimit !== "" ? fmtCurrency(detailsFilter.maxCreditLimit) : '∞'}
+                </div>
               )}
-              {Array.isArray(detailsFilter.representativeCode) && detailsFilter.representativeCode.length && (
-                <div><strong>Representante:</strong> {detailsFilter.representativeCode.join(', ')}</div>
-              )}
-              {Array.isArray(detailsFilter.city) && detailsFilter.city.length && (
-                <div><strong>Cidade:</strong> {detailsFilter.city.join(', ')}</div>
-              )}
-              {Array.isArray(detailsFilter.segment) && detailsFilter.segment.length && (
-                <div><strong>Segmento:</strong> {detailsFilter.segment.join(', ')}</div>
-              )}
-              {Array.isArray(detailsFilter.situation) && detailsFilter.situation.length && (
-                <div><strong>Situação:</strong> {detailsFilter.situation.join(', ')}</div>
-              )}
-              {Array.isArray(detailsFilter.foundationMonths) && detailsFilter.foundationMonths.length && (
-                <div><strong>Fundação (mês):</strong> {detailsFilter.foundationMonths.join(', ')}</div>
-              )}
-              {(detailsFilter.minCreditLimit || detailsFilter.maxCreditLimit) && (
-                <div><strong>Crédito:</strong> {fmtCurrency(detailsFilter.minCreditLimit)} – {detailsFilter.maxCreditLimit ? fmtCurrency(detailsFilter.maxCreditLimit) : '∞'}</div>
-              )}
-              {typeof detailsFilter.florder !== 'undefined' && (
+              {(detailsFilter.florder === true || detailsFilter.florder === false) && (
                 <div><strong>Encomenda:</strong> {detailsFilter.florder ? 'Sim' : 'Não'}</div>
               )}
-              {(detailsFilter.dtUltCompraStart || detailsFilter.dtUltCompraEnd) && (
-                <div><strong>Última compra (período):</strong> {fmtDate(detailsFilter.dtUltCompraStart)} – {fmtDate(detailsFilter.dtUltCompraEnd)}</div>
+              {((detailsFilter.dtUltCompraStart !== null && detailsFilter.dtUltCompraStart !== "") || (detailsFilter.dtUltCompraEnd !== null && detailsFilter.dtUltCompraEnd !== "")) && (
+                <div>
+                  <strong>Última compra:</strong> 
+                  {detailsFilter.dtUltCompraStart !== null && detailsFilter.dtUltCompraStart !== "" ? fmtDate(detailsFilter.dtUltCompraStart) : 'Qualquer data'}
+                  {detailsFilter.dtUltCompraEnd !== null && detailsFilter.dtUltCompraEnd !== "" ? ` – ${fmtDate(detailsFilter.dtUltCompraEnd)}` : ' – Até hoje'}
+                </div>
               )}
-              {(detailsFilter.minVlUltCompra != null || detailsFilter.maxVlUltCompra != null) && (
-                <div><strong>Valor da última compra:</strong> {fmtCurrency(detailsFilter.minVlUltCompra)} – {fmtCurrency(detailsFilter.maxVlUltCompra)}</div>
+              {(((detailsFilter.minVlUltCompra !== null && detailsFilter.minVlUltCompra !== "") || (detailsFilter.maxVlUltCompra !== null && detailsFilter.maxVlUltCompra !== "")) && !((detailsFilter.minVlUltCompra === 0 || detailsFilter.minVlUltCompra === "0") && (detailsFilter.maxVlUltCompra === 0 || detailsFilter.maxVlUltCompra === "0"))) && (
+                <div>
+                  <strong>Valor da última compra:</strong> 
+                  {detailsFilter.minVlUltCompra !== null && detailsFilter.minVlUltCompra !== "" ? fmtCurrency(detailsFilter.minVlUltCompra) : '0,00'}
+                  {' – '}
+                  {detailsFilter.maxVlUltCompra !== null && detailsFilter.maxVlUltCompra !== "" ? fmtCurrency(detailsFilter.maxVlUltCompra) : '∞'}
+                </div>
               )}
-              {Array.isArray(detailsFilter.tags) && detailsFilter.tags.length && (
-                <div><strong>Tags:</strong> {detailsFilter.tags.length}</div>
-              )}
-              {!Object.keys(detailsFilter || {}).length && (
-                <Typography variant="body2" color="textSecondary">Nenhum campo definido.</Typography>
+              {detailsFilter.tags && detailsFilter.tags.length > 0 && (
+                <div><strong>Tags:</strong> {Array.isArray(detailsFilter.tags) ? detailsFilter.tags.length : 1} selecionada(s)</div>
               )}
             </div>
           ) : (

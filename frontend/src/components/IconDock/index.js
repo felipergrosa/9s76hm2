@@ -8,7 +8,7 @@ import { List as ListIcon, Upload as UploadIcon, Filter as FilterIcon, Plus as P
 const IconDock = ({ actions = [], className }) => {
   return (
     <div
-      className={`flex items-center gap-6 px-4 py-2 bg-white dark:bg-gray-800 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-gray-100 dark:border-gray-700 ${className || ""}`}
+      className={`w-full md:w-auto flex items-center gap-4   md:items-stretch  p-0.5 pl-4 pr-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm ${className || ""} md:space-x-1`}
       style={{ WebkitBackdropFilter: "blur(6px)", backdropFilter: "blur(6px)" }}
     >
       {actions.map((a) => (
@@ -17,7 +17,7 @@ const IconDock = ({ actions = [], className }) => {
             type="button"
             onClick={a.onClick}
             disabled={a.disabled}
-            className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors focus:outline-none ${
+            className={`md:flex-1 w-full md:w-auto flex items-center justify-center rounded-xl transition-colors focus:outline-none p-2 h-9 md:mx-0.5 ${
               a.disabled
                 ? "text-gray-300 cursor-not-allowed"
                 : `${a.active ? 'text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700 ring-1 ring-gray-200 dark:ring-gray-600' : 'text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'}`

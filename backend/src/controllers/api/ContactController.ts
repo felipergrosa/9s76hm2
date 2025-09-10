@@ -56,6 +56,7 @@ interface ContactData {
   foundationDate?: Date;
   creditLimit?: string;
   tags?: string;
+  tagIds?: number[];
   segment?: string;
 }
 
@@ -107,6 +108,7 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
         return v === '' || v === undefined ? null : v;
       })
       .nullable(),
+    tagIds: Yup.array().of(Yup.number()).nullable(),
   });
 
   try {
@@ -164,6 +166,21 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
           });
         } catch (error) {
           logger.info("Erro ao criar Tags", error)
+        }
+      }
+    }
+
+    if (contactData.tagIds && contactData.tagIds.length > 0) {
+      for (const tagId of contactData.tagIds) {
+        try {
+          await ContactTag.findOrCreate({
+            where: {
+              contactId: contact.id,
+              tagId: tagId
+            }
+          });
+        } catch (error) {
+          logger.info(`Erro ao associar Tag ID ${tagId} ao contato`, error);
         }
       }
     }
