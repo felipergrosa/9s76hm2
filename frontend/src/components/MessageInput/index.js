@@ -22,28 +22,29 @@ import {
   pink,
   grey,
 } from "@material-ui/core/colors";
+import whatsBackground from "../../assets/wa-background.png";
+import whatsBackgroundDark from "../../assets/wa-background-dark.png";
 import {
-  AttachFile,
-  CheckCircleOutline,
-  Clear,
-  Comment,
-  Create,
-  Description,
-  HighlightOff,
-  Mic,
-  Mood,
-  MoreVert,
-  Send,
-  PermMedia,
-  Person,
-  Reply,
-  Duo,
-  Timer,
-} from "@material-ui/icons";
-import AddIcon from "@material-ui/icons/Add";
-import ChatIcon from '@material-ui/icons/Chat';
-import FlashOnIcon from '@material-ui/icons/FlashOn';
-import { CameraAlt } from "@material-ui/icons";
+  Smile,
+  Sparkles,
+  Plus,
+  Image as ImageIcon,
+  Camera,
+  FileText,
+  UserRound,
+  X,
+  Check,
+  Send as SendIcon,
+  Mic as MicIcon,
+  Reply as ReplyIcon,
+  Zap,
+  Clock as ClockIcon,
+  Video,
+  PenLine,
+  MessageSquare,
+  Paperclip,
+  MoreHorizontal,
+} from "lucide-react";
 import MicRecorder from "mic-recorder-to-mp3";
 import clsx from "clsx";
 import { ReplyMessageContext } from "../../context/ReplyingMessage/ReplyingMessageContext";
@@ -59,7 +60,6 @@ import ContactSendModal from "../ContactSendModal";
 import CameraModal from "../CameraModal";
 import axios from "axios";
 import ButtonModal from "../ButtonModal";
-import MenuIcon from '@material-ui/icons/Menu';
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import { ForwardMessageContext } from "../../context/ForwarMessage/ForwardMessageContext";
 import MessageUploadMedias from "../MessageUploadMedias";
@@ -73,11 +73,11 @@ const Mp3Recorder = new MicRecorder({ bitRate: 128 });
 
 const useStyles = makeStyles((theme) => ({
   mainWrapper: {
-    background: "#eee",
+    background: "transparent",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    borderTop: "1px solid rgba(0, 0, 0, 0.12)",
+    borderTop: "1px solid rgba(0, 0, 0, 0.08)",
     [theme.breakpoints.down("sm")]: {
       position: "fixed",
       bottom: 0,
@@ -107,27 +107,64 @@ const useStyles = makeStyles((theme) => ({
     overflow: "scroll",
   },
   newMessageBox: {
-    background: theme.palette.background.default,
+    // Pill interno (estilo WhatsApp)
+    backgroundColor: ((theme.palette.mode || theme.palette.type) === 'light') ? "#ffffff" : "#202c33",
     width: "100%",
     display: "flex",
-    padding: "7px",
+    padding: "0px 8px 0pt",
     alignItems: "center",
+    borderRadius: 40,
+    border: ((theme.palette.mode || theme.palette.type) === 'light') ? "1px solid rgba(0,0,0,0.08)" : "1px solid rgba(255,255,255,0.10)",
+    boxShadow: ((theme.palette.mode || theme.palette.type) === 'light')
+      ? "0 2px 6px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08)"
+      : "0 2px 6px rgba(0,0,0,0.50)",
+    gap: 4,
+    // Ícones dentro da pílula: área de clique maior e hover mais visível
+    '& .MuiIconButton-root': {
+      padding: 8,
+      borderRadius: 16,
+      transition: 'background-color 120ms ease',
+      '&:hover': {
+        backgroundColor: ((theme.palette.mode || theme.palette.type) === 'light') ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.16)'
+      }
+    },
   },
   messageInputWrapper: {
-    padding: 6,
+    padding: 0,
     marginRight: 7,
-    background: theme.palette.background.paper,
+    marginBottom: 5,
+    background: "transparent",
+    backgroundColor: "transparent !important",
+    backgroundImage: ((theme.palette.mode || theme.palette.type) === 'light') ? `url(${whatsBackground})` : `url(${whatsBackgroundDark})`,
+    backgroundRepeat: "repeat",
+    backgroundSize: "auto",
+    backgroundPosition: "center bottom",
     display: "flex",
-    borderRadius: 20,
+    borderRadius: 0,
     flex: 1,
     position: "relative",
+    boxShadow: "none !important",
+    border: "none",
+    // Container do InputBase: controla a borda e o fundo do campo de digitação
+    '& .MuiInputBase-root': {
+      backgroundColor: ((theme.palette.mode || theme.palette.type) === 'light') ? '#ffffff' : '#202c33',
+      borderRadius: 0,
+      // Para deixar sem borda depois, troque a linha abaixo por: 'border: "none"'
+      border: ((theme.palette.mode || theme.palette.type) === 'light') ? '0px solid #ffffff' : '0px solid rgba(255,255,255,0.18)'
+    },
+    '& .MuiInputBase-input': {
+      padding: 0,
+      fontSize: 14,
+      lineHeight: 1.1,
+      
+    }
   },
   messageInputWrapperPrivate: {
-    padding: 6,
+    padding: 4,
     marginRight: 7,
     background: "#F0E68C",
     display: "flex",
-    borderRadius: 20,
+    borderRadius: 22,
     flex: 1,
     position: "relative",
   },
@@ -135,6 +172,7 @@ const useStyles = makeStyles((theme) => ({
     paddingLeft: 10,
     flex: 1,
     border: "none",
+    background: "#FFFFFF",
 
   },
   messageInputPrivate: {
@@ -146,6 +184,19 @@ const useStyles = makeStyles((theme) => ({
   },
   sendMessageIcons: {
     color: grey[700],
+    fontSize: 18,
+  },
+  // Botão de alternância de assinatura
+  signatureToggle: {
+    '& svg': {
+      color: 'grey'
+    }
+  },
+  signatureActive: {
+    backgroundColor: theme.mode === 'light' ? 'rgba(0, 47, 94, 0.12)' : 'rgba(18, 0, 182, 0.22)',
+    '& svg': {
+      color: theme.palette.primary.main
+    }
   },
   ForwardMessageIcons: {
     color: grey[700],
@@ -161,8 +212,12 @@ const useStyles = makeStyles((theme) => ({
     position: "relative",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: theme.mode === 'light' ? "#ffffff" : "#202c33",
-    borderTop: "1px solid rgba(0, 0, 0, 0.12)",
+    backgroundColor: ((theme.palette.mode || theme.palette.type) === 'light') ? "transparent" : "#202c33",
+    backgroundImage: ((theme.palette.mode || theme.palette.type) === 'light') ? `url(${whatsBackground})` : `url(${whatsBackgroundDark})`,
+    backgroundRepeat: "repeat",
+    backgroundSize: "400px auto",
+    backgroundPosition: "center bottom",
+    borderTop: "none",
   },
   emojiBox: {
     position: "absolute",
@@ -990,7 +1045,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
             setInputMessage("");
           }}
         >
-          <Clear className={classes.sendMessageIcons} />
+          <X size={18} className={classes.sendMessageIcons} />
         </IconButton>
       </div>
     );
@@ -1062,7 +1117,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                 disabled={disableOption()}
                 onClick={(e) => setShowEmoji((prevState) => !prevState)}
               >
-                <Mood className={classes.sendMessageIcons} />
+                <Smile size={18} className={classes.sendMessageIcons} />
               </IconButton>
               <Tooltip title="Assistente de Chat">
                 <span>
@@ -1075,9 +1130,19 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       setAssistantOpen(prev => !prev);
                     }}
                   >
-                    <ChatIcon className={classes.sendMessageIcons} />
+                    <Sparkles size={18} className={classes.sendMessageIcons} />
                   </IconButton>
                 </span>
+              </Tooltip>
+              <Tooltip title={i18n.t("tickets.buttons.scredule")}>
+                <IconButton
+                  aria-label="scheduleMessage"
+                  component="span"
+                  onClick={() => setAppointmentModalOpen(true)}
+                  disabled={loading}
+                >
+                  <ClockIcon size={18} className={classes.sendMessageIcons} />
+                </IconButton>
               </Tooltip>
               {showEmoji ? (
                 <div className={classes.emojiBox}>
@@ -1101,7 +1166,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                 className={classes.invertedFabMenu}
                 onClick={handleOpenMenuClick}
               >
-                <AddIcon />
+                <Plus size={18} />
               </Fab>
               <Menu
                 anchorEl={anchorEl}
@@ -1126,14 +1191,14 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       component="span"
                       className={classes.invertedFabMenuMP}
                     >
-                      <PermMedia />
+                      <ImageIcon size={18} />
                     </Fab>
                     {i18n.t("messageInput.type.imageVideo")}
                   </label>
                 </MenuItem>
                 <MenuItem onClick={handleCameraModalOpen}>
                   <Fab className={classes.invertedFabMenuCamera}>
-                    <CameraAlt />
+                    <Camera size={18} />
                   </Fab>
                   {i18n.t("messageInput.type.cam")}
                 </MenuItem>
@@ -1150,20 +1215,20 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                   <label htmlFor="upload-doc-button">
                     <Fab aria-label="upload-img"
                       component="span" className={classes.invertedFabMenuDoc}>
-                      <Description />
+                      <FileText size={18} />
                     </Fab>
                     Documento
                   </label>
                 </MenuItem>
                 <MenuItem onClick={handleSendContactModalOpen}>
                   <Fab className={classes.invertedFabMenuCont}>
-                    <Person />
+                    <UserRound size={18} />
                   </Fab>
                   {i18n.t("messageInput.type.contact")}
                 </MenuItem>
                 <MenuItem onClick={handleSendLinkVideo}>
                   <Fab className={classes.invertedFabMenuMeet}>
-                    <Duo />
+                    <Video size={18} />
                   </Fab>
                   {i18n.t("messageInput.type.meet")}
                 </MenuItem>
@@ -1176,7 +1241,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
         )}
                 <MenuItem onClick={handleButtonModalOpen}>
                   <Fab className={classes.invertedFabMenuCont}>
-                    <MenuIcon />
+                    <MoreHorizontal size={18} />
                   </Fab>
                   Botões
                 </MenuItem>
@@ -1194,114 +1259,19 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
               {signMessagePar && (
                 <Tooltip title={i18n.t("messageInput.tooltip.signature")}>
                   <IconButton
+                    className={clsx(classes.signatureToggle, { [classes.signatureActive]: signMessage })}
                     aria-label="send-upload"
                     component="span"
                     onClick={handleChangeSign}
                   >
                     {signMessage === true ? (
-                      <Create style={{ color: theme.mode === "light" ? theme.palette.primary.main : "#EEE" }} />
-                    ) : (
-                      <Create style={{ color: "grey" }} />
-                    )}
-                  </IconButton>
-                </Tooltip>
-              )}
-              <Tooltip title={i18n.t("messageInput.tooltip.privateMessage")}>
-                <IconButton
-                  aria-label="send-upload"
-                  component="span"
-                  onClick={handlePrivateMessage}
-                >
-                  {privateMessage === true ? (
-                    <Comment style={{ color: theme.mode === "light" ? theme.palette.primary.main : "#EEE" }} />
+                    <PenLine size={18} style={{ color: theme.mode === "light" ? theme.palette.primary.main : "#EEE" }} />
                   ) : (
-                    <Comment style={{ color: "grey" }} />
+                    <PenLine size={18} style={{ color: "grey" }} />
                   )}
-                </IconButton>
-              </Tooltip>
-              {/* <Tooltip title={i18n.t("messageInput.tooltip.meet")}>
-                <IconButton
-                  aria-label="send-upload"
-                  component="span"
-                  onClick={handleSendLinkVideo}
-                >
-                  <Duo style={{ color: "grey" }} />
-                </IconButton>
-              </Tooltip> */}
-            </Hidden>
-            <Hidden only={["md", "lg", "xl"]}>
-              <IconButton
-                aria-controls="simple-menu"
-                aria-haspopup="true"
-                onClick={handleOpenMenuClick}
-              >
-                <MoreVert></MoreVert>
-              </IconButton>
-              <Menu
-                id="simple-menu"
-                keepMounted
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleMenuItemClick}
-              >
-                <MenuItem onClick={handleMenuItemClick}>
-                  <IconButton
-                    aria-label="emojiPicker"
-                    component="span"
-                    disabled={disableOption()}
-                    onClick={(e) => setShowEmoji((prevState) => !prevState)}
-                  >
-                    <Mood className={classes.sendMessageIcons} />
-                  </IconButton>
-                </MenuItem>
-                <MenuItem onClick={handleMenuItemClick}>
-                  <input
-                    multiple
-                    type="file"
-                    id="upload-button"
-                    disabled={disableOption()}
-                    className={classes.uploadInput}
-                    onChange={handleChangeMedias}
-                  />
-                  <label htmlFor="upload-button">
-                    <IconButton
-                      aria-label="upload"
-                      component="span"
-                      disabled={disableOption()}
-                    >
-                      <AttachFile className={classes.sendMessageIcons} />
-                    </IconButton>
-                  </label>
-                </MenuItem>
-                {signMessagePar && (
-                  <Tooltip title="Habilitar/Desabilitar Assinatura">
-                    <IconButton
-                      aria-label="send-upload"
-                      component="span"
-                      onClick={handleChangeSign}
-                    >
-                      {signMessage === true ? (
-                        <Create style={{ color: theme.mode === "light" ? theme.palette.primary.main : "#EEE" }} />
-                      ) : (
-                        <Create style={{ color: "grey" }} />
-                      )}
-                    </IconButton>
-                  </Tooltip>
-                )}
-                <Tooltip title="Habilitar/Desabilitar Comentários">
-                  <IconButton
-                    aria-label="send-upload"
-                    component="span"
-                    onClick={handlePrivateMessage}
-                  >
-                    {privateMessage === true ? (
-                      <Comment style={{ color: theme.mode === "light" ? theme.palette.primary.main : "#EEE" }} />
-                    ) : (
-                      <Comment style={{ color: "grey" }} />
-                    )}
                   </IconButton>
                 </Tooltip>
-              </Menu>
+            )}
             </Hidden>
             <div className={classes.flexContainer}>
               {privateMessageInputVisible && (
@@ -1408,23 +1378,13 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
             </div>
             {!privateMessageInputVisible && (
               <>
-                <Tooltip title={i18n.t("tickets.buttons.quickmessageflash")}>
+                <Tooltip title="Mensagem rápida">
                   <IconButton
                     aria-label="flash"
                     component="span"
                     onClick={() => setInputMessage('/')}
                   >
-                    <FlashOnIcon className={classes.sendMessageIcons} />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title={i18n.t("tickets.buttons.scredule")}>
-                  <IconButton
-                    aria-label="scheduleMessage"
-                    component="span"
-                    onClick={() => setAppointmentModalOpen(true)}
-                    disabled={loading}
-                  >
-                    <Timer className={classes.sendMessageIcons} />
+                    <Zap size={18} className={classes.sendMessageIcons} />
                   </IconButton>
                 </Tooltip>
                 {inputMessage || showSelectMessageCheckbox ? (
@@ -1436,7 +1396,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       disabled={loading}
                     >
                       {showSelectMessageCheckbox ?
-                        <Reply className={classes.ForwardMessageIcons} /> : <Send className={classes.sendMessageIcons} />}
+                        <ReplyIcon size={18} className={classes.ForwardMessageIcons} /> : <SendIcon size={18} className={classes.sendMessageIcons} />}
                     </IconButton>
                   </>
                 ) : recording ? (
@@ -1448,7 +1408,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       disabled={loading}
                       onClick={handleCancelAudio}
                     >
-                      <HighlightOff className={classes.cancelAudioIcon} />
+                      <X size={18} className={classes.cancelAudioIcon} />
                     </IconButton>
                     {loading ? (
                       <div>
@@ -1471,7 +1431,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       onClick={handleUploadAudio}
                       disabled={loading}
                     >
-                      <CheckCircleOutline className={classes.sendAudioIcon} />
+                      <Check size={18} className={classes.sendAudioIcon} />
                     </IconButton>
                   </div>
                 ) : (
@@ -1481,7 +1441,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                     disabled={disableOption()}
                     onClick={handleStartRecording}
                   >
-                    <Mic className={classes.sendMessageIcons} />
+                    <MicIcon size={18} className={classes.sendMessageIcons} />
                   </IconButton>
                 )}
               </>
@@ -1496,7 +1456,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                   disabled={loading}
                 >
                   {showSelectMessageCheckbox ?
-                    <Reply className={classes.ForwardMessageIcons} /> : <Send className={classes.sendMessageIcons} />}
+                    <ReplyIcon size={18} className={classes.ForwardMessageIcons} /> : <SendIcon size={18} className={classes.sendMessageIcons} />}
                 </IconButton>
               </>
             )}

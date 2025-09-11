@@ -111,7 +111,19 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
       try {
         const { data } = await api.get(`/queueIntegration/${integrationId}`);
         setIntegration((prevState) => {
-          return { ...prevState, ...data };
+          const next = { ...prevState, ...data };
+          // Parse jsonContent para tipos OpenAI/Gemini
+          try {
+            if ((data?.type === "openai" || data?.type === "gemini") && data?.jsonContent) {
+              const parsed = JSON.parse(data.jsonContent);
+              next.apiKey = parsed?.apiKey === "********" ? "" : (parsed?.apiKey || "");
+              next.model = parsed?.model || prevState.model;
+              next.temperature = parsed?.temperature ?? prevState.temperature;
+              next.maxTokens = parsed?.maxTokens ?? prevState.maxTokens;
+              next.maxMessages = parsed?.maxMessages ?? prevState.maxMessages;
+            }
+          } catch (_) {}
+          return next;
         });
       } catch (err) {
         toastError(err);
@@ -157,11 +169,39 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
 
     try {
       if (values.type === 'n8n' || values.type === 'webhook' || values.type === 'typebot' || values.type === "flowbuilder" || values.type === "openai" || values.type === "gemini") values.projectName = values.name
+      const payload = { ...values };
+
+      // Empacotar configurações específicas em jsonContent
+      if (values.type === "openai" || values.type === "gemini") {
+        const cfg = {
+          apiKey: values.apiKey,
+          model: values.model,
+          temperature: Number(values.temperature),
+          maxTokens: Number(values.maxTokens),
+          maxMessages: Number(values.maxMessages),
+        };
+
+        // Em edição: se apiKey não informada, não sobrescrever jsonContent (preserva a já salva)
+        const maskedOrEmpty = !values.apiKey || values.apiKey === "********";
+        if (!(integrationId && maskedOrEmpty)) {
+          payload.jsonContent = JSON.stringify(cfg);
+        } else {
+          delete payload.jsonContent;
+        }
+
+        // Remover campos auxiliares do payload raiz
+        delete payload.apiKey;
+        delete payload.model;
+        delete payload.temperature;
+        delete payload.maxTokens;
+        delete payload.maxMessages;
+      }
+
       if (integrationId) {
-        await api.put(`/queueIntegration/${integrationId}`, values);
+        await api.put(`/queueIntegration/${integrationId}`, payload);
         toast.success(i18n.t("queueIntegrationModal.messages.editSuccess"));
       } else {
-        await api.post("/queueIntegration", values);
+        await api.post("/queueIntegration", payload);
         toast.success(i18n.t("queueIntegrationModal.messages.addSuccess"));
       }
       handleClose();

@@ -956,25 +956,32 @@ export const verifyMediaMessage = async (
         .then(() => {
           // console.log("Arquivo salvo com sucesso!");
           if (media.mimetype.includes("audio")) {
-            console.log(media.mimetype);
             const inputFile = path.join(folder, media.filename);
-            let outputFile: string;
+            let outputFile: string | null = null;
 
-            if (inputFile.endsWith(".mpeg")) {
-              outputFile = inputFile.replace(".mpeg", ".mp3");
-            } else if (inputFile.endsWith(".ogg")) {
-              outputFile = inputFile.replace(".ogg", ".mp3");
-            } else {
-              // Trate outros formatos de arquivo conforme necessário
-              //console.error("Formato de arquivo não suportado:", inputFile);
-              return;
+            // Convertemos formatos comuns não suportados em iOS para MP3
+            if (/(\.mpeg)$/i.test(inputFile)) {
+              outputFile = inputFile.replace(/\.mpeg$/i, ".mp3");
+            } else if (/(\.ogg)$/i.test(inputFile)) {
+              outputFile = inputFile.replace(/\.ogg$/i, ".mp3");
+            } else if (/(\.oga)$/i.test(inputFile)) {
+              outputFile = inputFile.replace(/\.oga$/i, ".mp3");
+            } else if (/(\.webm)$/i.test(inputFile)) {
+              outputFile = inputFile.replace(/\.webm$/i, ".mp3");
             }
+
+            if (!outputFile) return; // formatos já compatíveis (ex.: mp3, m4a)
 
             return new Promise<void>((resolve, reject) => {
               ffmpeg(inputFile)
                 .toFormat("mp3")
                 .save(outputFile)
                 .on("end", () => {
+                  try {
+                    // Atualiza media.filename para apontar ao convertido
+                    const newName = path.basename(outputFile);
+                    media.filename = newName;
+                  } catch {}
                   resolve();
                 })
                 .on("error", (err: any) => {

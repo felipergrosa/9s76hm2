@@ -43,6 +43,8 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import { QueueSelectedContext } from "../../context/QueuesSelected/QueuesSelectedContext";
 import AudioModal from "../AudioModal";
 import AdMetaPreview from "../AdMetaPreview";
+import PdfModal from "../PdfModal";
+import LinkPreview from "../LinkPreview";
 
 import { useParams, useHistory } from 'react-router-dom';
 import { getBackendUrl } from "../../config";
@@ -323,6 +325,11 @@ const useStyles = makeStyles((theme) => ({
   textContentItem: {
     overflowWrap: "break-word",
     padding: "3px 80px 6px 6px",
+  },
+
+  // Versão compacta do balão quando não há texto exibido (ex.: PDF sem legenda)
+  textContentItemCompact: {
+    padding: "3px 10px 6px 6px",
   },
 
   textContentItemDeleted: {
@@ -1024,6 +1031,8 @@ const MessagesList = ({
           isGif={/\.gif(\?.*)?$/i.test(message.mediaUrl || "")}
         />
       );
+    } else if (message.mediaType === "application" && /\.pdf($|\?)/i.test(message.mediaUrl)) {
+      return <PdfModal url={message.mediaUrl} />;
     } else {
       return (
         <>
@@ -1203,7 +1212,12 @@ const MessagesList = ({
               "Contato"
             )
           }
-          {message.quotedMsg.mediaType === "application"
+          {message.quotedMsg.mediaType === "application" && /\.pdf($|\?)/i.test(message.quotedMsg.mediaUrl)
+            && (
+              <PdfModal url={message.quotedMsg.mediaUrl} />
+            )
+          }
+          {message.quotedMsg.mediaType === "application" && !/\.pdf($|\?)/i.test(message.quotedMsg.mediaUrl)
             && (
               <div className={classes.downloadMedia}>
                 <Button
@@ -1244,6 +1258,14 @@ const MessagesList = ({
   const isYouTubeLink = (url) => {
     const youtubeRegex = /(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
     return youtubeRegex.test(url);
+  };
+
+  const urlRegex = /https?:\/\/[^\s]+/gi;
+  const extractFirstUrl = (text = "") => {
+    try {
+      const m = text.match(urlRegex);
+      return m && m.length ? m[0] : "";
+    } catch { return ""; }
   };
 
   const handleDrop = event => {
@@ -1348,6 +1370,11 @@ const MessagesList = ({
                     <YouTubePreview videoUrl={message.body} />
                   </>
                 )}
+                {!isYouTubeLink(message.body) && extractFirstUrl(message.body) && (
+                  <div style={{ margin: "6px 0" }}>
+                    <LinkPreview url={extractFirstUrl(message.body)} />
+                  </div>
+                )}
 
                 {!lgpdDeleteMessage && message.isDeleted && (
                   <div>
@@ -1359,18 +1386,32 @@ const MessagesList = ({
 
                  {(message.mediaUrl || message.mediaType === "locationMessage" || message.mediaType === "contactMessage" || message.mediaType === "template" || message.mediaType === "adMetaPreview") && checkMessageMedia(message)}
 
-                <div className={clsx(classes.textContentItem, {
-                  [classes.textContentItemDeleted]: message.isDeleted,
-                })}>
+                <div className={clsx(
+                  classes.textContentItem,
+                  {
+                    [classes.textContentItemDeleted]: message.isDeleted,
+                    // Compacta quando for PDF e body == nome do arquivo
+                    [classes.textContentItemCompact]: (
+                      message.mediaType === "application" && /\.pdf($|\?)/i.test(message.mediaUrl || "") &&
+                      (getFileNameFromUrl(message.mediaUrl) || "").trim() === (message.body || "").trim()
+                    )
+                  }
+                )}>
                   {message.quotedMsg && renderQuotedMessage(message)}
                   {message.mediaType !== "adMetaPreview" && (
                     (
+                      // Para imagens/vídeos, só mostra body se for diferente do nome do arquivo
                       (message.mediaUrl !== null && (message.mediaType === "image" || message.mediaType === "video") && (getFileNameFromUrl(message.mediaUrl) || "").trim() !== (message.body || "").trim()) ||
-                      message.mediaType !== "audio" &&
-                      message.mediaType !== "image" &&
-                      message.mediaType != "reactionMessage" &&
-                      message.mediaType != "locationMessage" &&
-                      message.mediaType !== "contactMessage"
+                      // Para outros tipos (exceto os ignorados abaixo), mostra body normalmente,
+                      // porém NÃO mostra se for PDF e o body for exatamente o nome do arquivo
+                      (
+                        message.mediaType !== "audio" &&
+                        message.mediaType !== "image" &&
+                        message.mediaType != "reactionMessage" &&
+                        message.mediaType != "locationMessage" &&
+                        message.mediaType !== "contactMessage" &&
+                        !(message.mediaType === "application" && /\.pdf($|\?)/i.test(message.mediaUrl || "") && (getFileNameFromUrl(message.mediaUrl) || "").trim() === (message.body || "").trim())
+                      )
                     ) && (
                       <>
                         {xmlRegex.test(message.body) && (
@@ -1459,16 +1500,30 @@ const MessagesList = ({
                 )}
                 {(message.mediaUrl || message.mediaType === "locationMessage" || message.mediaType === "contactMessage" || message.mediaType === "template" || message.mediaType === "adMetaPreview") && checkMessageMedia(message)}
                 <div
-                  className={clsx(classes.textContentItem, {
-                    [classes.textContentItemDeleted]: message.isDeleted,
-                  })}
+                  className={clsx(
+                    classes.textContentItem,
+                    {
+                      [classes.textContentItemDeleted]: message.isDeleted,
+                      [classes.textContentItemCompact]: (
+                        message.mediaType === "application" && /\.pdf($|\?)/i.test(message.mediaUrl || "") &&
+                        (getFileNameFromUrl(message.mediaUrl) || "").trim() === (message.body || "").trim()
+                      )
+                    }
+                  )}
                 >
 
                   {message.quotedMsg && renderQuotedMessage(message)}
 
                   {
                     ((message.mediaType === "image" || message.mediaType === "video") && getFileNameFromUrl(message.mediaUrl) === message.body) ||
-                    (message.mediaType !== "audio" && message.mediaType != "reactionMessage" && message.mediaType != "locationMessage" && message.mediaType !== "contactMessage") && (
+                    (
+                      message.mediaType !== "audio" &&
+                      message.mediaType != "reactionMessage" &&
+                      message.mediaType != "locationMessage" &&
+                      message.mediaType !== "contactMessage" &&
+                      // Não mostrar o body se for PDF e body == nome do arquivo
+                      !(message.mediaType === "application" && /\.pdf($|\?)/i.test(message.mediaUrl || "") && (getFileNameFromUrl(message.mediaUrl) || "").trim() === (message.body || "").trim())
+                    ) && (
                       <>
                         {xmlRegex.test(message.body) && (
                           <div>{formatXml(message.body)}</div>
@@ -1478,7 +1533,6 @@ const MessagesList = ({
 
                       </>
                     )}
-
                   {message.quotedMsg && message.mediaType === "reactionMessage" && (
                     <>
                       <span style={{ marginLeft: "0px" }}>

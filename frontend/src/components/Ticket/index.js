@@ -4,6 +4,8 @@ import { useParams, useHistory } from "react-router-dom";
 import clsx from "clsx";
 
 import { makeStyles, Paper } from "@material-ui/core";
+import whatsBackground from "../../assets/wa-background.png";
+import whatsBackgroundDark from "../../assets/wa-background-dark.png";
 
 import ContactDrawer from "../ContactDrawer";
 import MessageInput from "../MessageInput";
@@ -38,6 +40,15 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
+    background: "transparent",
+    backgroundColor: "transparent",
+    backgroundImage: (theme) => (theme.mode === 'light' ? `url(${whatsBackground})` : `url(${whatsBackgroundDark})`),
+    backgroundRepeat: "repeat",
+    backgroundSize: "400px auto",
+    backgroundPosition: "center top",
+    boxShadow: "none",
+    border: 0,
+    borderRadius: 0,
     borderTopLeftRadius: 0,
     borderBottomLeftRadius: 0,
     borderLeft: "0",
@@ -244,11 +255,12 @@ const Ticket = () => {
   return (
     <div className={classes.root} id="drawer-container">
       <Paper
-        variant="outlined"
         elevation={0}
+        square
         className={clsx(classes.mainWrapper, {
           [classes.mainWrapperShift]: drawerOpen,
         })}
+        style={{ background: "transparent", boxShadow: "none", border: 0 }}
       >
         {/* <div id="TicketHeader"> */}
         <TicketHeader loading={loading}>

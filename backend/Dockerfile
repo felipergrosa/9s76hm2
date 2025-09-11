@@ -50,6 +50,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
+# Dependências de runtime necessárias (FFmpeg para processamento/conversão de mídia)
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+       ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
+
 # Build info injection
 ARG BUILD_DATE
 ARG GIT_COMMIT

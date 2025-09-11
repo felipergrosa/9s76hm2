@@ -226,12 +226,17 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 				<MenuItem onClick={handleSetShowSelectCheckbox}>
 					{i18n.t("messageOptionsMenu.forward")}
 				</MenuItem>
-				{["audio", "image", "video"].includes(message?.mediaType) && message?.mediaUrl && (
-          <MenuItem onClick={handleDownloadMedia}>
-            <GetApp fontSize="small" style={{ marginRight: 8 }} />
-            Download
-          </MenuItem>
-        )}
+				{(([
+                  "audio",
+                  "image",
+                  "video"
+                ].includes(message?.mediaType)) ||
+                  (message?.mediaType === "application" && message?.mediaUrl)) && (
+                  <MenuItem onClick={handleDownloadMedia}>
+                    <GetApp fontSize="small" style={{ marginRight: 8 }} />
+                    Download
+                  </MenuItem>
+                )}
 				{message.fromMe && (
 					<MenuItem onClick={handleOpenEditMessageModal}>
 						{i18n.t("messageOptionsMenu.edit")}
