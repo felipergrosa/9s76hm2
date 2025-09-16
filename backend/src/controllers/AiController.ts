@@ -60,13 +60,24 @@ export const transformText = async (req: Request, res: Response) => {
       }
     } catch {}
 
-    const cfg = integration?.jsonContent || {};
+    let cfgRaw: any = integration?.jsonContent || {};
+    // Garantir que jsonContent seja objeto
+    if (typeof cfgRaw === "string") {
+      try { cfgRaw = JSON.parse(cfgRaw); } catch { cfgRaw = {}; }
+    }
+    const cfg: any = cfgRaw || {};
     const model = String(cfg.model || (pickedType === "gemini" ? "gemini-2.0-pro" : process.env.OPENAI_MODEL || "gpt-4o-mini"));
     const temperature = typeof cfg.temperature === "number" ? cfg.temperature : 0.7;
+    const top_p = typeof cfg.topP === "number" ? cfg.topP : 0.9;
+    const presence_penalty = typeof cfg.presencePenalty === "number" ? cfg.presencePenalty : 0.0;
     const max_tokens = typeof cfg.maxTokens === "number" ? cfg.maxTokens : 400;
 
     // Prompts
-    const keepVars = "Mantenha intactos placeholders como {nome}, URLs e emojis. Responda somente com o texto final, sem explicações.";
+    const allowedVars: string[] = Array.isArray(cfg.permittedVariables) ? cfg.permittedVariables : [];
+    const allowedLine = allowedVars.length
+      ? `Você PODE usar somente estes placeholders quando existirem no contexto: ${allowedVars.join(", ")}.`
+      : "Se houver placeholders como {nome}, preserve-os; não invente novos.";
+    const keepVars = `${allowedLine} Responda somente com o texto final, sem explicações.`;
     const tLang = targetLang || "pt-BR";
     let systemMsg = "";
     let userMsg = "";
@@ -77,8 +88,34 @@ export const transformText = async (req: Request, res: Response) => {
       systemMsg = `Você corrige ortografia e gramática em pt-BR sem mudar o sentido.`;
       userMsg = `${keepVars}\n\nTexto:\n"""${text}"""`;
     } else {
-      systemMsg = `Você aprimora mensagens para WhatsApp (claras, naturais, sem SPAM).`;
-      userMsg = `${keepVars}\n\nTexto:\n"""${text}\n"""`;
+      // ENHANCE: usar preferências da integração
+      const ed = cfg.enhanceDefaults || {};
+      const brandVoice = (cfg.brandVoice || "").toString().trim();
+      const tone = (ed.tone || "amigável").toString();
+      const emojiLevel = (ed.emojiLevel || "medium").toString();
+      const hashtagsPref = (ed.hashtags || "auto").toString();
+      const customHashtags = (ed.customHashtags || "").toString().trim();
+      const lengthPref = (ed.length || "medium").toString();
+      const outLang = (ed.language || "pt-BR").toString();
+
+      const lengthGuide = lengthPref === "short" ? "3-4 linhas curtas"
+        : lengthPref === "long" ? "6-8 linhas curtas"
+        : "4-6 linhas curtas";
+
+      const emojiGuide = emojiLevel === "none" ? "evite emojis"
+        : emojiLevel === "low" ? "use poucos emojis (0-2) de forma sutil"
+        : emojiLevel === "high" ? "use mais emojis com parcimônia (até 6)" : "use alguns emojis (até 3)";
+
+      const hashtagsGuide = hashtagsPref === "custom" ? `inclua ao final as hashtags: ${customHashtags || ""}`
+        : "inclua 2-4 hashtags relevantes ao final";
+
+      const voice = brandVoice ? `Voz da marca: ${brandVoice}.` : "";
+
+      // Instruções de estilo mais humano
+      const style = `Escreva de forma natural, leve e próxima, evitando formalidade excessiva. Prefira voz ativa, frases curtas, fluxo conversacional e positividade. Se o contexto for comemorativo (ex.: aniversário), permita uma linha extra de celebração.`;
+
+      systemMsg = `Você aprimora mensagens para WhatsApp (claras, naturais, sem SPAM). ${voice}`;
+      userMsg = `Reescreva em ${outLang} com TOM ${tone}. ${emojiGuide}. ${hashtagsGuide}. Tamanho: ${lengthGuide}. ${style} ${keepVars}\n\nTexto:\n"""${text}\n"""`;
     }
 
     // Try OpenAI then Gemini if no explicit type
@@ -86,13 +123,31 @@ export const transformText = async (req: Request, res: Response) => {
       let apiKey: string | undefined = cfg.apiKey || process.env.OPENAI_API_KEY;
       if (!apiKey) throw new Error("OPENAI_API_KEY não configurada");
       const client = new OpenAI({ apiKey });
+      // Few-shots (pares user/assistant) para elevar consistência
+      const fewShots = [
+        {
+          user: 'Agradecer mensagem de aniversário em tom caloroso. Texto: "obrigado pela lembrança no meu dia"',
+          assistant: 'Muito obrigado pela lembrança no meu dia! 🎉 Fiquei muito feliz com sua mensagem — é sempre especial receber esse carinho. 😊'
+        },
+        {
+          user: 'Agradecer elogio do atendimento. Texto: "valeu pelo atendimento"',
+          assistant: 'Que bom saber disso! 😊 Fico muito feliz que o atendimento tenha sido positivo. Se precisar de algo, estou por aqui pra ajudar!'
+        }
+      ];
+      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+        { role: "system", content: systemMsg },
+        ...fewShots.flatMap(fs => ([
+          { role: "user" as const, content: fs.user },
+          { role: "assistant" as const, content: fs.assistant },
+        ])),
+        { role: "user", content: userMsg },
+      ];
       const completion = await client.chat.completions.create({
         model,
-        messages: [
-          { role: "system" as const, content: systemMsg },
-          { role: "user" as const, content: userMsg },
-        ],
+        messages,
         temperature,
+        top_p,
+        presence_penalty,
         max_tokens,
       });
       return completion.choices?.[0]?.message?.content?.trim() || "";
@@ -103,7 +158,14 @@ export const transformText = async (req: Request, res: Response) => {
       if (!apiKey) throw new Error("GEMINI_API_KEY não configurada");
       const genAI = new GoogleGenerativeAI(apiKey);
       const modelClient = genAI.getGenerativeModel({ model, systemInstruction: systemMsg });
-      const chat = modelClient.startChat({ history: [] });
+      // Few-shots no histórico
+      const history = [
+        { role: 'user', parts: [{ text: 'Agradecer mensagem de aniversário em tom caloroso. Texto: "obrigado pela lembrança no meu dia"' }] },
+        { role: 'model', parts: [{ text: 'Muito obrigado pela lembrança no meu dia! 🎉 Fiquei muito feliz com sua mensagem — é sempre especial receber esse carinho. 😊' }] },
+        { role: 'user', parts: [{ text: 'Agradecer elogio do atendimento. Texto: "valeu pelo atendimento"' }] },
+        { role: 'model', parts: [{ text: 'Que bom saber disso! 😊 Fico muito feliz que o atendimento tenha sido positivo. Se precisar de algo, estou por aqui pra ajudar!' }] },
+      ];
+      const chat = modelClient.startChat({ history });
       const result = await chat.sendMessage(userMsg);
       return result.response.text().trim();
     };
@@ -121,7 +183,25 @@ export const transformText = async (req: Request, res: Response) => {
       }
     }
 
-    return res.status(200).json({ result: out || "" });
+    // Pós-processamento: anexar hashtags personalizadas se configuradas e não presentes
+    try {
+      let finalText = out || "";
+      if (mode === "enhance") {
+        const ed = cfg.enhanceDefaults || {};
+        const hashtagsPref = (ed.hashtags || "auto").toString();
+        const customHashtags = (ed.customHashtags || "").toString().trim();
+        if (hashtagsPref === "custom" && customHashtags) {
+          const normalized = customHashtags.replace(/,+/g, " ").trim();
+          if (normalized && !finalText.toLowerCase().includes(normalized.split(/\s+/)[0]?.toLowerCase())) {
+            const sep = finalText.endsWith("\n") ? "\n" : "\n\n";
+            finalText = `${finalText}${sep}${normalized}`;
+          }
+        }
+      }
+      return res.status(200).json({ result: finalText });
+    } catch {
+      return res.status(200).json({ result: out || "" });
+    }
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || "Erro ao transformar texto" });
   }
@@ -242,6 +322,58 @@ export const encryptionStatus = async (_req: Request, res: Response) => {
     return res.status(200).json({ encryptionEnabled: enabled });
   } catch (error: any) {
     return res.status(200).json({ encryptionEnabled: false });
+  }
+};
+
+export const listModels = async (req: Request, res: Response) => {
+  try {
+    const { provider } = (req.query || {}) as { provider?: string };
+    const { companyId } = req.user;
+    const prov = provider === 'gemini' ? 'gemini' : 'openai';
+
+    if (prov === 'openai') {
+      // tentar listar via API; se falhar, fallback estático
+      try {
+        let apiKey: string | undefined = process.env.OPENAI_API_KEY;
+        try {
+          const integration = await GetIntegrationByTypeService({ companyId, type: 'openai' });
+          const cfg = (typeof integration?.jsonContent === 'string') ? JSON.parse(integration.jsonContent) : (integration?.jsonContent || {});
+          if (cfg?.apiKey) apiKey = cfg.apiKey;
+        } catch {}
+        if (!apiKey) throw new Error('no key');
+        const client = new OpenAI({ apiKey });
+        const list = await client.models.list();
+        const models = (list?.data || [])
+          .map(m => m.id)
+          .filter(id => /gpt|o\d|4o|mini|gpt-3\.5|gpt-4/i.test(id))
+          .sort();
+        const unique = Array.from(new Set(models));
+        if (unique.length) return res.status(200).json({ provider: 'openai', models: unique });
+      } catch {}
+      return res.status(200).json({ provider: 'openai', models: [
+        'gpt-4o', 'gpt-4o-mini', 'gpt-4o-realtime', 'gpt-3.5-turbo-1106'
+      ]});
+    }
+
+    // gemini
+    try {
+      let apiKey: string | undefined = process.env.GEMINI_API_KEY;
+      try {
+        const integration = await GetIntegrationByTypeService({ companyId, type: 'gemini' });
+        const cfg = (typeof integration?.jsonContent === 'string') ? JSON.parse(integration.jsonContent) : (integration?.jsonContent || {});
+        if (cfg?.apiKey) apiKey = cfg.apiKey;
+      } catch {}
+      if (!apiKey) throw new Error('no key');
+      // A SDK do Gemini nem sempre expõe listagem; retornamos recomendados
+      return res.status(200).json({ provider: 'gemini', models: [
+        'gemini-2.0-pro', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'
+      ]});
+    } catch {}
+    return res.status(200).json({ provider: 'gemini', models: [
+      'gemini-2.0-pro', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'
+    ]});
+  } catch (error: any) {
+    return res.status(200).json({ provider: 'openai', models: [] });
   }
 };
 

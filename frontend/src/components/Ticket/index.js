@@ -3,7 +3,7 @@ import { useParams, useHistory } from "react-router-dom";
 
 import clsx from "clsx";
 
-import { makeStyles, Paper } from "@material-ui/core";
+import { makeStyles, Paper, Hidden } from "@material-ui/core";
 import whatsBackground from "../../assets/wa-background.png";
 import whatsBackgroundDark from "../../assets/wa-background-dark.png";
 
@@ -32,6 +32,23 @@ const useStyles = makeStyles((theme) => ({
     height: "100%",
     position: "relative",
     overflow: "hidden",
+    width: '100%',
+    maxWidth: '100vw',
+  },
+
+  overlayMask: {
+    position: 'absolute',
+    inset: 0,
+    zIndex: 3,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // mantém o mesmo fundo do chat para evitar "flash" branco
+    backgroundColor: 'transparent',
+    pointerEvents: 'none'
+  },
+  hiddenContent: {
+    visibility: 'hidden'
   },
 
   mainWrapper: {
@@ -57,6 +74,7 @@ const useStyles = makeStyles((theme) => ({
       easing: theme.transitions.easing.sharp,
       duration: theme.transitions.duration.leavingScreen,
     }),
+    
   },
 
   mainWrapperShift: {
@@ -84,6 +102,8 @@ const Ticket = () => {
   const [contact, setContact] = useState({});
   const [ticket, setTicket] = useState({});
   const [dragDropFiles, setDragDropFiles] = useState([]);
+  const [showComposer, setShowComposer] = useState(false);
+  const [externalHeaderActive, setExternalHeaderActive] = useState(false);
   const { companyId } = user;
 
   useEffect(() => {
@@ -106,6 +126,12 @@ const Ticket = () => {
             // setWhatsapp(data.whatsapp);
             // setQueueId(data.queueId);
             setTicket(data);
+            // Disponibiliza globalmente para header externo
+            try { window.__lastTicket = data; window.__lastContact = data.contact; } catch {}
+            // Notifica topo (HeaderTicketInfo) que o ticket foi carregado
+            try {
+              window.dispatchEvent(new CustomEvent('ticket-loaded', { detail: { ticket: data, contact: data.contact } }));
+            } catch {}
             // Faz join imediato na sala do ticket pelo UUID (se o socket já estiver pronto)
             try {
               const candidate = (data?.uuid || ticketId || "").toString().trim();
@@ -137,6 +163,34 @@ const Ticket = () => {
     return () => clearTimeout(delayDebounceFn);
   }, [ticketId, user, history, socket]);
 
+  // Controla exibição do composer: só aparece quando as mensagens estiverem prontas/posicionadas
+  useEffect(() => {
+    setShowComposer(false);
+    const onMessagesReady = () => setShowComposer(true);
+    window.addEventListener('messages-ready', onMessagesReady);
+    // Fallback: se por algum motivo o evento não vier, libera após 600ms
+    const t = setTimeout(() => setShowComposer(true), 600);
+    return () => {
+      window.removeEventListener('messages-ready', onMessagesReady);
+      clearTimeout(t);
+    };
+  }, [ticketId]);
+
+  // Controla header externo (topo) e abre o drawer quando solicitado
+  useEffect(() => {
+    try {
+      setExternalHeaderActive(!!window.__externalHeaderActive);
+    } catch {}
+    const onToggleHeader = (e) => setExternalHeaderActive(!!(e?.detail?.active));
+    const onOpenContactDrawer = () => setDrawerOpen(true);
+    window.addEventListener('external-header-toggle', onToggleHeader);
+    window.addEventListener('open-contact-drawer', onOpenContactDrawer);
+    return () => {
+      window.removeEventListener('external-header-toggle', onToggleHeader);
+      window.removeEventListener('open-contact-drawer', onOpenContactDrawer);
+    };
+  }, []);
+
   useEffect(() => {
     if (!ticket && !ticket.id && ticket.uuid !== ticketId && ticketId === "undefined") {
       return;
@@ -167,6 +221,11 @@ const Ticket = () => {
       const onCompanyTicket = (data) => {
         if (data.action === "update" && data.ticket.id === ticket?.id) {
           setTicket(data.ticket);
+          // Notifica topo sobre atualização do ticket
+          try {
+            window.__lastTicket = data.ticket; window.__lastContact = contact;
+            window.dispatchEvent(new CustomEvent('ticket-loaded', { detail: { ticket: data.ticket, contact } }));
+          } catch {}
         }
 
         if (data.action === "delete" && data.ticketId === ticket?.id) {
@@ -178,10 +237,15 @@ const Ticket = () => {
         if (data.action === "update") {
           // if (isMounted) {
           setContact((prevState) => {
+            let next = prevState;
             if (prevState.id === data.contact?.id) {
-              return { ...prevState, ...data.contact };
+              next = { ...prevState, ...data.contact };
             }
-            return prevState;
+            try {
+              window.__lastTicket = ticket; window.__lastContact = next;
+              window.dispatchEvent(new CustomEvent('ticket-loaded', { detail: { ticket, contact: next } }));
+            } catch {}
+            return next;
           });
           // }
         }
@@ -240,13 +304,15 @@ const Ticket = () => {
           channel={ticket.channel}
         >
         </MessagesList>
-        <MessageInput
-          ticketId={ticket.id}
-          ticketStatus={ticket.status}
-          ticketChannel={ticket.channel}
-          droppedFiles={dragDropFiles}
-          contactId={contact.id}
-        />
+        {showComposer && (
+          <MessageInput
+            ticketId={ticket.id}
+            ticketStatus={ticket.status}
+            ticketChannel={ticket.channel}
+            droppedFiles={dragDropFiles}
+            contactId={contact.id}
+          />
+        )}
       </>
     );
   };
@@ -263,24 +329,23 @@ const Ticket = () => {
         style={{ background: "transparent", boxShadow: "none", border: 0 }}
       >
         {/* <div id="TicketHeader"> */}
-        <TicketHeader loading={loading}>
-          {ticket.contact !== undefined && (
-            <div id="TicketHeader">
-              <TicketInfo
-                contact={contact}
-                ticket={ticket}
-                onClick={handleDrawerToggle}
-              />
-            </div>
-          )}
-          <TicketActionButtons
-            ticket={ticket}
-          />
-        </TicketHeader>
+        {!externalHeaderActive && (
+          <TicketHeader loading={loading}>
+            {ticket.contact !== undefined && (
+              <div id="TicketHeader" style={{ flex: 1, minWidth: 0 }}>
+                <TicketInfo
+                  contact={contact}
+                  ticket={ticket}
+                  onClick={handleDrawerToggle}
+                />
+              </div>
+            )}
+            <TicketActionButtons
+              ticket={ticket}
+            />
+          </TicketHeader>
+        )}
         {/* </div> */}
-        <Paper>
-          <TagsContainer contact={contact} />
-        </Paper>
         <ReplyMessageProvider>
           <ForwardMessageProvider>
             <EditMessageProvider>

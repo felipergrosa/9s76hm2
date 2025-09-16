@@ -13,6 +13,7 @@ import {
   Hidden,
   Menu,
   MenuItem,
+  Divider,
   Tooltip,
   Fab,
 } from "@material-ui/core";
@@ -81,7 +82,17 @@ const useStyles = makeStyles((theme) => ({
     [theme.breakpoints.down("sm")]: {
       position: "fixed",
       bottom: 0,
+      left: 0,
+      right: 0,
       width: "100%",
+      borderTop: 'none',
+      padding: 0,
+      zIndex: 10,
+      backgroundColor: theme.mode === 'light' ? 'transparent' : '#0b0b0d',
+      backgroundImage: theme.mode === 'light' ? `url(${whatsBackground})` : `url(${whatsBackgroundDark})`,
+      backgroundRepeat: 'repeat',
+      backgroundSize: '400px auto',
+      backgroundPosition: 'center bottom'
     },
   },
   avatar: {
@@ -107,11 +118,10 @@ const useStyles = makeStyles((theme) => ({
     overflow: "scroll",
   },
   newMessageBox: {
-    // Pill interno (estilo WhatsApp)
     backgroundColor: ((theme.palette.mode || theme.palette.type) === 'light') ? "#ffffff" : "#202c33",
     width: "100%",
     display: "flex",
-    padding: "0px 8px 0pt",
+    padding: "0px 8px",
     alignItems: "center",
     borderRadius: 40,
     border: ((theme.palette.mode || theme.palette.type) === 'light') ? "1px solid rgba(0,0,0,0.08)" : "1px solid rgba(255,255,255,0.10)",
@@ -119,15 +129,11 @@ const useStyles = makeStyles((theme) => ({
       ? "0 2px 6px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08)"
       : "0 2px 6px rgba(0,0,0,0.50)",
     gap: 4,
-    // Ícones dentro da pílula: área de clique maior e hover mais visível
-    '& .MuiIconButton-root': {
-      padding: 8,
-      borderRadius: 16,
-      transition: 'background-color 120ms ease',
-      '&:hover': {
-        backgroundColor: ((theme.palette.mode || theme.palette.type) === 'light') ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.16)'
-      }
-    },
+    // Altura fixa para eliminar qualquer "salto" visual
+    height: 56,
+    [theme.breakpoints.down('sm')]: {
+      height: 60,
+    }
   },
   messageInputWrapper: {
     padding: 0,
@@ -150,18 +156,43 @@ const useStyles = makeStyles((theme) => ({
       backgroundColor: ((theme.palette.mode || theme.palette.type) === 'light') ? '#ffffff' : '#202c33',
       borderRadius: 0,
       // Para deixar sem borda depois, troque a linha abaixo por: 'border: "none"'
-      border: ((theme.palette.mode || theme.palette.type) === 'light') ? '0px solid #ffffff' : '0px solid rgba(255,255,255,0.18)'
+      border: ((theme.palette.mode || theme.palette.type) === 'light') ? '0px solid #ffffff' : '0px solid rgba(255,255,255,0.18)',
+      // Garante que o input ocupe altura fixa dentro do composer
+      height: 40,
+      display: 'flex',
+      alignItems: 'center'
+    },
+    // Ajuste específico para o textarea interno do InputBase multiline
+    '& .MuiInputBase-multiline': {
+      paddingTop: 10,
+      paddingBottom: 10,
+    },
+    '& .MuiInputBase-inputMultiline': {
+      padding: 0,
+      lineHeight: 1.3,
+      maxHeight: 24,
+      overflowY: 'auto',
     },
     '& .MuiInputBase-input': {
       padding: 0,
       fontSize: 14,
-      lineHeight: 1.1,
-      
+      lineHeight: 1.1
+    },
+    [theme.breakpoints.down('sm')]: {
+      width: '100%',
+      minWidth: '100%',
+      maxWidth: '100%',
+      margin: 0,
+      padding: 0,
+      left: 0,
+      right: 0,
+      position: 'relative',
+      boxShadow: 'none',
     }
   },
   messageInputWrapperPrivate: {
-    padding: 4,
-    marginRight: 7,
+    padding: 0,
+    marginRight: 0,
     background: "#F0E68C",
     display: "flex",
     borderRadius: 22,
@@ -172,7 +203,7 @@ const useStyles = makeStyles((theme) => ({
     paddingLeft: 10,
     flex: 1,
     border: "none",
-    background: "#FFFFFF",
+    
 
   },
   messageInputPrivate: {
@@ -307,12 +338,24 @@ const useStyles = makeStyles((theme) => ({
   messageQuickAnswersWrapper: {
     margin: 0,
     position: "absolute",
-    bottom: "50px",
+    bottom: "64px",
     background: theme.palette.background.default,
     padding: 0,
     border: "none",
     left: 0,
     width: "100%",
+    zIndex: 10,
+    // Mobile: lista fixa acima do composer para não sobrepor o input
+    [theme.breakpoints.down('sm')]: {
+      position: 'fixed',
+      left: 0,
+      right: 0,
+      bottom: 72,
+      width: '100%',
+      maxHeight: '40vh',
+      overflowY: 'auto',
+      zIndex: 1200,
+    },
     "& li": {
       listStyle: "none",
       "& a": {
@@ -579,6 +622,21 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
       setEditingMessage(null);
     };
   }, [ticketId, setReplyingMessage, setEditingMessage]);
+
+  // Sinaliza para outras partes da UI (MessagesList) que o composer já foi montado,
+  // permitindo rolar para o final após a estabilização do layout
+  useEffect(() => {
+    const notifyComposerReady = () => {
+      try {
+        const ev = new Event('composer-ready');
+        window.dispatchEvent(ev);
+      } catch {}
+    };
+    // dispara logo após montagem e novamente após um micro-delay
+    notifyComposerReady();
+    const t = setTimeout(notifyComposerReady, 120);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     setTimeout(() => {
@@ -999,6 +1057,19 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
     setAnchorEl(null);
   };
 
+  // Permite abrir o menu de anexos a partir do cabeçalho (botão + no topo, mobile)
+  useEffect(() => {
+    const onOpenAttachmentsMenu = (e) => {
+      try {
+        const anchorId = e?.detail?.anchorId;
+        const el = anchorId ? document.getElementById(anchorId) : null;
+        setAnchorEl(el || document.body);
+      } catch {}
+    };
+    window.addEventListener('open-attachments-menu', onOpenAttachmentsMenu);
+    return () => window.removeEventListener('open-attachments-menu', onOpenAttachmentsMenu);
+  }, []);
+
   const handleSendContactModalOpen = async () => {
     handleMenuItemClick();
     setSenVcardModalOpen(true);
@@ -1007,6 +1078,17 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   const handleCameraModalOpen = async () => {
     handleMenuItemClick();
     setModalCameraOpen(true);
+  };
+
+  // Ações específicas do menu no mobile
+  const handleOpenAssistantFromMenu = () => {
+    handleMenuItemClick();
+    setAssistantOpen(prev => !prev);
+  };
+
+  const handleOpenScheduleFromMenu = () => {
+    handleMenuItemClick();
+    setAppointmentModalOpen(true);
   };
 
   const handleCancelSelection = () => {
@@ -1168,84 +1250,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
               >
                 <Plus size={18} />
               </Fab>
-              <Menu
-                anchorEl={anchorEl}
-                keepMounted
-                open={Boolean(anchorEl)}
-                onClose={handleMenuItemClick}
-                id="simple-menu"
-              >
-                <MenuItem onClick={handleMenuItemClick}>
-                  <input
-                    multiple
-                    type="file"
-                    id="upload-img-button"
-                    accept="image/*, video/*, audio/* "
-                    // disabled={disableOption()}
-                    className={classes.uploadInput}
-                    onChange={handleChangeMedias}
-                  />
-                  <label htmlFor="upload-img-button">
-                    <Fab
-                      aria-label="upload-img"
-                      component="span"
-                      className={classes.invertedFabMenuMP}
-                    >
-                      <ImageIcon size={18} />
-                    </Fab>
-                    {i18n.t("messageInput.type.imageVideo")}
-                  </label>
-                </MenuItem>
-                <MenuItem onClick={handleCameraModalOpen}>
-                  <Fab className={classes.invertedFabMenuCamera}>
-                    <Camera size={18} />
-                  </Fab>
-                  {i18n.t("messageInput.type.cam")}
-                </MenuItem>
-                <MenuItem onClick={handleMenuItemClick}>
-                  <input
-                    multiple
-                    type="file"
-                    id="upload-doc-button"
-                    accept="application/*, text/*"
-                    // disabled={disableOption()}
-                    className={classes.uploadInput}
-                    onChange={handleChangeMedias}
-                  />
-                  <label htmlFor="upload-doc-button">
-                    <Fab aria-label="upload-img"
-                      component="span" className={classes.invertedFabMenuDoc}>
-                      <FileText size={18} />
-                    </Fab>
-                    Documento
-                  </label>
-                </MenuItem>
-                <MenuItem onClick={handleSendContactModalOpen}>
-                  <Fab className={classes.invertedFabMenuCont}>
-                    <UserRound size={18} />
-                  </Fab>
-                  {i18n.t("messageInput.type.contact")}
-                </MenuItem>
-                <MenuItem onClick={handleSendLinkVideo}>
-                  <Fab className={classes.invertedFabMenuMeet}>
-                    <Video size={18} />
-                  </Fab>
-                  {i18n.t("messageInput.type.meet")}
-                </MenuItem>
-                {buttonModalOpen && (
-          <ButtonModal
-            modalOpen={buttonModalOpen}
-            onClose={() => setButtonModalOpen(false)} // Função para fechar o modal
-            ticketId={ticketId}
-          />
-        )}
-                <MenuItem onClick={handleButtonModalOpen}>
-                  <Fab className={classes.invertedFabMenuCont}>
-                    <MoreHorizontal size={18} />
-                  </Fab>
-                  Botões
-                </MenuItem>
-              </Menu>
+              
               {/* <IconButton
 				  aria-label="upload"
 				  component="span"
@@ -1273,6 +1278,116 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                 </Tooltip>
             )}
             </Hidden>
+            {/* Botão + para mobile */}
+            <Hidden only={["md", "lg", "xl"]}>
+              <IconButton
+                aria-label="uploadMediasMobile"
+                component="span"
+                disabled={disableOption()}
+                onClick={handleOpenMenuClick}
+                style={{ padding: 8 }}
+              >
+                <Plus size={18} className={classes.sendMessageIcons} />
+              </IconButton>
+            </Hidden>
+            {/* Menu de anexos (disponível em todos os tamanhos) */}
+            <Menu
+              anchorEl={anchorEl}
+              keepMounted
+              open={Boolean(anchorEl)}
+              onClose={handleMenuItemClick}
+              id="simple-menu"
+              anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
+              transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+              style={{ zIndex: 1600 }}
+            >
+              {/* Itens mobile movidos para o final do menu, abaixo de "Botões" */}
+              <MenuItem onClick={handleMenuItemClick}>
+                <input
+                  multiple
+                  type="file"
+                  id="upload-img-button"
+                  accept="image/*, video/*, audio/* "
+                  className={classes.uploadInput}
+                  onChange={handleChangeMedias}
+                />
+                <label htmlFor="upload-img-button">
+                  <Fab
+                    aria-label="upload-img"
+                    component="span"
+                    className={classes.invertedFabMenuMP}
+                  >
+                    <ImageIcon size={18} />
+                  </Fab>
+                  {i18n.t("messageInput.type.imageVideo")}
+                </label>
+              </MenuItem>
+              <MenuItem onClick={handleCameraModalOpen}>
+                <Fab className={classes.invertedFabMenuCamera}>
+                  <Camera size={18} />
+                </Fab>
+                {i18n.t("messageInput.type.cam")}
+              </MenuItem>
+              <MenuItem onClick={handleMenuItemClick}>
+                <input
+                  multiple
+                  type="file"
+                  id="upload-doc-button"
+                  accept="application/*, text/*"
+                  className={classes.uploadInput}
+                  onChange={handleChangeMedias}
+                />
+                <label htmlFor="upload-doc-button">
+                  <Fab aria-label="upload-img"
+                    component="span" className={classes.invertedFabMenuDoc}>
+                    <FileText size={18} />
+                  </Fab>
+                  Documento
+                </label>
+              </MenuItem>
+              <MenuItem onClick={handleSendContactModalOpen}>
+                <Fab className={classes.invertedFabMenuCont}>
+                  <UserRound size={18} />
+                </Fab>
+                {i18n.t("messageInput.type.contact")}
+              </MenuItem>
+              <MenuItem onClick={handleSendLinkVideo}>
+                <Fab className={classes.invertedFabMenuMeet}>
+                  <Video size={18} />
+                </Fab>
+                {i18n.t("messageInput.type.meet")}
+              </MenuItem>
+              {buttonModalOpen && (
+                <ButtonModal
+                  modalOpen={buttonModalOpen}
+                  onClose={() => setButtonModalOpen(false)}
+                  ticketId={ticketId}
+                />
+              )}
+              <MenuItem onClick={handleButtonModalOpen}>
+                <Fab className={classes.invertedFabMenuCont}>
+                  <MoreHorizontal size={18} />
+                </Fab>
+                Botões
+              </MenuItem>
+              {isMobile && (
+                <>
+                  <Divider />
+                  <MenuItem onClick={handleOpenAssistantFromMenu}>
+                    <Fab className={classes.invertedFabMenuCont}>
+                      <Sparkles size={18} />
+                    </Fab>
+                    Assistente de Chat
+                  </MenuItem>
+                  <MenuItem onClick={handleOpenScheduleFromMenu}>
+                    <Fab className={classes.invertedFabMenuCont}>
+                      <ClockIcon size={16} />
+                    </Fab>
+                    {i18n.t('tickets.buttons.scredule')}
+                  </MenuItem>
+                </>
+              )}
+            </Menu>
             <div className={classes.flexContainer}>
               {privateMessageInputVisible && (
                 <div className={classes.flexItem}>
@@ -1289,7 +1404,8 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                           : i18n.t("messagesInput.placeholderClosed")
                       }
                       multiline
-                      maxRows={5}
+                      rowsMin={1}
+                      maxRows={isMobile ? 3 : 5}
                       value={inputMessage}
                       onChange={handleChangeInput}
                       disabled={disableOption()}
@@ -1338,7 +1454,8 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       className={classes.messageInput}
                       placeholder={placeholderText}
                       multiline
-                      maxRows={5}
+                      rowsMin={1}
+                      maxRows={isMobile ? 3 : 5}
                       value={inputMessage}
                       onChange={handleChangeInput}
                       disabled={disableOption()}

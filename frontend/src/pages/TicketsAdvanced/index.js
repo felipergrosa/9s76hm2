@@ -11,6 +11,7 @@ import ChatIcon from '@material-ui/icons/Chat';
 import TicketsManagerTabs from "../../components/TicketsManagerTabs";
 import Ticket from "../../components/Ticket";
 import TicketAdvancedLayout from "../../components/TicketAdvancedLayout";
+import ExternalTicketHeader from "../../components/ExternalTicketHeader";
 
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 
@@ -82,22 +83,28 @@ const TicketAdvanced = (props) => {
         />
     }
 
+    // Controle de external-header-toggle agora é feito dentro do ExternalTicketHeader
+
     return (
         <QueueSelectedProvider>
 
             <TicketAdvancedLayout>
                 <Box className={classes.header}>
-                    <BottomNavigation
-                        value={option}
-                        onChange={(event, newValue) => {
-                            setOption(newValue);
-                        }}
-                        showLabels
-                        className={classes.root}
-                    >
-                        <BottomNavigationAction label="Ticket" icon={<ChatIcon />} />
-                        <BottomNavigationAction label="Atendimentos" icon={<QuestionAnswerIcon />} />
-                    </BottomNavigation>
+                    {(option === 0 && ticketId && ticketId !== "undefined") ? (
+                        <ExternalTicketHeader />
+                    ) : (
+                        <BottomNavigation
+                            value={option}
+                            onChange={(event, newValue) => {
+                                setOption(newValue);
+                            }}
+                            showLabels
+                            className={classes.root}
+                        >
+                            <BottomNavigationAction label="Ticket" icon={<ChatIcon />} />
+                            <BottomNavigationAction label="Atendimentos" icon={<QuestionAnswerIcon />} />
+                        </BottomNavigation>
+                    )}
                 </Box>
                 <Box className={classes.content}>
                     {option === 0 ? renderMessageContext() : renderTicketsManagerTabs()}

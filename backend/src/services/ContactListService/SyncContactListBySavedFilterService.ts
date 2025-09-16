@@ -1,5 +1,4 @@
 import ContactList from "../../models/ContactList";
-import ContactListItem from "../../models/ContactListItem";
 import AddFilteredContactsToListService from "../ContactListItemService/AddFilteredContactsToListService";
 import logger from "../../utils/logger";
 
@@ -21,11 +20,10 @@ const SyncContactListBySavedFilterService = async ({ contactListId, companyId }:
     return { added: 0, duplicated: 0, errors: 0 };
   }
 
-  logger.info(`Sincronizando lista ${contactListId} com savedFilter`);
+  logger.info(`Sincronizando lista ${contactListId} com savedFilter (modo aditivo, sem remover existentes)`);
 
-  // Estratégia simples: limpar itens e recriar a partir do filtro salvo
-  await ContactListItem.destroy({ where: { contactListId } });
-
+  // Estratégia aditiva: apenas adiciona novos contatos que atendam ao filtro,
+  // evitando duplicados por número/email (lógica interna do AddFilteredContactsToListService)
   const result = await AddFilteredContactsToListService({
     contactListId,
     companyId,

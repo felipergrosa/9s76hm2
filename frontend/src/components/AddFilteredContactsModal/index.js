@@ -600,6 +600,11 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
         filters.maxVlUltCompra = Number(values.maxVlUltCompra);
       }
 
+      // Se marcado "Sem máximo" para Valor da Última Compra, remove maxVlUltCompra
+      if (values.vlUltCompraNoMax) {
+        delete filters.maxVlUltCompra;
+      }
+
       // Remover filtros vazios
       Object.keys(filters).forEach(key => {
         if (filters[key] === "" || filters[key] === null || filters[key] === undefined ||

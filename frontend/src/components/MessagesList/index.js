@@ -57,8 +57,27 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "column",
     flexGrow: 1,
     width: "100%",
-    minWidth: 300,
+    // Evita overflow horizontal no mobile
+    overflowX: 'hidden',
+    // Remover restrição que causava barra horizontal
+    // minWidth: 300,
     minHeight: 200,
+  },
+  loadingCenter: {
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
+    transform: 'translate(-50%, -50%)',
+    zIndex: 2,
+  },
+  fadeHidden: {
+    opacity: 0,
+    transition: 'opacity 180ms ease',
+    pointerEvents: 'none',
+  },
+  fadeShown: {
+    opacity: 1,
+    transition: 'opacity 180ms ease',
   },
 
   currentTick: {
@@ -130,9 +149,17 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     flexDirection: "column",
     flexGrow: 1,
-    padding: "20px 20px 30px 20px",
-    overflowY: "scroll",
+    padding: "20px 20px 20px 20px",
+    overflowY: "auto",
+    overscrollBehavior: 'contain',
+    WebkitOverflowScrolling: 'touch',
     ...theme.scrollbarStyles,
+    [theme.breakpoints.down('sm')]: {
+      // Mais espaço inferior para não ficar encoberto pelo composer
+      padding: '8px 12px 20px 12px',
+      overflowX: 'hidden',
+      overscrollBehavior: 'contain',
+    }
   },
   dragElement: {
     background: 'rgba(255, 255, 255, 0.8)',
@@ -720,7 +747,11 @@ const MessagesList = ({
     setPageNumber(1);
 
     currentTicketId.current = ticketId;
+    setUiReady(false);
   }, [ticketId, selectedQueuesMessage]);
+
+  const [uiReady, setUiReady] = useState(false);
+  const composerReadyRef = useRef(false);
 
   useEffect(() => {
     setLoading(true);
@@ -791,8 +822,19 @@ const MessagesList = ({
             }
           }
 
-          if (pageNumber === 1 && data.messages.length > 1) {
-            scrollToBottom();
+          if (pageNumber === 1) {
+            // aguarda composer e layout
+            const doReady = () => {
+              scrollToBottom();
+              setUiReady(true);
+              try { window.dispatchEvent(new Event('messages-ready')); } catch {}
+            };
+            if (composerReadyRef.current) {
+              setTimeout(doReady, 30);
+            } else {
+              // fallback: garante readiness mesmo sem evento
+              setTimeout(doReady, 180);
+            }
           }
         } catch (err) {
           setLoading(false);
@@ -803,6 +845,20 @@ const MessagesList = ({
 
     fetchMessages();
   }, [pageNumber, ticketId, selectedQueuesMessage]);
+
+  // Garante que, quando o composer sinalizar que está pronto, a lista role ao final
+  useEffect(() => {
+    const onComposerReady = () => {
+      composerReadyRef.current = true;
+      setTimeout(() => {
+        scrollToBottom();
+        setUiReady(true);
+        try { window.dispatchEvent(new Event('messages-ready')); } catch {}
+      }, 60);
+    };
+    window.addEventListener('composer-ready', onComposerReady);
+    return () => window.removeEventListener('composer-ready', onComposerReady);
+  }, []);
 
   useEffect(() => {
     if (!ticketId || ticketId === "undefined") {
@@ -1583,10 +1639,26 @@ const MessagesList = ({
         className={classes.messagesList}
         onScroll={handleScroll}
       >
-        {messagesList.length > 0 ?
+        {uiReady && (messagesList.length > 0 ?
           renderMessages()
-          : []}
+          : [])}
       </div>
+      {!uiReady && (
+        <div className={classes.messagesList} style={{ position: 'absolute', inset: 0, padding: 20, pointerEvents: 'none' }}>
+          <div className={classes.skelBubbleLeft}>
+            <div className={classes.skelLine} style={{ width: 220 }} />
+            <div className={classes.skelLine} style={{ width: 180 }} />
+            <div className={classes.skelLine} style={{ width: 140 }} />
+          </div>
+          <div className={classes.skelBubbleRight}>
+            <div className={classes.skelLine} style={{ width: 200 }} />
+            <div className={classes.skelLine} style={{ width: 160 }} />
+          </div>
+          <div className={classes.skelBubbleLeft}>
+            <div className={classes.skelLine} style={{ width: 260 }} />
+          </div>
+        </div>
+      )}
 
       {(channel !== "whatsapp" && channel !== undefined) && (
         <div

@@ -67,10 +67,11 @@ const useStyles = makeStyles((theme) => ({
   root: {
     display: "flex",
     height: "100vh",
-    [theme.breakpoints.down("sm")]: {
-      height: "calc(100vh - 56px)",
-    },
+    width: "100%",
+    maxWidth: "100%",
+    overflowX: "hidden",
     backgroundColor: theme.palette.fancyBackground,
+
     "& .MuiButton-outlinedPrimary": {
       color: theme.palette.primary,
       border:
@@ -176,6 +177,8 @@ const useStyles = makeStyles((theme) => ({
   content: {
     flex: 1,
     overflow: "visible", position: "relative",
+    width: "100%",
+    maxWidth: "100%",
   },
   contentShift: {
     marginLeft: drawerWidth,

@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 
-import { Card, Button } from "@material-ui/core";
+import { Card, IconButton } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
 import TicketHeaderSkeleton from "../TicketHeaderSkeleton";
 import ArrowBackIos from "@material-ui/icons/ArrowBackIos";
@@ -13,10 +13,14 @@ const useStyles = makeStyles(theme => ({
 		background: theme.palette.total,
 		flex: "none",
 		borderBottom: "1px solid rgba(0, 0, 0, 0.12)",
-		height: "65px",
+		height: 68,
+		padding: "0 0px 0 20px",
+		position: 'relative',
 		[theme.breakpoints.down("sm")]: {
-			flexWrap: "wrap",
-			height: 'max-content'
+			flexWrap: "nowrap",
+			alignItems: 'center',
+			gap: 4,
+			minHeight: 56,
 		},
 	},
 }));
@@ -51,9 +55,9 @@ const TicketHeader = ({ loading, children }) => {
 					square
 					className={classes.ticketHeader}
 				>
-					<Button color="primary" onClick={handleBack}>
-						<ArrowBackIos />
-					</Button>
+					<IconButton color="primary" size="small" edge="start" aria-label="voltar" onClick={handleBack}>
+						<ArrowBackIos fontSize="small" />
+					</IconButton>
 					{children}
 				</Card>
 			)}

@@ -22,7 +22,7 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     companyId
   });
 
-  // Mascarar apiKey de integrações OpenAI
+  // Máscara parcial da apiKey (mantém prefixo e oculta o restante)
   const sanitized = queueIntegrations.map(qi => {
     try {
       let obj: any = (qi as any).toJSON ? (qi as any).toJSON() : (qi as any);
@@ -30,7 +30,9 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
         try {
           const parsed = JSON.parse(obj.jsonContent);
           if (parsed && parsed.apiKey) {
-            parsed.apiKey = "********";
+            const key: string = String(parsed.apiKey);
+            const keep = Math.min(8, key.length);
+            parsed.apiKey = `${key.slice(0, keep)}********`;
             obj.jsonContent = JSON.stringify(parsed);
           }
         } catch (_) {}
@@ -72,12 +74,16 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     queueIntegration
   });
 
-  // Mascarar apiKey se for OpenAI
+  // Máscara parcial da apiKey se for OpenAI
   let obj: any = queueIntegration?.toJSON ? queueIntegration.toJSON() : queueIntegration;
   try {
     if (obj?.type === "openai" && obj?.jsonContent) {
       const parsed = JSON.parse(obj.jsonContent);
-      if (parsed?.apiKey) parsed.apiKey = "********";
+      if (parsed?.apiKey) {
+        const key: string = String(parsed.apiKey);
+        const keep = Math.min(8, key.length);
+        parsed.apiKey = `${key.slice(0, keep)}********`;
+      }
       obj.jsonContent = JSON.stringify(parsed);
     }
   } catch (_) {}
@@ -91,12 +97,16 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 
   const queueIntegration = await ShowQueueIntegrationService(integrationId, companyId);
 
-  // Mascarar apiKey se for OpenAI
+  // Máscara parcial da apiKey se for OpenAI
   let obj: any = queueIntegration?.toJSON ? queueIntegration.toJSON() : queueIntegration;
   try {
     if (obj?.type === "openai" && obj?.jsonContent) {
       const parsed = JSON.parse(obj.jsonContent);
-      if (parsed?.apiKey) parsed.apiKey = "********";
+      if (parsed?.apiKey) {
+        const key: string = String(parsed.apiKey);
+        const keep = Math.min(8, key.length);
+        parsed.apiKey = `${key.slice(0, keep)}********`;
+      }
       obj.jsonContent = JSON.stringify(parsed);
     }
   } catch (_) {}
@@ -126,7 +136,11 @@ export const update = async (
   try {
     if (obj?.type === "openai" && obj?.jsonContent) {
       const parsed = JSON.parse(obj.jsonContent);
-      if (parsed?.apiKey) parsed.apiKey = "********";
+      if (parsed?.apiKey) {
+        const key: string = String(parsed.apiKey);
+        const keep = Math.min(8, key.length);
+        parsed.apiKey = `${key.slice(0, keep)}********`;
+      }
       obj.jsonContent = JSON.stringify(parsed);
     }
   } catch (_) {}

@@ -154,7 +154,7 @@ const Contacts = () => {
     const [enableLGPD, setEnableLGPD] = useState(false);
 
     // Placeholder for total contacts, should be fetched from API
-    const [totalContacts, setTotalContacts] = useState(3000); 
+    const [totalContacts, setTotalContacts] = useState(0); 
     const [contactsPerPage, setContactsPerPage] = useState(25);
     // Ordenação
     const [sortField, setSortField] = useState("name");
@@ -173,6 +173,24 @@ const Contacts = () => {
             // ignora
         }
     }, [user?.id]);
+
+    // Carrega preferência de itens por página do usuário
+    useEffect(() => {
+        const key = `contactsPerPage:${user?.id || "anon"}`;
+        try {
+            const saved = parseInt(localStorage.getItem(key), 10);
+            if (!isNaN(saved) && saved > 0) {
+                setContactsPerPage(saved);
+            }
+        } catch (_) { /* ignore */ }
+    }, [user?.id]);
+
+    const handleChangePerPage = (e) => {
+        const value = parseInt(e.target.value, 10) || 25;
+        setContactsPerPage(value);
+        setPageNumber(1);
+        try { localStorage.setItem(`contactsPerPage:${user?.id || "anon"}`, String(value)); } catch {}
+    };
 
     useEffect(() => {
         async function fetchData() {
@@ -267,7 +285,8 @@ const Contacts = () => {
                                     // Substitui a lista pelo resultado da página atual
                                     dispatch({ type: "SET_CONTACTS", payload: data.contacts });
                                     setHasMore(data.hasMore);
-                                    setTotalContacts(typeof data.count === 'number' ? data.count : (data.total || data.contacts.length));
+                                    // Usa a contagem total fornecida pelo backend (já respeita filtros/pesquisa)
+                                    setTotalContacts(typeof data.count === 'number' ? data.count : (data.total || 0));
 
                                     // Atualizar o estado do "Selecionar Tudo" baseado nos contatos carregados e selecionados
                                     const allCurrentContactIds = data.contacts.map(c => c.id);
@@ -539,70 +558,11 @@ const Contacts = () => {
         });
     };
 
-    // Contatos ordenados (aplicado por página)
+    // A lista já vem paginada e ordenada do backend (params: limit, pageNumber, orderBy, order).
+    // Portanto, evitamos reordenar/repaginar no cliente para não misturar páginas.
     const sortedContacts = useMemo(() => {
-        const arr = contacts.filter(c => !c.isGroup);
-        const normalize = (v) => {
-            if (v === null || v === undefined) return "";
-            if (typeof v === "string") return v.toLowerCase();
-            return v;
-        };
-        const getFieldValue = (c) => {
-            switch (sortField) {
-                case "name":
-                    return c.name || "";
-                case "contactName":
-                    return c.contactName || "";
-                case "number":
-                    return c.number || "";
-                case "email":
-                    return c.email || "";
-                case "city":
-                    return c.city || "";
-                case "florder":
-                    return c.florder ? 1 : 0;
-                case "tags":
-                    return Array.isArray(c.tags) ? c.tags.length : 0;
-                case "status":
-                    return c.situation || (c.active ? "Ativo" : "Inativo");
-                default:
-                    return c.name || "";
-            }
-        };
-        const cmp = (a, b) => {
-            const va = normalize(getFieldValue(a));
-            const vb = normalize(getFieldValue(b));
-            if (typeof va === "number" && typeof vb === "number") {
-                return va - vb;
-            }
-            return String(va).localeCompare(String(vb), "pt-BR", { sensitivity: "base" });
-        };
-        const sorted = [...arr].sort(cmp);
-        const ordered = sortDirection === "desc" ? sorted.reverse() : sorted;
-        
-        // Aplicar filtro de busca se houver
-        const filtered = ordered.filter(contact => {
-            if (!searchParam) return true;
-            const searchLower = searchParam.toLowerCase();
-            return (
-                (contact.name && contact.name.toLowerCase().includes(searchLower)) ||
-                (contact.number && contact.number.includes(searchParam)) ||
-                (contact.email && contact.email.toLowerCase().includes(searchLower))
-            );
-        });
-        
-        // Atualizar o total de contatos para refletir a busca
-        if (searchParam) {
-            setTotalContacts(filtered.length);
-        } else {
-            setTotalContacts(contacts.length);
-        }
-        
-        // Aplicar paginação
-        const startIndex = (pageNumber - 1) * contactsPerPage;
-        const endIndex = startIndex + contactsPerPage;
-        return filtered.slice(startIndex, endIndex);
-    }, [contacts, sortField, sortDirection]);
+        return contacts.filter(c => !c.isGroup);
+    }, [contacts]);
 
     // Função para renderizar os números de página (sempre 3, janela deslizante)
 
@@ -733,7 +693,7 @@ const Contacts = () => {
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">
                         {i18n.t("contacts.title")}
                         <span className="text-lg font-normal text-gray-500 dark:text-gray-400 ml-2">
-                            ({contacts.length})
+                            ({totalContacts})
                         </span>
                     </h1>
                 </header>
@@ -771,6 +731,18 @@ const Contacts = () => {
                                     </>
                                 )}
                             </PopupState>
+                        {/* Itens por página (Mobile) */}
+                        <div className="flex items-center gap-1 text-sm">
+                            <span className="text-gray-600 dark:text-gray-300">Itens/página:</span>
+                            <select value={contactsPerPage} onChange={handleChangePerPage} className="h-10 px-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg">
+                                <option value={5}>5</option>
+                                <option value={25}>25</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                                <option value={500}>500</option>
+                                <option value={1000}>1000</option>
+                            </select>
+                        </div>
                             <Can
                                 role={user.profile}
                                 perform="contacts-page:deleteContact"
@@ -1097,7 +1069,7 @@ STATUS
                                     setPageNumber(1); // Reset to first page when items per page changes
                                 }}
                                 className="text-sm bg-gray-50 border border-gray-300 rounded-md p-1 dark:bg-gray-700 dark:border-gray-600"
-                            >
+                            >   <option value={5}>5</option>
                                 <option value={25}>25</option>
                                 <option value={50}>50</option>
                                 <option value={100}>100</option>

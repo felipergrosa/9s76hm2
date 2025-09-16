@@ -3,7 +3,7 @@ import { useHistory } from "react-router-dom";
 
 import { Can } from "../Can";
 import { makeStyles } from "@material-ui/core/styles";
-import { IconButton, Menu } from "@material-ui/core";
+import { IconButton, Menu, Hidden } from "@material-ui/core";
 import { DeviceHubOutlined, History, MoreVert, PictureAsPdf, Replay, SwapHorizOutlined } from "@material-ui/icons";
 import { v4 as uuidv4 } from "uuid";
 
@@ -39,18 +39,26 @@ import useCompanySettings from "../../hooks/useSettings/companySettings";
 import ShowTicketLogModal from "../ShowTicketLogModal";
 import TicketMessagesDialog from "../TicketMessagesDialog";
 import { useTheme } from "@material-ui/styles";
+import DeleteForeverIcon from '@material-ui/icons/DeleteForever';
 
 const useStyles = makeStyles(theme => ({
     actionButtons: {
-        marginRight: 6,
+        marginRight: 0,
         maxWidth: "100%",
         flex: "none",
+        flexShrink: 0,
+        minWidth: 64,
+        whiteSpace: 'nowrap',
         alignSelf: "center",
         marginLeft: "auto",
+        justifyContent: 'flex-end',
         // flexBasis: "50%",
         display: "flex",
         "& > *": {
             margin: theme.spacing(1),
+        },
+        "& > *:last-child": {
+            marginRight: 0,
         },
     },
     bottomButtonVisibilityIcon: {
@@ -408,130 +416,69 @@ const TicketActionButtonsCustom = ({ ticket
                 />
             )}
             <div className={classes.actionButtons}>
-                {ticket.status === "closed" && (ticket.queueId === null || ticket.queueId === undefined) && (
-                    <ButtonWithSpinner
-                        loading={loading}
-                        startIcon={<Replay />}
-                        size="small"
-                        onClick={e => handleOpenAcceptTicketWithouSelectQueue()}
-                    >
-                        {i18n.t("messagesList.header.buttons.reopen")}
-                    </ButtonWithSpinner>
-                )}
-                {(ticket.status === "closed" && ticket.queueId !== null) && (
-                    <ButtonWithSpinner
-                        startIcon={<Replay />}
-                        loading={loading}
-                        onClick={e => handleAcepptTicket(ticket.id)}
-                    >
-                        {i18n.t("messagesList.header.buttons.reopen")}
-                    </ButtonWithSpinner>
-                )}
-                {/* <IconButton
-                    className={classes.bottomButtonVisibilityIcon}
-                    onClick={handleShowLogTicket}
-                >
-                    <Tooltip title={i18n.t("messagesList.header.buttons.logTicket")}>
-                        <History />
-
-                    </Tooltip>
-                </IconButton> */}
-                {(ticket.status === "open" || ticket.status === "group") && (
-                    <>
-                        {/* {!showSelectMessageCheckbox ? ( */}
+                    <Hidden smDown>
+                    {ticket.status === "closed" && (ticket.queueId === null || ticket.queueId === undefined) && (
+                        <ButtonWithSpinner
+                            loading={loading}
+                            startIcon={<Replay />}
+                            size="small"
+                            onClick={e => handleOpenAcceptTicketWithouSelectQueue()}
+                        >
+                            {i18n.t("messagesList.header.buttons.reopen")}
+                        </ButtonWithSpinner>
+                    )}
+                    {(ticket.status === "closed" && ticket.queueId !== null) && (
+                        <ButtonWithSpinner
+                            startIcon={<Replay />}
+                            loading={loading}
+                            onClick={e => handleAcepptTicket(ticket.id)}
+                        >
+                            {i18n.t("messagesList.header.buttons.reopen")}
+                        </ButtonWithSpinner>
+                    )}
+                    {(ticket.status === "open" || ticket.status === "group") && (
                         <>
-                            {/* <IconButton
-                                className={classes.bottomButtonVisibilityIcon}
-                                onClick={handleEnableIntegration}
-                            >
-                                <Tooltip title={i18n.t("messagesList.header.buttons.enableIntegration")}>
-                                    {enableIntegration === true ? <DeviceHubOutlined style={{ color: "green" }} /> : <DeviceHubOutlined />}
-
-                                </Tooltip>
-                            </IconButton> */}
-
                             <IconButton className={classes.bottomButtonVisibilityIcon}>
                                 <Tooltip title={i18n.t("messagesList.header.buttons.resolve")}>
-                                    <HighlightOffIcon
-                                        // color="primary"
-                                        onClick={handleClickOpen}
-                                    />
+                                    <HighlightOffIcon onClick={handleClickOpen} />
                                 </Tooltip>
                             </IconButton>
-
                             <IconButton className={classes.bottomButtonVisibilityIcon}>
                                 <Tooltip title={i18n.t("tickets.buttons.returnQueue")}>
-                                    <UndoIcon
-                                        // color="primary"
-                                        onClick={(e) => handleUpdateTicketStatus(e, "pending", null)}
-                                    />
+                                    <UndoIcon onClick={(e) => handleUpdateTicketStatus(e, "pending", null)} />
                                 </Tooltip>
                             </IconButton>
-
                             <IconButton className={classes.bottomButtonVisibilityIcon}>
                                 <Tooltip title="Transferir Ticket">
-                                    <SwapHorizOutlined
-                                        // color="primary"
-                                        onClick={handleOpenTransferModal}
-                                    />
+                                    <SwapHorizOutlined onClick={handleOpenTransferModal} />
                                 </Tooltip>
                             </IconButton>
+                            <MenuItem className={classes.bottomButtonVisibilityIcon}>
+                                <Tooltip title={i18n.t("contactModal.form.chatBotContact")}>
+                                    <Switch size="small" checked={disableBot} onChange={() => handleContactToggleDisableBot()} />
+                                </Tooltip>
+                            </MenuItem>
                         </>
+                    )}
+                </Hidden>
 
-                        {/* {showSchedules && (
-                            <>
-                                <IconButton className={classes.bottomButtonVisibilityIcon}>
-                                    <Tooltip title={i18n.t("tickets.buttons.scredule")}>
-                                        <EventIcon
-                                            // color="primary"
-                                            onClick={handleOpenScheduleModal}
-                                        />
-                                    </Tooltip>
-                                </IconButton>
-                            </>
-                        )} */}
-
-                        <MenuItem className={classes.bottomButtonVisibilityIcon}>
-                            <Tooltip title={i18n.t("contactModal.form.chatBotContact")}>
-                                <Switch
-                                    size="small"
-                                    // color="primary"
-                                    checked={disableBot}
-                                    onChange={() => handleContactToggleDisableBot()}
-                                />
-                            </Tooltip>
-                        </MenuItem>
-
-
-
-                        {confirmationOpen && (
-                            <ConfirmationModal
-                                title={`${i18n.t("ticketOptionsMenu.confirmationModal.title")} #${ticket.id}?`}
-                                open={confirmationOpen}
-                                onClose={setConfirmationOpen}
-                                onConfirm={handleDeleteTicket}
-                            >
-                                {i18n.t("ticketOptionsMenu.confirmationModal.message")}
-                            </ConfirmationModal>
-                        )}
-                        {transferTicketModalOpen && (
-                            <TransferTicketModalCustom
-                                modalOpen={transferTicketModalOpen}
-                                onClose={handleCloseTransferTicketModal}
-                                ticketid={ticket.id}
-                                ticket={ticket}
-                            />
-                        )}
-                        {/* {scheduleModalOpen && (
-                            <ScheduleModal
-                                open={scheduleModalOpen}
-                                onClose={handleCloseScheduleModal}
-                                aria-labelledby="form-dialog-title"
-                                contactId={contactId}
-                            />
-                        )} */}
-
-                    </>
+                {confirmationOpen && (
+                    <ConfirmationModal
+                        title={`${i18n.t("ticketOptionsMenu.confirmationModal.title")} #${ticket.id}?`}
+                        open={confirmationOpen}
+                        onClose={setConfirmationOpen}
+                        onConfirm={handleDeleteTicket}
+                    >
+                        {i18n.t("ticketOptionsMenu.confirmationModal.message")}
+                    </ConfirmationModal>
+                )}
+                {transferTicketModalOpen && (
+                    <TransferTicketModalCustom
+                        modalOpen={transferTicketModalOpen}
+                        onClose={handleCloseTransferTicketModal}
+                        ticketid={ticket.id}
+                        ticket={ticket}
+                    />
                 )}
                 {ticket.status === "pending" && (ticket.queueId === null || ticket.queueId === undefined) && (
                     <ButtonWithSpinner
@@ -580,7 +527,28 @@ const TicketActionButtonsCustom = ({ ticket
                     open={menuOpen}
                     onClose={handleCloseMenu}
                 >
+                    {(ticket.status === "open" || ticket.status === "group") && (
+                        <>
+                            <MenuItem onClick={() => { handleCloseMenu(); handleClickOpen(); }}>
+                                <HighlightOffIcon style={{ color: '#e53935', marginRight: 10 }} />
+                                {i18n.t("messagesList.header.buttons.resolve")}
+                            </MenuItem>
+                            <MenuItem onClick={() => { handleCloseMenu(); handleUpdateTicketStatus(null, "pending", null); }}>
+                                <UndoIcon style={{ color: '#fb8c00', marginRight: 10 }} />
+                                {i18n.t("tickets.buttons.returnQueue")}
+                            </MenuItem>
+                            <MenuItem onClick={() => { handleCloseMenu(); handleOpenTransferModal(); }}>
+                                <SwapHorizOutlined style={{ color: '#1e88e5', marginRight: 10 }} />
+                                {i18n.t("ticketsList.buttons.transfer") || "Transferir ticket"}
+                            </MenuItem>
+                            <MenuItem onClick={() => { handleCloseMenu(); handleContactToggleDisableBot(); }}>
+                                <DeviceHubOutlined style={{ color: '#8e24aa', marginRight: 10 }} />
+                                {i18n.t("contactModal.form.chatBotContact")} {disableBot ? "(desligado)" : "(ligado)"}
+                            </MenuItem>
+                        </>
+                    )}
                     <MenuItem onClick={handleOpenConfirmationModal}>
+                        <DeleteForeverIcon style={{ color: '#d32f2f', marginRight: 10 }} />
                         <Can
                             role={user.profile}
                             perform="ticket-options:deleteTicket"
@@ -590,12 +558,15 @@ const TicketActionButtonsCustom = ({ ticket
                         />
                     </MenuItem>
                     <MenuItem onClick={handleEnableIntegration}>
+                        <DeviceHubOutlined style={{ color: enableIntegration ? '#ef5350' : '#00897b', marginRight: 10 }} />
                         {enableIntegration === true ? i18n.t("messagesList.header.buttons.disableIntegration") : i18n.t("messagesList.header.buttons.enableIntegration")}
                     </MenuItem>
                     <MenuItem onClick={handleShowLogTicket}>
+                        <History style={{ color: '#546e7a', marginRight: 10 }} />
                         {i18n.t("messagesList.header.buttons.logTicket")}
                     </MenuItem>
                     <MenuItem onClick={handleExportPDF}>
+                        <PictureAsPdf style={{ color: '#c62828', marginRight: 10 }} />
                         {i18n.t("ticketsList.buttons.exportAsPDF")}
                     </MenuItem>
                 </Menu>

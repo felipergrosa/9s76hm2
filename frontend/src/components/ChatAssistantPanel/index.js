@@ -11,6 +11,7 @@ import {
   makeStyles,
   useTheme,
   InputBase,
+  Popover,
 } from "@material-ui/core";
 import ContentCopyIcon from "@material-ui/icons/FileCopy";
 import AutorenewIcon from "@material-ui/icons/Autorenew";
@@ -20,6 +21,7 @@ import TranslateIcon from "@material-ui/icons/Translate";
 import SpellcheckIcon from "@material-ui/icons/Spellcheck";
 import TrendingUpIcon from "@material-ui/icons/TrendingUp";
 import PlayArrowIcon from "@material-ui/icons/PlayArrow";
+import { Bot as BotIcon } from "lucide-react";
 import api from "../../services/api";
 import { useHistory } from "react-router-dom";
 
@@ -135,6 +137,26 @@ const useStyles = makeStyles((theme) => ({
     width: '100%',
     marginTop: 6,
   },
+  providerMenu: {
+    padding: 8,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  providerChip: {
+    padding: '4px 8px',
+    borderRadius: 16,
+    cursor: 'pointer',
+    fontWeight: 700,
+    fontSize: 11,
+    userSelect: 'none',
+    color: theme.palette.text.secondary,
+    '&:hover': { backgroundColor: ((theme.palette.mode || theme.palette.type) === 'light') ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.12)' }
+  },
+  providerChipActive: {
+    backgroundColor: ((theme.palette.mode || theme.palette.type) === 'light') ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.20)',
+    color: theme.palette.primary.main,
+  },
   actionButtons: {
     display: 'flex',
     flexDirection: 'row',
@@ -199,11 +221,16 @@ const ChatAssistantPanel = ({
   const theme = useTheme();
   const [tab, setTab] = useState(1); // 0=Corretor 1=Aprimorar 2=Tradutor
   const [targetLang, setTargetLang] = useState("pt-BR");
+  const [provider, setProvider] = useState(() => {
+    try { return localStorage.getItem('ai_provider') || 'openai'; } catch { return 'openai'; }
+  }); // 'openai' | 'gemini'
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const history = useHistory();
   const [initializing, setInitializing] = useState(false);
+  const [providerAnchor, setProviderAnchor] = useState(null);
+  const providerLabel = provider === 'gemini' ? 'Gemini' : 'OpenAI';
 
   const mode = useMemo(() => (tab === 2 ? "translate" : tab === 0 ? "spellcheck" : "enhance"), [tab]);
 
@@ -218,7 +245,7 @@ const ChatAssistantPanel = ({
       setLoading(true);
       setError("");
       setResult("");
-      const payload = { mode, text: inputMessage };
+      const payload = { mode, text: inputMessage, integrationType: provider };
       if (mode === "translate") payload.targetLang = targetLang;
       const { data } = await api.post("/ai/transform", payload);
       setResult(data?.result || "");
@@ -242,7 +269,16 @@ const ChatAssistantPanel = ({
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputMessage, tab, targetLang, open]);
+  }, [inputMessage, tab, targetLang, provider, open]);
+
+  // Persistir provedor preferido
+  useEffect(() => {
+    try { localStorage.setItem('ai_provider', provider); } catch {}
+  }, [provider]);
+
+  const openProviderMenu = (e) => setProviderAnchor(e.currentTarget);
+  const closeProviderMenu = () => setProviderAnchor(null);
+  const handlePickProvider = (p) => { setProvider(p); closeProviderMenu(); };
 
   const handleCopy = async () => {
     if (!result) return;
@@ -307,10 +343,11 @@ const ChatAssistantPanel = ({
                 )}
               </div>
               <div className={classes.actionButtons}>
-                <Tooltip title="Copiar" placement="top">
+                {/* Abrir seletor de provedor */}
+                <Tooltip title={`Selecionar provedor de IA (atual: ${providerLabel})`} placement="top">
                   <span>
-                    <IconButton onClick={handleCopy} disabled={!result || loading} className={classes.smallIconButton} size="small">
-                      <ContentCopyIcon fontSize="small" />
+                    <IconButton onClick={openProviderMenu} className={classes.smallIconButton} size="small">
+                      <BotIcon size={16} />
                     </IconButton>
                   </span>
                 </Tooltip>
@@ -331,6 +368,30 @@ const ChatAssistantPanel = ({
               </div>
             </div>
           )}
+
+          {/* Popover de seleção de provedor */}
+          <Popover
+            open={Boolean(providerAnchor)}
+            anchorEl={providerAnchor}
+            onClose={closeProviderMenu}
+            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          >
+            <div className={classes.providerMenu}>
+              <div
+                onClick={() => handlePickProvider('openai')}
+                className={`${classes.providerChip} ${provider === 'openai' ? classes.providerChipActive : ''}`}
+              >
+                OA
+              </div>
+              <div
+                onClick={() => handlePickProvider('gemini')}
+                className={`${classes.providerChip} ${provider === 'gemini' ? classes.providerChipActive : ''}`}
+              >
+                GE
+              </div>
+            </div>
+          </Popover>
         </div>
       </Paper>
     </ClickAwayListener>

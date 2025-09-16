@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useContext, useCallback } from "react";
-import { parseISO, format, isSameDay } from "date-fns";
+import { parseISO, format, isSameDay, isYesterday } from "date-fns";
 import clsx from "clsx";
 import { useHistory, useParams } from "react-router-dom";
 
@@ -113,10 +113,19 @@ const useStyles = makeStyles((theme) => ({
 
     contactNameWrapper: {
         display: "flex",
-        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 6,
         marginLeft: "5px",
         fontWeight: "bold",
         color: theme.mode === 'light' ? "black" : "white",
+        minWidth: 0,
+    },
+    contactNameText: {
+        flex: 1,
+        minWidth: 0,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
     },
 
     lastMessageTime: {
@@ -126,6 +135,7 @@ const useStyles = makeStyles((theme) => ({
         top: -30,
         marginRight: "1px",
         color: theme.mode === 'light' ? "black" : grey[400],
+        fontSize: 11,
     },
 
     lastMessageTimeUnread: {
@@ -136,6 +146,7 @@ const useStyles = makeStyles((theme) => ({
         color: "green",
         fontWeight: "bold",
         marginRight: "1px",
+        fontSize: 11,
     },
 
     closedBadge: {
@@ -174,6 +185,29 @@ const useStyles = makeStyles((theme) => ({
         position: "absolute",
         top: "0%",
         left: "0%",
+    },
+
+    avatarContainer: {
+        position: 'relative',
+        width: 50,
+        height: 50,
+    },
+    channelBadge: {
+        position: 'absolute',
+        right: 0,
+        bottom: 0,
+        background: '#fff',
+        borderRadius: '50%',
+        width: 18,
+        height: 18,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: '1px solid rgba(0,0,0,0.15)'
+    },
+    channelIconAdjust: {
+        position: 'relative',
+        top: -3,
     },
 
     ticketInfo: {
@@ -656,43 +690,37 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     [classes.pendingTicket]: ticket.status === "pending",
                 })}
             >
-                <ListItemAvatar
-                    style={{ marginLeft: "-15px" }}
-                >
-                    <ContactAvatar
-                        contact={ticket?.contact}
-                        style={{
-                            width: "50px",
-                            height: "50px",
-                        }}
-                    />
+                <ListItemAvatar style={{ marginLeft: "-15px" }}>
+                    <div className={classes.avatarContainer}>
+                        <ContactAvatar
+                            contact={ticket?.contact}
+                            style={{ width: 50, height: 50 }}
+                        />
+                        {ticket.channel && (
+                            <div className={classes.channelBadge}>
+                                <div className={classes.channelIconAdjust}>
+                                    <ConnectionIcon width="14" height="14" connectionType={ticket.channel} />
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </ListItemAvatar>
                 <ListItemText
                     disableTypography
                     primary={
-                        <span className={classes.contactNameWrapper}>
+                        <div className={classes.contactNameWrapper}>
+                            {ticket.isGroup && ticket.channel === "whatsapp" && (
+                                <GroupIcon fontSize="small" style={{ color: grey[700], marginBottom: '-1px' }} />
+                            )}
                             <Typography
                                 noWrap
                                 component="span"
                                 variant="body2"
+                                className={classes.contactNameText}
                             >
-                                {ticket.isGroup && ticket.channel === "whatsapp" && <GroupIcon fontSize="small" style={{ color: grey[700], marginBottom: '-1px', marginLeft: '5px' }} />} &nbsp;
-                                {ticket.channel && <ConnectionIcon width="20" height="20" className={classes.connectionIcon} connectionType={ticket.channel} />} &nbsp;
-                                {truncate(ticket.contact?.name, 60)}
-                                <Tooltip title="Espiar Conversa">
-                                    <VisibilityIcon
-                                        onClick={handleOpenMessageDialog}
-                                        fontSize="small"
-                                        style={{
-                                            color: blue[700],
-                                            cursor: "pointer",
-                                            marginLeft: 10,
-                                            verticalAlign: "middle"
-                                        }}
-                                    />
-                                </Tooltip>
+                                {ticket.contact?.name}
                             </Typography>
-                        </span>
+                        </div>
                     }
                     secondary={
                         <span className={classes.contactNameWrapper}>
@@ -753,11 +781,12 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                                 variant="body2"
                             >
 
-                                {isSameDay(parseISO(ticket.updatedAt), new Date()) ? (
-                                    <>{format(parseISO(ticket.updatedAt), "HH:mm")}</>
-                                ) : (
-                                    <>{format(parseISO(ticket.updatedAt), "dd/MM/yyyy")}</>
-                                )}
+                                {(() => {
+                                    const d = parseISO(ticket.updatedAt);
+                                    if (isSameDay(d, new Date())) return format(d, "HH:mm");
+                                    if (isYesterday(d)) return "Ontem";
+                                    return format(d, "dd/MM/yy");
+                                })()}
                             </Typography>
 
                             <br />
@@ -767,6 +796,10 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
 
                 </ListItemSecondaryAction>
                 <ListItemSecondaryAction>
+                    {/* Ícones informativos e de espiar (canto inferior direito) */}
+                    <span className={classes.secondaryContentSecond}>
+                        {/* Ícone de Espiar ao lado do Fechar (será colocado após o botão de fechar) */}
+                    </span>
                     <span className={classes.secondaryContentSecond}>
                         {(ticket.status === "pending" && (ticket.queueId === null || ticket.queueId === undefined)) && (
                             <ButtonWithSpinner
@@ -778,7 +811,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                                 onClick={e => handleOpenAcceptTicketWithouSelectQueue()}
                             >
                                 <Tooltip title={`${i18n.t("ticketsList.buttons.accept")}`}>
-                                    <Done />
+                                    <Done fontSize="small" />
                                 </Tooltip>
                             </ButtonWithSpinner>
                         )}
@@ -794,7 +827,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                                 onClick={e => handleAcepptTicket(ticket.id)}
                             >
                                 <Tooltip title={`${i18n.t("ticketsList.buttons.accept")}`}>
-                                    <Done />
+                                    <Done fontSize="small" />
                                 </Tooltip>
                             </ButtonWithSpinner>
                         )}
@@ -802,7 +835,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     <span className={classes.secondaryContentSecond1} >
                         {(ticket.status === "pending" || ticket.status === "open" || ticket.status === "group") && (
                             <ButtonWithSpinner
-                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '26px', position: 'absolute', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
+                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '52px', position: 'absolute', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
                                 variant="contained"
                                 className={classes.acceptButton}
                                 size="small"
@@ -810,25 +843,42 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                                 onClick={handleOpenTransferModal}
                             >
                                 <Tooltip title={`${i18n.t("ticketsList.buttons.transfer")}`}>
-                                    <SwapHoriz />
+                                    <SwapHoriz fontSize="small" />
                                 </Tooltip>
                             </ButtonWithSpinner>
                         )}
                     </span>
                     <span className={classes.secondaryContentSecond} >
                         {(ticket.status === "open" || ticket.status === "group") && (
-                            <ButtonWithSpinner
-                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', bottom: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
-                                variant="contained"
-                                className={classes.acceptButton}
-                                size="small"
-                                loading={loading}
-                                onClick={e => handleCloseTicket(ticket.id)}
-                            >
-                                <Tooltip title={`${i18n.t("ticketsList.buttons.closed")}`}>
-                                    <HighlightOff />
+                            <>
+                                <ButtonWithSpinner
+                                    style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', bottom: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
+                                    variant="contained"
+                                    className={classes.acceptButton}
+                                    size="small"
+                                    loading={loading}
+                                    onClick={e => handleCloseTicket(ticket.id)}
+                                >
+                                    <Tooltip title={`${i18n.t("ticketsList.buttons.closed")}`}>
+                                        <HighlightOff fontSize="small" />
+                                    </Tooltip>
+                                </ButtonWithSpinner>
+                                {/* Ícone de espiar imediatamente ao lado do fechar */}
+                                <Tooltip title="Espiar Conversa">
+                                    <IconButton
+                                        size="small"
+                                        onClick={handleOpenMessageDialog}
+                                        style={{
+                                            position: 'absolute',
+                                            bottom: '-30px',
+                                            right: '26px',
+                                            padding: 0
+                                        }}
+                                    >
+                                        <VisibilityIcon fontSize="small" style={{ color: blue[700] }} />
+                                    </IconButton>
                                 </Tooltip>
-                            </ButtonWithSpinner>
+                            </>
                         )}
                     </span>
                     <span className={classes.secondaryContentSecond} >

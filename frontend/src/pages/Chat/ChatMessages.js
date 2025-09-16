@@ -38,14 +38,14 @@ const useStyles = makeStyles((theme) => ({
     height: "auto",
   },
   input: {
-    padding: "20px",
+    padding: "10px",
   },
   buttonSend: {
     margin: theme.spacing(1),
   },
   boxLeft: {
     padding: "10px 10px 5px",
-    margin: "10px",
+    margin: "5px",
     position: "relative",
     backgroundColor: "#ffffff",
     color: "#303030",
@@ -56,7 +56,7 @@ const useStyles = makeStyles((theme) => ({
   },
   boxRight: {
     padding: "10px 10px 5px",
-    margin: "10px 10px 10px auto",
+    margin: "5px 10px 10px auto",
     position: "relative",
     backgroundColor: "#dcf8c6",
     color: "#303030",
