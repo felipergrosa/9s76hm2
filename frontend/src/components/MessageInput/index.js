@@ -1337,6 +1337,8 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
               open={assistantOpen}
               inputMessage={inputMessage}
               setInputMessage={setInputMessage}
+              queueId={ticketData?.queue?.id || ticketData?.queueId || null}
+              whatsappId={ticketData?.whatsapp?.id || ticketData?.whatsappId || null}
               onClose={() => setAssistantOpen(false)}
             />
           </div>

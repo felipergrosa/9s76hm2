@@ -8,11 +8,9 @@ import {
 	ListItemText,
 	ListItemAvatar,
 	Typography,
-	Avatar,
 	Divider,
 	Badge,
 	ListItemSecondaryAction,
-	Box,
 	Dialog,
 	DialogTitle,
 	DialogContent,
@@ -23,16 +21,12 @@ import {
 import { makeStyles, useTheme } from "@material-ui/core/styles";
 import { green, grey } from "@material-ui/core/colors";
 
-import MarkChatReadIcon from "@material-ui/icons/DraftsOutlined";
-import MarkChatUnreadIcon from "@material-ui/icons/MarkunreadOutlined";
-
 import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
 import ButtonWithSpinner from "../ButtonWithSpinner";
 import MarkdownWrapper from "../MarkdownWrapper";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import toastError from "../../errors/toastError";
-import { SocketContext } from "../../context/Socket/SocketContext";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 
 import ContactTag from "../ContactTag";
@@ -803,7 +797,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     <span className={classes.secondaryContentSecond}>
                         {(ticket.status === "pending" && (ticket.queueId === null || ticket.queueId === undefined)) && (
                             <ButtonWithSpinner
-                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '51px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
+                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '80px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto', position: 'absolute' }}
                                 variant="contained"
                                 className={classes.acceptButton}
                                 size="small"
@@ -819,7 +813,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     <span className={classes.secondaryContentSecond} >
                         {(ticket.status === "pending" && ticket.queueId !== null) && (
                             <ButtonWithSpinner
-                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '51px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
+                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '80px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto', position: 'absolute' }}
                                 variant="contained"
                                 className={classes.acceptButton}
                                 size="small"
@@ -835,7 +829,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     <span className={classes.secondaryContentSecond1} >
                         {(ticket.status === "pending" || ticket.status === "open" || ticket.status === "group") && (
                             <ButtonWithSpinner
-                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '52px', position: 'absolute', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
+                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '50px', position: 'absolute', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
                                 variant="contained"
                                 className={classes.acceptButton}
                                 size="small"
@@ -852,7 +846,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                         {(ticket.status === "open" || ticket.status === "group") && (
                             <>
                                 <ButtonWithSpinner
-                                    style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', bottom: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
+                                    style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
                                     variant="contained"
                                     className={classes.acceptButton}
                                     size="small"
@@ -884,7 +878,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     <span className={classes.secondaryContentSecond} >
                         {((ticket.status === "pending" || ticket.status === "lgpd") && (user.userClosePendingTicket === "enabled" || user.profile === "admin")) && (
                             <ButtonWithSpinner
-                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', bottom: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
+                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
                                 variant="contained"
                                 className={classes.acceptButton}
                                 size="small"
@@ -901,7 +895,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     {(ticket.status === "closed" && (ticket.queueId === null || ticket.queueId === undefined)) && (
                             <ButtonWithSpinner
                                 //color="primary"
-                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', bottom: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
+                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
                                 variant="contained"
                                 className={classes.acceptButton}
                                 size="small"
@@ -919,7 +913,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                         {(ticket.status === "closed" && ticket.queueId !== null) && (
                             <ButtonWithSpinner
                                 //color="primary"
-                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', bottom: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
+                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
                                 variant="contained"
                                 className={classes.acceptButton}
                                 size="small"

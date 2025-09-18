@@ -47,6 +47,8 @@ import flowBuilder from "./flowBuilderRoutes";
 import flowCampaignRoutes from "./flowCampaignRoutes";
 import aiRoutes from "./aiRoutes";
 import maintenanceRoutes from "./maintenanceRoutes";
+import ragRoutes from "./ragRoutes";
+import labelsRoutes from "./labelsRoutes";
 
 
 const routes = Router();
@@ -101,5 +103,7 @@ routes.use(companySettingsRoutes);
 routes.use(scheduleMessageRoutes);
 routes.use(aiRoutes);
 routes.use(maintenanceRoutes);
+routes.use(ragRoutes);
+routes.use("/labels", labelsRoutes);
 
 export default routes;

@@ -53,6 +53,15 @@ import ContactTag from "../models/ContactTag";
 import logger from "../utils/logger";
 import ValidateContactService from "../services/ContactServices/ValidateContactService";
 import { isValidCPF, isValidCNPJ } from "../utils/validators";
+import GetDeviceTagsService from "../services/WbotServices/GetDeviceTagsService";
+import GetDeviceLabelsService from "../services/WbotServices/GetDeviceLabelsService";
+import ShowBaileysService from "../services/BaileysServices/ShowBaileysService";
+import { getLabels, getAllChatLabels } from "../libs/labelCache";
+import ForceAppStateSyncService from "../services/WbotServices/ForceAppStateSyncService";
+import { getWbot } from "../libs/wbot";
+import GetDeviceContactsService from "../services/WbotServices/GetDeviceContactsService";
+import ImportDeviceContactsAutoService from "../services/ContactServices/ImportDeviceContactsAutoService";
+import RebuildDeviceTagsService from "../services/WbotServices/RebuildDeviceTagsService";
 
 type IndexQuery = {
   searchParam: string;
@@ -987,5 +996,197 @@ export const getContactProfileURL = async (req: Request, res: Response) => {
       return res.status(200).json({ message: "Avatares atualizados com sucesso" });
     } catch (error) {
       return res.status(500).json({ error: "Erro ao atualizar avatares" });
+    }
+  };
+
+  export const getDeviceTags = async (req: Request, res: Response): Promise<Response> => {
+    const { companyId } = req.user;
+    const { whatsappId } = req.query as any;
+
+    try {
+      // Prioridade 1: cache (App State / BinaryInfo via eventos labels.*)
+      let deviceTags = await GetDeviceLabelsService(companyId, whatsappId ? Number(whatsappId) : undefined);
+
+      // Fallback: dados persistidos do Baileys (pode estar desatualizado)
+      if (deviceTags.length === 0) {
+        logger.info("Nenhuma tag encontrada no cache, tentando dados persistidos do Baileys...");
+        // Antes de cair para Baileys, força resync e aguarda labels chegarem
+        try {
+          const sync = await ForceAppStateSyncService(companyId, whatsappId ? Number(whatsappId) : undefined);
+          logger.info(`[getDeviceTags] ForceAppStateSyncService -> labelsCount=${(sync as any)?.labelsCount}`);
+          const refetched = await GetDeviceLabelsService(companyId, whatsappId ? Number(whatsappId) : undefined);
+          if (refetched.length > 0) {
+            deviceTags = refetched;
+          } else {
+            deviceTags = await GetDeviceTagsService(companyId, whatsappId ? Number(whatsappId) : undefined);
+          }
+        } catch (e: any) {
+          logger.warn(`[getDeviceTags] falha no resync antes do fallback: ${e?.message}`);
+          deviceTags = await GetDeviceTagsService(companyId, whatsappId ? Number(whatsappId) : undefined);
+        }
+      }
+      
+      return res.status(200).json({ tags: deviceTags });
+    } catch (error) {
+      logger.error("Erro ao obter tags do dispositivo:", error);
+      return res.status(500).json({ error: "Erro ao obter tags do dispositivo" });
+    }
+  };
+
+  // Lista contatos do dispositivo (via store/baileys) já com as tags associadas
+  export const getDeviceContacts = async (req: Request, res: Response): Promise<Response> => {
+    const { companyId } = req.user;
+    const { whatsappId, page = '1', pageSize = '50' } = req.query as any;
+    try {
+      const contacts = await GetDeviceContactsService(companyId, whatsappId ? Number(whatsappId) : undefined);
+
+      const p = Math.max(1, parseInt(String(page)) || 1);
+      const ps = Math.min(500, Math.max(1, parseInt(String(pageSize)) || 50));
+      const start = (p - 1) * ps;
+      const end = start + ps;
+      const slice = contacts.slice(start, end);
+      const total = contacts.length;
+      const hasMore = end < total;
+
+      return res.status(200).json({ contacts: slice, total, page: p, pageSize: ps, hasMore });
+    } catch (error: any) {
+      logger.error("Erro ao obter contatos do dispositivo:", error);
+      return res.status(500).json({ error: error?.message || "Erro ao obter contatos do dispositivo" });
+    }
+  };
+
+  // Reconstrói tags a partir dos chats persistidos (Baileys) — útil quando os patches de labels não chegaram
+  export const rebuildDeviceTags = async (req: Request, res: Response): Promise<Response> => {
+    const { companyId } = req.user;
+    const { whatsappId } = req.query as any;
+    try {
+      const result = await RebuildDeviceTagsService(companyId, whatsappId ? Number(whatsappId) : undefined);
+      return res.status(200).json(result);
+    } catch (error: any) {
+      logger.error("Erro ao reconstruir tags do dispositivo:", error);
+      return res.status(500).json({ error: error?.message || "Erro ao reconstruir tags do dispositivo" });
+    }
+  };
+
+  // Importa contatos do dispositivo e associa tags por nome (cria tags se necessário)
+  export const importDeviceContactsAuto = async (req: Request, res: Response): Promise<Response> => {
+    const { companyId } = req.user;
+    const { whatsappId, selectedJids, autoCreateTags } = req.body as any;
+    try {
+      const result = await ImportDeviceContactsAutoService({
+        companyId,
+        whatsappId: whatsappId ? Number(whatsappId) : undefined,
+        selectedJids: Array.isArray(selectedJids) ? selectedJids : undefined,
+        autoCreateTags: typeof autoCreateTags === 'boolean' ? autoCreateTags : true
+      });
+      return res.status(200).json(result);
+    } catch (error: any) {
+      logger.error("Erro ao importar contatos do dispositivo:", error);
+      return res.status(500).json({ error: error?.message || "Erro ao importar contatos do dispositivo" });
+    }
+  };
+
+  export const importWithTags = async (req: Request, res: Response): Promise<Response> => {
+    const { companyId } = req.user;
+    const { tagMapping, whatsappId } = req.body;
+
+    try {
+      // Importar contatos com mapeamento de tags
+      const result = await ImportContactsService(companyId, undefined, tagMapping, whatsappId);
+      return res.status(200).json(result);
+    } catch (error) {
+      logger.error("Erro ao importar contatos com tags:", error);
+      return res.status(500).json({ error: "Erro ao importar contatos com tags" });
+    }
+  };
+
+  export const debugDeviceData = async (req: Request, res: Response): Promise<Response> => {
+    const { companyId } = req.user;
+    const { whatsappId } = req.query as any;
+
+    try {
+      const defaultWhatsapp = await GetDefaultWhatsApp(whatsappId ? Number(whatsappId) : undefined, companyId);
+      const baileysData = await ShowBaileysService(defaultWhatsapp.id);
+      
+      const parseMaybeJSON = (val: any) => {
+        try {
+          if (!val) return null;
+          if (typeof val === 'string') return JSON.parse(val);
+          return val;
+        } catch {
+          return null;
+        }
+      };
+
+      const contacts = parseMaybeJSON((baileysData as any).contacts);
+      const chats = parseMaybeJSON((baileysData as any).chats);
+      const labelsCache = getLabels(defaultWhatsapp.id);
+      const chatLabelsMap = getAllChatLabels(defaultWhatsapp.id);
+      const chatLabelsArray = Array.from(chatLabelsMap.entries()).map(([chatId, set]) => ({ chatId, labels: Array.from(set) }));
+      
+      // Analisar estrutura dos dados
+      const debugInfo = {
+        whatsappId: defaultWhatsapp.id,
+        hasContacts: !!contacts,
+        contactsCount: contacts ? (Array.isArray(contacts) ? contacts.length : 'não é array') : 0,
+        hasChats: !!chats,
+        chatsCount: chats ? (Array.isArray(chats) ? chats.length : 'não é array') : 0,
+        sampleChat: chats && Array.isArray(chats) && chats.length > 0 ? chats[0] : null,
+        sampleContact: contacts && Array.isArray(contacts) && contacts.length > 0 ? contacts[0] : null,
+        labelsFromCache: labelsCache,
+        chatLabelsFromCache: chatLabelsArray
+      };
+      
+      return res.status(200).json(debugInfo);
+    } catch (error) {
+      logger.error("Erro ao obter dados de debug:", error);
+      return res.status(500).json({ error: "Erro ao obter dados de debug" });
+    }
+  };
+
+  export const forceAppStateSync = async (req: Request, res: Response): Promise<Response> => {
+    const { companyId } = req.user;
+    const { whatsappId } = req.query as any;
+    try {
+      const result = await ForceAppStateSyncService(companyId, whatsappId ? Number(whatsappId) : undefined);
+      return res.status(200).json(result);
+    } catch (error: any) {
+      logger.error("Erro ao forçar resync do App State:", error);
+      return res.status(500).json({ error: error?.message || "Erro ao forçar resync do App State" });
+    }
+  };
+
+  export const testCreateLabel = async (req: Request, res: Response): Promise<Response> => {
+    const { companyId } = req.user;
+    const { whatsappId } = req.query as any;
+    const { name = "Teste Label", color = 1 } = req.body;
+
+    try {
+      const defaultWhatsapp = await GetDefaultWhatsApp(whatsappId ? Number(whatsappId) : undefined, companyId);
+      const wbot = getWbot(defaultWhatsapp.id) as any;
+      
+      if (!wbot) {
+        throw new Error("Socket WhatsApp não encontrado");
+      }
+
+      logger.info(`[testCreateLabel] Tentando criar label: ${name} com cor ${color}`);
+      
+      // Tentar usar a API do Baileys para criar label
+      if (typeof wbot.addLabel === 'function') {
+        const labelId = `test_${Date.now()}`;
+        await wbot.addLabel('', {
+          id: labelId,
+          name,
+          color
+        });
+        logger.info(`[testCreateLabel] Label criada via addLabel: ${labelId}`);
+        return res.status(200).json({ success: true, labelId, method: 'addLabel' });
+      } else {
+        logger.warn(`[testCreateLabel] Função addLabel não disponível no socket`);
+        return res.status(400).json({ error: "Função addLabel não disponível no socket atual" });
+      }
+    } catch (error: any) {
+      logger.error("Erro ao criar label de teste:", error);
+      return res.status(500).json({ error: error?.message || "Erro ao criar label de teste" });
     }
   };

@@ -307,6 +307,11 @@ const QueueIntegration = () => {
                           src={openai} className={classes.avatar} />)}
                         {integration.type === "gemini" && (<Avatar
                           src={openai} className={classes.avatar} />)}
+                        {integration.type === "knowledge" && (
+                          <Avatar className={classes.avatar}>
+                            KB
+                          </Avatar>
+                        )}
                       </TableCell>
 
                       <TableCell align="center">{integration.id}</TableCell>

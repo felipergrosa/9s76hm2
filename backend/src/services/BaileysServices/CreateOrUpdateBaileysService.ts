@@ -1,5 +1,6 @@
 import { Chat, Contact } from "@whiskeysockets/baileys";
 import Baileys from "../../models/Baileys";
+import { isString } from "lodash";
 
 interface Request {
   whatsappId: number;
@@ -21,51 +22,96 @@ const createOrUpdateBaileysService = async ({
     if (baileysExists) {
       let getChats: Chat[] = [];
       let getContacts: Contact[] = [];
-    
-      // Converte os chats existentes se a string estiver OK
+
+      // Converte/normaliza CHATS existentes (aceita string JSON ou objeto)
       if (baileysExists.chats) {
         try {
-          getChats = JSON.parse(baileysExists.chats);
+          if (isString(baileysExists.chats)) {
+            getChats = JSON.parse(baileysExists.chats as any);
+          } else {
+            // Já veio como objeto/array do DB (JSON/JSONB)
+            getChats = (baileysExists.chats as unknown) as Chat[];
+          }
         } catch (err) {
-          console.warn(`Chats JSON inválido: ${baileysExists.chats}, substituindo por []`);
+          console.warn(`Chats JSON inválido, substituindo por []`);
           getChats = [];
         }
       }
-    
-      // Converte os contatos existentes se a string estiver OK
+
+      // Converte/normaliza CONTATOS existentes (aceita string JSON ou objeto)
       if (baileysExists.contacts) {
         try {
-          getContacts = JSON.parse(baileysExists.contacts);
+          if (isString(baileysExists.contacts)) {
+            getContacts = JSON.parse(baileysExists.contacts as any);
+          } else {
+            getContacts = (baileysExists.contacts as unknown) as Contact[];
+          }
         } catch (err) {
-          console.warn(`Contacts JSON inválido: ${baileysExists.contacts}, substituindo por []`);
+          console.warn(`Contacts JSON inválido, substituindo por []`);
           getContacts = [];
         }
       }
-    
-      // A partir daqui o fluxo continua como antes
+
+      // Função de merge: última atualização prevalece; labels = união
+      const mergeChats = (base: any[], updates: any[]): any[] => {
+        const byId = new Map<string, any>();
+        for (const c of base || []) {
+          if (c && c.id) byId.set(String(c.id), c);
+        }
+        for (const u of updates || []) {
+          if (!u || !u.id) continue;
+          const id = String(u.id);
+          const prev = byId.get(id) || {};
+          let merged: any = { ...prev, ...u };
+          const prevLabels = Array.isArray(prev.labels) ? prev.labels : [];
+          const newLabels = Array.isArray(u.labels) ? u.labels : [];
+          if (prevLabels.length || newLabels.length) {
+            // Se updates marcar 'labelsAbsolute', substitui; senão, faz união
+            const source = (u as any).labelsAbsolute ? newLabels : [...prevLabels, ...newLabels];
+            const flat = source.map((x: any) => {
+              if (x && typeof x === 'object') return String(x.id ?? x.value ?? x);
+              return String(x);
+            });
+            const uniq = Array.from(new Set(flat));
+            merged.labels = uniq;
+          }
+          byId.set(id, merged);
+        }
+        return Array.from(byId.values());
+      };
+
+      const mergeContactsArr = (base: any[], updates: any[]): any[] => {
+        const byId = new Map<string, any>();
+        for (const c of base || []) {
+          if (c && c.id) byId.set(String(c.id), c);
+        }
+        for (const u of updates || []) {
+          if (!u || !u.id) continue;
+          const id = String(u.id);
+          const prev = byId.get(id) || {};
+          const merged = { ...prev, ...u };
+          byId.set(id, merged);
+        }
+        return Array.from(byId.values());
+      };
+
+      // A partir daqui o fluxo continua com merge robusto
       if (chats) {
-        getChats.push(...chats);
-        getChats.sort();
-        const newChats = getChats.filter(
-          (v: Chat, i: number, a: Chat[]) => a.findIndex(v2 => v2.id === v.id) === i
-        );
+        const incoming = Array.isArray(chats) ? chats : [chats as any];
+        const newChats = mergeChats(getChats, incoming);
         return await baileysExists.update({
           chats: JSON.stringify(newChats),
         });
       }
-    
+
       if (contacts) {
-        getContacts.push(...contacts);
-        getContacts.sort();
-        const newContacts = getContacts.filter(
-          (v: Contact, i: number, a: Contact[]) => a.findIndex(v2 => v2.id === v.id) === i
-        );
+        const incoming = Array.isArray(contacts) ? contacts : [contacts as any];
+        const newContacts = mergeContactsArr(getContacts, incoming);
         return await baileysExists.update({
           contacts: JSON.stringify(newContacts),
         });
       }
     }
-    
 
     const baileys = await Baileys.create({
       whatsappId,

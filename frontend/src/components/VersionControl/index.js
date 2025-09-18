@@ -1,35 +1,65 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { Chip, Tooltip } from "@material-ui/core";
 import api from "../../services/api";
-import Button from "@material-ui/core/Button";
 
-const packageVersion = require("../../../package.json").version;
-
+// Componente responsável por exibir informações de versão do backend:
+// - Commit atual
+// - Data/Hora do build
+// - Versão de backend (db/env)
+// Também mostra a versão do frontend no tooltip.
 const VersionControl = () => {
-  const [storedVersion] = useState(window.localStorage.getItem("version") || "0.0.0");
+  const [info, setInfo] = useState(null);
 
-  const handleUpdateVersion = async () => {
-    window.localStorage.setItem("version", packageVersion);
+  useEffect(() => {
+    let isMounted = true;
 
-    // Mantive apenas para salvar no banco a versao atual
-    const { data } = await api.post("/version", {
-      version: packageVersion,
-    });
+    const fetch = async () => {
+      try {
+        const { data } = await api.get("/version");
+        if (!isMounted) return;
 
-    // Limpar o cache do navegador
-    caches.keys().then(function (names) {
-      for (let name of names) caches.delete(name);
-    });
+        const backendVersion = data?.backend?.version || "N/A";
+        const commit = data?.backend?.commit || "N/A";
+        const buildDateRaw = data?.backend?.buildDate || "N/A";
+        const frontendVersion = data?.version || "N/A";
 
-    // Atraso para garantir que o cache foi limpo
-    setTimeout(() => {
-      window.location.reload(true); // Recarregar a página
-    }, 1000);
-  };
+        // Formata a data localmente, quando possível
+        let buildDateLabel = buildDateRaw;
+        try {
+          const d = new Date(buildDateRaw);
+          if (!isNaN(d.getTime())) {
+            buildDateLabel = d.toLocaleString();
+          }
+        } catch {
+          // mantém string original
+        }
+
+        setInfo({
+          backendVersion,
+          commit,
+          buildDate: buildDateLabel,
+          frontendVersion
+        });
+      } catch (e) {
+        // Em caso de erro, não trava a UI; exibe nada
+        setInfo(null);
+      }
+    };
+
+    fetch();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (!info) return null;
+
+  const label = `BACKEND BUILD: ${info.buildDate} | Commit: ${info.commit} | Version: ${info.backendVersion}`;
 
   return (
-    <div>
-      
-    </div>
+    <Tooltip title={`Frontend: ${info.frontendVersion}`}>
+      <Chip size="small" label={label} />
+    </Tooltip>
   );
 };
 

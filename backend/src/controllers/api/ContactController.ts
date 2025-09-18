@@ -154,9 +154,20 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
 
       for (const tagName of tagList) {
         try {
-          let [tag, created] = await Tag.findOrCreate({
-            where: { name: tagName, companyId, color: "#A4CCCC", kanban: 0 }
+          // Primeiro tenta encontrar tag existente apenas por nome e companyId
+          let tag = await Tag.findOne({
+            where: { name: tagName, companyId }
           });
+
+          // Se não encontrou, cria nova tag com valores padrão
+          if (!tag) {
+            tag = await Tag.create({
+              name: tagName,
+              companyId,
+              color: "#A4CCCC",
+              kanban: 0
+            });
+          }
 
           await ContactTag.findOrCreate({
             where: {
@@ -165,7 +176,7 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
             }
           });
         } catch (error) {
-          logger.info("Erro ao criar Tags", error)
+          logger.info("Erro ao processar Tags", error)
         }
       }
     }

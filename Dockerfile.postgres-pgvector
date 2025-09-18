@@ -1,0 +1,22 @@
+# Dockerfile para PostgreSQL com pgvector pré-instalado
+FROM postgres:15
+
+# Instalar pgvector
+RUN apt-get update \
+    && apt-get install -y \
+        postgresql-15-pgvector \
+        wget \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar script de inicialização
+COPY init-pgvector.sh /docker-entrypoint-initdb.d/
+
+# Garantir permissões
+RUN chmod +x /docker-entrypoint-initdb.d/init-pgvector.sh
+
+# Expor porta padrão do PostgreSQL
+EXPOSE 5432
+
+# Comando padrão
+CMD ["postgres"]

@@ -34,6 +34,16 @@ RUN set -eux; \
 
 # Copia o restante do código
 COPY . .
+# Build info (gera arquivos .git-commit e .build-date no estágio de build)
+ARG GIT_COMMIT
+ARG BUILD_DATE
+RUN set -eux; \
+  COMMIT="${GIT_COMMIT:-}"; \
+  if [ -z "$COMMIT" ] && [ -d .git ]; then COMMIT="$(git rev-parse --short HEAD)"; fi; \
+  DATE="${BUILD_DATE:-}"; \
+  if [ -z "$DATE" ]; then DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"; fi; \
+  printf "%s" "$COMMIT" > .git-commit; \
+  printf "%s" "$DATE" > .build-date
 # Garante diretório público mesmo que não exista no repo (evita falha no COPY do runtime)
 RUN mkdir -p public
 
@@ -59,8 +69,10 @@ RUN apt-get update \
 # Build info injection
 ARG BUILD_DATE
 ARG GIT_COMMIT
+ARG BACKEND_VERSION
 ENV BUILD_DATE=$BUILD_DATE
 ENV GIT_COMMIT=$GIT_COMMIT
+ENV BACKEND_VERSION=$BACKEND_VERSION
 
 # Copia manifestos, dependências já instaladas e artefatos compilados
 COPY --from=build /app/package*.json ./
@@ -68,6 +80,9 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/public ./public
 COPY --from=build /app/certs ./certs
+# Build info files (presentes em runtime para fallback)
+COPY --from=build /app/.git-commit ./.git-commit
+COPY --from=build /app/.build-date ./.build-date
 COPY --from=build /app/scripts ./scripts
 COPY --from=build /app/.sequelizerc ./.sequelizerc
 RUN mkdir -p ./private

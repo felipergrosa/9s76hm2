@@ -3,6 +3,7 @@ import * as Yup from "yup";
 import { Formik, Form, Field } from "formik";
 import { toast } from "react-toastify";
 import OpenAIService from "../../services/openaiService";
+import api from "../../services/api";
 import { makeStyles } from "@material-ui/core/styles";
 import { green } from "@material-ui/core/colors";
 import Button from "@material-ui/core/Button";
@@ -148,6 +149,11 @@ const OpenAIModal = ({
     apiKey: "",
     queueId: null,
     maxMessages: 10,
+    // RAG
+    ragEnabled: false,
+    ragTopK: 4,
+    ragEmbeddingModel: "text-embedding-3-small",
+    ragEmbeddingDims: 1536,
     ...initialData
   };
 
@@ -159,6 +165,17 @@ const OpenAIModal = ({
   const [fileLists, setFileLists] = useState([]);
   const [expandedFileIds, setExpandedFileIds] = useState({});
   const [selectedOptions, setSelectedOptions] = useState([]);
+  // RAG: seleção de arquivo para indexação
+  const [ragFiles, setRagFiles] = useState([]);
+  const [ragFilesLoading, setRagFilesLoading] = useState(false);
+  const [selectedFileId, setSelectedFileId] = useState("");
+  const [fileOptions, setFileOptions] = useState([]);
+  const [selectedOptionId, setSelectedOptionId] = useState("");
+  const [ragIndexTitle, setRagIndexTitle] = useState("");
+  const [ragIndexTags, setRagIndexTags] = useState("");
+  const [ragChunkSize, setRagChunkSize] = useState(1200);
+  const [ragOverlap, setRagOverlap] = useState(200);
+  const [ragIndexMsg, setRagIndexMsg] = useState("");
   const [voiceTipsAnchorEl, setVoiceTipsAnchorEl] = useState(null);
 
   const openVoiceTips = Boolean(voiceTipsAnchorEl);
@@ -247,6 +264,60 @@ const OpenAIModal = ({
     loadData();
   }, [open, integrationId, initialData]);
 
+  // RAG: carregar lista de arquivos ao abrir
+  useEffect(() => {
+    (async () => {
+      if (!open) return;
+      try {
+        setRagFilesLoading(true);
+        const { data } = await api.get('/files/list', { params: { searchParam: '' } });
+        setRagFiles(Array.isArray(data) ? data : []);
+      } catch (_) {
+        setRagFiles([]);
+      } finally {
+        setRagFilesLoading(false);
+      }
+    })();
+  }, [open]);
+
+  const handleSelectFile = async (id) => {
+    try {
+      setSelectedFileId(id);
+      setFileOptions([]);
+      setSelectedOptionId("");
+      if (!id) return;
+      const { data } = await api.get(`/files/${id}`);
+      setFileOptions(Array.isArray(data?.options) ? data.options : []);
+      if (data?.name && !ragIndexTitle) setRagIndexTitle(data.name);
+    } catch (_) {
+      setFileOptions([]);
+    }
+  };
+
+  const handleIndexSelectedFile = async () => {
+    try {
+      if (!selectedOptionId) {
+        setRagIndexMsg('Selecione um arquivo e uma opção.');
+        setTimeout(() => setRagIndexMsg(''), 3000);
+        return;
+      }
+      const tags = (ragIndexTags || '').split(',').map(t => t.trim()).filter(Boolean);
+      await api.post('/helps/rag/index-file', {
+        fileOptionId: Number(selectedOptionId),
+        title: ragIndexTitle,
+        tags,
+        chunkSize: Number(ragChunkSize || 1200),
+        overlap: Number(ragOverlap || 200),
+      });
+      toast.success('Arquivo indexado com sucesso na base RAG.');
+      setRagIndexMsg('');
+    } catch (err) {
+      toast.error('Falha ao indexar arquivo.');
+      setRagIndexMsg('Falha ao indexar arquivo.');
+      setTimeout(() => setRagIndexMsg(''), 3000);
+    }
+  };
+
   const handleClose = () => {
     setIntegration(initialState);
     onClose();
@@ -258,6 +329,11 @@ const OpenAIModal = ({
         ...values,
         voice: values.model === "gpt-3.5-turbo-1106" ? values.voice : "texto",
         type: "openai", // Identificador do tipo de integração
+        // RAG
+        ragEnabled: !!values.ragEnabled,
+        ragTopK: Number(values.ragTopK || 4),
+        ragEmbeddingModel: values.ragEmbeddingModel || "text-embedding-3-small",
+        ragEmbeddingDims: Number(values.ragEmbeddingDims || 1536),
       };
 
       await onSave(integrationData);
@@ -306,6 +382,82 @@ const OpenAIModal = ({
                     margin="dense"
                     fullWidth
                   />
+                </div>
+
+                {/* RAG - Base de Conhecimento */}
+                <div style={{ marginTop: 12 }}>
+                  <Typography variant="h6">Base de Conhecimento (RAG)</Typography>
+                  <div className={classes.multFieldLine}>
+                    <FormControlLabel
+                      control={<Field as={Checkbox} color="primary" name="ragEnabled" checked={!!values.ragEnabled} />}
+                      label="Ativar RAG nas respostas"
+                    />
+                    <Field
+                      as={TextField}
+                      label="Top K"
+                      name="ragTopK"
+                      type="number"
+                      variant="outlined"
+                      margin="dense"
+                      style={{ width: 120 }}
+                    />
+                    <FormControl variant="outlined" margin="dense" style={{ minWidth: 260 }}>
+                      <InputLabel>Modelo de Embedding</InputLabel>
+                      <Field as={Select} label="Modelo de Embedding" name="ragEmbeddingModel"
+                        onChange={(e) => {
+                          setFieldValue('ragEmbeddingModel', e.target.value);
+                          if (String(e.target.value).includes('small')) setFieldValue('ragEmbeddingDims', 1536);
+                        }}
+                      >
+                        <MenuItem value="text-embedding-3-small">text-embedding-3-small (1536)</MenuItem>
+                      </Field>
+                    </FormControl>
+                    <Field
+                      as={TextField}
+                      label="Dimensões"
+                      name="ragEmbeddingDims"
+                      type="number"
+                      variant="outlined"
+                      margin="dense"
+                      style={{ width: 160 }}
+                      disabled
+                    />
+                  </div>
+                  <Typography variant="caption" color="textSecondary">
+                    Observação: atualmente otimizamos para 1536 dimensões. Outros modelos podem requerer migração da base.
+                  </Typography>
+                  {/* Seleção e Indexação de Arquivos */}
+                  <div style={{ marginTop: 12 }}>
+                    <Typography variant="subtitle1">Indexar Arquivo do Gerenciador</Typography>
+                    <div className={classes.multFieldLine}>
+                      <FormControl variant="outlined" margin="dense" style={{ minWidth: 240 }}>
+                        <InputLabel>Arquivo</InputLabel>
+                        <Select label="Arquivo" value={selectedFileId} onChange={(e) => handleSelectFile(e.target.value)} disabled={ragFilesLoading}>
+                          <MenuItem value=""><em>Selecione...</em></MenuItem>
+                          {(ragFiles || []).map(f => (
+                            <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <FormControl variant="outlined" margin="dense" style={{ minWidth: 240 }}>
+                        <InputLabel>Opção</InputLabel>
+                        <Select label="Opção" value={selectedOptionId} onChange={(e) => setSelectedOptionId(e.target.value)} disabled={!selectedFileId}>
+                          <MenuItem value=""><em>Selecione...</em></MenuItem>
+                          {(fileOptions || []).map(opt => (
+                            <MenuItem key={opt.id} value={opt.id}>{opt.name}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <TextField label="Título" value={ragIndexTitle} onChange={(e) => setRagIndexTitle(e.target.value)} variant="outlined" margin="dense" />
+                    </div>
+                    <div className={classes.multFieldLine}>
+                      <TextField label="Tags (separe por vírgula)" value={ragIndexTags} onChange={(e) => setRagIndexTags(e.target.value)} variant="outlined" margin="dense" style={{ flex: 1 }} />
+                      <TextField type="number" label="Chunk Size" value={ragChunkSize} onChange={(e) => setRagChunkSize(Number(e.target.value))} variant="outlined" margin="dense" style={{ width: 160 }} />
+                      <TextField type="number" label="Overlap" value={ragOverlap} onChange={(e) => setRagOverlap(Number(e.target.value))} variant="outlined" margin="dense" style={{ width: 160 }} />
+                      <Button variant="outlined" color="primary" onClick={handleIndexSelectedFile} disabled={!selectedOptionId} style={{ marginLeft: 8 }}>Indexar Arquivo</Button>
+                    </div>
+                    {ragIndexMsg ? <Typography variant="caption" color="textSecondary">{ragIndexMsg}</Typography> : null}
+                  </div>
                 </div>
 
                 <div className={classes.multFieldLine}>

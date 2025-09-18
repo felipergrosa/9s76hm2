@@ -1,7 +1,12 @@
 version: "3.8"
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        BUILD_DATE: ${BUILD_DATE}
+        GIT_COMMIT: ${GIT_COMMIT}
+        BACKEND_VERSION: ${BACKEND_VERSION}
     container_name: whaticket-backend
     restart: always
     environment:

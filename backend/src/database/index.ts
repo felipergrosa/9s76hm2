@@ -52,6 +52,10 @@ import { FlowAudioModel } from "../models/FlowAudio";
 import { FlowCampaignModel } from "../models/FlowCampaign";
 import { FlowImgModel } from "../models/FlowImg";
 import { WebhookModel } from "../models/Webhook";
+import KnowledgeDocument from "../models/KnowledgeDocument";
+import KnowledgeChunk from "../models/KnowledgeChunk";
+import WhatsappLabel from "../models/WhatsappLabel";
+import ContactWhatsappLabel from "../models/ContactWhatsappLabel";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -112,6 +116,10 @@ const models = [
   FlowCampaignModel,
   FlowImgModel,
   WebhookModel
+  , KnowledgeDocument
+  , KnowledgeChunk
+  , WhatsappLabel
+  , ContactWhatsappLabel
 ];
 
 sequelize.addModels(models);

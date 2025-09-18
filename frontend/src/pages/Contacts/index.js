@@ -51,6 +51,7 @@ import { v4 as uuidv4 } from "uuid";
 import LoadingOverlay from "../../components/LoadingOverlay";
 
 import ContactImportWpModal from "../../components/ContactImportWpModal";
+import ContactImportTagsModal from "../../components/ContactImportTagsModal";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import BulkEditContactsModal from "../../components/BulkEditContactsModal";
@@ -148,6 +149,7 @@ const Contacts = () => {
     const [isSelectAllChecked, setIsSelectAllChecked] = useState(false); // Estado para o checkbox "Selecionar Tudo"
     const [confirmDeleteManyOpen, setConfirmDeleteManyOpen] = useState(false); // Estado para o modal de confirmação de deleção em massa
     const [bulkEditOpen, setBulkEditOpen] = useState(false); // Modal de edição em massa
+    const [importTagsModalOpen, setImportTagsModalOpen] = useState(false); // Modal de importação com tags
 
     const { getAll: getAllSettings } = useCompanySettings();
     const [hideNum, setHideNum] = useState(false);
@@ -499,6 +501,19 @@ const Contacts = () => {
         }
     };
 
+    const handleImportWithTags = async (tagMapping, whatsappId) => {
+        try {
+            // Chamar API para importar contatos com mapeamento de tags
+            const resp = await api.post("/contacts/import-with-tags", { tagMapping, whatsappId });
+            toast.success("Importação iniciada/concluída.");
+            // NÃO recarrega a página aqui; o modal irá apresentar o relatório
+            return resp;
+        } catch (err) {
+            toastError(err);
+            throw err;
+        }
+    };
+
     const loadMore = () => {
         setPageNumber((prevState) => prevState + 1);
     };
@@ -626,6 +641,12 @@ const Contacts = () => {
                     }}
                 />
 
+                <ContactImportTagsModal
+                    isOpen={importTagsModalOpen}
+                    handleClose={() => setImportTagsModalOpen(false)}
+                    onImport={handleImportWithTags}
+                />
+
                 <ConfirmationModal
                     title={
                         deletingContact
@@ -722,6 +743,10 @@ const Contacts = () => {
                                             <MenuItem onClick={() => { setConfirmOpen(true); setImportContacts(true); popupState.close(); }}>
                                                 <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
                                                 {i18n.t("contacts.menu.importYourPhone")}
+                                            </MenuItem>
+                                            <MenuItem onClick={() => { setImportTagsModalOpen(true); popupState.close(); }}>
+                                                <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
+                                                Importar com Tags
                                             </MenuItem>
                                             <MenuItem onClick={() => { setImportContactModalOpen(true) }}>
                                                 <Backup fontSize="small" color="primary" style={{ marginRight: 10 }} />
@@ -826,6 +851,10 @@ const Contacts = () => {
                                         <MenuItem onClick={() => { setConfirmOpen(true); setImportContacts(true); popupState.close(); }}>
                                             <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
                                             {i18n.t("contacts.menu.importYourPhone")}
+                                        </MenuItem>
+                                        <MenuItem onClick={() => { setImportTagsModalOpen(true); popupState.close(); }}>
+                                            <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
+                                            Importar com Tags
                                         </MenuItem>
                                         <MenuItem onClick={() => { setImportContactModalOpen(true) }}>
                                             <Backup fontSize="small" color="primary" style={{ marginRight: 10 }} />

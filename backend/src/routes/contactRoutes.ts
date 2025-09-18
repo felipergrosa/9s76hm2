@@ -43,6 +43,14 @@ contactRoutes.get("/contactTags/:contactId", isAuth, ContactController.getContac
 contactRoutes.put("/contacts/toggleDisableBot/:contactId", isAuth, ContactController.toggleDisableBot);
 contactRoutes.put("/contact-wallet/:contactId", isAuth, ContactController.updateContactWallet);
 contactRoutes.post("/contacts/bulk-refresh-avatars", isAuth, ContactController.bulkRefreshAvatars);
+contactRoutes.get("/contacts/device-tags", isAuth, ContactController.getDeviceTags);
+contactRoutes.get("/contacts/device-contacts", isAuth, ContactController.getDeviceContacts);
+contactRoutes.post("/contacts/import-device-contacts", isAuth, ContactController.importDeviceContactsAuto);
+contactRoutes.post("/contacts/rebuild-device-tags", isAuth, ContactController.rebuildDeviceTags);
+contactRoutes.post("/contacts/import-with-tags", isAuth, ContactController.importWithTags);
+contactRoutes.get("/contacts/debug-device-data", isAuth, ContactController.debugDeviceData);
+contactRoutes.post("/contacts/force-appstate-sync", isAuth, ContactController.forceAppStateSync);
+contactRoutes.post("/contacts/test-create-label", isAuth, ContactController.testCreateLabel);
 // contactRoutes.get("/contacts/list-whatsapp", isAuth, ContactController.listWhatsapp);
 
 export default contactRoutes;

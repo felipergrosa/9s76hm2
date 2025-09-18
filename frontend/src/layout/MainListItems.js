@@ -226,7 +226,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
   const [pageNumber, setPageNumber] = useState(1);
   const [searchParam] = useState("");
   const [chats, dispatch] = useReducer(reducer, []);
-  const [version, setVersion] = useState(false);
+  const [versionInfo, setVersionInfo] = useState({ frontend: "", commit: "", buildDate: "" });
   const [managementHover, setManagementHover] = useState(false);
   const [campaignHover, setCampaignHover] = useState(false);
   const [flowHover, setFlowHover] = useState(false)
@@ -268,8 +268,20 @@ const MainListItems = ({ collapsed, drawerClose }) => {
 
   useEffect(() => {
     async function fetchVersion() {
-      const _version = await getVersion();
-      setVersion(_version.version);
+      const data = await getVersion();
+      const frontendVersion = data?.version || "N/A";
+      const commit = data?.backend?.commit || "N/A";
+      const buildDateRaw = data?.backend?.buildDate || "N/A";
+      let buildDate = buildDateRaw;
+      try {
+        const d = new Date(buildDateRaw);
+        if (!isNaN(d.getTime())) {
+          buildDate = d.toLocaleString();
+        }
+      } catch (e) {
+        // ignore parse errors, keep raw string
+      }
+      setVersionInfo({ frontend: frontendVersion, commit, buildDate });
     }
     fetchVersion();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -835,16 +847,19 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                 <img style={{ width: "100%", padding: "10px" }} src={logo} alt="image" />            
               </Hidden> 
               */}
-          <Typography
-            style={{
-              fontSize: "12px",
-              padding: "10px",
-              textAlign: "center",
-              fontWeight: "bold",
-            }}
-          >
-            {`Versão 25.07.28`}
-          </Typography>
+          <Tooltip title={`BACKEND BUILD: ${versionInfo.buildDate} | Commit: ${versionInfo.commit}`}>
+            <Typography
+              style={{
+                fontSize: "12px",
+                padding: "10px",
+                textAlign: "center",
+                fontWeight: "bold",
+                cursor: "default",
+              }}
+            >
+              {`Versão ${versionInfo.frontend}`}
+            </Typography>
+          </Tooltip>
         </React.Fragment>
       )}
     </div>

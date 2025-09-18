@@ -12,6 +12,8 @@ import fs from "fs";
 import path from "path";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import ResolveAIIntegrationService from "../IA/ResolveAIIntegrationService";
+import IAClientFactory from "../IA/IAClientFactory";
 import Ticket from "../../models/Ticket";
 import Contact from "../../models/Contact";
 import Message from "../../models/Message";
@@ -213,11 +215,45 @@ export const handleOpenAi = async (
 
   const publicFolder: string = path.resolve(__dirname, "..", "..", "..", "public", `company${ticket.companyId}`);
 
-  const isOpenAIModel = ["gpt-3.5-turbo-1106", "gpt-4o"].includes(openAiSettings.model);
-  const isGeminiModel = ["gemini-2.0-pro", "gemini-2.0-flash"].includes(openAiSettings.model);
+  // Resolver credenciais/modelo a partir da fila/conexão/empresa
+  try {
+    const preferProvider = (openAiSettings?.model || "").toLowerCase().includes("gemini") ? "gemini" : "openai";
+    const resolved = await ResolveAIIntegrationService({
+      companyId: ticket.companyId,
+      queueId: openAiSettings?.queueId || ticket.queueId,
+      whatsappId: ticket.whatsappId,
+      preferProvider: preferProvider as any
+    });
+    const cfg = resolved?.config || {};
+
+    const model = openAiSettings?.model || cfg.model || (resolved?.provider === "gemini" ? "gemini-2.0-pro" : "gpt-4o-mini");
+    const apiKey = openAiSettings?.apiKey || cfg.apiKey;
+    const maxTokens = (openAiSettings?.maxTokens ?? cfg.maxTokens ?? 400) as number;
+    const temperature = (openAiSettings?.temperature ?? cfg.temperature ?? 0.7) as number;
+
+    // Efetivar configurações consolidadas sem perder demais campos do settings original
+    openAiSettings = {
+      ...openAiSettings,
+      model,
+      apiKey,
+      maxTokens,
+      temperature
+    } as IOpenAi;
+  } catch {
+    // silencioso: manter openAiSettings como veio
+  }
+
+  const isOpenAIModel = ["gpt-3.5-turbo-1106", "gpt-4o", "gpt-4o-mini"].includes(openAiSettings.model) || openAiSettings.model?.toLowerCase().startsWith("gpt");
+  const isGeminiModel = ["gemini-2.0-pro", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"].includes(openAiSettings.model) || openAiSettings.model?.toLowerCase().includes("gemini");
 
   let openai: SessionOpenAi | null = null;
   let gemini: SessionGemini | null = null;
+
+  // Validate apiKey obrigatória
+  if (!openAiSettings.apiKey) {
+    console.error("[IA][wbot] Nenhuma API key configurada. Configure em Integrações → Queue Integration.");
+    return;
+  }
 
   // Initialize AI provider based on model
   if (isOpenAIModel) {
@@ -281,18 +317,48 @@ export const handleOpenAi = async (
 
     try {
       let responseText: string | null = null;
+      const provider = isGeminiModel ? "gemini" : "openai";
+      const t0 = Date.now();
 
-      if (isOpenAIModel && openai) {
-        messagesAI.push({ role: "user", content: bodyMessage! });
-        responseText = await handleOpenAIRequest(openai, messagesAI, openAiSettings);
-      } else if (isGeminiModel && gemini) {
-        responseText = await handleGeminiRequest(gemini, messagesAI, openAiSettings, bodyMessage!, promptSystem);
+      // Tenta via IAClientFactory (unificado)
+      try {
+        const client = IAClientFactory(provider as any, openAiSettings.apiKey);
+        const history = messagesAI
+          .filter(m => m.role !== "system")
+          .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
+        responseText = await client.chatWithHistory({
+          model: openAiSettings.model,
+          system: promptSystem,
+          history,
+          user: bodyMessage!,
+          temperature: openAiSettings.temperature,
+          max_tokens: openAiSettings.maxTokens,
+        });
+      } catch (e) {
+        // Fallback seguro: mantém implementação anterior por provedor
+        if (isOpenAIModel && openai) {
+          messagesAI.push({ role: "user", content: bodyMessage! });
+          responseText = await handleOpenAIRequest(openai, messagesAI, openAiSettings);
+        } else if (isGeminiModel && gemini) {
+          responseText = await handleGeminiRequest(gemini, messagesAI, openAiSettings, bodyMessage!, promptSystem);
+        }
       }
 
       if (!responseText) {
         console.error("No response from AI provider");
         return;
       }
+
+      const latency = Date.now() - t0;
+      try {
+        console.log("[IA][wbot][text]", {
+          provider,
+          model: openAiSettings.model,
+          latencyMs: latency,
+          companyId: ticket.companyId,
+          ticketId: ticket.id,
+        });
+      } catch {}
 
       await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
     } catch (error: any) {
@@ -321,71 +387,170 @@ export const handleOpenAi = async (
       }
 
       let transcription: string | null = null;
+      const provider = isGeminiModel ? "gemini" : "openai";
 
-      if (isOpenAIModel && openai) {
-        const file = fs.createReadStream(audioFilePath) as any;
-        const transcriptionResult = await openai.audio.transcriptions.create({
-          model: "whisper-1",
-          file: file,
-        });
-        transcription = transcriptionResult.text;
+      if (isOpenAIModel) {
+        // Tenta via IAClientFactory (OpenAI Whisper)
+        try {
+          const client = IAClientFactory("openai" as any, openAiSettings.apiKey);
+          const t0 = Date.now();
+          if (client.transcribe) {
+            transcription = await client.transcribe({ filePath: audioFilePath, model: "whisper-1" });
+          }
+          const latency = Date.now() - t0;
+          if (transcription) {
+            try { console.log("[IA][wbot][transcribe]", { provider: "openai", model: "whisper-1", latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+          }
+        } catch {}
 
-        const sentTranscriptMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-          text: `🎤 *Sua mensagem de voz:* ${transcription}`,
-        });
-        await verifyMessage(sentTranscriptMessage!, ticket, contact);
+        // Fallback para implementação antiga, se necessário
+        if (!transcription && openai) {
+          const t0 = Date.now();
+          const file = fs.createReadStream(audioFilePath) as any;
+          const transcriptionResult = await openai.audio.transcriptions.create({
+            model: "whisper-1",
+            file: file,
+          });
+          transcription = transcriptionResult.text;
+          const latency = Date.now() - t0;
+          if (transcription) {
+            try { console.log("[IA][wbot][transcribe]", { provider: "openai", model: "whisper-1", latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+          }
+        }
 
-        messagesAI.push({ role: "user", content: transcription });
-        const responseText = await handleOpenAIRequest(openai, messagesAI, openAiSettings);
-        if (responseText) {
-          await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
+        if (transcription) {
+          const sentTranscriptMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+            text: `🎤 *Sua mensagem de voz:* ${transcription}`,
+          });
+          await verifyMessage(sentTranscriptMessage!, ticket, contact);
+
+          messagesAI.push({ role: "user", content: transcription });
+
+          // Responder ao usuário: tenta via Factory com histórico, fallback para método antigo
+          try {
+            const client = IAClientFactory("openai" as any, openAiSettings.apiKey);
+            const history = messagesAI
+              .filter(m => m.role !== "system")
+              .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
+            const t0resp = Date.now();
+            const responseText = await client.chatWithHistory({
+              model: openAiSettings.model,
+              system: promptSystem,
+              history,
+              user: transcription,
+              temperature: openAiSettings.temperature,
+              max_tokens: openAiSettings.maxTokens,
+            });
+            if (responseText) {
+              const latency = Date.now() - t0resp;
+              try { console.log("[IA][wbot][audio-reply]", { provider: "openai", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+              await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
+            }
+          } catch {
+            const t0resp = Date.now();
+            const responseText = await handleOpenAIRequest(openai as any, messagesAI, openAiSettings);
+            if (responseText) {
+              const latency = Date.now() - t0resp;
+              try { console.log("[IA][wbot][audio-reply]", { provider: "openai", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+              await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
+            }
+          }
         }
       } else if (isGeminiModel && gemini) {
-        const model = gemini.getGenerativeModel({
-          model: openAiSettings.model,
-          systemInstruction: promptSystem,
-        });
+        // Tenta via IAClientFactory para transcrever e responder
+        try {
+          const client = IAClientFactory("gemini" as any, openAiSettings.apiKey);
+          const t0 = Date.now();
+          if (client.transcribe) {
+            transcription = await client.transcribe({ filePath: audioFilePath, model: openAiSettings.model });
+          }
+          const latency = Date.now() - t0;
+          if (transcription) {
+            try { console.log("[IA][wbot][transcribe]", { provider: "gemini", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+          }
+        } catch {}
 
-        const audioFileBase64 = fs.readFileSync(audioFilePath, { encoding: 'base64' });
-        const fileExtension = path.extname(audioFilePath).toLowerCase();
-        let mimeType = 'audio/mp3';
-        switch (fileExtension) {
-          case '.wav': mimeType = 'audio/wav'; break;
-          case '.mp3': mimeType = 'audio/mp3'; break;
-          case '.aac': mimeType = 'audio/aac'; break;
-          case '.ogg': mimeType = 'audio/ogg'; break;
-          case '.flac': mimeType = 'audio/flac'; break;
-          case '.aiff': mimeType = 'audio/aiff'; break;
+        // Fallback para implementação antiga
+        if (!transcription) {
+          const model = gemini.getGenerativeModel({
+            model: openAiSettings.model,
+            systemInstruction: promptSystem,
+          });
+
+          const audioFileBase64 = fs.readFileSync(audioFilePath, { encoding: 'base64' });
+          const fileExtension = path.extname(audioFilePath).toLowerCase();
+          let mimeType = 'audio/mp3';
+          switch (fileExtension) {
+            case '.wav': mimeType = 'audio/wav'; break;
+            case '.mp3': mimeType = 'audio/mp3'; break;
+            case '.aac': mimeType = 'audio/aac'; break;
+            case '.ogg': mimeType = 'audio/ogg'; break;
+            case '.flac': mimeType = 'audio/flac'; break;
+            case '.aiff': mimeType = 'audio/aiff'; break;
+          }
+
+          const t0 = Date.now();
+          const transcriptionRequest = await model.generateContent({
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { text: "Gere uma transcrição precisa deste áudio." },
+                  {
+                    inlineData: {
+                      mimeType: mimeType,
+                      data: audioFileBase64,
+                    },
+                  },
+                ],
+              },
+            ],
+          });
+
+          transcription = transcriptionRequest.response.text();
+          const latency = Date.now() - t0;
+          if (transcription) {
+            try { console.log("[IA][wbot][transcribe]", { provider: "gemini", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+          }
         }
 
-        const transcriptionRequest = await model.generateContent({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: "Gere uma transcrição precisa deste áudio." },
-                {
-                  inlineData: {
-                    mimeType: mimeType,
-                    data: audioFileBase64,
-                  },
-                },
-              ],
-            },
-          ],
-        });
+        if (transcription) {
+          const sentTranscriptMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+            text: `🎤 *Sua mensagem de voz:* ${transcription}`,
+          });
+          await verifyMessage(sentTranscriptMessage!, ticket, contact);
 
-        transcription = transcriptionRequest.response.text();
+          messagesAI.push({ role: "user", content: transcription });
 
-        const sentTranscriptMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-          text: `🎤 *Sua mensagem de voz:* ${transcription}`,
-        });
-        await verifyMessage(sentTranscriptMessage!, ticket, contact);
-
-        messagesAI.push({ role: "user", content: transcription });
-        const responseText = await handleGeminiRequest(gemini, messagesAI, openAiSettings, transcription, promptSystem);
-        if (responseText) {
-          await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
+          // Responder ao usuário: tenta via Factory com histórico, fallback para método antigo
+          try {
+            const client = IAClientFactory("gemini" as any, openAiSettings.apiKey);
+            const history = messagesAI
+              .filter(m => m.role !== "system")
+              .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
+            const t0resp = Date.now();
+            const responseText = await client.chatWithHistory({
+              model: openAiSettings.model,
+              system: promptSystem,
+              history,
+              user: transcription,
+              temperature: openAiSettings.temperature,
+              max_tokens: openAiSettings.maxTokens,
+            });
+            if (responseText) {
+              const latency = Date.now() - t0resp;
+              try { console.log("[IA][wbot][audio-reply]", { provider: "gemini", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+              await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
+            }
+          } catch {
+            const t0resp = Date.now();
+            const responseText = await handleGeminiRequest(gemini, messagesAI, openAiSettings, transcription, promptSystem);
+            if (responseText) {
+              const latency = Date.now() - t0resp;
+              try { console.log("[IA][wbot][audio-reply]", { provider: "gemini", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+              await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
+            }
+          }
         }
       }
 

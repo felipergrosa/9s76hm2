@@ -2,6 +2,7 @@ import {
   WASocket,
   BinaryNode,
   Contact as BContact,
+  Chat,
   isJidBroadcast,
   isJidStatusBroadcast,
   isJidUser,
@@ -13,6 +14,7 @@ import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
 import logger from "../../utils/logger";
+import { upsertLabel, addChatLabelAssociation, getChatLabelIds } from "../../libs/labelCache";
 import createOrUpdateBaileysService from "../BaileysServices/CreateOrUpdateBaileysService";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import CompaniesSettings from "../../models/CompaniesSettings";
@@ -37,6 +39,7 @@ const wbotMonitor = async (
   whatsapp: Whatsapp,
   companyId: number
 ): Promise<void> => {
+  logger.info(`[wbotMonitor] Iniciando monitor para whatsappId=${whatsapp.id}, companyId=${companyId}`);
   try {
     wbot.ws.on("CB:call", async (node: BinaryNode) => {
       const content = node.content[0] as any;
@@ -178,8 +181,9 @@ const wbotMonitor = async (
           await createOrUpdateBaileysService({
             whatsappId: whatsapp.id,
             contacts: filteredContacts,
-          });
-        } catch (err) {
+    });
+
+  } catch (err) {
           logger.error(`Error in createOrUpdateBaileysService: ${err.message}`);
           Sentry.captureException(err);
           console.log("Filtered Contacts:", filteredContacts); // Debug output
@@ -189,6 +193,131 @@ const wbotMonitor = async (
         Sentry.captureException(err);
       }
     });
+
+    // Persistência de CHATS (com labels) no Baileys para extração de etiquetas
+    wbot.ev.on("chats.upsert", async (chats: Chat[]) => {
+      try {
+        await createOrUpdateBaileysService({
+          whatsappId: whatsapp.id,
+          chats
+        });
+      } catch (err: any) {
+        logger.error(`Error persisting chats.upsert: ${err?.message}`);
+        Sentry.captureException(err);
+      }
+    });
+
+    wbot.ev.on("chats.update", async (chats: Partial<Chat>[]) => {
+      try {
+        // Mesmo fluxo de merge no serviço; envia as atualizações parciais
+        await createOrUpdateBaileysService({
+          whatsappId: whatsapp.id,
+          chats: chats as any
+        });
+      } catch (err: any) {
+        logger.error(`Error persisting chats.update: ${err?.message}`);
+        Sentry.captureException(err);
+      }
+    });
+
+    // Captura eventos de edição de labels (criar/editar/remover) vindos do App State
+    wbot.ev.on("labels.edit", (payload: any) => {
+      try {
+        logger.info(`[wbotMonitor] Evento labels.edit recebido:`, JSON.stringify(payload));
+        const { id, name, color, predefinedId, deleted } = payload || {};
+        if (!id) {
+          logger.warn(`[wbotMonitor] labels.edit sem ID:`, payload);
+          return;
+        }
+        upsertLabel(whatsapp.id, { id: String(id), name: String(name || id), color, predefinedId, deleted });
+        logger.info(`[wbotMonitor] Label ${name} (${id}) processada para whatsappId=${whatsapp.id}`);
+      } catch (err: any) {
+        logger.error(`[wbotMonitor] labels.edit handler error: ${err?.message}`, err);
+      }
+    });
+
+    // Sincronização inicial/relacional de labels: inventário completo e relações
+    // Payload esperado (defensivo): { labels: [{id,name,color}], relations?: [{ chatId,labelId } | { type:'label_jid', chatId, labelId }] }
+    (wbot.ev as any).on("labels.relations", async (payload: any) => {
+      try {
+        logger.info(`[wbotMonitor] Evento labels.relations recebido`);
+        const labels = Array.isArray(payload?.labels) ? payload.labels : [];
+        for (const l of labels) {
+          if (!l?.id) continue;
+          upsertLabel(whatsapp.id, { id: String(l.id), name: String(l.name || l.id), color: l.color });
+        }
+
+        const relations = Array.isArray(payload?.relations) ? payload.relations : (Array.isArray(payload?.associations) ? payload.associations : []);
+        for (const r of relations) {
+          const chatId = String(r?.chatId || r?.jid || '');
+          const labelId = String(r?.labelId || r?.lid || '');
+          if (!chatId || !labelId) continue;
+          addChatLabelAssociation(whatsapp.id, chatId, labelId, true);
+        }
+
+        // Persistir mapeamento atualizado das labels por chat em Baileys.chats para fallback e contagem
+        try {
+          if (Array.isArray(relations) && relations.length > 0) {
+            const batch: any[] = [];
+            const seen = new Map<string, Set<string>>();
+            for (const r of relations) {
+              const chatId = String(r?.chatId || r?.jid || '');
+              const labelId = String(r?.labelId || r?.lid || '');
+              if (!chatId || !labelId) continue;
+              let set = seen.get(chatId);
+              if (!set) { set = new Set(); seen.set(chatId, set); }
+              set.add(labelId);
+            }
+            for (const [jid, set] of seen.entries()) {
+              batch.push({ id: jid, labels: Array.from(set), labelsAbsolute: true });
+            }
+            if (batch.length) {
+              await createOrUpdateBaileysService({ whatsappId: whatsapp.id, chats: batch as any });
+            }
+          }
+        } catch (e: any) {
+          logger.warn(`[wbotMonitor] Falha ao persistir labels.relations no Baileys.chats: ${e?.message}`);
+        }
+      } catch (err: any) {
+        logger.error(`[wbotMonitor] labels.relations handler error: ${err?.message}`, err);
+      }
+    });
+
+    // Captura eventos de associação de labels a chats/mensagens
+    wbot.ev.on("labels.association", async (payload: any) => {
+      try {
+        logger.info(`[wbotMonitor] Evento labels.association recebido:`, JSON.stringify(payload));
+        const { type, association } = payload || {};
+        if (!association) {
+          logger.warn(`[wbotMonitor] labels.association sem association:`, payload);
+          return;
+        }
+        const labeled = type === "add";
+        const assocType = association.type; // 'label_jid' (Chat) ou 'label_message'
+        const labelId = association.labelId;
+        if (assocType === "label_jid" || assocType === 0 || assocType === "Chat") {
+          const chatId = association.chatId;
+          if (chatId && labelId) {
+            addChatLabelAssociation(whatsapp.id, chatId, labelId, labeled);
+            logger.info(`[wbotMonitor] Associação ${labeled ? 'add' : 'remove'}: chat=${chatId} label=${labelId}`);
+
+            // Persistir labels deste chat também em Baileys.chats (para fallback e contagem)
+            try {
+              const ids = getChatLabelIds(whatsapp.id, chatId) || [];
+              await createOrUpdateBaileysService({
+                whatsappId: whatsapp.id,
+                chats: [{ id: chatId, labels: ids, labelsAbsolute: true }] as any
+              });
+            } catch (e: any) {
+              logger.warn(`[wbotMonitor] Falha ao persistir labels no Baileys.chats para chat=${chatId}: ${e?.message}`);
+            }
+          }
+        }
+      } catch (err: any) {
+        logger.error(`[wbotMonitor] labels.association handler error: ${err?.message}`, err);
+      }
+    });
+
   } catch (err) {
     logger.error(`Error in wbotMonitor: ${err.message}`);
     Sentry.captureException(err);

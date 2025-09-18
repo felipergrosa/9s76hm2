@@ -216,6 +216,8 @@ const ChatAssistantPanel = ({
   onClose,
   inputMessage,
   setInputMessage,
+  queueId,
+  whatsappId,
 }) => {
   const classes = useStyles();
   const theme = useTheme();
@@ -245,7 +247,7 @@ const ChatAssistantPanel = ({
       setLoading(true);
       setError("");
       setResult("");
-      const payload = { mode, text: inputMessage, integrationType: provider };
+      const payload = { mode, text: inputMessage, integrationType: provider, queueId, whatsappId };
       if (mode === "translate") payload.targetLang = targetLang;
       const { data } = await api.post("/ai/transform", payload);
       setResult(data?.result || "");

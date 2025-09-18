@@ -55,7 +55,6 @@ import Brightness4Icon from "@material-ui/icons/Brightness4";
 import Brightness7Icon from "@material-ui/icons/Brightness7";
 import { getBackendUrl } from "../config";
 import useSettings from "../hooks/useSettings";
-import VersionControl from "../components/VersionControl";
 
 // import { SocketContext } from "../context/Socket/SocketContext";
 
@@ -525,7 +524,6 @@ const LoggedInLayout = ({ children, themeToggle }) => {
               label={i18n.t("mainDrawer.appBar.user.token")}
             />
           )}
-          <VersionControl />
 
           {/* DESABILITADO POIS TEM BUGS */}
           {<UserLanguageSelector /> }

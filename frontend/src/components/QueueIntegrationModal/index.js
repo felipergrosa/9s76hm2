@@ -160,6 +160,11 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
     temperature: 1,
     maxTokens: 100,
     maxMessages: 10,
+    // RAG (Base de Conhecimento)
+    ragEnabled: false,
+    ragTopK: 4,
+    ragEmbeddingModel: "text-embedding-3-small",
+    ragEmbeddingDims: 1536,
     // Advanced defaults
     brandVoice: "",
     tone: "amigável",
@@ -184,6 +189,17 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
   const [dialogflowHelpAnchor, setDialogflowHelpAnchor] = useState(null);
   const [tagsAnchorEl, setTagsAnchorEl] = useState(null);
   const [tagsSearch, setTagsSearch] = useState("");
+  // RAG: seleção de arquivos do Gerenciador
+  const [ragFiles, setRagFiles] = useState([]);
+  const [ragFilesLoading, setRagFilesLoading] = useState(false);
+  const [selectedFileId, setSelectedFileId] = useState("");
+  const [fileOptions, setFileOptions] = useState([]);
+  const [selectedOptionId, setSelectedOptionId] = useState("");
+  const [ragIndexTitle, setRagIndexTitle] = useState("");
+  const [ragIndexTags, setRagIndexTags] = useState("");
+  const [ragChunkSize, setRagChunkSize] = useState(1200);
+  const [ragOverlap, setRagOverlap] = useState(200);
+  const [ragIndexMsg, setRagIndexMsg] = useState("");
 
   // Lista de variáveis do sistema (mesma base do PromptModal)
   const mustacheVars = [
@@ -229,7 +245,7 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
         const { data } = await api.get(`/queueIntegration/${integrationId}`);
         setIntegration((prevState) => {
           const next = { ...prevState, ...data };
-          // Parse jsonContent para tipos OpenAI/Gemini
+          // Parse jsonContent conforme tipo
           try {
             if ((data?.type === "openai" || data?.type === "gemini") && data?.jsonContent) {
               const parsed = JSON.parse(data.jsonContent);
@@ -262,6 +278,13 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
               const pv = Array.isArray(parsed?.permittedVariables) ? parsed.permittedVariables : [];
               const uniquePv = Array.from(new Set(pv));
               next.permittedVariablesText = uniquePv.join(' ');
+            } else if (data?.type === 'knowledge' && data?.jsonContent) {
+              const parsed = JSON.parse(data.jsonContent);
+              next.ragEnabled = typeof parsed?.ragEnabled === 'boolean' ? parsed.ragEnabled
+                : (typeof parsed?.ragEnabled === 'string' ? ['enabled','true','on','1'].includes(parsed.ragEnabled.toLowerCase()) : prevState.ragEnabled);
+              next.ragTopK = parsed?.ragTopK ?? prevState.ragTopK;
+              next.ragEmbeddingModel = parsed?.ragEmbeddingModel || prevState.ragEmbeddingModel;
+              next.ragEmbeddingDims = parsed?.ragEmbeddingDims ?? (String(next.ragEmbeddingModel).includes('small') ? 1536 : prevState.ragEmbeddingDims);
             }
           } catch (_) {}
           return next;
@@ -284,6 +307,60 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
     };
 
   }, [integrationId, open]);
+
+  // RAG: carregar lista de arquivos ao abrir modal
+  useEffect(() => {
+    (async () => {
+      if (!open) return;
+      try {
+        setRagFilesLoading(true);
+        const { data } = await api.get('/files/list', { params: { searchParam: '' } });
+        setRagFiles(Array.isArray(data) ? data : []);
+      } catch (_) {
+        setRagFiles([]);
+      } finally {
+        setRagFilesLoading(false);
+      }
+    })();
+  }, [open]);
+
+  const handleSelectFile = async (id) => {
+    try {
+      setSelectedFileId(id);
+      setFileOptions([]);
+      setSelectedOptionId("");
+      if (!id) return;
+      const { data } = await api.get(`/files/${id}`);
+      setFileOptions(Array.isArray(data?.options) ? data.options : []);
+      if (data?.name && !ragIndexTitle) setRagIndexTitle(data.name);
+    } catch (_) {
+      setFileOptions([]);
+    }
+  };
+
+  const handleIndexSelectedFile = async () => {
+    try {
+      if (!selectedOptionId) {
+        setRagIndexMsg('Selecione um arquivo e uma opção.');
+        setTimeout(() => setRagIndexMsg(''), 3000);
+        return;
+      }
+      const tags = (ragIndexTags || '').split(',').map(t => t.trim()).filter(Boolean);
+      await api.post('/helps/rag/index-file', {
+        fileOptionId: Number(selectedOptionId),
+        title: ragIndexTitle,
+        tags,
+        chunkSize: Number(ragChunkSize || 1200),
+        overlap: Number(ragOverlap || 200),
+      });
+      toast.success('Arquivo indexado com sucesso na base RAG.');
+      setRagIndexMsg('');
+    } catch (err) {
+      toastError(err);
+      setRagIndexMsg('Falha ao indexar arquivo.');
+      setTimeout(() => setRagIndexMsg(''), 3000);
+    }
+  };
 
   const handleClose = () => {
     setIntegration({ ...initialState });
@@ -394,6 +471,25 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
         delete payload.customHashtags;
         delete payload.length;
         delete payload.outLanguage;
+        // Não persistir campos RAG em openai/gemini
+        delete payload.ragEnabled;
+        delete payload.ragTopK;
+        delete payload.ragEmbeddingModel;
+        delete payload.ragEmbeddingDims;
+      } else if (values.type === 'knowledge') {
+        // Persistir configurações RAG na integração 'knowledge'
+        const cfg = {
+          ragEnabled: !!values.ragEnabled,
+          ragTopK: Number(values.ragTopK || 4),
+          ragEmbeddingModel: values.ragEmbeddingModel || 'text-embedding-3-small',
+          ragEmbeddingDims: Number(values.ragEmbeddingDims || 1536),
+        };
+        payload.jsonContent = JSON.stringify(cfg);
+        payload.projectName = values.name;
+        // limpar campos que não se aplicam
+        delete payload.apiKey; delete payload.model; delete payload.temperature; delete payload.maxTokens; delete payload.maxMessages;
+        delete payload.creativityLevel; delete payload.permittedVariablesText; delete payload.brandVoice; delete payload.tone; delete payload.emojiLevel;
+        delete payload.hashtags; delete payload.customHashtags; delete payload.length; delete payload.outLanguage;
       }
 
       if (integrationId) {
@@ -463,6 +559,7 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
                           <MenuItem value="typebot">Typebot</MenuItem>
                           <MenuItem value="flowbuilder">Flowbuilder</MenuItem>
                           <MenuItem value="gemini">Google Gemini</MenuItem>
+                          <MenuItem value="knowledge">Base de Conhecimento</MenuItem>
                         </Field>
                       </FormControl>
                     </Grid>
@@ -566,6 +663,101 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
                       </>
                     )}
 
+                    {values.type === 'knowledge' && (
+                      <>
+                        <Grid item xs={12} md={6} xl={6} >
+                          <Field
+                            as={TextField}
+                            label={i18n.t("queueIntegrationModal.form.name")}
+                            autoFocus
+                            name="name"
+                            fullWidth
+                            error={touched.name && Boolean(errors.name)}
+                            helperText={(touched.name && errors.name) || <ClampHelperText>Um rótulo para identificar esta integração</ClampHelperText>}
+                            variant="outlined"
+                            margin="dense"
+                            className={classes.textField}
+                          />
+                        </Grid>
+                        <Grid item xs={12}>
+                          <Paper style={{ padding: 12 }} variant="outlined">
+                            <Typography variant="h6">Configurações da Base de Conhecimento</Typography>
+                            <Grid container spacing={2}>
+                              <Grid item xs={12} md={4}>
+                                <FormControlLabel
+                                  control={<Field as={Switch} color="primary" name="ragEnabled" checked={!!values.ragEnabled} />}
+                                  label="Ativar RAG nas respostas"
+                                />
+                              </Grid>
+                              <Grid item xs={6} md={2}>
+                                <Field as={TextField} type="number" label="Top K" name="ragTopK" fullWidth margin="dense" />
+                              </Grid>
+                              <Grid item xs={12} md={3}>
+                                <FormControl fullWidth margin="dense" variant="outlined">
+                                  <InputLabel>Modelo de Embedding</InputLabel>
+                                  <Field as={Select} label="Modelo de Embedding" name="ragEmbeddingModel">
+                                    <MenuItem value="text-embedding-3-small">text-embedding-3-small (1536)</MenuItem>
+                                  </Field>
+                                </FormControl>
+                              </Grid>
+                              <Grid item xs={12} md={3}>
+                                <Field as={TextField} label="Dimensões" name="ragEmbeddingDims" fullWidth margin="dense" disabled />
+                              </Grid>
+                            </Grid>
+                          </Paper>
+                        </Grid>
+
+                        {/* Seção para indexação de arquivos do Gerenciador */}
+                        <Grid item xs={12}>
+                          <Paper style={{ padding: 12 }} variant="outlined">
+                            <Typography variant="subtitle1">Indexar Arquivo do Gerenciador</Typography>
+                            <Grid container spacing={2}>
+                              <Grid item xs={12} md={5}>
+                                <FormControl fullWidth margin="dense" variant="outlined">
+                                  <InputLabel>Arquivo</InputLabel>
+                                  <Select label="Arquivo" value={selectedFileId} onChange={(e) => handleSelectFile(e.target.value)} disabled={ragFilesLoading}>
+                                    <MenuItem value=""><em>Selecione...</em></MenuItem>
+                                    {(ragFiles || []).map(f => (
+                                      <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>
+                                    ))}
+                                  </Select>
+                                </FormControl>
+                              </Grid>
+                              <Grid item xs={12} md={4}>
+                                <FormControl fullWidth margin="dense" variant="outlined">
+                                  <InputLabel>Opção</InputLabel>
+                                  <Select label="Opção" value={selectedOptionId} onChange={(e) => setSelectedOptionId(e.target.value)} disabled={!selectedFileId}>
+                                    <MenuItem value=""><em>Selecione...</em></MenuItem>
+                                    {(fileOptions || []).map(opt => (
+                                      <MenuItem key={opt.id} value={opt.id}>{opt.name}</MenuItem>
+                                    ))}
+                                  </Select>
+                                </FormControl>
+                              </Grid>
+                              <Grid item xs={12} md={3}>
+                                <TextField label="Título" value={ragIndexTitle} onChange={(e) => setRagIndexTitle(e.target.value)} fullWidth margin="dense" />
+                              </Grid>
+                              <Grid item xs={12} md={6}>
+                                <TextField label="Tags (separe por vírgula)" value={ragIndexTags} onChange={(e) => setRagIndexTags(e.target.value)} fullWidth margin="dense" />
+                              </Grid>
+                              <Grid item xs={6} md={3}>
+                                <TextField type="number" label="Chunk Size" value={ragChunkSize} onChange={(e) => setRagChunkSize(Number(e.target.value))} fullWidth margin="dense" />
+                              </Grid>
+                              <Grid item xs={6} md={3}>
+                                <TextField type="number" label="Overlap" value={ragOverlap} onChange={(e) => setRagOverlap(Number(e.target.value))} fullWidth margin="dense" />
+                              </Grid>
+                              <Grid item xs={12}>
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                  <Button variant="outlined" color="primary" onClick={handleIndexSelectedFile} disabled={!selectedOptionId}>Indexar Arquivo</Button>
+                                  {ragIndexMsg ? <Typography variant="caption" color="textSecondary">{ragIndexMsg}</Typography> : null}
+                                </div>
+                              </Grid>
+                            </Grid>
+                          </Paper>
+                        </Grid>
+                      </>
+                    )}
+
                     {(values.type === "n8n" || values.type === "webhook") && (
                       <>
                         <Grid item xs={12} md={6} xl={6} >
@@ -636,7 +828,7 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
                               <Typography variant="body2" color="textSecondary" component="div">
                                 • API Key: cole a chave começando com <code>sk-</code>. Ao salvar, mostramos apenas o prefixo por segurança.<br/>
                                 • Modelo: escolha o equilíbrio entre custo e qualidade (ex.: <strong>GPT 4o</strong> = melhor qualidade).<br/>
-                                • Criatividade: controla automaticamente temperature/topP/penalty.<br/>
+                                • Criatividade: controla automaticamente temperatura/topP/penalty.<br/>
                                 • Máx. Tokens: limite de tamanho da resposta.
                               </Typography>
                             </div>

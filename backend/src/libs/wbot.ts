@@ -32,6 +32,7 @@ import NodeCache from 'node-cache';
 import { Store } from "./store";
 import fs from "fs";
 import path from "path";
+import createOrUpdateBaileysService from "../services/BaileysServices/CreateOrUpdateBaileysService";
 
 const msgRetryCounterCache = new NodeCache({
   stdTTL: 600,
@@ -157,7 +158,17 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         const { id, name, allowGroup, companyId } = whatsappUpdate;
 
         const { version, isLatest } = await fetchLatestWaWebVersion({});
-        logger.info(`using WA v${version.join(".")}, isLatest: ${isLatest}`);
+        // Log com timestamp e versão do pacote Baileys instalado
+        try {
+          // Evita erro de tipo em TS usando require dinâmico
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const baileysPkg = require("@whiskeysockets/baileys/package.json");
+          const ts = moment().format("DD-MM-YYYY HH:mm:ss");
+          logger.info(`INFO [${ts}]: Baileys pkg v${baileysPkg?.version || "unknown"} | WA Web v${version.join(".")}, isLatest: ${isLatest}`);
+        } catch (e) {
+          const ts = moment().format("DD-MM-YYYY HH:mm:ss");
+          logger.info(`INFO [${ts}]: Baileys pkg vunknown | WA Web v${version.join(".")}, isLatest: ${isLatest}`);
+        }
         logger.info(`Starting session ${name}`);
         let retriesQrCode = 0;
 
@@ -229,6 +240,20 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               await wpp.update({
                 statusImportMessages
               });
+              // Persistir snapshot de contatos e chats (melhora listagem no modal de import)
+              try {
+                const { contacts: snapContacts, chats: snapChats } = messageSet || {};
+                if ((Array.isArray(snapContacts) && snapContacts.length) || (Array.isArray(snapChats) && snapChats.length)) {
+                  await createOrUpdateBaileysService({
+                    whatsappId: whatsapp.id,
+                    contacts: Array.isArray(snapContacts) ? snapContacts : undefined,
+                    chats: Array.isArray(snapChats) ? snapChats : undefined
+                  });
+                  logger.info(`[wbot] messaging-history.set snapshot persisted: contacts=${Array.isArray(snapContacts) ? snapContacts.length : 0}, chats=${Array.isArray(snapChats) ? snapChats.length : 0}`);
+                }
+              } catch (e: any) {
+                logger.warn(`[wbot] falha ao persistir snapshot de contacts/chats: ${e?.message}`);
+              }
               const whatsappId = whatsapp.id;
               let filteredMessages = messageSet.messages
               let filteredDateMessages = []
@@ -432,6 +457,19 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 sessions.push(wsocket);
               }
 
+              // Forçar uma sincronização completa do App State ao abrir a conexão
+              try {
+                const sock: any = wsocket as any;
+                if (sock && typeof sock.resyncAppState === 'function') {
+                  const { ALL_WA_PATCH_NAMES } = require("@whiskeysockets/baileys");
+                  logger.info(`[wbot] Triggering initial resyncAppState for whatsappId=${whatsapp.id}`);
+                  await sock.resyncAppState(ALL_WA_PATCH_NAMES, true);
+                  logger.info(`[wbot] Initial resyncAppState requested for whatsappId=${whatsapp.id}`);
+                }
+              } catch (e: any) {
+                logger.warn(`[wbot] initial resyncAppState failed: ${e?.message}`);
+              }
+
               resolve(wsocket);
             }
 
@@ -481,8 +519,6 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           }
         );
         wsocket.ev.on("creds.update", saveCreds);
-        // wsocket.store = store;
-        // store.bind(wsocket.ev);
       })();
     } catch (error) {
       Sentry.captureException(error);
