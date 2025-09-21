@@ -4,7 +4,9 @@ import fs, { unlink, unlinkSync } from "fs";
 import { exec } from "child_process";
 import path from "path";
 import ffmpegPath from "@ffmpeg-installer/ffmpeg";
-import Jimp from "jimp";
+// Usar require para compatibilidade com Jimp v1.x e evitar conflitos de tipos
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const Jimp = require("jimp");
 
 import AppError from "../../errors/AppError";
 import Ticket from "../../models/Ticket";
@@ -67,7 +69,9 @@ const processImage = async (
     const maxDim = 2048; // Limite "HD" alto mantendo qualidade
     const { width, height } = img.bitmap as { width: number; height: number };
     if (Math.max(width, height) > maxDim) {
-      img.scaleToFit(maxDim, maxDim, Jimp.RESIZE_BILINEAR);
+      // Redimensiona para caber dentro de maxDim mantendo proporção
+      // @ts-ignore - constantes existem em Jimp v1
+      img.scaleToFit(maxDim, maxDim, (Jimp as any).RESIZE_BILINEAR);
     }
 
     // Por padrão, enviaremos JPEG de alta qualidade; mantém PNG se a origem é PNG

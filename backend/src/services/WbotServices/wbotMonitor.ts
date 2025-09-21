@@ -224,13 +224,26 @@ const wbotMonitor = async (
     wbot.ev.on("labels.edit", (payload: any) => {
       try {
         logger.info(`[wbotMonitor] Evento labels.edit recebido:`, JSON.stringify(payload));
-        const { id, name, color, predefinedId, deleted } = payload || {};
-        if (!id) {
-          logger.warn(`[wbotMonitor] labels.edit sem ID:`, payload);
-          return;
+        const items: any[] = Array.isArray(payload)
+          ? payload
+          : (Array.isArray(payload?.labels) ? payload.labels : [payload]);
+        let count = 0;
+        for (const it of items) {
+          const rid = it?.id ?? it?.labelId ?? it?.lid ?? it?.value;
+          if (!rid) continue;
+          const id = String(rid);
+          const name = String(it?.name ?? it?.label ?? it?.title ?? it?.displayName ?? id);
+          const color = it?.color ?? it?.colorHex ?? it?.backgroundColor;
+          const predefinedId = it?.predefinedId;
+          const deleted = it?.deleted === true;
+          upsertLabel(whatsapp.id, { id, name, color, predefinedId, deleted });
+          count++;
         }
-        upsertLabel(whatsapp.id, { id: String(id), name: String(name || id), color, predefinedId, deleted });
-        logger.info(`[wbotMonitor] Label ${name} (${id}) processada para whatsappId=${whatsapp.id}`);
+        if (count === 0) {
+          logger.warn(`[wbotMonitor] labels.edit sem itens válidos para upsert.`);
+        } else {
+          logger.info(`[wbotMonitor] labels.edit processou ${count} label(s) para whatsappId=${whatsapp.id}`);
+        }
       } catch (err: any) {
         logger.error(`[wbotMonitor] labels.edit handler error: ${err?.message}`, err);
       }

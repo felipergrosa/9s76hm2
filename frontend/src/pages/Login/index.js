@@ -13,25 +13,34 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 const useStyles = makeStyles((theme) => ({
   root: {
     display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
     width: "100vw",
     height: "100vh",
-    [theme.breakpoints.down("sm")]: {
-      flexDirection: "column",
+    overflow: "hidden",
+    position: "relative",
+    // Cor do fundo animado tela de login
+    background: "linear-gradient(-45deg,rgb(218, 149, 92),rgb(60, 183, 231),rgb(31, 113, 143),rgb(118, 240, 211))",
+    backgroundSize: "400% 400%",
+    animation: "$gradientAnimation 15s ease infinite",
+  },
+  "@keyframes gradientAnimation": {
+    "0%": {
+      backgroundPosition: "0% 50%",
+    },
+    "50%": {
+      backgroundPosition: "100% 50%",
+    },
+    "100%": {
+      backgroundPosition: "0% 50%",
     },
   },
-  imageSide: {
-    flex: 1,
-    background: `url('https://clickscertos.com.br/wp-content/uploads/2025/05/capazapflow.webp') no-repeat center center`,
-    backgroundSize: "cover",
-    height: "100%",
-  },
   formSide: {
-    flex: 1,
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
     padding: "40px",
-    background: "linear-gradient(135deg, #e0f7fa, #f0f4c3)",
+    zIndex: 1,
     [theme.breakpoints.down("sm")]: {
       padding: "20px",
     },
@@ -194,102 +203,99 @@ const Login = () => {
       </Helmet>
 
       <div className={classes.root}>
-        <div className={classes.imageSide}></div>
-        <div className={classes.formSide}>
-          <form className={classes.formContainer} onSubmit={handleSubmit}>
-            <img src="/logo.png" alt="Logo" className={classes.logoImg} />
-            {error && <Typography color="error">{error}</Typography>}
-            <TextField
-              label="Email"
-              variant="outlined"
-              fullWidth
-              margin="normal"
-              type="email"
-              value={user.email}
-              onChange={(e) => setUser({ ...user, email: e.target.value })}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <EmailIcon />
-                  </InputAdornment>
-                ),
+        <form className={classes.formContainer} onSubmit={handleSubmit}>
+          <img src="/logo.png" alt="Logo" className={classes.logoImg} />
+          {error && <Typography color="error">{error}</Typography>}
+          <TextField
+            label="Email"
+            variant="outlined"
+            fullWidth
+            margin="normal"
+            type="email"
+            value={user.email}
+            onChange={(e) => setUser({ ...user, email: e.target.value })}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <EmailIcon />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <TextField
+            label="Password"
+            variant="outlined"
+            fullWidth
+            margin="normal"
+            type={showPassword ? "text" : "password"}
+            value={user.password}
+            onChange={(e) => setUser({ ...user, password: e.target.value })}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <LockIcon />
+                </InputAdornment>
+              ),
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton onClick={() => setShowPassword(!showPassword)}>
+                    {showPassword ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+          />
+          <div className={classes.rememberMeContainer}>
+            <Switch
+              checked={user.remember}
+              onChange={(e) => setUser({ ...user, remember: e.target.checked })}
+              name="remember"
+              sx={{
+                "& .MuiSwitch-thumb": {
+                  backgroundColor: user.remember ? "#4F0F96" : "#C3C3C3",
+                },
+                "& .Mui-checked": {
+                  color: "#4F0F96",
+                },
+                "& .Mui-checked + .MuiSwitch-track": {
+                  backgroundColor: "#4F0F96",
+                },
+                "& .MuiSwitch-track": {
+                  backgroundColor: user.remember ? "#4F0F96" : "#C3C3C3",
+                },
               }}
             />
-            <TextField
-              label="Password"
-              variant="outlined"
-              fullWidth
-              margin="normal"
-              type={showPassword ? "text" : "password"}
-              value={user.password}
-              onChange={(e) => setUser({ ...user, password: e.target.value })}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LockIcon />
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPassword(!showPassword)}>
-                      {showPassword ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <div className={classes.rememberMeContainer}>
-              <Switch
-                checked={user.remember}
-                onChange={(e) => setUser({ ...user, remember: e.target.checked })}
-                name="remember"
-                sx={{
-                  "& .MuiSwitch-thumb": {
-                    backgroundColor: user.remember ? "#4F0F96" : "#C3C3C3",
-                  },
-                  "& .Mui-checked": {
-                    color: "#4F0F96",
-                  },
-                  "& .Mui-checked + .MuiSwitch-track": {
-                    backgroundColor: "#4F0F96",
-                  },
-                  "& .MuiSwitch-track": {
-                    backgroundColor: user.remember ? "#4F0F96" : "#C3C3C3",
-                  },
-                }}
-              />
-              <Typography>Lembrar de mim</Typography>
-            </div>
-            <div>
+            <Typography>Lembrar de mim</Typography>
+          </div>
+          <div>
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              className={classes.submitBtn}
+            >
+              Entrar
+            </Button>
+            {userCreationEnabled && (
               <Button
-                type="submit"
+                component={RouterLink}
+                to="/signup"
                 variant="contained"
-                color="primary"
-                className={classes.submitBtn}
+                className={classes.registerBtn}
               >
-                Entrar
+                Cadastre-se
               </Button>
-              {userCreationEnabled && (
-                <Button
-                  component={RouterLink}
-                  to="/signup"
-                  variant="contained"
-                  className={classes.registerBtn}
-                >
-                  Cadastre-se
-                </Button>
-              )}
-            </div>
-            <div className={classes.forgotPassword}>
-              <RouterLink
-                to="/forgot-password"
-                className={classes.forgotPasswordLink}
-              >
-                Esqueceu a senha?
-              </RouterLink>
-            </div>
-          </form>
-        </div>
+            )}
+          </div>
+          <div className={classes.forgotPassword}>
+            <RouterLink
+              to="/forgot-password"
+              className={classes.forgotPasswordLink}
+            >
+              Esqueceu a senha?
+            </RouterLink>
+          </div>
+        </form>
         <div
           className={classes.whatsappButton}
           onClick={() => window.open("https://wa.me/5511916130562")}

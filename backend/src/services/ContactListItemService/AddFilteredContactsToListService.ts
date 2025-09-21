@@ -163,7 +163,7 @@ const AddFilteredContactsToListService = async ({
             .replace(/\./g, '') // remove separador de milhar
             .replace(',', '.'); // vírgula para ponto
           const num = parseFloat(cleaned);
-          return isNaN(num) ? 0 : num;
+          return isNaN(num) ? 0 : num / 100;
         };
 
         const hasMin = typeof filters.minCreditLimit !== 'undefined' && filters.minCreditLimit !== '';

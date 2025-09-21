@@ -78,6 +78,8 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
   const [systemTags, setSystemTags] = useState([]);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState({ total: 0, processed: 0, created: 0, updated: 0, tagged: 0 });
+  const importPollRef = useRef(null);
   const [tagMappings, setTagMappings] = useState({});
   const [newTagNames, setNewTagNames] = useState({});
   const [selectedDeviceTags, setSelectedDeviceTags] = useState(new Set());
@@ -90,6 +92,60 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
   const [contactsHasMore, setContactsHasMore] = useState(true);
   const [contactsLoadingPage, setContactsLoadingPage] = useState(false);
   const contactsListRef = useRef(null);
+  // Estado do QR Code (WhatsApp-Web.js)
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrCode, setQrCode] = useState("");
+  const [qrStatus, setQrStatus] = useState("idle"); // idle | initializing | qr_generated | authenticated | connected | disconnected
+  const qrPollRef = useRef(null);
+  // Progresso de carregamento de labels (WhatsApp-Web.js)
+  const [labelsProgress, setLabelsProgress] = useState({ percent: 0, phase: 'idle' });
+  const progressPollRef = useRef(null);
+  const phaseLabel = useCallback((phase) => {
+    const map = {
+      iniciando: 'Iniciando',
+      labels_recebidas: 'Recebendo etiquetas',
+      contagem_por_label: 'Contando por etiqueta',
+      lendo_contatos_salvos: 'Lendo contatos salvos',
+      mapeando_rotulados: 'Mapeando contatos rotulados',
+      concluido: 'Concluído',
+      idle: 'Aguardando'
+    };
+    return map[String(phase)] || String(phase);
+  }, []);
+
+  const startProgressPolling = useCallback(() => {
+    if (progressPollRef.current) return;
+    progressPollRef.current = setInterval(async () => {
+      try {
+        if (!selectedWhatsappId) return;
+        const { data } = await api.get(`/whatsapp-web/labels/progress?whatsappId=${selectedWhatsappId}`);
+        const percent = Number(data?.percent || 0);
+        const phase = String(data?.phase || 'idle');
+        setLabelsProgress({ percent, phase });
+        if (percent >= 100) {
+          clearInterval(progressPollRef.current);
+          progressPollRef.current = null;
+        }
+      } catch (_) { /* ignore */ }
+    }, 600);
+  }, [selectedWhatsappId]);
+
+  const stopProgressPolling = useCallback(() => {
+    if (progressPollRef.current) {
+      clearInterval(progressPollRef.current);
+      progressPollRef.current = null;
+    }
+  }, []);
+
+  const handleCancelLabels = useCallback(async () => {
+    try {
+      if (!selectedWhatsappId) return;
+      await api.get(`/whatsapp-web/labels/cancel?whatsappId=${selectedWhatsappId}`);
+    } catch (_) {}
+    stopProgressPolling();
+    setLoading(false);
+    setLabelsProgress({ percent: 0, phase: 'idle' });
+  }, [selectedWhatsappId, stopProgressPolling]);
 
   // Escolhe automaticamente cor de texto (preto/branco) com base na cor da tag
   const getContrastColor = (hexColor) => {
@@ -104,26 +160,18 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
     return luminance > 0.6 ? '#000' : '#fff';
   };
 
-  const rebuildDeviceTags = async () => {
-    try {
-      setLoading(true);
-      const resp = await api.post(`/contacts/rebuild-device-tags?whatsappId=${selectedWhatsappId}`);
-      console.log('Rebuild Tags Response:', resp.data);
-      await loadData();
-      setLoading(false);
-      // Sem alert: feedback silencioso no console; UI já é atualizada
-    } catch (error) {
-      console.error('Erro ao reconstruir tags:', error);
-      setLoading(false);
-    }
-  };
+  // Removidos: funções legadas baseadas em Baileys
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setLabelsProgress({ percent: 1, phase: 'iniciando' });
+    startProgressPolling();
     try {
-      // Carregar tags do dispositivo
-      const deviceResponse = await api.get(`/contacts/device-tags?whatsappId=${selectedWhatsappId}`);
-      const deviceTagsData = Array.isArray(deviceResponse.data.tags) ? deviceResponse.data.tags : [];
+      // Limpa dados anteriores para evitar piscar conteúdo durante o loading
+      setDeviceTags([]);
+      // Carregar labels via WhatsApp-Web.js
+      const deviceResponse = await api.get(`/whatsapp-web/labels?whatsappId=${selectedWhatsappId}`);
+      const deviceTagsData = Array.isArray(deviceResponse.data?.labels) ? deviceResponse.data.labels : [];
       setDeviceTags(deviceTagsData);
 
       // Carregar tags do sistema (lista completa)
@@ -131,11 +179,10 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
       const systemTagsData = Array.isArray(systemResponse.data) ? systemResponse.data : (Array.isArray(systemResponse.data?.tags) ? systemResponse.data.tags : []);
       setSystemTags(systemTagsData);
 
-      // Reset paginação e carregar primeira página de contatos
+      // Não carregar contatos via endpoint legado automaticamente
       setDeviceContacts([]);
       setContactsPage(1);
-      setContactsHasMore(true);
-      await loadContactsPage(1, false);
+      setContactsHasMore(false);
 
       // Inicializar mapeamentos vazios
       const initialMappings = {};
@@ -151,6 +198,13 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
       toastError(error);
     } finally {
       setLoading(false);
+      // Força 100% ao terminar o ciclo
+      setLabelsProgress(p => ({ percent: 100, phase: 'concluido' }));
+      // Aguarda um pequeno tempo para o usuário ver 100% e encerra polling
+      setTimeout(() => {
+        stopProgressPolling();
+        setLabelsProgress({ percent: 0, phase: 'idle' });
+      }, 700);
     }
   }, [selectedWhatsappId]);
 
@@ -177,10 +231,6 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
       const { data } = await api.get("/whatsapp");
       const whatsappsData = Array.isArray(data) ? data : [];
       setWhatsapps(whatsappsData);
-      // Selecionar automaticamente a primeira conexão quando nenhuma estiver selecionada
-      if (!selectedWhatsappId && whatsappsData.length > 0) {
-        setSelectedWhatsappId(whatsappsData[0].id);
-      }
     } catch (err) {
       toastError(err);
     }
@@ -188,15 +238,12 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
 
   useEffect(() => {
     fetchWhatsapps();
-
-    if (isOpen) {
-      loadData();
-    }
+    // Não carregar automaticamente ao abrir
   }, [fetchWhatsapps, isOpen, loadData]);
 
   // Recarrega automaticamente quando a conexão selecionada muda
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && selectedWhatsappId) {
       loadData();
     }
   }, [selectedWhatsappId, isOpen, loadData]);
@@ -245,6 +292,18 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
     // Caminho 1: Importação por tags do dispositivo (se houver seleção de tags)
     if (selectedDeviceTags.size > 0) {
       setImporting(true);
+      // Inicia progresso de importação (progressId dedicado)
+      const progressId = `imp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      setImportProgress({ total: 0, processed: 0, created: 0, updated: 0, tagged: 0 });
+      // Polling de progresso
+      if (importPollRef.current) clearInterval(importPollRef.current);
+      importPollRef.current = setInterval(async () => {
+        try {
+          const { data } = await api.get(`/contacts/import-progress`, { params: { progressId } });
+          const p = data?.progress || {};
+          if (typeof p.total === 'number') setImportProgress(p);
+        } catch (_) { /* ignore */ }
+      }, 600);
       try {
         const tagMapping = {};
         for (const deviceTagId of selectedDeviceTags) {
@@ -254,9 +313,18 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
             tagMapping[deviceTagId] = { systemTagId };
           } else if (newTagName) {
             tagMapping[deviceTagId] = { newTagName };
+          } else {
+            // Envia seleção mesmo sem mapeamento (ex.: __all__ ou apenas importar sem etiquetar)
+            tagMapping[deviceTagId] = {};
           }
         }
-        const resp = await onImport(tagMapping, selectedWhatsappId);
+        // Opções avançadas + progressId
+        tagMapping.__options = { ...(tagMapping.__options || {}), progressId };
+        const resp = await api.post('/contacts/import-with-tags', {
+          tagMapping,
+          whatsappId: selectedWhatsappId,
+          progressId
+        });
         // Guardar sumário para exibir no drawer permanente
         try {
           const data = resp?.data || resp;
@@ -270,6 +338,10 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
         toastError(error);
       } finally {
         setImporting(false);
+        if (importPollRef.current) {
+          clearInterval(importPollRef.current);
+          importPollRef.current = null;
+        }
       }
       return;
     }
@@ -301,161 +373,241 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
     setTagMappings({});
     setNewTagNames({});
     setImportSummary(null);
+    // Encerrar polling do QR caso esteja ativo
+    if (qrPollRef.current) {
+      clearInterval(qrPollRef.current);
+      qrPollRef.current = null;
+    }
+    setQrOpen(false);
+    setQrCode("");
+    setQrStatus("idle");
     handleClose();
   };
 
-  const debugDeviceData = async () => {
+
+  // Removido forceLabelsSync legado
+
+  // Removido rebuildCacheFromBaileys legado
+
+  const initializeWhatsAppWeb = async () => {
+    // Mantemos a função para compatibilidade, mas agora abrimos o modal dedicado
+    await openQrModal();
+  };
+
+  // Abre modal e inicia polling de status/QR
+  const openQrModal = async () => {
     try {
-      const response = await api.get(`/contacts/debug-device-data?whatsappId=${selectedWhatsappId}`);
-      console.log('Debug Device Data:', response.data);
-      alert(`Debug Info:\n${JSON.stringify(response.data, null, 2)}`);
+      setQrStatus("initializing");
+      setQrOpen(true);
+      setQrCode("");
+
+      // Dispara inicialização no backend
+      await api.post(`/whatsapp-web/initialize?whatsappId=${selectedWhatsappId}`);
+
+      // Inicia polling a cada 2s
+      if (qrPollRef.current) clearInterval(qrPollRef.current);
+      qrPollRef.current = setInterval(async () => {
+        try {
+          const statusResponse = await api.get(`/whatsapp-web/status?whatsappId=${selectedWhatsappId}`);
+          const { hasQR, qrCode: code, status, connected } = statusResponse.data || {};
+          setQrStatus(status || (connected ? 'connected' : 'initializing'));
+          if (hasQR && code) {
+            setQrCode(code);
+          }
+          if (connected) {
+            // Conectado: para polling, fecha modal após pequena pausa
+            if (qrPollRef.current) {
+              clearInterval(qrPollRef.current);
+              qrPollRef.current = null;
+            }
+            setTimeout(() => {
+              setQrOpen(false);
+              setQrCode("");
+            }, 1200);
+          }
+        } catch (e) {
+          // mantém polling, mostra status mínimo
+          // console.error('Polling status error', e);
+        }
+      }, 2000);
     } catch (error) {
-      console.error('Erro no debug:', error);
-      alert('Erro ao obter dados de debug');
+      console.error('Erro ao inicializar WhatsApp-Web.js:', error);
+      alert('Erro ao inicializar WhatsApp-Web.js');
+      setQrOpen(false);
+      if (qrPollRef.current) {
+        clearInterval(qrPollRef.current);
+        qrPollRef.current = null;
+      }
     }
   };
 
-  const forceAppStateSync = async () => {
+  const testWhatsAppWebLabels = async () => {
     try {
       setLoading(true);
-      const response = await api.post(`/contacts/force-appstate-sync?whatsappId=${selectedWhatsappId}`);
-      console.log('Force Sync Response:', response.data);
-
-      // Se já retornou com labelsCount > 0, recarrega imediatamente
-      const labelsCount = response?.data?.labelsCount || 0;
-      if (labelsCount > 0) {
-        await loadData();
-        setLoading(false);
-        return;
-      }
-
-      // Polling: tentar por até 10s
-      const start = Date.now();
-      const timeoutMs = 10000;
-      const step = 1000;
-      let success = false;
-      while (Date.now() - start < timeoutMs) {
-        try {
-          const deviceResponse = await api.get(`/contacts/device-tags?whatsappId=${selectedWhatsappId}`);
-          const tags = Array.isArray(deviceResponse.data.tags) ? deviceResponse.data.tags : [];
-          if (tags.length > 0) {
-            setDeviceTags(tags);
-            success = true;
-            break;
-          }
-        } catch (_) {}
-        await new Promise(r => setTimeout(r, step));
-      }
-      if (!success) {
-        alert('Sincronização forçada concluída, mas nenhuma etiqueta foi recebida. Tente reconectar a sessão do WhatsApp e tente novamente.');
+      setLabelsProgress({ percent: 1, phase: 'iniciando' });
+      startProgressPolling();
+      
+      // Buscar as labels diretamente
+      const response = await api.get(`/whatsapp-web/labels?whatsappId=${selectedWhatsappId}`);
+      console.log('WhatsApp-Web.js Labels Response:', response.data);
+      
+      if (response.data?.success) {
+        const labels = response.data.labels || [];
+        // Atualizar estado com as labels do WhatsApp-Web.js (sem alert)
+        setDeviceTags(labels);
+      } else {
+        alert(`❌ Erro no WhatsApp-Web.js:\n\n${response.data?.error || 'Erro desconhecido'}\n\nVerifique os logs do backend para mais detalhes.`);
       }
       setLoading(false);
+      setLabelsProgress(p => ({ percent: 100, phase: 'concluido' }));
+      setTimeout(() => {
+        stopProgressPolling();
+        setLabelsProgress({ percent: 0, phase: 'idle' });
+      }, 700);
     } catch (error) {
-      console.error('Erro ao forçar sincronização:', error);
-      alert('Erro ao forçar sincronização do App State');
+      console.error('Erro ao testar WhatsApp-Web.js:', error);
+      
+      let errorMessage = '❌ Erro ao conectar com WhatsApp-Web.js:\n\n';
+      
+      if (error.response?.data?.error) {
+        errorMessage += error.response.data.error;
+      } else if (error.message) {
+        errorMessage += error.message;
+      } else {
+        errorMessage += 'Erro desconhecido';
+      }
+      
+      errorMessage += '\n\nVerifique:\n';
+      errorMessage += '• Se o backend está rodando\n';
+      errorMessage += '• Os logs do backend para mais detalhes\n';
+      errorMessage += '• Se precisa escanear o QR Code';
+      
+      alert(errorMessage);
       setLoading(false);
+      stopProgressPolling();
     }
   };
 
-  if (loading) {
-    return (
-      <Dialog fullWidth maxWidth="md" open={isOpen} onClose={handleCloseModal}>
-        <div className={classes.loadingContainer}>
-          <CircularProgress />
-          <Typography variant="body1" style={{ marginLeft: 16 }}>
-            Carregando tags...
-          </Typography>
-        </div>
-      </Dialog>
-    );
-  }
+  // Removido retorno antecipado em loading para sempre mostrar o modal com a barra de progresso
 
   return (
+    <>
     <Dialog fullWidth maxWidth="md" open={isOpen} onClose={handleCloseModal}>
       <DialogTitle>
         Importar Contatos com Tags
       </DialogTitle>
 
       <DialogContent>
-        {importing && (
-          <Box mb={2}>
-            <LinearProgress />
-          </Box>
-        )}
-        {!importSummary && (
-        <Box mb={2} display="flex" alignItems="center" justifyContent="space-between">
-          <Typography variant="body2" color="textSecondary">
-            Selecione as tags do WhatsApp que deseja importar e mapeie para tags do sistema.
-          </Typography>
+        {loading ? (
           <Box>
-            <Tooltip title="Debug - Ver Dados">
-              <IconButton
-                onClick={debugDeviceData}
-                disabled={loading}
-                style={{ marginRight: 8 }}
-              >
-                <span style={{ fontSize: '16px' }}>🔍</span>
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Forçar Sincronização App State">
-              <IconButton
-                onClick={forceAppStateSync}
-                disabled={loading}
-                style={{ marginRight: 8 }}
-              >
-                <span style={{ fontSize: '16px' }}>🔄</span>
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Reconstruir Tags (a partir dos chats)">
-              <IconButton
-                onClick={rebuildDeviceTags}
-                disabled={loading}
-                style={{ marginRight: 8 }}
-              >
-                <span style={{ fontSize: '16px' }}>🛠️</span>
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Sincronizar Etiquetas">
-              <IconButton
-                onClick={loadData}
-                disabled={loading}
-              >
-                <Refresh />
-              </IconButton>
-            </Tooltip>
+            <Box mb={2}>
+              <LinearProgress variant={labelsProgress.percent > 0 ? 'determinate' : 'indeterminate'} value={Math.max(1, Math.min(100, labelsProgress.percent || 0))} />
+            </Box>
+            <Box display="flex" alignItems="center" justifyContent="space-between">
+              <Box display="flex" alignItems="center">
+                <Typography variant="body2" color="textSecondary">
+                  Buscando etiquetas do WhatsApp...
+                </Typography>
+                <Box display="flex" alignItems="center" ml={2} minWidth={180}>
+                  <Typography variant="caption" color="textSecondary">
+                    {Math.max(1, Math.min(100, labelsProgress.percent))}% — {phaseLabel(labelsProgress.phase)}
+                  </Typography>
+                </Box>
+              </Box>
+              <Button size="small" onClick={handleCancelLabels}>
+                Cancelar
+              </Button>
+            </Box>
           </Box>
-        </Box>
-        )}
-
-        <FormControl fullWidth variant="outlined" margin="dense">
-          <InputLabel id="whatsapp-select-label">Conexão WhatsApp</InputLabel>
-          <Select
-            labelId="whatsapp-select-label"
-            id="whatsapp-select"
-            value={selectedWhatsappId}
-            onChange={(e) => setSelectedWhatsappId(e.target.value)}
-            label="Conexão WhatsApp"
-          >
-            <MenuItem value="">
-              <em>Padrão</em>
-            </MenuItem>
-            {Array.isArray(whatsapps) &&
-              whatsapps.map((whatsapp) => (
-                <MenuItem key={whatsapp.id} value={whatsapp.id}>
-                  {whatsapp.name}
-                </MenuItem>
-              ))}
-          </Select>
-        </FormControl>
-
-        {!importSummary && (loading ? (
-          <Box className={classes.loadingContainer}>
-            <CircularProgress />
-            <Typography variant="body1" style={{ marginLeft: 16 }}>
-              Carregando tags...
+        ) : importing ? (
+          <Box>
+            <Box mb={1}>
+              <LinearProgress
+                variant={importProgress && importProgress.total > 0 ? 'determinate' : 'indeterminate'}
+                value={importProgress && importProgress.total > 0 ? Math.min(100, Math.max(1, Math.floor((importProgress.processed / importProgress.total) * 100))) : 0}
+              />
+            </Box>
+            <Typography variant="body2" color="textSecondary">
+              {importProgress && importProgress.total > 0
+                ? `Importando contatos... ${importProgress.processed}/${importProgress.total} (criados: ${importProgress.created}, atualizados: ${importProgress.updated}, etiquetados: ${importProgress.tagged})`
+                : 'Importando contatos... aguarde concluir.'}
             </Typography>
           </Box>
-        ) : !Array.isArray(deviceTags) || deviceTags.length === 0 ? (
+        ) : (
+        !importSummary && (
+          <Box mb={2} display="flex" alignItems="center" justifyContent="space-between">
+            <Box display="flex" alignItems="center">
+              <Typography variant="body2" color="textSecondary">
+                Selecione as tags do WhatsApp que deseja importar e mapeie para tags do sistema.
+              </Typography>
+              {labelsProgress.percent > 0 && (
+                <Box display="flex" alignItems="center" ml={2} minWidth={180}>
+                  <LinearProgress variant="determinate" value={Math.max(1, Math.min(100, labelsProgress.percent))} style={{ width: 120, marginRight: 8 }} />
+                  <Typography variant="caption" color="textSecondary">
+                    {Math.max(1, Math.min(100, labelsProgress.percent))}% — {phaseLabel(labelsProgress.phase)}
+                  </Typography>
+                  <Button size="small" style={{ marginLeft: 8 }} onClick={handleCancelLabels} disabled={!loading}>
+                    Cancelar
+                  </Button>
+                </Box>
+              )}
+            </Box>
+            <Box>
+              {/* Ícones legados removidos */}
+              <Tooltip title="Inicializar WhatsApp-Web.js (gerar QR Code)">
+                <IconButton
+                  onClick={openQrModal}
+                  disabled={loading}
+                  style={{ marginRight: 8 }}
+                >
+                  <span style={{ fontSize: '16px' }}>📱</span>
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Buscar etiquetas via WhatsApp-Web.js">
+                <IconButton
+                  onClick={testWhatsAppWebLabels}
+                  disabled={loading}
+                  style={{ marginRight: 8 }}
+                >
+                  <span style={{ fontSize: '16px' }}>🌐</span>
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Sincronizar Etiquetas">
+                <IconButton
+                  onClick={loadData}
+                  disabled={loading}
+                >
+                  <Refresh />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Box>
+        ))}
+
+        {!loading && !importing && !importSummary && (
+          <FormControl fullWidth variant="outlined" margin="dense">
+            <InputLabel id="whatsapp-select-label">Conexão WhatsApp</InputLabel>
+            <Select
+              labelId="whatsapp-select-label"
+              id="whatsapp-select"
+              value={selectedWhatsappId}
+              onChange={(e) => setSelectedWhatsappId(e.target.value)}
+              label="Conexão WhatsApp"
+            >
+              <MenuItem value="">
+                <em>Padrão</em>
+              </MenuItem>
+              {Array.isArray(whatsapps) &&
+                whatsapps.map((whatsapp) => (
+                  <MenuItem key={whatsapp.id} value={whatsapp.id}>
+                    {whatsapp.name}
+                  </MenuItem>
+                ))}
+            </Select>
+          </FormControl>
+        )}
+
+        {!loading && !importing && !importSummary && (!Array.isArray(deviceTags) || deviceTags.length === 0) ? (
           <div>
             <Alert severity="info" style={{ marginBottom: 8 }}>
               Nenhuma tag de WhatsApp foi encontrada para esta conexão. Você pode importar contatos do dispositivo e usar as tags exibidas ao lado de cada contato.
@@ -523,7 +675,7 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
               </List>
             </div>
           </div>
-        ) : (
+        ) : (!loading && !importing && !importSummary && (
           <div>
             <Typography variant="h6" gutterBottom>
               Tags do Dispositivo ({Array.isArray(deviceTags) ? deviceTags.length : 0})
@@ -531,7 +683,14 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
 
             <List>
               {Array.isArray(deviceTags) &&
-                deviceTags.map((deviceTag) => {
+                deviceTags
+                  .sort((a, b) => {
+                    // "Sem etiqueta" sempre no topo
+                    if (a.id === "__unlabeled__") return -1;
+                    if (b.id === "__unlabeled__") return 1;
+                    return a.name.localeCompare(b.name);
+                  })
+                  .map((deviceTag) => {
                   const mappedId = tagMappings[deviceTag.id];
                   const mappedTag = Array.isArray(systemTags)
                     ? systemTags.find((t) => t.id === mappedId)
@@ -539,6 +698,7 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                   const mappedLabel = mappedTag
                     ? ` → Tag: ${mappedTag.name}`
                     : '';
+                  const isUnlabeled = deviceTag.id === "__unlabeled__";
                   return (
                     <div key={deviceTag.id} className={classes.deviceTagItem}>
                       <Box display="flex" alignItems="center" mb={1}>
@@ -559,10 +719,12 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                                     : ''
                                 }`}
                                 style={{
-                                  backgroundColor: deviceTag.color || '#A4CCCC',
-                                  color: getContrastColor(deviceTag.color || '#A4CCCC'),
+                                  backgroundColor: isUnlabeled ? '#8D99AE' : (deviceTag.color || '#A4CCCC'),
+                                  color: getContrastColor(isUnlabeled ? '#8D99AE' : (deviceTag.color || '#A4CCCC')),
+                                  fontWeight: isUnlabeled ? 'bold' : 'normal'
                                 }}
                                 size="small"
+                                icon={isUnlabeled ? <span>📝</span> : undefined}
                               />
                               {mappedLabel && (
                                 <Typography
@@ -570,6 +732,14 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                                   style={{ marginLeft: 8, color: '#555' }}
                                 >
                                   {mappedLabel}
+                                </Typography>
+                              )}
+                              {isUnlabeled && (
+                                <Typography
+                                  variant="caption"
+                                  style={{ marginLeft: 8, color: '#666', fontStyle: 'italic' }}
+                                >
+                                  Contatos sem etiquetas no WhatsApp
                                 </Typography>
                               )}
                             </Box>
@@ -580,7 +750,11 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                       {selectedDeviceTags.has(deviceTag.id) && (
                         <Box ml={4}>
                           <Typography variant="body2" gutterBottom>
-                            Mapear para:
+                            Mapear para: {mappedTag ? (
+                              <span style={{ fontStyle: 'italic', color: '#555' }}>
+                                → Tag: {mappedTag.name}
+                              </span>
+                            ) : null}
                           </Typography>
 
                           {/* Seleção de tag existente */}
@@ -726,6 +900,53 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
         )}
       </DialogActions>
     </Dialog>
+
+    {/* Modal de QR Code do WhatsApp-Web.js */}
+    <Dialog fullWidth maxWidth="xs" open={qrOpen} onClose={() => setQrOpen(false)}>
+      <DialogTitle>Conectar WhatsApp-Web.js</DialogTitle>
+      <DialogContent>
+        <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" p={1}>
+          <Typography variant="body2" gutterBottom>
+            Status: {qrStatus === 'qr_generated' ? 'QR Code gerado' : qrStatus}
+          </Typography>
+          {!qrCode && (
+            <Box display="flex" alignItems="center" justifyContent="center" p={2}>
+              <CircularProgress />
+              <Typography variant="caption" style={{ marginLeft: 8 }}>
+                Aguardando QR Code...
+              </Typography>
+            </Box>
+          )}
+          {qrCode && (
+            <img
+              alt="QR Code WhatsApp"
+              width={300}
+              height={300}
+              style={{ borderRadius: 8, border: '1px solid #eee' }}
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCode)}`}
+            />
+          )}
+          <Typography variant="caption" color="textSecondary" style={{ marginTop: 8 }}>
+            Abra o aplicativo WhatsApp no celular → Dispositivos conectados → Conectar um dispositivo → aponte a câmera para o QR.
+          </Typography>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setQrOpen(false)} color="primary">Fechar</Button>
+        {qrCode && (
+          <Button
+            color="primary"
+            onClick={() => {
+              const url = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCode)}`;
+              window.open(url, '_blank');
+            }}
+          >
+            Abrir em nova aba
+          </Button>
+        )}
+      </DialogActions>
+    </Dialog>
+    </>
   );
 };
 

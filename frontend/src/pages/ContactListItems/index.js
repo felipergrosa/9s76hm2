@@ -412,7 +412,7 @@ const ContactListItems = () => {
         case "situation":
           return (c.contact && c.contact.situation) || "";
         case "creditLimit":
-          return (c.contact && c.contact.creditLimit) ?? 0;
+          return c.contact && c.contact.creditLimit ? formatCurrency(c.contact.creditLimit) : "";
         case "tags":
           return Array.isArray(c.contact && c.contact.tags) ? (c.contact.tags || []).length : 0;
         default:

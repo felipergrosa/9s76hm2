@@ -5,7 +5,11 @@ import React, {
     useContext,
     useRef,
     useMemo,
+    useCallback,
 } from "react";
+import useContactHandlers from "../../hooks/useContactHandlers";
+import useContactPagination from "../../hooks/useContactPagination";
+import useContactSort from "../../hooks/useContactSort";
 import { toast } from "react-toastify";
 import { useHistory, useLocation } from "react-router-dom";
 import useContactUpdates from "../../hooks/useContactUpdates";
@@ -33,6 +37,9 @@ import { Facebook, Instagram, WhatsApp, ImportExport, Backup, ContactPhone } fro
 import { Tooltip, Menu, MenuItem } from "@material-ui/core";
 import api from "../../services/api";
 import ContactAvatar from "../../components/ContactAvatar";
+import ContactRow from "../../components/ContactRow";
+import ContactCard from "../../components/ContactCard";
+import LazyContactAvatar from "../../components/LazyContactAvatar";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 import ContactModal from "../../components/ContactModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
@@ -117,13 +124,33 @@ const Contacts = () => {
     const location = useLocation();
 
     const { user, socket } = useContext(AuthContext);
+    
+    // Hook de ordenação para contatos
+    const { 
+        sortField, 
+        sortDirection, 
+        handleSort 
+    } = useContactSort('name', 'asc', user?.id);
 
     const [loading, setLoading] = useState(false);
-    const [pageNumber, setPageNumber] = useState(1);
     const [searchParam, setSearchParam] = useState("");
     const [contacts, dispatch] = useReducer(reducer, []);
     const [selectedContactId, setSelectedContactId] = useState(null);
     const [contactModalOpen, setContactModalOpen] = useState(false);
+    
+    // Hook de paginação
+    const {
+        pageNumber, 
+        setPageNumber,
+        contactsPerPage, 
+        setContactsPerPage,
+        totalContacts, 
+        setTotalContacts,
+        totalPages,
+        handleChangePerPage,
+        goToPage: handlePageChange,
+        renderPageNumbers
+    } = useContactPagination(25, user?.id);
 
     const [importContactModalOpen, setImportContactModalOpen] = useState(false);
     const [deletingContact, setDeletingContact] = useState(null);
@@ -155,43 +182,35 @@ const Contacts = () => {
     const [hideNum, setHideNum] = useState(false);
     const [enableLGPD, setEnableLGPD] = useState(false);
 
-    // Placeholder for total contacts, should be fetched from API
-    const [totalContacts, setTotalContacts] = useState(0); 
-    const [contactsPerPage, setContactsPerPage] = useState(25);
-    // Ordenação
-    const [sortField, setSortField] = useState("name");
-    const [sortDirection, setSortDirection] = useState("asc"); // 'asc' | 'desc'
+    // Handlers para interações com contatos
+    const {
+        handleEditContact,
+        handleDeleteContact,
+        handleShowDeleteConfirm,
+        handleBlockContact,
+        handleShowBlockConfirm,
+        handleUnblockContact,
+        handleShowUnblockConfirm,
+        handleStartNewTicket
+    } = useContactHandlers(
+        setDeletingContact,
+        setBlockingContact,
+        setUnBlockingContact,
+        setContactTicket,
+        setNewTicketModalOpen,
+        setSelectedContactId,
+        setContactModalOpen,
+        setSearchParam,
+        setPageNumber
+    );
+    // Hook de ordenação já foi importado no topo
 
-    // Carrega preferência de ordenação do usuário
-    useEffect(() => {
-        const key = `contactsSort:${user?.id || "anon"}`;
-        try {
-            const saved = JSON.parse(localStorage.getItem(key));
-            if (saved && saved.field) {
-                setSortField(saved.field);
-                setSortDirection(saved.direction === "desc" ? "desc" : "asc");
-            }
-        } catch (e) {
-            // ignora
-        }
-    }, [user?.id]);
+    // Preferências de paginação já são gerenciadas pelo hook useContactPagination
 
-    // Carrega preferência de itens por página do usuário
-    useEffect(() => {
-        const key = `contactsPerPage:${user?.id || "anon"}`;
-        try {
-            const saved = parseInt(localStorage.getItem(key), 10);
-            if (!isNaN(saved) && saved > 0) {
-                setContactsPerPage(saved);
-            }
-        } catch (_) { /* ignore */ }
-    }, [user?.id]);
-
-    const handleChangePerPage = (e) => {
+    // Adaptador para manter compatibilidade com o componente atual
+    const adaptedHandleChangePerPage = (e) => {
         const value = parseInt(e.target.value, 10) || 25;
-        setContactsPerPage(value);
-        setPageNumber(1);
-        try { localStorage.setItem(`contactsPerPage:${user?.id || "anon"}`, String(value)); } catch {}
+        handleChangePerPage(value);
     };
 
     useEffect(() => {
@@ -389,30 +408,23 @@ const Contacts = () => {
         setContactModalOpen(false);
     };
 
-    const hadleEditContact = (contactId) => {
-        setSelectedContactId(contactId);
-        setContactModalOpen(true);
-    };
+    // Agora usando o handleEditContact do hook useContactHandlers
 
-    const handleDeleteContact = async (contactId) => {
-        try {
-            await api.delete(`/contacts/${contactId}`);
-            toast.success(i18n.t("contacts.toasts.deleted"));
-        } catch (err) {
-            toastError(err);
-        }
-        setDeletingContact(null);
-    };
+    // Agora usando o handleDeleteContact do hook useContactHandlers
 
-    // NOVA FUNÇÃO: SELECIONAR UM CONTATO INDIVIDUALMENTE
-    const handleToggleSelectContact = (contactId) => (event) => {
-        if (event.target.checked) {
-            setSelectedContactIds((prevSelected) => [...prevSelected, contactId]);
-        } else {
-            setSelectedContactIds((prevSelected) => prevSelected.filter((id) => id !== contactId));
-            setIsSelectAllChecked(false); // Se um individual é desmarcado, "Selecionar Tudo" deve ser desmarcado
-        }
-    };
+    // NOVA FUNÇÃO: SELECIONAR UM CONTATO INDIVIDUALMENTE (memoizada)
+    const handleToggleSelectContact = useCallback((contactId) => {
+        setSelectedContactIds((prevSelected) => {
+            if (prevSelected.includes(contactId)) {
+                const newSelection = prevSelected.filter((id) => id !== contactId);
+                // Se um individual é desmarcado, "Selecionar Tudo" deve ser desmarcado
+                if (isSelectAllChecked) setIsSelectAllChecked(false);
+                return newSelection;
+            } else {
+                return [...prevSelected, contactId];
+            }
+        });
+    }, [isSelectAllChecked]);
 
     // NOVA FUNÇÃO: SELECIONAR/DESSELECIONAR TODOS OS CONTATOS
     const handleSelectAllContacts = (event) => {
@@ -450,29 +462,7 @@ const Contacts = () => {
     };
 
 
-    const handleBlockContact = async (contactId) => {
-        try {
-            await api.put(`/contacts/block/${contactId}`, { active: false });
-            toast.success("Contato bloqueado");
-        } catch (err) {
-            toastError(err);
-        }
-        setSearchParam("");
-        setPageNumber(1);
-        setBlockingContact(null);
-    };
-
-    const handleUnBlockContact = async (contactId) => {
-        try {
-            await api.put(`/contacts/block/${contactId}`, { active: true });
-            toast.success("Contato desbloqueado");
-        } catch (err) {
-            toastError(err);
-        }
-        setSearchParam("");
-        setPageNumber(1);
-        setUnBlockingContact(null);
-    };
+    // Agora usando o handleBlockContact e handleUnblockContact do hook useContactHandlers
 
     const onSave = (whatsappId) => {
         setImportWhatsappId(whatsappId)
@@ -520,7 +510,7 @@ const Contacts = () => {
 
     // Removido infinite scroll para manter paginação fixa por página
 
-    const formatPhoneNumber = (number) => {
+    const formatPhoneNumber = useCallback((number) => {
         if (!number) return "";
         const cleaned = ('' + number).replace(/\D/g, '');
         if (cleaned.startsWith("55") && cleaned.length === 13) {
@@ -530,48 +520,20 @@ const Contacts = () => {
             }
         }
         return number;
-    };
+    }, []);
 
-    // Trunca texto para um tamanho máximo e adiciona reticências
-    const truncateText = (text, max = 150) => {
+    // Trunca texto para um tamanho máximo e adiciona reticências (memoizado)
+    const truncateText = useCallback((text, max = 150) => {
         if (!text) return "";
         const str = String(text);
         return str.length > max ? str.slice(0, max) + "..." : str;
-    };
+    }, []);
 
-    // Função para lidar com a navegação de página
-    const handlePageChange = (page) => {
-        if (page >= 1 && page <= totalPages) {
-            setPageNumber(page);
-        }
-    };
+    // Função de navegação já é fornecida pelo hook como handlePageChange
 
-    // Calcula o número total de páginas
-    const totalPages = totalContacts === 0 ? 1 : Math.ceil(totalContacts / contactsPerPage);
+    // Calculação de páginas já é feita no hook useContactPagination
 
-    // Persistência da ordenação
-    const persistSort = (field, direction) => {
-        const key = `contactsSort:${user?.id || "anon"}`;
-        try {
-            localStorage.setItem(key, JSON.stringify({ field, direction }));
-        } catch (e) {
-            // ignora
-        }
-    };
-
-    // Handler de clique no cabeçalho para ordenar
-    const handleSort = (field) => {
-        setSortField((prevField) => {
-            const nextField = field;
-            setSortDirection((prevDir) => {
-                const nextDir = prevField === field ? (prevDir === "asc" ? "desc" : "asc") : "asc";
-                persistSort(nextField, nextDir);
-                setPageNumber(1);
-                return nextDir;
-            });
-            return nextField;
-        });
-    };
+    // Agora usando o handleSort do hook useContactSort
 
     // A lista já vem paginada e ordenada do backend (params: limit, pageNumber, orderBy, order).
     // Portanto, evitamos reordenar/repaginar no cliente para não misturar páginas.
@@ -579,32 +541,7 @@ const Contacts = () => {
         return contacts.filter(c => !c.isGroup);
     }, [contacts]);
 
-    // Função para renderizar os números de página (sempre 3, janela deslizante)
-
-        const renderPageNumbers = () => {
-            const pages = [];
-            if (totalPages <= 3) {
-                for (let i = 1; i <= totalPages; i++) pages.push(i);
-            } else {
-                const start = Math.max(1, Math.min(pageNumber - 1, totalPages - 2));
-                const end = Math.min(totalPages, start + 2);
-                for (let i = start; i <= end; i++) pages.push(i);
-            }
-            return pages.map((page, index) => (
-                <li key={index}>
-                    <button
-                        onClick={() => handlePageChange(page)}
-                        className={`flex items-center justify-center px-3 h-8 leading-tight border
-                            ${page === pageNumber
-                                ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
-                                : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-                            }`}
-                    >
-                        {page}
-                    </button>
-                </li>
-            ));
-        };
+    // Função renderPageNumbers já está disponibilizada pelo hook useContactPagination
 
     return (
         <div className="flex-1 bg-gray-50 dark:bg-gray-900 min-h-full">
@@ -671,7 +608,7 @@ const Contacts = () => {
                             : blockingContact
                                 ? handleBlockContact(blockingContact.id)
                                 : unBlockingContact
-                                    ? handleUnBlockContact(unBlockingContact.id)
+                                    ? handleUnblockContact(unBlockingContact.id)
                                     : ImportContacts
                                         ? handleimportContact()
                                         : handleImportExcel()
@@ -740,10 +677,6 @@ const Contacts = () => {
                                             </button>
                                         </Tooltip>
                                         <Menu {...bindMenu(popupState)}>
-                                            <MenuItem onClick={() => { setConfirmOpen(true); setImportContacts(true); popupState.close(); }}>
-                                                <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
-                                                {i18n.t("contacts.menu.importYourPhone")}
-                                            </MenuItem>
                                             <MenuItem onClick={() => { setImportTagsModalOpen(true); popupState.close(); }}>
                                                 <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
                                                 Importar com Tags
@@ -848,10 +781,6 @@ const Contacts = () => {
                                         </button>
                                     </Tooltip>
                                     <Menu {...bindMenu(popupState)}>
-                                        <MenuItem onClick={() => { setConfirmOpen(true); setImportContacts(true); popupState.close(); }}>
-                                            <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
-                                            {i18n.t("contacts.menu.importYourPhone")}
-                                        </MenuItem>
                                         <MenuItem onClick={() => { setImportTagsModalOpen(true); popupState.close(); }}>
                                             <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
                                             Importar com Tags
@@ -970,110 +899,19 @@ STATUS
                             </thead>
                             <tbody>
                                 {sortedContacts.map((contact) => (
-                                    <tr key={contact.id} className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                                        <td className="w-[48px] p-4">
-                                            <input type="checkbox"
-                                                checked={selectedContactIds.includes(contact.id)}
-                                                onChange={handleToggleSelectContact(contact.id)}
-                                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
-                                        </td>
-                                        <td className="pl-0 pr-3 py-3 font-medium text-gray-900 whitespace-nowrap dark:text-white flex items-center gap-3 w-[360px] lg:w-[360px] max-w-[360px] lg:max-w-[360px] overflow-hidden text-ellipsis">
-                                            <Tooltip {...CustomTooltipProps} title={contact.name}>
-                                                <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 flex-shrink-0 overflow-hidden">
-                                                    <ContactAvatar 
-                                                        contact={contact}
-                                                        style={{ width: "40px", height: "40px" }}
-                                                    />
-                                                </div>
-                                            </Tooltip>
-                                            <Tooltip {...CustomTooltipProps} title={contact.name}>
-                                                <span className="truncate">
-                                                    {contact.name}
-                                                </span>
-                                            </Tooltip>
-                                        </td>
-                                        <td className="pl-3 pr-3 py-3 whitespace-nowrap w-[120px]">
-                                            <div className="flex items-center gap-2 text-[16px] leading-tight">
-                                                <span className="flex-1  min-w-4 truncate text-[16px] leading-tight text-gray-800 dark:text-gray-100">{formatPhoneNumber(contact.number)}</span>
-                                                {!!contact.isWhatsappValid ? (
-                                                    <Tooltip {...CustomTooltipProps} title={`WhatsApp válido${contact.validatedAt ? ` • ${new Date(contact.validatedAt).toLocaleString('pt-BR')}` : ""}`}>
-                                                        <CheckCircle className="w-5 h-5 text-green-700 flex-shrink-0" />
-                                                    </Tooltip>
-                                                ) : (
-                                                    <Tooltip {...CustomTooltipProps} title={`WhatsApp inválido${contact.validatedAt ? ` • ${new Date(contact.validatedAt).toLocaleString('pt-BR')}` : ""}`}>
-                                                        <Ban className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                                                    </Tooltip>
-                                                )}
-                                            </div>
-                                        </td>
-                                        {/* Células 'Nome do Contato' e 'Encomenda' removidas */}
-                                        <td className="hidden lg:table-cell pl-1 pr-1 py-3 w-[120px] overflow-hidden text-ellipsis whitespace-nowrap">
-                                            <Tooltip {...CustomTooltipProps} title={contact.email}>
-                                                <span className="truncate block max-w-full text-xs">{contact.email}</span>
-                                            </Tooltip>
-                                        </td>
-                                        <td className="pl-3 pr-3 py-3 max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap">
-                                            <Tooltip {...CustomTooltipProps} title={contact.city}>
-                                                <span className="truncate">{contact.city}</span>
-                                            </Tooltip>
-                                        </td>
-                                        <td className="text-center pl-1 pr-1 py-1 max-w-[50px]">
-                                            <div className="flex justify-center  gap-1">
-                                                {contact.tags && contact.tags.slice(0, 4).map((tag) => (
-                                                    <Tooltip {...CustomTooltipProps} title={tag.name} key={tag.id}>
-                                                        <span
-                                                            className="inline-block w-[10px] h-[10px] rounded-full"
-                                                            style={{ backgroundColor: tag.color || '#9CA3AF' }}
-                                                        ></span>
-                                                    </Tooltip>
-                                                ))}
-                                                {contact.tags && contact.tags.length > 4 && (
-                                                    <Tooltip {...CustomTooltipProps} title={contact.tags.slice(4).map(t => t.name).join(", ")}>
-                                                        <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-semibold text-white rounded-full bg-gray-400 dark:bg-gray-600 select-none">
-                                                            +{contact.tags.length - 4}
-                                                        </span>
-                                                    </Tooltip>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="pl-3 pr-3 py-3 text-center w-[110px]">
-                                            <span className={`px-1.5 py-0.5 text-xs font-semibold rounded-full ${
-                                                contact.situation === 'Ativo' 
-                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 
-                                                    : contact.situation === 'Inativo' 
-                                                        ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                                                        : contact.situation === 'Suspenso'
-                                                            ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                                            : 'bg-gray-300 text-gray-800 dark:bg-gray-600 dark:text-gray-200'
-                                            }`}>
-                                                {contact.situation || (contact.active ? 'Ativo' : 'Inativo')}
-                                            </span>
-                                        </td>
-                                        <td className="pl-3 pr-3 py-3 text-center w-[120px]">
-                                            <div className="flex items-center justify-center gap-1.5">
-                                                <Tooltip {...CustomTooltipProps} title="Enviar mensagem pelo WhatsApp">
-                                                    <button onClick={() => { setContactTicket(contact); setNewTicketModalOpen(true); }} className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300">
-                                                        <WhatsApp className="w-4 h-4" />
-                                                    </button>
-                                                </Tooltip>
-                                                <Tooltip {...CustomTooltipProps} title="Editar contato">
-                                                    <button onClick={() => hadleEditContact(contact.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                                                        <Edit className="w-5 h-5" />
-                                                    </button>
-                                                </Tooltip>
-                                                <Tooltip {...CustomTooltipProps} title={contact.active ? "Bloquear contato" : "Desbloquear contato"}>
-                                                    <button onClick={contact.active ? () => { setBlockingContact(contact); setConfirmOpen(true); } : () => { setUnBlockingContact(contact); setConfirmOpen(true); }} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
-                                                        {contact.active ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
-                                                    </button>
-                                                </Tooltip>
-                                                <Tooltip {...CustomTooltipProps} title="Deletar contato">
-                                                    <button onClick={() => { setDeletingContact(contact); setConfirmOpen(true); }} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
-                                                        <Trash2 className="w-5 h-5" />
-                                                    </button>
-                                                </Tooltip>
-                                            </div>
-                                        </td>
-                                    </tr>
+                                    <ContactRow 
+                                        key={contact.id}
+                                        contact={contact}
+                                        selectedContactIds={selectedContactIds}
+                                        onToggleSelect={handleToggleSelectContact}
+                                        onEdit={handleEditContact}
+                                        onSendMessage={handleStartNewTicket}
+                                        onDelete={handleShowDeleteConfirm}
+                                        onBlock={handleShowBlockConfirm}
+                                        onUnblock={handleShowUnblockConfirm}
+                                        formatPhoneNumber={formatPhoneNumber}
+                                        CustomTooltipProps={CustomTooltipProps}
+                                    />
                                 ))}
                                 {loading && <TableRowSkeleton avatar columns={9} />}
                             </tbody>
@@ -1151,44 +989,17 @@ STATUS
                 {/* Lista de Contatos (Mobile) */}
                 <div className="min-[1200px]:hidden flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
                     {sortedContacts.map((contact) => (
-                        <div key={contact.id} className="w-full bg-white dark:bg-gray-800 shadow rounded-lg p-3 flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 overflow-hidden flex-shrink-0">
-                                <ContactAvatar 
-                                    contact={contact}
-                                    className="w-8 h-8 rounded-full object-cover"
-                                />
-                            </div>
-                            <div className="flex flex-col flex-1 min-w-0">
-                                <span className="text-xs md:text-sm font-medium text-gray-900 dark:text-white truncate" title={contact.name}>
-                                    {contact.name}
-                                </span>
-                                {/* 'Nome do Contato' removido na visualização compacta */}
-                                <span className="text-xs text-gray-500 dark:text-gray-400 truncate" title={contact.email}>
-                                    {contact.email}
-                                </span>
-                                <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 ">
-                                    <span className="truncate">{formatPhoneNumber(contact.number)}</span>
-                                    {!!contact.isWhatsappValid ? (
-                                        <Tooltip {...CustomTooltipProps} title={`WhatsApp válido${contact.validatedAt ? ` • ${new Date(contact.validatedAt).toLocaleString('pt-BR')}` : ""}`}>
-                                            <CheckCircle className="w-5 h-5 text-green-600" />
-                                        </Tooltip>
-                                    ) : (
-                                        <Tooltip {...CustomTooltipProps} title={`WhatsApp inválido${contact.validatedAt ? ` • ${new Date(contact.validatedAt).toLocaleString('pt-BR')}` : ""}`}>
-                                            <Ban className="w-5 h-5 text-gray-400" />
-                                        </Tooltip>
-                                    )}
-                                    {/* Badge de 'Encomenda' removido na visualização compacta */}
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-1.5 flex-shrink-0">
-                                <button onClick={() => { setContactTicket(contact); setNewTicketModalOpen(true); }} className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"><WhatsApp className="w-5 h-5" /></button>
-                                <button onClick={() => hadleEditContact(contact.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"><Edit className="w-5 h-5" /></button>
-                                <button onClick={contact.active ? () => { setBlockingContact(contact); setConfirmOpen(true); } : () => { setUnBlockingContact(contact); setConfirmOpen(true); }} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
-                                    {contact.active ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
-                                </button>
-                                <button onClick={() => { setDeletingContact(contact); setConfirmOpen(true); }} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"><Trash2 className="w-5 h-5" /></button>
-                            </div>
-                        </div>
+                        <ContactCard
+                            key={contact.id}
+                            contact={contact}
+                            onEdit={handleEditContact}
+                            onSendMessage={handleStartNewTicket}
+                            onDelete={handleShowDeleteConfirm}
+                            onBlock={handleShowBlockConfirm}
+                            onUnblock={handleShowUnblockConfirm}
+                            formatPhoneNumber={formatPhoneNumber}
+                            CustomTooltipProps={CustomTooltipProps}
+                        />
                     ))}
                 </div>
                 {/* Paginação (Mobile) */}

@@ -74,3 +74,9 @@ export const mapLabelIdsToTags = (whatsappId: number, labelIds: string[]): { id:
     return { id: String(id), name: lab?.name || String(id), color: lab?.color };
   });
 };
+
+export const clearCache = (whatsappId: number) => {
+  labelsByWpp.delete(whatsappId);
+  chatLabelsByWpp.delete(whatsappId);
+  logger.info(`[labelCache] Cache limpo para whatsappId=${whatsappId}`);
+};

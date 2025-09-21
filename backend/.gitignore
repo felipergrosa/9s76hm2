@@ -137,6 +137,11 @@ wwebjs_auth/
 **/wwebjs_auth/**/IndexedDB/
 **/wwebjs_auth/**/GPUCache/
 
+# Cache do whatsapp-web.js/puppeteer
+.wwebjs_cache/
+**/.wwebjs_cache/
+**/.wwebjs_cache/**
+
 # Custom: Whaticket logs, status, backups, stash, restore
 # Evita commitar arquivos de status/logs/merge temporários
 # (ajuste conforme padrão dos seus scripts)

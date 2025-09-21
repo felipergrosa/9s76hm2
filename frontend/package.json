@@ -88,6 +88,7 @@
     "react-toastify": "^6.0.9",
     "react-trello": "^2.2.11",
     "react-webcam": "^7.1.1",
+    "react-window": "^2.1.1",
     "react-youtube": "^10.1.0",
     "reactflow": "^11.7.4",
     "recharts": "^2.0.2",

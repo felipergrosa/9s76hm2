@@ -7,8 +7,8 @@ import { Can } from "../Can";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
 import * as XLSX from "xlsx";
-import { useHistory } from 'react-router-dom/cjs/react-router-dom.min';
-import toastError from '../../errors/toastError';
+// import { useHistory } from 'react-router-dom/cjs/react-router-dom.min';
+// import toastError from '../../errors/toastError';
 const useStyles = makeStyles((theme) => ({
   multFieldLine: {
     display: "flex",
@@ -44,7 +44,7 @@ const useStyles = makeStyles((theme) => ({
 const ContactImportWpModal = ({ isOpen, handleClose, selectedTags, hideNum, userProfile }) => {
   const classes = useStyles();
   const { user } = useContext(AuthContext);
-  const history = useHistory();
+  // const history = useHistory();
 
   const initialContact = { name: "", number: "", error: "" }
 
@@ -177,13 +177,7 @@ const ContactImportWpModal = ({ isOpen, handleClose, selectedTags, hideNum, user
     };
     reader.readAsArrayBuffer(file);
   };
-  const handleimportContact = async () => {
-    try {
-      history.push('/contacts/import');
-    } catch (err) {
-      toastError(err);
-    }
-  };
+  // Botão de importação do aparelho padrão removido
 
   return (
     <Dialog fullWidth open={isOpen} onClose={handleClosed}>
@@ -218,17 +212,7 @@ const ContactImportWpModal = ({ isOpen, handleClose, selectedTags, hideNum, user
               {i18n.t("contactImportWpModal.buttons.downloadModel")}
             </Button>
           </div>
-          <div className={classes.multFieldLine}>
-            <Button
-              fullWidth
-              size="small"
-              color="primary"
-              variant="contained"
-              onClick={() => handleimportContact()}
-            >
-              {i18n.t("contactImportWpModal.buttons.import")}
-            </Button>
-          </div>
+          {/* Botão 'Importar' do aparelho padrão removido para consolidar fluxo na Importação com Tags */}
           {/* <div className={classes.multFieldLine}>
             <div style={{ minWidth: "100%" }}>
               {contactsToImport?.length ?

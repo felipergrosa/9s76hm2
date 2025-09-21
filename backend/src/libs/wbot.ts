@@ -164,10 +164,10 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           // eslint-disable-next-line @typescript-eslint/no-var-requires
           const baileysPkg = require("@whiskeysockets/baileys/package.json");
           const ts = moment().format("DD-MM-YYYY HH:mm:ss");
-          logger.info(`INFO [${ts}]: Baileys pkg v${baileysPkg?.version || "unknown"} | WA Web v${version.join(".")}, isLatest: ${isLatest}`);
+          logger.info(`Baileys pkg v${baileysPkg?.version || "unknown"} | WA Web v${version.join(".")}, isLatest: ${isLatest}`);
         } catch (e) {
           const ts = moment().format("DD-MM-YYYY HH:mm:ss");
-          logger.info(`INFO [${ts}]: Baileys pkg vunknown | WA Web v${version.join(".")}, isLatest: ${isLatest}`);
+          logger.info(`Baileys pkg vunknown | WA Web v${version.join(".")}, isLatest: ${isLatest}`);
         }
         logger.info(`Starting session ${name}`);
         let retriesQrCode = 0;
@@ -207,9 +207,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           getMessage: msgDB.get,
         });
 
-
-
-
+        // Store em memória desabilitada nesta versão; usamos snapshot/persistência via messaging-history.set
         setTimeout(async () => {
           const wpp = await Whatsapp.findByPk(whatsapp.id);
           // console.log("Status:::::",wpp.status)
@@ -462,9 +460,24 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 const sock: any = wsocket as any;
                 if (sock && typeof sock.resyncAppState === 'function') {
                   const { ALL_WA_PATCH_NAMES } = require("@whiskeysockets/baileys");
-                  logger.info(`[wbot] Triggering initial resyncAppState for whatsappId=${whatsapp.id}`);
-                  await sock.resyncAppState(ALL_WA_PATCH_NAMES, true);
-                  logger.info(`[wbot] Initial resyncAppState requested for whatsappId=${whatsapp.id}`);
+                  const labelPatches = (ALL_WA_PATCH_NAMES || []).filter((n: string) => /label/i.test(n));
+                  logger.info(`[wbot] Triggering initial resyncAppState for whatsappId=${whatsapp.id}. Label patches: ${JSON.stringify(labelPatches)}`);
+                  // Primeiro tenta resync focado em labels
+                  if (Array.isArray(labelPatches) && labelPatches.length > 0) {
+                    try {
+                      await sock.resyncAppState(labelPatches, true);
+                      logger.info(`[wbot] Label-only resync requested for whatsappId=${whatsapp.id}`);
+                    } catch (e:any) {
+                      logger.warn(`[wbot] Label-only resync failed: ${e?.message}`);
+                    }
+                  }
+                  // Em seguida, faz um resync completo como fallback
+                  try {
+                    await sock.resyncAppState(ALL_WA_PATCH_NAMES, true);
+                    logger.info(`[wbot] Full resyncAppState requested for whatsappId=${whatsapp.id}`);
+                  } catch (e:any) {
+                    logger.warn(`[wbot] full resyncAppState failed: ${e?.message}`);
+                  }
                 }
               } catch (e: any) {
                 logger.warn(`[wbot] initial resyncAppState failed: ${e?.message}`);
@@ -519,6 +532,160 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           }
         );
         wsocket.ev.on("creds.update", saveCreds);
+
+        // Diagnóstico temporário (até estabilizar labels): logar eventos relevantes por 5 minutos
+        try {
+          const start = Date.now();
+          const logEvent = (name: string) => (payload: any) => {
+            if (Date.now() - start > 5 * 60 * 1000) return; // 5 min
+            const size = (() => { try { return JSON.stringify(payload).length; } catch { return -1; } })();
+            logger.info(`[wbot][ev:${name}] size=${size}`);
+            // Log detalhado para labels.edit (para debug de tags novas)
+            if (name === "labels.edit" && payload) {
+              try {
+                const items = Array.isArray(payload) ? payload : [payload];
+                items.forEach((item: any) => {
+                  if (item?.id && item?.name) {
+                    logger.info(`[wbot][labels.edit] ID: ${item.id}, Nome: ${item.name}, Cor: ${item.color || 'N/A'}`);
+                  }
+                });
+              } catch {}
+            }
+          };
+          (wsocket.ev as any).on("labels.relations", logEvent("labels.relations"));
+          wsocket.ev.on("labels.edit" as any, logEvent("labels.edit"));
+          wsocket.ev.on("labels.association" as any, logEvent("labels.association"));
+          wsocket.ev.on("messaging-history.set" as any, logEvent("messaging-history.set"));
+          wsocket.ev.on("chats.update", logEvent("chats.update"));
+          wsocket.ev.on("chats.upsert", logEvent("chats.upsert"));
+        } catch (e) {
+          logger.warn(`[wbot] não foi possível registrar logs de diagnóstico: ${e?.message}`);
+        }
+
+        // Handler geral: extrai labels de messaging-history.set e atualiza caches/persistência
+        try {
+          const { upsertLabel, addChatLabelAssociation, getChatLabelIds } = require("../libs/labelCache");
+          // Redundância: capturar labels.edit aqui também para garantir inventário
+          (wsocket.ev as any).on("labels.edit", (payload: any) => {
+            try {
+              logger.info(`[wbot] labels.edit recebido: ${JSON.stringify(payload)}`);
+              const items = Array.isArray(payload) ? payload : [payload];
+              for (const item of items) {
+                const id = String(item?.id || "");
+                if (!id) continue;
+                const name = String(item?.name || id);
+                const color = item?.color;
+                const deleted = item?.deleted === true;
+                logger.info(`[wbot] Processando label: ID=${id}, Nome=${name}, Deletada=${deleted}`);
+                upsertLabel(whatsapp.id, { id, name, color, predefinedId: item?.predefinedId, deleted });
+              }
+            } catch (e:any) {
+              logger.warn(`[wbot] labels.edit upsert failed: ${e?.message}`);
+            }
+          });
+
+          // Handler para labels.association - crítico para popular o cache
+          (wsocket.ev as any).on("labels.association", (payload: any) => {
+            try {
+              logger.info(`[wbot] labels.association recebido: ${JSON.stringify(payload)}`);
+              if (payload && typeof payload === 'object') {
+                const associations = payload.associations || payload;
+                if (Array.isArray(associations)) {
+                  for (const assoc of associations) {
+                    const chatId = String(assoc?.chatId || assoc?.jid || "");
+                    const labelId = String(assoc?.labelId || assoc?.id || "");
+                    if (chatId && labelId) {
+                      logger.info(`[wbot] Associando chat ${chatId} com label ${labelId}`);
+                      addChatLabelAssociation(whatsapp.id, chatId, labelId, true);
+                    }
+                  }
+                } else if (associations.chatId && associations.labelId) {
+                  const chatId = String(associations.chatId);
+                  const labelId = String(associations.labelId);
+                  logger.info(`[wbot] Associando chat ${chatId} com label ${labelId}`);
+                  addChatLabelAssociation(whatsapp.id, chatId, labelId, true);
+                }
+              }
+            } catch (e: any) {
+              logger.warn(`[wbot] labels.association handler failed: ${e?.message}`);
+            }
+          });
+
+          wsocket.ev.on("messaging-history.set", async (messageSet: any) => {
+            try {
+              const wppId = whatsapp.id;
+              const labels = Array.isArray(messageSet?.labels) ? messageSet.labels : [];
+              const chats = Array.isArray(messageSet?.chats) ? messageSet.chats : [];
+              if (labels.length) {
+                labels.forEach((l: any) => {
+                  if (l?.id) upsertLabel(wppId, { id: String(l.id), name: String(l.name || l.id), color: l.color });
+                });
+              }
+              if (chats.length) {
+                for (const c of chats) {
+                  const jid = String(c?.id || c?.jid || "");
+                  const clabels: string[] = Array.isArray(c?.labels) ? c.labels.map((x: any) => String(x)) : [];
+                  if (jid && clabels.length) {
+                    for (const lid of clabels) {
+                      addChatLabelAssociation(wppId, jid, lid, true);
+                    }
+                  }
+                }
+                // Persistir labels por chat em Baileys.chats
+                try {
+                  const batch = chats
+                    .map((c: any) => ({ id: String(c?.id || c?.jid || ""), labels: Array.isArray(c?.labels) ? c.labels.map((x:any)=>String(x)) : [] }))
+                    .filter((x: any) => x.id && x.labels.length);
+                  if (batch.length) {
+                    await createOrUpdateBaileysService({ whatsappId: whatsapp.id, chats: batch.map((b:any)=>({ ...b, labelsAbsolute: true })) });
+                  }
+                } catch (e:any) {
+                  logger.warn(`[wbot] persist from messaging-history.set failed: ${e?.message}`);
+                }
+              }
+            } catch (e:any) {
+              logger.warn(`[wbot] messaging-history.set label extract failed: ${e?.message}`);
+            }
+          });
+
+          // Processamento em tempo real de labels vindas por updates de chats
+          const handleChatLabelUpdate = async (payload: any, source: string) => {
+            try {
+              const items = Array.isArray(payload) ? payload : [payload];
+              const batch: any[] = [];
+              for (const c of items) {
+                const jid = String(c?.id || c?.jid || "");
+                if (!jid) continue;
+                const raw = Array.isArray(c?.labels) ? c.labels : (Array.isArray(c?.labelIds) ? c.labelIds : []);
+                // Se vierem objetos de label, upsert no inventário
+                for (const lab of (Array.isArray(c?.labels) ? c.labels : [])) {
+                  try {
+                    const lid = String(lab?.id || lab?.value || "");
+                    if (!lid) continue;
+                    const lname = String(lab?.name || lab?.label || lab?.title || lid);
+                    const lcolor = lab?.color || lab?.colorHex || lab?.backgroundColor;
+                    upsertLabel(whatsapp.id, { id: lid, name: lname, color: lcolor });
+                  } catch {}
+                }
+                const ids: string[] = Array.from(new Set((raw || []).map((x:any)=>String(typeof x === 'object' ? (x.id ?? x.value ?? x) : x))));
+                if (!ids.length) continue;
+                for (const lid of ids) addChatLabelAssociation(whatsapp.id, jid, lid, true);
+                batch.push({ id: jid, labels: ids, labelsAbsolute: true });
+              }
+              if (batch.length) {
+                await createOrUpdateBaileysService({ whatsappId: whatsapp.id, chats: batch as any });
+                logger.info(`[wbot] persisted ${batch.length} chat label updates from ${source}`);
+              }
+            } catch (e:any) {
+              logger.warn(`[wbot] handleChatLabelUpdate failed (${source}): ${e?.message}`);
+            }
+          };
+
+          wsocket.ev.on("chats.upsert" as any, async (payload: any) => handleChatLabelUpdate(payload, 'chats.upsert'));
+          wsocket.ev.on("chats.update" as any, async (payload: any) => handleChatLabelUpdate(payload, 'chats.update'));
+        } catch (e:any) {
+          logger.warn(`[wbot] failed to register messaging-history.set handler: ${e?.message}`);
+        }
       })();
     } catch (error) {
       Sentry.captureException(error);

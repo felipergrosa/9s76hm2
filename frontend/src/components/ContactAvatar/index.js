@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, memo } from "react";
 import { Avatar } from "@material-ui/core";
 
-const ContactAvatar = ({ contact, ...props }) => {
+// Componente de avatar com otimização de desempenho (memoizado)
+const ContactAvatar = memo(({ contact, ...props }) => {
   const [imageError, setImageError] = useState(false);
 
   // Reset error quando contato muda
@@ -52,10 +53,14 @@ const ContactAvatar = ({ contact, ...props }) => {
       src={imageUrl}
       onError={handleImageError}
       alt={contactName || "Avatar"}
+      loading="lazy" // Adiciona lazy loading nativo do navegador
     >
       {contactName ? contactName.charAt(0).toUpperCase() : "?"}
     </Avatar>
   );
-};
+});
+
+// Nome de exibição para debugging
+ContactAvatar.displayName = 'ContactAvatar';
 
 export default ContactAvatar;

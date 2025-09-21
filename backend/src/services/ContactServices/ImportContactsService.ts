@@ -1,16 +1,38 @@
 import { head } from "lodash";
 import XLSX from "xlsx";
 import { has } from "lodash";
+
 import ContactListItem from "../../models/ContactListItem";
 import CheckContactNumber from "../WbotServices/CheckNumber";
 import logger from "../../utils/logger";
 import Contact from "../../models/Contact";
 import Tag from "../../models/Tag";
 import ContactTag from "../../models/ContactTag";
-import GetDeviceContactsService from "../WbotServices/GetDeviceContactsService";
-import { getAllChatLabels, getLabelMap } from "../../libs/labelCache";
+// Removido: importações de cache/baileys
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
+import WhatsAppWebLabelsService from "../WbotServices/WhatsAppWebLabelsService";
+
 // import CheckContactNumber from "../WbotServices/CheckNumber";
+
+// Progresso em memória por progressId
+type ImportProgress = {
+  total: number;
+  processed: number;
+  created: number;
+  updated: number;
+  tagged: number;
+};
+const importProgressMap: Map<string, ImportProgress> = new Map();
+
+export function getImportProgress(progressId: string) {
+  if (!progressId) return { total: 0, processed: 0, created: 0, updated: 0, tagged: 0 };
+  return importProgressMap.get(progressId) || { total: 0, processed: 0, created: 0, updated: 0, tagged: 0 };
+}
+
+export function resetImportProgress(progressId: string) {
+  if (!progressId) return;
+  importProgressMap.delete(progressId);
+}
 
 export async function ImportContactsService(
   companyId: number,
@@ -19,51 +41,87 @@ export async function ImportContactsService(
   whatsappId?: number
 ) {
   let contacts: any[] = [];
+  const options = (tagMapping && tagMapping.__options) ? tagMapping.__options : {};
+  const validateNumber = !!options.validateNumber;
+  const defaultUnlabeledTagName = typeof options.defaultUnlabeledTagName === 'string' ? options.defaultUnlabeledTagName.trim() : '';
+  const progressId: string = options.progressId ? String(options.progressId) : '';
 
   if (tagMapping) {
-    // Import a partir das etiquetas do WhatsApp (device) com mapeamento
+    // Importação exclusivamente via WhatsApp-Web.js
     const mappedDeviceTagIds: string[] = Object.keys(tagMapping || {}).map(String);
-
-    // Resolver whatsappId efetivo (número) para acessar o cache correto
     const defWpp = await GetDefaultWhatsApp(whatsappId, companyId);
     const effectiveWhatsAppId = defWpp.id;
 
-    // 1) Obter associações chat->labels do cache e derivar os JIDs que possuem QUALQUER das labels selecionadas
-    const chatLabels = getAllChatLabels(effectiveWhatsAppId);
-    const selectedJids = new Set<string>();
-    for (const [chatId, set] of chatLabels.entries()) {
-      const id = String(chatId);
-      // Ignorar grupos e JIDs inválidos
-      if (!id.includes('@') || id.endsWith('@g.us')) continue;
-      const has = Array.from(set.values()).some(lid => mappedDeviceTagIds.includes(String(lid)));
-      if (has) selectedJids.add(id);
+    // Obter inventário de labels para mapear id -> name
+    const deviceLabels = await WhatsAppWebLabelsService.getDeviceLabels(companyId, effectiveWhatsAppId);
+    const labelNameMap = new Map<string, string>(
+      deviceLabels.map(l => [String(l.id), String(l.name)])
+    );
+    // Apenas IDs válidos presentes no inventário do dispositivo (+ __unlabeled__)
+    const validIds = new Set<string>(deviceLabels.map(l => String(l.id)));
+    validIds.add("__unlabeled__");
+    const selectedIds = mappedDeviceTagIds.filter(id => validIds.has(String(id)));
+
+    const addContact = (acc: Map<string, any>, c: any, ensureLabelId?: string) => {
+      // Nome e número
+      const jid = String(c?.id || c?.jid || "");
+      const number = String(c?.number || jid.split('@')[0] || "").replace(/\D/g, "");
+      if (!number) return acc;
+      const name = String(c?.name || c?.pushname || c?.notify || number).trim();
+
+      // Tags do dispositivo (mantém apenas as selecionadas)
+      const rawTags = Array.isArray(c?.tags) ? c.tags : [];
+      let deviceTags = rawTags
+        .filter((t: any) => selectedIds.includes(String(t.id)) && String(t.id) !== "__unlabeled__")
+        .map((t: any) => ({ id: String(t.id), name: String(t.name || labelNameMap.get(String(t.id)) || t.id) }));
+
+      // Garante tag selecionada específica quando vier contato de uma label
+      if (ensureLabelId && ensureLabelId !== "__unlabeled__") {
+        const exists = deviceTags.some(t => String(t.id) === String(ensureLabelId));
+        if (!exists) {
+          deviceTags.push({ id: String(ensureLabelId), name: String(labelNameMap.get(String(ensureLabelId)) || ensureLabelId) });
+        }
+      }
+
+      // Merge por número
+      const existing = acc.get(number);
+      if (existing) {
+        const merged = new Map<string, any>();
+        [...existing.deviceTags, ...deviceTags].forEach((t: any) => merged.set(String(t.id), t));
+        existing.deviceTags = Array.from(merged.values());
+        if (!existing.name || existing.name === existing.number) existing.name = name;
+        acc.set(number, existing);
+      } else {
+        acc.set(number, { name, number, email: '', companyId, deviceTags });
+      }
+      return acc;
+    };
+
+    const acc = new Map<string, any>();
+    // Para cada label selecionada (exceto __unlabeled__), obter contatos diretamente do WhatsApp‑Web.js
+    for (const lid of selectedIds.filter(id => id !== "__unlabeled__")) {
+      try {
+        const contactsByLabel = await (WhatsAppWebLabelsService as any).getContactsByLabel(companyId, String(lid), effectiveWhatsAppId);
+        for (const c of contactsByLabel) addContact(acc, c, String(lid));
+      } catch (e: any) {
+        logger.warn(`[ImportContactsService] Falha ao obter contatos para label ${lid}: ${e?.message}`);
+      }
     }
-    logger.info(`[ImportContactsService] JIDs selecionados por labels (${mappedDeviceTagIds.join(', ')}): ${selectedJids.size}`);
 
-    // 2) Obter contatos do dispositivo (para nomes) e filtrar pelos JIDs coletados
-    const deviceContacts = await GetDeviceContactsService(companyId, whatsappId);
-    const byJid = new Map<string, any>(deviceContacts.map(c => [String(c.id), c]));
+    // "Sem etiqueta"
+    if (selectedIds.includes("__unlabeled__")) {
+      try {
+        const unlabeledContacts = await (WhatsAppWebLabelsService as any).getContactsByLabel(companyId, "__unlabeled__", effectiveWhatsAppId);
+        for (const c of unlabeledContacts) addContact(acc, c);
+      } catch (e: any) {
+        logger.warn(`[ImportContactsService] Falha ao obter contatos sem etiqueta: ${e?.message}`);
+      }
+    }
 
-    const labelMap = getLabelMap(effectiveWhatsAppId);
-    contacts = Array.from(selectedJids).map(jid => {
-      const c = byJid.get(jid) || { id: jid, name: '', notify: '', tags: [] };
-      // Dispositivo: garantir que deviceTags inclua apenas as labels selecionadas
-      const deviceTags = (Array.isArray(c.tags) ? c.tags : []).filter((t: any) => mappedDeviceTagIds.includes(String(t.id)));
-      // Se não veio no contato, cria tags pelo mapa de labels
-      const ensured = deviceTags.length > 0 ? deviceTags : mappedDeviceTagIds
-        .filter(lid => (chatLabels.get(jid)?.has(String(lid))) )
-        .map(lid => ({ id: String(lid), name: (labelMap.get(String(lid)) as any)?.name || String(lid) }));
-
-      return {
-        name: (c.name || c.notify || '').trim(),
-        number: String(jid).split('@')[0] || '',
-        email: '',
-        companyId,
-        deviceTags: ensured
-      };
-    });
-    logger.info(`[ImportContactsService] Contatos derivados de labels: ${contacts.length}`);
+    contacts = Array.from(acc.values());
+    logger.info(`[ImportContactsService] Contatos via WhatsApp-Web.js: ${contacts.length}`);
   } else {
+
     // Import from Excel file (existing logic)
     const workbook = XLSX.readFile(file?.path as string);
     const worksheet = head(Object.values(workbook.Sheets)) as any;
@@ -161,8 +219,28 @@ export async function ImportContactsService(
   let taggedCount = 0;
   const perTagApplied: Record<string, number> = {};
 
+  // Inicializa progresso
+  if (progressId) {
+    importProgressMap.set(progressId, {
+      total: contacts.length,
+      processed: 0,
+      created: 0,
+      updated: 0,
+      tagged: 0
+    });
+  }
+
   for (const incoming of contacts) {
-    const number = `${incoming.number}`;
+    let number = `${incoming.number}`;
+    // Validação/normalização opcional do número
+    if (validateNumber) {
+      try {
+        const normalized = await CheckContactNumber(number, companyId);
+        if (normalized) number = `${normalized}`;
+      } catch (e) {
+        logger.warn(`[ImportContactsService] Número inválido/inesperado ao normalizar: ${number} — mantendo original`);
+      }
+    }
     const companyIdRow = incoming.companyId;
 
     const existing = await Contact.findOne({ where: { number, companyId: companyIdRow } });
@@ -233,8 +311,9 @@ export async function ImportContactsService(
     }
 
     // Handle tag associations for device contacts
-    if (tagMapping && incoming.deviceTags) {
-      for (const deviceTag of incoming.deviceTags) {
+    if (tagMapping) {
+      // 1) Aplicar mapeamentos de labels reais presentes no contato
+      if (incoming.deviceTags) for (const deviceTag of incoming.deviceTags) {
         const mapping = tagMapping[deviceTag.id];
         if (mapping) {
           let systemTagId = null;
@@ -274,6 +353,40 @@ export async function ImportContactsService(
           }
         }
       }
+
+      // 2) Aplicar mapeamento especial de "Sem etiqueta" (mesmo sem deviceTags no contato)
+      const hasExplicitUnlabeled = !!tagMapping["__unlabeled__"];
+      const mapping = hasExplicitUnlabeled ? tagMapping["__unlabeled__"] : (defaultUnlabeledTagName ? { newTagName: defaultUnlabeledTagName } : null);
+      if (mapping) {
+        let systemTagId = null as any;
+        if (mapping.systemTagId) {
+          systemTagId = mapping.systemTagId;
+        } else if (mapping.newTagName) {
+          const [newTag] = await Tag.findOrCreate({
+            where: { name: mapping.newTagName, companyId },
+            defaults: { color: "#A4CCCC", kanban: 0 }
+          });
+          systemTagId = newTag.id;
+        }
+        if (systemTagId) {
+          await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: systemTagId } });
+          taggedCount++;
+          const tagNameForReport = mapping.newTagName || (await Tag.findByPk(systemTagId))?.name || "Sem etiqueta";
+          perTagApplied[tagNameForReport] = (perTagApplied[tagNameForReport] || 0) + 1;
+        }
+      }
+    }
+
+    // Atualiza progresso por iteração
+    if (progressId) {
+      const p = importProgressMap.get(progressId);
+      if (p) {
+        p.processed += 1;
+        p.created = createdCount;
+        p.updated = updatedCount;
+        p.tagged = taggedCount;
+        importProgressMap.set(progressId, p);
+      }
     }
   }
 
@@ -292,7 +405,7 @@ export async function ImportContactsService(
   //   }
   // }
 
-  return {
+  const result = {
     total: contacts.length,
     created: createdCount,
     updated: updatedCount,
@@ -300,4 +413,11 @@ export async function ImportContactsService(
     perTagApplied,
     contacts: contactList
   };
+
+  // Limpa o progresso em memória para este progressId
+  if (progressId) {
+    try { resetImportProgress(progressId); } catch (_) { /* ignore */ }
+  }
+
+  return result;
 }

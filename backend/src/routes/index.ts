@@ -49,6 +49,8 @@ import aiRoutes from "./aiRoutes";
 import maintenanceRoutes from "./maintenanceRoutes";
 import ragRoutes from "./ragRoutes";
 import labelsRoutes from "./labelsRoutes";
+import wbotLabelsRoutes from "./wbotLabelsRoutes";
+import whatsappWebLabelsRoutes from "./whatsappWebLabelsRoutes";
 
 
 const routes = Router();
@@ -105,5 +107,7 @@ routes.use(aiRoutes);
 routes.use(maintenanceRoutes);
 routes.use(ragRoutes);
 routes.use("/labels", labelsRoutes);
+routes.use(wbotLabelsRoutes);
+routes.use(whatsappWebLabelsRoutes);
 
 export default routes;

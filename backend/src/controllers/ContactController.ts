@@ -37,7 +37,7 @@ import SimpleListService, {
 import ContactCustomField from "../models/ContactCustomField";
 import ToggleAcceptAudioContactService from "../services/ContactServices/ToggleAcceptAudioContactService";
 import BlockUnblockContactService from "../services/ContactServices/BlockUnblockContactService";
-import { ImportContactsService } from "../services/ContactServices/ImportContactsService";
+import { ImportContactsService, getImportProgress } from "../services/ContactServices/ImportContactsService";
 import NumberSimpleListService from "../services/ContactServices/NumberSimpleListService";
 import CreateOrUpdateContactServiceForImport from "../services/ContactServices/CreateOrUpdateContactServiceForImport";
 import UpdateContactWalletsService from "../services/ContactServices/UpdateContactWalletsService";
@@ -488,6 +488,11 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
     userId: req.user.id // Adicionando o userId ao criar o contato
   });
 
+  // Validar contato após a criação
+  await ValidateContactService({ contactId: contact.id, companyId, ttlHours: 0 }).catch(err => {
+    logger.warn({ contactId: contact.id, companyId, error: err?.message }, "[Contacts.store] validação após a criação falhou");
+  });
+
   // Suporte a tagIds e tags por nome no store
   try {
     const { tagIds, tags } = req.body as any;
@@ -673,6 +678,11 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
     const number = validNumber;
     contactData.number = number;
   }
+
+  // Validar contato após a atualização
+  await ValidateContactService({ contactId: Number(contactId), companyId, ttlHours: 0 }).catch(err => {
+    logger.warn({ contactId: Number(contactId), companyId, error: err?.message }, "[Contacts.update] validação assíncrona falhou");
+  });
 
   const contact = await UpdateContactService({
     contactData,
@@ -1088,15 +1098,28 @@ export const getContactProfileURL = async (req: Request, res: Response) => {
 
   export const importWithTags = async (req: Request, res: Response): Promise<Response> => {
     const { companyId } = req.user;
-    const { tagMapping, whatsappId } = req.body;
+    const { tagMapping, whatsappId, progressId } = req.body as any;
 
     try {
       // Importar contatos com mapeamento de tags
+      if (tagMapping && progressId) {
+        tagMapping.__options = { ...(tagMapping.__options || {}), progressId };
+      }
       const result = await ImportContactsService(companyId, undefined, tagMapping, whatsappId);
       return res.status(200).json(result);
     } catch (error) {
       logger.error("Erro ao importar contatos com tags:", error);
       return res.status(500).json({ error: "Erro ao importar contatos com tags" });
+    }
+  };
+
+  export const importProgress = async (req: Request, res: Response): Promise<Response> => {
+    try {
+      const { progressId } = req.query as any;
+      const prog = getImportProgress(String(progressId || ''));
+      return res.status(200).json({ success: true, progress: prog });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error?.message || 'Erro ao obter progresso de importação' });
     }
   };
 

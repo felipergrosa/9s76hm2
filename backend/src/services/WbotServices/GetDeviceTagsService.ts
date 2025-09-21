@@ -3,11 +3,13 @@ import ShowBaileysService from "../BaileysServices/ShowBaileysService";
 import logger from "../../utils/logger";
 import { isString, isArray } from "lodash";
 import { getLabelMap } from "../../libs/labelCache";
+import { getUnlabeledJids } from "./GetDeviceContactsService";
 
 interface DeviceTag {
   id: string;
   name: string;
   color?: string;
+  count?: number;
 }
 
 const GetDeviceTagsService = async (companyId: number, whatsappId?: number): Promise<DeviceTag[]> => {
@@ -99,6 +101,51 @@ const GetDeviceTagsService = async (companyId: number, whatsappId?: number): Pro
         }
       });
     }
+
+    // Adicionar tag sintética "Sem etiqueta" com contagem de JIDs sem labels
+    try {
+      const unlabeled = await getUnlabeledJids(companyId, whatsappId);
+      const countUnlabeled = unlabeled.size;
+      logger.info(`[GetDeviceTagsService] Contatos sem etiqueta encontrados: ${countUnlabeled}`);
+      
+      // Sempre adicionar, mesmo com count 0 (para debug)
+      tagsMap.set("__unlabeled__", {
+        id: "__unlabeled__",
+        name: "Sem etiqueta",
+        color: "#8D99AE",
+        count: countUnlabeled
+      });
+    } catch (err: any) {
+      logger.warn(`[GetDeviceTagsService] Erro ao buscar contatos sem etiqueta: ${err?.message}`);
+    }
+
+    // Enriquecer contagem por tag com base nos dados (cache e Baileys)
+    try {
+      const defaultWhatsappId = defaultWhatsapp.id;
+      const baileysData = await ShowBaileysService(defaultWhatsappId);
+      const parseMaybeJSON = (val: any) => {
+        try { if (!val) return null; if (isString(val)) return JSON.parse(val as string); return val; } catch { return null; }
+      };
+      const chats = parseMaybeJSON((baileysData as any).chats);
+      // Mapa de contagem
+      const counts = new Map<string, number>();
+      if (isArray(chats)) {
+        (chats as any[]).forEach((chat: any) => {
+          const raw = Array.isArray(chat?.labels) ? chat.labels : (Array.isArray(chat?.labelIds) ? chat.labelIds : []);
+          for (const item of (raw || [])) {
+            const id = String(typeof item === 'object' ? (item?.id ?? item?.value ?? item) : item);
+            counts.set(id, (counts.get(id) || 0) + 1);
+          }
+        });
+      }
+      // Aplicar contagem nas tags
+      for (const [id, obj] of tagsMap.entries()) {
+        if (id === "__unlabeled__") continue; // já setada acima
+        const c = counts.get(id) || 0;
+        (obj as any).count = c;
+        tagsMap.set(id, obj as any);
+      }
+    } catch {}
 
     const deviceTags = Array.from(tagsMap.values());
     
