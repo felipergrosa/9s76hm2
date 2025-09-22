@@ -156,14 +156,19 @@ const AddFilteredContactsToListService = async ({
     // Filtro de limite de crédito (mínimo e máximo inclusivo)
     if (filters.minCreditLimit || filters.maxCreditLimit) {
       try {
+        // Converte entrada para número SEM dividir por 100. Aceita "1.234,56" e "1234.56".
         const parseMoney = (val: string): number => {
-          const cleaned = String(val)
-            .replace(/\s+/g, '')
-            .replace(/R\$?/gi, '')
-            .replace(/\./g, '') // remove separador de milhar
-            .replace(',', '.'); // vírgula para ponto
-          const num = parseFloat(cleaned);
-          return isNaN(num) ? 0 : num / 100;
+          const raw = String(val).trim().replace(/\s+/g, '').replace(/R\$?/gi, '');
+          let num: number;
+          if (raw.includes(',')) {
+            // PT-BR: remove pontos (milhar) e troca vírgula por ponto
+            const normalized = raw.replace(/\./g, '').replace(/,/g, '.');
+            num = parseFloat(normalized);
+          } else {
+            // EN-US: mantém ponto como separador decimal
+            num = parseFloat(raw);
+          }
+          return isNaN(num) ? 0 : num;
         };
 
         const hasMin = typeof filters.minCreditLimit !== 'undefined' && filters.minCreditLimit !== '';
@@ -171,9 +176,18 @@ const AddFilteredContactsToListService = async ({
         const minValue = hasMin ? parseMoney(filters.minCreditLimit as string) : undefined;
         const maxValue = hasMax ? parseMoney(filters.maxCreditLimit as string) : undefined;
 
-        // Expressão para converter creditLimit (VARCHAR BRL) em número
+        // Expressão para converter creditLimit (VARCHAR BRL/EN-US) em número
+        // Regra: se contiver vírgula, é PT-BR (remove pontos e troca vírgula por ponto); senão, mantém ponto decimal.
         const creditLimitNumeric = literal(
-          `CAST(REPLACE(REPLACE(REPLACE(TRIM("creditLimit"), 'R$', ''), '.', ''), ',', '.') AS NUMERIC)`
+          `CAST(
+            CASE
+              WHEN TRIM("creditLimit") = '' THEN NULL
+              WHEN POSITION(',' IN TRIM("creditLimit")) > 0 THEN
+                REPLACE(REPLACE(REPLACE(TRIM(REPLACE("creditLimit", 'R$', '')), '.', ''), ',', '.'), ' ', '')
+              ELSE
+                REPLACE(TRIM(REPLACE("creditLimit", 'R$', '')), ' ', '')
+            END AS NUMERIC
+          )`
         );
 
         // Ignorar registros com creditLimit NULL ou vazio (evita falha no CAST e resultados incorretos)
@@ -286,8 +300,17 @@ const AddFilteredContactsToListService = async ({
       const parseNum = (v: any): number | null => {
         if (v === undefined || v === null || v === '') return null;
         if (typeof v === 'number') return v;
-        const n = parseFloat(String(v).replace(/\s+/g, '').replace(/R\$?/gi, '').replace(/\./g, '').replace(',', '.'));
-        return isNaN(n) ? null : n;
+        const raw = String(v).trim().replace(/\s+/g, '').replace(/R\$?/gi, '');
+        let num: number;
+        if (raw.includes(',')) {
+          // PT-BR
+          const normalized = raw.replace(/\./g, '').replace(/,/g, '.');
+          num = parseFloat(normalized);
+        } else {
+          // EN-US
+          num = parseFloat(raw);
+        }
+        return isNaN(num) ? null : num;
       };
       const hasMin = typeof (filters as any).minVlUltCompra !== 'undefined' && (filters as any).minVlUltCompra !== '';
       const hasMax = typeof (filters as any).maxVlUltCompra !== 'undefined' && (filters as any).maxVlUltCompra !== '';
@@ -313,7 +336,7 @@ const AddFilteredContactsToListService = async ({
     let contacts = [] as any[];
     const creditFilterActive = Boolean(filters.minCreditLimit || filters.maxCreditLimit);
     const creditLimitNumericAttr = creditFilterActive
-      ? literal(`CAST(REPLACE(REPLACE(REPLACE(TRIM("creditLimit"), 'R$', ''), '.', ''), ',', '.') AS NUMERIC)`) 
+      ? literal(`CAST(CASE WHEN TRIM("creditLimit") = '' THEN NULL WHEN POSITION(',' IN TRIM("creditLimit")) > 0 THEN REPLACE(REPLACE(REPLACE(TRIM(REPLACE("creditLimit", 'R$', '')), '.', ''), ',', '.'), ' ', '') ELSE REPLACE(TRIM(REPLACE("creditLimit", 'R$', '')), ' ', '') END AS NUMERIC)`) 
       : null;
     
     try {

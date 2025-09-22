@@ -140,6 +140,21 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading }) =>
         ? (contact.contact.profilePicUrl || contact.contact.urlPicture)
         : (contact?.urlPicture || contact?.profilePicUrl);
 
+    // Helper de moeda robusto: aceita "1.234,56", "1234.56", "R$ 1.234,56", etc.
+    const formatCurrencyBRL = (val, fallback = null) => {
+        if (val == null || val === '') return fallback;
+        const s = String(val).trim().replace(/\s+/g,'').replace(/R\$?/i,'');
+        let num;
+        if (s.includes(',')) {
+            const normalized = s.replace(/\./g, '').replace(/,/g, '.');
+            num = Number(normalized);
+        } else {
+            num = Number(s);
+        }
+        if (isNaN(num)) return fallback ?? String(val);
+        return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
+    };
+
     useEffect(() => {
         async function fetchData() {
 
@@ -301,7 +316,7 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading }) =>
                                         )}
                                         {typeof contact.vlUltCompra !== 'undefined' && contact.vlUltCompra !== null && (
                                           <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {`Valor Última Compra: R$ ${Number(contact.vlUltCompra).toFixed(2).replace('.', ',')}`}
+                                            {`Valor Última Compra: ${formatCurrencyBRL(contact.vlUltCompra, '—')}`}
                                           </Typography>
                                         )}
                                         <Typography style={{ color: "primary", fontSize: 12 }}>
@@ -320,7 +335,7 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading }) =>
                                             {contact.foundationDate && `Data de Fundação: ${new Date(contact.foundationDate).toLocaleDateString()}`}
                                         </Typography>
                                         <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {contact.creditLimit && contact.creditLimit !== '' && `Limite de Crédito: R$ ${parseFloat(contact.creditLimit).toFixed(2).replace('.', ',')}`}
+                                            {contact.creditLimit && contact.creditLimit !== '' && `Limite de Crédito: ${formatCurrencyBRL(contact.creditLimit, '')}`}
                                         </Typography>
                                     </>
                                 }

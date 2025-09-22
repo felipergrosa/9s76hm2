@@ -472,7 +472,16 @@ const ContactListItems = () => {
   const monthsPT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
   const formatCurrency = (val) => {
     if (val == null || val === "") return null;
-    const num = Number(String(val).replace(/\./g, '').replace(/,/g, '.'));
+    const s = String(val).trim();
+    let num;
+    // Se tiver vírgula, assumimos formato PT-BR (1.234,56): remove pontos (milhar) e troca vírgula por ponto
+    if (s.includes(',')) {
+      const normalized = s.replace(/\./g, '').replace(/,/g, '.');
+      num = Number(normalized);
+    } else {
+      // Sem vírgula: assumimos formato com ponto decimal (inglês) e não removemos pontos
+      num = Number(s);
+    }
     if (isNaN(num)) return String(val);
     return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
   };
@@ -563,7 +572,14 @@ const ContactListItems = () => {
     // Helpers
     const fmtCurrency = (val) => {
       if (val == null || val === '') return '—';
-      const num = Number(String(val).replace(/\s+/g,'').replace(/R\$?/i,'').replace(/\./g,'').replace(/,/g,'.'));
+      const s = String(val).trim().replace(/\s+/g,'').replace(/R\$?/i,'');
+      let num;
+      if (s.includes(',')) {
+        const normalized = s.replace(/\./g,'').replace(/,/g,'.');
+        num = Number(normalized);
+      } else {
+        num = Number(s);
+      }
       if (isNaN(num)) return String(val);
       return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
     };
