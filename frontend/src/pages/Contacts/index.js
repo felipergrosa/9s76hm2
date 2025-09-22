@@ -10,6 +10,7 @@ import React, {
 import useContactHandlers from "../../hooks/useContactHandlers";
 import useContactPagination from "../../hooks/useContactPagination";
 import useContactSort from "../../hooks/useContactSort";
+import useDebounce from "../../hooks/useDebounce";
 import { toast } from "react-toastify";
 import { useHistory, useLocation } from "react-router-dom";
 import useContactUpdates from "../../hooks/useContactUpdates";
@@ -40,6 +41,7 @@ import ContactAvatar from "../../components/ContactAvatar";
 import ContactRow from "../../components/ContactRow";
 import ContactCard from "../../components/ContactCard";
 import LazyContactAvatar from "../../components/LazyContactAvatar";
+// Removida virtualização mobile para manter um único scroll externo
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 import ContactModal from "../../components/ContactModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
@@ -134,7 +136,13 @@ const Contacts = () => {
 
     const [loading, setLoading] = useState(false);
     const [searchParam, setSearchParam] = useState("");
+    const debouncedSearchParam = useDebounce(searchParam, 400);
+    const isSearching = searchParam !== debouncedSearchParam;
     const [contacts, dispatch] = useReducer(reducer, []);
+    const [refreshTick, setRefreshTick] = useState(0);
+    const requestIdRef = useRef(0);
+    const prevPageRef = useRef(null);
+    const prevLimitRef = useRef(null);
     const [selectedContactId, setSelectedContactId] = useState(null);
     const [contactModalOpen, setContactModalOpen] = useState(false);
     
@@ -182,6 +190,11 @@ const Contacts = () => {
     const [hideNum, setHideNum] = useState(false);
     const [enableLGPD, setEnableLGPD] = useState(false);
 
+    // Estados para seleção avançada
+    const [lastSelectedIndex, setLastSelectedIndex] = useState(null); // Desktop: shift-select
+    const [isSelectionMode, setIsSelectionMode] = useState(false); // Mobile: long-press
+    const longPressTimerRef = useRef(null);
+
     // Handlers para interações com contatos
     const {
         handleEditContact,
@@ -196,6 +209,8 @@ const Contacts = () => {
         setDeletingContact,
         setBlockingContact,
         setUnBlockingContact,
+        setConfirmOpen,
+        setRefreshTick,
         setContactTicket,
         setNewTicketModalOpen,
         setSelectedContactId,
@@ -285,46 +300,64 @@ const Contacts = () => {
         setSegmentFilter(arr);
     }, [location.search]);
 
-                    useEffect(() => {
-                        setLoading(true);
-                        const delayDebounceFn = setTimeout(() => {
-                            const fetchContacts = async () => {
-                                try {
-                                    const { data } = await api.get("/contacts/", {
-                                        params: { 
-                                            searchParam, 
-                                            pageNumber, 
-                                            contactTag: JSON.stringify(selectedTags), 
-                                            limit: contactsPerPage, 
-                                            isGroup: "false",
-                                            // 'tags' não é suportado no backend; usa 'name' como fallback
-                                            orderBy: sortField === 'tags' ? 'name' : sortField,
-                                            order: sortDirection,
-                                            segment: segmentFilter,
-                                        },
-                                    });
-                                    // Substitui a lista pelo resultado da página atual
-                                    dispatch({ type: "SET_CONTACTS", payload: data.contacts });
-                                    setHasMore(data.hasMore);
-                                    // Usa a contagem total fornecida pelo backend (já respeita filtros/pesquisa)
-                                    setTotalContacts(typeof data.count === 'number' ? data.count : (data.total || 0));
+    useEffect(() => {
+        // Só reseta a lista quando mudar de página ou de itens por página
+        const shouldReset = prevPageRef.current !== pageNumber || prevLimitRef.current !== contactsPerPage;
+        if (shouldReset) {
+            dispatch({ type: "RESET" });
+        }
+        setLoading(true);
+        // Garante que respostas antigas sejam ignoradas
+        const currentId = ++requestIdRef.current;
+        const fetchContacts = async () => {
+            try {
+                const { data } = await api.get("/contacts/", {
+                    params: { 
+                        searchParam: debouncedSearchParam, 
+                        pageNumber, 
+                        contactTag: JSON.stringify(selectedTags), 
+                        limit: contactsPerPage, 
+                        isGroup: "false",
+                        // 'tags' não é suportado no backend; usa 'name' como fallback
+                        orderBy: sortField === 'tags' ? 'name' : sortField,
+                        order: sortDirection,
+                        segment: segmentFilter,
+                    },
+                });
+                // Ignora respostas de solicitações antigas
+                if (currentId !== requestIdRef.current) return;
+                // Substitui a lista pelo resultado da página atual
+                dispatch({ type: "SET_CONTACTS", payload: data.contacts });
+                setHasMore(data.hasMore);
+                // Usa a contagem total fornecida pelo backend (já respeita filtros/pesquisa)
+                setTotalContacts(data.count);
 
-                                    // Atualizar o estado do "Selecionar Tudo" baseado nos contatos carregados e selecionados
-                                    const allCurrentContactIds = data.contacts.map(c => c.id);
-                                    const newSelected = selectedContactIds.filter(id => allCurrentContactIds.includes(id));
-                                    setSelectedContactIds(newSelected); // Mantenha apenas os IDs que ainda estão na lista
-                                    setIsSelectAllChecked(newSelected.length === allCurrentContactIds.length && allCurrentContactIds.length > 0);
+                // Atualizar o estado do "Selecionar Tudo" baseado nos contatos carregados e selecionados
+                const allCurrentContactIds = data.contacts.map(c => c.id);
+                const newSelected = selectedContactIds.filter(id => allCurrentContactIds.includes(id));
+                setSelectedContactIds(newSelected); // Mantenha apenas os IDs que ainda estão na lista
+                setIsSelectAllChecked(newSelected.length === allCurrentContactIds.length && allCurrentContactIds.length > 0);
 
-                                } catch (err) {
-                                    toastError(err);
-                                } finally {
-                                    setLoading(false);
-                                }
-                            };
-                            fetchContacts();
-                        }, 500);
-                        return () => clearTimeout(delayDebounceFn);
-                    }, [searchParam, pageNumber, selectedTags, contactsPerPage, sortField, sortDirection, segmentFilter]);
+            } catch (err) {
+                toastError(err);
+            } finally {
+                if (currentId === requestIdRef.current) setLoading(false);
+                // Atualiza refs de comparação após a busca
+                prevPageRef.current = pageNumber;
+                prevLimitRef.current = contactsPerPage;
+            }
+        };
+        fetchContacts();
+    }, [
+        debouncedSearchParam,
+        pageNumber,
+        selectedTags,
+        contactsPerPage,
+        sortField,
+        sortDirection,
+        segmentFilter,
+        refreshTick,
+    ]);
 
     // Hook para atualização em tempo real de avatares
     useContactUpdates((updatedContact) => {
@@ -408,23 +441,64 @@ const Contacts = () => {
         setContactModalOpen(false);
     };
 
+    // A lista já vem paginada e ordenada do backend (params: limit, pageNumber, orderBy, order).
+    // Portanto, evitamos reordenar/repaginar no cliente para não misturar páginas.
+    const sortedContacts = useMemo(() => {
+        return contacts.filter(c => !c.isGroup);
+    }, [contacts]);
+
     // Agora usando o handleEditContact do hook useContactHandlers
 
     // Agora usando o handleDeleteContact do hook useContactHandlers
 
     // NOVA FUNÇÃO: SELECIONAR UM CONTATO INDIVIDUALMENTE (memoizada)
-    const handleToggleSelectContact = useCallback((contactId) => {
+    const handleToggleSelectContact = useCallback((contactId, rowIndex = null, evt = null) => {
         setSelectedContactIds((prevSelected) => {
-            if (prevSelected.includes(contactId)) {
-                const newSelection = prevSelected.filter((id) => id !== contactId);
-                // Se um individual é desmarcado, "Selecionar Tudo" deve ser desmarcado
+            const hasShift = !!(evt && evt.shiftKey);
+            // Shift-select (desktop)
+            if (hasShift && lastSelectedIndex !== null && rowIndex !== null) {
+                const start = Math.min(lastSelectedIndex, rowIndex);
+                const end = Math.max(lastSelectedIndex, rowIndex);
+                const rangeIds = sortedContacts.slice(start, end + 1).map(c => c.id);
+                const setIds = new Set([...prevSelected, ...rangeIds]);
                 if (isSelectAllChecked) setIsSelectAllChecked(false);
-                return newSelection;
-            } else {
-                return [...prevSelected, contactId];
+                return Array.from(setIds);
             }
+            // Toggle simples
+            const already = prevSelected.includes(contactId);
+            const next = already ? prevSelected.filter(id => id !== contactId) : [...prevSelected, contactId];
+            if (!already) setLastSelectedIndex(rowIndex);
+            if (isSelectAllChecked && already) setIsSelectAllChecked(false);
+            return next;
         });
-    }, [isSelectAllChecked]);
+        if (rowIndex !== null && !(evt && evt.shiftKey)) setLastSelectedIndex(rowIndex);
+    }, [lastSelectedIndex, sortedContacts, isSelectAllChecked]);
+
+    // Mobile: toque longo para entrar em modo seleção
+    const handleCardLongPressStart = useCallback((contactId) => {
+        setIsSelectionMode(true);
+        setSelectedContactIds((prev) => prev.includes(contactId) ? prev : [...prev, contactId]);
+    }, []);
+
+    // Mobile: arrastar sobre cards para selecionar
+    const handleCardDragSelect = useCallback((contactId) => {
+        if (!isSelectionMode || !contactId) return;
+        setSelectedContactIds((prev) => prev.includes(contactId) ? prev : [...prev, contactId]);
+    }, [isSelectionMode]);
+
+    const handleCardLongPressEnd = useCallback(() => {
+        // Mantém o modo seleção ativo até o usuário limpar manualmente
+    }, []);
+
+    // Mobile: toque simples durante o modo seleção alterna o item
+    const handleTapWhileSelection = useCallback((contactId) => {
+        if (!isSelectionMode) return;
+        setSelectedContactIds((prev) => (
+            prev.includes(contactId)
+                ? prev.filter(id => id !== contactId)
+                : [...prev, contactId]
+        ));
+    }, [isSelectionMode]);
 
     // NOVA FUNÇÃO: SELECIONAR/DESSELECIONAR TODOS OS CONTATOS
     const handleSelectAllContacts = (event) => {
@@ -451,9 +525,8 @@ const Contacts = () => {
             setSelectedContactIds([]); // Limpa a seleção
             setIsSelectAllChecked(false); // Desmarca o "Selecionar Tudo"
             setConfirmDeleteManyOpen(false); // Fecha o modal de confirmação
-            // Re-fetch os contatos para atualizar a lista
-            dispatch({ type: "RESET" });
-            setPageNumber(1);
+            // Re-fetch os contatos para atualizar a lista, sem limpar visualmente
+            setRefreshTick((t) => t + 1);
         } catch (err) {
             toastError(err);
         } finally {
@@ -534,12 +607,6 @@ const Contacts = () => {
     // Calculação de páginas já é feita no hook useContactPagination
 
     // Agora usando o handleSort do hook useContactSort
-
-    // A lista já vem paginada e ordenada do backend (params: limit, pageNumber, orderBy, order).
-    // Portanto, evitamos reordenar/repaginar no cliente para não misturar páginas.
-    const sortedContacts = useMemo(() => {
-        return contacts.filter(c => !c.isGroup);
-    }, [contacts]);
 
     // Função renderPageNumbers já está disponibilizada pelo hook useContactPagination
 
@@ -689,18 +756,6 @@ const Contacts = () => {
                                     </>
                                 )}
                             </PopupState>
-                        {/* Itens por página (Mobile) */}
-                        <div className="flex items-center gap-1 text-sm">
-                            <span className="text-gray-600 dark:text-gray-300">Itens/página:</span>
-                            <select value={contactsPerPage} onChange={handleChangePerPage} className="h-10 px-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg">
-                                <option value={5}>5</option>
-                                <option value={25}>25</option>
-                                <option value={50}>50</option>
-                                <option value={100}>100</option>
-                                <option value={500}>500</option>
-                                <option value={1000}>1000</option>
-                            </select>
-                        </div>
                             <Can
                                 role={user.profile}
                                 perform="contacts-page:deleteContact"
@@ -714,6 +769,25 @@ const Contacts = () => {
                                                 aria-label={`Deletar ${selectedContactIds.length} contato(s)`}
                                             >
                                                 <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </Tooltip>
+                                    ) : null
+                                )}
+                                no={() => null}
+                            />
+                            <Can
+                                role={user.profile}
+                                perform="contacts-page:bulkEdit"
+                                yes={() => (
+                                    selectedContactIds.length > 0 ? (
+                                        <Tooltip {...CustomTooltipProps} title={`Editar em massa (${selectedContactIds.length})`}>
+                                            <button
+                                                onClick={() => setBulkEditOpen(true)}
+                                                disabled={loading}
+                                                className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                                aria-label={`Editar em massa ${selectedContactIds.length} contato(s)`}
+                                            >
+                                                <Edit className="w-4 h-4" />
                                             </button>
                                         </Tooltip>
                                     ) : null
@@ -742,6 +816,9 @@ const Contacts = () => {
                             className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        {isSearching && (
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
+                        )}
                     </div>
                 </div>
 
@@ -763,6 +840,9 @@ const Contacts = () => {
                                 className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            {isSearching && (
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
+                            )}
                         </div>
                     </div>
 
@@ -833,165 +913,76 @@ const Contacts = () => {
                             )}
                             no={() => null}
                         />
+            <Tooltip {...CustomTooltipProps} title="Novo Contato">
+                <button
+                    onClick={handleOpenContactModal}
+                    className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-label="Novo Contato"
+                >
+                    <UserPlus className="w-6 h-6" />
+                </button>
+            </Tooltip>
+        </div>
+    </div>
 
-                        <Tooltip {...CustomTooltipProps} title="Novo Contato">
-                            <button
-                                onClick={handleOpenContactModal}
-                                className="w-10 h-10 flex items-center justify-center text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                aria-label="Novo Contato"
-                            >
-                                <UserPlus className="w-6 h-6" />
+    {/* Tabela de Contatos (Desktop) */}
+    <div className="hidden min-[1200px]:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
+        <div className="overflow-x-hidden">
+            <table className="w-full table-fixed text-sm text-left text-gray-500 dark:text-gray-400">
+                <thead className="uppercase text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400 tracking-wider">
+                    <tr>
+                        <th scope="col" className="w-[48px] p-2 text-center">
+                            <input type="checkbox"
+                                checked={isSelectAllChecked}
+                                onChange={handleSelectAllContacts}
+                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
+                        </th>
+                        <th scope="col" className="pl-14 pr-3 py-2 w-[300px]">
+                            <button onClick={() => handleSort('name')} className="flex items-center gap-1 select-none font-medium">
+                                NOME
+                                <span className="text-[15px] opacity-70">{sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                             </button>
-                        </Tooltip>
-                    </div>
-                </div>
-                {/* Tabela de Contatos (Desktop) */}
-                <div className="hidden min-[1200px]:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-                    <div className="overflow-x-hidden">
-                        <table className="w-full table-fixed text-sm text-left text-gray-500 dark:text-gray-400">
-                            <thead className="uppercase text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400 tracking-wider">
-                                <tr>
-                                    <th scope="col" className="w-[48px] p-2 text-center">
-                                        <input type="checkbox"
-                                            checked={isSelectAllChecked}
-                                            onChange={handleSelectAllContacts}
-                                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
-                                    </th>
-                                    <th scope="col" className="pl-14 pr-3 py-2 w-[300px]">
-                                        <button onClick={() => handleSort('name')} className="flex items-center gap-1 select-none font-medium">
-NOME
-                                            <span className="text-[15px] opacity-70">{sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
-                                        </button>
-                                    </th>
-                                    {/* Colunas 'Nome do Contato' e 'Encomenda' removidas conforme solicitação */}
-                                    <th scope="col" className="pl-3 pr-3 py-2 w-[167px]">
-                                        <button onClick={() => handleSort('number')} className="flex items-center gap-1 select-none w-full font-medium">
-WHATSAPP
-                                            <span className="text-[15px] opacity-70">{sortField === 'number' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" className="hidden lg:table-cell pl-1 pr-3 py-2 w-[140px]">
-                                        <button onClick={() => handleSort('email')} className="flex items-center gap-1 select-none font-medium">
-EMAIL
-                                            <span className="text-[15px] opacity-70">{sortField === 'email' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" className="pl-3 pr-3 py-2 w-[100px]">
-                                        <button onClick={() => handleSort('city')} className="flex items-center gap-1 select-none font-medium">
-CIDADE/UF
-                                            <span className="text-[15px] opacity-70">{sortField === 'city' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" className="pl-3 pr-3 py-2 text-center w-[50px]">
-                                        <button onClick={() => handleSort('tags')} className="flex items-center justify-center gap-1 w-full select-none font-medium">
-TAGS
-                                            <span className="text-[15px] opacity-70">{sortField === 'tags' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" className="pl-4 pr-3 py-2 text-center w-[80px]">
-                                        <button onClick={() => handleSort('status')} className="flex items-center justify-center gap-1 w-full select-none font-medium">
-STATUS
-                                            <span className="text-[15px] opacity-70">{sortField === 'status' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" className="pl-3 pr-3 py-2 text-center w-[120px] font-medium">AÇÕES</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {sortedContacts.map((contact) => (
-                                    <ContactRow 
-                                        key={contact.id}
-                                        contact={contact}
-                                        selectedContactIds={selectedContactIds}
-                                        onToggleSelect={handleToggleSelectContact}
-                                        onEdit={handleEditContact}
-                                        onSendMessage={handleStartNewTicket}
-                                        onDelete={handleShowDeleteConfirm}
-                                        onBlock={handleShowBlockConfirm}
-                                        onUnblock={handleShowUnblockConfirm}
-                                        formatPhoneNumber={formatPhoneNumber}
-                                        CustomTooltipProps={CustomTooltipProps}
-                                    />
-                                ))}
-                                {loading && <TableRowSkeleton avatar columns={9} />}
-                            </tbody>
-                        </table>
-                    </div>
-                    {/* Paginação da Tabela */}
-                    <nav className="flex items-center justify-between p-4" aria-label="Table navigation">
-                        <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
-                            Página {" "}
-                            <span className="font-semibold text-gray-900 dark:text-white">{pageNumber}</span>
-                            {" "} de {" "}
-                            <span className="font-semibold text-gray-900 dark:text-white">{totalPages}</span>
-                            {" "} • {" "}
-                            <span className="font-semibold text-gray-900 dark:text-white">{totalContacts}</span> contatos
-                        </span>
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm">Itens por página:</span>
-                            <select
-                                value={contactsPerPage}
-                                onChange={(e) => {
-                                    setContactsPerPage(Number(e.target.value));
-                                    setPageNumber(1); // Reset to first page when items per page changes
-                                }}
-                                className="text-sm bg-gray-50 border border-gray-300 rounded-md p-1 dark:bg-gray-700 dark:border-gray-600"
-                            >   <option value={5}>5</option>
-                                <option value={25}>25</option>
-                                <option value={50}>50</option>
-                                <option value={100}>100</option>
-                                <option value={500}>500</option>
-                                <option value={1000}>1000</option>
-                            </select>
-                        </div>
-                        <ul className="inline-flex items-center -space-x-px">
-                            <li>
-                                <button
-                                    onClick={() => handlePageChange(1)}
-                                    disabled={pageNumber === 1}
-                                    className="flex items-center justify-center px-3 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <ChevronsLeft className="w-5 h-5" />
-                                </button>
-                            </li>
-                            <li>
-                                <button
-                                    onClick={() => handlePageChange(pageNumber - 1)}
-                                    disabled={pageNumber === 1}
-                                    className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <ChevronLeft className="w-5 h-5" />
-                                </button>
-                            </li>
-                            {renderPageNumbers()}
-                            <li>
-                                <button
-                                    onClick={() => handlePageChange(pageNumber + 1)}
-                                    disabled={pageNumber === totalPages}
-                                    className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <ChevronRight className="w-5 h-5" />
-                                </button>
-                            </li>
-                            <li>
-                                <button
-                                    onClick={() => handlePageChange(totalPages)}
-                                    disabled={pageNumber === totalPages}
-                                    className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <ChevronsRight className="w-5 h-5" />
-                                </button>
-                            </li>
-                        </ul>
-                    </nav>
-                </div>
-
-                {/* Lista de Contatos (Mobile) */}
-                <div className="min-[1200px]:hidden flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
-                    {sortedContacts.map((contact) => (
-                        <ContactCard
+                        </th>
+                        <th scope="col" className="pl-3 pr-3 py-2 w-[167px]">
+                            <button onClick={() => handleSort('number')} className="flex items-center gap-1 select-none w-full font-medium">
+                                WHATSAPP
+                                <span className="text-[15px] opacity-70">{sortField === 'number' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                            </button>
+                        </th>
+                        <th scope="col" className="hidden lg:table-cell pl-1 pr-3 py-2 w-[140px]">
+                            <button onClick={() => handleSort('email')} className="flex items-center gap-1 select-none font-medium">
+                                EMAIL
+                                <span className="text-[15px] opacity-70">{sortField === 'email' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                            </button>
+                        </th>
+                        <th scope="col" className="pl-3 pr-3 py-2 w-[100px]">
+                            <button onClick={() => handleSort('city')} className="flex items-center gap-1 select-none font-medium">
+                                CIDADE/UF
+                                <span className="text-[15px] opacity-70">{sortField === 'city' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                            </button>
+                        </th>
+                        <th scope="col" className="pl-3 pr-3 py-2 text-center w-[50px]">
+                            <button onClick={() => handleSort('tags')} className="flex items-center justify-center gap-1 w-full select-none font-medium">
+                                TAGS
+                                <span className="text-[15px] opacity-70">{sortField === 'tags' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                            </button>
+                        </th>
+                        <th scope="col" className="pl-4 pr-3 py-2 text-center w-[80px]">
+                            <button onClick={() => handleSort('status')} className="flex items-center justify-center gap-1 w-full select-none font-medium">
+                                STATUS
+                                <span className="text-[15px] opacity-70">{sortField === 'status' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                            </button>
+                        </th>
+                        <th scope="col" className="pl-3 pr-3 py-2 text-center w-[120px] font-medium">AÇÕES</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {sortedContacts.map((contact, rowIndex) => (
+                        <ContactRow 
                             key={contact.id}
                             contact={contact}
+                            selectedContactIds={selectedContactIds}
+                            onToggleSelect={(id, _i, e) => handleToggleSelectContact(id, rowIndex, e)}
                             onEdit={handleEditContact}
                             onSendMessage={handleStartNewTicket}
                             onDelete={handleShowDeleteConfirm}
@@ -999,55 +990,196 @@ STATUS
                             onUnblock={handleShowUnblockConfirm}
                             formatPhoneNumber={formatPhoneNumber}
                             CustomTooltipProps={CustomTooltipProps}
+                            rowIndex={rowIndex}
                         />
                     ))}
-                </div>
-                {/* Paginação (Mobile) */}
+                    {loading && <TableRowSkeleton avatar columns={9} />}
+                </tbody>
+            </table>
+        </div>
+        {/* Paginação da Tabela (Desktop) */}
+        <nav className="hidden min-[1200px]:flex items-center justify-between p-4" aria-label="Table navigation">
+            <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+                Página {" "}
+                <span className="font-semibold text-gray-900 dark:text-white">{pageNumber}</span>
+                {" "} de {" "}
+                <span className="font-semibold text-gray-900 dark:text-white">{totalPages}</span>
+                {" "} • {" "}
+                <span className="font-semibold text-gray-900 dark:text-white">{totalContacts}</span> contatos
+            </span>
+            <div className="flex items-center gap-2">
+                <span className="text-sm">Itens por página:</span>
+                <select
+                    value={contactsPerPage}
+                    onChange={(e) => {
+                        setContactsPerPage(Number(e.target.value));
+                        setPageNumber(1);
+                    }}
+                    className="text-sm bg-gray-50 border border-gray-300 rounded-md p-1 dark:bg-gray-700 dark:border-gray-600"
+                >
+                    <option value={5}>5</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={500}>500</option>
+                    <option value={1000}>1000</option>
+                </select>
+            </div>
+            <ul className="inline-flex items-center -space-x-px">
+                <li>
+                    <button
+                        onClick={() => handlePageChange(1)}
+                        disabled={pageNumber === 1}
+                        className="flex items-center justify-center px-3 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <ChevronsLeft className="w-5 h-5" />
+                    </button>
+                </li>
+                <li>
+                    <button
+                        onClick={() => handlePageChange(pageNumber - 1)}
+                        disabled={pageNumber === 1}
+                        className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <ChevronLeft className="w-5 h-5" />
+                    </button>
+                </li>
+                {renderPageNumbers().map((page, index) => (
+                    <li key={index}>
+                        <button
+                            onClick={() => handlePageChange(page)}
+                            className={`flex items-center justify-center px-3 h-8 leading-tight border
+                                ${page === pageNumber
+                                    ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
+                                    : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                                }`}
+                        >
+                            {page}
+                        </button>
+                    </li>
+                ))}
+                <li>
+                    <button
+                        onClick={() => handlePageChange(pageNumber + 1)}
+                        disabled={pageNumber === totalPages}
+                        className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <ChevronRight className="w-5 h-5" />
+                    </button>
+                </li>
+                <li>
+                    <button
+                        onClick={() => handlePageChange(totalPages)}
+                        disabled={pageNumber === totalPages}
+                        className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <ChevronsRight className="w-5 h-5" />
+                    </button>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    {/* Lista de Contatos (Mobile) */}
+    <div className="min-[1200px]:hidden flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
+        {sortedContacts.map((contact) => (
+            <ContactCard
+                key={contact.id}
+                contact={contact}
+                onEdit={handleEditContact}
+                onSendMessage={handleStartNewTicket}
+                onDelete={handleShowDeleteConfirm}
+                onBlock={handleShowBlockConfirm}
+                onUnblock={handleShowUnblockConfirm}
+                formatPhoneNumber={formatPhoneNumber}
+                CustomTooltipProps={CustomTooltipProps}
+                // Mobile: seleção por long-press/arrastar
+                isSelectionMode={isSelectionMode}
+                onLongPressStart={handleCardLongPressStart}
+                onDragSelect={handleCardDragSelect}
+                onLongPressEnd={handleCardLongPressEnd}
+                onTapWhileSelection={handleTapWhileSelection}
+                isSelected={selectedContactIds.includes(contact.id)}
+            />
+        ))}
+    </div>
+                
+    {/* Paginação (Mobile) */}
                 <nav className="min-[1200px]:hidden flex items-center justify-between p-3 mt-2 w-full max-w-[375px] mx-auto" aria-label="Mobile navigation">
                     <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
                         Página <span className="font-semibold text-gray-900 dark:text-white">{pageNumber}</span>
                         {" "} de {" "}
                         <span className="font-semibold text-gray-900 dark:text-white">{totalPages}</span>
+                        {" "} • {" "}
+                        <span className="font-semibold text-gray-900 dark:text-white">{totalContacts}</span> contatos
                     </span>
-                    <ul className="inline-flex items-center -space-x-px">
-                        <li>
-                            <button
-                                onClick={() => handlePageChange(1)}
-                                disabled={pageNumber === 1}
-                                className="flex items-center justify-center px-3 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <ChevronsLeft className="w-5 h-5" />
-                            </button>
-                        </li>
-                        <li>
-                            <button
-                                onClick={() => handlePageChange(pageNumber - 1)}
-                                disabled={pageNumber === 1}
-                                className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <ChevronLeft className="w-5 h-5" />
-                            </button>
-                        </li>
-                        {renderPageNumbers()}
-                        <li>
-                            <button
-                                onClick={() => handlePageChange(pageNumber + 1)}
-                                disabled={pageNumber === totalPages}
-                                className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <ChevronRight className="w-5 h-5" />
-                            </button>
-                        </li>
-                        <li>
-                            <button
-                                onClick={() => handlePageChange(totalPages)}
-                                disabled={pageNumber === totalPages}
-                                className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <ChevronsRight className="w-5 h-5" />
-                            </button>
-                        </li>
-                    </ul>
+                    <div className="flex items-center gap-2">
+                        <select
+                            value={contactsPerPage}
+                            onChange={(e) => {
+                                setContactsPerPage(Number(e.target.value));
+                                setPageNumber(1);
+                            }}
+                            className="text-xs bg-gray-50 border border-gray-300 rounded-md p-1 dark:bg-gray-700 dark:border-gray-600"
+                        >
+                            <option value={5}>5</option>
+                            <option value={25}>25</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                        </select>
+                        <ul className="inline-flex items-center -space-x-px">
+                            <li>
+                                <button
+                                    onClick={() => handlePageChange(1)}
+                                    disabled={pageNumber === 1}
+                                    className="flex items-center justify-center px-2 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <ChevronsLeft className="w-4 h-4" />
+                                </button>
+                            </li>
+                            <li>
+                                <button
+                                    onClick={() => handlePageChange(pageNumber - 1)}
+                                    disabled={pageNumber === 1}
+                                    className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <ChevronLeft className="w-4 h-4" />
+                                </button>
+                            </li>
+                            {renderPageNumbers().map((page, index) => (
+                                <li key={index}>
+                                    <button
+                                        onClick={() => handlePageChange(page)}
+                                        className={`flex items-center justify-center px-2 h-8 leading-tight border
+                                            ${page === pageNumber
+                                                ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
+                                                : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                                            }`}
+                                    >
+                                        {page}
+                                    </button>
+                                </li>
+                            ))}
+                            <li>
+                                <button
+                                    onClick={() => handlePageChange(pageNumber + 1)}
+                                    disabled={pageNumber === totalPages}
+                                    className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <ChevronRight className="w-4 h-4" />
+                                </button>
+                            </li>
+                            <li>
+                                <button
+                                    onClick={() => handlePageChange(totalPages)}
+                                    disabled={pageNumber === totalPages}
+                                    className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <ChevronsRight className="w-4 h-4" />
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
                 </nav>
                 </div>
             </MainContainer>

@@ -1,11 +1,11 @@
-import React, { memo } from "react";
+import React, { memo, useRef, useCallback, useState } from "react";
 import { Trash2, Edit, Lock, Unlock, CheckCircle, Ban } from "lucide-react";
 import { WhatsApp } from "@material-ui/icons";
 import { Tooltip } from "@material-ui/core";
 import LazyContactAvatar from "../LazyContactAvatar";
 
 // Componente de card de contato para versão mobile, memoizado para evitar re-renders
-const ContactCard = memo(({
+const ContactCard = memo(({ 
   contact,
   onEdit,
   onSendMessage,
@@ -13,10 +13,71 @@ const ContactCard = memo(({
   onBlock,
   onUnblock,
   formatPhoneNumber,
-  CustomTooltipProps
+  CustomTooltipProps,
+  // Seleção mobile
+  isSelectionMode = false,
+  onLongPressStart,
+  onDragSelect,
+  onLongPressEnd,
+  onTapWhileSelection,
+  isSelected = false,
 }) => {
+  const longPressTimerRef = useRef(null);
+  const longPressTriggeredRef = useRef(false);
+  const [pressing, setPressing] = useState(false);
+
+  const clearTimer = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const handleTouchStart = useCallback((e) => {
+    longPressTriggeredRef.current = false;
+    setPressing(true);
+    clearTimer();
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      if (onLongPressStart) onLongPressStart(contact.id);
+    }, 500);
+  }, [clearTimer, onLongPressStart, contact?.id]);
+
+  const handleTouchMove = useCallback((e) => {
+    if (!isSelectionMode && !longPressTriggeredRef.current) return;
+    const touch = e.touches && e.touches[0];
+    if (!touch) return;
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!el) return;
+    const wrapper = el.closest && el.closest('[data-contact-id]');
+    const id = wrapper && wrapper.getAttribute && wrapper.getAttribute('data-contact-id');
+    if (id && onDragSelect) onDragSelect(Number(id));
+  }, [isSelectionMode, onDragSelect]);
+
+  const handleTouchEnd = useCallback(() => {
+    clearTimer();
+    setPressing(false);
+    if (longPressTriggeredRef.current) {
+      if (onLongPressEnd) onLongPressEnd();
+    } else if (isSelectionMode && onTapWhileSelection) {
+      // Toque simples durante modo seleção: alterna seleção
+      onTapWhileSelection(contact.id);
+    }
+  }, [clearTimer, onLongPressEnd]);
+
+  const cardClasses = `w-full bg-white dark:bg-gray-800 shadow rounded-lg p-3 flex flex-col gap-3 ${
+    isSelected ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-white dark:ring-offset-gray-900' : ''
+  } ${pressing ? 'scale-[0.99] transition-transform' : ''}`;
+
   return (
-    <div className="w-full bg-white dark:bg-gray-800 shadow rounded-lg p-3 flex flex-col gap-3">
+    <div
+      className={cardClasses}
+      data-contact-id={contact.id}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+    >
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 overflow-hidden flex-shrink-0">
           <LazyContactAvatar 

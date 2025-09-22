@@ -318,7 +318,7 @@ class WhatsAppWebLabelsService {
         if (contactsWithoutLabels.length > 0) {
           deviceLabels.unshift({
             id: "__unlabeled__",
-            name: "Sem etiqueta (salvos)",
+            name: "Sem etiqueta",
             color: "#8D99AE",
             count: contactsWithoutLabels.length
           });
@@ -340,7 +340,7 @@ class WhatsAppWebLabelsService {
           return isContact && isSaved;
         });
         if (savedPersonal.length > 0) {
-          deviceLabels.unshift({ id: "__all__", name: "Todos os contatos (salvos)", color: "#5E97D1", count: savedPersonal.length });
+          deviceLabels.unshift({ id: "__all__", name: "Todos os contatos", color: "#5E97D1", count: savedPersonal.length });
         }
 
         // Broadcasts / Grupos (pelo conjunto de chats)

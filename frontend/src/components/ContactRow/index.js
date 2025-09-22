@@ -22,18 +22,24 @@ const ContactRow = memo(({
   onBlock, 
   onUnblock,
   formatPhoneNumber,
-  CustomTooltipProps
+  CustomTooltipProps,
+  rowStyle,
+  rowIndex
 }) => {
   
   // Determina se o contato está selecionado
   const isSelected = selectedContactIds.includes(contact.id);
 
+  const rowClasses = `border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 ${
+    isSelected ? 'bg-blue-50 dark:bg-blue-900/30' : 'bg-white dark:bg-gray-800'
+  }`;
+
   return (
-    <tr key={contact.id} className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+    <tr key={contact.id} style={rowStyle} className={rowClasses}>
       <td className="w-[48px] p-4">
         <input type="checkbox"
           checked={isSelected}
-          onChange={() => onToggleSelect(contact.id)}
+          onClick={(e) => onToggleSelect(contact.id, rowIndex, e)}
           className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" 
         />
       </td>

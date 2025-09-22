@@ -87,6 +87,11 @@ COPY --from=build /app/scripts ./scripts
 COPY --from=build /app/.sequelizerc ./.sequelizerc
 RUN mkdir -p ./private
 
+RUN apt-get update \
+  && apt-get install -y chromium
+
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false
+
 EXPOSE 8080
 
 # Executa o servidor compilado (sem nodemon em produção)

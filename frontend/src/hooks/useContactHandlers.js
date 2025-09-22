@@ -10,6 +10,8 @@ const useContactHandlers = (
   setDeletingContact,
   setBlockingContact,
   setUnBlockingContact,
+  setConfirmOpen,
+  setRefreshTick,
   setContactTicket,
   setNewTicketModalOpen,
   setSelectedContactId,
@@ -29,6 +31,7 @@ const useContactHandlers = (
     try {
       await api.delete(`/contacts/${contactId}`);
       toast.success(i18n.t("contacts.toasts.deleted"));
+      if (setRefreshTick) setRefreshTick((t) => t + 1);
     } catch (err) {
       toastError(err);
     }
@@ -38,13 +41,15 @@ const useContactHandlers = (
   // Handler para mostrar modal de confirmação de deleção
   const handleShowDeleteConfirm = useCallback((contact) => {
     setDeletingContact(contact);
-  }, [setDeletingContact]);
+    setConfirmOpen(true);
+  }, [setDeletingContact, setConfirmOpen]);
 
   // Handler para bloquear um contato
   const handleBlockContact = useCallback(async (contactId) => {
     try {
       await api.put(`/contacts/block/${contactId}`, { active: false });
       toast.success("Contato bloqueado");
+      if (setRefreshTick) setRefreshTick((t) => t + 1);
     } catch (err) {
       toastError(err);
     }
@@ -56,13 +61,15 @@ const useContactHandlers = (
   // Handler para mostrar modal de confirmação de bloqueio
   const handleShowBlockConfirm = useCallback((contact) => {
     setBlockingContact(contact);
-  }, [setBlockingContact]);
+    setConfirmOpen(true);
+  }, [setBlockingContact, setConfirmOpen]);
 
   // Handler para desbloquear um contato
   const handleUnblockContact = useCallback(async (contactId) => {
     try {
       await api.put(`/contacts/block/${contactId}`, { active: true });
       toast.success("Contato desbloqueado");
+      if (setRefreshTick) setRefreshTick((t) => t + 1);
     } catch (err) {
       toastError(err);
     }
@@ -74,7 +81,8 @@ const useContactHandlers = (
   // Handler para mostrar modal de confirmação de desbloqueio
   const handleShowUnblockConfirm = useCallback((contact) => {
     setUnBlockingContact(contact);
-  }, [setUnBlockingContact]);
+    setConfirmOpen(true);
+  }, [setUnBlockingContact, setConfirmOpen]);
 
   // Handler para iniciar um novo ticket/conversa
   const handleStartNewTicket = useCallback((contact) => {
