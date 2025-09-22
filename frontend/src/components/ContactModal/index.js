@@ -359,7 +359,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											}}
 											variant="outlined"
 											margin="dense"
-											disabled
+											//disabled
 											placeholder="Insira numeros"
 											fullWidth
 										/>
