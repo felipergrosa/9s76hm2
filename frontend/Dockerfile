@@ -13,6 +13,10 @@ COPY . .
 # Troque pelo seu domínio público do backend (ou use ARG se quiser mais flexibilidade)
 ENV REACT_APP_BACKEND_URL=https://chatsapi.nobreluminarias.com.br
 
+# Versão do frontend injetada no build (vinda do CI)
+ARG REACT_APP_FRONTEND_VERSION
+ENV REACT_APP_FRONTEND_VERSION=$REACT_APP_FRONTEND_VERSION
+
 # Build da aplicação React
 RUN NODE_OPTIONS=--max-old-space-size=6144 npm run build
 

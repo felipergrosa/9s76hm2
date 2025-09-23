@@ -20,6 +20,17 @@ jobs:
           VER=$(node -p -e "require('./backend/package.json').version")
           echo "version=$VER" >> $GITHUB_OUTPUT
 
+      - name: Compute backend version label
+        id: vcalc
+        run: |
+          BASE=$(node -p -e "require('./backend/package.json').version")
+          # Extrai prefixo antes de 'v-<n>' se existir, senão usa BASE como prefixo
+          PREFIX=$(node -e "const v=process.argv[1];const m=v.match(/^(.*?)(?:v-\d+)?$/);process.stdout.write(m?m[1]:v)" "$BASE")
+          echo "Base version: $BASE -> Prefix: $PREFIX"
+          AUTO=${GITHUB_RUN_NUMBER}
+          FINAL="${PREFIX}v-${AUTO}"
+          echo "version_label=$FINAL" >> $GITHUB_OUTPUT
+
       - name: Login to DockerHub
         uses: docker/login-action@v2
         with:
@@ -34,8 +45,8 @@ jobs:
           build-args: |
             GIT_COMMIT=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp || github.run_started_at }}
-            BACKEND_VERSION=${{ steps.pkg.outputs.version || '' }}
+            BACKEND_VERSION=${{ steps.vcalc.outputs.version_label }}
           tags: |
             felipergrosa/whaticket-backend:latest
             felipergrosa/whaticket-backend:${{ github.sha }}
-            felipergrosa/whaticket-backend:v${{ steps.pkg.outputs.version }}
+            felipergrosa/whaticket-backend:v${{ steps.vcalc.outputs.version_label }}

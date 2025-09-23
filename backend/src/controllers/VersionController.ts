@@ -57,16 +57,23 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   };
 
   const fileCommit = safeRead(path.join(process.cwd(), ".git-commit"));
-  const commit = process.env.GIT_COMMIT || fileCommit || safeExec("git rev-parse --short HEAD") || readCommitFromGitDir() || "N/A";
+  const rawCommit = process.env.GIT_COMMIT || fileCommit || safeExec("git rev-parse --short HEAD") || readCommitFromGitDir() || "N/A";
+  const commit = rawCommit || "N/A";
+  const commitShort = commit && commit.length >= 6 ? commit.substring(0, 6) : commit;
 
   const fileBuildDate = safeRead(path.join(process.cwd(), ".build-date"));
   const buildDate = process.env.BUILD_DATE || fileBuildDate || new Date().toISOString();
 
+  const backendVersion = record?.versionBackend || process.env.BACKEND_VERSION || "N/A";
+  const versionLabel = backendVersion && commitShort && commitShort !== "N/A" ? `${backendVersion}+${commitShort}` : backendVersion;
+
   return res.status(200).json({
     version: record?.versionFrontend || "N/A",
     backend: {
-      version: record?.versionBackend || process.env.BACKEND_VERSION || "N/A",
+      version: backendVersion,
+      versionLabel,
       commit,
+      commitShort,
       buildDate
     }
   });

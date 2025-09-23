@@ -226,7 +226,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
   const [pageNumber, setPageNumber] = useState(1);
   const [searchParam] = useState("");
   const [chats, dispatch] = useReducer(reducer, []);
-  const [versionInfo, setVersionInfo] = useState({ frontend: "", backend: "", commit: "", buildDate: "" });
+  const [versionInfo, setVersionInfo] = useState({ frontend: "", backend: "", commit: "", commitShort: "", buildDate: "" });
   const [managementHover, setManagementHover] = useState(false);
   const [campaignHover, setCampaignHover] = useState(false);
   const [flowHover, setFlowHover] = useState(false)
@@ -271,7 +271,9 @@ const MainListItems = ({ collapsed, drawerClose }) => {
       const data = await getVersion();
       const frontendVersion = data?.version || "N/A";
       const backendVersion = data?.backend?.version || "N/A";
+      // backendLabel não será usado na UI (exibiremos apenas a versão pura do backend)
       const commit = data?.backend?.commit || "N/A";
+      const commitShort = data?.backend?.commitShort || (commit && commit.length >= 6 ? commit.substring(0,6) : commit);
       const buildDateRaw = data?.backend?.buildDate || "N/A";
       let buildDate = buildDateRaw;
       try {
@@ -282,7 +284,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
       } catch (e) {
         // ignore parse errors, keep raw string
       }
-      setVersionInfo({ frontend: frontendVersion, backend: backendVersion, commit, buildDate });
+      setVersionInfo({ frontend: frontendVersion, backend: backendVersion, commit, commitShort, buildDate });
     }
     fetchVersion();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -848,7 +850,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                 <img style={{ width: "100%", padding: "10px" }} src={logo} alt="image" />            
               </Hidden> 
               */}
-          <Tooltip title={`BACKEND BUILD: ${versionInfo.buildDate} | Commit: ${versionInfo.commit} | Frontend: ${versionInfo.frontend}`}>
+          <Tooltip title={`BACKEND BUILD: ${versionInfo.buildDate} | Commit: ${versionInfo.commitShort || versionInfo.commit} | Frontend: ${versionInfo.frontend}`}>
             <Typography
               style={{
                 fontSize: "12px",

@@ -343,10 +343,12 @@ const LoggedInLayout = ({ children, themeToggle }) => {
 
   useEffect(() => {
     // Envia a versão do frontend para o backend (/version)
+    // Usa a versão injetada pelo CI (REACT_APP_FRONTEND_VERSION) com fallback para package.json
     // Envia somente se a versão atual for diferente da última registrada
     (async () => {
       try {
-        const current = pkg?.version || "";
+        const injected = process.env.REACT_APP_FRONTEND_VERSION;
+        const current = injected && injected.length ? injected : (pkg?.version || "");
         const lastSent = localStorage.getItem("frontendVersionSent") || "";
         if (current && current !== lastSent) {
           await setVersion(current);
