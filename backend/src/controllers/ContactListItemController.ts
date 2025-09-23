@@ -21,6 +21,8 @@ type IndexQuery = {
   pageNumber: string;
   companyId: string | number;
   contactListId: string | number;
+  orderBy?: string;
+  order?: "asc" | "desc" | "ASC" | "DESC";
 };
 
 type StoreData = {
@@ -37,14 +39,16 @@ type FindParams = {
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
-  const { searchParam, pageNumber, contactListId } = req.query as IndexQuery;
+  const { searchParam, pageNumber, contactListId, orderBy, order } = req.query as IndexQuery;
   const { companyId } = req.user;
 
   const { contacts, count, hasMore } = await ListService({
     searchParam,
     pageNumber,
     companyId,
-    contactListId
+    contactListId,
+    orderBy,
+    order
   });
 
   return res.json({ contacts, count, hasMore });

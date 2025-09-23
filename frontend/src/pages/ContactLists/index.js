@@ -113,6 +113,17 @@ const ContactLists = () => {
   // Popover de detalhes do filtro salvo
   const [detailsAnchorEl, setDetailsAnchorEl] = useState(null);
   const [detailsFilter, setDetailsFilter] = useState(null);
+  // Nomes das tags (carregado uma vez)
+  const [allTags, setAllTags] = useState([]);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { data } = await api.get('/tags');
+        setAllTags(Array.isArray(data) ? data : (data && Array.isArray(data.tags) ? data.tags : []));
+      } catch {}
+    };
+    load();
+  }, []);
   const openDetails = (event, sf) => {
     setDetailsAnchorEl(event.currentTarget);
     // Limpa chaves com valores vazios ou compostos apenas por zeros para evitar "linhas fantasma"
@@ -370,6 +381,33 @@ const ContactLists = () => {
                     {(() => {
                       const sf = contactList && contactList.savedFilter ? contactList.savedFilter : null;
                       if (!sf) return <span style={{ color: '#999' }}>—</span>;
+                      const hasAny = (
+                        (Array.isArray(sf.channel) && sf.channel.length > 0) ||
+                        (Array.isArray(sf.representativeCode) && sf.representativeCode.length > 0) ||
+                        (Array.isArray(sf.city) && sf.city.length > 0) ||
+                        (Array.isArray(sf.segment) && sf.segment.length > 0) ||
+                        (Array.isArray(sf.situation) && sf.situation.length > 0) ||
+                        (Array.isArray(sf.foundationMonths) && sf.foundationMonths.length > 0) ||
+                        (!!sf.minCreditLimit || !!sf.maxCreditLimit) ||
+                        (typeof sf.florder !== 'undefined') ||
+                        (!!sf.dtUltCompraStart || !!sf.dtUltCompraEnd) ||
+                        (sf.minVlUltCompra != null || sf.maxVlUltCompra != null) ||
+                        (Array.isArray(sf.tags) && sf.tags.length > 0)
+                      );
+                      if (!hasAny) return <span style={{ color: '#999' }}>—</span>;
+                      const activeCount = [
+                        Array.isArray(sf.channel) && sf.channel.length > 0,
+                        Array.isArray(sf.representativeCode) && sf.representativeCode.length > 0,
+                        Array.isArray(sf.city) && sf.city.length > 0,
+                        Array.isArray(sf.segment) && sf.segment.length > 0,
+                        Array.isArray(sf.situation) && sf.situation.length > 0,
+                        Array.isArray(sf.foundationMonths) && sf.foundationMonths.length > 0,
+                        (!!sf.minCreditLimit || !!sf.maxCreditLimit),
+                        (typeof sf.florder !== 'undefined'),
+                        (!!sf.dtUltCompraStart || !!sf.dtUltCompraEnd),
+                        (sf.minVlUltCompra != null || sf.maxVlUltCompra != null),
+                        (Array.isArray(sf.tags) && sf.tags.length > 0)
+                      ].filter(Boolean).length;
                       return (
                         <Button
                           size="small"
@@ -378,7 +416,7 @@ const ContactLists = () => {
                           onClick={(e) => openDetails(e, sf)}
                           startIcon={<FilterIcon size={16} color="#059669" />}
                         >
-                          Filtro salvo
+                          {`Filtro salvo${activeCount ? ` (${activeCount})` : ''}`}
                         </Button>
                       );
                     })()}
@@ -437,142 +475,48 @@ const ContactLists = () => {
           <Typography variant="subtitle2" gutterBottom>Detalhes do filtro salvo</Typography>
           {detailsFilter ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {(() => {
-                // Debug visual: lista chaves cujo valor é apenas zeros (string) ou contém apenas zeros (em arrays)
-                try {
-                  const zeroOnly = Object.entries(detailsFilter || {})
-                    .filter(([key, val]) => {
-                      if (val == null) return false;
-                      if (Array.isArray(val)) return val.some(v => /^0+$/.test(String(v ?? '').trim()));
-                      return /^0+$/.test(String(val ?? '').trim());
-                    })
-                    .map(([key]) => key);
-                  return zeroOnly.length ? (
-                    <Typography variant="caption" color="textSecondary">Debug: campos com zeros = {zeroOnly.join(', ')}</Typography>
-                  ) : null;
-                } catch (_) { return null; }
-              })()}
-              {(() => {
-                const isInv = (val) => { const s = String(val ?? '').trim(); return !s || /^0+$/.test(s); };
-                const ch = detailsFilter.channel;
-                if (!ch) return null;
-                if (Array.isArray(ch)) {
-                  const list = ch.map(v => String(v ?? '').trim()).filter(v => !isInv(v));
-                  return list.length ? (
-                    <div><strong>Canal:</strong> {list.join(', ')}</div>
-                  ) : null;
-                }
-                const s = String(ch ?? '').trim();
-                if (isInv(s)) return null;
-                return (<div><strong>Canal:</strong> {s}</div>);
-              })()}
-              {(() => {
-                const isInv = (val) => { const s = String(val ?? '').trim(); return !s || /^0+$/.test(s); };
-                const rc = detailsFilter.representativeCode;
-                if (!rc) return null;
-                if (Array.isArray(rc)) {
-                  const list = rc.map(v => String(v ?? '').trim()).filter(v => !isInv(v));
-                  return list.length ? (
-                    <div><strong>Representante:</strong> {list.join(', ')}</div>
-                  ) : null;
-                }
-                const s = String(rc ?? '').trim();
-                if (isInv(s)) return null;
-                return (<div><strong>Representante:</strong> {s}</div>);
-              })()}
-              {(() => {
-                const isInv = (val) => { const s = String(val ?? '').trim(); return !s || /^0+$/.test(s); };
-                const ct = detailsFilter.city;
-                if (!ct) return null;
-                if (Array.isArray(ct)) {
-                  const list = ct.map(v => String(v ?? '').trim()).filter(v => !isInv(v));
-                  return list.length ? (
-                    <div><strong>Cidade:</strong> {list.join(', ')}</div>
-                  ) : null;
-                }
-                const s = String(ct ?? '').trim();
-                if (isInv(s)) return null;
-                return (<div><strong>Cidade:</strong> {s}</div>);
-              })()}
-              {(() => {
-                const isInv = (val) => { const s = String(val ?? '').trim(); return !s || /^0+$/.test(s); };
-                const sg = detailsFilter.segment;
-                if (!sg) return null;
-                if (Array.isArray(sg)) {
-                  const list = sg.map(v => String(v ?? '').trim()).filter(v => !isInv(v));
-                  return list.length ? (
-                    <div><strong>Segmento:</strong> {list.join(', ')}</div>
-                  ) : null;
-                }
-                const s = String(sg ?? '').trim();
-                if (isInv(s)) return null;
-                return (<div><strong>Segmento:</strong> {s}</div>);
-              })()}
-              {(() => {
-                const isInv = (val) => { const s = String(val ?? '').trim(); return !s || /^0+$/.test(s); };
-                const st = detailsFilter.situation;
-                if (!st) return null;
-                if (Array.isArray(st)) {
-                  const list = st.map(v => String(v ?? '').trim()).filter(v => !isInv(v));
-                  return list.length ? (
-                    <div><strong>Situação:</strong> {list.join(', ')}</div>
-                  ) : null;
-                }
-                const s = String(st ?? '').trim();
-                if (isInv(s)) return null;
-                return (<div><strong>Situação:</strong> {s}</div>);
-              })()}
-              {(() => {
-                const fm = detailsFilter.foundationMonths;
-                if (!fm) return null;
-                if (Array.isArray(fm)) {
-                  const list = fm.filter(v => v != null && String(v).trim() !== '' && !/^0+$/.test(String(v).trim()));
-                  return list.length ? (
-                    <div><strong>Fundação (mês):</strong> {list.join(', ')}</div>
-                  ) : null;
-                }
-                const s = String(fm ?? '').trim();
-                if (!s || /^0+$/.test(s)) return null;
-                return (<div><strong>Fundação (mês):</strong> {s}</div>);
-              })()}
-              {(((detailsFilter.minCreditLimit !== null && detailsFilter.minCreditLimit !== "") || (detailsFilter.maxCreditLimit !== null && detailsFilter.maxCreditLimit !== "")) && !((detailsFilter.minCreditLimit === 0 || detailsFilter.minCreditLimit === "0") && (detailsFilter.maxCreditLimit === 0 || detailsFilter.maxCreditLimit === "0"))) && (
-                <div>
-                  <strong>Crédito:</strong> 
-                  {detailsFilter.minCreditLimit !== null && detailsFilter.minCreditLimit !== "" ? fmtCurrency(detailsFilter.minCreditLimit) : '0,00'}
-                  {' – '}
-                  {detailsFilter.maxCreditLimit !== null && detailsFilter.maxCreditLimit !== "" ? fmtCurrency(detailsFilter.maxCreditLimit) : '∞'}
-                </div>
+              {Array.isArray(detailsFilter.channel) && detailsFilter.channel.length > 0 && (
+                <div><strong>Canal:</strong> {detailsFilter.channel.join(', ')}</div>
               )}
-              {(detailsFilter.florder === true || detailsFilter.florder === false) && (
+              {Array.isArray(detailsFilter.representativeCode) && detailsFilter.representativeCode.length > 0 && (
+                <div><strong>Representante:</strong> {detailsFilter.representativeCode.join(', ')}</div>
+              )}
+              {Array.isArray(detailsFilter.city) && detailsFilter.city.length > 0 && (
+                <div><strong>Cidade:</strong> {detailsFilter.city.join(', ')}</div>
+              )}
+              {Array.isArray(detailsFilter.segment) && detailsFilter.segment.length > 0 && (
+                <div><strong>Segmento:</strong> {detailsFilter.segment.join(', ')}</div>
+              )}
+              {Array.isArray(detailsFilter.situation) && detailsFilter.situation.length > 0 && (
+                <div><strong>Situação:</strong> {detailsFilter.situation.join(', ')}</div>
+              )}
+              {Array.isArray(detailsFilter.foundationMonths) && detailsFilter.foundationMonths.length > 0 && (
+                <div><strong>Fundação (mês):</strong> {detailsFilter.foundationMonths.join(', ')}</div>
+              )}
+              {!!detailsFilter.minCreditLimit || !!detailsFilter.maxCreditLimit ? (
+                <div><strong>Crédito:</strong> {fmtCurrency(detailsFilter.minCreditLimit)} – {detailsFilter.maxCreditLimit ? fmtCurrency(detailsFilter.maxCreditLimit) : '∞'}</div>
+              ) : null}
+              {typeof detailsFilter.florder !== 'undefined' && (
                 <div><strong>Encomenda:</strong> {detailsFilter.florder ? 'Sim' : 'Não'}</div>
               )}
-              {((detailsFilter.dtUltCompraStart !== null && detailsFilter.dtUltCompraStart !== "") || (detailsFilter.dtUltCompraEnd !== null && detailsFilter.dtUltCompraEnd !== "")) && (
-                <div>
-                  <strong>Última compra:</strong> 
-                  {detailsFilter.dtUltCompraStart !== null && detailsFilter.dtUltCompraStart !== "" ? fmtDate(detailsFilter.dtUltCompraStart) : 'Qualquer data'}
-                  {detailsFilter.dtUltCompraEnd !== null && detailsFilter.dtUltCompraEnd !== "" ? ` – ${fmtDate(detailsFilter.dtUltCompraEnd)}` : ' – Até hoje'}
-                </div>
-              )}
-              {(((detailsFilter.minVlUltCompra !== null && detailsFilter.minVlUltCompra !== "") || (detailsFilter.maxVlUltCompra !== null && detailsFilter.maxVlUltCompra !== "")) && !((detailsFilter.minVlUltCompra === 0 || detailsFilter.minVlUltCompra === "0") && (detailsFilter.maxVlUltCompra === 0 || detailsFilter.maxVlUltCompra === "0"))) && (
-                <div>
-                  <strong>Valor da última compra:</strong> 
-                  {detailsFilter.minVlUltCompra !== null && detailsFilter.minVlUltCompra !== "" ? fmtCurrency(detailsFilter.minVlUltCompra) : '0,00'}
-                  {' – '}
-                  {detailsFilter.maxVlUltCompra !== null && detailsFilter.maxVlUltCompra !== "" ? fmtCurrency(detailsFilter.maxVlUltCompra) : '∞'}
-                </div>
-              )}
-              {detailsFilter.tags && detailsFilter.tags.length > 0 && (
-                <div><strong>Tags:</strong> {Array.isArray(detailsFilter.tags) ? detailsFilter.tags.length : 1} selecionada(s)</div>
+              {!!detailsFilter.dtUltCompraStart || !!detailsFilter.dtUltCompraEnd ? (
+                <div><strong>Última compra (período):</strong> {fmtDate(detailsFilter.dtUltCompraStart)} – {fmtDate(detailsFilter.dtUltCompraEnd)}</div>
+              ) : null}
+              {detailsFilter.minVlUltCompra != null || detailsFilter.maxVlUltCompra != null ? (
+                <div><strong>Valor da última compra:</strong> {fmtCurrency(detailsFilter.minVlUltCompra)} – {fmtCurrency(detailsFilter.maxVlUltCompra)}</div>
+              ) : null}
+              {Array.isArray(detailsFilter.tags) && detailsFilter.tags.length > 0 && (
+                <div><strong>Tags:</strong> {(allTags.length ? allTags.filter(t => detailsFilter.tags.includes(t.id)).map(t => t.name) : detailsFilter.tags.map(id => `#${id}`)).join(', ')}</div>
               )}
             </div>
           ) : (
-            <Typography variant="body2" color="textSecondary">Nenhum filtro.</Typography>
+            <Typography variant="body2" color="textSecondary">—</Typography>
           )}
         </div>
       </Popover>
-      {/* Paginação numerada */}
-      <nav className="flex justify-center mt-4" aria-label="Page navigation">
-        <ul className="inline-flex -space-x-px text-sm">
+      {/* Paginação (baseada no totalPages/renderPageNumbers) */}
+      <nav className="flex justify-between items-center mt-4">
+        <ul className="inline-flex items-center -space-x-px">
           <li>
             <button
               onClick={() => handlePageChange(1)}

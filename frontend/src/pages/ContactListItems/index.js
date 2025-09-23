@@ -178,8 +178,11 @@ const ContactListItems = () => {
     const delayDebounceFn = setTimeout(() => {
       const fetchContacts = async () => {
         try {
+          // Mapear campo de ordenação para o backend (creditLimit -> creditlimit)
+          const orderByParam = (sortField === 'creditLimit') ? 'creditlimit' : sortField;
+          const orderParam = (sortDirection || 'asc');
           const { data } = await api.get(`contact-list-items`, {
-            params: { searchParam, pageNumber, contactListId },
+            params: { searchParam, pageNumber, contactListId, orderBy: orderByParam, order: orderParam },
           });
           // Substitui a lista pelo resultado da página atual
           dispatch({ type: "SET_CONTACTS", payload: data.contacts });
@@ -194,7 +197,7 @@ const ContactListItems = () => {
       fetchContacts();
     }, 400);
     return () => clearTimeout(delayDebounceFn);
-  }, [searchParam, pageNumber, contactListId, refreshKey]);
+  }, [searchParam, pageNumber, contactListId, refreshKey, sortField, sortDirection]);
 
   // Persistência da ordenação por usuário/lista
   useEffect(() => {
@@ -390,46 +393,16 @@ const ContactListItems = () => {
     });
   };
 
-  // Ordenação client-side (por página)
+  // Ordenação agora é server-side; manter fallback seguro
   const sortedContacts = useMemo(() => {
-    const normalize = (v) => {
-      if (v === null || v === undefined) return "";
-      if (typeof v === "string") return v.toLowerCase();
-      return v;
-    };
-    const getFieldValue = (c) => {
-      switch (sortField) {
-        case "name":
-          return c.name || (c.contact && c.contact.name) || "";
-        case "number":
-          return c.number || (c.contact && c.contact.number) || "";
-        case "email":
-          return c.email || (c.contact && c.contact.email) || "";
-        case "city":
-          return (c.contact && c.contact.city) || "";
-        case "segment":
-          return (c.contact && c.contact.segment) || "";
-        case "situation":
-          return (c.contact && c.contact.situation) || "";
-        case "creditLimit":
-          return c.contact && c.contact.creditLimit ? formatCurrency(c.contact.creditLimit) : "";
-        case "tags":
-          return Array.isArray(c.contact && c.contact.tags) ? (c.contact.tags || []).length : 0;
-        default:
-          return c.name || (c.contact && c.contact.name) || "";
-      }
-    };
-    const cmp = (a, b) => {
-      const va = normalize(getFieldValue(a));
-      const vb = normalize(getFieldValue(b));
-      if (typeof va === "number" && typeof vb === "number") {
-        return va - vb;
-      }
-      return String(va).localeCompare(String(vb), "pt-BR", { sensitivity: "base" });
-    };
-    const sorted = [...contacts].sort(cmp);
-    return sortDirection === "desc" ? sorted.reverse() : sorted;
-  }, [contacts, sortField, sortDirection]);
+    try {
+      if (!Array.isArray(contacts)) return [];
+      return contacts;
+    } catch (e) {
+      toastError(e);
+      return Array.isArray(contacts) ? contacts : [];
+    }
+  }, [contacts]);
 
   // Paginação fixa (sem infinite scroll), espelhando /contatos
   const handlePageChange = (page) => {
@@ -504,6 +477,22 @@ const ContactListItems = () => {
     const [open, setOpen] = useState(false);
     const f = contactList && contactList.savedFilter;
     if (!f) return null;
+
+    // Detecta se há algum critério realmente ativo; se não houver, não exibe nada
+    const hasAny = (
+      (Array.isArray(f.channel) && f.channel.length > 0) ||
+      (Array.isArray(f.representativeCode) && f.representativeCode.length > 0) ||
+      (Array.isArray(f.city) && f.city.length > 0) ||
+      (Array.isArray(f.segment) && f.segment.length > 0) ||
+      (Array.isArray(f.situation) && f.situation.length > 0) ||
+      (Array.isArray(f.foundationMonths) && f.foundationMonths.length > 0) ||
+      (!!f.minCreditLimit || !!f.maxCreditLimit) ||
+      (typeof f.florder !== 'undefined') ||
+      (!!f.dtUltCompraStart || !!f.dtUltCompraEnd) ||
+      (f.minVlUltCompra != null || f.maxVlUltCompra != null) ||
+      (Array.isArray(f.tags) && f.tags.length > 0)
+    );
+    if (!hasAny) return null;
 
     const parts = [];
     if (Array.isArray(f.channel) && f.channel.length) parts.push({ label: 'Canal', values: f.channel });
@@ -589,6 +578,21 @@ const ContactListItems = () => {
       return isNaN(d.getTime()) ? String(s) : d.toLocaleDateString('pt-BR');
     };
 
+    // Conta critérios ativos para exibir no botão
+    const activeCount = [
+      Array.isArray(f.channel) && f.channel.length > 0,
+      Array.isArray(f.representativeCode) && f.representativeCode.length > 0,
+      Array.isArray(f.city) && f.city.length > 0,
+      Array.isArray(f.segment) && f.segment.length > 0,
+      Array.isArray(f.situation) && f.situation.length > 0,
+      Array.isArray(f.foundationMonths) && f.foundationMonths.length > 0,
+      (!!f.minCreditLimit || !!f.maxCreditLimit),
+      (typeof f.florder !== 'undefined'),
+      (!!f.dtUltCompraStart || !!f.dtUltCompraEnd),
+      (f.minVlUltCompra != null || f.maxVlUltCompra != null),
+      (Array.isArray(f.tags) && f.tags.length > 0)
+    ].filter(Boolean).length;
+
     return (
       <div style={{ padding: '6px 8px 2px 8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, rowGap: 6 }}>
@@ -599,7 +603,7 @@ const ContactListItems = () => {
               onMouseEnter={(e) => { setAnchorEl(e.currentTarget); setOpen(true); }}
               startIcon={<FilterIcon size={16} color="#059669" />}
             >
-              Filtro salvo
+              {`Filtro salvo${activeCount ? ` (${activeCount})` : ''}`}
             </Button>
             <Tooltip title="Limpar filtro salvo" placement="top" arrow>
               <IconButton size="small" onClick={handleDisableAutoUpdate}>
@@ -621,38 +625,40 @@ const ContactListItems = () => {
             <div style={{ padding: 16, maxWidth: 440 }}>
               <Typography variant="subtitle2" gutterBottom>Detalhes do filtro salvo</Typography>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {Array.isArray(f.channel) && f.channel.length && (
+                {Array.isArray(f.channel) && f.channel.length > 0 && (
                   <div><strong>Canal:</strong> {f.channel.join(', ')}</div>
                 )}
-                {Array.isArray(f.representativeCode) && f.representativeCode.length && (
+                {Array.isArray(f.representativeCode) && f.representativeCode.length > 0 && (
                   <div><strong>Representante:</strong> {f.representativeCode.join(', ')}</div>
                 )}
-                {Array.isArray(f.city) && f.city.length && (
+                {Array.isArray(f.city) && f.city.length > 0 && (
                   <div><strong>Cidade:</strong> {f.city.join(', ')}</div>
                 )}
-                {Array.isArray(f.segment) && f.segment.length && (
+                {Array.isArray(f.segment) && f.segment.length > 0 && (
                   <div><strong>Segmento:</strong> {f.segment.join(', ')}</div>
                 )}
-                {Array.isArray(f.situation) && f.situation.length && (
+                {Array.isArray(f.situation) && f.situation.length > 0 && (
                   <div><strong>Situação:</strong> {f.situation.join(', ')}</div>
                 )}
-                {Array.isArray(f.foundationMonths) && f.foundationMonths.length && (
+                {Array.isArray(f.foundationMonths) && f.foundationMonths.length > 0 && (
                   <div><strong>Fundação (mês):</strong> {f.foundationMonths.join(', ')}</div>
                 )}
-                {(f.minCreditLimit || f.maxCreditLimit) && (
+                {(!!f.minCreditLimit || !!f.maxCreditLimit) && (
                   <div><strong>Crédito:</strong> {fmtCurrency(f.minCreditLimit)} – {f.maxCreditLimit ? fmtCurrency(f.maxCreditLimit) : '∞'}</div>
                 )}
                 {typeof f.florder !== 'undefined' && (
                   <div><strong>Encomenda:</strong> {f.florder ? 'Sim' : 'Não'}</div>
                 )}
-                {(f.dtUltCompraStart || f.dtUltCompraEnd) && (
+                {(!!f.dtUltCompraStart || !!f.dtUltCompraEnd) && (
                   <div><strong>Última compra (período):</strong> {fmtDate(f.dtUltCompraStart)} – {fmtDate(f.dtUltCompraEnd)}</div>
                 )}
                 {(f.minVlUltCompra != null || f.maxVlUltCompra != null) && (
                   <div><strong>Valor da última compra:</strong> {fmtCurrency(f.minVlUltCompra)} – {fmtCurrency(f.maxVlUltCompra)}</div>
                 )}
-                {Array.isArray(f.tags) && f.tags.length && (
-                  <div><strong>Tags:</strong> {f.tags.length}</div>
+                {Array.isArray(f.tags) && f.tags.length > 0 && (
+                  <div><strong>Tags:</strong> {(allTags.length
+                    ? allTags.filter(t => f.tags.includes(t.id)).map(t => t.name)
+                    : f.tags.map(id => `#${id}`)).join(', ')}</div>
                 )}
               </div>
             </div>
@@ -949,19 +955,28 @@ const ContactListItems = () => {
                             )}
                           </div>
                         </td>
-                        <td className="px-2 py-2 text-center">
+                        <td className="px-2 py-2 text-center align-middle whitespace-nowrap">
                           <div className="flex items-center justify-center gap-2">
-                            <Tooltip {...CustomTooltipProps} title="Editar">
-                              <button onClick={() => hadleEditContact(contact?.contact?.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                                <Edit className="w-4 h-4" />
-                              </button>
+                            <Tooltip {...CustomTooltipProps} title={contact?.contact?.id ? "Editar" : "Contato não vinculado"}>
+                              <span className="inline-flex">
+                                <button
+                                  disabled={!contact?.contact?.id}
+                                  onClick={() => contact?.contact?.id && hadleEditContact(contact.contact.id)}
+                                  className={`inline-flex items-center justify-center w-6 h-6 leading-none rounded hover:bg-blue-50/70 dark:hover:bg-gray-700/40 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 ${!contact?.contact?.id ? 'opacity-50 cursor-not-allowed hover:text-blue-600 dark:hover:text-blue-400' : ''}`}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                              </span>
                             </Tooltip>
                             <Can
                               role={user.profile}
                               perform="contacts-page:deleteContact"
                               yes={() => (
                                 <Tooltip {...CustomTooltipProps} title="Excluir">
-                                  <button onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
+                                  <button
+                                    onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
+                                    className="inline-flex items-center justify-center w-6 h-6 leading-none rounded hover:bg-red-50/70 dark:hover:bg-gray-700/40 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                                  >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
                                 </Tooltip>
@@ -1059,12 +1074,27 @@ const ContactListItems = () => {
                     )}
                   </div>
                   <div className="flex items-center gap-2 flex-nowrap whitespace-nowrap shrink-0">
-                    <button onClick={() => hadleEditContact(contact?.contact?.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"><Edit className="w-4 h-4" /></button>
+                    <Tooltip {...CustomTooltipProps} title={contact?.contact?.id ? "Editar" : "Contato não vinculado"}>
+                      <span className="inline-flex">
+                        <button
+                          disabled={!contact?.contact?.id}
+                          onClick={() => contact?.contact?.id && hadleEditContact(contact.contact.id)}
+                          className={`inline-flex items-center justify-center w-6 h-6 leading-none rounded hover:bg-blue-50/70 dark:hover:bg-gray-700/40 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 ${!contact?.contact?.id ? 'opacity-50 cursor-not-allowed hover:text-blue-600 dark:hover:text-blue-400' : ''}`}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                      </span>
+                    </Tooltip>
                     <Can
                       role={user.profile}
                       perform="contacts-page:deleteContact"
                       yes={() => (
-                        <button onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"><Trash2 className="w-4 h-4" /></button>
+                        <button
+                          onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
+                          className="inline-flex items-center justify-center w-6 h-6 leading-none rounded hover:bg-red-50/70 dark:hover:bg-gray-700/40 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       )}
                     />
                   </div>
