@@ -20,6 +20,7 @@ interface FilterParams {
   dtUltCompraEnd?: string;   // yyyy-mm-dd
   minVlUltCompra?: number | string; // valor mínimo da última compra
   maxVlUltCompra?: number | string; // valor máximo da última compra
+  bzEmpresa?: string; // filtro por empresa
 }
 
 interface Request {
@@ -131,6 +132,15 @@ const AddFilteredContactsToListService = async ({
     // Filtro de situação
     if (filters.situation && filters.situation.length > 0) {
       whereConditions.push({ situation: { [Op.in]: filters.situation } });
+    }
+
+    // Filtro de empresa
+    if (filters.bzEmpresa && filters.bzEmpresa.trim()) {
+      whereConditions.push({ 
+        bzEmpresa: { 
+          [Op.iLike]: `%${filters.bzEmpresa.trim()}%` 
+        } 
+      });
     }
 
     // Filtro por mês (independente do ano) da data de fundação

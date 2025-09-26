@@ -89,6 +89,7 @@ const ContactSchema = Yup.object().shape({
   segment: Yup.string().nullable(),
   dtUltCompra: Yup.date().nullable(),
   vlUltCompra: Yup.mixed().nullable(),
+  bzEmpresa: Yup.string().nullable(),
 });
 
 // Switch personalizado: verde quando ativo (checked), vermelho quando inativo
@@ -133,6 +134,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		florder: false,
 		dtUltCompra: "",
 		vlUltCompra: "",
+		bzEmpresa: "",
 	};
 
 	const [contact, setContact] = useState(initialState);
@@ -232,7 +234,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 						<Form>
 							<DialogContent dividers>
 								<Grid container spacing={2}>
-									<Grid item xs={12}>
+									<Grid item xs={12} md={6}>
 										<Field
 											as={TextField}
 											label={i18n.t("contactModal.form.name")}
@@ -243,6 +245,22 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											variant="outlined"
 											margin="dense"
 											fullWidth
+											InputLabelProps={{
+												shrink: true,
+											}}
+										/>
+									</Grid>
+									<Grid item xs={12} md={6}>
+										<Field
+											as={TextField}
+											label="Empresa"
+											name="bzEmpresa"
+											variant="outlined"
+											margin="dense"
+											fullWidth
+											InputLabelProps={{
+												shrink: true,
+											}}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -274,6 +292,9 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 																error={touched.number && Boolean(errors.number)}
 																helperText={touched.number && errors.number}
 																placeholder="+55 (XX) XXXXX-XXXX"
+																InputLabelProps={{
+																	shrink: true,
+																}}
 															/>
 														)}
 													</InputMask>
@@ -413,7 +434,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											margin="dense"
 											fullWidth
 										>
-											<InputLabel id="situation-select-label">Situação</InputLabel>
+											<InputLabel id="situation-select-label" shrink>Situação</InputLabel>
 											<Field
 												as={Select}
 												labelId="situation-select-label"
@@ -512,6 +533,9 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 															variant="outlined"
 															margin="dense"
 															className={classes.textField}
+															InputLabelProps={{
+																shrink: true,
+															}}
 														/>
 														<Field
 															as={TextField}
@@ -520,6 +544,9 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 															variant="outlined"
 															margin="dense"
 															className={classes.textField}
+															InputLabelProps={{
+																shrink: true,
+															}}
 														/>
 														<IconButton
 															size="small"

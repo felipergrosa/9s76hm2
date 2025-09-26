@@ -43,6 +43,7 @@ interface Request {
   florder?: boolean;
   dtUltCompra?: Date | string | null;
   vlUltCompra?: number | string | null;
+  bzEmpresa?: string;
 }
 
 const CreateContactService = async ({
@@ -71,6 +72,7 @@ const CreateContactService = async ({
                                       florder,
                                       dtUltCompra,
                                       vlUltCompra,
+                                      bzEmpresa,
                                     }: Request): Promise<Contact> => {
   const numberExists = await Contact.findOne({
     where: { number, companyId }
@@ -170,6 +172,7 @@ const CreateContactService = async ({
     florder?: boolean;
     dtUltCompra?: Date | null;
     vlUltCompra?: number | null;
+    bzEmpresa?: string | null;
   } = {
     name: name || '',
     number: number || '',
@@ -198,6 +201,7 @@ const CreateContactService = async ({
     florder: !!florder,
     dtUltCompra: dtUltCompraValue,
     vlUltCompra: vlUltCompraValue,
+    bzEmpresa: emptyToNull(bzEmpresa),
   };
 
   // Apenas adiciona o userId se ele for fornecido

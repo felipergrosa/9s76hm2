@@ -132,6 +132,13 @@ const ListContactsService = async ({
             "LIKE",
             `%${sanitizedSearchParam}%`
           )
+        },
+        {
+          bzEmpresa: where(
+            fn("LOWER", fn("unaccent", col("Contact.bzEmpresa"))),
+            "LIKE",
+            `%${sanitizedSearchParam}%`
+          )
         }
       ]
     };
@@ -227,6 +234,7 @@ const ListContactsService = async ({
       "creditLimit",
       "segment",
       "dtUltCompra",
+      "bzEmpresa",
       // Campos persistidos
       "isWhatsappValid",
       "validatedAt"

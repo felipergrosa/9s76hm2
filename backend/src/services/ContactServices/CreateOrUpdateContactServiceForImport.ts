@@ -24,6 +24,7 @@ interface Request {
   fantasyName?: string;
   foundationDate?: Date;
   segment?: string;
+  bzEmpresa?: string;
 }
 
 const CreateOrUpdateContactServiceForImport = async ({
@@ -43,7 +44,8 @@ const CreateOrUpdateContactServiceForImport = async ({
   situation,
   fantasyName,
   foundationDate,
-  segment
+  segment,
+  bzEmpresa
 }: Request): Promise<Contact> => {
   const number = isGroup ? rawNumber : rawNumber.replace(/[^0-9]/g, "");
 
@@ -73,6 +75,17 @@ const CreateOrUpdateContactServiceForImport = async ({
     return undefined;
   };
 
+  // helper: normalize bzEmpresa to null when empty/whitespace; undefined when not provided
+  const normalizeBzEmpresa = (v: any): string | null | undefined => {
+    if (typeof v === 'undefined') return undefined;
+    if (v === null) return null;
+    if (typeof v === 'string') {
+      const e = v.trim();
+      return e === '' ? null : e;
+    }
+    return undefined;
+  };
+
   const contactData = {
     name,
     number,
@@ -90,7 +103,8 @@ const CreateOrUpdateContactServiceForImport = async ({
     situation: situation || 'Ativo',
     fantasyName,
     foundationDate: finalFoundationDate,
-    segment: normalizeSegment(segment)
+    segment: normalizeSegment(segment),
+    bzEmpresa: normalizeBzEmpresa(bzEmpresa)
   };
 
   const io = getIO();

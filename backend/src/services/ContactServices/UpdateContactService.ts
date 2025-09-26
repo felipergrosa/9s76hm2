@@ -40,6 +40,7 @@ interface ContactData {
   florder?: boolean;
   vlUltCompra?: number | string | null;
   dtUltCompra?: Date | string | null;
+  bzEmpresa?: string;
 }
 
 interface Request {
@@ -78,7 +79,8 @@ const UpdateContactService = async ({
     segment,
     florder,
     vlUltCompra,
-    dtUltCompra
+    dtUltCompra,
+    bzEmpresa
   } = contactData;
 
   const sanitizedCreditLimit = creditLimit !== undefined ? creditLimit : null;
@@ -257,6 +259,7 @@ const UpdateContactService = async ({
     vlUltCompra: vlUltCompra !== undefined ? vlUltCompraValue : (contact as any).vlUltCompra,
     dtUltCompra: dtUltCompra !== undefined ? lastPurchaseValue : (contact as any).dtUltCompra,
     florder: florder !== undefined ? !!florder : (contact as any).florder,
+    bzEmpresa: bzEmpresa !== undefined ? emptyToNull(bzEmpresa) : (contact as any).bzEmpresa,
   };
 
   // Apenas atualiza o userId se ele for fornecido
@@ -281,7 +284,7 @@ const UpdateContactService = async ({
       "urlPicture", "florder", "vlUltCompra", "contactName",
       // Adicionar novos campos aos atributos
       "cpfCnpj", "representativeCode", "city", "instagram",
-      "situation", "fantasyName", "foundationDate", "creditLimit", "segment", "dtUltCompra"
+      "situation", "fantasyName", "foundationDate", "creditLimit", "segment", "dtUltCompra", "bzEmpresa"
     ],
     include: ["extraInfo", "tags",
       {

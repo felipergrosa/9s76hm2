@@ -97,6 +97,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
   const [segments, setSegments] = useState([]);
   const [situations, setSituations] = useState([]);
   const [representativeCodes, setRepresentativeCodes] = useState([]);
+  const [empresas, setEmpresas] = useState([]);
   const [tags, setTags] = useState([]);
   const [selectedTags, setSelectedTags] = useState([]);
   const [loadingChannels, setLoadingChannels] = useState(false);
@@ -104,6 +105,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
   const [loadingSegments, setLoadingSegments] = useState(false);
   const [loadingSituations, setLoadingSituations] = useState(false);
   const [loadingRepresentatives, setLoadingRepresentatives] = useState(false);
+  const [loadingEmpresas, setLoadingEmpresas] = useState(false);
   const [saveFilterFlag, setSaveFilterFlag] = useState(false);
   const [cronTime, setCronTime] = useState("02:00"); // HH:mm
   const [cronTz, setCronTz] = useState("America/Sao_Paulo");
@@ -308,6 +310,32 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
       toastError(err);
     }
     setLoadingSegments(false);
+  };
+
+  const loadEmpresas = async () => {
+    const cached = getCache("empresas");
+    if (Array.isArray(cached) && cached.length) { setEmpresas(cached); return; }
+    setLoadingEmpresas(true);
+    try {
+      let companyId = user?.companyId;
+      if (!companyId) {
+        const info = await getCurrentUserInfo?.();
+        companyId = info?.user?.companyId || info?.companyId;
+      }
+      if (!companyId) return;
+
+      const { data } = await api.get("/contacts/empresas");
+      const list = Array.isArray(data) ? data : (Array.isArray(data?.empresas) ? data.empresas : []);
+      const normalized = list
+        .map(e => (e == null ? "" : String(e).trim()))
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, "pt-BR"));
+      setEmpresas(normalized);
+      setCache("empresas", normalized);
+    } catch (err) {
+      toastError(err);
+    }
+    setLoadingEmpresas(false);
   };
 
   const loadCities = async () => {
@@ -701,6 +729,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
             : '',
           dtUltCompraStart: (savedFilter && savedFilter.dtUltCompraStart) ? savedFilter.dtUltCompraStart : null,
           dtUltCompraEnd: (savedFilter && savedFilter.dtUltCompraEnd) ? savedFilter.dtUltCompraEnd : null,
+          bzEmpresa: (savedFilter && savedFilter.bzEmpresa) ? savedFilter.bzEmpresa : [],
         }}
         enableReinitialize={true}
         onSubmit={(values, actions) => {
@@ -735,6 +764,9 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             fullWidth
                             margin="dense"
                             className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
                             InputProps={{
                               ...params.InputProps,
                               endAdornment: (
@@ -773,6 +805,9 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             fullWidth
                             margin="dense"
                             className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
                             InputProps={{
                               ...params.InputProps,
                               endAdornment: (
@@ -811,6 +846,9 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             fullWidth
                             margin="dense"
                             className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
                             InputProps={{
                               ...params.InputProps,
                               endAdornment: (
@@ -849,6 +887,9 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             fullWidth
                             margin="dense"
                             className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
                             InputProps={{
                               ...params.InputProps,
                               endAdornment: (
@@ -887,6 +928,9 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             fullWidth
                             margin="dense"
                             className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
                             InputProps={{
                               ...params.InputProps,
                               endAdornment: (
@@ -921,6 +965,9 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             fullWidth
                             margin="dense"
                             className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
                           />
                         )}
                       />
@@ -1126,7 +1173,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                 {/* Linha 2: Encomenda + Range de Data da Última Compra */}
                 <Grid item xs={12} md={6}>
                   <FormControl variant="outlined" margin="dense" fullWidth className={values.florder ? classes.activeFilter : ""}>
-                    <InputLabel id="florder-select-label">Encomenda</InputLabel>
+                    <InputLabel id="florder-select-label" shrink>Encomenda</InputLabel>
                     <Field as={Select} labelId="florder-select-label" id="florder-select" name="florder" label="Encomenda">
                       <MenuItem value=""><em>—</em></MenuItem>
                       <MenuItem value="Sim">Sim</MenuItem>
@@ -1143,7 +1190,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                       return (
                         <>
                           <Button fullWidth variant="outlined" size="small" style={{ height: 43, ...(hasDateFilter && { borderColor: green[500], borderWidth: '2px' }) }} onClick={(e)=>{ setRangeAnchor(e.currentTarget); setRangeOpen(true); }}>
-                            {hasDateFilter ? `Última Compra: ${format(parseISO(start), 'dd/MM')} — ${format(parseISO(end), 'dd/MM/yy')}` : 'Filtrar por Data da Última Compra'}
+                            {hasDateFilter ? `Última Compra: ${format(parseISO(start), 'dd/MM')} — ${format(parseISO(end), 'dd/MM/yy')}` : 'Filtrar Data Última Compra'}
                           </Button>
                           <Popover open={rangeOpen} anchorEl={rangeAnchor} onClose={()=> setRangeOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} transformOrigin={{ vertical: 'top', horizontal: 'left' }}>
                             <DateRangePicker
@@ -1171,8 +1218,48 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                   </Field>
                 </Grid>
                 
-                {/* Linha 3: Tags em uma única linha */}
-                <Grid item xs={12} md={12}>
+                {/* Linha 3: Empresa e Tags */}
+                <Grid item xs={12} md={6}>
+                  <Field name="bzEmpresa">
+                    {({ field, form }) => (
+                      <Autocomplete
+                        multiple
+                        options={empresas}
+                        onOpen={() => { loadEmpresas(); }}
+                        loading={loadingEmpresas}
+                        loadingText="Carregando..."
+                        noOptionsText="Sem opções"
+                        getOptionLabel={(option) => option}
+                        value={field.value || []}
+                        onChange={(event, value) => form.setFieldValue(field.name, value)}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            variant="outlined"
+                            label="Empresa"
+                            placeholder="Empresa"
+                            fullWidth
+                            margin="dense"
+                            className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
+                            InputProps={{
+                              ...params.InputProps,
+                              endAdornment: (
+                                <>
+                                  {loadingEmpresas ? <CircularProgress color="inherit" size={20} /> : null}
+                                  {params.InputProps.endAdornment}
+                                </>
+                              )
+                            }}
+                          />
+                        )}
+                      />
+                    )}
+                  </Field>
+                </Grid>
+                <Grid item xs={12} md={6}>
                   <Autocomplete
                     multiple
                     id="tags"
@@ -1202,6 +1289,9 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                         fullWidth
                         margin="dense"
                         className={selectedTags && selectedTags.length > 0 ? classes.activeFilter : ""}
+                        InputLabelProps={{
+                          shrink: true,
+                        }}
                       />
                     )}
                   />

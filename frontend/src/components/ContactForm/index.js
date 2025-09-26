@@ -80,6 +80,7 @@ const ContactSchema = Yup.object().shape({
     foundationDate: Yup.date().nullable(),
     creditLimit: Yup.string().nullable(),
     segment: Yup.string().nullable(),
+    bzEmpresa: Yup.string().nullable(),
 });
 
 export function ContactForm ({ initialContact, onSave, onCancel }) {
@@ -127,7 +128,7 @@ export function ContactForm ({ initialContact, onSave, onCancel }) {
                                 {i18n.t("contactModal.form.mainInfo")}
                             </Typography>
                         </Grid> */}
-                        <Grid item xs={12}>
+                        <Grid item xs={12} md={6}>
                             <Field
                                 as={TextField}
                                 label={i18n.t("contactModal.form.name")}
@@ -138,6 +139,16 @@ export function ContactForm ({ initialContact, onSave, onCancel }) {
                                 variant="outlined"
                                 margin="dense"
                                 className={classes.textField}
+                                fullWidth
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <Field
+                                as={TextField}
+                                label="Empresa"
+                                name="bzEmpresa"
+                                variant="outlined"
+                                margin="dense"
                                 fullWidth
                             />
                         </Grid>

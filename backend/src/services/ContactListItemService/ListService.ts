@@ -48,12 +48,12 @@ const ListService = async ({
   const dir = (String(order || "ASC").toUpperCase() === "DESC" ? "DESC" : "ASC") as "ASC" | "DESC";
   const by = (orderBy || "name").toLowerCase();
   // Campos na ContactListItem: name, number, email
-  // Campos no Contact associado: city, segment, situation, creditLimit
+  // Campos no Contact associado: city, segment, situation, creditLimit, bzEmpresa
   let orderClause: any[] = [["name", dir]];
   if (["name", "number", "email"].includes(by)) {
     orderClause = [[by, dir]];
-  } else if (["city", "segment", "situation", "creditlimit"].includes(by)) {
-    const contactField = by === "creditlimit" ? "creditLimit" : by;
+  } else if (["city", "segment", "situation", "creditlimit", "bzempresa", "empresa"].includes(by)) {
+    const contactField = by === "creditlimit" ? "creditLimit" : by === "bzempresa" || by === "empresa" ? "bzEmpresa" : by;
     // Sintaxe suportada pelo Sequelize para ordenar por campo do include
     orderClause = [[{ model: Contact, as: "contact" }, contactField, dir]] as any;
   } else if (by === "tags") {
@@ -82,7 +82,8 @@ const ListService = async ({
           "situation",
           "creditLimit",
           "channel",
-          "representativeCode"
+          "representativeCode",
+          "bzEmpresa"
         ],
         required: false,
         include: [

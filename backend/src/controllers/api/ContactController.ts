@@ -43,6 +43,34 @@ export const segments = async (req: Request, res: Response): Promise<Response> =
   return res.json({ count: segments.length, segments });
 }
 
+export const empresas = async (req: Request, res: Response): Promise<Response> => {
+  const bodyCompanyId = (req.body as any)?.companyId;
+  const queryCompanyId = (req.query as any)?.companyId;
+  const companyId = Number(bodyCompanyId ?? queryCompanyId);
+
+  if (!companyId || Number.isNaN(companyId)) {
+    throw new AppError("companyId é obrigatório", 400);
+  }
+
+  const rows = await Contact.findAll({
+    where: {
+      companyId,
+      bzEmpresa: { [Op.ne]: null }
+    },
+    attributes: ["bzEmpresa"],
+    raw: true
+  });
+
+  const set = new Set<string>();
+  for (const r of rows as any[]) {
+    const e = (r.bzEmpresa || "").trim();
+    if (e) set.add(e);
+  }
+
+  const empresas = Array.from(set).sort((a, b) => a.localeCompare(b));
+  return res.json({ count: empresas.length, empresas });
+}
+
 interface ContactData {
   name: string;
   number: string;
@@ -58,6 +86,7 @@ interface ContactData {
   tags?: string;
   tagIds?: number[];
   segment?: string;
+  bzEmpresa?: string;
 }
 
 export const show = async (req: Request, res:Response): Promise<Response> => {
@@ -108,6 +137,12 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
         return v === '' || v === undefined ? null : v;
       })
       .nullable(),
+    bzEmpresa: Yup.string()
+      .transform((value, originalValue) => {
+        const v = typeof originalValue === 'string' ? originalValue.trim() : originalValue;
+        return v === '' || v === undefined ? null : v;
+      })
+      .nullable(),
     tagIds: Yup.array().of(Yup.number()).nullable(),
   });
 
@@ -138,6 +173,15 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
     } else if (typeof contactData.segment === 'string') {
       const s = contactData.segment.trim();
       contactData.segment = (s === '') ? (null as any) : s;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(contactData, 'bzEmpresa')) {
+    if (contactData.bzEmpresa === null || contactData.bzEmpresa === undefined) {
+      // mantém null/undefined
+    } else if (typeof contactData.bzEmpresa === 'string') {
+      const e = contactData.bzEmpresa.trim();
+      contactData.bzEmpresa = (e === '') ? (null as any) : e;
     }
   }
 

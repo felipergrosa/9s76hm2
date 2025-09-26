@@ -140,7 +140,8 @@ const ContactSchema = Yup.object().shape({
       return false;
     }),
   creditLimit: Yup.string().nullable(),
-  situation: Yup.mixed().oneOf(['Ativo', 'Inativo', 'Suspenso']).default('Ativo')
+  situation: Yup.mixed().oneOf(['Ativo', 'Baixado', 'Ex-Cliente', 'Excluido', 'Futuro', 'Inativo', 'Suspenso']).default('Ativo'),
+  bzEmpresa: Yup.string().nullable()
 });
 
 const ContactForm = ({ initialContact, onSave, onCancel }) => {
@@ -156,7 +157,8 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
     foundationDate: initialContact?.foundationDate || '',
     creditLimit: initialContact?.creditLimit || '',
     contactName: initialContact?.contactName || '',
-    florder: Boolean(initialContact?.florder) || false
+    florder: Boolean(initialContact?.florder) || false,
+    bzEmpresa: initialContact?.bzEmpresa || ''
   });
 
   useEffect(() => {
@@ -171,7 +173,8 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
       foundationDate: initialContact?.foundationDate || '',
       creditLimit: initialContact?.creditLimit || '',
       contactName: initialContact?.contactName || '',
-      florder: Boolean(initialContact?.florder) || false
+      florder: Boolean(initialContact?.florder) || false,
+      bzEmpresa: initialContact?.bzEmpresa || ''
     });
   }, [initialContact]);
 
@@ -208,7 +211,7 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
       {({ values, errors, touched, isSubmitting, handleChange, handleBlur }) => (
         <Form className={classes.formContainer}>
           <Grid container spacing={2}>
-            {/* Linha 1 - Nome e Email */}
+            {/* Linha 1 - Nome e Empresa */}
             <Grid item xs={12} sm={6}>
               <Field
                 as={TextField}
@@ -226,11 +229,38 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
             <Grid item xs={12} sm={6}>
               <Field
                 as={TextField}
+                label="Empresa"
+                name="bzEmpresa"
+                variant="outlined"
+                margin="dense"
+                fullWidth
+                className={classes.field}
+              />
+            </Grid>
+
+            {/* Linha 2 - Email e Número */}
+            <Grid item xs={12} sm={6}>
+              <Field
+                as={TextField}
                 label={i18n.t("contactModal.form.email")}
                 name="email"
                 error={touched.email && Boolean(errors.email)}
                 helperText={touched.email && errors.email}
                 placeholder="email@exemplo.com"
+                margin="dense"
+                fullWidth
+                className={classes.field}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Field
+                as={TextField}
+                label={i18n.t("contactModal.form.number")}
+                name="number"
+                error={touched.number && Boolean(errors.number)}
+                helperText={touched.number && errors.number}
+                placeholder="5513912344321"
+                variant="outlined"
                 margin="dense"
                 fullWidth
                 className={classes.field}
@@ -265,21 +295,7 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
               </div>
             </Grid>
 
-            {/* Linha 2 - Número e Cidade */}
-            <Grid item xs={12} sm={6}>
-              <Field
-                as={TextField}
-                label={i18n.t("contactModal.form.number")}
-                name="number"
-                error={touched.number && Boolean(errors.number)}
-                helperText={touched.number && errors.number}
-                placeholder="5513912344321"
-                variant="outlined"
-                margin="dense"
-                fullWidth
-                className={classes.field}
-              />
-            </Grid>
+            {/* Linha 3 - Cidade e CPF/CNPJ */}
             <Grid item xs={12} sm={6}>
               <Field
                 as={TextField}
@@ -291,8 +307,6 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
                 className={classes.field}
               />
             </Grid>
-
-            {/* Linha 3 - CPF/CNPJ e Instagram */}
             <Grid item xs={12} sm={6}>
               <div className={classes.field}>
                 <TextField
@@ -335,6 +349,8 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
                 </FormHelperText>
               </div>
             </Grid>
+
+            {/* Linha 4 - Instagram e Nome Fantasia */}
             <Grid item xs={12} sm={6}>
               <Field
                 as={TextField}

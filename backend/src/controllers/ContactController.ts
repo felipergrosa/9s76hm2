@@ -314,6 +314,32 @@ export const segments = async (req: Request, res: Response): Promise<Response> =
   return res.json({ count: list.length, segments: list });
 };
 
+// Lista distintas empresas para a empresa autenticada
+export const empresas = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+
+  const rows = await Contact.findAll({
+    where: { 
+      companyId,
+      bzEmpresa: { [Op.ne]: null }
+    },
+    attributes: ["bzEmpresa"],
+    group: ["bzEmpresa"],
+    raw: true
+  });
+
+  const set = new Set<string>();
+  for (const row of rows) {
+    if (row.bzEmpresa && typeof row.bzEmpresa === "string") {
+      set.add(row.bzEmpresa.trim());
+    }
+  }
+
+  const list = Array.from(set).sort((a, b) => a.localeCompare(b));
+  return res.json({ count: list.length, empresas: list });
+};
+
+
 export const store = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
   const { companyId } = req.user;
   const newContact: ContactData = req.body;

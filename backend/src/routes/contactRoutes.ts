@@ -18,6 +18,7 @@ contactRoutes.get("/contacts/import-progress", isAuth, ContactController.importP
 contactRoutes.get("/contacts", isAuth, ContactController.index);
 contactRoutes.get("/contacts/list", isAuth, ContactController.list);
 contactRoutes.get("/contacts/segments", isAuth, ContactController.segments);
+contactRoutes.get("/contacts/empresas", isAuth, ContactController.empresas);
 contactRoutes.get("/contacts/profile/:number", isAuth, ContactController.getContactProfileURL);
 contactRoutes.get("/contacts/:contactId(\\d+)", isAuth, ContactController.show);
 contactRoutes.post("/contacts", isAuth, ContactController.store);

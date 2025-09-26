@@ -848,6 +848,12 @@ const ContactListItems = () => {
                           <span className="text-[15px] opacity-70">{sortField === 'creditLimit' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                         </button>
                       </th>
+                      <th scope="col" className="pl-3 pr-3 py-2 w-[120px]">
+                        <button onClick={() => handleSort('empresa')} className="flex items-center gap-1 select-none font-medium">
+                          EMPRESA
+                          <span className="text-[15px] opacity-70">{sortField === 'empresa' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </button>
+                      </th>
                       <th scope="col" className="pl-3 pr-3 py-2 text-center w-[70px]">
                         <button onClick={() => handleSort('tags')} className="flex items-center justify-center gap-1 w-full select-none">
                           TAGS
@@ -935,6 +941,12 @@ const ContactListItems = () => {
                             <span className="truncate">{contact.contact && contact.contact.creditLimit ? formatCurrency(contact.contact.creditLimit) : ""}</span>
                           </Tooltip>
                         </td>
+                        {/* Empresa */}
+                        <td className="px-3 py-2 max-w-[140px] overflow-hidden text-ellipsis whitespace-nowrap">
+                          <Tooltip {...CustomTooltipProps} title={(contact.contact && contact.contact.bzEmpresa) || ""}>
+                            <span className="truncate">{(contact.contact && contact.contact.bzEmpresa) || ""}</span>
+                          </Tooltip>
+                        </td>
                         {/* Tags - estilo pontos coloridos */}
                         <td className="pl-3 pr-3 py-2 text-center w-[70px]">
                           <div className="flex justify-center gap-1">
@@ -986,7 +998,7 @@ const ContactListItems = () => {
                         </td>
                       </tr>
                     ))}
-                    {loading && <TableRowSkeleton avatar columns={10} />}
+                    {loading && <TableRowSkeleton avatar columns={11} />}
                   </tbody>
                 </table>
               </div>
@@ -1053,11 +1065,13 @@ const ContactListItems = () => {
                     <span className="text-[12px] text-gray-500 dark:text-gray-400 truncate">
                       {formatPhoneNumber(contact.number)}
                     </span>
-                    {(contact.contact && (contact.contact.city || contact.contact.segment)) && (
+                    {(contact.contact && (contact.contact.city || contact.contact.segment || contact.contact.bzEmpresa)) && (
                       <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
                         {contact.contact.city ? `${contact.contact.city}` : ""}
-                        {contact.contact.city && contact.contact.segment ? " • " : ""}
+                        {contact.contact.city && (contact.contact.segment || contact.contact.bzEmpresa) ? " • " : ""}
                         {contact.contact.segment ? `${contact.contact.segment}` : ""}
+                        {contact.contact.segment && contact.contact.bzEmpresa ? " • " : ""}
+                        {contact.contact.bzEmpresa ? `${contact.contact.bzEmpresa}` : ""}
                       </span>
                     )}
                     {Array.isArray(contact.contact && contact.contact.tags) && (contact.contact.tags || []).length > 0 && (

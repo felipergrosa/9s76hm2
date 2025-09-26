@@ -174,6 +174,11 @@ class Contact extends Model<Contact> {
   })
   vlUltCompra: number;
 
+  @Column({
+    allowNull: true
+  })
+  bzEmpresa: string;
+
   @CreatedAt
   createdAt: Date;
 

@@ -100,6 +100,7 @@ export default (body: string, ticket?: Ticket): string => {
     foundationDate: ticket ? formatDate(ticket?.contact?.foundationDate as any) : "",
     creditLimit: ticket ? (ticket?.contact?.creditLimit || "") : "",
     segment: ticket ? ticket?.contact?.segment : "",
+    bzEmpresa: ticket ? ticket?.contact?.bzEmpresa : "",
     ticket_id: ticket ? ticket.id : "",
     userName: ticket ? ticket?.user?.name : "",
     ms: msgsd(),
