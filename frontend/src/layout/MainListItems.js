@@ -45,6 +45,7 @@ import {
   GridOn,
   ListAlt,
   PhonelinkSetup,
+  Memory,
 } from "@material-ui/icons";
 
 import { WhatsAppsContext } from "../context/WhatsApp/WhatsAppsContext";
@@ -819,6 +820,18 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                   to="/settings"
                   primary={i18n.t("mainDrawer.listItems.settings")}
                   icon={<SettingsOutlinedIcon />}
+                  tooltip={collapsed}
+                />
+              )}
+            />
+            <Can
+              role={user.profile}
+              perform="dashboard:view"
+              yes={() => (
+                <ListItemLink
+                  to="/ai-settings"
+                  primary="Configurações IA"
+                  icon={<Memory />}
                   tooltip={collapsed}
                 />
               )}

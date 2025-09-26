@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useReducer, useState } from "react";
 
-import openSocket from "socket.io-client";
+// import openSocket from "socket.io-client"; // Não utilizado
 
 import {
   Button,
@@ -25,6 +25,7 @@ import toastError from "../../errors/toastError";
 import api from "../../services/api";
 import { DeleteOutline, Edit } from "@material-ui/icons";
 import PromptModal from "../../components/PromptModal";
+import PromptEnhancements from "../../components/PromptEnhancements";
 import { toast } from "react-toastify";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -99,6 +100,8 @@ const Prompts = () => {
   const [promptModalOpen, setPromptModalOpen] = useState(false);
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [enhancementsOpen, setEnhancementsOpen] = useState(false);
+  const [templateData, setTemplateData] = useState(null);
   //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
 
@@ -117,8 +120,7 @@ const Prompts = () => {
       }
     }
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [companyId, history]);
 
   useEffect(() => {
     (async () => {
@@ -157,11 +159,13 @@ const Prompts = () => {
   const handleOpenPromptModal = () => {
     setPromptModalOpen(true);
     setSelectedPrompt(null);
+    setTemplateData(null);
   };
 
   const handleClosePromptModal = () => {
     setPromptModalOpen(false);
     setSelectedPrompt(null);
+    setTemplateData(null);
   };
 
   const handleEditPrompt = (prompt) => {
@@ -184,6 +188,45 @@ const Prompts = () => {
     setSelectedPrompt(null);
   };
 
+  const handleSelectTemplate = (template) => {
+    setTemplateData({
+      name: template.name,
+      prompt: template.prompt,
+      integrationId: null,
+      queueId: null,
+      maxMessages: 10,
+      // Aplicar primeira voz sugerida se disponível
+      voice: template.suggestedVoices && template.suggestedVoices.length > 0 
+        ? template.suggestedVoices[0] 
+        : "texto",
+      voiceKey: "",
+      voiceRegion: "",
+      // Aplicar configurações de IA do template
+      temperature: template.temperature || 0.9,
+      maxTokens: template.maxTokens || 300,
+      // Passar dados adicionais do template
+      suggestedVoices: template.suggestedVoices,
+      ragSuggestions: template.ragSuggestions,
+      integrationType: template.integrationType,
+      difficulty: template.difficulty,
+      score: template.score,
+      variables: template.variables
+    });
+
+    const voiceMessage = template.suggestedVoices && template.suggestedVoices.length > 0 
+      ? ` Voz "${template.suggestedVoices[0].replace('pt-BR-', '').replace('Neural', '')}" aplicada automaticamente.`
+      : "";
+    
+    const tempMessage = template.temperature 
+      ? ` Temperatura: ${template.temperature}`
+      : "";
+
+    toast.success(`Template "${template.name}" aplicado!${voiceMessage}${tempMessage} Ajuste os detalhes e salve.`);
+
+    setSelectedPrompt(null);
+    setPromptModalOpen(true);
+  };
+
   return (
     <MainContainer>
       <ConfirmationModal
@@ -202,6 +245,12 @@ const Prompts = () => {
         open={promptModalOpen}
         onClose={handleClosePromptModal}
         promptId={selectedPrompt?.id}
+        templateData={templateData}
+      />
+      <PromptEnhancements
+        open={enhancementsOpen}
+        onClose={() => setEnhancementsOpen(false)}
+        onSelectTemplate={handleSelectTemplate}
       />
       {user.profile === "user" ?
         <ForbiddenPage />
@@ -210,6 +259,14 @@ const Prompts = () => {
           <MainHeader>
             <Title>{i18n.t("prompts.title")}</Title>
             <MainHeaderButtonsWrapper>
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={() => setEnhancementsOpen(true)}
+                style={{ marginRight: 8 }}
+              >
+                🚀 Melhorias
+              </Button>
               <Button
                 variant="contained"
                 color="primary"

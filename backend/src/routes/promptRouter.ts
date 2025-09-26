@@ -15,4 +15,6 @@ promptRoutes.put("/prompt/:promptId", isAuth, PromptController.update);
 
 promptRoutes.delete("/prompt/:promptId", isAuth, PromptController.remove);
 
+promptRoutes.get("/prompts/stats", isAuth, PromptController.stats);
+
 export default promptRoutes;

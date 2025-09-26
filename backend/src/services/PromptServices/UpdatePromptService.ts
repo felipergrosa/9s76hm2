@@ -13,7 +13,6 @@ interface PromptData {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
-  queueId?: number;
   maxMessages?: number;
   companyId?: string | number;
   voice?: string;
@@ -21,6 +20,7 @@ interface PromptData {
   voiceRegion?: string;
   model?: string;
   attachments?: string; // JSON string
+  integrationId?: number;
 }
 
 interface Request {

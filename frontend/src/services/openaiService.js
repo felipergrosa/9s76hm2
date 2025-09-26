@@ -5,15 +5,35 @@ class OpenAIService {
   // Buscar configuração OpenAI ativa da empresa
   static async getActiveConfig() {
     try {
-      const { data } = await api.get("/queueIntegration", {
-        params: { type: "openai", active: true }
-      });
+      const { data } = await api.get("/queueIntegration");
       
-      // Retorna a primeira configuração OpenAI ativa encontrada
-      const openaiConfig = data.queueIntegrations?.find(config => config.type === "openai");
-      return openaiConfig || null;
+      // Busca por configurações OpenAI ou Gemini ativas
+      const configs = data.queueIntegrations || [];
+      
+      // Prioriza OpenAI, depois Gemini
+      let activeConfig = configs.find(config => config.type === "openai");
+      if (!activeConfig) {
+        activeConfig = configs.find(config => config.type === "gemini");
+      }
+      
+      // Se encontrou configuração, parseia o jsonContent
+      if (activeConfig && activeConfig.jsonContent) {
+        try {
+          const parsedConfig = JSON.parse(activeConfig.jsonContent);
+          return {
+            ...activeConfig,
+            ...parsedConfig,
+            type: activeConfig.type
+          };
+        } catch (e) {
+          console.warn("Erro ao parsear jsonContent:", e);
+          return activeConfig;
+        }
+      }
+      
+      return activeConfig || null;
     } catch (error) {
-      console.error("Erro ao buscar configuração OpenAI:", error);
+      console.error("Erro ao buscar configuração IA:", error);
       return null;
     }
   }

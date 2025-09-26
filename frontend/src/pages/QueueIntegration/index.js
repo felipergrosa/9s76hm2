@@ -22,6 +22,10 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Card,
+  CardContent,
+  Typography,
+  Box,
 } from "@material-ui/core";
 
 import {
@@ -250,6 +254,7 @@ const QueueIntegration = () => {
         <ForbiddenPage />
         :
         <>
+
           <MainHeader>
             <Title>{i18n.t("queueIntegration.title")} ({queueIntegration.length})</Title>
             <MainHeaderButtonsWrapper>

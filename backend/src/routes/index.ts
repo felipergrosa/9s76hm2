@@ -1,4 +1,5 @@
 import { Router } from "express";
+import isAuth from "../middleware/isAuth";
 
 import userRoutes from "./userRoutes";
 import authRoutes from "./authRoutes";
@@ -48,6 +49,8 @@ import flowCampaignRoutes from "./flowCampaignRoutes";
 import aiRoutes from "./aiRoutes";
 import maintenanceRoutes from "./maintenanceRoutes";
 import ragRoutes from "./ragRoutes";
+import presetRoutes from "./presetRoutes";
+import ContactFieldsController from "../controllers/ContactFieldsController";
 import labelsRoutes from "./labelsRoutes";
 import wbotLabelsRoutes from "./wbotLabelsRoutes";
 import whatsappWebLabelsRoutes from "./whatsappWebLabelsRoutes";
@@ -106,6 +109,8 @@ routes.use(scheduleMessageRoutes);
 routes.use(aiRoutes);
 routes.use(maintenanceRoutes);
 routes.use(ragRoutes);
+routes.use(presetRoutes);
+routes.get("/contacts/fields", isAuth, ContactFieldsController.getContactFields);
 routes.use("/labels", labelsRoutes);
 routes.use(wbotLabelsRoutes);
 routes.use(whatsappWebLabelsRoutes);

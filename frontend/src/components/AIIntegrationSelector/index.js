@@ -7,9 +7,13 @@ import {
   Typography,
   Box,
   Chip,
-  CircularProgress
+  CircularProgress,
+  IconButton,
+  Popover,
+  ClickAwayListener
 } from "@material-ui/core";
 import { Alert } from "@material-ui/lab";
+import CheckCircleIcon from "@material-ui/icons/CheckCircle";
 import { makeStyles } from "@material-ui/core/styles";
 import api from "../../services/api";
 
@@ -27,6 +31,24 @@ const useStyles = makeStyles((theme) => ({
   chip: {
     margin: theme.spacing(0.5),
   },
+  configuredChip: {
+    backgroundColor: '#4caf50 !important',
+    color: 'white !important',
+  },
+  checkIcon: {
+    color: '#4caf50',
+    fontSize: 20,
+    marginLeft: theme.spacing(1),
+  },
+  popoverContent: {
+    padding: theme.spacing(2),
+    maxWidth: 400,
+  },
+  selectContainer: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+  },
 }));
 
 const AIIntegrationSelector = ({ 
@@ -36,12 +58,18 @@ const AIIntegrationSelector = ({
   required = false,
   error = false,
   helperText = "",
-  showDetails = true 
+  showDetails = true,
+  margin = "normal"
 }) => {
   const classes = useStyles();
   const [integrations, setIntegrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedIntegration, setSelectedIntegration] = useState(null);
+  const [configAnchorEl, setConfigAnchorEl] = useState(null);
+
+  const openConfigPopover = Boolean(configAnchorEl);
+  const handleOpenConfig = (event) => setConfigAnchorEl(event.currentTarget);
+  const handleCloseConfig = () => setConfigAnchorEl(null);
 
   useEffect(() => {
     const fetchIntegrations = async () => {
@@ -156,83 +184,136 @@ const AIIntegrationSelector = ({
 
   return (
     <>
-      <FormControl
-        variant="outlined"
-        className={classes.formControl}
-        fullWidth
-        error={error}
-        required={required}
-      >
-        <InputLabel>{label}</InputLabel>
-        <Select
-          value={value || ""}
-          onChange={handleChange}
-          label={label}
+      <Box className={classes.selectContainer}>
+        <FormControl
+          variant="outlined"
+          className={classes.formControl}
+          fullWidth
+          error={error}
+          required={required}
+          margin={margin}
         >
-          <MenuItem value="">
-            <em>Selecione uma integração</em>
-          </MenuItem>
-          {integrations.map((integration) => (
-            <MenuItem key={integration.id} value={integration.id}>
-              <Box display="flex" alignItems="center" gap={1}>
-                <Chip 
-                  label={integration.type.toUpperCase()} 
-                  size="small" 
-                  color={integration.type === "openai" ? "primary" : "secondary"}
-                />
-                {integration.name}
-              </Box>
+          <InputLabel>{label}</InputLabel>
+          <Select
+            value={value || ""}
+            onChange={handleChange}
+            label={label}
+          >
+            <MenuItem value="">
+              <em>Selecione uma integração</em>
             </MenuItem>
-          ))}
-        </Select>
-        {helperText && (
-          <Typography variant="caption" color={error ? "error" : "textSecondary"}>
-            {helperText}
-          </Typography>
-        )}
-      </FormControl>
-
-      {showDetails && selectedIntegration && (
-        <Box className={classes.integrationInfo}>
-          <Typography variant="subtitle2" gutterBottom>
-            📋 Configurações da Integração
-          </Typography>
-          <Box display="flex" flexWrap="wrap" gap={1}>
-            {(() => {
-              const get = (obj, keys) => keys.reduce((acc, k) => acc ?? obj?.[k], undefined);
-              const model = get(selectedIntegration, ["model", "defaultModel", "modelDefault", "model_name"]);
-              const temperature = get(selectedIntegration, ["temperature", "temp", "temperatureDefault"]) ?? get(selectedIntegration, ["creativity"]);
-              const maxTokens = get(selectedIntegration, ["maxTokens", "max_tokens", "maxTokensDefault"]);
-              const hasKey = (selectedIntegration.apiKey || selectedIntegration.hasApiKey || selectedIntegration.apiKeyMasked || selectedIntegration.encryptedKey || selectedIntegration.keyConfigured);
-              return (
-                <>
-                  <Chip 
-                    label={`Modelo: ${model || "Não definido"}`} 
-                    size="small" 
-                    className={classes.chip}
-                  />
-                  <Chip 
-                    label={`Temperatura: ${temperature ?? "1"}`} 
-                    size="small" 
-                    className={classes.chip}
-                  />
-                  <Chip 
-                    label={`Máx. Tokens: ${maxTokens ?? "100"}`} 
-                    size="small" 
-                    className={classes.chip}
-                  />
-                  <Chip 
-                    label={`API Key: ${hasKey ? "✅ Configurada" : "❌ Não configurada"}`} 
-                    size="small" 
-                    className={classes.chip}
-                    color={hasKey ? "primary" : "secondary"}
-                  />
-                </>
+            {integrations.map((integration) => {
+              // Verificar se é a integração selecionada para usar dados mais completos
+              const currentIntegration = (selectedIntegration && String(selectedIntegration.id) === String(integration.id)) 
+                ? selectedIntegration 
+                : integration;
+              
+              const hasKey = Boolean(
+                currentIntegration.apiKey || 
+                currentIntegration.hasApiKey || 
+                currentIntegration.apiKeyMasked || 
+                currentIntegration.encryptedKey || 
+                currentIntegration.keyConfigured ||
+                (currentIntegration.apiKey && currentIntegration.apiKey !== '')
               );
-            })()}
+              
+              return (
+                <MenuItem key={integration.id} value={integration.id}>
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <Chip 
+                      label={integration.type.toUpperCase()} 
+                      size="small" 
+                      className={hasKey ? classes.configuredChip : ''}
+                      color={!hasKey ? (integration.type === "openai" ? "primary" : "secondary") : undefined}
+                    />
+                    {integration.name}
+                  </Box>
+                </MenuItem>
+              );
+            })}
+          </Select>
+          {helperText && (
+            <Typography variant="caption" color={error ? "error" : "textSecondary"}>
+              {helperText}
+            </Typography>
+          )}
+        </FormControl>
+
+        {selectedIntegration && (
+          <IconButton
+            onClick={handleOpenConfig}
+            className={classes.checkIcon}
+            size="small"
+          >
+            <CheckCircleIcon />
+          </IconButton>
+        )}
+      </Box>
+
+      {/* Popover separado */}
+      <Popover
+        open={openConfigPopover}
+        anchorEl={configAnchorEl}
+        onClose={handleCloseConfig}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'left',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'left',
+        }}
+        disableRestoreFocus
+      >
+        {selectedIntegration && (
+          <Box className={classes.popoverContent}>
+            <Typography variant="subtitle2" gutterBottom>
+              📋 Configurações da Integração
+            </Typography>
+            <Box display="flex" flexWrap="wrap" gap={1}>
+              {(() => {
+                const get = (obj, keys) => keys.reduce((acc, k) => acc ?? obj?.[k], undefined);
+                const model = get(selectedIntegration, ["model", "defaultModel", "modelDefault", "model_name"]);
+                const temperature = get(selectedIntegration, ["temperature", "temp", "temperatureDefault"]) ?? get(selectedIntegration, ["creativity"]);
+                const maxTokens = get(selectedIntegration, ["maxTokens", "max_tokens", "maxTokensDefault"]);
+                const hasKey = Boolean(
+                  selectedIntegration.apiKey || 
+                  selectedIntegration.hasApiKey || 
+                  selectedIntegration.apiKeyMasked || 
+                  selectedIntegration.encryptedKey || 
+                  selectedIntegration.keyConfigured ||
+                  (selectedIntegration.apiKey && selectedIntegration.apiKey !== '')
+                );
+                return (
+                  <>
+                    <Chip 
+                      label={`Modelo: ${model || "Não definido"}`} 
+                      size="small" 
+                      className={classes.chip}
+                    />
+                    <Chip 
+                      label={`Temperatura: ${temperature ?? "1"}`} 
+                      size="small" 
+                      className={classes.chip}
+                    />
+                    <Chip 
+                      label={`Máx. Tokens: ${maxTokens ?? "100"}`} 
+                      size="small" 
+                      className={classes.chip}
+                    />
+                    <Chip 
+                      label={`API Key: ${hasKey ? "✅ Configurada" : "❌ Não configurada"}`} 
+                      size="small" 
+                      className={classes.chip}
+                      color={hasKey ? "primary" : "secondary"}
+                    />
+                  </>
+                );
+              })()}
+            </Box>
           </Box>
-        </Box>
-      )}
+        )}
+      </Popover>
     </>
   );
 };

@@ -4,6 +4,7 @@ import GetIntegrationByTypeService from "../services/QueueIntegrationServices/Ge
 import ResolveAIIntegrationService from "../services/IA/ResolveAIIntegrationService";
 import IAClientFactory from "../services/IA/IAClientFactory";
 import ChatAssistantService from "../services/IA/usecases/ChatAssistantService";
+import PresetService from "../services/IA/PresetService";
 
 const extractVariables = (text: string): string[] => {
   if (!text) return [];
@@ -15,8 +16,27 @@ const extractVariables = (text: string): string[] => {
 export const transformText = async (req: Request, res: Response) => {
   try {
     const { companyId } = req.user;
-    const { mode, text, targetLang, integrationType, queueId, whatsappId }
-      : { mode: "translate" | "spellcheck" | "enhance"; text: string; targetLang?: string; integrationType?: "openai" | "gemini"; queueId?: number | string; whatsappId?: number | string } = req.body || {};
+    const { 
+      mode, 
+      text, 
+      targetLang, 
+      integrationType, 
+      queueId, 
+      whatsappId, 
+      context 
+    }: { 
+      mode: "translate" | "spellcheck" | "enhance"; 
+      text: string; 
+      targetLang?: string; 
+      integrationType?: "openai" | "gemini"; 
+      queueId?: number | string; 
+      whatsappId?: number | string;
+      context?: {
+        assistantContext?: string;
+        module?: string;
+        [key: string]: any;
+      };
+    } = req.body || {};
 
     if (!text || typeof text !== "string") {
       return res.status(400).json({ error: "text é obrigatório" });
@@ -24,6 +44,8 @@ export const transformText = async (req: Request, res: Response) => {
     if (!mode || !["translate", "spellcheck", "enhance"].includes(mode)) {
       return res.status(400).json({ error: "mode inválido" });
     }
+
+    console.log(`[AiController] transformText - context:`, context);
 
     const result = await ChatAssistantService.runTransformText({
       companyId,
@@ -33,10 +55,13 @@ export const transformText = async (req: Request, res: Response) => {
       integrationType,
       queueId,
       whatsappId,
+      assistantContext: context?.assistantContext,
+      module: context?.module as any,
     });
 
     return res.status(200).json({ result });
   } catch (error: any) {
+    console.error(`[AiController] transformText error:`, error);
     return res.status(500).json({ error: error?.message || "Erro ao transformar texto" });
   }
 };
@@ -207,4 +232,62 @@ export const listModels = async (req: Request, res: Response) => {
   }
 };
 
-export default { generateCampaignMessages, encryptionStatus, transformText };
+// Gerenciamento de presets
+export const savePreset = async (req: Request, res: Response) => {
+  try {
+    const { companyId } = req.user;
+    const { preset } = req.body;
+
+    if (!preset || !preset.name || !preset.module || !preset.systemPrompt) {
+      return res.status(400).json({ error: "Dados do preset são obrigatórios" });
+    }
+
+    await PresetService.savePreset({ companyId, preset });
+    
+    return res.status(200).json({ message: "Preset salvo com sucesso" });
+  } catch (error: any) {
+    console.error("Erro ao salvar preset:", error);
+    return res.status(500).json({ error: error?.message || "Erro ao salvar preset" });
+  }
+};
+
+export const listPresets = async (req: Request, res: Response) => {
+  try {
+    const { companyId } = req.user;
+    
+    const presets = await PresetService.listPresets(companyId);
+    
+    return res.status(200).json({ presets });
+  } catch (error: any) {
+    console.error("Erro ao listar presets:", error);
+    return res.status(500).json({ error: error?.message || "Erro ao listar presets" });
+  }
+};
+
+export const deletePreset = async (req: Request, res: Response) => {
+  try {
+    const { companyId } = req.user;
+    const { module } = req.params;
+
+    if (!module || !["general", "campaign", "ticket", "prompt"].includes(module)) {
+      return res.status(400).json({ error: "Módulo inválido" });
+    }
+
+    await PresetService.deletePreset(companyId, module as any);
+    
+    return res.status(200).json({ message: "Preset removido com sucesso" });
+  } catch (error: any) {
+    console.error("Erro ao remover preset:", error);
+    return res.status(500).json({ error: error?.message || "Erro ao remover preset" });
+  }
+};
+
+export default { 
+  generateCampaignMessages, 
+  encryptionStatus, 
+  transformText, 
+  listModels,
+  savePreset,
+  listPresets,
+  deletePreset
+};

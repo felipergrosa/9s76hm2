@@ -552,14 +552,11 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
                           id="type"
                           required
                         >
-                          <MenuItem value="openai">OpenAI</MenuItem>
                           <MenuItem value="dialogflow">DialogFlow</MenuItem>
                           <MenuItem value="n8n">N8N</MenuItem>
                           <MenuItem value="webhook">WebHooks</MenuItem>
                           <MenuItem value="typebot">Typebot</MenuItem>
                           <MenuItem value="flowbuilder">Flowbuilder</MenuItem>
-                          <MenuItem value="gemini">Google Gemini</MenuItem>
-                          <MenuItem value="knowledge">Base de Conhecimento</MenuItem>
                         </Field>
                       </FormControl>
                     </Grid>

@@ -25,11 +25,24 @@ const QueueSelectSingle = ({ selectedQueueId, onChange, label }) => {
             try {
                 const { data } = await api.get("/queue");
                 setQueues(data);
+                // Debug removido - funcionando corretamente
             } catch (err) {
                 toastError(`QUEUESELETSINGLE >>> ${err}`);
             }
         })();
     }, []);
+
+    // Verificar se o selectedQueueId existe nas filas quando ambos estão disponíveis
+    useEffect(() => {
+        if (selectedQueueId && queues.length > 0) {
+            const queueExists = queues.some(queue => queue.id === selectedQueueId);
+            if (!queueExists) {
+                console.warn(`Fila ID ${selectedQueueId} não encontrada nas filas disponíveis`);
+                // Resetar para valor vazio se a fila não existir
+                if (onChange) onChange("");
+            }
+        }
+    }, [selectedQueueId, queues, onChange]);
 
     const labelText = label || i18n.t("queueSelect.inputLabel");
 
@@ -51,9 +64,16 @@ const QueueSelectSingle = ({ selectedQueueId, onChange, label }) => {
                             labelId="queue-selection-label"
                             id="queue-selection"
                             fullWidth
-                            value={selectedQueueId || ""}
+                            value={
+                                selectedQueueId && queues.some(q => q.id === selectedQueueId) 
+                                    ? selectedQueueId 
+                                    : ""
+                            }
                             onChange={e => onChange(e.target.value)}
                         >
+                            <MenuItem value="">
+                                <em>Selecione uma fila</em>
+                            </MenuItem>
                             {queues.map(queue => (
                                 <MenuItem key={queue.id} value={queue.id}>
                                     {queue.name}
@@ -69,6 +89,9 @@ const QueueSelectSingle = ({ selectedQueueId, onChange, label }) => {
                             id="queue-selection"
                             fullWidth
                         >
+                            <MenuItem value="">
+                                <em>Selecione uma fila</em>
+                            </MenuItem>
                             {queues.map(queue => (
                                 <MenuItem key={queue.id} value={queue.id}>
                                     {queue.name}

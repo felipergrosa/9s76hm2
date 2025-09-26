@@ -4,34 +4,34 @@ import { Formik, Form, Field } from "formik";
 import { toast } from "react-toastify";
 import { makeStyles } from "@material-ui/core/styles";
 import { green } from "@material-ui/core/colors";
-import Button from "@material-ui/core/Button";
-import ExpandLess from "@material-ui/icons/ExpandLess";
-import ExpandMore from "@material-ui/icons/ExpandMore";
 import InfoOutlinedIcon from "@material-ui/icons/InfoOutlined";
 import {
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  Button,
   TextField,
   Typography,
-  Paper,
-  Tooltip,
-  Link,
-  ClickAwayListener,
-  Popover,
-  Chip,
-  CircularProgress,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  List,
-  ListItem,
-  ListItemText,
-  Collapse,
-  Checkbox,
-  FormControlLabel
+  Grid,
+  Switch,
+  FormControlLabel,
+  Box,
+  Chip,
+  Tooltip,
+  IconButton,
+  Divider,
+  Card,
+  CardContent,
+  CardActions,
+  Link,
+  ClickAwayListener,
+  Popover,
+  CircularProgress,
 } from "@material-ui/core";
 import QueueSelectSingle from "../QueueSelectSingle";
 import AIIntegrationSelector from "../AIIntegrationSelector";
@@ -71,15 +71,6 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
-// Alinhar a lista de modelos com o backend
-const allowedModels = [
-  "gpt-3.5-turbo-1106",
-  "gpt-4o",
-  "gemini-1.5-flash",
-  "gemini-1.5-pro",
-  "gemini-2.0-flash",
-  "gemini-2.0-pro",
-];
 
 const PromptSchema = Yup.object().shape({
   name: Yup.string()
@@ -89,7 +80,11 @@ const PromptSchema = Yup.object().shape({
   prompt: Yup.string()
     .min(50, "Muito curto!")
     .required("Descreva o treinamento para Inteligência Artificial"),
-  integrationId: Yup.number().required("Selecione uma integração IA"),
+  integrationId: Yup.number().when('useGlobalConfig', {
+    is: false,
+    then: Yup.number().required("Selecione uma integração IA"),
+    otherwise: Yup.number().notRequired(),
+  }),
   queueId: Yup.number().required("Informe a fila"),
   maxMessages: Yup.number()
     .min(1, "Mínimo 1 mensagem")
@@ -102,12 +97,21 @@ const PromptSchema = Yup.object().shape({
   }),
   voiceKey: Yup.string().notRequired(),
   voiceRegion: Yup.string().notRequired(),
+  temperature: Yup.number()
+    .min(0, "Mínimo 0")
+    .max(2, "Máximo 2")
+    .notRequired(),
+  maxTokens: Yup.number()
+    .min(1, "Mínimo 1 token")
+    .max(4000, "Máximo 4000 tokens")
+    .notRequired(),
 });
 
-const PromptModal = ({ open, onClose, promptId }) => {
+const PromptModal = ({ open, onClose, promptId, templateData }) => {
   const classes = useStyles();
   const [selectedIntegration, setSelectedIntegration] = useState(null);
   const [encryptionEnabled, setEncryptionEnabled] = useState(true);
+  const [useGlobalConfig, setUseGlobalConfig] = useState(false);
 
   const initialState = {
     name: "",
@@ -118,15 +122,17 @@ const PromptModal = ({ open, onClose, promptId }) => {
     voice: "texto",
     voiceKey: "",
     voiceRegion: "",
+    temperature: 0.9,
+    maxTokens: 300,
+    useGlobalConfig: false,
   };
 
   const [prompt, setPrompt] = useState(initialState);
   const promptInputRef = useRef(null);
   const [tagsAnchorEl, setTagsAnchorEl] = useState(null);
   const [tagsSearch, setTagsSearch] = useState("");
-  const [filesSearch, setFilesSearch] = useState("");
-  const [fileLists, setFileLists] = useState([]);
-  const [expandedFileIds, setExpandedFileIds] = useState({});
+  const [filesSearch] = useState(""); // Usado no useEffect
+  const [fileLists, setFileLists] = useState([]); // Usado no useEffect
   const [selectedOptions, setSelectedOptions] = useState([]); // [{fileListId, optionId, name, path, mediaType}]
   const [voiceTipsAnchorEl, setVoiceTipsAnchorEl] = useState(null);
 
@@ -216,16 +222,52 @@ const PromptModal = ({ open, onClose, promptId }) => {
     const fetchPrompt = async () => {
       if (!promptId) {
         setPrompt(initialState);
+        setSelectedIntegration(null);
         return;
       }
       try {
         const { data } = await api.get(`/prompt/${promptId}`);
+        // Debug: verificar se integrationId foi carregado
+        console.log('Prompt carregado - integrationId:', data.integrationId);
+        
         setPrompt({
           ...initialState,
           ...data,
           queueId: data.queueId || null,
           integrationId: data.integrationId || null,
         });
+        
+        // Buscar dados completos da integração se existir integrationId
+        if (data.integrationId) {
+          try {
+            const { data: integrationData } = await api.get(`/queueIntegration/${data.integrationId}`);
+            let integration = integrationData && (integrationData.queueIntegration || integrationData);
+            if (integration && integration.jsonContent) {
+              try {
+                const parsed = JSON.parse(integration.jsonContent);
+                const masked = typeof parsed?.apiKey === 'string' && parsed.apiKey.endsWith('********');
+                integration = {
+                  ...integration,
+                  apiKey: masked ? parsed.apiKey : (parsed.apiKey || integration.apiKey),
+                  model: parsed.model ?? integration.model,
+                  temperature: parsed.temperature ?? integration.temperature,
+                  maxTokens: parsed.maxTokens ?? integration.maxTokens,
+                  maxMessages: parsed.maxMessages ?? integration.maxMessages,
+                  topP: parsed.topP ?? integration.topP,
+                  presencePenalty: parsed.presencePenalty ?? integration.presencePenalty,
+                  creativity: parsed.creativityLevel ?? integration.creativity,
+                };
+              } catch (_) {}
+            }
+            setSelectedIntegration(integration);
+          } catch (err) {
+            console.error('Erro ao buscar integração:', err);
+            setSelectedIntegration(null);
+          }
+        } else {
+          setSelectedIntegration(null);
+        }
+        
         // Restaurar anexos selecionados, se houver
         try {
           if (data.attachments) {
@@ -254,7 +296,7 @@ const PromptModal = ({ open, onClose, promptId }) => {
       }
     };
     fetchFiles();
-  }, [promptId, open]);
+  }, [promptId, open, templateData]);
 
   useEffect(() => {
     let active = true;
@@ -266,6 +308,49 @@ const PromptModal = ({ open, onClose, promptId }) => {
     })();
     return () => { active = false; };
   }, [filesSearch]);
+  // useEffect para aplicar template quando modal abrir
+  useEffect(() => {
+    if (open && !promptId && templateData) {
+      console.log('Template detectado no useEffect:', templateData);
+      
+      // Aplicar dados básicos do template
+      const templatePromptData = {
+        ...initialState,
+        name: templateData.name || "",
+        prompt: templateData.prompt || "",
+        // Aplicar voz sugerida se disponível
+        voice: templateData.suggestedVoices && templateData.suggestedVoices.length > 0 
+          ? templateData.suggestedVoices[0] 
+          : "texto",
+        // Configurações padrão baseadas no template
+        maxMessages: 10,
+        voiceKey: "",
+        voiceRegion: "",
+        // Aplicar temperatura se disponível no template
+        temperature: templateData.temperature || 0.9,
+        maxTokens: templateData.maxTokens || 300,
+      };
+      
+      setPrompt(templatePromptData);
+      setSelectedOptions([]);
+      
+      // Limpar integração selecionada para permitir nova seleção
+      setSelectedIntegration(null);
+      
+      console.log('Template aplicado:', {
+        name: templatePromptData.name,
+        voice: templatePromptData.voice,
+        suggestedVoices: templateData.suggestedVoices,
+        integrationType: templateData.integrationType
+      });
+      
+      // Mostrar toast com informações do template aplicado
+      if (templateData.suggestedVoices && templateData.suggestedVoices.length > 0) {
+        const voiceName = templateData.suggestedVoices[0].replace('pt-BR-', '').replace('Neural', '');
+        toast.info(`🎤 Voz "${voiceName}" aplicada automaticamente do template`);
+      }
+    }
+  }, [open, promptId, templateData, initialState]);
 
   const handleClose = () => {
     setPrompt(initialState);
@@ -275,11 +360,23 @@ const PromptModal = ({ open, onClose, promptId }) => {
 
   const handleSavePrompt = async (values, { setSubmitting, setErrors }) => {
     try {
+      // Debug: verificar dados antes de salvar
+      console.log('Salvando prompt com integrationId:', values.integrationId);
+      
       const promptData = {
         ...values,
+        // IMPORTANTE: Tratar configurações globais vs específicas
+        integrationId: useGlobalConfig ? null : values.integrationId,
         voice: (selectedIntegration?.model === "gpt-3.5-turbo-1106") ? values.voice : "texto",
         attachments: JSON.stringify(selectedOptions || []),
+        // Usar dados da integração específica OU valores do template/form para configurações globais
+        apiKey: useGlobalConfig ? "" : (selectedIntegration?.apiKey || ""),
+        model: useGlobalConfig ? "" : (selectedIntegration?.model || "gpt-3.5-turbo-1106"),
+        maxTokens: useGlobalConfig ? values.maxTokens : (Number(selectedIntegration?.maxTokens) || values.maxTokens || 300),
+        temperature: useGlobalConfig ? values.temperature : (Number(selectedIntegration?.temperature) || values.temperature || 0.9),
+        useGlobalConfig: useGlobalConfig,
       };
+      
       if (promptId) {
         await api.put(`/prompt/${promptId}`, promptData);
       } else {
@@ -316,7 +413,19 @@ const PromptModal = ({ open, onClose, promptId }) => {
 
   return (
     <div className={classes.root}>
-      <Dialog open={open} onClose={handleClose} maxWidth="md" scroll="paper" fullWidth>
+      <Dialog 
+        open={open} 
+        onClose={handleClose} 
+        maxWidth="md" 
+        scroll="paper" 
+        fullWidth
+        PaperProps={{
+          style: {
+            maxHeight: '90vh',
+            height: '90vh'
+          }
+        }}
+      >
         <DialogTitle id="form-dialog-title">
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {promptId ? i18n.t("promptModal.title.edit") : i18n.t("promptModal.title.add")}
@@ -342,41 +451,163 @@ const PromptModal = ({ open, onClose, promptId }) => {
         >
           {({ touched, errors, isSubmitting, values, setFieldValue }) => (
             <Form style={{ width: "100%" }}>
-              <DialogContent dividers>
-                {!encryptionEnabled && (
-                  <Paper variant="outlined" style={{ background: '#fff8e1', borderColor: '#ffb300', padding: 8, marginBottom: 12 }}>
-                    <Typography style={{ fontWeight: 600, marginBottom: 4 }}>Atenção: criptografia de API Key não habilitada</Typography>
-                    <Typography variant="body2">
-                      Defina a variável de ambiente <b>OPENAI_ENCRYPTION_KEY</b> (ou <b>DATA_KEY</b>) no backend para que a sua API Key seja armazenada de forma criptografada.
-                    </Typography>
-                  </Paper>
-                )}
+              <DialogContent 
+                dividers 
+                style={{ 
+                  overflowY: 'auto', 
+                  overflowX: 'hidden',
+                  maxHeight: 'calc(90vh - 140px)' 
+                }}
+              >
                 <Typography variant="body2" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
                   Preencha os campos abaixo. Dica: personalize o texto do Prompt usando variáveis como {"{nome}"}, {"{pedido}"}.
                 </Typography>
-                <Field
-                  as={TextField}
-                  label={i18n.t("promptModal.form.name")}
-                  name="name"
-                  error={touched.name && Boolean(errors.name)}
-                  helperText={touched.name ? errors.name : "Um rótulo para identificar este Prompt (ex.: Boas-vindas)"}
-                  variant="outlined"
-                  margin="dense"
-                  fullWidth
-                  required
-                />
-                <FormControl fullWidth margin="dense" variant="outlined">
-                  <AIIntegrationSelector
-                    value={values.integrationId}
-                    onChange={(integrationId, integration) => {
-                      setFieldValue('integrationId', integrationId);
-                      setSelectedIntegration(integration);
-                    }}
-                    error={touched.integrationId && Boolean(errors.integrationId)}
-                    helperText={touched.integrationId ? errors.integrationId : "Selecione uma integração OpenAI/Gemini configurada"}
-                  />
-                </FormControl>
+                <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <Field
+                      as={TextField}
+                      label={i18n.t("promptModal.form.name")}
+                      name="name"
+                      error={touched.name && Boolean(errors.name)}
+                      helperText={touched.name ? errors.name : "Um rótulo para identificar este Prompt (ex.: Boas-vindas)"}
+                      variant="outlined"
+                      margin="dense"
+                      fullWidth
+                      required
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <Typography variant="caption" style={{ opacity: 0.8 }}>
+                        Configuração IA
+                      </Typography>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Typography variant="caption" style={{ fontSize: '0.75rem' }}>
+                          Específica
+                        </Typography>
+                        <input
+                          type="checkbox"
+                          checked={useGlobalConfig}
+                          onChange={(e) => {
+                            setUseGlobalConfig(e.target.checked);
+                            if (e.target.checked) {
+                              setFieldValue('integrationId', null);
+                              setSelectedIntegration(null);
+                            }
+                          }}
+                          style={{ margin: '0 4px' }}
+                        />
+                        <Typography variant="caption" style={{ fontSize: '0.75rem' }}>
+                          Global
+                        </Typography>
+                      </div>
+                    </div>
+                    {!useGlobalConfig ? (
+                      <AIIntegrationSelector
+                        value={values.integrationId}
+                        onChange={(integrationId, integration) => {
+                          setFieldValue('integrationId', integrationId);
+                          setSelectedIntegration(integration);
+                        }}
+                        error={touched.integrationId && Boolean(errors.integrationId)}
+                        helperText={touched.integrationId ? errors.integrationId : "Selecione uma integração IA"}
+                        margin="dense"
+                      />
+                    ) : (
+                      <div style={{ 
+                        padding: 12, 
+                        backgroundColor: '#f0f8ff', 
+                        borderRadius: 4, 
+                        border: '1px solid #2196f3' 
+                      }}>
+                        <Typography variant="body2" style={{ color: '#1976d2' }}>
+                          🌐 Usando configurações globais de IA
+                        </Typography>
+                        <Typography variant="caption" style={{ color: '#666' }}>
+                          As configurações definidas em "Configurações → IA" serão utilizadas
+                        </Typography>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Informações do template aplicado */}
+                {templateData && (
+                  <div style={{ 
+                    marginTop: 16, 
+                    marginBottom: 16, 
+                    padding: 12, 
+                    backgroundColor: '#e3f2fd', 
+                    borderRadius: 8, 
+                    border: '1px solid #2196f3' 
+                  }}>
+                    <Typography variant="subtitle2" style={{ color: '#1976d2', marginBottom: 8 }}>
+                      📋 Template Aplicado: {templateData.name}
+                    </Typography>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                      {templateData.difficulty && (
+                        <Chip size="small" label={`Dificuldade: ${templateData.difficulty}`} style={{ backgroundColor: '#ff9800', color: 'white' }} />
+                      )}
+                      {templateData.score && (
+                        <Chip size="small" label={`⭐ ${templateData.score}/10`} style={{ backgroundColor: '#4caf50', color: 'white' }} />
+                      )}
+                      {templateData.integrationType && (
+                        <Chip size="small" label={`IA: ${templateData.integrationType === 'universal' ? 'Universal' : templateData.integrationType.toUpperCase()}`} color="primary" variant="outlined" />
+                      )}
+                      {templateData.temperature && (
+                        <Chip size="small" label={`🌡️ Temp: ${templateData.temperature}`} style={{ backgroundColor: '#9c27b0', color: 'white' }} />
+                      )}
+                      {templateData.maxTokens && (
+                        <Chip size="small" label={`🔢 Tokens: ${templateData.maxTokens}`} style={{ backgroundColor: '#607d8b', color: 'white' }} />
+                      )}
+                    </div>
+                    {templateData.suggestedVoices && templateData.suggestedVoices.length > 0 && (
+                      <Typography variant="caption" style={{ color: '#1976d2' }}>
+                        🎤 Voz aplicada: {templateData.suggestedVoices[0].replace('pt-BR-', '').replace('Neural', '')}
+                        {templateData.suggestedVoices.length > 1 && ` (+${templateData.suggestedVoices.length - 1} outras disponíveis)`}
+                      </Typography>
+                    )}
+                    {templateData.ragSuggestions && templateData.ragSuggestions.length > 0 && (
+                      <div style={{ marginTop: 4 }}>
+                        <Typography variant="caption" style={{ color: '#1976d2', display: 'block' }}>
+                          🧠 RAG sugerido: {templateData.ragSuggestions.join(', ')}
+                        </Typography>
+                      </div>
+                    )}
+                    {templateData.variables && templateData.variables.length > 0 && (
+                      <div style={{ marginTop: 8 }}>
+                        <Typography variant="caption" style={{ color: '#1976d2', display: 'block', marginBottom: 4 }}>
+                          🏷️ Variáveis disponíveis ({templateData.variables.length}):
+                        </Typography>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {templateData.variables.slice(0, 6).map((variable) => (
+                            <Chip 
+                              key={variable} 
+                              size="small" 
+                              label={`{${variable}}`} 
+                              style={{ 
+                                backgroundColor: '#2196f3', 
+                                color: 'white', 
+                                fontSize: '0.7rem',
+                                height: 20
+                              }} 
+                            />
+                          ))}
+                          {templateData.variables.length > 6 && (
+                            <Chip 
+                              size="small" 
+                              label={`+${templateData.variables.length - 6}`} 
+                              variant="outlined"
+                              style={{ height: 20, fontSize: '0.7rem' }}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Typography variant="caption" style={{ opacity: 0.8 }}>Prompt</Typography>
                   <Link component="button" type="button" onClick={handleOpenTags} onMouseEnter={handleOpenTags} style={{ fontSize: 12 }}>
@@ -384,72 +615,22 @@ const PromptModal = ({ open, onClose, promptId }) => {
                   </Link>
                 </div>
                 <div style={{ marginTop: 12 }}>
-                  <Typography variant="subtitle2" style={{ marginBottom: 4 }}>Anexos do Prompt (biblioteca de arquivos)</Typography>
-                  <TextField
-                    value={filesSearch}
-                    onChange={e => setFilesSearch(e.target.value)}
-                    placeholder="Buscar listas de arquivos..."
-                    variant="outlined"
-                    size="small"
-                    fullWidth
-                    style={{ marginBottom: 8 }}
-                  />
-                  <Paper variant="outlined" style={{ maxHeight: 220, overflow: 'auto' }}>
-                    <List dense>
-                      {fileLists.map(fl => {
-                        const open = !!expandedFileIds[fl.id];
-                        return (
-                          <div key={fl.id}>
-                            <ListItem button onClick={async () => {
-                              setExpandedFileIds(prev => ({ ...prev, [fl.id]: !open }));
-                              if (!open) {
-                                try {
-                                  const { data } = await api.get(`/files/${fl.id}`);
-                                  setExpandedFileIds(prev => ({ ...prev, [fl.id]: data }));
-                                } catch (_) {}
-                              }
-                            }}>
-                              <ListItemText primary={fl.name} secondary={fl.message} />
-                              {open ? <ExpandLess /> : <ExpandMore />}
-                            </ListItem>
-                            <Collapse in={!!expandedFileIds[fl.id]} timeout="auto" unmountOnExit>
-                              <List dense component="div" disablePadding>
-                                {(expandedFileIds[fl.id]?.options || []).map(opt => {
-                                  const checked = selectedOptions.some(s => s.fileListId === fl.id && s.optionId === opt.id);
-                                  return (
-                                    <ListItem key={opt.id} style={{ paddingLeft: 28 }}>
-                                      <FormControlLabel
-                                        control={
-                                          <Checkbox
-                                            color="primary"
-                                            checked={checked}
-                                            onChange={(e) => {
-                                              setSelectedOptions(prev => {
-                                                if (e.target.checked) {
-                                                  return [...prev, { fileListId: fl.id, optionId: opt.id, name: opt.name, path: opt.path, mediaType: opt.mediaType }];
-                                                }
-                                                return prev.filter(s => !(s.fileListId === fl.id && s.optionId === opt.id));
-                                              });
-                                            }}
-                                          />
-                                        }
-                                        label={opt.name || opt.path || `Opção ${opt.id}`}
-                                      />
-                                    </ListItem>
-                                  );
-                                })}
-                              </List>
-                            </Collapse>
-                          </div>
-                        );
-                      })}
-                    </List>
-                  </Paper>
-                  {!!selectedOptions.length && (
-                    <Typography variant="caption" style={{ display: 'block', marginTop: 4 }}>
-                      Selecionados: {selectedOptions.length}
-                    </Typography>
-                  )}
+                  <Typography variant="subtitle2" style={{ marginBottom: 4, color: '#666' }}>
+                    {useGlobalConfig ? '🌐 Configuração Global de IA' : '🎯 Configuração Específica de IA'}
+                  </Typography>
+                  <Typography variant="body2" style={{ marginBottom: 8, color: '#888', fontSize: '0.875rem' }}>
+                    {useGlobalConfig 
+                      ? 'Este prompt utilizará as configurações globais de IA definidas no menu Configurações. Ideal para padronização em toda a empresa.'
+                      : 'Este prompt tem configurações específicas de IA. Permite personalização total para casos de uso únicos.'
+                    }
+                  </Typography>
+                </div>
+                
+                <div style={{ marginTop: 12 }}>
+                  <Typography variant="subtitle2" style={{ marginBottom: 4, color: '#666' }}>RAG Global Integrado</Typography>
+                  <Typography variant="body2" style={{ marginBottom: 8, color: '#888', fontSize: '0.875rem' }}>
+                    O sistema RAG alimenta automaticamente as conversas com conhecimento relevante dos arquivos da empresa.
+                  </Typography>
                 </div>
                 <Field
                   as={TextField}
@@ -525,52 +706,12 @@ const PromptModal = ({ open, onClose, promptId }) => {
                     />
                   )}
                 />
-                {selectedIntegration && (
-                  <Paper variant="outlined" style={{ padding: 12, marginBottom: 12, backgroundColor: '#f5f5f5' }}>
-                    <Typography variant="subtitle2" style={{ marginBottom: 8 }}>Integração Selecionada</Typography>
-                    <Typography variant="body2">
-                      <strong>{selectedIntegration.name}</strong> • {selectedIntegration.model} • Temp: {selectedIntegration.temperature} • Tokens: {selectedIntegration.maxTokens}
-                    </Typography>
-                  </Paper>
-                )}
-                <div className={classes.multFieldLine}>
-                  <FormControl
-                    fullWidth
-                    margin="dense"
-                    variant="outlined"
-                    disabled={selectedIntegration?.model !== "gpt-3.5-turbo-1106"}
-                    error={touched.voice && Boolean(errors.voice)}
-                  >
-                    <InputLabel>{i18n.t("promptModal.form.voice")}</InputLabel>
-                    <Field
-                      as={Select}
-                      label={i18n.t("promptModal.form.voice")}
-                      name="voice"
-                    >
-                      <MenuItem value="texto">Texto</MenuItem>
-                      <MenuItem value="pt-BR-FranciscaNeural">Francisca</MenuItem>
-                      <MenuItem value="pt-BR-AntonioNeural">Antônio</MenuItem>
-                      <MenuItem value="pt-BR-BrendaNeural">Brenda</MenuItem>
-                      <MenuItem value="pt-BR-DonatoNeural">Donato</MenuItem>
-                      <MenuItem value="pt-BR-ElzaNeural">Elza</MenuItem>
-                      <MenuItem value="pt-BR-FabioNeural">Fábio</MenuItem>
-                      <MenuItem value="pt-BR-GiovannaNeural">Giovanna</MenuItem>
-                      <MenuItem value="pt-BR-HumbertoNeural">Humberto</MenuItem>
-                      <MenuItem value="pt-BR-JulioNeural">Julio</MenuItem>
-                      <MenuItem value="pt-BR-LeilaNeural">Leila</MenuItem>
-                      <MenuItem value="pt-BR-LeticiaNeural">Letícia</MenuItem>
-                      <MenuItem value="pt-BR-ManuelaNeural">Manuela</MenuItem>
-                      <MenuItem value="pt-BR-NicolauNeural">Nicolau</MenuItem>
-                      <MenuItem value="pt-BR-ValerioNeural">Valério</MenuItem>
-                      <MenuItem value="pt-BR-YaraNeural">Yara</MenuItem>
-                    </Field>
-                    {touched.voice && errors.voice && (
-                      <div style={{ color: "red", fontSize: "12px" }}>{errors.voice}</div>
-                    )}
-                  </FormControl>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                  <Typography variant="subtitle2">Voz (TTS) e Transcrição (STT)</Typography>
+                
+                <Divider style={{ margin: '24px 0 16px 0' }} />
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+
+                  <Typography variant="h6" style={{ fontSize: '1.1rem', fontWeight: 500 }}>Voz e Transcrição</Typography>
                   <Link
                     component="button"
                     type="button"
@@ -622,6 +763,62 @@ const PromptModal = ({ open, onClose, promptId }) => {
                     </div>
                   </Popover>
                 </ClickAwayListener>
+                
+                {/* Voz e Temperatura na mesma linha */}
+                <div className={classes.multFieldLine}>
+                  <FormControl
+                    fullWidth
+                    margin="dense"
+                    variant="outlined"
+                    disabled={selectedIntegration?.model !== "gpt-3.5-turbo-1106"}
+                    error={touched.voice && Boolean(errors.voice)}
+                  >
+                    <InputLabel>{i18n.t("promptModal.form.voice")}</InputLabel>
+                    <Field
+                      as={Select}
+                      label={i18n.t("promptModal.form.voice")}
+                      name="voice"
+                    >
+                      <MenuItem value="texto">Texto</MenuItem>
+                      <MenuItem value="pt-BR-FranciscaNeural">Francisca</MenuItem>
+                      <MenuItem value="pt-BR-AntonioNeural">Antônio</MenuItem>
+                      <MenuItem value="pt-BR-BrendaNeural">Brenda</MenuItem>
+                      <MenuItem value="pt-BR-DonatoNeural">Donato</MenuItem>
+                      <MenuItem value="pt-BR-ElzaNeural">Elza</MenuItem>
+                      <MenuItem value="pt-BR-FabioNeural">Fábio</MenuItem>
+                      <MenuItem value="pt-BR-GiovannaNeural">Giovanna</MenuItem>
+                      <MenuItem value="pt-BR-HumbertoNeural">Humberto</MenuItem>
+                      <MenuItem value="pt-BR-JulioNeural">Julio</MenuItem>
+                      <MenuItem value="pt-BR-LeilaNeural">Leila</MenuItem>
+                      <MenuItem value="pt-BR-LeticiaNeural">Letícia</MenuItem>
+                      <MenuItem value="pt-BR-ManuelaNeural">Manuela</MenuItem>
+                      <MenuItem value="pt-BR-NicolauNeural">Nicolau</MenuItem>
+                      <MenuItem value="pt-BR-ValerioNeural">Valério</MenuItem>
+                      <MenuItem value="pt-BR-YaraNeural">Yara</MenuItem>
+                    </Field>
+                    {touched.voice && errors.voice && (
+                      <div style={{ color: "red", fontSize: "12px" }}>{errors.voice}</div>
+                    )}
+                  </FormControl>
+                  <Field
+                    as={TextField}
+                    label={i18n.t("promptModal.form.temperature")}
+                    name="temperature"
+                    error={touched.temperature && Boolean(errors.temperature)}
+                    helperText={touched.temperature && errors.temperature}
+                    variant="outlined"
+                    margin="dense"
+                    fullWidth
+                    type="number"
+                    inputProps={{
+                      step: "0.1",
+                      min: "0",
+                      max: "1",
+                    }}
+                  />
+                </div>
+                
+                {/* VoiceKey e VoiceRegion */}
                 <div className={classes.multFieldLine}>
                   <Field
                     as={TextField}
@@ -644,24 +841,6 @@ const PromptModal = ({ open, onClose, promptId }) => {
                     margin="dense"
                     fullWidth
                     disabled={selectedIntegration?.model !== "gpt-3.5-turbo-1106"}
-                  />
-                </div>
-                <div className={classes.multFieldLine}>
-                  <Field
-                    as={TextField}
-                    label={i18n.t("promptModal.form.temperature")}
-                    name="temperature"
-                    error={touched.temperature && Boolean(errors.temperature)}
-                    helperText={touched.temperature && errors.temperature}
-                    variant="outlined"
-                    margin="dense"
-                    fullWidth
-                    type="number"
-                    inputProps={{
-                      step: "0.1",
-                      min: "0",
-                      max: "1",
-                    }}
                   />
                 </div>
               </DialogContent>

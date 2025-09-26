@@ -38,6 +38,33 @@ const CreateQueueIntegrationService = async ({
   typebotKeywordRestart,
   typebotRestartMessage 
 }: Request): Promise<QueueIntegrations> => {
+  
+  // Para presets, verificar se já existe e atualizar em vez de criar
+  if (type && type.startsWith('preset-')) {
+    const existingPreset = await QueueIntegrations.findOne({
+      where: { type, companyId }
+    });
+    
+    if (existingPreset) {
+      // Atualizar preset existente
+      await existingPreset.update({
+        name,
+        projectName,
+        jsonContent,
+        language,
+        urlN8N,
+        typebotExpires,
+        typebotKeywordFinish,
+        typebotSlug,
+        typebotUnknownMessage,
+        typebotDelayMessage,
+        typebotKeywordRestart,
+        typebotRestartMessage
+      });
+      return existingPreset;
+    }
+  }
+
   const schema = Yup.object().shape({
     name: Yup.string()
       .required()
@@ -47,6 +74,17 @@ const CreateQueueIntegrationService = async ({
         "This integration name is already used.",
         async value => {
           if (!value) return false;
+          
+          // Para presets: validar apenas se já existe no mesmo módulo (type)
+          if (type && type.startsWith('preset-')) {
+            const existsInSameModule = await QueueIntegrations.findOne({
+              where: { type, companyId }
+            });
+            // Se existe no mesmo módulo, será atualizado (não é erro)
+            return true;
+          }
+          
+          // Para outras integrações: validar nome único
           const nameExists = await QueueIntegrations.findOne({
             where: { name: value, companyId }
           });
@@ -60,7 +98,6 @@ const CreateQueueIntegrationService = async ({
   } catch (err) {
     throw new AppError(err.message);
   }
-
 
   // Encrypt OpenAI apiKey if present
   let jsonToPersist: string = jsonContent;

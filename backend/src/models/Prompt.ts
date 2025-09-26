@@ -33,19 +33,16 @@ class Prompt extends Model<Prompt> {
   @Column
   apiKey: string;
 
-  @Column({ defaultValue: 10 })
   maxMessages: number;
 
   @Column({ defaultValue: 100 })
   maxTokens: number;
 
-  @Column({ defaultValue: 1 })
+  @Column({ type: DataType.FLOAT, defaultValue: 0.9 })
   temperature: number;
 
   @Column({ defaultValue: 0 })
   promptTokens: number;
-
-  @Column({ defaultValue: 0 })
   completionTokens: number;
 
   @Column({ defaultValue: 0 })
@@ -78,6 +75,10 @@ class Prompt extends Model<Prompt> {
 
   @BelongsTo(() => Queue)
   queue: Queue;
+
+  @AllowNull(true)
+  @Column
+  integrationId: number;
 
   @ForeignKey(() => Company)
   @Column

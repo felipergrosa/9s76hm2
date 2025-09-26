@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Paper,
-  Button,
   TextField,
   MenuItem,
   CircularProgress,
@@ -9,25 +8,21 @@ import {
   Tooltip,
   ClickAwayListener,
   makeStyles,
-  useTheme,
-  InputBase,
   Popover,
   Typography,
   Chip,
   Box,
 } from "@material-ui/core";
-import ContentCopyIcon from "@material-ui/icons/FileCopy";
 import AutorenewIcon from "@material-ui/icons/Autorenew";
 import CheckIcon from "@material-ui/icons/Check";
 import CloseIcon from "@material-ui/icons/Close";
 import TranslateIcon from "@material-ui/icons/Translate";
 import SpellcheckIcon from "@material-ui/icons/Spellcheck";
 import TrendingUpIcon from "@material-ui/icons/TrendingUp";
-import PlayArrowIcon from "@material-ui/icons/PlayArrow";
 import { Bot as BotIcon } from "lucide-react";
 import api from "../../services/api";
-import { useHistory } from "react-router-dom";
 import OpenAIService from "../../services/openaiService";
+import { showAIErrorToast } from "../../utils/aiErrorHandler";
 
 const LANGS = [
   { code: "pt-BR", label: "Português (Brasil)" },
@@ -271,7 +266,6 @@ const ChatAssistantPanel = ({
   title,
 }) => {
   const classes = useStyles({ dialogMode });
-  const theme = useTheme();
   const [tab, setTab] = useState(1); // 0=Corretor 1=Aprimorar 2=Tradutor
   const [targetLang, setTargetLang] = useState("pt-BR");
   const [provider, setProvider] = useState(() => {
@@ -280,7 +274,6 @@ const ChatAssistantPanel = ({
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const history = useHistory();
   const [initializing, setInitializing] = useState(false);
   const [providerAnchor, setProviderAnchor] = useState(null);
   const providerLabel = provider === 'gemini' ? 'Gemini' : 'OpenAI';
@@ -288,29 +281,42 @@ const ChatAssistantPanel = ({
   const [integrationConfig, setIntegrationConfig] = useState(null);
 
   const transformMode = useMemo(() => (tab === 2 ? "translate" : tab === 0 ? "spellcheck" : "enhance"), [tab]);
-  const effectiveActions = useMemo(() => {
-    if (!actions || !actions.length) return ["apply"];
-    return actions;
-  }, [actions]);
 
   useEffect(() => {
     if (!open) return;
     let active = true;
     const loadConfig = async () => {
       try {
+        console.log('[ChatAssistant] Carregando configuração IA...');
         const config = await OpenAIService.getActiveConfig();
+        console.log('[ChatAssistant] Configuração carregada:', config);
         if (!active) return;
         if (config) {
           if (config?.type) {
+            console.log('[ChatAssistant] Definindo provedor:', config.type);
             setProvider(config.type);
             setLockedProvider(true);
           }
           setIntegrationConfig(config);
         } else {
+          console.log('[ChatAssistant] Nenhuma configuração encontrada');
           setLockedProvider(false);
         }
-      } catch (_) {
+      } catch (error) {
+        console.error('[ChatAssistant] Erro ao carregar configuração:', error);
         setLockedProvider(false);
+        
+        // Toast informativo sobre problema de configuração
+        if (window.toast && error?.response?.status) {
+          const status = error.response.status;
+          if (status === 401) {
+            window.toast.warning("🔐 Sem permissão para acessar configurações de IA.");
+          } else if (status === 404) {
+            window.toast.info("⚙️ Nenhuma configuração de IA encontrada. Configure OpenAI ou Gemini.");
+          } else if (status >= 500) {
+            window.toast.error("🔧 Erro no servidor ao carregar configurações de IA.");
+          }
+        }
       }
     };
     loadConfig();
@@ -340,13 +346,26 @@ const ChatAssistantPanel = ({
           summary: contextSummary,
           presets: presets?.map(p => p.label) || [],
           assistantContext,
+          // Mapeia contexto para módulo
+          module: assistantContext === 'ticket' ? 'ticket' : 
+                 assistantContext === 'campaign' ? 'campaign' : 
+                 assistantContext === 'prompt' ? 'prompt' : 'general'
         }
       };
       if (transformMode === "translate") payload.targetLang = targetLang;
+      
+      console.log('[ChatAssistant] Enviando payload:', payload);
+      console.log('[ChatAssistant] Configuração atual:', integrationConfig);
+      
       const { data } = await api.post("/ai/transform", payload);
+      console.log('[ChatAssistant] Resposta recebida:', data);
       setResult(data?.result || "");
     } catch (err) {
-      setError(err?.response?.data?.error || "Falha ao processar texto");
+      console.error('[ChatAssistant] Erro na requisição:', err);
+      
+      // Usa utilitário para tratamento padronizado de erros
+      const errorInfo = showAIErrorToast(err, window.toast || console);
+      setError(errorInfo.message);
     } finally {
       setLoading(false);
     }
@@ -380,12 +399,6 @@ const ChatAssistantPanel = ({
   const closeProviderMenu = () => setProviderAnchor(null);
   const handlePickProvider = (p) => { setProvider(p); closeProviderMenu(); };
 
-  const handleCopy = async () => {
-    if (!result) return;
-    try {
-      await navigator.clipboard.writeText(result);
-    } catch (_) {}
-  };
 
   const applyToEditor = (action) => {
     if (!result) return;
