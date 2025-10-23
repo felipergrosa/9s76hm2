@@ -62,6 +62,10 @@ const useStyles = makeStyles((theme) => ({
     // Remover restrição que causava barra horizontal
     // minWidth: 300,
     minHeight: 200,
+    // CRÍTICO: Força contenção absoluta
+    maxWidth: "100%",
+    boxSizing: "border-box",
+    contain: "layout style",
   },
   loadingCenter: {
     position: 'absolute',
@@ -151,9 +155,13 @@ const useStyles = makeStyles((theme) => ({
     flexGrow: 1,
     padding: "20px 20px 20px 20px",
     overflowY: "auto",
+    overflowX: "hidden", // CRÍTICO: Evita overflow horizontal
     overscrollBehavior: 'contain',
     WebkitOverflowScrolling: 'touch',
     ...theme.scrollbarStyles,
+    // Força contenção dentro do viewport
+    maxWidth: "100%",
+    boxSizing: "border-box",
     [theme.breakpoints.down('sm')]: {
       // Mais espaço inferior para não ficar encoberto pelo composer
       padding: '8px 12px 20px 12px',
@@ -188,10 +196,14 @@ const useStyles = makeStyles((theme) => ({
     marginRight: 20,
     marginTop: 2,
     minWidth: 150,
-    maxWidth: 350,
+    maxWidth: 300,
     height: "auto",
     display: "block",
     position: "relative",
+    // Controle rigoroso de overflow
+    overflow: "hidden",
+    wordWrap: "break-word",
+    wordBreak: "break-word",
     "&:hover #messageActionsButton": {
       display: "flex",
       position: "absolute",
@@ -214,7 +226,7 @@ const useStyles = makeStyles((theme) => ({
     boxShadow: theme.mode === 'light' ? "0 1px 1px #b3b3b3" : "0 1px 1px #000000",
     [theme.breakpoints.down('sm')]: {
       marginRight: 10,
-      maxWidth: 280,
+      maxWidth: 250,
     },
   },
 
@@ -373,8 +385,8 @@ const useStyles = makeStyles((theme) => ({
 
   messageMedia: {
     objectFit: "cover",
-    maxWidth: 320,
-    maxHeight: 240,
+    maxWidth: 250,
+    maxHeight: 180,
     width: "auto",
     height: "auto",
     marginBottom: 12,
@@ -382,9 +394,11 @@ const useStyles = makeStyles((theme) => ({
     borderTopRightRadius: 8,
     borderBottomLeftRadius: 8,
     borderBottomRightRadius: 8,
+    // Força contenção dentro do container
+    display: "block",
     [theme.breakpoints.down('sm')]: {
-      maxWidth: 280,
-      maxHeight: 200,
+      maxWidth: 200,
+      maxHeight: 150,
     },
   },
 
@@ -393,6 +407,9 @@ const useStyles = makeStyles((theme) => ({
     display: "inline-block",
     maxWidth: "100%",
     overflow: "hidden",
+    // Força contenção rigorosa
+    width: "fit-content",
+    boxSizing: "border-box",
   },
 
   hdBadge: {
