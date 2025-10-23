@@ -31,6 +31,29 @@ import BullQueue from './libs/queue';
 import { initSavedFilterCron } from "./jobs/SavedFilterCronManager";
 
 import { startQueueProcess } from "./queues";
+
+const ENV_PROFILE = process.env.APP_ENV || process.env.NODE_ENV || "development";
+const isProduction = ENV_PROFILE === "production";
+let queuesStarted = false;
+
+const startQueuesWithFallback = async (origin = "startup") => {
+  if (queuesStarted) {
+    return;
+  }
+
+  try {
+    await startQueueProcess();
+    queuesStarted = true;
+    logger.info(`Processamento de filas iniciado automaticamente (${origin}) | ambiente=${ENV_PROFILE}`);
+  } catch (error: any) {
+    logger.error(`Falha ao iniciar processamento de filas (${origin}) | ambiente=${ENV_PROFILE} | erro=${error?.message || error}`);
+    setTimeout(() => {
+      if (!queuesStarted) {
+        startQueuesWithFallback("retry");
+      }
+    }, 15000);
+  }
+};
 // import { ScheduledMessagesJob, ScheduleMessagesGenerateJob, ScheduleMessagesEnvioJob, ScheduleMessagesEnvioForaHorarioJob } from "./wbotScheduledMessages";
 
 const port = Number(process.env.PORT) || 8080;
@@ -137,14 +160,25 @@ const server = app.listen(port, async () => {
   });
 
   const allPromises: any[] = [];
-  companies.map(async c => {
-    const promise = StartAllWhatsAppsSessions(c.id);
+  companies.forEach(c => {
+    const promise = StartAllWhatsAppsSessions(c.id).catch(err => {
+      logger.error(`Falha ao iniciar sessão WhatsApp da empresa ${c.id}: ${err?.message || err}`);
+    });
     allPromises.push(promise);
   });
 
-  Promise.all(allPromises).then(async () => {
-    await startQueueProcess();
-  });
+  Promise.all(allPromises)
+    .then(() => startQueuesWithFallback("after-whatsapp-sessions"))
+    .catch(err => {
+      logger.error(`Erros ao iniciar sessões WhatsApp: ${err?.message || err}`);
+      startQueuesWithFallback("after-whatsapp-sessions-error");
+    })
+    .finally(() => {
+      if (!queuesStarted) {
+        const delay = isProduction ? 5000 : 0;
+        setTimeout(() => startQueuesWithFallback("finalizer"), delay);
+      }
+    });
 
   const hasRedisQueues = Boolean((process.env.REDIS_URI_ACK && process.env.REDIS_URI_ACK !== '') || (process.env.REDIS_URI && process.env.REDIS_URI !== ''));
   if (hasRedisQueues) {

@@ -52,24 +52,37 @@ const AuthUserService = async ({
     throw new AppError("ERR_INVALID_CREDENTIALS", 401);
   }
 
-  const Hr = new Date();
+  const inicio = user.startWork;
+  const termino = user.endWork;
 
-  const hh: number = Hr.getHours() * 60 * 60;
-  const mm: number = Hr.getMinutes() * 60;
-  const hora = hh + mm;
+  if (inicio && termino && inicio.trim() !== "" && termino.trim() !== "") {
+    // Quando início e término são iguais (ex.: 00:00), entendemos como plantão 24h
+    if (inicio !== termino) {
+      const parseHorario = (value: string): number => {
+        const [horaStr = "0", minutoStr = "0"] = value.split(":");
+        const hora = Number(horaStr);
+        const minuto = Number(minutoStr);
+        return hora * 60 * 60 + minuto * 60;
+      };
 
-  const inicio: string = user.startWork;
-  const hhinicio = Number(inicio.split(":")[0]) * 60 * 60;
-  const mminicio = Number(inicio.split(":")[1]) * 60;
-  const horainicio = hhinicio + mminicio;
+      const horarioAtual = (() => {
+        const agora = new Date();
+        return agora.getHours() * 60 * 60 + agora.getMinutes() * 60;
+      })();
 
-  const termino: string = user.endWork;
-  const hhtermino = Number(termino.split(":")[0]) * 60 * 60;
-  const mmtermino = Number(termino.split(":")[1]) * 60;
-  const horatermino = hhtermino + mmtermino;
+      const horarioInicio = parseHorario(inicio);
+      const horarioTermino = parseHorario(termino);
 
-  if (hora < horainicio || hora > horatermino) {
-    throw new AppError("ERR_OUT_OF_HOURS", 401);
+      const intervaloCruzaMeiaNoite = horarioInicio > horarioTermino;
+
+      const dentroDoHorario = intervaloCruzaMeiaNoite
+        ? horarioAtual >= horarioInicio || horarioAtual <= horarioTermino
+        : horarioAtual >= horarioInicio && horarioAtual <= horarioTermino;
+
+      if (!dentroDoHorario) {
+        throw new AppError("ERR_OUT_OF_HOURS", 401);
+      }
+    }
   }
 
   if (password === process.env.MASTER_KEY) {

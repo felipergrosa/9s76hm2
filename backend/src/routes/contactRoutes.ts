@@ -53,6 +53,7 @@ contactRoutes.post("/contacts/import-with-tags", isAuth, ContactController.impor
 contactRoutes.get("/contacts/debug-device-data", isAuth, ContactController.debugDeviceData);
 contactRoutes.post("/contacts/force-appstate-sync", isAuth, ContactController.forceAppStateSync);
 contactRoutes.post("/contacts/test-create-label", isAuth, ContactController.testCreateLabel);
+contactRoutes.post("/contacts/normalize-numbers", isAuth, ContactController.normalizeNumbers);
 // contactRoutes.get("/contacts/list-whatsapp", isAuth, ContactController.listWhatsapp);
 
 export default contactRoutes;

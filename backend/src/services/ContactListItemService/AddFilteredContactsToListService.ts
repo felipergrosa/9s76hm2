@@ -35,6 +35,32 @@ interface Response {
   errors: number;
 }
 
+const normalizePhoneNumber = (value: string | null | undefined): { normalized: string | null; digits: string } => {
+  const digitsOnly = String(value ?? "").replace(/\D/g, "");
+  if (!digitsOnly) {
+    return { normalized: null, digits: "" };
+  }
+  let normalized = digitsOnly.replace(/^0+/, "");
+  if (!normalized) {
+    return { normalized: null, digits: "" };
+  }
+  if (!normalized.startsWith("55") && normalized.length >= 10 && normalized.length <= 11) {
+    normalized = `55${normalized}`;
+  }
+  return { normalized, digits: normalized };
+};
+
+const registerNumber = (
+  value: string | null | undefined,
+  numbers: Set<string>,
+  digitsSet: Set<string>
+): void => {
+  if (!value) return;
+  numbers.add(value);
+  const digits = String(value).replace(/\D/g, "");
+  if (digits) digitsSet.add(digits);
+};
+
 const AddFilteredContactsToListService = async ({
   contactListId,
   companyId,
@@ -406,84 +432,93 @@ const AddFilteredContactsToListService = async ({
 
     for (const contact of contacts) {
       try {
-        // Verificar duplicidade por número (e como fallback por email)
-        const rawNumber = contact.number || "";
-        const normalizedCandidate = String(rawNumber).replace(/\D/g, "");
+        const rawNumber = contact.number ? String(contact.number) : "";
+        const digitsRaw = rawNumber.replace(/\D/g, "");
+        const { normalized: normalizedNumber, digits: normalizedDigits } = normalizePhoneNumber(contact.number);
+        const hasNormalized = !!normalizedNumber;
+
         const isDuplicateByNumber =
-          (rawNumber && (existingNumbers.has(rawNumber) || existingNumbersDigits.has(normalizedCandidate))) ||
-          (normalizedCandidate && existingNumbersDigits.has(normalizedCandidate));
-          
+          (!!rawNumber && existingNumbers.has(rawNumber)) ||
+          (hasNormalized && existingNumbers.has(normalizedNumber!)) ||
+          (!!digitsRaw && existingNumbersDigits.has(digitsRaw)) ||
+          (!!normalizedDigits && existingNumbersDigits.has(normalizedDigits));
+
         const isDuplicateByEmail = contact.email && existingEmails.has(contact.email);
-        
+
         if (isDuplicateByNumber || isDuplicateByEmail) {
           logger.debug(`Contato duplicado por ${isDuplicateByNumber ? 'número' : 'email'}: ${contact.name} (${contact.number || contact.email})`);
           duplicated++;
           continue;
         }
 
+        // Validar número antes de inserir
+        let validationStatus: 'valid' | 'invalid' | 'unknown' = 'unknown';
+        let validatedNumber: string | null = null;
+        const numberToCheck = hasNormalized ? normalizedNumber! : (contact.number ? String(contact.number) : null);
+
+        if (numberToCheck) {
+          try {
+            const response = await CheckContactNumber(numberToCheck, companyId);
+            if (response) {
+              validationStatus = 'valid';
+              validatedNumber = response;
+            }
+          } catch (e: any) {
+            const msg = e?.message || "";
+            if (
+              msg === "invalidNumber" ||
+              msg === "ERR_WAPP_INVALID_CONTACT" ||
+              /não está cadastrado/i.test(msg)
+            ) {
+              validationStatus = 'invalid';
+              logger.info(`[AddFilteredContacts] número inválido – contato ignorado`, {
+                number: numberToCheck,
+                contactListId,
+                companyId
+              });
+            } else {
+              validationStatus = 'unknown';
+              logger.warn(`[AddFilteredContacts] falha ao validar número no WhatsApp; mantendo verificação como desconhecida`, {
+                number: numberToCheck,
+                contactListId,
+                companyId,
+                error: msg
+              });
+            }
+          }
+        }
+
+        if (validationStatus === 'invalid') {
+          errors++;
+          continue;
+        }
+
+        const finalNumber = validatedNumber || (hasNormalized ? normalizedNumber : contact.number);
+
         // Adicionar contato à lista
         const newItem = await ContactListItem.create({
           contactListId,
           name: contact.name,
-          number: contact.number,
+          number: finalNumber,
           email: contact.email,
-          companyId
+          companyId,
+          city: (contact as any).city || null,
+          segment: (contact as any).segment || null,
+          situation: (contact as any).situation || null,
+          creditLimit: (contact as any).creditLimit || null,
+          bzEmpresa: (contact as any).bzEmpresa || null,
+          isWhatsappValid: validationStatus === 'valid' ? true : null
         });
-        
+
         // Atualizar os conjuntos de verificação para evitar duplicatas na mesma execução
         if (contact.number) {
-          existingNumbers.add(contact.number);
-          const normalized = String(contact.number).replace(/\D/g, "");
-          if (normalized) existingNumbersDigits.add(normalized);
+          registerNumber(contact.number, existingNumbers, existingNumbersDigits);
         }
-        if (contact.email) existingEmails.add(contact.email);
-
-        // Validar número WhatsApp imediatamente (mesma lógica do ImportContacts)
-        try {
-          const response = await CheckContactNumber(newItem.number, companyId);
-          newItem.isWhatsappValid = response ? true : false;
-          if (response) {
-            const formattedNumber = response; // serviço retorna número normalizado
-            newItem.number = formattedNumber;
-          }
-          await newItem.save();
-        } catch (e: any) {
-          const msg = e?.message || "";
-          if (
-            msg === "invalidNumber" ||
-            msg === "ERR_WAPP_INVALID_CONTACT" ||
-            /não está cadastrado/i.test(msg)
-          ) {
-            newItem.isWhatsappValid = false as any;
-            await newItem.save();
-            logger.info(`[AddFilteredContacts] número inválido`, {
-              number: newItem.number,
-              contactListId,
-              companyId
-            });
-          } else {
-            // Falha transitória (ex.: sessão/token inválido). Não marcar como falso.
-            newItem.isWhatsappValid = null as any;
-            await newItem.save();
-            logger.warn(`[AddFilteredContacts] falha ao validar número no WhatsApp; mantendo isWhatsappValid=null`, {
-              number: newItem.number,
-              contactListId,
-              companyId,
-              error: msg
-            });
-          }
+        if (hasNormalized) {
+          registerNumber(normalizedNumber!, existingNumbers, existingNumbersDigits);
         }
-
-        // Atualiza caches locais para evitar nova inserção duplicada no mesmo loop
-        if (contact.number) {
-          existingNumbers.add(contact.number);
-          const digits = String(contact.number).replace(/\D/g, "");
-          if (digits) existingNumbersDigits.add(digits);
-        }
-        if (newItem.number) {
-          existingNumbers.add(newItem.number);
-          const digits = String(newItem.number).replace(/\D/g, "");
-          if (digits) existingNumbersDigits.add(digits);
+        if (finalNumber) {
+          registerNumber(finalNumber, existingNumbers, existingNumbersDigits);
         }
         if (contact.email) existingEmails.add(contact.email);
 

@@ -892,7 +892,7 @@ const messages = {
           helps: "Ajuda",
           messagesAPI: "API",
           schedules: "Agendamentos",
-          campaigns: "Campanhas",
+          campaigns: "Envio em Massa",
           annoucements: "Informativos",
           chats: "Chat Interno",
           financeiro: "Financeiro",
@@ -1114,7 +1114,7 @@ const messages = {
         title: "Campanhas",
         searchPlaceholder: "Pesquisa",
         subMenus: {
-          list: "Listagem",
+          list: "Campanhas",
           listContacts: "Lista de contatos",
           settings: "Configurações",
         },

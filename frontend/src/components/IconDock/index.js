@@ -1,6 +1,6 @@
 import React from "react";
 import { Tooltip } from "@material-ui/core";
-import { List as ListIcon, Upload as UploadIcon, Filter as FilterIcon, Plus as PlusIcon, Trash2, RefreshCw, Eraser } from "lucide-react";
+import { List as ListIcon, Upload as UploadIcon, Filter as FilterIcon, Plus as PlusIcon, Trash2, RefreshCw, Eraser, UserPlus } from "lucide-react";
 
 // Dock minimalista: apenas ícones, alinhados, com tooltip.
 // Props: actions = [{ id, icon: JSX, label, onClick, disabled }]
@@ -36,6 +36,7 @@ export const DefaultIconSet = ({ color = "currentColor", size = 20, strokeWidth 
   lists: <ListIcon size={size} color={color} strokeWidth={strokeWidth} />,
   import: <UploadIcon size={size} color={color} strokeWidth={strokeWidth} />,
   filter: <FilterIcon size={size} color={color} strokeWidth={strokeWidth} />,
+  addManual: <UserPlus size={size} color={color} strokeWidth={strokeWidth} />,
   add: <PlusIcon size={size} color={color} strokeWidth={strokeWidth} />,
   clearItems: <Trash2 size={size} color={color} strokeWidth={strokeWidth} />,
   syncNow: <RefreshCw size={size} color={color} strokeWidth={strokeWidth} />,

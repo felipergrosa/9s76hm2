@@ -31,4 +31,10 @@ routes.post(
   ContactListItemController.addFilteredContacts
 );
 
+routes.post(
+  "/contact-list-items/:contactListId/add-manual-contacts",
+  isAuth,
+  ContactListItemController.addManualContacts
+);
+
 export default routes;

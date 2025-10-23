@@ -233,3 +233,104 @@ export const addFilteredContacts = async (
     return res.status(400).json({ error: error.message });
   }
 };
+
+export const addManualContacts = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  try {
+    const { companyId } = req.user;
+    const { contactListId } = req.params;
+    const { contactIds } = req.body as { contactIds: number[] };
+
+    if (!Array.isArray(contactIds) || contactIds.length === 0) {
+      return res.status(400).json({ error: "Lista de contatos é obrigatória" });
+    }
+
+    logger.info('Adicionando contatos manualmente à lista', {
+      contactListId,
+      contactIds,
+      count: contactIds.length
+    });
+
+    // Buscar contatos válidos
+    const Contact = require("../models/Contact").default;
+    const contacts = await Contact.findAll({
+      where: {
+        id: { [require("sequelize").Op.in]: contactIds },
+        companyId,
+        isWhatsappValid: true
+      },
+      attributes: ['id', 'name', 'number', 'email', 'city', 'segment', 'situation', 'creditLimit', 'bzEmpresa']
+    });
+
+    if (contacts.length === 0) {
+      return res.status(400).json({ error: "Nenhum contato válido encontrado" });
+    }
+
+    // Verificar duplicatas existentes na lista
+    const existingItems = await ContactListItem.findAll({
+      where: {
+        contactListId: parseInt(contactListId, 10),
+        companyId,
+        number: { [require("sequelize").Op.in]: contacts.map(c => c.number) }
+      },
+      attributes: ['number']
+    });
+
+    const existingNumbers = new Set(existingItems.map(item => item.number));
+    const contactsToAdd = contacts.filter(contact => !existingNumbers.has(contact.number));
+
+    if (contactsToAdd.length === 0) {
+      return res.status(400).json({ 
+        error: "Todos os contatos selecionados já estão na lista",
+        duplicated: contacts.length
+      });
+    }
+
+    // Criar itens da lista
+    const newItems = await Promise.all(
+      contactsToAdd.map(contact => 
+        ContactListItem.create({
+          contactListId: parseInt(contactListId, 10),
+          name: contact.name,
+          number: contact.number,
+          email: contact.email || "",
+          companyId,
+          isWhatsappValid: true
+        })
+      )
+    );
+
+    const result = {
+      added: newItems.length,
+      duplicated: contacts.length - contactsToAdd.length,
+      errors: contactIds.length - contacts.length
+    };
+
+    // Recarregar lista via socket
+    const { contacts: updatedContacts } = await ListService({
+      searchParam: "",
+      pageNumber: "1",
+      companyId,
+      contactListId: parseInt(contactListId, 10)
+    });
+
+    const io = getIO();
+    io.of(`/workspace-${companyId}`)
+      .emit(`company-${companyId}-ContactListItem`, {
+        action: "reload",
+        records: updatedContacts
+      });
+
+    return res.status(200).json(result);
+  } catch (error: any) {
+    logger.error('Erro ao adicionar contatos manualmente:', {
+      message: error.message,
+      stack: error.stack,
+      contactListId: req.params.contactListId,
+      contactIds: req.body.contactIds
+    });
+    return res.status(400).json({ error: error.message });
+  }
+};

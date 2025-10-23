@@ -21,6 +21,7 @@ import ContactListItemModal from "../../components/ContactListItemModal";
 import ContactModal from "../../components/ContactModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import AddFilteredContactsModal from "../../components/AddFilteredContactsModal";
+import AddManualContactsModal from "../../components/AddManualContactsModal";
 
 import { i18n } from "../../translate/i18n";
  
@@ -128,6 +129,7 @@ const ContactListItems = () => {
   const [hasMore, setHasMore] = useState(false);
   const [contactList, setContactList] = useState({});
   const [filterModalOpen, setFilterModalOpen] = useState(false);
+  const [manualContactsModalOpen, setManualContactsModalOpen] = useState(false);
   const [allTags, setAllTags] = useState([]);
   const fileUploadRef = useRef(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -369,6 +371,23 @@ const ContactListItems = () => {
 
   const handleCloseFilterModal = () => {
     setFilterModalOpen(false);
+  };
+
+  const handleOpenManualContactsModal = () => {
+    setManualContactsModalOpen(true);
+  };
+
+  const handleCloseManualContactsModal = () => {
+    setManualContactsModalOpen(false);
+  };
+
+  const handleManualContactsSuccess = () => {
+    // Recarregar lista após adicionar contatos manualmente
+    dispatch({ type: "RESET" });
+    setSearchParam("");
+    setPageNumber(1);
+    setRefreshKey((k) => k + 1);
+    refreshContactList();
   };
 
   // Persistência de ordenação (por usuário/lista)
@@ -707,6 +726,12 @@ const ContactListItems = () => {
             setRefreshKey((k) => k + 1);
           }}
         />
+        <AddManualContactsModal
+          open={manualContactsModalOpen}
+          onClose={handleCloseManualContactsModal}
+          contactListId={contactListId}
+          onSuccess={handleManualContactsSuccess}
+        />
       {/* Confirmação para limpar todos os itens da lista */}
       <ConfirmationModal
         title={"Limpar itens da lista"}
@@ -778,6 +803,7 @@ const ContactListItems = () => {
                 actions={[
                   { id: 'import', label: i18n.t("contactListItems.buttons.import"), onClick: () => { if (fileUploadRef.current) { fileUploadRef.current.value = null; fileUploadRef.current.click(); } }, icon: DefaultIconSet({ color: '#111' }).import },
                   { id: 'filter', label: 'Filtrar', onClick: handleOpenFilterModal, icon: DefaultIconSet({ color: '#111' }).filter, active: filterModalOpen },
+                  { id: 'addManual', label: 'Adicionar contatos manualmente', onClick: handleOpenManualContactsModal, icon: DefaultIconSet({ color: '#059669' }).addManual },
                   { id: 'clearItems', label: 'Limpar itens da lista', onClick: () => setConfirmClearListOpen(true), icon: DefaultIconSet({ color: '#b91c1c' }).clearItems },
                   { id: 'syncNow', label: 'Sincronizar agora', onClick: handleSyncNow, icon: DefaultIconSet({ color: '#065f46' }).syncNow },
                 ]}

@@ -42,6 +42,7 @@ import NumberSimpleListService from "../services/ContactServices/NumberSimpleLis
 import CreateOrUpdateContactServiceForImport from "../services/ContactServices/CreateOrUpdateContactServiceForImport";
 import UpdateContactWalletsService from "../services/ContactServices/UpdateContactWalletsService";
 import BulkUpdateContactsService from "../services/ContactServices/BulkUpdateContactsService";
+import NormalizeContactNumbersService from "../services/ContactServices/NormalizeContactNumbersService";
 
 import FindContactTags from "../services/ContactServices/FindContactTags";
 import { log } from "console";
@@ -1374,5 +1375,25 @@ export const getContactProfileURL = async (req: Request, res: Response) => {
     } catch (error: any) {
       logger.error("Erro ao criar label de teste:", error);
       return res.status(500).json({ error: error?.message || "Erro ao criar label de teste" });
+    }
+  };
+
+  export const normalizeNumbers = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+    const { companyId } = req.user;
+    const { dryRun = false } = req.body;
+
+    try {
+      const result = await NormalizeContactNumbersService({
+        companyId,
+        dryRun: Boolean(dryRun)
+      });
+
+      return res.status(200).json(result);
+    } catch (error: any) {
+      logger.error("Erro ao normalizar números de contatos:", error);
+      return res.status(500).json({ 
+        error: "Erro interno do servidor",
+        message: error?.message || "Erro desconhecido"
+      });
     }
   };
