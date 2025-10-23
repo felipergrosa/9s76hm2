@@ -33,6 +33,7 @@ interface Request {
   cpfCnpj?: string;
   representativeCode?: string;
   city?: string;
+  region?: string;
   instagram?: string;
   situation?: 'Ativo' | 'Baixado' | 'Ex-Cliente' | 'Excluido' | 'Futuro' | 'Inativo';
   fantasyName?: string;
@@ -62,6 +63,7 @@ const CreateContactService = async ({
                                       cpfCnpj,
                                       representativeCode,
                                       city,
+                                      region,
                                       instagram,
                                       situation,
                                       fantasyName,
@@ -161,6 +163,7 @@ const CreateContactService = async ({
     cpfCnpj: string | null;
     representativeCode: string | null;
     city: string | null;
+    region: string | null;
     instagram: string | null;
     situation: string;
     fantasyName: string | null;
@@ -191,6 +194,7 @@ const CreateContactService = async ({
     cpfCnpj: emptyToNull(cpfCnpj),
     representativeCode: emptyToNull(representativeCode),
     city: emptyToNull(city),
+    region: emptyToNull(region),
     instagram: emptyToNull(instagram),
     situation: situation || 'Ativo',
     fantasyName: emptyToNull(fantasyName),

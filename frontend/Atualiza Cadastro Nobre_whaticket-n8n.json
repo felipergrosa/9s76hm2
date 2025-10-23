@@ -1,0 +1,333 @@
+{
+  "name": "Atualiza Cadastro Nobre/whaticket",
+  "nodes": [
+    {
+      "parameters": {
+        "functionCode": "const lista = items.map(i => ({\n  cnpj: i.json.Cnpj_Cnpf,\n  razao: i.json.RzCliente,\n  alterado: i.json.DtAlteracao\n}));\n\nconsole.log('📋 Contatos filtrados para sync:', lista);\n\nreturn items;"
+      },
+      "id": "15d64cb3-1adf-4a5b-9d03-f3eec8410f63",
+      "name": "Debug Contatos Filtrados",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        608,
+        -960
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "b9977e2e-dc56-4938-935b-8dfa5cabe726",
+      "name": "Schedule Trigger1",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -256,
+        -1184
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "/*\n  Este SELECT busca clientes ativos/inativos/ex-clientes da empresa 97, \n  filtrando por segmento específico e por data de alteração.\n\n  ⚠️ IMPORTANTE:\n  Foi adicionado um filtro no bloco WHERE para garantir que somente registros \n  com **ao menos um número de telefone válido** sejam retornados.\n  O filtro verifica se existe algum dos seguintes dados com valor preenchido, \n  após limpeza de caracteres como parênteses, traços e espaços:\n  \n    - F_WhatsApp1\n    - F_Ddd1 + F_Telefone1\n    - C_Ddd1 + C_Telefone1\n    - E_Ddd1 + E_Telefone1\n\n  Essa validação evita erros na integração com o Whaticket, que exige um número de telefone no campo \"number\".\n*/\n\nSELECT TOP 100\n  -- Identificação principal\n  C.Cnpj_Cnpf,\n  C.FsCliente,\n  C.RzCliente,\n  C.FlTipo,\n  C.Ie_Rg,\n  \n  -- Contatos principais\n  COALESCE(\n    NULLIF(LOWER(C.Email1), ''),\n    NULLIF(LOWER(C.Email2), ''),\n    NULLIF(LOWER(C.Email3), ''),\n    NULLIF(LOWER(C.F_Email1), ''),\n    NULLIF(LOWER(C.C_Email1), ''),\n    NULLIF(LOWER(C.E_Email1), '')\n  ) AS EmailValido,\n\n  -- Whatsapp mais provável\n  COALESCE(\n    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(C.F_WhatsApp1, '(', ''), ')', ''), '-', ''), ' ', ''), ''),\n    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.F_Ddd1, C.F_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), ''),\n    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.C_Ddd1, C.C_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), ''),\n    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.E_Ddd1, C.E_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '')\n  ) AS WhatsAppValido,\n\n  -- Telefones tratados\n  REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.F_Ddd1, C.F_Telefone1), '(', ''), ')', ''), '-', ''), ' ', '') AS Telefone1,\n  REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.C_Ddd1, C.C_Telefone1), '(', ''), ')', ''), '-', ''), ' ', '') AS Telefone2,\n  REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.E_Ddd1, C.E_Telefone1), '(', ''), ')', ''), '-', ''), ' ', '') AS Telefone3,\n\n  -- Endereço/Bairro/Cidade/UF\n  UPPER(LTRIM(RTRIM(REPLACE(COALESCE(NULLIF(C.F_Endereco, ''), NULLIF(C.C_Endereco, ''), NULLIF(C.E_Endereco, '')), '  ', ' ')))) AS EnderecoValido,\n  UPPER(LTRIM(RTRIM(REPLACE(COALESCE(NULLIF(C.F_Bairro,   ''), NULLIF(C.C_Bairro,   ''), NULLIF(C.E_Bairro,   '')), '  ', ' ')))) AS BairroValido,\n  UPPER(LTRIM(RTRIM(REPLACE(COALESCE(NULLIF(C.F_Cidade,   ''), NULLIF(C.C_Cidade,   ''), NULLIF(C.E_Cidade,   '')), '  ', ' ')))) AS CidadeValido,\n  UPPER(LTRIM(RTRIM(COALESCE(NULLIF(C.F_Estado, ''), NULLIF(C.C_Estado, ''), NULLIF(C.E_Estado, ''))))) AS EstadoValido,\n\n  -- CEP / Município\n  REPLACE(COALESCE(NULLIF(C.F_Cep, ''), NULLIF(C.C_Cep, ''), NULLIF(C.E_Cep, '')), ' ', '') AS CepValido,\n  REPLACE(COALESCE(NULLIF(C.F_CdMunicipio, ''), NULLIF(C.C_CdMunicipio, ''), NULLIF(C.E_CdMunicipio, '')), ' ', '') AS CodMunicipioValido,\n\n  -- Segmento\n  C.CdSegmento,\n  CONCAT(RTRIM(C.CdSegmento), ' - ', LTRIM(RTRIM(SM.DsSegmento))) AS DsSegmento,\n\n  -- Região (apenas a descrição)\n  LTRIM(RTRIM(RG.DsRegiao)) AS DsRegiao,\n\n  -- Outros campos\n  C.Ativo_Inativo_ExCliente,\n\n  -- Código do representante\n  C.CdRepresentante,\n\n  -- Código + Nome do representante\n  CONCAT(RTRIM(C.CdRepresentante), ' - ', COALESCE(RTRIM(R.Fsrepresentante), '')) AS CdRepresentante_Nome,\n\n  C.DtFundacao,\n  C.DtAlteracao,\n  C.FlTrabalhaEncomenda,\n  C.DtUltCompra,\n  E.FsEmpresa,\n\n  -- Limite de crédito\n  CAST(ISNULL(LC.LimiteCredito, 0) AS money) AS CreditLimit,\n  \n  -- Última compra\n  CAST(ISNULL(LC.VlUltCompra, 0) AS money) AS UltimaCompra\n\nFROM nobregerencia.dbo.BusinessCadCliente AS C\n\n-- JOIN com os dados financeiros\nLEFT JOIN nobregerencia.dbo.BusinessCadClienteLC AS LC\n  ON LC.Cnpj_Cnpf = C.Cnpj_Cnpf\n\n-- JOIN com a tabela de Segmento de Mercado\nLEFT JOIN nobregerencia.dbo.BusinessCadSegMercado AS SM\n  ON C.CdSegmento = SM.CdSegmento\n\n-- JOIN com a tabela de empresas\nLEFT JOIN nobregerencia.dbo.BusinessCadEmpresa AS E\n  ON LC.CdEmpresa = E.CdEmpresa\n\n-- JOIN com a tabela de representantes\nLEFT JOIN nobregerencia.dbo.BusinessCadRepresentante AS R\n  ON R.CdRepresentante = C.CdRepresentante\n\n-- JOIN com a tabela de regiões (para DsRegiao)\nLEFT JOIN nobregerencia.dbo.BusinessCadRegiao AS RG\n  ON RG.CdRegiao = C.CdRegiao\n\nWHERE\n      LC.CdEmpresa = 97\n  AND C.Cnpj_Cnpf IS NOT NULL \n  AND C.Cnpj_Cnpf <> ''\n  AND C.Ativo_Inativo_ExCliente IN ('Ativo','Inativo','Excluido','Ex-Cliente','Baixado','Futuro','Excluído')\n  AND C.DtAlteracao < CAST(GETDATE() AS DATE)\n  AND C.CdSegmento IN (17, 19, 27, 28, 61, 68, 72, 74, 77, 54)\n\n  --  Filtro adicional: precisa ter ao menos UM telefone válido\n  AND (\n    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(C.F_WhatsApp1, '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL\n    OR NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.F_Ddd1, C.F_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL\n    OR NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.C_Ddd1, C.C_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL\n    OR NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.E_Ddd1, C.E_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL\n  );"
+      },
+      "id": "164e6ffb-bdce-4794-987d-9dda5fbd8af1",
+      "name": "Busca Clientes SQL",
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1,
+      "position": [
+        -64,
+        -1184
+      ],
+      "credentials": {
+        "microsoftSql": {
+          "id": "347YbKVdQ6hSkPU6",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const staticData = this.getWorkflowStaticData('global');\nconst marginMinutes = Number(staticData.syncMarginMinutes ?? 2);\nconst lastSyncIso = staticData.lastSyncDate;\nlet cutoff = null;\n\nif (lastSyncIso) {\n  const parsed = new Date(lastSyncIso);\n  if (!Number.isNaN(parsed.getTime())) {\n    const marginMs = Math.max(marginMinutes, 0) * 60000;\n    cutoff = new Date(parsed.getTime() - marginMs);\n  }\n}\n\nconst filtered = [];\n\nfor (const item of items) {\n  const rawDate = item.json.DtAlteracao ?? item.json.dtAlteracao ?? null;\n  const dt = rawDate ? new Date(rawDate) : null;\n\n  if (!dt || Number.isNaN(dt.getTime())) {\n    console.log('⚠️ Registro ignorado por DtAlteracao inválida:', rawDate);\n    continue;\n  }\n\n  item.json.__dtAlteracaoISO = dt.toISOString();\n\n  if (!cutoff || dt >= cutoff) {\n    filtered.push(item);\n  }\n}\n\nlet maxDate = null;\nfor (const item of filtered) {\n  const candidate = new Date(item.json.__dtAlteracaoISO);\n  if (!Number.isNaN(candidate.getTime())) {\n    if (!maxDate || candidate > maxDate) {\n      maxDate = candidate;\n    }\n  }\n}\n\nif (maxDate) {\n  staticData.pendingLastSyncDate = maxDate.toISOString();\n  staticData.pendingLastSyncCount = filtered.length;\n} else {\n  staticData.pendingLastSyncCount = 0;\n}\n\nstaticData.lastQueryCount = items.length;\n\nconsole.log('🧮 Registros considerados para sync:', filtered.length, 'de', items.length, '- limite desde', cutoff ? cutoff.toISOString() : 'início');\nif (maxDate) {\n  console.log('⏱️ Próxima referência de última alteração:', maxDate.toISOString());\n} else {\n  console.log('ℹ️ Nenhum registro elegível para atualizar lastSyncDate.');\n}\n\nreturn filtered;"
+      },
+      "id": "f9e2150c-b215-4086-a006-25fb4a78462b",
+      "name": "Filtra por DtAlteracao",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -1184
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "Cnpj_Cnpf",
+              "value": "={{$json.Cnpj_Cnpf}}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.EmailValido }}"
+            },
+            {
+              "name": "FsCliente",
+              "value": "={{ $json.FsCliente }}"
+            },
+            {
+              "name": "RzCliente",
+              "value": "={{$json.RzCliente}}"
+            },
+            {
+              "name": "DtAlteracao",
+              "value": "={{$json.DtAlteracao}}"
+            },
+            {
+              "name": "segmento",
+              "value": "={{ $json.DsSegmento }}"
+            },
+            {
+              "name": "empresa",
+              "value": "={{ $json.FsEmpresa }}"
+            },
+            {
+              "name": "regiao",
+              "value": "={{ $json.DsRegiao }}"
+            }
+          ],
+          "number": [
+            {
+              "name": "F_WhatsApp1",
+              "value": "={{ $json.WhatsAppValido }}"
+            }
+          ]
+        },
+        "options": {
+          "dotNotation": true
+        }
+      },
+      "id": "25b84f67-9c2b-40ae-b927-61e23d4a4cbb",
+      "name": "Mapeia Campos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        384,
+        -1184
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Body Whaticket com filtro de e-mail, número, tag dinâmica e situação normalizada\n\nreturn items\n  .map(item => {\n    const j = item.json;\n\n    // 📞 Número tratado\n    const raw = String(j.WhatsAppValido ?? '').trim();\n    const digits = raw.replace(/[^0-9]/g, '');\n    const number = digits\n      ? digits.startsWith('55')\n        ? digits\n        : '55' + digits\n      : '';\n\n    // 📧 E-mail válido\n    const rawEmail = String(j.EmailValido ?? '').trim().toLowerCase();\n    const isValidEmail =\n      rawEmail &&\n      !['null', 'undefined', '', '[empty]', 'xxx'].includes(rawEmail) &&\n      /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(rawEmail);\n\n    // 🏷️ Tag dinâmica\n    let tag = 'CLIENTES';\n    const seg = Number(j.CdSegmento);\n    if (seg === 54) {\n      tag = 'REPRESENTANTES';\n    } else if ([17, 19, 27, 28, 61, 68, 72, 74, 77].includes(seg)) {\n      tag = 'CLIENTES';\n    }\n\n    // 📌 Situação normalizada para os valores aceitos pela API\n    const rawSituation = String(j.Ativo_Inativo_ExCliente ?? '').trim();\n    let situation = 'Ativo';\n    if (\n      ['Ativo', 'Inativo', 'Excluido', 'Ex-Cliente', 'Baixado', 'Futuro'].includes(\n        rawSituation\n      )\n    ) {\n      situation = rawSituation;\n    } else if (rawSituation === 'Excluído') {\n      situation = 'Excluido'; // normaliza acento\n    }\n\n    // 🧱 Monta o body\n    const body = {\n      companyId: 1,\n      name: String(j.RzCliente ?? '').trim(),\n      number,\n      fantasyName: String(j.FsCliente ?? '').trim(),\n      situation,\n      email: isValidEmail ? rawEmail : undefined,\n      cpfCnpj: String(j.Cnpj_Cnpf ?? '').replace(/[^0-9]/g, '') || undefined,\n      city: String(j.CidadeValido ?? '').trim() || undefined,\n      segmento: String(j.DsSegmento ?? '').trim() || undefined,\n      creditLimit: String(j.CreditLimit ?? '').trim() || undefined,\n      representativeCode: String(j.CdRepresentante_Nome ?? '').trim() || undefined,\n      empresa: String(j.FsEmpresa ?? '').trim() || undefined,\n      tags: tag,\n      regiao: String(j.DsRegiao ?? '').trim() || undefined,\n    };\n\n    // 📅 Trata data de fundação\n    if (j.DtFundacao) {\n      try {\n        body.foundationDate = new Date(j.DtFundacao).toISOString();\n      } catch (e) {\n        // ignora erros de data inválida\n      }\n    }\n\n    // 🧹 Remove campos undefined\n    Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);\n\n    return { json: body };\n  })\n  // 🛑 Filtra se não tiver número (evita erro 400)\n  .filter(item => !!item.json.number);"
+      },
+      "id": "e489b52d-2ac8-4d79-ac8b-3cff82cf958d",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        -1184
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://chatsapi.nobreluminarias.com.br/api/contacts/sync",
+        "options": {
+          "timeout": 30000,
+          "retry": {
+            "enabled": true,
+            "maxTries": 3
+          }
+        },
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "companyId",
+              "value": "=1"
+            },
+            {
+              "name": "name",
+              "value": "={{ $json.name }}"
+            },
+            {
+              "name": "number",
+              "value": "={{ $json.number }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.email }}"
+            },
+            {
+              "name": "representativeCode",
+              "value": "={{ $json.representativeCode }}"
+            },
+            {
+              "name": "city",
+              "value": "={{ $json.city }}"
+            },
+            {
+              "name": "situation",
+              "value": "={{ $json.situation }}"
+            },
+            {
+              "name": "fantasyName",
+              "value": "={{ $json.fantasyName }}"
+            },
+            {
+              "name": "foundationDate",
+              "value": "={{ $json.foundationDate }}"
+            },
+            {
+              "name": "creditLimit",
+              "value": "={{ $json.creditLimit }}"
+            },
+            {
+              "name": "=segment",
+              "value": "={{ $json.segmento }}"
+            },
+            {
+              "name": "tags",
+              "value": "={{ $json.tags }}"
+            },
+            {
+              "name": "bzEmpresa",
+              "value": "={{ $json.empresa }}"
+            },
+            {
+              "name": "region",
+              "value": "={{ $json.regiao }}"
+            }
+          ]
+        },
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "Bearer qsFj2s8e2XY85oHcNMAvEw"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "4693c606-ee52-45b3-9b06-911d400fa474",
+      "name": "Sincronizar Contato Whaticket1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        832,
+        -1184
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst now = new Date();\nconst hasPending = !!staticData.pendingLastSyncDate;\nstaticData.lastSyncDate = hasPending ? staticData.pendingLastSyncDate : now.toISOString();\nstaticData.lastSyncUpdatedAt = now.toISOString();\nconsole.log('🔄 Última sincronização salva em:', staticData.lastSyncDate, '| Pending?', hasPending ? 'sim' : 'não');\ndelete staticData.pendingLastSyncDate;\ndelete staticData.pendingLastSyncCount;\nreturn items;"
+      },
+      "id": "48528866-e9c2-41f3-961a-1796f6d7025b",
+      "name": "Atualiza Data Sincronizacao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        -1184
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Busca Clientes SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca Clientes SQL": {
+      "main": [
+        [
+          {
+            "node": "Filtra por DtAlteracao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mapeia Campos": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Debug Contatos Filtrados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtra por DtAlteracao": {
+      "main": [
+        [
+          {
+            "node": "Mapeia Campos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Sincronizar Contato Whaticket1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sincronizar Contato Whaticket1": {
+      "main": [
+        [
+          {
+            "node": "Atualiza Data Sincronizacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "845bcb57-ffd0-4213-92cb-c131bacaa5a5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1e4dd6e5907cfc73b0f183f507966709c4992b7f82d0eaa38d56d177cc8df7ef"
+  },
+  "id": "8VjNDtjUtwgeE6qA",
+  "tags": []
+}

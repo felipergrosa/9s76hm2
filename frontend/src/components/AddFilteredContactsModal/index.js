@@ -94,6 +94,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
   const [loading, setLoading] = useState(false);
   const [channels, setChannels] = useState([]);
   const [cities, setCities] = useState([]);
+  const [regions, setRegions] = useState([]);
   const [segments, setSegments] = useState([]);
   const [situations, setSituations] = useState([]);
   const [representativeCodes, setRepresentativeCodes] = useState([]);
@@ -102,6 +103,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
   const [selectedTags, setSelectedTags] = useState([]);
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [loadingCities, setLoadingCities] = useState(false);
+  const [loadingRegions, setLoadingRegions] = useState(false);
   const [loadingSegments, setLoadingSegments] = useState(false);
   const [loadingSituations, setLoadingSituations] = useState(false);
   const [loadingRepresentatives, setLoadingRepresentatives] = useState(false);
@@ -222,6 +224,9 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
     }
     if (Array.isArray(savedFilter.city) && savedFilter.city.length) {
       setCities(prev => Array.from(new Set([...(prev||[]), ...savedFilter.city.map(v => String(v).trim()).filter(Boolean)])).sort((a,b)=>a.localeCompare(b,"pt-BR")));
+    }
+    if (Array.isArray(savedFilter.region) && savedFilter.region.length) {
+      setRegions(prev => Array.from(new Set([...(prev||[]), ...savedFilter.region.map(v => String(v).trim()).filter(Boolean)])).sort((a,b)=>a.localeCompare(b,"pt-BR")));
     }
     if (Array.isArray(savedFilter.representativeCode) && savedFilter.representativeCode.length) {
       setRepresentativeCodes(prev => Array.from(new Set([...(prev||[]), ...savedFilter.representativeCode.map(v => String(v).trim()).filter(Boolean)])).sort((a,b)=>a.localeCompare(b,"pt-BR")));
@@ -392,6 +397,61 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
     setLoadingCities(false);
   };
 
+  const loadRegions = async () => {
+    const cached = getCache("regions");
+    if (Array.isArray(cached) && cached.length) { setRegions(cached); return; }
+    setLoadingRegions(true);
+    try {
+      // Prévia rápida com primeira página
+      let page = 1;
+      let hasMore = true;
+      const map = new Map();
+
+      const firstResp = await api.get("/contacts", {
+        params: { pageNumber: page, limit: 500, orderBy: "region", order: "ASC" },
+      });
+      const firstList = Array.isArray(firstResp?.data?.contacts) ? firstResp.data.contacts : [];
+      for (const c of firstList) {
+        const raw = c?.region; if (!raw) continue;
+        const value = String(raw).trim(); if (!value) continue;
+        const key = value.toLowerCase(); if (!map.has(key)) map.set(key, value);
+      }
+      hasMore = Boolean(firstResp?.data?.hasMore);
+      page += 1;
+
+      const basePreview = Array.from(map.values()).sort((a,b)=>a.localeCompare(b,"pt-BR")).slice(0,5);
+      const setPreview = new Set(basePreview);
+      if (savedFilter && Array.isArray(savedFilter.region)) {
+        savedFilter.region.forEach(v => { const s = String(v||"").trim(); if (s) setPreview.add(s); });
+      }
+      setRegions(Array.from(setPreview).sort((a,b)=>a.localeCompare(b,"pt-BR")));
+
+      // Continuação em background
+      while (hasMore) {
+        const { data } = await api.get("/contacts", {
+          params: { pageNumber: page, limit: 500, orderBy: "region", order: "ASC" },
+        });
+        const list = Array.isArray(data?.contacts) ? data.contacts : [];
+        for (const c of list) {
+          const raw = c?.region; if (!raw) continue;
+          const value = String(raw).trim(); if (!value) continue;
+          const key = value.toLowerCase(); if (!map.has(key)) map.set(key, value);
+        }
+        hasMore = Boolean(data?.hasMore);
+        page += 1;
+        if (list.length === 0) break;
+      }
+
+      const all = Array.from(map.values()).sort((a,b)=>a.localeCompare(b,"pt-BR"));
+      setRegions(all);
+      setCache("regions", all);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setLoadingRegions(false);
+    }
+  };
+
   const loadSituations = async () => {
     const cached = getCache("situations");
     if (Array.isArray(cached) && cached.length) { setSituations(cached); return; }
@@ -550,6 +610,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
         channel: values.channel ? values.channel : null,
         representativeCode: values.representativeCode ? values.representativeCode : null,
         city: values.city ? values.city : null,
+        region: values.region ? values.region : null,
         segment: values.segment ? values.segment : null,
         situation: values.situation ? values.situation : null,
         tags: selectedTags.map(tag => tag.id)
@@ -579,10 +640,12 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
       };
       const ch = sanitizeList(filters.channel);
       const ct = sanitizeList(filters.city);
+      const rg = sanitizeList(filters.region);
       const sg = sanitizeList(filters.segment);
       const st = sanitizeList(filters.situation);
       if (typeof ch === 'undefined') delete filters.channel; else filters.channel = ch;
       if (typeof ct === 'undefined') delete filters.city; else filters.city = ct;
+      if (typeof rg === 'undefined') delete filters.region; else filters.region = rg;
       if (typeof sg === 'undefined') delete filters.segment; else filters.segment = sg;
       if (typeof st === 'undefined') delete filters.situation; else filters.situation = st;
 
@@ -712,6 +775,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
           channel: (savedFilter && savedFilter.channel) ? savedFilter.channel : [],
           representativeCode: (savedFilter && savedFilter.representativeCode) ? savedFilter.representativeCode : [],
           city: (savedFilter && savedFilter.city) ? savedFilter.city : [],
+          region: (savedFilter && savedFilter.region) ? savedFilter.region : [],
           segment: (savedFilter && savedFilter.segment) ? savedFilter.segment : [],
           situation: (savedFilter && savedFilter.situation) ? savedFilter.situation : [],
           foundationMonths: (savedFilter && Array.isArray(savedFilter.foundationMonths))
@@ -866,6 +930,47 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                 </Grid>
 
                 <Grid item xs={12} md={6}>
+                  <Field name="region">
+                    {({ field, form }) => (
+                      <Autocomplete
+                        multiple
+                        options={regions}
+                        onOpen={() => { loadRegions(); }}
+                        loading={loadingRegions}
+                        loadingText="Carregando..."
+                        noOptionsText="Sem opções"
+                        getOptionLabel={(option) => option}
+                        value={field.value || []}
+                        onChange={(event, value) => form.setFieldValue(field.name, value)}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            variant="outlined"
+                            label="Região"
+                            placeholder="Região"
+                            fullWidth
+                            margin="dense"
+                            className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
+                            InputProps={{
+                              ...params.InputProps,
+                              endAdornment: (
+                                <>
+                                  {loadingRegions ? <CircularProgress color="inherit" size={20} /> : null}
+                                  {params.InputProps.endAdornment}
+                                </>
+                              )
+                            }}
+                          />
+                        )}
+                      />
+                    )}
+                  </Field>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
                   <Field name="segment">
                     {({ field, form }) => (
                       <Autocomplete
@@ -947,6 +1052,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                   </Field>
                 </Grid>
 
+                {/* Linha 1: Data de Fundação + Encomenda */}
                 <Grid item xs={12} md={6}>
                   <Field name="foundationMonths">
                     {({ field, form }) => (
@@ -975,7 +1081,18 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                   </Field>
                 </Grid>
 
-                {/* Linha 1: Limite de Crédito (faixa) + Valor da Última Compra (faixa) */}
+                <Grid item xs={12} md={6}>
+                  <FormControl variant="outlined" margin="dense" fullWidth className={values.florder ? classes.activeFilter : ""}>
+                    <InputLabel id="florder-select-label" shrink>Encomenda</InputLabel>
+                    <Field as={Select} labelId="florder-select-label" id="florder-select" name="florder" label="Encomenda">
+                      <MenuItem value=""><em>—</em></MenuItem>
+                      <MenuItem value="Sim">Sim</MenuItem>
+                      <MenuItem value="Não">Não</MenuItem>
+                    </Field>
+                  </FormControl>
+                </Grid>
+
+                {/* Linha 2: Limite de Crédito (faixa) + Valor da Última Compra (faixa) */}
                 <Grid item xs={12} md={6}>
                   <Box className={((values.minCreditLimit && Number(values.minCreditLimit) > 0) || (values.maxCreditLimit && Number(values.maxCreditLimit) < 100000) || values.creditLimitNoMax) ? classes.activeFilterBox : ""}>
                     <Typography variant="subtitle2">Limite de Crédito (faixa)</Typography>
@@ -1170,18 +1287,8 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                   </Box>
                 </Grid>
 
-                {/* Linha 2: Encomenda + Range de Data da Última Compra */}
-                <Grid item xs={12} md={6}>
-                  <FormControl variant="outlined" margin="dense" fullWidth className={values.florder ? classes.activeFilter : ""}>
-                    <InputLabel id="florder-select-label" shrink>Encomenda</InputLabel>
-                    <Field as={Select} labelId="florder-select-label" id="florder-select" name="florder" label="Encomenda">
-                      <MenuItem value=""><em>—</em></MenuItem>
-                      <MenuItem value="Sim">Sim</MenuItem>
-                      <MenuItem value="Não">Não</MenuItem>
-                    </Field>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} md={6}>
+                {/* Linha 3: Range de Data da Última Compra */}
+                <Grid item xs={12} md={12}>
                   <Field name="dtUltCompraStart">
                     {({ form }) => {
                       const start = form.values.dtUltCompraStart;
@@ -1218,7 +1325,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                   </Field>
                 </Grid>
                 
-                {/* Linha 3: Empresa e Tags */}
+                {/* Linha 4: Empresa e Tags */}
                 <Grid item xs={12} md={6}>
                   <Field name="bzEmpresa">
                     {({ field, form }) => (

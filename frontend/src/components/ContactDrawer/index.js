@@ -307,6 +307,9 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading }) =>
                                             {contact.city && `Cidade: ${contact.city}`}
                                         </Typography>
                                         <Typography style={{ color: "primary", fontSize: 12 }}>
+                                            {contact.region && `Região: ${contact.region}`}
+                                        </Typography>
+                                        <Typography style={{ color: "primary", fontSize: 12 }}>
                                             {`Encomenda: ${contact.florder ? 'Sim' : 'Não'}`}
                                         </Typography>
                                         {contact.dtUltCompra && (

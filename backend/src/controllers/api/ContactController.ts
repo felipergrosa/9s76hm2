@@ -78,6 +78,7 @@ interface ContactData {
   cpfCnpj?: string;
   representativeCode?: string;
   city?: string;
+  region?: string;
   instagram?: string;
   situation?: 'Ativo' | 'Baixado' | 'Ex-Cliente' | 'Excluido' | 'Futuro' | 'Inativo';
   fantasyName?: string;
@@ -121,6 +122,7 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
     cpfCnpj: Yup.string().nullable(),
     representativeCode: Yup.string().nullable(),
     city: Yup.string().nullable(),
+    region: Yup.string().nullable(),
     instagram: Yup.string().nullable(),
     situation: Yup.string().oneOf(['Ativo', 'Baixado', 'Ex-Cliente', 'Excluido', 'Futuro', 'Inativo']).nullable(),
     fantasyName: Yup.string().nullable(),
@@ -173,6 +175,15 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
     } else if (typeof contactData.segment === 'string') {
       const s = contactData.segment.trim();
       contactData.segment = (s === '') ? (null as any) : s;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(contactData, 'region')) {
+    if (contactData.region === null || contactData.region === undefined) {
+      // mantém null/undefined
+    } else if (typeof contactData.region === 'string') {
+      const r = contactData.region.trim();
+      contactData.region = (r === '') ? (null as any) : r;
     }
   }
 

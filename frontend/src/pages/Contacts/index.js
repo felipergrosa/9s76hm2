@@ -243,6 +243,7 @@ const Contacts = () => {
 
         pushArray(appliedFilters.channel, "Canal");
         pushArray(appliedFilters.city, "Cidade");
+        pushArray(appliedFilters.region, "Região");
         pushArray(appliedFilters.segment, "Segmento");
         pushArray(appliedFilters.situation, "Situação");
         pushArray(appliedFilters.representativeCode, "Representante");
@@ -726,12 +727,6 @@ const Contacts = () => {
         return number;
     }, []);
 
-    // Trunca texto para um tamanho máximo e adiciona reticências (memoizado)
-    const truncateText = useCallback((text, max = 150) => {
-        if (!text) return "";
-        const str = String(text);
-        return str.length > max ? str.slice(0, max) + "..." : str;
-    }, []);
 
     // Função de navegação já é fornecida pelo hook como handlePageChange
 

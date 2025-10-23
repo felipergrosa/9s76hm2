@@ -90,6 +90,7 @@ const ContactSchema = Yup.object().shape({
   dtUltCompra: Yup.date().nullable(),
   vlUltCompra: Yup.mixed().nullable(),
   bzEmpresa: Yup.string().nullable(),
+  region: Yup.string().nullable(),
 });
 
 // Switch personalizado: verde quando ativo (checked), vermelho quando inativo
@@ -135,6 +136,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		dtUltCompra: "",
 		vlUltCompra: "",
 		bzEmpresa: "",
+		region: "",
 	};
 
 	const [contact, setContact] = useState(initialState);
@@ -347,6 +349,19 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											as={TextField}
 											label="Cidade"
 											name="city"
+											variant="outlined"
+											margin="dense"
+											InputLabelProps={{
+												shrink: true,
+											}}
+											fullWidth
+										/>
+									</Grid>
+									<Grid item xs={12} md={6}>
+										<Field
+											as={TextField}
+											label="Região"
+											name="region"
 											variant="outlined"
 											margin="dense"
 											InputLabelProps={{

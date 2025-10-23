@@ -33,6 +33,7 @@ interface Request {
   cpfCnpj?: string;
   representativeCode?: string;
   city?: string;
+  region?: string;
   instagram?: string;
   situation?: string;
   fantasyName?: string;
@@ -90,6 +91,7 @@ const CreateOrUpdateContactService = async ({
   cpfCnpj,
   representativeCode,
   city,
+  region,
   instagram,
   situation,
   fantasyName,
@@ -139,6 +141,16 @@ if (!isGroup) {
       return undefined;
     })();
 
+    const normalizedRegion = ((): string | null | undefined => {
+      if (typeof region === 'undefined') return undefined;
+      if (region === null) return null;
+      if (typeof region === 'string') {
+        const r = region.trim();
+        return r === '' ? null : r;
+      }
+      return undefined;
+    })();
+
     const contactData = {
       name,
       number,
@@ -149,6 +161,7 @@ if (!isGroup) {
       cpfCnpj: sanitizedCpfCnpj,
       representativeCode: representativeCode || undefined,
       city: city || undefined,
+      region: normalizedRegion,
       instagram: instagram || undefined,
       situation: situation || "Ativo",
       fantasyName: fantasyName || undefined,
@@ -180,6 +193,7 @@ if (!isGroup) {
       contact.foundationDate = foundationDate || contact.foundationDate;
       contact.creditLimit = creditLimit !== undefined ? (creditLimit || null) : contact.creditLimit;
       contact.segment = normalizedSegment !== undefined ? (normalizedSegment as any) : (contact as any).segment;
+      contact.region = normalizedRegion !== undefined ? (normalizedRegion as any) : (contact as any).region;
 
       if (isNil(contact.whatsappId)) {
         const whatsapp = await Whatsapp.findOne({

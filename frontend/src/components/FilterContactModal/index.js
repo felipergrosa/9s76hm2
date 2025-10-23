@@ -87,6 +87,7 @@ const createEmptyValues = () => ({
   channel: [],
   representativeCode: [],
   city: [],
+  region: [],
   segment: [],
   situation: [],
   foundationMonths: [],
@@ -108,6 +109,7 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
   const [loading, setLoading] = useState(false);
   const [channels, setChannels] = useState([]);
   const [cities, setCities] = useState([]);
+  const [regions, setRegions] = useState([]);
   const [segments, setSegments] = useState([]);
   const [situations, setSituations] = useState([]);
   const [representativeCodes, setRepresentativeCodes] = useState([]);
@@ -116,6 +118,7 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
   const [selectedTags, setSelectedTags] = useState([]);
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [loadingCities, setLoadingCities] = useState(false);
+  const [loadingRegions, setLoadingRegions] = useState(false);
   const [loadingSegments, setLoadingSegments] = useState(false);
   const [loadingSituations, setLoadingSituations] = useState(false);
   const [loadingRepresentatives, setLoadingRepresentatives] = useState(false);
@@ -146,6 +149,7 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
     base.channel = normalizeArray(src.channel);
     base.representativeCode = normalizeArray(src.representativeCode);
     base.city = normalizeArray(src.city);
+    base.region = normalizeArray(src.region);
     base.segment = normalizeArray(src.segment);
     base.situation = normalizeArray(src.situation);
     base.bzEmpresa = normalizeArray(src.bzEmpresa);
@@ -269,6 +273,9 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
     }
     if (Array.isArray(initialFilter.city) && initialFilter.city.length) {
       setCities(prev => Array.from(new Set([...(prev||[]), ...initialFilter.city.map(v => String(v).trim()).filter(Boolean)])).sort((a,b)=>a.localeCompare(b,"pt-BR")));
+    }
+    if (Array.isArray(initialFilter.region) && initialFilter.region.length) {
+      setRegions(prev => Array.from(new Set([...(prev||[]), ...initialFilter.region.map(v => String(v).trim()).filter(Boolean)])).sort((a,b)=>a.localeCompare(b,"pt-BR")));
     }
     if (Array.isArray(initialFilter.representativeCode) && initialFilter.representativeCode.length) {
       setRepresentativeCodes(prev => Array.from(new Set([...(prev||[]), ...initialFilter.representativeCode.map(v => String(v).trim()).filter(Boolean)])).sort((a,b)=>a.localeCompare(b,"pt-BR")));
@@ -435,23 +442,64 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
       setCache("cities", all);
     } catch (err) {
       toastError(err);
+    } finally {
+      setLoadingCities(false);
     }
-    setLoadingCities(false);
   };
 
-  const loadSituations = async () => {
-    const cached = getCache("situations");
-    if (Array.isArray(cached) && cached.length) { setSituations(cached); return; }
-    setLoadingSituations(true);
+  const loadRegions = async () => {
+    const cached = getCache("regions");
+    if (Array.isArray(cached) && cached.length) { setRegions(cached); return; }
+    setLoadingRegions(true);
     try {
-      const base = [...defaultSituations].sort((a, b) => a.localeCompare(b, "pt-BR"));
-      setSituations(base);
-      setCache("situations", base);
+      // Prévia rápida com primeira página
+      let page = 1;
+      let hasMore = true;
+      const map = new Map(); // key lower -> exibido
+
+      const firstResp = await api.get("/contacts", {
+        params: { pageNumber: page, limit: 500, orderBy: "region", order: "ASC" },
+      });
+      const firstList = Array.isArray(firstResp?.data?.contacts) ? firstResp.data.contacts : [];
+      for (const c of firstList) {
+        const raw = c?.region; if (!raw) continue;
+        const value = String(raw).trim(); if (!value) continue;
+        const key = value.toLowerCase(); if (!map.has(key)) map.set(key, value);
+      }
+      hasMore = Boolean(firstResp?.data?.hasMore);
+      page += 1;
+
+      const basePreview = Array.from(map.values()).sort((a,b)=>a.localeCompare(b,"pt-BR")).slice(0,5);
+      const setPreview = new Set(basePreview);
+      if (initialFilter && Array.isArray(initialFilter.region)) {
+        initialFilter.region.forEach(v => { const s = String(v||"").trim(); if (s) setPreview.add(s); });
+      }
+      setRegions(Array.from(setPreview).sort((a,b)=>a.localeCompare(b,"pt-BR")));
+
+      // Continuação em background
+      while (hasMore) {
+        const { data } = await api.get("/contacts", {
+          params: { pageNumber: page, limit: 500, orderBy: "region", order: "ASC" },
+        });
+        const list = Array.isArray(data?.contacts) ? data.contacts : [];
+        for (const c of list) {
+          const raw = c?.region; if (!raw) continue;
+          const value = String(raw).trim(); if (!value) continue;
+          const key = value.toLowerCase(); if (!map.has(key)) map.set(key, value);
+        }
+        hasMore = Boolean(data?.hasMore);
+        page += 1;
+        if (list.length === 0) break;
+      }
+
+      const all = Array.from(map.values()).sort((a,b)=>a.localeCompare(b,"pt-BR"));
+      setRegions(all);
+      setCache("regions", all);
     } catch (err) {
-      setSituations([...defaultSituations].sort((a, b) => a.localeCompare(b, "pt-BR")));
       toastError(err);
+    } finally {
+      setLoadingRegions(false);
     }
-    setLoadingSituations(false);
   };
 
   const loadRepresentativeCodes = async () => {
@@ -557,6 +605,7 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
         channel: values.channel ? values.channel : null,
         representativeCode: values.representativeCode ? values.representativeCode : null,
         city: values.city ? values.city : null,
+        region: values.region ? values.region : null,
         segment: values.segment ? values.segment : null,
         situation: values.situation ? values.situation : null,
         tags: selectedTags.map(tag => tag.id)
@@ -586,11 +635,13 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
       };
       const ch = sanitizeList(filters.channel);
       const ct = sanitizeList(filters.city);
+      const rg = sanitizeList(filters.region);
       const sg = sanitizeList(filters.segment);
       const st = sanitizeList(filters.situation);
       const bz = sanitizeList(filters.bzEmpresa);
       if (typeof ch === 'undefined') delete filters.channel; else filters.channel = ch;
       if (typeof ct === 'undefined') delete filters.city; else filters.city = ct;
+      if (typeof rg === 'undefined') delete filters.region; else filters.region = rg;
       if (typeof sg === 'undefined') delete filters.segment; else filters.segment = sg;
       if (typeof st === 'undefined') delete filters.situation; else filters.situation = st;
       if (typeof bz === 'undefined') delete filters.bzEmpresa; else filters.bzEmpresa = bz;
@@ -810,6 +861,38 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
                             fullWidth
                             margin="dense"
                             className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
+                            InputLabelProps={{ shrink: true, }}
+                            InputProps={{ ...params.InputProps, endAdornment: (<> {loadingCities ? <CircularProgress color="inherit" size={20} /> : null} {params.InputProps.endAdornment} </>) }}
+                          />
+                        )}
+                      />
+                    )}
+                  </Field>
+                </Grid>
+
+                {/* Campo Região - Novo campo adicionado */}
+                <Grid item xs={12} md={6}>
+                  <Field name="region">
+                    {({ field, form }) => (
+                      <Autocomplete
+                        multiple
+                        options={regions}
+                        onOpen={() => { loadRegions(); }}
+                        loading={loadingRegions}
+                        loadingText="Carregando..."
+                        noOptionsText="Sem opções"
+                        getOptionLabel={(option) => option}
+                        value={field.value || []}
+                        onChange={(event, value) => form.setFieldValue(field.name, value)}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            variant="outlined"
+                            label="Região"
+                            placeholder="Região"
+                            fullWidth
+                            margin="dense"
+                            className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
                             InputLabelProps={{
                               shrink: true,
                             }}
@@ -817,7 +900,7 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
                               ...params.InputProps,
                               endAdornment: (
                                 <>
-                                  {loadingCities ? <CircularProgress color="inherit" size={20} /> : null}
+                                  {loadingRegions ? <CircularProgress color="inherit" size={20} /> : null}
                                   {params.InputProps.endAdornment}
                                 </>
                               )
@@ -876,7 +959,7 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
                       <Autocomplete
                         multiple
                         options={situations}
-                        onOpen={() => { if (!situations.length) loadSituations(); }}
+                        onOpen={() => { }}
                         loading={loadingSituations}
                         loadingText="Carregando..."
                         noOptionsText="Sem opções"
@@ -911,6 +994,7 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
                   </Field>
                 </Grid>
 
+                {/* Linha 1: Data de Fundação + Encomenda */}
                 <Grid item xs={12} md={6}>
                   <Field name="foundationMonths">
                     {({ field, form }) => (
@@ -939,7 +1023,18 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
                   </Field>
                 </Grid>
 
-                {/* Linha 1: Limite de Crédito (faixa) + Valor da Última Compra (faixa) */}
+                <Grid item xs={12} md={6}>
+                  <FormControl variant="outlined" margin="dense" fullWidth className={values.florder ? classes.activeFilter : ""}>
+                    <InputLabel id="florder-select-label" shrink>Encomenda</InputLabel>
+                    <Field as={Select} labelId="florder-select-label" id="florder-select" name="florder" label="Encomenda">
+                      <MenuItem value=""><em>—</em></MenuItem>
+                      <MenuItem value="Sim">Sim</MenuItem>
+                      <MenuItem value="Não">Não</MenuItem>
+                    </Field>
+                  </FormControl>
+                </Grid>
+
+                {/* Linha 2: Limite de Crédito (faixa) + Valor da Última Compra (faixa) */}
                 <Grid item xs={12} md={6}>
                   <Box className={((values.minCreditLimit && Number(values.minCreditLimit) > 0) || (values.maxCreditLimit && Number(values.maxCreditLimit) < 100000) || values.creditLimitNoMax) ? classes.activeFilterBox : ""}>
                     <Typography variant="subtitle2">Limite de Crédito (faixa)</Typography>
@@ -1134,17 +1229,7 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
                   </Box>
                 </Grid>
 
-                {/* Linha 2: Encomenda + Range de Data da Última Compra */}
-                <Grid item xs={12} md={6}>
-                  <FormControl variant="outlined" margin="dense" fullWidth className={values.florder ? classes.activeFilter : ""}>
-                    <InputLabel id="florder-select-label" shrink>Encomenda</InputLabel>
-                    <Field as={Select} labelId="florder-select-label" id="florder-select" name="florder" label="Encomenda">
-                      <MenuItem value=""><em>—</em></MenuItem>
-                      <MenuItem value="Sim">Sim</MenuItem>
-                      <MenuItem value="Não">Não</MenuItem>
-                    </Field>
-                  </FormControl>
-                </Grid>
+                {/* Linha 3: WhatsApp Inválido + Range de Data da Última Compra */}
                 <Grid item xs={12} md={6}>
                   <Field name="whatsappInvalid">
                     {({ field }) => (
@@ -1158,7 +1243,6 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
                     )}
                   </Field>
                 </Grid>
-
                 <Grid item xs={12} md={6}>
                   <Field name="dtUltCompraStart">
                     {({ form }) => {

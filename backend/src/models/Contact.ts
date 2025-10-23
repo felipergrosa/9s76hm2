@@ -179,6 +179,11 @@ class Contact extends Model<Contact> {
   })
   bzEmpresa: string;
 
+  @Column({
+    allowNull: true
+  })
+  region: string;
+
   @CreatedAt
   createdAt: Date;
 

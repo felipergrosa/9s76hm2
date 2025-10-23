@@ -81,6 +81,7 @@ const ContactSchema = Yup.object().shape({
     creditLimit: Yup.string().nullable(),
     segment: Yup.string().nullable(),
     bzEmpresa: Yup.string().nullable(),
+    region: Yup.string().nullable(),
 });
 
 export function ContactForm ({ initialContact, onSave, onCancel }) {
@@ -225,6 +226,16 @@ export function ContactForm ({ initialContact, onSave, onCancel }) {
                                 as={TextField}
                                 label="Cidade"
                                 name="city"
+                                variant="outlined"
+                                margin="dense"
+                                fullWidth
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <Field
+                                as={TextField}
+                                label="Região"
+                                name="region"
                                 variant="outlined"
                                 margin="dense"
                                 fullWidth

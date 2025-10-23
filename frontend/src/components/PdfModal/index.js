@@ -59,7 +59,6 @@ const useStyles = makeStyles((theme) => ({
 const PdfModal = ({ url }) => {
   const classes = useStyles();
   const [open, setOpen] = useState(false);
-  const [numPages, setNumPages] = useState(null);
   const [loadError, setLoadError] = useState(false);
   const wrapRef = useRef(null);
   const [thumbWidth, setThumbWidth] = useState(140);
@@ -82,8 +81,7 @@ const PdfModal = ({ url }) => {
     return () => ro.disconnect();
   }, []);
 
-  const onLoadSuccess = useCallback(({ numPages }) => {
-    setNumPages(numPages);
+  const onLoadSuccess = useCallback(() => {
     setLoadError(false);
   }, []);
 

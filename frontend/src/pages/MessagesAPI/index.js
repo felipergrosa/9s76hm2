@@ -285,6 +285,7 @@ Content-Type: application/json
   "cpfCnpj": "123.456.789-00",
   "representativeCode": "COD-007",
   "city": "Cidade Exemplo",
+  "region": "Sudeste",
   "instagram": "@username",
   "situation": "Ativo",
   "fantasyName": "Nome Fantasia Exemplo",
@@ -307,7 +308,7 @@ Content-Type: application/json
             <Formik 
               initialValues={{ 
                 token: '', name: '', number: '', email: '', contactName: '', cpfCnpj: '', 
-                representativeCode: '', city: '', instagram: '', situation: '', 
+                representativeCode: '', city: '', region: '', instagram: '', situation: '', 
                 fantasyName: '', foundationDate: '', creditLimit: '', segment: '', florder: false, dtUltCompra: '', disableBot: false, tagIds: '', tags: '' 
               }} 
               onSubmit={handleSyncContact}
@@ -322,6 +323,7 @@ Content-Type: application/json
                   <Field as={TextField} name="cpfCnpj" label="CPF/CNPJ" variant="outlined" className={classes.formField} />
                   <Field as={TextField} name="representativeCode" label="Código do Representante" variant="outlined" className={classes.formField} />
                   <Field as={TextField} name="city" label="Cidade" variant="outlined" className={classes.formField} />
+                  <Field as={TextField} name="region" label="Região" variant="outlined" className={classes.formField} />
                   <Field as={TextField} name="instagram" label="Instagram" variant="outlined" className={classes.formField} />
                   <Field as={TextField} name="situation" label="Situação" variant="outlined" className={classes.formField} />
                   <Field as={TextField} name="fantasyName" label="Nome Fantasia" variant="outlined" className={classes.formField} />

@@ -19,6 +19,7 @@ interface Request {
   cpfCnpj?: string;
   representativeCode?: string;
   city?: string;
+  region?: string;
   instagram?: string;
   situation?: 'Ativo' | 'Baixado' | 'Ex-Cliente' | 'Excluido' | 'Futuro' | 'Inativo';
   fantasyName?: string;
@@ -40,6 +41,7 @@ const CreateOrUpdateContactServiceForImport = async ({
   cpfCnpj,
   representativeCode,
   city,
+  region,
   instagram,
   situation,
   fantasyName,
@@ -75,6 +77,17 @@ const CreateOrUpdateContactServiceForImport = async ({
     return undefined;
   };
 
+  // helper: normalize region to null when empty/whitespace; undefined quando não enviado
+  const normalizeRegion = (v: any): string | null | undefined => {
+    if (typeof v === 'undefined') return undefined;
+    if (v === null) return null;
+    if (typeof v === 'string') {
+      const r = v.trim();
+      return r === '' ? null : r;
+    }
+    return undefined;
+  };
+
   // helper: normalize bzEmpresa to null when empty/whitespace; undefined when not provided
   const normalizeBzEmpresa = (v: any): string | null | undefined => {
     if (typeof v === 'undefined') return undefined;
@@ -99,6 +112,7 @@ const CreateOrUpdateContactServiceForImport = async ({
     cpfCnpj: cpfCnpj ? String(cpfCnpj) : undefined,
     representativeCode: representativeCode ? String(representativeCode) : undefined,
     city,
+    region: normalizeRegion(region),
     instagram,
     situation: situation || 'Ativo',
     fantasyName,
@@ -130,6 +144,11 @@ const CreateOrUpdateContactServiceForImport = async ({
     // Não sobrescrever 'segment' se não enviado
     if (typeof contactData.segment === 'undefined') {
       delete updatePayload.segment;
+    }
+
+    // Não sobrescrever 'region' se não enviado
+    if (typeof contactData.region === 'undefined') {
+      delete updatePayload.region;
     }
 
     if (hasValidExistingName) {
