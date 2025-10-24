@@ -103,7 +103,7 @@ const ListContactsService = async ({
         include: [
           { 
             model: Tag, 
-            as: "tag",
+            as: "tags",
             attributes: [], 
             where: { name: { [Op.like]: "#%" } } // Apenas tags de permissão
           }
