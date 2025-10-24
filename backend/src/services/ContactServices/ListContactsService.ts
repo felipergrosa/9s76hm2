@@ -84,9 +84,9 @@ const ListContactsService = async ({
     }
   }
 
-  // Regra de acesso para não-admins: somente contatos que POSSUEM TODAS as tags permitidas (lógica AND)
-  // Exemplo: usuário com [#fernanda, #Clientes] só vê contatos que tenham AMBAS as tags
-  // Se não houver allowedContactTags, retorna lista vazia
+  // Regra de acesso para não-admins: usuário deve ter TODAS as tags de permissão (#) que o contato possui
+  // Exemplo: contato com [#fernanda, #representantes] só aparece se usuário tiver AMBAS
+  // Tags de permissão são aquelas que começam com '#'
   const isRestrictedUser = profile !== 'admin' && !!userId;
   const mustFilterByAllowedTags = isRestrictedUser && userAllowedContactTags.length > 0;
   
@@ -95,15 +95,36 @@ const ListContactsService = async ({
       // Usuário sem tags permitidas => nenhum contato
       whereCondition.id = { [Op.in]: [] };
     } else {
-      // Busca contatos que possuem TODAS as tags permitidas (lógica AND)
-      const contactsWithAllTags = await ContactTag.findAll({
-        where: { tagId: { [Op.in]: userAllowedContactTags } },
+      // Busca contatos que têm alguma tag de permissão (#) que o usuário NÃO possui
+      const contactsWithDisallowedTags = await ContactTag.findAll({
+        where: { 
+          tagId: { [Op.notIn]: userAllowedContactTags }
+        },
+        include: [
+          { 
+            model: Tag, 
+            as: "tag",
+            attributes: [], 
+            where: { name: { [Op.like]: "#%" } } // Apenas tags de permissão
+          }
+        ],
         attributes: ["contactId"],
-        group: ["contactId"],
-        having: literal(`COUNT(DISTINCT "tagId") = ${userAllowedContactTags.length}`)
+        group: ["contactId"]
       });
       
-      const allowedContactIds = contactsWithAllTags.map(ct => ct.contactId);
+      const disallowedContactIds = contactsWithDisallowedTags.map(ct => ct.contactId);
+      
+      // Busca contatos que têm pelo menos UMA tag permitida E não têm tags proibidas
+      const contactsWithAllowedTags = await ContactTag.findAll({
+        where: { 
+          tagId: { [Op.in]: userAllowedContactTags },
+          contactId: disallowedContactIds.length > 0 ? { [Op.notIn]: disallowedContactIds } : undefined
+        },
+        attributes: ["contactId"],
+        group: ["contactId"]
+      });
+      
+      const allowedContactIds = contactsWithAllowedTags.map(ct => ct.contactId);
       whereCondition.id = allowedContactIds.length > 0 ? { [Op.in]: allowedContactIds } : { [Op.in]: [] };
     }
   }
