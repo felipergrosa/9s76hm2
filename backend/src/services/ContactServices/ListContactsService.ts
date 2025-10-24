@@ -115,11 +115,16 @@ const ListContactsService = async ({
       const disallowedContactIds = contactsWithDisallowedTags.map(ct => ct.contactId);
       
       // Busca contatos que têm pelo menos UMA tag permitida E não têm tags proibidas
+      const whereClause: any = { 
+        tagId: { [Op.in]: userAllowedContactTags }
+      };
+      
+      if (disallowedContactIds.length > 0) {
+        whereClause.contactId = { [Op.notIn]: disallowedContactIds };
+      }
+      
       const contactsWithAllowedTags = await ContactTag.findAll({
-        where: { 
-          tagId: { [Op.in]: userAllowedContactTags },
-          contactId: disallowedContactIds.length > 0 ? { [Op.notIn]: disallowedContactIds } : undefined
-        },
+        where: whereClause,
         attributes: ["contactId"],
         group: ["contactId"]
       });
