@@ -1,4 +1,4 @@
-import { Op, fn, where, col, Filterable, Includeable } from "sequelize";
+import { Op, fn, where, col, Filterable, Includeable, literal } from "sequelize";
 import { startOfDay, endOfDay, parseISO } from "date-fns";
 
 import Ticket from "../../models/Ticket";
@@ -228,41 +228,16 @@ const ListTicketsServiceKanban = async ({
     const user = await ShowUserService(userId, companyId);
     const allowed = (user as any)?.allowedContactTags as number[] | undefined;
     if (user.profile !== "admin" && Array.isArray(allowed) && allowed.length > 0) {
-      // Busca contatos que têm alguma tag de permissão (#) que o usuário NÃO possui
-      const contactsWithDisallowedTags = await ContactTag.findAll({
-        where: { 
-          tagId: { [Op.notIn]: allowed }
-        },
-        include: [
-          { 
-            model: Tag, 
-            as: "tags",
-            attributes: [], 
-            where: { name: { [Op.like]: "#%" } } // Apenas tags de permissão
-          }
-        ],
+      // Busca contatos que possuem TODAS as tags permitidas do usuário (lógica AND)
+      // Usa COUNT para garantir que o contato tenha exatamente todas as tags
+      const contactsWithAllTags = await ContactTag.findAll({
+        where: { tagId: { [Op.in]: allowed } },
         attributes: ["contactId"],
-        group: ["contactId"]
+        group: ["contactId"],
+        having: literal(`COUNT(DISTINCT "tagId") = ${allowed.length}`)
       });
       
-      const disallowedContactIds = contactsWithDisallowedTags.map(ct => ct.contactId);
-      
-      // Busca contatos que têm pelo menos UMA tag permitida E não têm tags proibidas
-      const whereClause: any = { 
-        tagId: { [Op.in]: allowed }
-      };
-      
-      if (disallowedContactIds.length > 0) {
-        whereClause.contactId = { [Op.notIn]: disallowedContactIds };
-      }
-      
-      const contactsWithAllowedTags = await ContactTag.findAll({
-        where: whereClause,
-        attributes: ["contactId"],
-        group: ["contactId"]
-      });
-      
-      const allowedContactIds = contactsWithAllowedTags.map(ct => ct.contactId);
+      const allowedContactIds = contactsWithAllTags.map(ct => ct.contactId);
       
       if (allowedContactIds.length > 0) {
         whereCondition = {
