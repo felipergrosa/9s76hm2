@@ -228,16 +228,18 @@ const ListTicketsServiceKanban = async ({
     const user = await ShowUserService(userId, companyId);
     const allowed = (user as any)?.allowedContactTags as number[] | undefined;
     if (user.profile !== "admin" && Array.isArray(allowed) && allowed.length > 0) {
-      // Contatos que possuem alguma tag fora do conjunto permitido
+      // Contatos que possuem alguma TAG DE PERMISSÃO (name LIKE '#%') fora do conjunto permitido
       const disallowed = await ContactTag.findAll({
         where: { tagId: { [Op.notIn]: allowed } },
+        include: [{ model: Tag, attributes: [], where: { name: { [Op.like]: "#%" } } }],
         attributes: ["contactId"],
         group: ["contactId"]
       });
       const disallowedIds = disallowed.map(r => r.contactId);
-      // Contatos cujas tags são todas permitidas (AND)
+      // Contatos cujas TAGS DE PERMISSÃO são todas permitidas (AND)
       const allowedWithTags = await ContactTag.findAll({
         where: { contactId: { [Op.notIn]: disallowedIds } },
+        include: [{ model: Tag, attributes: [], where: { name: { [Op.like]: "#%" } } }],
         attributes: ["contactId"],
         group: ["contactId"]
       });

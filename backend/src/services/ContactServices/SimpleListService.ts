@@ -4,6 +4,7 @@ import { FindOptions, Op, literal } from "sequelize";
 import Ticket from "../../models/Ticket";
 import ContactTag from "../../models/ContactTag";
 import User from "../../models/User";
+import Tag from "../../models/Tag";
 
 export interface SearchContactParams {
   companyId: string | number;
@@ -27,24 +28,27 @@ const SimpleListService = async ({ name, companyId, userId, profile }: SearchCon
     }
   }
 
-  // Regra de acesso por tags (AND):
+  // Regra de acesso por tags (AND) considerando SOMENTE tags de permissão (nome iniciando com '#'):
   // - Admin: vê tudo
   // - Usuário normal:
-  //   (a) Sempre pode ver contatos SEM TAG
+  //   (a) Sempre pode ver contatos SEM TAG DE PERMISSÃO (sem nenhuma tag '#')
   //   (b) Pode ver contatos de tickets dele
-  //   (c) Pode ver contatos cujas tags (se existirem) sejam TODAS contidas em allowedContactTags
+  //   (c) Pode ver contatos cujas tags de permissão (se existirem) sejam TODAS contidas em allowedContactTags
   if (profile !== "admin" && userId) {
     const user = await User.findByPk(userId);
 
-    // (a) Contatos sem tag (visíveis a todos)
-    const noTagRows = await Contact.findAll({
-      where: {
-        companyId,
-        id: { [Op.notIn]: literal('(SELECT DISTINCT "contactId" FROM "ContactTags")') }
-      },
+    // (a) Contatos sem TAG DE PERMISSÃO (sem nenhuma tag cujo name LIKE '#%')
+    const contactsWithPermRows = await ContactTag.findAll({
+      include: [{ model: Tag, attributes: [], where: { name: { [Op.like]: "#%" } } }],
+      attributes: ["contactId"],
+      group: ["contactId"]
+    });
+    const contactsWithPermIds = contactsWithPermRows.map(r => r.contactId);
+    const noPermRows = await Contact.findAll({
+      where: { companyId, id: { [Op.notIn]: contactsWithPermIds.length ? contactsWithPermIds : [-1] } },
       attributes: ["id"]
     });
-    const noTagIds = noTagRows.map(c => c.id);
+    const noTagIds = noPermRows.map(c => c.id);
 
     // (b) Contatos de tickets do usuário
     const userTickets = await Ticket.findAll({
@@ -56,17 +60,19 @@ const SimpleListService = async ({ name, companyId, userId, profile }: SearchCon
 
     let allowedIds = Array.from(new Set([...noTagIds, ...fromTickets]));
 
-    // (c) AND: contatos cujas tags estão TODAS contidas nas allowedContactTags
+    // (c) AND: contatos cujas TAGS DE PERMISSÃO estão TODAS contidas em allowedContactTags
     if (user && Array.isArray(user.allowedContactTags) && user.allowedContactTags.length > 0) {
-      // contatos com alguma tag fora do conjunto permitido
+      // contatos com alguma TAG DE PERMISSÃO fora do conjunto permitido
       const disallowed = await ContactTag.findAll({
         where: { tagId: { [Op.notIn]: user.allowedContactTags } },
+        include: [{ model: Tag, attributes: [], where: { name: { [Op.like]: "#%" } } }],
         attributes: ["contactId"],
         group: ["contactId"]
       });
       const disallowedIds = disallowed.map(r => r.contactId);
       const allowedWithTags = await ContactTag.findAll({
         where: { contactId: { [Op.notIn]: disallowedIds } },
+        include: [{ model: Tag, attributes: [], where: { name: { [Op.like]: "#%" } } }],
         attributes: ["contactId"],
         group: ["contactId"]
       });

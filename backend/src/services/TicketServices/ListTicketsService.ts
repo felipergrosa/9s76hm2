@@ -533,20 +533,23 @@ const ListTicketsService = async ({
     companyId
   };
 
-  // Política de acesso por tags (AND): não-admin pode ver também tickets cujos
-  // contatos tenham TODAS as tags contidas em user.allowedContactTags.
+  // Política de acesso por tags (AND): considerar SOMENTE tags de permissão (nome iniciando com '#').
+  // Não-admin pode ver também tickets cujos contatos tenham TODAS as tags de permissão
+  // contidas em user.allowedContactTags.
   if (user.profile !== "admin" && Array.isArray((user as any).allowedContactTags) && (user as any).allowedContactTags.length > 0) {
     const allowedSet = (user as any).allowedContactTags as number[];
-    // Contatos que possuem alguma tag FORA do conjunto permitido
+    // Contatos que possuem alguma tag de permissão (name LIKE '#%') FORA do conjunto permitido
     const disallowed = await ContactTag.findAll({
       where: { tagId: { [Op.notIn]: allowedSet } },
+      include: [{ model: Tag, attributes: [], where: { name: { [Op.like]: "#%" } } }],
       attributes: ["contactId"],
       group: ["contactId"]
     });
     const disallowedIds = disallowed.map(r => r.contactId);
-    // Contatos cujas tags são TODAS permitidas (ou contatos sem tags não são expandidos aqui)
+    // Contatos cujas tags de permissão são TODAS permitidas (ou sem tags de permissão)
     const allowedWithTags = await ContactTag.findAll({
       where: { contactId: { [Op.notIn]: disallowedIds } },
+      include: [{ model: Tag, attributes: [], where: { name: { [Op.like]: "#%" } } }],
       attributes: ["contactId"],
       group: ["contactId"]
     });
