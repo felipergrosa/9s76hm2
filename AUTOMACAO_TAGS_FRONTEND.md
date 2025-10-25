@@ -10,7 +10,7 @@ A interface de automação de tags permite configurar regras para aplicar tags a
 
 1. Acesse **Tags** no menu
 2. Clique em **NOVA TAG** ou edite uma tag existente
-3. **Importante:** O nome da tag deve começar com `#` (ex: `#FERNANDA-FREITAS`)
+3. **Importante:** O nome da tag deve começar com `#` (ex: `#NOME-USUARIO`)
 4. Escolha uma cor
 5. Clique em **SALVAR**
 
@@ -47,7 +47,7 @@ Após salvar a tag, a seção **🤖 Automação de Tags** aparecerá automatica
 
 #### Exemplo Prático
 
-**Objetivo:** Aplicar tag `#FERNANDA-FREITAS` em contatos da carteira dela
+**Objetivo:** Aplicar tag `#NOME-USUARIO` em contatos da carteira dela
 
 **Regras:**
 

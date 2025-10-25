@@ -533,32 +533,49 @@ const ListTicketsService = async ({
     companyId
   };
 
-  // Política de acesso por tags: usuário deve ter TODAS as tags de permissão (#) que o contato possui
-  // Tags de permissão são aquelas que começam com '#'
+  // Política de acesso hierárquica:
+  // Contato deve ter PELO MENOS UMA tag pessoal (#) do usuário
+  // E PELO MENOS UMA tag complementar (## ou ###) do usuário
   if (user.profile !== "admin" && Array.isArray((user as any).allowedContactTags) && (user as any).allowedContactTags.length > 0) {
     const userTags = (user as any).allowedContactTags as number[];
     
-    // Filtra apenas tags de permissão (que começam com #)
+    // Busca e categoriza tags de permissão (que começam com #)
+    const { categorizeTagsByName } = require("../../helpers/TagCategoryHelper");
     const permissionTags = await Tag.findAll({
       where: {
         id: { [Op.in]: userTags },
         name: { [Op.like]: "#%" }
       },
-      attributes: ["id"]
+      attributes: ["id", "name"]
     });
-    const allowedSet = permissionTags.map((t: any) => t.id);
     
-    if (allowedSet.length > 0) {
-      // Busca contatos que possuem TODAS as tags permitidas do usuário (lógica AND)
-      // Usa COUNT para garantir que o contato tenha exatamente todas as tags
-      const contactsWithAllTags = await ContactTag.findAll({
-        where: { tagId: { [Op.in]: allowedSet } },
-        attributes: ["contactId"],
-        group: ["contactId"],
-        having: literal(`COUNT(DISTINCT "tagId") = ${allowedSet.length}`)
+    const categorized = categorizeTagsByName(permissionTags);
+    const userPersonalTags = categorized.personal;
+    const userComplementaryTags = categorized.complementary;
+    
+    if (userPersonalTags.length > 0) {
+      // Busca contatos que têm pelo menos uma tag pessoal do usuário
+      const contactsWithPersonalTag = await ContactTag.findAll({
+        where: { tagId: { [Op.in]: userPersonalTags } },
+        attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
+        raw: true
       });
       
-      const allowedContactIds = contactsWithAllTags.map(ct => ct.contactId);
+      let allowedContactIds = contactsWithPersonalTag.map((ct: any) => ct.contactId);
+      
+      // Se usuário tem tags complementares, filtra ainda mais
+      if (userComplementaryTags.length > 0 && allowedContactIds.length > 0) {
+        const contactsWithComplementaryTag = await ContactTag.findAll({
+          where: { 
+            contactId: { [Op.in]: allowedContactIds },
+            tagId: { [Op.in]: userComplementaryTags }
+          },
+          attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
+          raw: true
+        });
+        
+        allowedContactIds = contactsWithComplementaryTag.map((ct: any) => ct.contactId);
+      }
     
       if (allowedContactIds.length > 0) {
         whereCondition = {

@@ -76,44 +76,63 @@ const ListContactsService = async ({
   let whereCondition: Filterable["where"] = {};
   const additionalWhere: any[] = [];
 
-  let userAllowedContactTags: number[] = [];
+  let userPersonalTags: number[] = [];
+  let userComplementaryTags: number[] = [];
+  
   if (userId) {
     const user = await User.findByPk(userId);
     if (user && Array.isArray(user.allowedContactTags) && user.allowedContactTags.length > 0) {
-      // Filtra apenas tags de permissão (que começam com #)
+      // Busca tags de permissão (que começam com #)
       const Tag = require("../../models/Tag").default;
+      const { categorizeTagsByName } = require("../../helpers/TagCategoryHelper");
+      
       const permissionTags = await Tag.findAll({
         where: {
           id: { [Op.in]: user.allowedContactTags },
           name: { [Op.like]: "#%" }
         },
-        attributes: ["id"]
+        attributes: ["id", "name"]
       });
-      userAllowedContactTags = permissionTags.map((t: any) => t.id);
+      
+      const categorized = categorizeTagsByName(permissionTags);
+      userPersonalTags = categorized.personal;
+      userComplementaryTags = categorized.complementary;
     }
   }
 
-  // Regra de acesso para não-admins: usuário deve ter TODAS as tags de permissão (#) que o contato possui
-  // Exemplo: contato com [#fernanda, #representantes] só aparece se usuário tiver AMBAS
-  // Tags de permissão são aquelas que começam com '#'
+  // Regra de acesso hierárquica:
+  // Contato deve ter PELO MENOS UMA tag pessoal (#) do usuário
+  // E PELO MENOS UMA tag complementar (## ou ###) do usuário
   const isRestrictedUser = profile !== 'admin' && !!userId;
-  const mustFilterByAllowedTags = isRestrictedUser && userAllowedContactTags.length > 0;
   
   if (isRestrictedUser) {
-    if (!mustFilterByAllowedTags) {
-      // Usuário sem tags permitidas => nenhum contato
+    if (userPersonalTags.length === 0) {
+      // Usuário sem tags pessoais => nenhum contato
       whereCondition.id = { [Op.in]: [] };
     } else {
-      // Busca contatos que possuem TODAS as tags permitidas do usuário (lógica AND)
-      // Usa COUNT para garantir que o contato tenha exatamente todas as tags
-      const contactsWithAllTags = await ContactTag.findAll({
-        where: { tagId: { [Op.in]: userAllowedContactTags } },
-        attributes: ["contactId"],
-        group: ["contactId"],
-        having: literal(`COUNT(DISTINCT "tagId") = ${userAllowedContactTags.length}`)
+      // Busca contatos que têm pelo menos uma tag pessoal do usuário
+      const contactsWithPersonalTag = await ContactTag.findAll({
+        where: { tagId: { [Op.in]: userPersonalTags } },
+        attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
+        raw: true
       });
       
-      const allowedContactIds = contactsWithAllTags.map(ct => ct.contactId);
+      let allowedContactIds = contactsWithPersonalTag.map((ct: any) => ct.contactId);
+      
+      // Se usuário tem tags complementares, filtra ainda mais
+      if (userComplementaryTags.length > 0 && allowedContactIds.length > 0) {
+        // Contatos devem ter também pelo menos uma tag complementar
+        const contactsWithComplementaryTag = await ContactTag.findAll({
+          where: { 
+            contactId: { [Op.in]: allowedContactIds },
+            tagId: { [Op.in]: userComplementaryTags }
+          },
+          attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
+          raw: true
+        });
+        
+        allowedContactIds = contactsWithComplementaryTag.map((ct: any) => ct.contactId);
+      }
       
       whereCondition.id = allowedContactIds.length > 0 ? { [Op.in]: allowedContactIds } : { [Op.in]: [] };
     }

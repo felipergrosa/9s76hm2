@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
+import { Op } from "sequelize";
 import Ticket from "../models/Ticket";
 import AppError from "../errors/AppError";
 import User from "../models/User";
@@ -295,20 +296,47 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 
   const ticket = await ShowTicketService(ticketId, companyId);
 
-  // Verificação de acesso: admin sempre pode; usuário pode se for dono do ticket
-  // ou se o contato tiver TODAS as tags contidas em allowedContactTags do usuário.
+  // Verificação de acesso hierárquica: admin sempre pode; usuário pode se for dono do ticket
+  // ou se o contato tiver PELO MENOS UMA tag pessoal (#) E PELO MENOS UMA tag complementar (## ou ###) do usuário
   // Contato sem tags: não libera acesso extra (somente o dono).
   if (profile !== "admin") {
     const me = await User.findByPk(Number(userId));
     const allowedTagIds: number[] = (me && Array.isArray((me as any).allowedContactTags)) ? (me as any).allowedContactTags : [];
     const isOwner = Number(ticket.userId) === Number(userId);
-    // AND: todas as tags do contato devem estar em allowedTagIds
-    const contactTagIds: number[] = Array.isArray((ticket as any)?.contact?.tags)
-      ? ((ticket as any).contact.tags as any[]).map((t: any) => t.id)
-      : [];
-    const hasAllTags = contactTagIds.length > 0 && contactTagIds.every(id => allowedTagIds.includes(id));
-    if (!isOwner && !hasAllTags) {
-      throw new AppError("FORBIDDEN_CONTACT_ACCESS", 403);
+    
+    if (!isOwner) {
+      // Busca e categoriza tags do usuário
+      const Tag = require("../models/Tag").default;
+      const { categorizeTagsByName } = require("../helpers/TagCategoryHelper");
+      
+      const userPermissionTags = await Tag.findAll({
+        where: {
+          id: { [Op.in]: allowedTagIds },
+          name: { [Op.like]: "#%" }
+        },
+        attributes: ["id", "name"]
+      });
+      
+      const categorized = categorizeTagsByName(userPermissionTags);
+      const userPersonalTags = categorized.personal;
+      const userComplementaryTags = categorized.complementary;
+      
+      // Tags do contato
+      const contactTags: any[] = Array.isArray((ticket as any)?.contact?.tags)
+        ? (ticket as any).contact.tags
+        : [];
+      const contactTagIds = contactTags.map((t: any) => t.id);
+      
+      // Verifica se contato tem pelo menos uma tag pessoal do usuário
+      const hasPersonalTag = contactTagIds.some(id => userPersonalTags.includes(id));
+      
+      // Verifica se contato tem pelo menos uma tag complementar do usuário (se usuário tiver)
+      const hasComplementaryTag = userComplementaryTags.length === 0 || 
+        contactTagIds.some(id => userComplementaryTags.includes(id));
+      
+      if (!hasPersonalTag || !hasComplementaryTag) {
+        throw new AppError("FORBIDDEN_CONTACT_ACCESS", 403);
+      }
     }
   }
 
@@ -349,17 +377,45 @@ export const showFromUUID = async (
     type: "access"
   });
 
-  // Verificação de acesso por tags/dono do ticket (mesma regra do show)
+  // Verificação de acesso hierárquica por tags/dono do ticket (mesma regra do show)
   if (profile !== "admin") {
     const me = await User.findByPk(Number(userId));
     const allowedTagIds: number[] = (me && Array.isArray((me as any).allowedContactTags)) ? (me as any).allowedContactTags : [];
     const isOwner = Number(ticket.userId) === Number(userId);
-    const contactTagIds: number[] = Array.isArray((ticket as any)?.contact?.tags)
-      ? ((ticket as any).contact.tags as any[]).map((t: any) => t.id)
-      : [];
-    const hasAllTags = contactTagIds.every(id => allowedTagIds.includes(id));
-    if (!isOwner && !hasAllTags) {
-      throw new AppError("FORBIDDEN_CONTACT_ACCESS", 403);
+    
+    if (!isOwner) {
+      // Busca e categoriza tags do usuário
+      const Tag = require("../models/Tag").default;
+      const { categorizeTagsByName } = require("../helpers/TagCategoryHelper");
+      
+      const userPermissionTags = await Tag.findAll({
+        where: {
+          id: { [Op.in]: allowedTagIds },
+          name: { [Op.like]: "#%" }
+        },
+        attributes: ["id", "name"]
+      });
+      
+      const categorized = categorizeTagsByName(userPermissionTags);
+      const userPersonalTags = categorized.personal;
+      const userComplementaryTags = categorized.complementary;
+      
+      // Tags do contato
+      const contactTags: any[] = Array.isArray((ticket as any)?.contact?.tags)
+        ? (ticket as any).contact.tags
+        : [];
+      const contactTagIds = contactTags.map((t: any) => t.id);
+      
+      // Verifica se contato tem pelo menos uma tag pessoal do usuário
+      const hasPersonalTag = contactTagIds.some(id => userPersonalTags.includes(id));
+      
+      // Verifica se contato tem pelo menos uma tag complementar do usuário (se usuário tiver)
+      const hasComplementaryTag = userComplementaryTags.length === 0 || 
+        contactTagIds.some(id => userComplementaryTags.includes(id));
+      
+      if (!hasPersonalTag || !hasComplementaryTag) {
+        throw new AppError("FORBIDDEN_CONTACT_ACCESS", 403);
+      }
     }
   }
 

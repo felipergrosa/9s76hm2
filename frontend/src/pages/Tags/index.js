@@ -34,9 +34,9 @@ import TableRowSkeleton from "../../components/TableRowSkeleton";
 import TagModal from "../../components/TagModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
-import { Chip, Tooltip } from "@material-ui/core";
+import { Chip, Tooltip, Typography, Box, Divider, Accordion, AccordionSummary, AccordionDetails } from "@material-ui/core";
 import { AuthContext } from "../../context/Auth/AuthContext";
-import { MoreHoriz } from "@material-ui/icons";
+import { MoreHoriz, ExpandMore, Info } from "@material-ui/icons";
 import ContactTagListModal from "../../components/ContactTagListModal";
 
 const reducer = (state, action) => {
@@ -70,6 +70,25 @@ const useStyles = makeStyles((theme) => ({
     overflowY: "scroll",
     ...theme.scrollbarStyles,
   },
+  categoryHeader: {
+    backgroundColor: theme.palette.grey[100],
+    padding: theme.spacing(2),
+    marginTop: theme.spacing(2),
+    marginBottom: theme.spacing(1),
+    borderRadius: 4,
+  },
+  helpBox: {
+    backgroundColor: theme.palette.info.light,
+    padding: theme.spacing(2),
+    marginBottom: theme.spacing(2),
+    borderRadius: 4,
+    display: "flex",
+    alignItems: "flex-start",
+    gap: theme.spacing(1),
+  },
+  categoryDivider: {
+    margin: theme.spacing(2, 0),
+  },
 }));
 
 const Tags = () => {
@@ -89,6 +108,29 @@ const Tags = () => {
   const [tags, dispatch] = useReducer(reducer, []);
   const [tagModalOpen, setTagModalOpen] = useState(false);
   const pageNumberRef = useRef(1);
+
+  // Função para categorizar tags baseado na quantidade de #
+  const categorizeTags = (tags) => {
+    const personal = [];
+    const group = [];
+    const region = [];
+    const transactional = [];
+
+    tags.forEach(tag => {
+      const name = tag.name || '';
+      if (name.startsWith('###')) {
+        region.push(tag);
+      } else if (name.startsWith('##')) {
+        group.push(tag);
+      } else if (name.startsWith('#')) {
+        personal.push(tag);
+      } else {
+        transactional.push(tag);
+      }
+    });
+
+    return { personal, group, region, transactional };
+  };
 
   useEffect(() => {
     const fetchMoreTags = async () => {
@@ -239,69 +281,106 @@ const Tags = () => {
         variant="outlined"
         onScroll={handleScroll}
       >
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell align="center">{i18n.t("tags.table.id")}</TableCell>
-              <TableCell align="center">{i18n.t("tags.table.name")}</TableCell>
-              <TableCell align="center">
-                {i18n.t("tags.table.contacts")}
-              </TableCell>
-              <TableCell align="center">
-                {i18n.t("tags.table.actions")}
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+        {/* Caixa de Ajuda */}
+        <Box className={classes.helpBox}>
+          <Info color="primary" />
+          <Box>
+            <Typography variant="subtitle2" style={{ fontWeight: 'bold' }}>
+              Como funcionam as Tags Hierárquicas:
+            </Typography>
+            <Typography variant="body2">
+              <strong>#</strong> (1x) = Tag Pessoal (obrigatória) - Ex: #NOME-USUARIO<br />
+              <strong>##</strong> (2x) = Grupo (complementar) - Ex: ##CLIENTES, ##REPRESENTANTES<br />
+              <strong>###</strong> (3x) = Região (complementar) - Ex: ###REGIAO-NORTE<br />
+              <strong>Sem #</strong> = Transacional (não afeta permissões) - Ex: VIP, ATIVO
+            </Typography>
+            <Typography variant="body2" style={{ marginTop: 8, fontStyle: 'italic' }}>
+              💡 Usuários veem contatos que tenham sua tag pessoal + pelo menos uma tag complementar
+            </Typography>
+          </Box>
+        </Box>
+
+        {(() => {
+          const categorized = categorizeTags(tags);
+          
+          const renderTagTable = (categoryTags, title) => {
+            if (categoryTags.length === 0) return null;
+            
+            return (
+              <>
+                <Box className={classes.categoryHeader}>
+                  <Typography variant="h6" style={{ fontWeight: 'bold' }}>
+                    {title} ({categoryTags.length})
+                  </Typography>
+                </Box>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell align="center">ID</TableCell>
+                      <TableCell align="center">Nome</TableCell>
+                      <TableCell align="center">Contatos</TableCell>
+                      <TableCell align="center">Ações</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {categoryTags.map((tag) => (
+                      <TableRow key={tag.id}>
+                        <TableCell align="center">{tag.id}</TableCell>
+                        <TableCell align="center">
+                          <Chip
+                            variant="outlined"
+                            style={{
+                              backgroundColor: tag.color,
+                              textShadow: "0px 0.3px #000",
+                              color: "white",
+                            }}
+                            label={tag.name}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell align="center">
+                          {tag?.contacts?.length}
+                          <IconButton
+                            size="small"
+                            onClick={() => handleShowContacts(tag?.contacts, tag)}
+                            disabled={tag?.contacts?.length === 0}
+                          >
+                            <MoreHoriz />
+                          </IconButton>
+                        </TableCell>
+                        <TableCell align="center">
+                          <IconButton size="small" onClick={() => handleEditTag(tag)}>
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setConfirmModalOpen(true);
+                              setDeletingTag(tag);
+                            }}
+                          >
+                            <DeleteOutlineIcon />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <Divider className={classes.categoryDivider} />
+              </>
+            );
+          };
+
+          return (
             <>
-              {tags.map((tag) => (
-                <TableRow key={tag.id}>
-                  <TableCell align="center">{tag.id}</TableCell>
-                  <TableCell align="center">
-                    <Chip
-                      variant="outlined"
-                      style={{
-                        backgroundColor: tag.color,
-                        textShadow: "0px 0.3px #000",
-                        color: "white",
-                      }}
-                      label={tag.name}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell align="center">
-                    {tag?.contacts?.length}
-                    <IconButton
-                      size="small"
-                      onClick={() => handleShowContacts(tag?.contacts, tag)}
-                      disabled={tag?.contacts?.length === 0}
-                    >
-                      <MoreHoriz />
-                    </IconButton>
-                  </TableCell>
-
-                  <TableCell align="center">
-                    <IconButton size="small" onClick={() => handleEditTag(tag)}>
-                      <EditIcon />
-                    </IconButton>
-
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        setConfirmModalOpen(true);
-                        setDeletingTag(tag);
-                      }}
-                    >
-                      <DeleteOutlineIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-
+              {renderTagTable(categorized.personal, "📋 Tags Pessoais")}
+              {renderTagTable(categorized.group, "👥 Tags de Grupo")}
+              {renderTagTable(categorized.region, "🌎 Tags de Região")}
+              {renderTagTable(categorized.transactional, "🔖 Tags Transacionais")}
               {loading && <TableRowSkeleton key="skeleton" columns={4} />}
             </>
-          </TableBody>
-        </Table>
+          );
+        })()}
       </Paper>
     </MainContainer>
   );
