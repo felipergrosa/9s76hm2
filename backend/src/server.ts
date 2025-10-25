@@ -31,6 +31,8 @@ import BullQueue from './libs/queue';
 import { initSavedFilterCron } from "./jobs/SavedFilterCronManager";
 
 import { startQueueProcess } from "./queues";
+import tagRulesCron from "./cron/tagRulesCron";
+import tagRulesRecentContactsCron from "./cron/tagRulesRecentContactsCron";
 
 const ENV_PROFILE = process.env.APP_ENV || process.env.NODE_ENV || "development";
 const isProduction = ENV_PROFILE === "production";
@@ -218,6 +220,10 @@ process.on("unhandledRejection", (reason, p) => {
 
 // Inicializa o cron de sincronização de savedFilter (configurável por env/Settings)
 initSavedFilterCron();
+
+// Inicializa os crons de aplicação automática de tag rules
+tagRulesCron(); // Executa diariamente às 2h (processamento completo)
+tagRulesRecentContactsCron(); // Executa a cada 5 minutos (apenas contatos recentes)
 
 initIO(server);
 gracefulShutdown(server);

@@ -138,6 +138,8 @@ const CreateContactService = async ({
   }
 
   // Normalização do valor da última compra (aceita string BRL)
+  const MAX_LAST_PURCHASE = 10000000000; // 10 bilhões (limite DECIMAL(12,2))
+
   const parseMoney = (val: any): number | null => {
     if (val === undefined || val === null || val === '') return null;
     if (typeof val === 'number') return val;
@@ -147,7 +149,11 @@ const CreateContactService = async ({
       .replace(/\./g, '')
       .replace(',', '.');
     const num = parseFloat(cleaned);
-    return isNaN(num) ? null : num;
+    if (isNaN(num)) return null;
+    if (Math.abs(num) >= MAX_LAST_PURCHASE) {
+      throw new AppError("INVALID_LAST_PURCHASE_AMOUNT");
+    }
+    return num;
   };
   const vlUltCompraValue = parseMoney(vlUltCompra as any);
 
@@ -230,6 +236,16 @@ const CreateContactService = async ({
   } catch (err) {
     logger.warn("Falha ao atualizar avatar/nome centralizado", err);
   }
+
+  // Aplica regras de tags automaticamente (forma assíncrona, não bloqueia)
+  setImmediate(async () => {
+    try {
+      const ApplyTagRulesService = (await import("../TagServices/ApplyTagRulesService")).default;
+      await ApplyTagRulesService({ companyId, contactId: contact.id });
+    } catch (err) {
+      logger.warn(`Falha ao aplicar regras de tags no contato ${contact.id}`, err);
+    }
+  });
 
   if (wallets) {
     await ContactWallet.destroy({

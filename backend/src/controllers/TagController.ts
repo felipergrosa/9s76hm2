@@ -23,14 +23,15 @@ type IndexQuery = {
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { pageNumber, searchParam, kanban, tagId } = req.query as IndexQuery;
-  const { companyId } = req.user;
+  const { companyId, profile } = req.user;
 
   const { tags, count, hasMore } = await ListService({
     searchParam,
     pageNumber,
     companyId,
     kanban,
-    tagId
+    tagId,
+    profile
   });
 
   return res.json({ tags, count, hasMore });
@@ -42,10 +43,13 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     nextLaneId,
     greetingMessageLane,
     rollbackLaneId } = req.body;
-  const { companyId } = req.user;
+  const { companyId, profile } = req.user;
 
-  if (req.user.profile !== "admin") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
+  // Usuários não-admin só podem criar tags transacionais (sem #)
+  if (profile !== "admin") {
+    if (name && name.startsWith("#")) {
+      throw new AppError("Usuários não-admin só podem criar tags transacionais (sem #)", 403);
+    }
   }
 
   const tag = await CreateService({
@@ -81,13 +85,25 @@ export const update = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
-  if (req.user.profile !== "admin") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
-
   const { tagId } = req.params;
   const tagData = req.body;
-  const { companyId } = req.user;
+  const { companyId, profile } = req.user;
+
+  // Usuários não-admin só podem editar tags transacionais (sem #)
+  if (profile !== "admin") {
+    // Busca a tag atual
+    const currentTag = await ShowService(tagId);
+    
+    // Não pode editar tag de permissão (#)
+    if (currentTag.name && currentTag.name.startsWith("#")) {
+      throw new AppError("Usuários não-admin não podem editar tags de permissão (#)", 403);
+    }
+    
+    // Não pode renomear para tag de permissão (#)
+    if (tagData.name && tagData.name.startsWith("#")) {
+      throw new AppError("Usuários não-admin só podem criar/editar tags transacionais (sem #)", 403);
+    }
+  }
 
   const tag = await UpdateService({ tagData, id: tagId });
 
@@ -106,10 +122,15 @@ export const remove = async (
   res: Response
 ): Promise<Response> => {
   const { tagId } = req.params;
-  const { companyId } = req.user;
+  const { companyId, profile } = req.user;
 
-  if (req.user.profile !== "admin") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
+  // Usuários não-admin só podem deletar tags transacionais (sem #)
+  if (profile !== "admin") {
+    const currentTag = await ShowService(tagId);
+    
+    if (currentTag.name && currentTag.name.startsWith("#")) {
+      throw new AppError("Usuários não-admin não podem deletar tags de permissão (#)", 403);
+    }
   }
 
   await DeleteService(tagId);

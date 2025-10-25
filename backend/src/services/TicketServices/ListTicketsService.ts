@@ -536,31 +536,43 @@ const ListTicketsService = async ({
   // Política de acesso por tags: usuário deve ter TODAS as tags de permissão (#) que o contato possui
   // Tags de permissão são aquelas que começam com '#'
   if (user.profile !== "admin" && Array.isArray((user as any).allowedContactTags) && (user as any).allowedContactTags.length > 0) {
-    const allowedSet = (user as any).allowedContactTags as number[];
+    const userTags = (user as any).allowedContactTags as number[];
     
-    // Busca contatos que possuem TODAS as tags permitidas do usuário (lógica AND)
-    // Usa COUNT para garantir que o contato tenha exatamente todas as tags
-    const contactsWithAllTags = await ContactTag.findAll({
-      where: { tagId: { [Op.in]: allowedSet } },
-      attributes: ["contactId"],
-      group: ["contactId"],
-      having: literal(`COUNT(DISTINCT "tagId") = ${allowedSet.length}`)
+    // Filtra apenas tags de permissão (que começam com #)
+    const permissionTags = await Tag.findAll({
+      where: {
+        id: { [Op.in]: userTags },
+        name: { [Op.like]: "#%" }
+      },
+      attributes: ["id"]
     });
+    const allowedSet = permissionTags.map((t: any) => t.id);
     
-    const allowedContactIds = contactsWithAllTags.map(ct => ct.contactId);
+    if (allowedSet.length > 0) {
+      // Busca contatos que possuem TODAS as tags permitidas do usuário (lógica AND)
+      // Usa COUNT para garantir que o contato tenha exatamente todas as tags
+      const contactsWithAllTags = await ContactTag.findAll({
+        where: { tagId: { [Op.in]: allowedSet } },
+        attributes: ["contactId"],
+        group: ["contactId"],
+        having: literal(`COUNT(DISTINCT "tagId") = ${allowedSet.length}`)
+      });
+      
+      const allowedContactIds = contactsWithAllTags.map(ct => ct.contactId);
     
-    if (allowedContactIds.length > 0) {
-      whereCondition = {
-        [Op.and]: [
-          { companyId },
-          {
-            [Op.or]: [
-              whereCondition,
-              { contactId: { [Op.in]: allowedContactIds } }
-            ]
-          }
-        ]
-      } as any;
+      if (allowedContactIds.length > 0) {
+        whereCondition = {
+          [Op.and]: [
+            { companyId },
+            {
+              [Op.or]: [
+                whereCondition,
+                { contactId: { [Op.in]: allowedContactIds } }
+              ]
+            }
+          ]
+        } as any;
+      }
     }
   }
 

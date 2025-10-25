@@ -54,6 +54,7 @@ import ContactFieldsController from "../controllers/ContactFieldsController";
 import labelsRoutes from "./labelsRoutes";
 import wbotLabelsRoutes from "./wbotLabelsRoutes";
 import whatsappWebLabelsRoutes from "./whatsappWebLabelsRoutes";
+import tagRuleRoutes from "./tagRuleRoutes";
 
 
 const routes = Router();
@@ -114,5 +115,6 @@ routes.get("/contacts/fields", isAuth, ContactFieldsController.getContactFields)
 routes.use("/labels", labelsRoutes);
 routes.use(wbotLabelsRoutes);
 routes.use(whatsappWebLabelsRoutes);
+routes.use(tagRuleRoutes);
 
 export default routes;

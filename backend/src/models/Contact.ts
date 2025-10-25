@@ -13,7 +13,9 @@ import {
   ForeignKey,
   BelongsTo,
   BelongsToMany,
-  DataType
+  DataType,
+  AfterCreate,
+  AfterUpdate
 } from "sequelize-typescript";
 import ContactCustomField from "./ContactCustomField";
 import Ticket from "./Ticket";
@@ -276,6 +278,40 @@ class Contact extends Model<Contact> {
 
   @BelongsTo(() => User)
   user: User;
+
+  // Hook para aplicar regras de tags automaticamente após criar contato
+  @AfterCreate
+  static async applyTagRulesAfterCreate(contact: Contact) {
+    // Executa de forma assíncrona sem bloquear
+    setImmediate(async () => {
+      try {
+        const ApplyTagRulesService = (await import("../services/TagServices/ApplyTagRulesService")).default;
+        await ApplyTagRulesService({ 
+          companyId: contact.companyId,
+          contactId: contact.id 
+        });
+      } catch (err) {
+        console.error(`[Hook] Erro ao aplicar regras de tags no contato ${contact.id}:`, err);
+      }
+    });
+  }
+
+  // Hook para aplicar regras de tags automaticamente após atualizar contato
+  @AfterUpdate
+  static async applyTagRulesAfterUpdate(contact: Contact) {
+    // Executa de forma assíncrona sem bloquear
+    setImmediate(async () => {
+      try {
+        const ApplyTagRulesService = (await import("../services/TagServices/ApplyTagRulesService")).default;
+        await ApplyTagRulesService({ 
+          companyId: contact.companyId,
+          contactId: contact.id 
+        });
+      } catch (err) {
+        console.error(`[Hook] Erro ao aplicar regras de tags no contato ${contact.id}:`, err);
+      }
+    });
+  }
 }
 
 export default Contact;

@@ -32,7 +32,19 @@ const SimpleListService = async ({ name, companyId, userId, profile }: SearchCon
   // Tags de permissão são aquelas que começam com '#'
   if (profile !== "admin" && userId) {
     const user = await User.findByPk(userId);
-    const userAllowedContactTags = user && Array.isArray(user.allowedContactTags) ? user.allowedContactTags : [];
+    let userAllowedContactTags: number[] = [];
+    
+    if (user && Array.isArray(user.allowedContactTags) && user.allowedContactTags.length > 0) {
+      // Filtra apenas tags de permissão (que começam com #)
+      const permissionTags = await Tag.findAll({
+        where: {
+          id: { [Op.in]: user.allowedContactTags },
+          name: { [Op.like]: "#%" }
+        },
+        attributes: ["id"]
+      });
+      userAllowedContactTags = permissionTags.map((t: any) => t.id);
+    }
 
     if (userAllowedContactTags.length === 0) {
       // Usuário sem tags permitidas => nenhum contato

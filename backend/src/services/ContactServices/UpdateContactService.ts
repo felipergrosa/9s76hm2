@@ -31,6 +31,7 @@ interface ContactData {
   cpfCnpj?: string;
   representativeCode?: string;
   city?: string;
+  region?: string;
   instagram?: string;
   situation?: 'Ativo' | 'Baixado' | 'Ex-Cliente' | 'Excluido' | 'Futuro' | 'Inativo';
   fantasyName?: string;
@@ -71,6 +72,7 @@ const UpdateContactService = async ({
     cpfCnpj,
     representativeCode,
     city,
+    region,
     instagram,
     situation,
     fantasyName,
@@ -124,6 +126,8 @@ const UpdateContactService = async ({
   }
 
   // Normalização do valor da última compra (aceita string BRL)
+  const MAX_LAST_PURCHASE = 10000000000; // 10 bilhões (limite DECIMAL(12,2))
+
   const parseMoney = (val: any): number | null => {
     if (val === undefined || val === null || val === '') return null;
     if (typeof val === 'number') return val;
@@ -133,7 +137,11 @@ const UpdateContactService = async ({
       .replace(/\./g, '')
       .replace(',', '.');
     const num = parseFloat(cleaned);
-    return isNaN(num) ? null : num;
+    if (isNaN(num)) return null;
+    if (Math.abs(num) >= MAX_LAST_PURCHASE) {
+      throw new AppError("INVALID_LAST_PURCHASE_AMOUNT");
+    }
+    return num;
   };
   const vlUltCompraValue = parseMoney(vlUltCompra as any);
 
@@ -144,7 +152,7 @@ const UpdateContactService = async ({
       "acceptAudioMessage", "active", "disableBot", "profilePicUrl", "remoteJid",
       "urlPicture", "florder", "contactName",
       // Adicionar novos campos aos atributos
-      "cpfCnpj", "representativeCode", "city", "instagram",
+      "cpfCnpj", "representativeCode", "city", "region", "instagram",
       "situation", "fantasyName", "foundationDate", "creditLimit", "segment", "dtUltCompra", "vlUltCompra"
     ],
     include: ["extraInfo", "tags",
@@ -250,6 +258,7 @@ const UpdateContactService = async ({
     cpfCnpj: cpfCnpj !== undefined ? emptyToNull(cpfCnpj) : contact.cpfCnpj,
     representativeCode: representativeCode !== undefined ? emptyToNull(representativeCode) : contact.representativeCode,
     city: city !== undefined ? emptyToNull(city) : contact.city,
+    region: region !== undefined ? emptyToNull(region) : (contact as any).region,
     instagram: instagram !== undefined ? emptyToNull(instagram) : contact.instagram,
     situation: situation !== undefined ? situation : contact.situation || 'Ativo',
     fantasyName: fantasyName !== undefined ? emptyToNull(fantasyName) : contact.fantasyName,
@@ -277,13 +286,23 @@ const UpdateContactService = async ({
     console.warn("Falha ao atualizar avatar/nome centralizado", err);
   }
 
+  // Aplica regras de tags automaticamente (forma assíncrona, não bloqueia)
+  setImmediate(async () => {
+    try {
+      const ApplyTagRulesService = (await import("../TagServices/ApplyTagRulesService")).default;
+      await ApplyTagRulesService({ companyId, contactId: contact.id });
+    } catch (err) {
+      console.warn(`Falha ao aplicar regras de tags no contato ${contact.id}`, err);
+    }
+  });
+
   await contact.reload({
     attributes: [
       "id", "name", "number", "channel", "email", "companyId",
       "acceptAudioMessage", "active", "disableBot", "profilePicUrl", "remoteJid",
       "urlPicture", "florder", "vlUltCompra", "contactName",
       // Adicionar novos campos aos atributos
-      "cpfCnpj", "representativeCode", "city", "instagram",
+      "cpfCnpj", "representativeCode", "city", "region", "instagram",
       "situation", "fantasyName", "foundationDate", "creditLimit", "segment", "dtUltCompra", "bzEmpresa"
     ],
     include: ["extraInfo", "tags",

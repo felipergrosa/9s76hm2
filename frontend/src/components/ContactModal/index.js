@@ -177,12 +177,27 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	};
 
 	const handleSaveContact = async values => {
+		const payload = {
+			...values,
+			disableBot: values.disableBot,
+			representativeCode: values.representativeCode?.trim?.() || values.representativeCode || null,
+			city: values.city?.trim?.() || values.city || null,
+			region: values.region?.trim?.() || values.region || null,
+			instagram: values.instagram?.trim?.() || values.instagram || null,
+			situation: values.situation?.trim?.() || values.situation || null,
+			fantasyName: values.fantasyName?.trim?.() || values.fantasyName || null,
+			creditLimit: values.creditLimit?.trim?.() || values.creditLimit || null,
+			segment: values.segment?.trim?.() || values.segment || null,
+			contactName: values.contactName?.trim?.() || values.contactName || null,
+			bzEmpresa: values.bzEmpresa?.trim?.() || values.bzEmpresa || null
+		};
+
 		try {
 			if (contactId) {
-				await api.put(`/contacts/${contactId}`, { ...values, disableBot: values.disableBot });
+				await api.put(`/contacts/${contactId}`, payload);
 				handleClose();
 			} else {
-				const { data } = await api.post("/contacts", { ...values, disableBot: values.disableBot });
+				const { data } = await api.post("/contacts", payload);
 				// Sincroniza tags pendentes após criação, se houver
 				if (Array.isArray(pendingTags) && pendingTags.length > 0) {
 					try {
@@ -430,18 +445,34 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
-										<Field
-											as={TextField}
-											label="Valor da Última Compra (R$)"
-											name="vlUltCompra"
-											variant="outlined"
-											margin="dense"
-											InputLabelProps={{
-												shrink: true,
-											}}
-											placeholder="Ex.: 1.234,56"
-											fullWidth
-										/>
+										<Field name="vlUltCompra">
+											{({ field, form }) => (
+												<TextField
+													{...field}
+													label="Valor da Última Compra (R$)"
+													variant="outlined"
+													margin="dense"
+													InputLabelProps={{
+														shrink: true,
+													}}
+													placeholder="Ex.: 1.234,56"
+													fullWidth
+													onChange={(e) => {
+														const value = e.target.value;
+														// Remove caracteres não numéricos exceto vírgula e ponto
+														const cleaned = value.replace(/[^\d.,]/g, '');
+														// Converte para número para validação
+														const numValue = parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
+														// Limite: 9.999.999.999,99 (< 10 bilhões)
+														if (!isNaN(numValue) && numValue >= 10000000000) {
+															toast.error("Valor máximo permitido: R$ 9.999.999.999,99");
+															return;
+														}
+														form.setFieldValue('vlUltCompra', cleaned);
+													}}
+												/>
+											)}
+										</Field>
 									</Grid>
 									<Grid item xs={12} md={6}>
 										<FormControl

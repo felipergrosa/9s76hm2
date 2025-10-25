@@ -57,6 +57,7 @@ import KnowledgeChunk from "../models/KnowledgeChunk";
 import AIUsageLog from "../models/AIUsageLog";
 import WhatsappLabel from "../models/WhatsappLabel";
 import ContactWhatsappLabel from "../models/ContactWhatsappLabel";
+import TagRule from "../models/TagRule";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -121,7 +122,8 @@ const models = [
   KnowledgeChunk,
   AIUsageLog,
   WhatsappLabel,
-  ContactWhatsappLabel
+  ContactWhatsappLabel,
+  TagRule
 ];
 
 sequelize.addModels(models);

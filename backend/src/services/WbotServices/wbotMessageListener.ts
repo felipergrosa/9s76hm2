@@ -128,6 +128,60 @@ const sessionsOpenAi: SessionOpenAi[] = [];
 
 const writeFileAsync = promisify(writeFile);
 
+interface GroupMetadataCacheEntry {
+  subject: string;
+  expiresAt: number;
+}
+
+const GROUP_METADATA_CACHE_TTL_MS = 5 * 60 * 1000;
+const GROUP_METADATA_RATE_LIMIT_BACKOFF_MS = 30 * 1000;
+const groupMetadataCache = new Map<string, GroupMetadataCacheEntry>();
+const groupMetadataBackoffUntil = new Map<string, number>();
+
+const getFallbackGroupName = (remoteJid: string): string => {
+  if (!remoteJid) return "Grupo";
+  return remoteJid.split("@")[0] || remoteJid;
+};
+
+const getGroupMetadataFromCache = (remoteJid: string): GroupMetadataCacheEntry | undefined => {
+  const entry = groupMetadataCache.get(remoteJid);
+  if (!entry) return undefined;
+  if (entry.expiresAt > Date.now()) {
+    return entry;
+  }
+  groupMetadataCache.delete(remoteJid);
+  return undefined;
+};
+
+const setGroupMetadataCache = (remoteJid: string, subject: string): void => {
+  groupMetadataCache.set(remoteJid, {
+    subject,
+    expiresAt: Date.now() + GROUP_METADATA_CACHE_TTL_MS
+  });
+};
+
+const shouldBackoffGroupMetadata = (remoteJid: string): boolean => {
+  const until = groupMetadataBackoffUntil.get(remoteJid);
+  if (!until) return false;
+  if (until > Date.now()) {
+    return true;
+  }
+  groupMetadataBackoffUntil.delete(remoteJid);
+  return false;
+};
+
+const registerGroupMetadataBackoff = (remoteJid: string): void => {
+  groupMetadataBackoffUntil.set(remoteJid, Date.now() + GROUP_METADATA_RATE_LIMIT_BACKOFF_MS);
+};
+
+const isRateLimitError = (error: any): boolean => {
+  if (!error) return false;
+  const dataCode = error?.data;
+  const outputCode = error?.output?.statusCode;
+  const message: string = error?.message || "";
+  return dataCode === 429 || outputCode === 429 || message.includes("rate-overlimit") || message.includes("overlimit");
+};
+
 function removeFile(directory) {
   fs.unlink(directory, error => {
     if (error) throw error;
@@ -4127,10 +4181,36 @@ const handleMessage = async (
 
     if (isGroup) {
       console.log("log... 2966");
-      const grupoMeta = await wbot.groupMetadata(msg.key.remoteJid);
+      const groupJid = msg.key.remoteJid;
+      let groupSubject = getFallbackGroupName(groupJid);
+
+      const cachedMetadata = getGroupMetadataFromCache(groupJid);
+      if (cachedMetadata) {
+        groupSubject = cachedMetadata.subject || groupSubject;
+      } else if (!shouldBackoffGroupMetadata(groupJid)) {
+        try {
+          const grupoMeta = await wbot.groupMetadata(groupJid);
+          groupSubject = grupoMeta?.subject || groupSubject;
+          setGroupMetadataCache(groupJid, groupSubject);
+        } catch (error) {
+          if (isRateLimitError(error)) {
+            registerGroupMetadataBackoff(groupJid);
+            logger.warn(
+              { err: error, groupJid },
+              "[wbotMessageListener] groupMetadata rate limited, utilizando fallback"
+            );
+          } else {
+            logger.error(
+              { err: error, groupJid },
+              "[wbotMessageListener] Falha ao buscar groupMetadata"
+            );
+          }
+        }
+      }
+
       const msgGroupContact = {
-        id: grupoMeta.id,
-        name: grupoMeta.subject
+        id: groupJid,
+        name: groupSubject
       };
       groupContact = await verifyContact(msgGroupContact, wbot, companyId, userId);
     }

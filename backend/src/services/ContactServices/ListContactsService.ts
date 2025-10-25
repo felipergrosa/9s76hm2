@@ -80,7 +80,16 @@ const ListContactsService = async ({
   if (userId) {
     const user = await User.findByPk(userId);
     if (user && Array.isArray(user.allowedContactTags) && user.allowedContactTags.length > 0) {
-      userAllowedContactTags = user.allowedContactTags;
+      // Filtra apenas tags de permissão (que começam com #)
+      const Tag = require("../../models/Tag").default;
+      const permissionTags = await Tag.findAll({
+        where: {
+          id: { [Op.in]: user.allowedContactTags },
+          name: { [Op.like]: "#%" }
+        },
+        attributes: ["id"]
+      });
+      userAllowedContactTags = permissionTags.map((t: any) => t.id);
     }
   }
 
