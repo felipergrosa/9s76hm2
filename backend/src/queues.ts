@@ -50,6 +50,9 @@ const limiterDuration = process.env.REDIS_OPT_LIMITER_DURATION || 3000;
 // Controle de backoff por conexão (whatsappId) em memória
 type BackoffState = { count: number; lastErrorAt: number; pausedUntil?: number };
 const backoffMap: Map<number, BackoffState> = new Map();
+// Controle de pacing por conexão (whatsappId) em memória
+type PacingState = { lastSentAt?: number; blockedUntil?: number; sentSinceLonger: number };
+const pacingMap: Map<number, PacingState> = new Map();
 
 interface ProcessCampaignData {
   id: number;
@@ -81,6 +84,12 @@ interface CapBackoffSettings {
   capDaily: number;  // mensagens/dia por conexão
   backoffErrorThreshold: number; // nº de erros consecutivos para acionar pausa
   backoffPauseMinutes: number;   // minutos de pausa quando atingir o threshold
+}
+
+interface IntervalSettings {
+  messageIntervalMs: number;      // intervalo mínimo entre envios por conexão
+  longerIntervalAfter: number;    // após X mensagens, aplicar pausa maior
+  greaterIntervalMs: number;      // duração da pausa maior
 }
 
 export const userMonitor = new BullQueue("UserMonitor", connection);
@@ -852,6 +861,74 @@ function getBackoffDeferDelayMs(whatsappId: number): number {
   return state.pausedUntil > now ? (state.pausedUntil - now) + randomValue(250, 1000) : 0;
 }
 
+// ==== Intervalos (messageInterval, longerIntervalAfter, greaterInterval) ====
+async function getIntervalSettings(companyId: number): Promise<IntervalSettings> {
+  try {
+    const settings = await CampaignSetting.findAll({
+      where: { companyId },
+      attributes: ["key", "value"],
+    });
+
+    // Defaults conservadores
+    let messageInterval = 30;       // segundos
+    let longerIntervalAfter = 20;   // mensagens
+    let greaterInterval = 60;       // segundos
+
+    settings.forEach(s => {
+      try {
+        const v = s.value ? JSON.parse(s.value) : null;
+        if (s.key === "messageInterval" && v != null) messageInterval = Number(v);
+        if (s.key === "longerIntervalAfter" && v != null) longerIntervalAfter = Number(v);
+        if (s.key === "greaterInterval" && v != null) greaterInterval = Number(v);
+      } catch {}
+    });
+
+    return {
+      messageIntervalMs: Math.max(0, messageInterval) * 1000,
+      longerIntervalAfter: Math.max(0, longerIntervalAfter),
+      greaterIntervalMs: Math.max(0, greaterInterval) * 1000,
+    };
+  } catch {
+    return { messageIntervalMs: 30000, longerIntervalAfter: 20, greaterIntervalMs: 60000 };
+  }
+}
+
+function getPacingDeferDelayMs(whatsappId: number, s: IntervalSettings): number {
+  const now = Date.now();
+  const st = pacingMap.get(whatsappId) || { sentSinceLonger: 0 } as PacingState;
+
+  // Se está bloqueado por pausa longa
+  if (st.blockedUntil && st.blockedUntil > now) {
+    return (st.blockedUntil - now) + randomValue(100, 300);
+  }
+
+  // Se atingiu o limite de mensagens desde a última pausa longa, agenda uma nova pausa
+  if (s.longerIntervalAfter > 0 && (st.sentSinceLonger || 0) >= s.longerIntervalAfter) {
+    st.blockedUntil = now + s.greaterIntervalMs;
+    st.sentSinceLonger = 0;
+    pacingMap.set(whatsappId, st);
+    return (st.blockedUntil - now) + randomValue(50, 150);
+  }
+
+  // Respeita intervalo mínimo entre mensagens
+  if (st.lastSentAt) {
+    const elapsed = now - st.lastSentAt;
+    if (elapsed < s.messageIntervalMs) {
+      return (s.messageIntervalMs - elapsed) + randomValue(100, 300);
+    }
+  }
+
+  pacingMap.set(whatsappId, st);
+  return 0;
+}
+
+function updatePacingOnSuccess(whatsappId: number, s: IntervalSettings) {
+  const st = pacingMap.get(whatsappId) || { sentSinceLonger: 0 } as PacingState;
+  st.lastSentAt = Date.now();
+  st.sentSinceLonger = (st.sentSinceLonger || 0) + 1;
+  pacingMap.set(whatsappId, st);
+}
+
 function updateBackoffOnError(whatsappId: number, caps: CapBackoffSettings, errMsg: string) {
   const patterns = /(too many|rate|limi|429|ban|block|spam)/i;
   const isRateLike = patterns.test(errMsg || "");
@@ -1203,20 +1280,29 @@ async function handleDispatchCampaign(job) {
       return;
     }
 
+    // Atualiza status para processando
+    await campaignShipping.update({ status: 'processing' });
+
     // Checagem de supressão antes do envio
     const suppressed = await isNumberSuppressed(campaignShipping.number, campaign.companyId);
     if (suppressed) {
-      await campaignShipping.update({ deliveredAt: moment() });
+      await campaignShipping.update({ 
+        deliveredAt: moment(),
+        status: 'suppressed',
+        lastError: 'Contato na lista de supressão (DNC/Opt-out)'
+      });
       await verifyAndFinalizeCampaign(campaign);
       logger.warn(`Contato suprimido (opt-out/blacklist). Não enviado: Campanha=${campaignId};Contato=${campaignShipping.number}`);
       return;
     }
 
-    // Cap e Backoff por conexão (whatsappId)
+    // Cap, Backoff e Pacing por conexão (whatsappId)
     const caps = await getCapBackoffSettings(campaign.companyId);
+    const intervals = await getIntervalSettings(campaign.companyId);
     const capDelayMs = await getCapDeferDelayMs(selectedWhatsappId, caps);
     const backoffDelayMs = getBackoffDeferDelayMs(selectedWhatsappId);
-    const deferMs = Math.max(capDelayMs, backoffDelayMs);
+    const pacingDelayMs = getPacingDeferDelayMs(selectedWhatsappId, intervals);
+    const deferMs = Math.max(capDelayMs, backoffDelayMs, pacingDelayMs);
     if (deferMs > 0) {
       const nextJob = await campaignQueue.add(
         "DispatchCampaign",
@@ -1224,11 +1310,11 @@ async function handleDispatchCampaign(job) {
         { delay: deferMs, removeOnComplete: true }
       );
       await campaignShipping.update({ jobId: String(nextJob.id) });
-      logger.warn(`Cap/Backoff ativo. Reagendando envio: Campanha=${campaignId}; Registro=${campaignShippingId}; delay=${deferMs}ms`);
+      logger.warn(`Cap/Backoff/Pacing ativo. Reagendando envio: Campanha=${campaignId}; Registro=${campaignShippingId}; delay=${deferMs}ms; cap=${capDelayMs}; backoff=${backoffDelayMs}; pacing=${pacingDelayMs}`);
       return;
     }
     logger.info(
-      `Sem deferimento: prosseguindo com envio imediato. Campanha=${campaignId}; Registro=${campaignShippingId}; capDelayMs=${capDelayMs}; backoffDelayMs=${backoffDelayMs}`
+      `Sem deferimento: prosseguindo com envio imediato. Campanha=${campaignId}; Registro=${campaignShippingId}; capDelayMs=${capDelayMs}; backoffDelayMs=${backoffDelayMs}; pacingDelayMs=${pacingDelayMs}`
     );
 
     const isGroup = Boolean(campaignShipping.contact && campaignShipping.contact.isGroup);
@@ -1358,9 +1444,14 @@ async function handleDispatchCampaign(job) {
           //     });
           // }
         }
-        await campaignShipping.update({ deliveredAt: moment() });
-        // sucesso: zera backoff para a conexão
+        await campaignShipping.update({ 
+          deliveredAt: moment(),
+          status: 'delivered',
+          attempts: (campaignShipping.attempts || 0) + 1
+        });
+        // sucesso: zera backoff e atualiza pacing da conexão
         resetBackoffOnSuccess(selectedWhatsappId);
+        updatePacingOnSuccess(selectedWhatsappId, intervals);
       }
     }
     else {
@@ -1426,8 +1517,13 @@ async function handleDispatchCampaign(job) {
         }
       }
 
-      await campaignShipping.update({ deliveredAt: moment() });
-      resetBackoffOnSuccess(campaign.whatsappId);
+      await campaignShipping.update({ 
+        deliveredAt: moment(),
+        status: 'delivered',
+        attempts: (campaignShipping.attempts || 0) + 1
+      });
+      resetBackoffOnSuccess(selectedWhatsappId);
+      updatePacingOnSuccess(selectedWhatsappId, intervals);
 
     }
     await verifyAndFinalizeCampaign(campaign);
@@ -1461,8 +1557,32 @@ async function handleDispatchCampaign(job) {
           { delay: delayMs, removeOnComplete: true }
         );
         const record = await CampaignShipping.findByPk(campaignShippingId);
-        if (record) await record.update({ jobId: String(nextJob.id) });
-        logger.warn(`Erro no envio. Backoff aplicado e job reagendado em ${delayMs}ms. Campanha=${campaign.id}; Registro=${campaignShippingId}`);
+        if (record) {
+          const newAttempts = (record.attempts || 0) + 1;
+          const maxAttempts = 5;
+          
+          // Se excedeu tentativas máximas, marca como falha permanente
+          if (newAttempts >= maxAttempts) {
+            await record.update({ 
+              jobId: null,
+              status: 'failed',
+              attempts: newAttempts,
+              lastError: `Falha após ${maxAttempts} tentativas: ${err?.message || 'Erro desconhecido'}`,
+              lastErrorAt: moment().toDate()
+            });
+            logger.error(`[CAMPAIGN FAILED] Campanha=${campaign.id}; Registro=${campaignShippingId}; Tentativas=${newAttempts}; Erro=${err?.message}`);
+            return;
+          }
+          
+          // Caso contrário, reagenda
+          await record.update({ 
+            jobId: String(nextJob.id),
+            attempts: newAttempts,
+            lastError: err?.message || 'Erro desconhecido',
+            lastErrorAt: moment().toDate()
+          });
+        }
+        logger.warn(`Erro no envio. Backoff aplicado e job reagendado em ${delayMs}ms. Campanha=${campaign.id}; Registro=${campaignShippingId}; Tentativa=${(record?.attempts || 0) + 1}`);
         return;
       }
     } catch (inner) {

@@ -29,7 +29,7 @@ import Route from "./Route";
 import Schedules from "../pages/Schedules";
 import Campaigns from "../pages/Campaigns";
 import CampaignsConfig from "../pages/CampaignsConfig";
-import CampaignReport from "../pages/CampaignReport";
+import CampaignDetailedReport from "../pages/CampaignDetailedReport";
 import Annoucements from "../pages/Annoucements";
 import Chat from "../pages/Chat";
 import Prompts from "../pages/Prompts";
@@ -125,7 +125,7 @@ const Routes = () => {
                     <Route exact path="/contact-lists" component={ContactLists} isPrivate />
                     <Route exact path="/contact-lists/:contactListId/contacts" component={ContactListItems} isPrivate />
                     <Route exact path="/campaigns" component={Campaigns} isPrivate />
-                    <Route exact path="/campaign/:campaignId/report" component={CampaignReport} isPrivate />
+                    <Route exact path="/campaign/:campaignId/detailed-report" component={CampaignDetailedReport} isPrivate />
                     <Route exact path="/campaigns-config" component={CampaignsConfig} isPrivate />
                   </>
                 )}

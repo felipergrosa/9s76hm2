@@ -606,8 +606,14 @@ const CampaignModal = ({
     const scheduledAt = moment(campaign.scheduledAt);
     const moreThenAnHour =
       !Number.isNaN(scheduledAt.diff(now)) && scheduledAt.diff(now, "hour") > 1;
+    
+    // Permite edição se:
+    // 1. Campanha está INATIVA (nunca enviada)
+    // 2. Campanha está PROGRAMADA com mais de 1 hora para iniciar
+    // 3. Campanha está CANCELADA (pausada)
     const isEditable =
       campaign.status === "INATIVA" ||
+      campaign.status === "CANCELADA" ||
       (campaign.status === "PROGRAMADA" && moreThenAnHour);
 
     setCampaignEditable(isEditable);

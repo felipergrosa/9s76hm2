@@ -1,4 +1,4 @@
-import { Op, fn, col, where } from "sequelize";
+import { Op, fn, col, where, literal } from "sequelize";
 import Campaign from "../../models/Campaign";
 import { isEmpty } from "lodash";
 import ContactList from "../../models/ContactList";
@@ -47,7 +47,7 @@ const ListService = async ({
     where: whereCondition,
     limit,
     offset,
-    order: [["status", "ASC"], ["scheduledAt", "DESC"]],
+    order: [[literal('"Campaign"."scheduledAt" DESC NULLS LAST')]],
     include: [
       { model: ContactList },
       { model: Whatsapp, attributes: ["id", "name"] }

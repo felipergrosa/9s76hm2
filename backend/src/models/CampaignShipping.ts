@@ -55,6 +55,19 @@ class CampaignShipping extends Model<CampaignShipping> {
   @Column
   messageIndex: number;
 
+  // Campos de monitoramento e rastreamento de erros
+  @Column({ defaultValue: 0 })
+  attempts: number;
+
+  @Column
+  lastError: string;
+
+  @Column
+  lastErrorAt: Date;
+
+  @Column({ defaultValue: "pending" })
+  status: string; // pending, processing, delivered, failed, suppressed
+
   @CreatedAt
   createdAt: Date;
 

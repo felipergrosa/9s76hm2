@@ -3,11 +3,13 @@ import { useParams } from "react-router-dom";
 import { useHistory } from "react-router-dom";
 import { makeStyles } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
+import Button from "@material-ui/core/Button";
 import { toast } from "react-toastify";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import { Grid, LinearProgress, Typography } from "@material-ui/core";
+import AssessmentIcon from "@material-ui/icons/Assessment";
 import api from "../../services/api";
 import { has, get, isNull } from "lodash";
 import CardCounter from "../../components/Dashboard/CardCounter";
@@ -29,7 +31,7 @@ import { i18n } from "../../translate/i18n";
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
     flex: 1,
-    // padding: theme.spacing(2),
+    width: "100%",
     padding: theme.padding,
     overflowY: "scroll",
     ...theme.scrollbarStyles,
@@ -38,7 +40,7 @@ const useStyles = makeStyles((theme) => ({
     textAlign: "right",
   },
   tabPanelsContainer: {
-    // padding: theme.spacing(2),
+    width: "100%",
     padding: theme.padding,
   },
 }));
@@ -171,8 +173,18 @@ const CampaignReport = () => {
     <MainContainer>
       <MainHeader>
         <Grid style={{ width: "99.6%" }} container>
-          <Grid xs={12} item>
+          <Grid xs={12} sm={8} item>
             <Title>{i18n.t("campaignReport.title")} {campaign.name || i18n.t("campaignReport.campaign")}</Title>
+          </Grid>
+          <Grid xs={12} sm={4} item style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AssessmentIcon />}
+              onClick={() => history.push(`/campaign/${campaignId}/detailed-report`)}
+            >
+              Relatório Detalhado
+            </Button>
           </Grid>
         </Grid>
       </MainHeader>

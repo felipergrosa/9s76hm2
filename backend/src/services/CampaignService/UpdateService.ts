@@ -52,9 +52,10 @@ const UpdateService = async (data: Data): Promise<Campaign> => {
     throw new AppError("ERR_NO_CAMPAIGN_FOUND", 404);
   }
 
+  // Permite edição apenas de campanhas que não estão em andamento ou finalizadas
   if (["INATIVA", "PROGRAMADA", "CANCELADA"].indexOf(data.status) === -1) {
     throw new AppError(
-      "Só é permitido alterar campanha Inativa e Programada",
+      "Só é permitido alterar campanha Inativa, Programada ou Cancelada (Pausada)",
       400
     );
   }

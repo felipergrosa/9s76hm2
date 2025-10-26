@@ -11,6 +11,7 @@ import ShowService from "../services/CampaignService/ShowService";
 import UpdateService from "../services/CampaignService/UpdateService";
 import DeleteService from "../services/CampaignService/DeleteService";
 import FindService from "../services/CampaignService/FindService";
+import GetDetailedReportService from "../services/CampaignService/GetDetailedReportService";
 
 import Campaign from "../models/Campaign";
 
@@ -302,6 +303,26 @@ export const deleteMedia = async (
     campaign.mediaName = null;
     await campaign.save();
     return res.send({ mensagem: "Arquivo excluído" });
+  } catch (err: any) {
+    throw new AppError(err.message);
+  }
+};
+
+export const detailedReport = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+  const { status, search, pageNumber } = req.query as any;
+
+  try {
+    const report = await GetDetailedReportService(+id, {
+      status,
+      search,
+      pageNumber
+    });
+
+    return res.status(200).json(report);
   } catch (err: any) {
     throw new AppError(err.message);
   }

@@ -94,9 +94,17 @@ const reducer = (state, action) => {
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
     flex: 1,
-    // padding: theme.spacing(1),
-    padding: theme.padding,
-    // Removido overflow e barra de rolagem interna para usar scroll da janela
+    padding: theme.spacing(2),
+    overflowY: "scroll",
+    ...theme.scrollbarStyles,
+  },
+  tableContainer: {
+    width: '100%',
+    overflowX: 'auto',
+  },
+  table: {
+    width: "100%",
+    tableLayout: "fixed",
   },
 }));
 
@@ -289,7 +297,7 @@ const Campaigns = () => {
   };
 
   return (
-    <MainContainer useWindowScroll>
+    <MainContainer>
       <ConfirmationModal
         title={
           deletingCampaign &&
@@ -359,7 +367,8 @@ const Campaigns = () => {
               className={classes.mainPaper}
               variant="outlined"
             >
-              <Table size="small">
+              <div className={classes.tableContainer}>
+                <Table size="small" className={classes.table}>
                 <TableHead>
                   <TableRow>
                     <TableCell align="center">
@@ -440,9 +449,10 @@ const Campaigns = () => {
                           )}
                           <IconButton
                             onClick={() =>
-                              history.push(`/campaign/${campaign.id}/report`)
+                              history.push(`/campaign/${campaign.id}/detailed-report`)
                             }
                             size="small"
+                            title="Relatório Detalhado"
                           >
                             <DescriptionIcon />
                           </IconButton>
@@ -469,6 +479,7 @@ const Campaigns = () => {
                   </>
                 </TableBody>
               </Table>
+              </div>
             </Paper>
             {/* Paginação numerada */}
             <nav className="flex justify-center mt-4" aria-label="Page navigation">
