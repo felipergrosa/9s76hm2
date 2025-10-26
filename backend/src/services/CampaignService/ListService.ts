@@ -47,7 +47,7 @@ const ListService = async ({
     where: whereCondition,
     limit,
     offset,
-    order: [[literal('"Campaign"."scheduledAt" DESC NULLS LAST')]],
+    order: [literal('"Campaign"."scheduledAt" DESC NULLS LAST')],
     include: [
       { model: ContactList },
       { model: Whatsapp, attributes: ["id", "name"] }
