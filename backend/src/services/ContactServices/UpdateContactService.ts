@@ -2,6 +2,8 @@ import AppError from "../../errors/AppError";
 import Contact from "../../models/Contact";
 import ContactCustomField from "../../models/ContactCustomField";
 import ContactWallet from "../../models/ContactWallet";
+import { Op } from "sequelize";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 interface ExtraInfo {
   id?: number;
@@ -170,6 +172,39 @@ const UpdateContactService = async ({
     throw new AppError("ERR_NO_CONTACT_FOUND", 404);
   }
 
+  const isGroupContact = contact.isGroup;
+  let targetNumber = contact.number;
+  let canonicalNumberValue = isGroupContact ? null : (contact.canonicalNumber ?? contact.number);
+
+  if (number !== undefined) {
+    if (isGroupContact) {
+      targetNumber = typeof number === "string" ? number.trim() : String(number);
+      canonicalNumberValue = null;
+    } else {
+      const { canonical } = safeNormalizePhoneNumber(String(number));
+
+      if (!canonical) {
+        throw new AppError("ERR_INVALID_PHONE_NUMBER");
+      }
+
+      const duplicate = await Contact.findOne({
+        where: {
+          companyId,
+          canonicalNumber: canonical,
+          id: { [Op.ne]: contact.id }
+        },
+        attributes: ["id"]
+      });
+
+      if (duplicate) {
+        throw new AppError("ERR_DUPLICATED_CONTACT");
+      }
+
+      targetNumber = canonical;
+      canonicalNumberValue = canonical;
+    }
+  }
+
   if (extraInfo) {
     await Promise.all(
       extraInfo.map(async (info: any) => {
@@ -221,12 +256,13 @@ const UpdateContactService = async ({
   const currentIsNumber = currentName.replace(/\D/g, "") === String(contact.number);
   const hasValidExistingName = currentName !== "" && !currentIsNumber;
 
+  const fallbackNumber = targetNumber ?? contact.number;
   let resolvedName = contact.name;
   if (name === undefined) {
     resolvedName = contact.name; // sem alteração do campo name
   } else {
     const incomingName = (name || "").trim();
-    const incomingIsNumber = incomingName.replace(/\D/g, "") === String(number ?? contact.number);
+    const incomingIsNumber = incomingName.replace(/\D/g, "") === String(fallbackNumber);
 
     if (hasValidExistingName) {
       // Só aceitar alteração se o novo nome for explicitamente válido (não vazio e não igual ao número)
@@ -237,13 +273,14 @@ const UpdateContactService = async ({
       }
     } else {
       // Nome atual é vazio ou igual ao número: aceitar um nome melhor, senão manter número
-      resolvedName = incomingName && !incomingIsNumber ? incomingName : String(number ?? contact.number);
+      resolvedName = incomingName && !incomingIsNumber ? incomingName : String(fallbackNumber);
     }
   }
 
   const updateData: any = {
     name: resolvedName,
-    number: number !== undefined ? number : contact.number,
+    number: targetNumber,
+    canonicalNumber: isGroupContact ? null : canonicalNumberValue,
     contactName: contactName !== undefined ? emptyToNull(contactName) : (contact as any).contactName,
     // Email: nunca salvar como null (modelo não permite). Vazio => "".
     email: email !== undefined

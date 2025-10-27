@@ -15,7 +15,8 @@ import {
   BelongsToMany,
   DataType,
   AfterCreate,
-  AfterUpdate
+  AfterUpdate,
+  BeforeSave
 } from "sequelize-typescript";
 import ContactCustomField from "./ContactCustomField";
 import Ticket from "./Ticket";
@@ -26,6 +27,7 @@ import Tag from "./Tag";
 import ContactWallet from "./ContactWallet";
 import User from "./User";
 import Whatsapp from "./Whatsapp";
+import { safeNormalizePhoneNumber } from "../utils/phone";
 
 @Table
 class Contact extends Model<Contact> {
@@ -53,6 +55,9 @@ class Contact extends Model<Contact> {
   @Default("")
   @Column
   email: string;
+
+  @Column
+  canonicalNumber: string;
 
   @Default("")
   @Column
@@ -278,6 +283,29 @@ class Contact extends Model<Contact> {
 
   @BelongsTo(() => User)
   user: User;
+
+  @BeforeSave
+  static applyCanonicalNumber(contact: Contact) {
+    if (contact.isGroup) {
+      contact.canonicalNumber = null;
+      return;
+    }
+
+    const shouldNormalize = contact.changed("number") || !contact.canonicalNumber;
+
+    if (!shouldNormalize) {
+      return;
+    }
+
+    const { canonical } = safeNormalizePhoneNumber(contact.number);
+
+    if (canonical) {
+      contact.setDataValue("number", canonical);
+      contact.canonicalNumber = canonical;
+    } else {
+      contact.canonicalNumber = null;
+    }
+  }
 
   // Hook para aplicar regras de tags automaticamente após criar contato
   @AfterCreate

@@ -4,6 +4,7 @@ import Contact from "../../models/Contact";
 import ContactCustomField from "../../models/ContactCustomField";
 import logger from "../../utils/logger";
 import ContactWallet from "../../models/ContactWallet";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 interface ExtraInfo extends ContactCustomField {
   name: string;
@@ -47,6 +48,77 @@ interface Request {
   bzEmpresa?: string;
 }
 
+const shouldReplaceName = (currentName: string | null | undefined, fallbackNumber: string): boolean => {
+  const normalized = (currentName || "").trim();
+  if (!normalized) return true;
+
+  const digitsOnly = normalized.replace(/\D/g, "");
+  return digitsOnly === fallbackNumber;
+};
+
+const mergeContactData = (contact: Contact, canonicalNumber: string, payload: any) => {
+  const updates: any = {};
+
+  const mergeStringField = (field: string) => {
+    const incoming = payload[field];
+    if (typeof incoming === "undefined" || incoming === null) return;
+
+    const incomingStr = typeof incoming === "string" ? incoming.trim() : incoming;
+    if (incomingStr === "" || incomingStr === null) return;
+
+    const current = (contact as any)[field];
+    if (!current || (typeof current === "string" && current.trim() === "")) {
+      updates[field] = incoming;
+    }
+  };
+
+  const mergeDirectField = (field: string) => {
+    const incoming = payload[field];
+    if (typeof incoming === "undefined" || incoming === null) return;
+    const current = (contact as any)[field];
+    if (current === null || typeof current === "undefined") {
+      updates[field] = incoming;
+    }
+  };
+
+  mergeStringField("email");
+  mergeStringField("representativeCode");
+  mergeStringField("city");
+  mergeStringField("region");
+  mergeStringField("instagram");
+  mergeStringField("fantasyName");
+  mergeStringField("creditLimit");
+  mergeStringField("segment");
+  mergeStringField("contactName");
+  mergeStringField("bzEmpresa");
+  mergeStringField("cpfCnpj");
+
+  mergeDirectField("foundationDate");
+  mergeDirectField("dtUltCompra");
+  mergeDirectField("vlUltCompra");
+
+  if (payload.situation && !contact.situation) {
+    updates.situation = payload.situation;
+  }
+
+  if (shouldReplaceName(contact.name, canonicalNumber) && payload.name) {
+    updates.name = payload.name;
+  }
+
+  updates.number = canonicalNumber;
+  updates.canonicalNumber = canonicalNumber;
+
+  if (Object.keys(updates).length > 0) {
+    return contact.update(updates);
+  }
+
+  if (contact.canonicalNumber !== canonicalNumber) {
+    return contact.update({ number: canonicalNumber, canonicalNumber });
+  }
+
+  return contact;
+};
+
 const CreateContactService = async ({
                                       name,
                                       number,
@@ -76,13 +148,15 @@ const CreateContactService = async ({
                                       vlUltCompra,
                                       bzEmpresa,
                                     }: Request): Promise<Contact> => {
-  const numberExists = await Contact.findOne({
-    where: { number, companyId }
-  });
+  const { canonical } = safeNormalizePhoneNumber(number);
 
-  if (numberExists) {
-    throw new AppError("ERR_DUPLICATED_CONTACT");
+  if (!canonical) {
+    throw new AppError("ERR_INVALID_PHONE_NUMBER");
   }
+
+  const existingContact = await Contact.findOne({
+    where: { companyId, canonicalNumber: canonical }
+  });
 
   // Validação de CPF/CNPJ
   if (cpfCnpj) {
@@ -182,9 +256,10 @@ const CreateContactService = async ({
     dtUltCompra?: Date | null;
     vlUltCompra?: number | null;
     bzEmpresa?: string | null;
+    canonicalNumber: string;
   } = {
     name: name || '',
-    number: number || '',
+    number: canonical,
     email: (() => {
       if (email === undefined || email === null) return '';
       const e = typeof email === 'string' ? email.trim() : String(email);
@@ -212,7 +287,39 @@ const CreateContactService = async ({
     dtUltCompra: dtUltCompraValue,
     vlUltCompra: vlUltCompraValue,
     bzEmpresa: emptyToNull(bzEmpresa),
+    canonicalNumber: canonical,
   };
+
+  if (existingContact) {
+    const merged = await mergeContactData(existingContact, canonical, {
+      ...contactData,
+      userId,
+      dtUltCompra: dtUltCompraValue,
+      vlUltCompra: vlUltCompraValue
+    });
+
+    if (wallets) {
+      await ContactWallet.destroy({
+        where: {
+          companyId,
+          contactId: existingContact.id
+        }
+      });
+
+      const contactWallets: Wallet[] = [];
+      wallets.forEach((wallet: any) => {
+        contactWallets.push({
+          walletId: !wallet.id ? wallet : wallet.id,
+          contactId: existingContact.id,
+          companyId
+        });
+      });
+
+      await ContactWallet.bulkCreate(contactWallets);
+    }
+
+    return merged;
+  }
 
   // Apenas adiciona o userId se ele for fornecido
   if (userId) {

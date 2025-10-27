@@ -2,12 +2,14 @@ import { getIO } from "../../libs/socket";
 import CompaniesSettings from "../../models/CompaniesSettings";
 import Contact from "../../models/Contact";
 import ContactCustomField from "../../models/ContactCustomField";
+import ContactWallet from "../../models/ContactWallet";
 import fs from "fs";
 import path, { join } from "path";
 import logger from "../../utils/logger";
 import { isNil } from "lodash";
 import Whatsapp from "../../models/Whatsapp";
 import * as Sentry from "@sentry/node";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 const axios = require('axios');
 
@@ -103,22 +105,31 @@ const CreateOrUpdateContactService = async ({
     let createContact = false;
     let shouldEmitUpdate = false;
     const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
-    const number = isGroup ? rawNumber : rawNumber.replace(/[^0-9]/g, "");
-    // Após sanitizar o número…
-if (!isGroup) {
-  const numLen = number.length;
-  if (numLen < 10 || numLen > 13) {
-    try {
-      const existing = await Contact.findOne({ where: { number, companyId } });
-      if (existing) {
-        return existing;
+
+    const rawNumberDigits = isGroup ? (rawNumber || "").toString().trim() : (rawNumber || "").toString();
+    const { canonical } = !isGroup ? safeNormalizePhoneNumber(rawNumberDigits) : { canonical: null };
+
+    const number = isGroup ? rawNumberDigits : canonical;
+
+    if (!isGroup) {
+      if (!number) {
+        logger.warn("[CreateOrUpdateContactService] Número inválido após normalização", { rawNumber, companyId });
+        return null as any;
       }
-    } catch (err) {
-      logger.warn("Falha ao buscar contato existente para número inválido", err);
+
+      const numLen = number.length;
+      if (numLen < 10 || numLen > 13) {
+        try {
+          const existing = await Contact.findOne({ where: { companyId, canonicalNumber: number } });
+          if (existing) {
+            return existing;
+          }
+        } catch (err) {
+          logger.warn("Falha ao buscar contato existente para número inválido", err);
+        }
+        return null as any;
+      }
     }
-    return null as any;
-  }
-}
 
 
     // Garante que creditLimit seja null se não estiver definido
@@ -175,7 +186,7 @@ if (!isGroup) {
     let contact: Contact | null;
 
     contact = await Contact.findOne({
-      where: { number, companyId }
+      where: isGroup ? { number: rawNumberDigits, companyId } : { companyId, canonicalNumber: number }
     });
 
     let updateImage = (!contact || contact?.profilePicUrl !== profilePicUrl && profilePicUrl !== "") && wbot || false;
@@ -188,6 +199,10 @@ if (!isGroup) {
       contact.remoteJid = remoteJid;
       contact.profilePicUrl = profilePicUrl || null;
       contact.isGroup = isGroup;
+      if (!isGroup) {
+        contact.number = number;
+        contact.canonicalNumber = number;
+      }
       // Atualiza os novos campos se eles forem fornecidos
       contact.cpfCnpj = sanitizedCpfCnpj === undefined ? contact.cpfCnpj : sanitizedCpfCnpj;
       contact.representativeCode = representativeCode || contact.representativeCode;
@@ -287,7 +302,8 @@ if (!isGroup) {
           channel,
           acceptAudioMessage: acceptAudioMessageContact === 'enabled' ? true : false,
           remoteJid: newRemoteJid,
-          whatsappId
+          whatsappId,
+          canonicalNumber: isGroup ? null : number
         });
       }
       
@@ -301,7 +317,8 @@ if (!isGroup) {
           ...contactData,
           name: effectiveName,
           channel,
-          whatsappId
+          whatsappId,
+          canonicalNumber: isGroup ? null : number
         });
       }
     }

@@ -42,8 +42,10 @@ import ContactTagListModal from "../../components/ContactTagListModal";
 const reducer = (state, action) => {
   switch (action.type) {
     case "LOAD_TAGS":
+      console.log("LOAD_TAGS", action.payload);
       return [...state, ...action.payload];
     case "UPDATE_TAGS":
+      console.log("UPDATE_TAGS", action.payload);
       const tag = action.payload;
       const tagIndex = state.findIndex((s) => s.id === tag.id);
 
@@ -107,7 +109,7 @@ const Tags = () => {
   const [searchParam, setSearchParam] = useState("");
   const [tags, dispatch] = useReducer(reducer, []);
   const [tagModalOpen, setTagModalOpen] = useState(false);
-  const pageNumberRef = useRef(1);
+  const pageNumberRef = useRef(0);
 
   // Função para categorizar tags baseado na quantidade de #
   const categorizeTags = (tags) => {
@@ -134,15 +136,21 @@ const Tags = () => {
 
   useEffect(() => {
     const fetchMoreTags = async () => {
+      if (pageNumberRef.current === pageNumber) {
+        return;
+      }
+      pageNumberRef.current = pageNumber;
       try {
         const { data } = await api.get("/tags/", {
           params: { searchParam, pageNumber, kanban: 0 },
         });
+        console.log("fetchMoreTags", data.tags);
         dispatch({ type: "LOAD_TAGS", payload: data.tags });
         setHasMore(data.hasMore);
-        setLoading(false);
       } catch (err) {
         toastError(err);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -304,6 +312,7 @@ const Tags = () => {
           const categorized = categorizeTags(tags);
           
           const renderTagTable = (categoryTags, title) => {
+            console.log("renderTagTable", categoryTags, title);
             if (categoryTags.length === 0) return null;
             
             return (

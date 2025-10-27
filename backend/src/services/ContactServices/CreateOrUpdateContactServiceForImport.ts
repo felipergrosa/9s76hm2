@@ -1,5 +1,6 @@
 import { getIO } from "../../libs/socket";
 import Contact from "../../models/Contact";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 interface ExtraInfo {
   name: string;
@@ -51,7 +52,13 @@ const CreateOrUpdateContactServiceForImport = async ({
   bzEmpresa,
   silentMode // Adicionar a nova propriedade
 }: Request): Promise<Contact> => {
-  const number = isGroup ? rawNumber : rawNumber.replace(/[^0-9]/g, "");
+  const rawString = (rawNumber || "").toString();
+  const { canonical } = !isGroup ? safeNormalizePhoneNumber(rawString) : { canonical: null };
+  const number = isGroup ? rawString.trim() : canonical;
+
+  if (!isGroup && !number) {
+    throw new Error("Número inválido fornecido para importação");
+  }
 
   // Convert Excel serial date to JS Date object
   let finalFoundationDate = foundationDate;
@@ -126,7 +133,9 @@ const CreateOrUpdateContactServiceForImport = async ({
   const io = getIO();
   let contact: Contact | null;
 
-  contact = await Contact.findOne({ where: { number, companyId } });
+  contact = await Contact.findOne({
+    where: isGroup ? { number: rawString.trim(), companyId } : { companyId, canonicalNumber: number }
+  });
 
   if (contact) {
     // Proteção: não sobrescrever nome personalizado já válido
@@ -161,7 +170,10 @@ const CreateOrUpdateContactServiceForImport = async ({
       updatePayload.name = incomingName && !incomingIsNumber ? incomingName : String(number);
     }
 
-    await contact.update(updatePayload);
+    await contact.update({
+      ...updatePayload,
+      ...(isGroup ? {} : { number, canonicalNumber: number })
+    });
 
     if (!silentMode) { // Emitir evento apenas se não estiver em modo silencioso
       io.of(`/workspace-${companyId}`)
@@ -171,7 +183,10 @@ const CreateOrUpdateContactServiceForImport = async ({
         });
     }
   } else {
-    contact = await Contact.create(contactData);
+    contact = await Contact.create({
+      ...contactData,
+      canonicalNumber: isGroup ? null : number
+    });
 
     if (!silentMode) { // Emitir evento apenas se não estiver em modo silencioso
       io.of(`/workspace-${companyId}`)

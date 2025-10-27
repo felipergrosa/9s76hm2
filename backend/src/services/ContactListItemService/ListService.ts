@@ -108,21 +108,35 @@ const ListService = async ({
   console.log(`[ListService] Total de itens: ${rowsAny.length}, Sem contact: ${itemsNeedingContact.length}`);
   
   if (itemsNeedingContact.length > 0) {
-    // Extrair números únicos dos itens
-    const uniqueNumbers = [...new Set(
-      itemsNeedingContact
-        .map(item => (item.number || "").toString().trim())
-        .filter(Boolean)
-    )];
+    // Extrair números originais e variantes (raw, trim, apenas dígitos)
+    const numberVariantsSet = new Set<string>();
+    itemsNeedingContact.forEach(item => {
+      const raw = (item.number || "").toString();
+      if (!raw) return;
+      const trimmed = raw.trim();
+      const digits = raw.replace(/\D/g, "");
+
+      numberVariantsSet.add(raw);
+      if (trimmed) numberVariantsSet.add(trimmed);
+      if (digits) numberVariantsSet.add(digits);
+      if (digits && digits.startsWith("55") && digits.length > 11) {
+        numberVariantsSet.add(digits.substring(2));
+      }
+      if (digits && !digits.startsWith("55") && digits.length >= 10) {
+        numberVariantsSet.add(`55${digits}`);
+      }
+    });
+
+    const numberVariants = [...numberVariantsSet];
+
+    console.log(`[ListService] Buscando ${numberVariants.length} variantes de números no banco...`);
     
-    console.log(`[ListService] Buscando ${uniqueNumbers.length} números únicos no banco...`);
-    
-    if (uniqueNumbers.length > 0) {
-      // Buscar contatos usando exatamente os números como estão salvos
+    if (numberVariants.length > 0) {
+      // Buscar contatos usando as variantes dos números
       const foundContacts = await Contact.findAll({
         where: {
           companyId,
-          number: { [Op.in]: uniqueNumbers }
+          number: { [Op.in]: numberVariants }
         },
         attributes: [
           "id",
@@ -153,16 +167,29 @@ const ListService = async ({
       // Criar mapa número -> contato
       const contactMap = new Map();
       foundContacts.forEach(contact => {
-        const num = (contact.number || "").toString().trim();
-        contactMap.set(num, contact);
+        const numRaw = (contact.number || "").toString();
+        const numTrimmed = numRaw.trim();
+        const digits = numRaw.replace(/\D/g, "");
+
+        if (numRaw) contactMap.set(numRaw, contact);
+        if (numTrimmed) contactMap.set(numTrimmed, contact);
+        if (digits) contactMap.set(digits, contact);
+        if (digits && digits.startsWith("55") && digits.length > 11) {
+          contactMap.set(digits.substring(2), contact);
+        }
+        if (digits && !digits.startsWith("55") && digits.length >= 10) {
+          contactMap.set(`55${digits}`, contact);
+        }
       });
 
       // Associar contatos aos itens
       let matched = 0;
       itemsNeedingContact.forEach(item => {
-        const itemNumber = (item.number || "").toString().trim();
-        const found = contactMap.get(itemNumber);
-        
+        const raw = (item.number || "").toString();
+        const trimmed = raw.trim();
+        const digits = raw.replace(/\D/g, "");
+        let found = contactMap.get(raw) || contactMap.get(trimmed) || contactMap.get(digits);
+
         if (found) {
           item.setDataValue && item.setDataValue("contact", found);
           if (!item.contact) (item as any).contact = found;

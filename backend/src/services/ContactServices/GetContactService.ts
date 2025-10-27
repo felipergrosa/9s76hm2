@@ -2,6 +2,7 @@ import AppError from "../../errors/AppError";
 import Contact from "../../models/Contact";
 import ContactCustomField from "../../models/ContactCustomField";
 import CreateContactService from "./CreateContactService";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 interface ExtraInfo extends ContactCustomField {
   name: string;
@@ -26,14 +27,20 @@ const GetContactService = async ({
   cpfCnpj,
   companyId
 }: Request): Promise<Contact> => {
+  const { canonical } = safeNormalizePhoneNumber(number);
+
+  if (!canonical) {
+    throw new AppError("ERR_INVALID_PHONE_NUMBER");
+  }
+
   const numberExists = await Contact.findOne({
-    where: { number, cpfCnpj, companyId }
+    where: { companyId, canonicalNumber: canonical }
   });
 
   if (!numberExists) {
     const contact = await CreateContactService({
       name,
-      number,
+      number: canonical,
       companyId
     });
 
