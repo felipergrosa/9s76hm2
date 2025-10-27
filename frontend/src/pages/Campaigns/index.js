@@ -191,12 +191,14 @@ const Campaigns = () => {
     }
   };
 
-  const handleOpenCampaignModal = () => {
-    setSelectedCampaign(null);
+  const handleOpenCampaignModal = (campaign) => {
+    console.log('[Campaigns] Abrindo modal de campanha', campaign?.id, campaign);
+    setSelectedCampaign(campaign);
     setCampaignModalOpen(true);
   };
 
   const handleCloseCampaignModal = () => {
+    console.log('[Campaigns] Fechando modal de campanha');
     setSelectedCampaign(null);
     setCampaignModalOpen(false);
   };
