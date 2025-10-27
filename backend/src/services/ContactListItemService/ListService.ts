@@ -105,22 +105,24 @@ const ListService = async ({
   // Primeiro, identificar quais itens precisam de busca
   const itemsNeedingContact = rowsAny.filter(item => !item.contact);
   
+  console.log(`[ListService] Total de itens: ${rowsAny.length}, Sem contact: ${itemsNeedingContact.length}`);
+  
   if (itemsNeedingContact.length > 0) {
-    // Buscar todos os números de uma vez para otimizar
-    const numbers = itemsNeedingContact.map(item => {
-      const raw = (item.number || "").toString();
-      const digits = raw.replace(/\D/g, "");
-      return { raw, digits, item };
-    }).filter(n => n.raw || n.digits);
-
-    // Buscar contatos em lote
-    const allNumbers = [...new Set(numbers.flatMap(n => [n.raw, n.digits]).filter(Boolean))];
+    // Extrair números únicos dos itens
+    const uniqueNumbers = [...new Set(
+      itemsNeedingContact
+        .map(item => (item.number || "").toString().trim())
+        .filter(Boolean)
+    )];
     
-    if (allNumbers.length > 0) {
+    console.log(`[ListService] Buscando ${uniqueNumbers.length} números únicos no banco...`);
+    
+    if (uniqueNumbers.length > 0) {
+      // Buscar contatos usando exatamente os números como estão salvos
       const foundContacts = await Contact.findAll({
         where: {
           companyId,
-          number: { [Op.in]: allNumbers }
+          number: { [Op.in]: uniqueNumbers }
         },
         attributes: [
           "id",
@@ -146,23 +148,29 @@ const ListService = async ({
         ]
       });
 
-      // Criar mapa de número -> contato para lookup rápido
+      console.log(`[ListService] Encontrados ${foundContacts.length} contatos no banco`);
+
+      // Criar mapa número -> contato
       const contactMap = new Map();
       foundContacts.forEach(contact => {
-        const num = (contact.number || "").toString();
-        const digits = num.replace(/\D/g, "");
+        const num = (contact.number || "").toString().trim();
         contactMap.set(num, contact);
-        contactMap.set(digits, contact);
       });
 
       // Associar contatos aos itens
-      numbers.forEach(({ raw, digits, item }) => {
-        const found = contactMap.get(raw) || contactMap.get(digits);
+      let matched = 0;
+      itemsNeedingContact.forEach(item => {
+        const itemNumber = (item.number || "").toString().trim();
+        const found = contactMap.get(itemNumber);
+        
         if (found) {
           item.setDataValue && item.setDataValue("contact", found);
           if (!item.contact) (item as any).contact = found;
+          matched++;
         }
       });
+      
+      console.log(`[ListService] ${matched} de ${itemsNeedingContact.length} itens associados com sucesso`);
     }
   }
 
