@@ -98,59 +98,73 @@ const ListService = async ({
     ]
   });
 
-  // Pós-processamento: alguns itens podem não associar com Contact por diferenças de formatação do número.
-  // Para esses casos, tentamos localizar o contato pelo número normalizado (apenas dígitos)
-  // e preencher o campo contact dinamicamente.
+  // Pós-processamento: garantir que TODOS os itens tenham o Contact associado
+  // Isso é crítico quando itens são inseridos via filtro (INSERT direto) sem associação
   const rowsAny: any[] = contacts as any[];
-  await Promise.all(
-    rowsAny.map(async (item) => {
-      try {
-        if (item.contact) return; // já populado pela associação
-        const raw = (item.number || "").toString();
-        const digits = raw.replace(/\D/g, "");
-        if (!raw && !digits) return;
-        const found = await Contact.findOne({
-          where: {
-            companyId,
-            [Op.or]: [
-              { number: raw },
-              { number: digits },
-              { number: { [Op.like]: `%${digits}%` } },
-              { number: { [Op.like]: `%${raw}%` } }
-            ]
-          },
-          attributes: [
-            "id",
-            "name",
-            "number",
-            "email",
-            "profilePicUrl",
-            "city",
-            "segment",
-            "situation",
-            "creditLimit",
-            "channel",
-            "representativeCode"
-          ],
-          include: [
-            {
-              model: Tag,
-              as: "tags",
-              attributes: ["id", "name", "color"],
-              through: { attributes: [] }
-            }
-          ]
-        });
+  
+  // Primeiro, identificar quais itens precisam de busca
+  const itemsNeedingContact = rowsAny.filter(item => !item.contact);
+  
+  if (itemsNeedingContact.length > 0) {
+    // Buscar todos os números de uma vez para otimizar
+    const numbers = itemsNeedingContact.map(item => {
+      const raw = (item.number || "").toString();
+      const digits = raw.replace(/\D/g, "");
+      return { raw, digits, item };
+    }).filter(n => n.raw || n.digits);
+
+    // Buscar contatos em lote
+    const allNumbers = [...new Set(numbers.flatMap(n => [n.raw, n.digits]).filter(Boolean))];
+    
+    if (allNumbers.length > 0) {
+      const foundContacts = await Contact.findAll({
+        where: {
+          companyId,
+          number: { [Op.in]: allNumbers }
+        },
+        attributes: [
+          "id",
+          "name",
+          "number",
+          "email",
+          "profilePicUrl",
+          "city",
+          "segment",
+          "situation",
+          "creditLimit",
+          "channel",
+          "representativeCode",
+          "bzEmpresa"
+        ],
+        include: [
+          {
+            model: Tag,
+            as: "tags",
+            attributes: ["id", "name", "color"],
+            through: { attributes: [] }
+          }
+        ]
+      });
+
+      // Criar mapa de número -> contato para lookup rápido
+      const contactMap = new Map();
+      foundContacts.forEach(contact => {
+        const num = (contact.number || "").toString();
+        const digits = num.replace(/\D/g, "");
+        contactMap.set(num, contact);
+        contactMap.set(digits, contact);
+      });
+
+      // Associar contatos aos itens
+      numbers.forEach(({ raw, digits, item }) => {
+        const found = contactMap.get(raw) || contactMap.get(digits);
         if (found) {
-          // setDataValue evita mexer no modelo/associação original, mas expõe "contact" no JSON 
           item.setDataValue && item.setDataValue("contact", found);
           if (!item.contact) (item as any).contact = found;
         }
-      } catch (_) {
-        // silencioso: se falhar, apenas mantém contact nulo
-      }
-    })
-  );
+      });
+    }
+  }
 
   const hasMore = count > offset + contacts.length;
 

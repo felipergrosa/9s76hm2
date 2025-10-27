@@ -18,6 +18,8 @@ import CircularProgress from "@material-ui/core/CircularProgress";
 import AttachFileIcon from "@material-ui/icons/AttachFile";
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import InfoOutlinedIcon from "@material-ui/icons/InfoOutlined";
+import PlayCircleOutlineIcon from "@material-ui/icons/PlayCircleOutline";
+import PauseCircleOutlineIcon from "@material-ui/icons/PauseCircleOutline";
 import Chip from '@material-ui/core/Chip';
 import Tooltip from '@material-ui/core/Tooltip';
 import Typography from '@material-ui/core/Typography';
@@ -247,6 +249,7 @@ const CampaignModal = ({
   };
 
   const [campaign, setCampaign] = useState(initialState);
+  const [campaignLoading, setCampaignLoading] = useState(false);
   const [whatsapps, setWhatsapps] = useState([]);
   const [selectedWhatsapps, setSelectedWhatsapps] = useState([]);
   const [dispatchStrategy, setDispatchStrategy] = useState("single");
@@ -508,72 +511,57 @@ const CampaignModal = ({
   };
 
   useEffect(() => {
-    if (isMounted.current) {
-      if (initialValues) {
-        setCampaign((prevState) => {
-          return { ...prevState, ...initialValues };
-        });
-      }
+    if (!open || !isMounted.current) return;
 
-      api
-        .get(`/contact-lists/list`, { params: { companyId } })
-        .then(({ data }) => setContactLists(data));
+    const loadData = async () => {
+      try {
+        // Carregar dados básicos em paralelo (não dependem da campanha)
+        const [contactListsRes, whatsappsRes, tagsRes] = await Promise.all([
+          api.get(`/contact-lists/list`, { params: { companyId } }),
+          api.get(`/whatsapp`, { params: { companyId, session: 0 } }),
+          api.get(`/tags/list`, { params: { companyId, kanban: 0 } })
+        ]);
 
-      api
-        .get(`/whatsapp`, { params: { companyId, session: 0 } })
-        .then(({ data }) => {
-          // Mapear os dados recebidos da API para adicionar a propriedade 'selected'
-          const mappedWhatsapps = data.map((whatsapp) => ({
-            ...whatsapp,
-            selected: false,
+        setContactLists(contactListsRes.data || []);
+        
+        const mappedWhatsapps = (whatsappsRes.data || []).map((whatsapp) => ({
+          ...whatsapp,
+          selected: false,
+        }));
+        setWhatsapps(mappedWhatsapps);
+
+        const formattedTagLists = (tagsRes.data || [])
+          .filter(tag => tag.contacts && tag.contacts.length > 0)
+          .map((tag) => ({
+            id: tag.id,
+            name: `${tag.name} (${tag.contacts.length})`,
           }));
+        setTagLists(formattedTagLists);
 
-          setWhatsapps(mappedWhatsapps);
-        });
+        // Se tem campaignId, carregar dados da campanha
+        if (campaignId) {
+          setCampaignLoading(true);
+          const { data } = await api.get(`/campaigns/${campaignId}`);
+          console.log('[CampaignModal] Dados recebidos da API:', data);
 
-      api.get(`/tags/list`, { params: { companyId, kanban: 0 } })
-        .then(({ data }) => {
-          const fetchedTags = data;
-          // Perform any necessary data transformation here
-          const formattedTagLists = fetchedTags
-            .filter(tag => tag.contacts.length > 0)  // Filtra as tags com contacts.length > 0
-            .map((tag) => ({
-              id: tag.id,
-              name: `${tag.name} (${tag.contacts.length})`,
-            }));
+          if (data?.user) setSelectedUser(data.user);
+          if (data?.queue) setSelectedQueue(data.queue.id);
+          if (data?.whatsappId) setWhatsappId(data.whatsappId);
+          if (data?.dispatchStrategy) setDispatchStrategy(data.dispatchStrategy);
+          
+          if (data?.allowedWhatsappIds) {
+            try {
+              const parsed = typeof data.allowedWhatsappIds === 'string' 
+                ? JSON.parse(data.allowedWhatsappIds) 
+                : data.allowedWhatsappIds;
+              if (Array.isArray(parsed)) setAllowedWhatsappIds(parsed);
+            } catch (e) {
+              console.error('[CampaignModal] Erro ao parsear allowedWhatsappIds:', e);
+            }
+          }
 
-          setTagLists(formattedTagLists);
-        })
-        .catch((error) => {
-          console.error("Error retrieving tags:", error);
-        });
-
-      if (!campaignId) return;
-
-      api.get(`/campaigns/${campaignId}`).then(({ data }) => {
-
-        if (data?.user)
-          setSelectedUser(data.user);
-
-        if (data?.queue)
-          setSelectedQueue(data.queue.id)
-
-        if (data?.whatsappId) {
-          // const selectedWhatsapps = data.whatsappId.split(",");
-          setWhatsappId(data.whatsappId);
-        }
-        if (data?.dispatchStrategy) {
-          setDispatchStrategy(data.dispatchStrategy);
-        }
-        if (data?.allowedWhatsappIds) {
-          try {
-            const parsed = typeof data.allowedWhatsappIds === 'string' ? JSON.parse(data.allowedWhatsappIds) : data.allowedWhatsappIds;
-            if (Array.isArray(parsed)) setAllowedWhatsappIds(parsed);
-          } catch (e) {}
-        }
-        setCampaign((prev) => {
-          let prevCampaignData = Object.assign({}, prev);
-
+          // Atualizar estado da campanha
+          const prevCampaignData = {};
           Object.entries(data).forEach(([key, value]) => {
             if (key === "scheduledAt" && value !== "" && value !== null) {
               prevCampaignData[key] = moment(value).format("YYYY-MM-DDTHH:mm");
@@ -581,12 +569,21 @@ const CampaignModal = ({
               prevCampaignData[key] = value === null ? "" : value;
             }
           });
+          setCampaign(prevCampaignData);
+          setCampaignLoading(false);
+        } else if (initialValues) {
+          // Nova campanha com valores iniciais
+          setCampaign((prevState) => ({ ...prevState, ...initialValues }));
+        }
+      } catch (err) {
+        console.error('[CampaignModal] Erro ao carregar dados:', err);
+        toastError(err);
+        setCampaignLoading(false);
+      }
+    };
 
-          return prevCampaignData;
-        });
-      });
-    }
-  }, [campaignId, open, initialValues, companyId]);
+    loadData();
+  }, [campaignId, open, companyId]);
 
   // Carregar listas simples de arquivos para a biblioteca (quando abrir)
   useEffect(() => {
@@ -818,9 +815,16 @@ const CampaignModal = ({
             onChange={(e) => handleAttachmentFile(e)}
           />
         </div>
+        {campaignLoading ? (
+          <DialogContent dividers>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+              <CircularProgress />
+            </div>
+          </DialogContent>
+        ) : (
         <Formik
           initialValues={campaign}
-          enableReinitialize
+          enableReinitialize={true}
           validationSchema={CampaignSchema}
           onSubmit={(values, actions) => {
             setTimeout(() => {
@@ -1527,23 +1531,30 @@ const CampaignModal = ({
 
                 </DialogContent>
                 <DialogActions>
-                  {campaign.status === "CANCELADA" && (
-                    <Button
-                      color="primary"
-                      onClick={() => restartCampaign()}
-                      variant="outlined"
-                    >
-                      {i18n.t("campaigns.dialog.buttons.restart")}
-                    </Button>
-                  )}
-                  {campaign.status === "EM_ANDAMENTO" && (
-                    <Button
-                      color="primary"
-                      onClick={() => cancelCampaign()}
-                      variant="outlined"
-                    >
-                      {i18n.t("campaigns.dialog.buttons.cancel")}
-                    </Button>
+                  {/* Botões de controle da campanha */}
+                  {campaignId && (
+                    <div style={{ marginRight: 'auto', display: 'flex', gap: 8 }}>
+                      {(campaign.status === "CANCELADA" || campaign.status === "PROGRAMADA") && (
+                        <Button
+                          color="primary"
+                          onClick={() => restartCampaign()}
+                          variant="outlined"
+                          startIcon={<PlayCircleOutlineIcon />}
+                        >
+                          {campaign.status === "CANCELADA" ? "Retomar" : "Iniciar"}
+                        </Button>
+                      )}
+                      {campaign.status === "EM_ANDAMENTO" && (
+                        <Button
+                          color="secondary"
+                          onClick={() => cancelCampaign()}
+                          variant="outlined"
+                          startIcon={<PauseCircleOutlineIcon />}
+                        >
+                          Pausar
+                        </Button>
+                      )}
+                    </div>
                   )}
                   {!attachment && !campaign.mediaPath && campaignEditable && (
                     <Button
@@ -1587,6 +1598,7 @@ const CampaignModal = ({
             );
           }}
         </Formik>
+        )}
 
         {assistantOpen && (
           <div
