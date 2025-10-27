@@ -142,7 +142,7 @@ const ListService = async ({
           ]
         });
         if (found) {
-          // setDataValue evita mexer no modelo/associação original, mas expõe "contact" no JSON
+          // setDataValue evita mexer no modelo/associação original, mas expõe "contact" no JSON 
           item.setDataValue && item.setDataValue("contact", found);
           if (!item.contact) (item as any).contact = found;
         }
