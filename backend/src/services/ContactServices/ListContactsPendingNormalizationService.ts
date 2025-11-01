@@ -203,16 +203,15 @@ const buildBaseWhere = (companyId: number): WhereOptions => {
   const conditions: WhereOptions[] = [
     { canonicalNumber: null },
     { canonicalNumber: "" },
-    sequelizeWhere(fn("length", col("canonicalNumber")), { [Op.lt]: 8 }),
-    sequelizeWhere(fn("length", col("canonicalNumber")), { [Op.gt]: 15 }),
-    sequelizeWhere(literal("REGEXP_REPLACE(\"canonicalNumber\", '[0-9]', '', 'g')"), { [Op.ne]: "" }),
+    sequelizeWhere(fn("length", fn("COALESCE", col("canonicalNumber"), "")), { [Op.lt]: 8 }),
+    sequelizeWhere(fn("length", fn("COALESCE", col("canonicalNumber"), "")), { [Op.gt]: 15 }),
     // Incluir contatos onde number != canonicalNumber (possível desatualização)
-    literal('"number" != "canonicalNumber"')
+    literal('COALESCE("number", \'\') != COALESCE("canonicalNumber", \'\')')
   ];
 
   return {
     companyId,
-    number: { [Op.ne]: null },
+    number: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: "" }] },
     isGroup: false,
     [Op.or]: conditions
   } as WhereOptions;

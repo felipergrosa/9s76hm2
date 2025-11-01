@@ -55,7 +55,8 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import { Can } from "../../components/Can";
 import NewTicketModal from "../../components/NewTicketModal";
 import PopupState, { bindTrigger, bindMenu } from "material-ui-popup-state";
-import formatSerializedId from '../../utils/formatSerializedId';
+import { FormatMask } from "../../utils/FormatMask";
+import formatSerializedId, { safeFormatPhoneNumber } from '../../utils/formatSerializedId';
 import { v4 as uuidv4 } from "uuid";
 import LoadingOverlay from "../../components/LoadingOverlay";
 
@@ -774,18 +775,36 @@ const Contacts = () => {
 
     // Removido infinite scroll para manter paginação fixa por página
 
-    const formatPhoneNumber = useCallback((number) => {
+    const formatPhoneNumber = useCallback((number, isGroup = false) => {
         if (!number) return "";
-        const cleaned = ('' + number).replace(/\D/g, '');
-        if (cleaned.startsWith("55") && cleaned.length === 13) {
-            const match = cleaned.match(/^(\d{2})(\d{2})(\d{5})(\d{4})$/);
-            if (match) {
-                return `BR (${match[2]}) ${match[3]}-${match[4]}`;
+        const formatted = safeFormatPhoneNumber(number, false, isGroup);
+        if (formatted && formatted !== number) {
+            return formatted;
+        }
+
+        const cleaned = String(number).replace(/\D/g, "");
+        if (!cleaned) return number;
+
+        if (cleaned.startsWith("55")) {
+            if (cleaned.length >= 12) {
+                const ddd = cleaned.substring(2, 4);
+                const phone = cleaned.substring(4);
+                const prefix = phone.substring(0, phone.length - 4);
+                const suffix = phone.substring(phone.length - 4);
+                return `+55 (${ddd}) ${prefix}-${suffix}`;
+            }
+
+            if (cleaned.length === 11) {
+                const ddd = cleaned.substring(2, 4);
+                const prefix = cleaned.substring(4, cleaned.length - 4);
+                const suffix = cleaned.substring(cleaned.length - 4);
+                return `+55 (${ddd}) ${prefix}-${suffix}`;
             }
         }
-        return number;
-    }, []);
 
+        const mask = new FormatMask();
+        return mask.setPhoneFormatMask(cleaned) || number;
+    }, []);
 
     // Função de navegação já é fornecida pelo hook como handlePageChange
 

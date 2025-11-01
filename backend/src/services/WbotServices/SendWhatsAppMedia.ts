@@ -25,18 +25,6 @@ interface Request {
 }
 const os = require("os");
 
-// let ffmpegPath;
-// if (os.platform() === "win32") {
-//   // Windows
-//   ffmpegPath = "C:\\ffmpeg\\ffmpeg.exe"; // Substitua pelo caminho correto no Windows
-// } else if (os.platform() === "darwin") {
-//   // macOS
-//   ffmpegPath = "/opt/homebrew/bin/ffmpeg"; // Substitua pelo caminho correto no macOS
-// } else {
-//   // Outros sistemas operacionais (Linux, etc.)
-//   ffmpegPath = "/usr/bin/ffmpeg"; // Substitua pelo caminho correto em sistemas Unix-like
-// }
-
 const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
 
 const processAudio = async (audio: string, companyId: string): Promise<string> => {

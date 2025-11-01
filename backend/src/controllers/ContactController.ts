@@ -68,6 +68,7 @@ import { getWbot } from "../libs/wbot";
 import GetDeviceContactsService from "../services/WbotServices/GetDeviceContactsService";
 import ImportDeviceContactsAutoService from "../services/ContactServices/ImportDeviceContactsAutoService";
 import RebuildDeviceTagsService from "../services/WbotServices/RebuildDeviceTagsService";
+import { safeNormalizePhoneNumber } from "../utils/phone";
 
 type IndexQuery = {
   searchParam: string;
@@ -501,23 +502,40 @@ if (tagsQuery) {
     isWhatsappValid
   });
 
-  // Dispara validações em background sem bloquear a resposta
+  // [ANTI-BAN] Dispara validações em background de forma controlada
   try {
-    // Forçar revalidação imediata durante os testes: TTL = 0h (voltar para 24 quando terminar)
-    const ttlHours = 0;
+    // TTL padrão: 168h (1 semana) - pode ser ajustado via .env
+    const autoValidateEnabled = String(process.env.CONTACT_AUTO_VALIDATE_ON_LIST || "false").toLowerCase() === "true";
+    
+    if (!autoValidateEnabled) {
+      // Validação automática desabilitada para evitar sobrecarga da API WhatsApp
+      return res.json(result);
+    }
+    
+    const ttlHours = Number(process.env.CONTACT_VALIDATE_TTL_HOURS) || 168; // 1 semana
+    const maxConcurrent = Number(process.env.CONTACT_VALIDATE_MAX_CONCURRENT) || 3;
     const now = Date.now();
     const ttlMs = ttlHours * 60 * 60 * 1000;
-    result.contacts.forEach(c => {
+    
+    const toValidate = result.contacts.filter(c => {
       const isWhats = c.channel === "whatsapp";
       const notGroup = !c.isGroup;
       const last = c.validatedAt ? new Date(c.validatedAt as any).getTime() : 0;
       const stale = !last || now - last > ttlMs || c.isWhatsappValid === null || typeof c.isWhatsappValid === "undefined";
-      if (isWhats && notGroup && stale) {
-        // fire-and-forget
+      return isWhats && notGroup && stale;
+    }).slice(0, maxConcurrent); // Limita concorrência
+    
+    // Valida de forma sequencial com delay
+    toValidate.forEach((c, index) => {
+      setTimeout(() => {
         ValidateContactService({ contactId: c.id, companyId, ttlHours })
           .catch(err => logger.warn({ contactId: c.id, companyId, error: err?.message }, "[Contacts.index] validação assíncrona falhou"));
-      }
+      }, index * 2000); // 2 segundos entre cada validação
     });
+    
+    if (toValidate.length > 0) {
+      logger.info({ companyId, count: toValidate.length, maxConcurrent, ttlHours }, "[Contacts.index] agendadas validações em background");
+    }
   } catch (e: any) {
     logger.warn({ companyId, error: e?.message }, "[Contacts.index] falha ao agendar validações");
   }
@@ -962,9 +980,20 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 
   if (oldContact.number != contactData.number && oldContact.channel == "whatsapp") {
     const isGroup = oldContact && oldContact.remoteJid ? oldContact.remoteJid.endsWith("@g.us") : oldContact.isGroup;
-    const validNumber = await CheckContactNumber(contactData.number, companyId, isGroup);
-    const number = validNumber;
-    contactData.number = number;
+    try {
+      const validNumber = await CheckContactNumber(contactData.number, companyId, isGroup);
+      contactData.number = validNumber;
+    } catch (err) {
+      if (err instanceof AppError && String(err.message).includes("ERR_NO_DEF_WAPP_FOUND")) {
+        const { canonical } = safeNormalizePhoneNumber(String(contactData.number || ""));
+        if (!canonical) {
+          throw new AppError("ERR_INVALID_PHONE_NUMBER");
+        }
+        contactData.number = canonical;
+      } else {
+        throw err;
+      }
+    }
   }
 
   // Validar contato após a atualização

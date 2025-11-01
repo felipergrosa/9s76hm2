@@ -98,10 +98,40 @@ export const normalizePhoneNumber = (
     return { canonical: null, digits: "" };
   }
 
+  // Detecta e normaliza números brasileiros
   if (!hasKnownDdi(canonical)) {
     // Se não reconhecemos DDI mas o número parece nacional (10/11 dígitos), assumir Brasil
     if (canonical.length >= 10 && canonical.length <= 11) {
       canonical = `55${canonical}`;
+    }
+  } else {
+    // Se já tem DDI, valida se é BR e se precisa do 9
+    const resolved = resolveCountryMetadata(canonical);
+    if (resolved.ddi === "55" && resolved.metadata) {
+      const national = resolved.national;
+      // Número BR deve ter 10 (fixo) ou 11 (celular com 9) dígitos nacionais
+      if (national.length === 10) {
+        // Verifica se é celular sem o 9: DDD (2 dígitos) + 8 dígitos
+        const ddd = national.substring(0, 2);
+        const resto = national.substring(2);
+        // Se o resto tem 8 dígitos e começa com 6-9, é celular sem o 9
+        if (resto.length === 8 && /^[6-9]/.test(resto)) {
+          canonical = `55${ddd}9${resto}`;
+        }
+      } else if (national.length === 13) {
+        // Caso especial: 55 + 15 (DDD) + 51786-8419 (11 dígitos) = número duplicado com DDI errado
+        // Exemplo: 15517868419 -> deveria ser 5515917868419
+        // Detecta padrão: primeiros 2-3 dígitos repetem o DDD
+        const possibleDDD = national.substring(0, 2);
+        const restAfterDDD = national.substring(2);
+        if (restAfterDDD.length === 11 && /^[6-9]/.test(restAfterDDD.substring(1, 2))) {
+          // Já tem o 9, apenas reorganiza
+          canonical = `55${possibleDDD}${restAfterDDD}`;
+        } else if (restAfterDDD.length === 10 && /^[6-9]/.test(restAfterDDD.substring(0, 1))) {
+          // Falta o 9
+          canonical = `55${possibleDDD}9${restAfterDDD}`;
+        }
+      }
     }
   }
 

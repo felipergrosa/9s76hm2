@@ -72,6 +72,7 @@ import ShowFileService from "../FileServices/ShowService";
 
 import OpenAI from "openai";
 import ffmpeg from "fluent-ffmpeg";
+import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 import {
   SpeechConfig,
   SpeechSynthesizer,
@@ -98,6 +99,15 @@ import { handleOpenAi } from "../IntegrationsServices/OpenAiService";
 import { IOpenAi } from "../../@types/openai";
 
 const os = require("os");
+
+ffmpeg.setFfmpegPath(ffmpegPath.path);
+
+const DEBUG_WBOT_LOGS = process.env.WBOT_DEBUG === "true";
+const debugLog = (...args: unknown[]): void => {
+  if (DEBUG_WBOT_LOGS) {
+    logger.debug({ scope: "wbot", payload: args });
+  }
+};
 
 const request = require("request");
 
@@ -571,25 +581,6 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
       };
 };
 
-function findCaption(obj) {
-  if (typeof obj !== "object" || obj === null) {
-    return null;
-  }
-
-  for (const key in obj) {
-    if (key === "caption" || key === "text" || key === "conversation") {
-      return obj[key];
-    }
-
-    const result = findCaption(obj[key]);
-    if (result) {
-      return result;
-    }
-  }
-
-  return null;
-}
-
 // const downloadMedia = async (msg: proto.IWebMessageInfo, companyId: number, whatsappId: number) => {
 //   const mineType =
 //     msg.message?.imageMessage ||
@@ -853,25 +844,33 @@ const verifyContact = async (
   userId: number = null
 ): Promise<Contact> => {
   let profilePicUrl = ""; // Busca de avatar é feita por serviço dedicado, não aqui.
-  // Remove caracteres não numéricos do JID
-  const cleaned = msgContact.id.replace(/\D/g, "");
-  const isGroup = msgContact.id.includes("g.us");
+  const normalizedJid = jidNormalizedUser(msgContact.id);
+  const cleaned = normalizedJid.replace(/\D/g, "");
+  const isGroup = normalizedJid.includes("g.us");
+  const isLinkedDevice = msgContact.id.includes("@lid");
+
+  if (isLinkedDevice) {
+    debugLog("[verifyContact] JID @lid detectado, normalizando", {
+      originalJid: msgContact.id,
+      normalizedJid
+    });
+  }
 
   // Validação: só cria contato se não for grupo e o número tiver entre 8 e 15 dígitos
   const isPhoneLike = !isGroup && cleaned.length >= 8 && cleaned.length <= 15;
   if (!isPhoneLike) {
-    const existing = await Contact.findOne({ where: { remoteJid: msgContact.id, companyId } });
+    const existing = await Contact.findOne({ where: { remoteJid: normalizedJid, companyId } });
     if (existing) {
       return existing;
     }
     // Se não existe, cria um contato básico para evitar erro null
     const basicContactData = {
-      name: msgContact.name || msgContact.id,
-      number: cleaned || msgContact.id,
+      name: msgContact.name || normalizedJid,
+      number: cleaned || normalizedJid,
       profilePicUrl: "",
       isGroup,
       companyId,
-      remoteJid: msgContact.id,
+      remoteJid: normalizedJid,
       whatsappId: wbot.id,
       wbot
     };
@@ -879,7 +878,13 @@ const verifyContact = async (
     return newContact;
   }
 
-  console.log('[verifyContact] isGroup:', isGroup, '| msgContact.id:', msgContact.id, '| msgContact.name:', msgContact.name, '| cleaned:', cleaned);
+  debugLog('[verifyContact] processamento de contato', {
+    isGroup,
+    originalJid: msgContact.id,
+    normalizedJid,
+    cleaned,
+    name: msgContact.name
+  });
   // Corrige: nunca sobrescrever nome personalizado
   let nomeContato = msgContact.name;
   if (!isGroup) {
@@ -894,7 +899,7 @@ const verifyContact = async (
     profilePicUrl,
     isGroup,
     companyId,
-    remoteJid: msgContact.id,
+    remoteJid: normalizedJid,
     whatsappId: wbot.id,
     wbot
   };
@@ -4335,7 +4340,7 @@ const handleMessage = async (
         msgType === "editedMessage"
           ? msg.message.editedMessage.message.protocolMessage.key.id
           : msg.message?.protocolMessage.key.id;
-      let bodyEdited = findCaption(msg.message);
+      let bodyEdited = getBodyMessage(msg);
 
       console.log("log... 3075");
 

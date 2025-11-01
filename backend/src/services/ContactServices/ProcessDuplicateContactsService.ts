@@ -3,6 +3,7 @@ import AppError from "../../errors/AppError";
 import Contact from "../../models/Contact";
 import sequelize from "../../database";
 import { getIO } from "../../libs/socket";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 interface ProcessDuplicateParams {
   companyId: number;
@@ -120,6 +121,19 @@ const dedupeContactTags = async (transaction: Transaction): Promise<void> => {
   );
 };
 
+const normalizeGroupKey = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const digitsOnly = String(value).replace(/\D/g, "");
+  if (!digitsOnly) return null;
+  if (digitsOnly.length >= 11) {
+    return digitsOnly.slice(-11);
+  }
+  if (digitsOnly.length >= 8) {
+    return digitsOnly;
+  }
+  return null;
+};
+
 const ProcessDuplicateContactsService = async ({
   companyId,
   canonicalNumber,
@@ -128,14 +142,57 @@ const ProcessDuplicateContactsService = async ({
   mode = "selected",
   operation = "merge"
 }: ProcessDuplicateParams): Promise<ProcessDuplicateResult> => {
-  if (!canonicalNumber) {
+  const normalizedGroupKey = normalizeGroupKey(canonicalNumber);
+
+  if (!normalizedGroupKey) {
     throw new AppError("ERR_INVALID_CANONICAL_NUMBER");
   }
+
+  const contactIdRows = await sequelize.query<{ id: number }>(
+    `
+      WITH contact_digits AS (
+        SELECT
+          "id",
+          "companyId",
+          REGEXP_REPLACE(COALESCE("canonicalNumber", "number", ''), '\\D', '', 'g') AS digits
+        FROM "Contacts"
+        WHERE "companyId" = :companyId
+          AND "isGroup" = false
+      ),
+      normalized_contacts AS (
+        SELECT
+          "id",
+          CASE
+            WHEN digits IS NULL OR digits = '' THEN NULL
+            WHEN LENGTH(digits) >= 11 THEN RIGHT(digits, 11)
+            WHEN LENGTH(digits) >= 8 THEN digits
+            ELSE NULL
+          END AS normalized
+        FROM contact_digits
+      )
+      SELECT "id"
+      FROM normalized_contacts
+      WHERE normalized = :normalizedKey;
+    `,
+    {
+      replacements: {
+        companyId,
+        normalizedKey: normalizedGroupKey
+      },
+      type: QueryTypes.SELECT
+    }
+  );
+
+  if (!contactIdRows.length) {
+    throw new AppError("ERR_DUPLICATE_GROUP_NOT_FOUND", 404);
+  }
+
+  const contactIds = contactIdRows.map(row => row.id);
 
   const contacts = await Contact.findAll({
     where: {
       companyId,
-      canonicalNumber
+      id: contactIds
     }
   });
 
@@ -168,22 +225,30 @@ const ProcessDuplicateContactsService = async ({
 
   let updatedMaster: Contact;
 
+  const canonicalCandidates = contacts
+    .map(contact => safeNormalizePhoneNumber(contact.canonicalNumber || contact.number)?.canonical)
+    .filter((value): value is string => Boolean(value));
+
+  const finalCanonical = canonicalCandidates[0]
+    || safeNormalizePhoneNumber(normalizedGroupKey)?.canonical
+    || normalizedGroupKey;
+
   await sequelize.transaction(async transaction => {
     const aggregatedUpdates: Record<string, unknown> = {};
 
     if (operation === "merge") {
       duplicates.forEach(duplicate => {
-        const updates = collectUpdatesFromDuplicate(master, duplicate, canonicalNumber);
+        const updates = collectUpdatesFromDuplicate(master, duplicate, finalCanonical);
         Object.assign(aggregatedUpdates, updates);
       });
     }
 
-    if (master.number !== canonicalNumber) {
-      aggregatedUpdates.number = canonicalNumber;
+    if (master.number !== finalCanonical) {
+      aggregatedUpdates.number = finalCanonical;
     }
 
-    if (master.canonicalNumber !== canonicalNumber) {
-      aggregatedUpdates.canonicalNumber = canonicalNumber;
+    if (master.canonicalNumber !== finalCanonical) {
+      aggregatedUpdates.canonicalNumber = finalCanonical;
     }
 
     if (Object.keys(aggregatedUpdates).length > 0) {
@@ -233,7 +298,7 @@ const ProcessDuplicateContactsService = async ({
     master: updatedMaster,
     mergedIds: duplicateIds,
     operation,
-    canonicalNumber
+    canonicalNumber: finalCanonical
   };
 };
 

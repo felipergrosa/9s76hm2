@@ -2,8 +2,12 @@ const { QueryInterface, DataTypes } = require("sequelize");
 
 module.exports = {
   up: async (queryInterface) => {
-    // Primeiro, criar a tabela WhatsappLabels
-    await queryInterface.createTable("WhatsappLabels", {
+    // Verificar se a tabela já existe
+    const tables = await queryInterface.showAllTables();
+    
+    // Primeiro, criar a tabela WhatsappLabels se não existir
+    if (!tables.includes("WhatsappLabels")) {
+      await queryInterface.createTable("WhatsappLabels", {
       id: {
         type: DataTypes.INTEGER,
         autoIncrement: true,
@@ -45,9 +49,11 @@ module.exports = {
         allowNull: false
       }
     });
+    }
 
-    // Depois, criar a tabela ContactWhatsappLabels
-    await queryInterface.createTable("ContactWhatsappLabels", {
+    // Depois, criar a tabela ContactWhatsappLabels se não existir
+    if (!tables.includes("ContactWhatsappLabels")) {
+      await queryInterface.createTable("ContactWhatsappLabels", {
       id: {
         type: DataTypes.INTEGER,
         autoIncrement: true,
@@ -75,17 +81,26 @@ module.exports = {
         allowNull: false
       }
     });
+    }
 
-    // Por último, adicionar os índices
-    await queryInterface.addIndex("WhatsappLabels", ["whatsappLabelId", "whatsappId"], {
-      unique: true,
-      name: "whatsapp_labels_unique"
-    });
+    // Por último, adicionar os índices (com tratamento de erro caso já existam)
+    try {
+      await queryInterface.addIndex("WhatsappLabels", ["whatsappLabelId", "whatsappId"], {
+        unique: true,
+        name: "whatsapp_labels_unique"
+      });
+    } catch (error) {
+      console.log("Índice whatsapp_labels_unique já existe ou erro ao criar:", error.message);
+    }
 
-    await queryInterface.addIndex("ContactWhatsappLabels", ["contactId", "whatsappLabelId"], {
-      unique: true,
-      name: "contact_whatsapp_labels_unique"
-    });
+    try {
+      await queryInterface.addIndex("ContactWhatsappLabels", ["contactId", "whatsappLabelId"], {
+        unique: true,
+        name: "contact_whatsapp_labels_unique"
+      });
+    } catch (error) {
+      console.log("Índice contact_whatsapp_labels_unique já existe ou erro ao criar:", error.message);
+    }
   },
 
   down: async (queryInterface) => {

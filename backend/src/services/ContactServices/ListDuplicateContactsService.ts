@@ -3,8 +3,9 @@ import Contact from "../../models/Contact";
 import sequelize from "../../database";
 
 interface DuplicateRow {
-  canonicalNumber: string;
-  total: number;
+  normalized: string;
+  ids: number[];
+  total: number | string;
 }
 
 interface TotalRow {
@@ -18,83 +19,133 @@ interface ListDuplicatesParams {
   canonicalNumber?: string;
 }
 
+const sanitizeDigits = (value?: string): string | null => {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, "");
+  return digits || null;
+};
+
 const ListDuplicateContactsService = async ({
   companyId,
   limit = 20,
   offset = 0,
   canonicalNumber
 }: ListDuplicatesParams) => {
-  const replacements: Record<string, unknown> = {
-    companyId
-  };
+  const normalizedFilter = sanitizeDigits(canonicalNumber || undefined);
 
-  let whereSql = '"companyId" = :companyId AND "canonicalNumber" IS NOT NULL';
+  const duplicates = await sequelize.query<DuplicateRow>(
+    `
+      WITH contact_digits AS (
+        SELECT
+          "id",
+          "companyId",
+          REGEXP_REPLACE(COALESCE("canonicalNumber", "number", ''), '\\D', '', 'g') AS digits
+        FROM "Contacts"
+        WHERE "companyId" = :companyId
+          AND "isGroup" = false
+      ),
+      normalized_contacts AS (
+        SELECT
+          "id",
+          CASE
+            WHEN digits IS NULL OR digits = '' THEN NULL
+            WHEN LENGTH(digits) >= 11 THEN RIGHT(digits, 11)
+            WHEN LENGTH(digits) >= 8 THEN digits
+            ELSE NULL
+          END AS normalized
+        FROM contact_digits
+      )
+      SELECT
+        normalized,
+        ARRAY_AGG(id ORDER BY id) AS ids,
+        COUNT(*) AS total
+      FROM normalized_contacts
+      WHERE normalized IS NOT NULL
+        AND normalized != ''
+        ${normalizedFilter ? "AND normalized = :normalizedFilter" : ""}
+      GROUP BY normalized
+      HAVING COUNT(*) > 1
+      ORDER BY COUNT(*) DESC
+      LIMIT :limit
+      OFFSET :offset;
+    `,
+    {
+      replacements: {
+        companyId,
+        limit,
+        offset,
+        normalizedFilter
+      },
+      type: QueryTypes.SELECT
+    }
+  ) as unknown as DuplicateRow[];
 
-  if (canonicalNumber) {
-    whereSql += ' AND "canonicalNumber" = :canonicalNumber';
-    replacements.canonicalNumber = canonicalNumber;
-  }
-
-  const baseSql = `
-    FROM "Contacts"
-    WHERE ${whereSql}
-    GROUP BY "canonicalNumber"
-    HAVING COUNT(*) > 1
-  `;
-
-  const dataSql = `
-    SELECT "canonicalNumber", COUNT(*) AS total
-    ${baseSql}
-    ORDER BY total DESC
-    LIMIT ${limit}
-    OFFSET ${offset}
-  `;
-
-  const duplicates = await sequelize.query<DuplicateRow>(dataSql, {
-    replacements,
-    type: QueryTypes.SELECT
-  }) as unknown as DuplicateRow[];
-
-  const canonicalNumbers = duplicates.map((d: DuplicateRow) => d.canonicalNumber);
-
-  if (!canonicalNumbers.length) {
+  if (!duplicates.length) {
     return {
       groups: [],
       total: 0
     };
   }
 
+  const allIds = duplicates.flatMap(row => row.ids);
+
   const contacts = await Contact.findAll({
     where: {
       companyId,
-      canonicalNumber: { [Op.in]: canonicalNumbers }
+      id: { [Op.in]: allIds }
     },
-    order: [["canonicalNumber", "ASC"], ["updatedAt", "DESC"]]
+    order: [["updatedAt", "DESC"]]
   });
 
-  const mapped = canonicalNumbers.map(cn => ({
-    canonicalNumber: cn,
-    total: duplicates.find((d: DuplicateRow) => d.canonicalNumber === cn)?.total || contacts.filter(c => c.canonicalNumber === cn).length,
-    contacts: contacts.filter(c => c.canonicalNumber === cn)
+  const contactsById = new Map<number, Contact>();
+  contacts.forEach(contact => {
+    contactsById.set(contact.id, contact);
+  });
+
+  const groups = duplicates.map(row => ({
+    canonicalNumber: row.normalized,
+    total: Number(row.total),
+    contacts: row.ids
+      .map(id => contactsById.get(id))
+      .filter((contact): contact is Contact => Boolean(contact))
   }));
 
-  const totalSql = `
-    SELECT COUNT(*) AS total
-    FROM (
-      SELECT "canonicalNumber"
-      ${baseSql}
-    ) duplicates
-  `;
-
-  const totalResult = await sequelize.query<TotalRow>(totalSql, {
-    replacements,
-    type: QueryTypes.SELECT
-  }) as unknown as TotalRow[];
+  const totalResult = await sequelize.query<TotalRow>(
+    `
+      WITH normalized_contacts AS (
+        SELECT
+          "id",
+          "canonicalNumber" AS normalized
+        FROM "Contacts"
+        WHERE "companyId" = :companyId
+          AND "isGroup" = false
+          AND "canonicalNumber" IS NOT NULL
+          AND "canonicalNumber" != ''
+          AND LENGTH("canonicalNumber") >= 8
+      )
+      SELECT COUNT(*) AS total
+      FROM (
+        SELECT normalized
+        FROM normalized_contacts
+        WHERE normalized IS NOT NULL
+          ${normalizedFilter ? "AND normalized = :normalizedFilter" : ""}
+        GROUP BY normalized
+        HAVING COUNT(*) > 1
+      ) dup;
+    `,
+    {
+      replacements: {
+        companyId,
+        normalizedFilter
+      },
+      type: QueryTypes.SELECT
+    }
+  ) as unknown as TotalRow[];
 
   const totalGroups = Number(totalResult[0]?.total ?? 0);
 
   return {
-    groups: mapped,
+    groups,
     total: totalGroups
   };
 };

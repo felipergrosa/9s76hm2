@@ -794,11 +794,11 @@ async function getCapBackoffSettings(companyId: number): Promise<CapBackoffSetti
       attributes: ["key", "value"]
     });
 
-    // Defaults
-    let capHourly = 300;
-    let capDaily = 2000;
-    let backoffErrorThreshold = 5;
-    let backoffPauseMinutes = 10;
+    // Defaults (lê do .env com fallback seguro)
+    let capHourly = Number(process.env.CAP_HOURLY) || 30;
+    let capDaily = Number(process.env.CAP_DAILY) || 150;
+    let backoffErrorThreshold = Number(process.env.BACKOFF_ERROR_THRESHOLD) || 3;
+    let backoffPauseMinutes = Number(process.env.BACKOFF_PAUSE_MINUTES) || 15;
 
     settings.forEach(s => {
       if (s.key === "capHourly") capHourly = Number(JSON.parse(s.value));
@@ -809,8 +809,13 @@ async function getCapBackoffSettings(companyId: number): Promise<CapBackoffSetti
 
     return { capHourly, capDaily, backoffErrorThreshold, backoffPauseMinutes };
   } catch (e) {
-    // Retorna defaults em caso de erro
-    return { capHourly: 300, capDaily: 2000, backoffErrorThreshold: 5, backoffPauseMinutes: 10 };
+    // Retorna defaults em caso de erro (valores conservadores do .env)
+    return { 
+      capHourly: Number(process.env.CAP_HOURLY) || 30, 
+      capDaily: Number(process.env.CAP_DAILY) || 150, 
+      backoffErrorThreshold: Number(process.env.BACKOFF_ERROR_THRESHOLD) || 3, 
+      backoffPauseMinutes: Number(process.env.BACKOFF_PAUSE_MINUTES) || 15 
+    };
   }
 }
 
@@ -869,10 +874,10 @@ async function getIntervalSettings(companyId: number): Promise<IntervalSettings>
       attributes: ["key", "value"],
     });
 
-    // Defaults conservadores
-    let messageInterval = 30;       // segundos
-    let longerIntervalAfter = 20;   // mensagens
-    let greaterInterval = 60;       // segundos
+    // Defaults conservadores (lê do .env)
+    let messageInterval = Number(process.env.MESSAGE_INTERVAL_SEC) || 60;       // segundos
+    let longerIntervalAfter = Number(process.env.LONGER_INTERVAL_AFTER) || 10;   // mensagens
+    let greaterInterval = Number(process.env.GREATER_INTERVAL_SEC) || 300;       // segundos
 
     settings.forEach(s => {
       try {
@@ -889,7 +894,11 @@ async function getIntervalSettings(companyId: number): Promise<IntervalSettings>
       greaterIntervalMs: Math.max(0, greaterInterval) * 1000,
     };
   } catch {
-    return { messageIntervalMs: 30000, longerIntervalAfter: 20, greaterIntervalMs: 60000 };
+    return { 
+      messageIntervalMs: (Number(process.env.MESSAGE_INTERVAL_SEC) || 60) * 1000, 
+      longerIntervalAfter: Number(process.env.LONGER_INTERVAL_AFTER) || 10, 
+      greaterIntervalMs: (Number(process.env.GREATER_INTERVAL_SEC) || 300) * 1000 
+    };
   }
 }
 
@@ -1535,8 +1544,15 @@ async function handleDispatchCampaign(job) {
         record: campaign
       });
 
+    // Log de monitoramento anti-ban
+    const now = moment();
+    const hourStart = now.clone().startOf("hour");
+    const dayStart = now.clone().startOf("day");
+    const hourlyCount = await countDeliveredSince(selectedWhatsappId, hourStart.toISOString());
+    const dailyCount = await countDeliveredSince(selectedWhatsappId, dayStart.toISOString());
+    
     logger.info(
-      `Campanha enviada para: Campanha=${campaignId};Contato=${campaignShipping.contact.name}`
+      `✅ [ANTI-BAN] Mensagem enviada | Campanha=${campaignId} | Contato=${campaignShipping.contact.name} | WhatsApp=${selectedWhatsappId} | Hora: ${hourlyCount}/${caps.capHourly} | Dia: ${dailyCount}/${caps.capDaily}`
     );
   } catch (err: any) {
     try {

@@ -331,13 +331,15 @@ const Kanban = () => {
     popularCards(jsonString);
   }, [tags, tickets, searchText, sortBy, filterQueues, filterUsers, filterTags]);
 
-  const handleCardMove = async (cardId, sourceLaneId, targetLaneId) => {
+  const handleCardMove = async (sourceLaneId, targetLaneId, cardId) => {
     try {
+      const ticketId = String(cardId);
+
       // Remove tag(s) atuais do ticket
-      await api.delete(`/ticket-tags/${cardId}`);
+      await api.delete(`/ticket-tags/${ticketId}`);
       // Se destino não for "sem tag" (lane0), adiciona nova tag
       if (String(targetLaneId) !== 'lane0') {
-        await api.put(`/ticket-tags/${cardId}/${targetLaneId}`);
+        await api.put(`/ticket-tags/${ticketId}/${targetLaneId}`);
       }
       await fetchTickets();
       popularCards(jsonString);
@@ -353,7 +355,7 @@ const Kanban = () => {
   const quickMove = async (ticket, targetTagId) => {
     try {
       const source = (ticket.tags && ticket.tags[0]?.id) ? String(ticket.tags[0].id) : 'lane0';
-      await handleCardMove(String(ticket.id), source, String(targetTagId));
+      await handleCardMove(source, String(targetTagId), String(ticket.id));
       await fetchTickets();
     } catch (e) { console.log(e); }
   };

@@ -102,7 +102,7 @@
     "zustand": "^4.4.1"
   },
   "scripts": {
-    "start": "craco start",
+    "start": "node ./scripts/check_and_kill_port.js && craco start",
     "build": "set NODE_OPTIONS=--max-old-space-size=6144&& craco build",
     "test": "craco test"
   },

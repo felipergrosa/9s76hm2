@@ -18,6 +18,25 @@ interface Request {
   whatsappId?: number;
 }
 
+const truthyValues = new Set(["true", "1", "yes", "y", "sim"]);
+
+const boolFromEnv = (value: string | undefined, fallback = false): boolean => {
+  if (value === undefined || value === null) return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (truthyValues.has(normalized)) return true;
+  if (["false", "0", "no", "n", "nao", "não"].includes(normalized)) return false;
+  return fallback;
+};
+
+const numberFromEnv = (value: string | undefined, fallback: number): number => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+};
+
 const ensureFolder = (absoluteFolder: string) => {
   if (!fs.existsSync(absoluteFolder)) {
     fs.mkdirSync(absoluteFolder, { recursive: true });
@@ -74,6 +93,16 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
 
     if (!contact || contact.companyId !== companyId) return contact;
 
+    const fetchEnabled = boolFromEnv(process.env.AVATAR_FETCH_ENABLED, true);
+    if (!fetchEnabled) {
+      return contact;
+    }
+
+    const refreshIntervalHours = numberFromEnv(process.env.AVATAR_REFRESH_INTERVAL_HOURS, 24);
+    const refreshIntervalMs = Math.max(1, refreshIntervalHours) * 60 * 60 * 1000;
+    const allowNameLookup = boolFromEnv(process.env.AVATAR_USE_NAME_LOOKUP, false);
+    const allowGroupMetadata = boolFromEnv(process.env.AVATAR_USE_GROUP_METADATA, false);
+
     const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
     const contactUuid = (contact as any).uuid as string;
     const isGroup = !!contact.isGroup;
@@ -102,9 +131,8 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
     // Early-exit se atualizado há menos de 24h
     const key = `${companyId}:${contact.id}`;
     const now = Date.now();
-    const DAY = 24 * 60 * 60 * 1000;
     const last = lastAvatarRefreshMap.get(key) || 0;
-    if (now - last <= DAY) {
+    if (now - last <= refreshIntervalMs) {
       return contact;
     }
 
@@ -121,8 +149,8 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
             : `${contact.number}@s.whatsapp.net`;
         newProfileUrl = await wbot.profilePictureUrl(jid, "image");
 
-        // Atualiza também o nome do grupo se for grupo
-        if (contact.isGroup) {
+        // Atualiza também o nome do grupo se permitido
+        if (contact.isGroup && allowGroupMetadata) {
           let groupName = "Grupo desconhecido";
           try {
             const groupMeta = await wbot.groupMetadata(jid);
@@ -136,7 +164,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
           await contact.reload();
         }
         // Atualização de nome de contato comum
-        if (!contact.isGroup) {
+        if (!contact.isGroup && allowNameLookup) {
           const nomeAtual = (contact.name || '').trim();
           // Verifica se o nome é igual ao número (apenas dígitos, sem +, espaços, etc)
           const soNumero = nomeAtual.replace(/\D/g, "");

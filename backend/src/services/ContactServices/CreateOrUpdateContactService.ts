@@ -118,7 +118,8 @@ const CreateOrUpdateContactService = async ({
       }
 
       const numLen = number.length;
-      if (numLen < 10 || numLen > 13) {
+      // Aceita números internacionais conforme E.164 (8 a 15 dígitos)
+      if (numLen < 8 || numLen > 15) {
         try {
           const existing = await Contact.findOne({ where: { companyId, canonicalNumber: number } });
           if (existing) {
