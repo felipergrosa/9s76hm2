@@ -78,7 +78,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     defaultTicketsManagerWidth = 550,
     allowRealTime,
     allowConnections,
-    allowedContactTags
+    allowedContactTags,
+    permissions
   } = req.body;
   let userCompanyId: number | null = null;
 
@@ -194,7 +195,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       defaultTicketsManagerWidth,
       allowRealTime,
       allowConnections,
-      allowedContactTags
+      allowedContactTags,
+      permissions
     });
 
     const io = getIO();

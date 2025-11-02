@@ -34,6 +34,7 @@ import { getBackendUrl } from "../../config";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { Avatar } from "@material-ui/core";
 import ForbiddenPage from "../../components/ForbiddenPage";
+import usePermissions from "../../hooks/usePermissions";
 
 const backendUrl = getBackendUrl();
 
@@ -126,6 +127,7 @@ const Users = () => {
   const [searchParam, setSearchParam] = useState("");
   const [users, dispatch] = useReducer(reducer, []);
   const { user: loggedInUser, socket } = useContext(AuthContext)
+  const { hasPermission } = usePermissions();
   const { profileImage } = loggedInUser;
   const USERS_PER_PAGE = 20; // Mantém alinhado ao backend
 
@@ -281,9 +283,7 @@ const Users = () => {
         userId={selectedUser && selectedUser.id}
         key={i18n.language}
       />
-      {loggedInUser.profile === "user" ?
-        <ForbiddenPage />
-        :
+      {hasPermission("users.view") ? (
         <>
           <MainHeader>
             <Title>{i18n.t("users.title")} ({users.length})</Title>
@@ -436,7 +436,7 @@ const Users = () => {
             </ul>
           </nav>
         </>
-      }
+      ) : <ForbiddenPage />}
     </MainContainer>
   );
 };

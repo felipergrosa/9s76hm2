@@ -37,6 +37,7 @@ import toastError from "../../errors/toastError";
 // import { SocketContext } from "../../context/Socket/SocketContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import ForbiddenPage from "../../components/ForbiddenPage";
+import usePermissions from "../../hooks/usePermissions";
 
 const reducer = (state, action) => {
     if (action.type === "LOAD_FILES") {
@@ -96,6 +97,7 @@ const FileLists = () => {
 
     //   const socketManager = useContext(SocketContext);
     const { user, socket } = useContext(AuthContext);
+    const { hasPermission } = usePermissions();
 
 
     const [loading, setLoading] = useState(false);
@@ -217,9 +219,7 @@ const FileLists = () => {
                 aria-labelledby="form-dialog-title"
                 fileListId={selectedFileList && selectedFileList.id}
             />
-            {user.profile === "user" ?
-                <ForbiddenPage />
-                :
+            {hasPermission("files.view") ? (
                 <>
                     <MainHeader>
                         <Title>{i18n.t("files.title")} ({files.length})</Title>
@@ -289,7 +289,8 @@ const FileLists = () => {
                             </TableBody>
                         </Table>
                     </Paper>
-                </>}
+                </>
+            ) : <ForbiddenPage />}
         </MainContainer>
     );
 };

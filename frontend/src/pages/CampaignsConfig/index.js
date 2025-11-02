@@ -30,6 +30,7 @@ import {
 import InfoOutlinedIcon from "@material-ui/icons/InfoOutlined";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import ForbiddenPage from "../../components/ForbiddenPage";
+import usePermissions from "../../hooks/usePermissions";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
 
@@ -83,6 +84,7 @@ const CampaignsConfig = () => {
   const [selectedKey, setSelectedKey] = useState(null);
   const [variable, setVariable] = useState({ key: "", value: "" });
   const { user, socket } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
 
   const [sabado, setSabado] = React.useState(false);
   const [domingo, setDomingo] = React.useState(false);
@@ -245,10 +247,7 @@ const CampaignsConfig = () => {
       >
         {i18n.t("campaigns.confirmationModal.deleteMessage")}
       </ConfirmationModal>
-      {
-        user.profile === "user" ?
-          <ForbiddenPage />
-          :
+      { hasPermission("campaigns-config.view") ? (
           <>
             <MainHeader>
               <Grid style={{ width: "99.6%" }} container>
@@ -704,7 +703,8 @@ const CampaignsConfig = () => {
                 </Grid>
               </Box>
             </Paper>
-          </>}
+          </>
+        ) : <ForbiddenPage /> }
     </MainContainer>
   );
 };

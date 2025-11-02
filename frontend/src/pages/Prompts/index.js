@@ -32,6 +32,7 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import usePlans from "../../hooks/usePlans";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 import ForbiddenPage from "../../components/ForbiddenPage";
+import usePermissions from "../../hooks/usePermissions";
 // import { SocketContext } from "../../context/Socket/SocketContext";
 
 const useStyles = makeStyles((theme) => ({
@@ -108,6 +109,7 @@ const Prompts = () => {
   const { getPlanCompany } = usePlans();
   const history = useHistory();
   const companyId = user.companyId;
+  const { hasPermission } = usePermissions();
 
   useEffect(() => {
     async function fetchData() {
@@ -252,9 +254,7 @@ const Prompts = () => {
         onClose={() => setEnhancementsOpen(false)}
         onSelectTemplate={handleSelectTemplate}
       />
-      {user.profile === "user" ?
-        <ForbiddenPage />
-        :
+      {hasPermission("prompts.view") ? (
         <>
           <MainHeader>
             <Title>{i18n.t("prompts.title")}</Title>
@@ -326,7 +326,8 @@ const Prompts = () => {
               </TableBody>
             </Table>
           </Paper>
-        </>}
+        </>
+      ) : <ForbiddenPage />}
     </MainContainer>
   );
 };

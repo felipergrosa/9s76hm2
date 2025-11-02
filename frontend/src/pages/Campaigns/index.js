@@ -40,6 +40,7 @@ import { useDate } from "../../hooks/useDate";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import usePlans from "../../hooks/usePlans";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import usePermissions from "../../hooks/usePermissions";
 
 const reducer = (state, action) => {
   if (action.type === "SET_CAMPAIGNS") {
@@ -128,6 +129,7 @@ const Campaigns = () => {
 
   const { datetimeToClient } = useDate();
   const { getPlanCompany } = usePlans();
+  const { hasPermission } = usePermissions();
 
   useEffect(() => {
     async function fetchData() {
@@ -323,17 +325,12 @@ const Campaigns = () => {
           campaignId={selectedCampaign && selectedCampaign.id}
         />
       )}
-      {
-        user.profile === "user"?
-          <ForbiddenPage />
-          :
-          <>
-            <MainHeader>
-              <Grid style={{ width: "99.6%" }} container>
-                <Grid xs={12} sm={8} item>
-                  <Title>{i18n.t("campaigns.title")}</Title>
-                </Grid>
-                <Grid xs={12} sm={4} item>
+      {hasPermission("campaigns.view") ? (
+        <>
+          <MainHeader>
+            <Grid style={{ width: "99.6%" }} container>
+              <Grid xs={12} sm={8} item>
+                <Title>{i18n.t("campaigns.title")}</Title>
                   <Grid spacing={2} container>
                     <Grid xs={6} sm={6} item>
                       <TextField
@@ -541,7 +538,10 @@ const Campaigns = () => {
                 </li>
               </ul>
             </nav>
-          </>}
+          </>
+        ) : (
+          <ForbiddenPage />
+        )}
     </MainContainer>
   );
 };

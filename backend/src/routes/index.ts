@@ -55,6 +55,8 @@ import labelsRoutes from "./labelsRoutes";
 import wbotLabelsRoutes from "./wbotLabelsRoutes";
 import whatsappWebLabelsRoutes from "./whatsappWebLabelsRoutes";
 import tagRuleRoutes from "./tagRuleRoutes";
+import permissionRoutes from "./permissionRoutes";
+import auditLogRoutes from "./auditLogRoutes";
 
 
 const routes = Router();
@@ -116,5 +118,7 @@ routes.use("/labels", labelsRoutes);
 routes.use(wbotLabelsRoutes);
 routes.use(whatsappWebLabelsRoutes);
 routes.use(tagRuleRoutes);
+routes.use(permissionRoutes);
+routes.use(auditLogRoutes);
 
 export default routes;

@@ -32,6 +32,7 @@ interface UserData {
   profileImage?: string;
   language?: string;
   allowedContactTags?: number[];
+  permissions?: string[];
 }
 
 interface Request {
@@ -99,6 +100,12 @@ const UpdateUserService = async ({
       ? userData.allowedContactTags
       : [];
   }
+  // Atualiza permissions apenas se enviado (pode ser [] para limpar)
+  if (userData.hasOwnProperty("permissions")) {
+    dataToUpdate.permissions = Array.isArray(userData.permissions)
+      ? userData.permissions
+      : [];
+  }
   
   // Lógica especial para a conexão (whatsappId):
   // Só atualiza se o campo for enviado.
@@ -150,7 +157,8 @@ const UpdateUserService = async ({
     allowRealTime: user.allowRealTime,
     allowConnections: user.allowConnections,
     profileImage: user.profileImage,
-    allowedContactTags: user.allowedContactTags
+    allowedContactTags: user.allowedContactTags,
+    permissions: user.permissions || []
   };
 
   return serializedUser;

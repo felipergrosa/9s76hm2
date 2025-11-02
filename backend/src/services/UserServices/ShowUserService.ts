@@ -37,7 +37,8 @@ const ShowUserService = async (id: string | number, companyId: string | number):
         "allowRealTime",
         "allowConnections",
         "language",
-        "allowedContactTags"
+        "allowedContactTags",
+        "permissions"
       ],
       include: [
         { model: Queue, as: "queues", attributes: ["id", "name", "color"] },

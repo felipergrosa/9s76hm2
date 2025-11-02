@@ -53,6 +53,7 @@ import { AuthContext } from "../context/Auth/AuthContext";
 import { useActiveMenu } from "../context/ActiveMenuContext";
 
 import { Can } from "../components/Can";
+import usePermissions from "../hooks/usePermissions";
 
 import { isArray } from "lodash";
 import api from "../services/api";
@@ -208,6 +209,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
   const { user, socket } = useContext(AuthContext);
   const { setActiveMenu } = useActiveMenu();
   const location = useLocation();
+  const { hasPermission, hasAnyPermission, isAdmin } = usePermissions();
 
   const [connectionWarning, setConnectionWarning] = useState(false);
   const [openCampaignSubmenu, setOpenCampaignSubmenu] = useState(false);
@@ -300,7 +302,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
     async function fetchData() {
       const companyId = user.companyId;
       const planConfigs = await getPlanCompany(undefined, companyId);
-
+      
       setShowCampaigns(planConfigs.plan.useCampaigns);
       setShowKanban(planConfigs.plan.useKanban);
       setShowOpenAi(planConfigs.plan.useOpenAi);
@@ -395,149 +397,92 @@ const MainListItems = ({ collapsed, drawerClose }) => {
 
   return (
     <div onClick={drawerClose}>
-      <Can
-        role={
-          (user.profile === "user" && user.showDashboard === "enabled") || user.allowRealTime === "enabled"
-            ? "admin"
-            : user.profile
-        }
-        perform={"drawer-admin-items:view"}
-        yes={() => (
-          <>
-            <Tooltip title={collapsed ? i18n.t("mainDrawer.listItems.management") : ""} placement="right">
-              <ListItem
-                dense
-                button
-                onClick={() => setOpenDashboardSubmenu((prev) => !prev)}
-                onMouseEnter={() => setManagementHover(true)}
-                onMouseLeave={() => setManagementHover(false)}
-              >
-                <ListItemIcon>
-                  <Avatar
-                    className={`${classes.iconHoverActive} ${isManagementActive || managementHover ? "active" : ""}`}
-                  >
-                    <Dashboard />
-                  </Avatar>
-                </ListItemIcon>
-                <ListItemText
-                  primary={
-                    <Typography className={classes.listItemText}>
-                      {i18n.t("mainDrawer.listItems.management")}
-                    </Typography>
-                  }
-                />
-                {openDashboardSubmenu ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-              </ListItem>
-            </Tooltip>
-            <Collapse
-              in={openDashboardSubmenu}
-              timeout="auto"
-              unmountOnExit
-              style={{
-                backgroundColor: theme.mode === "light" ? "rgba(120,120,120,0.1)" : "rgba(120,120,120,0.5)",
-              }}
-            >
-              <Can
-                role={user.profile === "user" && user.showDashboard === "enabled" ? "admin" : user.profile}
-                perform={"drawer-admin-items:view"}
-                yes={() => (
-                  <>
-                    <ListItemLink
-                      small
-                      to="/"
-                      primary="Dashboard"
-                      icon={<DashboardOutlinedIcon />}
-                      tooltip={collapsed}
-                    />
-                    <ListItemLink
-                      small
-                      to="/reports"
-                      primary={i18n.t("mainDrawer.listItems.reports")}
-                      icon={<Description />}
-                      tooltip={collapsed}
-                    />
-                  </>
-                )}
-              />
-              <Can
-                role={user.profile === "user" && user.allowRealTime === "enabled" ? "admin" : user.profile}
-                perform={"drawer-admin-items:view"}
-                yes={() => (
-                  <ListItemLink
-                    to="/moments"
-                    primary={i18n.t("mainDrawer.listItems.chatsTempoReal")}
-                    icon={<GridOn />}
-                    tooltip={collapsed}
-                  />
-                )}
-              />
-            </Collapse>
-          </>
-        )}
-      />
-      <ListItemLink
-        to="/tickets"
-        primary={i18n.t("mainDrawer.listItems.tickets")}
-        icon={<WhatsAppIcon />}
-        tooltip={collapsed}
-      />
-
-      <ListItemLink
-        to="/quick-messages"
-        primary={i18n.t("mainDrawer.listItems.quickMessages")}
-        icon={<FlashOnIcon />}
-        tooltip={collapsed}
-      />
-
-      {showKanban && (
-        <>
-          <ListItemLink
-            to="/kanban"
-            primary={i18n.t("mainDrawer.listItems.kanban")}
-            icon={<ViewKanban />}
-            tooltip={collapsed}
-          />
-        </>
+      {/* BLOCO LEGADO - Apenas itens diretos (Dashboard antigo e Tempo Real) */}
+      {((user.profile === "admin" || user.profile === "super") ||
+        (user.profile === "user" && user.showDashboard === "enabled")) && (
+        <ListItemLink
+          to="/"
+          primary="Dashboard"
+          icon={<DashboardOutlinedIcon />}
+          tooltip={collapsed}
+        />
+      )}
+      {((user.profile === "admin" || user.profile === "super") ||
+        (user.profile === "user" && user.allowRealTime === "enabled")) && (
+        <ListItemLink
+          to="/moments"
+          primary={i18n.t("mainDrawer.listItems.chatsTempoReal")}
+          icon={<GridOn />}
+          tooltip={collapsed}
+        />
       )}
 
-      <ListItemLink
-        to="/contacts"
-        primary={i18n.t("mainDrawer.listItems.contacts")}
-        icon={<ContactPhoneOutlinedIcon />}
-        tooltip={collapsed}
-      />
-
-      {showSchedules && (
-        <>
-          <ListItemLink
-            to="/schedules"
-            primary={i18n.t("mainDrawer.listItems.schedules")}
-            icon={<Schedule />}
-            tooltip={collapsed}
-          />
-        </>
+      {/* MENU PRINCIPAL */}
+      {hasPermission("tickets.view") && (
+        <ListItemLink
+          to="/tickets"
+          primary={i18n.t("mainDrawer.listItems.tickets")}
+          icon={<WhatsAppIcon />}
+          tooltip={collapsed}
+        />
       )}
 
-      <ListItemLink
-        to="/tags"
-        primary={i18n.t("mainDrawer.listItems.tags")}
-        icon={<LocalOfferIcon />}
-        tooltip={collapsed}
-      />
+      {hasPermission("quick-messages.view") && (
+        <ListItemLink
+          to="/quick-messages"
+          primary={i18n.t("mainDrawer.listItems.quickMessages")}
+          icon={<FlashOnIcon />}
+          tooltip={collapsed}
+        />
+      )}
 
-      {showInternalChat && (
-        <>
-          <ListItemLink
-            to="/chats"
-            primary={i18n.t("mainDrawer.listItems.chats")}
-            icon={
-              <Badge color="secondary" variant="dot" invisible={invisible}>
-                <ForumIcon />
-              </Badge>
-            }
-            tooltip={collapsed}
-          />
-        </>
+      {showKanban && hasPermission("kanban.view") && (
+        <ListItemLink
+          to="/kanban"
+          primary={i18n.t("mainDrawer.listItems.kanban")}
+          icon={<ViewKanban />}
+          tooltip={collapsed}
+        />
+      )}
+
+      {hasPermission("contacts.view") && (
+        <ListItemLink
+          to="/contacts"
+          primary={i18n.t("mainDrawer.listItems.contacts")}
+          icon={<ContactPhoneOutlinedIcon />}
+          tooltip={collapsed}
+        />
+      )}
+
+      {showSchedules && hasPermission("schedules.view") && (
+        <ListItemLink
+          to="/schedules"
+          primary={i18n.t("mainDrawer.listItems.schedules")}
+          icon={<Schedule />}
+          tooltip={collapsed}
+        />
+      )}
+
+      {hasPermission("tags.view") && (
+        <ListItemLink
+          to="/tags"
+          primary={i18n.t("mainDrawer.listItems.tags")}
+          icon={<LocalOfferIcon />}
+          tooltip={collapsed}
+        />
+      )}
+
+      {showInternalChat && hasPermission("internal-chat.view") && (
+        <ListItemLink
+          to="/chats"
+          primary={i18n.t("mainDrawer.listItems.chats")}
+          icon={
+            <Badge color="secondary" variant="dot" invisible={invisible}>
+              <ForumIcon />
+            </Badge>
+          }
+          tooltip={collapsed}
+        />
       )}
 
       {/* <ListItemLink
@@ -546,25 +491,21 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         icon={<EventAvailableIcon />}
       /> */}
       
-        <ListItemLink
-          to="/helps"
-          primary={i18n.t("mainDrawer.listItems.helps")}
-          icon={<HelpOutlineIcon />}
-          tooltip={collapsed}
-        />
+        {hasPermission("helps.view") && (
+          <ListItemLink
+            to="/helps"
+            primary={i18n.t("mainDrawer.listItems.helps")}
+            icon={<HelpOutlineIcon />}
+            tooltip={collapsed}
+          />
+        )}
       
-      <Can
-        role={user.profile === "user" && user.allowConnections === "enabled" ? "admin" : user.profile}
-        perform="dashboard:view"
-        yes={() => (
-          <>
-            <Divider />
-            <ListSubheader inset>{i18n.t("mainDrawer.listItems.administration")}</ListSubheader>
-            {showCampaigns && (
-              <Can
-                role={user.profile}
-                perform="dashboard:view"
-                yes={() => (
+      {/* SEÇÃO ADMINISTRAÇÃO */}
+      <Divider />
+      <ListSubheader inset>{i18n.t("mainDrawer.listItems.administration")}</ListSubheader>
+      
+      {/* CAMPANHAS */}
+      {showCampaigns && hasPermission("campaigns.view") && (
                   <>
                     <Tooltip title={collapsed ? i18n.t("mainDrawer.listItems.campaigns") : ""} placement="right">
                       <ListItem
@@ -622,15 +563,10 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                       </List>
                     </Collapse>
                   </>
-                )}
-              />
-            )}
+      )}
 
-            {/* FLOWBUILDER */}
-            <Can
-              role={user.profile}
-              perform="dashboard:view"
-              yes={() => (
+      {/* FLOWBUILDER */}
+      {hasPermission("flowbuilder.view") && (
                 <>
                   <Tooltip title={collapsed ? i18n.t("mainDrawer.listItems.flowbuilder") : ""} placement="right">
                     <ListItem
@@ -684,177 +620,139 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                     </List>
                   </Collapse>
                 </>
-              )}
-            />
+      )}
 
+      {/* ANÚNCIOS */}
+      {user.super && (
+        <ListItemLink
+          to="/announcements"
+          primary={i18n.t("mainDrawer.listItems.annoucements")}
+          icon={<AnnouncementIcon />}
+          tooltip={collapsed}
+        />
+      )}
 
-            {user.super && (
-              <ListItemLink
-                to="/announcements"
-                primary={i18n.t("mainDrawer.listItems.annoucements")}
-                icon={<AnnouncementIcon />}
-                tooltip={collapsed}
-              />
-            )}
+      {/* API EXTERNA */}
+      {showExternalApi && hasPermission("external-api.view") && (
+        <ListItemLink
+          to="/messages-api"
+          primary={i18n.t("mainDrawer.listItems.messagesAPI")}
+          icon={<CodeRoundedIcon />}
+          tooltip={collapsed}
+        />
+      )}
 
-            {showExternalApi && (
-              <>
-                <Can
-                  role={user.profile}
-                  perform="dashboard:view"
-                  yes={() => (
-                    <ListItemLink
-                      to="/messages-api"
-                      primary={i18n.t("mainDrawer.listItems.messagesAPI")}
-                      icon={<CodeRoundedIcon />}
-                      tooltip={collapsed}
-                    />
-                  )}
-                />
-              </>
-            )}
-            <Can
-              role={user.profile}
-              perform="dashboard:view"
-              yes={() => (
-                <ListItemLink
-                  to="/users"
-                  primary={i18n.t("mainDrawer.listItems.users")}
-                  icon={<PeopleAltOutlinedIcon />}
-                  tooltip={collapsed}
-                />
-              )}
-            />
-            <Can
-              role={user.profile}
-              perform="dashboard:view"
-              yes={() => (
-                <ListItemLink
-                  to="/queues"
-                  primary={i18n.t("mainDrawer.listItems.queues")}
-                  icon={<AccountTreeOutlinedIcon />}
-                  tooltip={collapsed}
-                />
-              )}
-            />
+      {/* USUÁRIOS */}
+      {hasPermission("users.view") && (
+        <ListItemLink
+          to="/users"
+          primary={i18n.t("mainDrawer.listItems.users")}
+          icon={<PeopleAltOutlinedIcon />}
+          tooltip={collapsed}
+        />
+      )}
 
-            {showOpenAi && (
-              <Can
-                role={user.profile}
-                perform="dashboard:view"
-                yes={() => (
-                  <ListItemLink
-                    to="/prompts"
-                    primary={i18n.t("mainDrawer.listItems.prompts")}
-                    icon={<AllInclusive />}
-                    tooltip={collapsed}
-                  />
-                )}
-              />
-            )}
+      {/* FILAS */}
+      {hasPermission("queues.view") && (
+        <ListItemLink
+          to="/queues"
+          primary={i18n.t("mainDrawer.listItems.queues")}
+          icon={<AccountTreeOutlinedIcon />}
+          tooltip={collapsed}
+        />
+      )}
 
-            {showIntegrations && (
-              <Can
-                role={user.profile}
-                perform="dashboard:view"
-                yes={() => (
-                  <ListItemLink
-                    to="/queue-integration"
-                    primary={i18n.t("mainDrawer.listItems.queueIntegration")}
-                    icon={<DeviceHubOutlined />}
-                    tooltip={collapsed}
-                  />
-                )}
-              />
-            )}
-            <Can
-              role={user.profile === "user" && user.allowConnections === "enabled" ? "admin" : user.profile}
-              perform={"drawer-admin-items:view"}
-              yes={() => (
-                <ListItemLink
-                  to="/connections"
-                  primary={i18n.t("mainDrawer.listItems.connections")}
-                  icon={<SyncAltIcon />}
-                  showBadge={connectionWarning}
-                  tooltip={collapsed}
-                />
-              )}
-            />
-            {user.super && (
-              <ListItemLink
-                to="/allConnections"
-                primary={i18n.t("mainDrawer.listItems.allConnections")}
-                icon={<PhonelinkSetup />}
-                tooltip={collapsed}
-              />
-            )}
-            <Can
-              role={user.profile}
-              perform="dashboard:view"
-              yes={() => (
-                <ListItemLink
-                  to="/files"
-                  primary={i18n.t("mainDrawer.listItems.files")}
-                  icon={<AttachFile />}
-                  tooltip={collapsed}
-                />
-              )}
-            />
-            <Can
-              role={user.profile}
-              perform="dashboard:view"
-              yes={() => (
-                <ListItemLink
-                  to="/financeiro"
-                  primary={i18n.t("mainDrawer.listItems.financeiro")}
-                  icon={<LocalAtmIcon />}
-                  tooltip={collapsed}
-                />
-              )}
-            />
-            <Can
-              role={user.profile}
-              perform="dashboard:view"
-              yes={() => (
-                <ListItemLink
-                  to="/settings"
-                  primary={i18n.t("mainDrawer.listItems.settings")}
-                  icon={<SettingsOutlinedIcon />}
-                  tooltip={collapsed}
-                />
-              )}
-            />
-            <Can
-              role={user.profile}
-              perform="dashboard:view"
-              yes={() => (
-                <ListItemLink
-                  to="/ai-settings"
-                  primary="Configurações IA"
-                  icon={<Memory />}
-                  tooltip={collapsed}
-                />
-              )}
-            />
-            {/* {user.super && (
-              <ListSubheader inset>
-                {i18n.t("mainDrawer.listItems.administration")}
-              </ListSubheader>
-            )} */}
+      {/* PROMPTS IA */}
+      {showOpenAi && hasPermission("prompts.view") && (
+        <ListItemLink
+          to="/prompts"
+          primary={i18n.t("mainDrawer.listItems.prompts")}
+          icon={<AllInclusive />}
+          tooltip={collapsed}
+        />
+      )}
 
-            {user.super && (
-              <ListItemLink
-                to="/companies"
-                primary={i18n.t("mainDrawer.listItems.companies")}
-                icon={<BusinessIcon />}
-                tooltip={collapsed}
-              />
-            )}
+      {/* INTEGRAÇÕES */}
+      {showIntegrations && hasPermission("integrations.view") && (
+        <ListItemLink
+          to="/queue-integration"
+          primary={i18n.t("mainDrawer.listItems.queueIntegration")}
+          icon={<DeviceHubOutlined />}
+          tooltip={collapsed}
+        />
+      )}
 
-          </>
+      {/* CONEXÕES (Sistema Legado) */}
+      {((user.profile === "admin" || user.profile === "super") ||
+        (user.profile === "user" && user.allowConnections === "enabled")) && (
+        <ListItemLink
+          to="/connections"
+          primary={i18n.t("mainDrawer.listItems.connections")}
+          icon={<SyncAltIcon />}
+          showBadge={connectionWarning}
+          tooltip={collapsed}
+        />
+      )}
 
-        )}
-      />
+      {/* TODAS AS CONEXÕES (Super) */}
+      {user.super && (
+        <ListItemLink
+          to="/allConnections"
+          primary={i18n.t("mainDrawer.listItems.allConnections")}
+          icon={<PhonelinkSetup />}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* ARQUIVOS */}
+      {hasPermission("files.view") && (
+        <ListItemLink
+          to="/files"
+          primary={i18n.t("mainDrawer.listItems.files")}
+          icon={<AttachFile />}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* FINANCEIRO */}
+      {hasPermission("financeiro.view") && (
+        <ListItemLink
+          to="/financeiro"
+          primary={i18n.t("mainDrawer.listItems.financeiro")}
+          icon={<LocalAtmIcon />}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* CONFIGURAÇÕES */}
+      {hasPermission("settings.view") && (
+        <ListItemLink
+          to="/settings"
+          primary={i18n.t("mainDrawer.listItems.settings")}
+          icon={<SettingsOutlinedIcon />}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* CONFIGURAÇÕES IA */}
+      {hasPermission("ai-settings.view") && (
+        <ListItemLink
+          to="/ai-settings"
+          primary="Configurações IA"
+          icon={<Memory />}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* EMPRESAS (Super) */}
+      {user.super && (
+        <ListItemLink
+          to="/companies"
+          primary={i18n.t("mainDrawer.listItems.companies")}
+          icon={<BusinessIcon />}
+          tooltip={collapsed}
+        />
+      )}
       {!collapsed && (
         <React.Fragment>
           <Divider />

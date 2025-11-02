@@ -2,6 +2,7 @@ import Queue from "../models/Queue";
 import Company from "../models/Company";
 import User from "../models/User";
 import jwt from "jsonwebtoken";
+import { getUserPermissions } from "./PermissionAdapter";
 
 interface SerializedUser {
   id: number;
@@ -29,6 +30,7 @@ interface SerializedUser {
   allowRealTime: string;
   allowConnections: string;
   allowedContactTags: number[];
+  permissions: string[];
 }
 
 export const SerializeUser = async (user: User): Promise<SerializedUser> => {
@@ -64,6 +66,7 @@ export const SerializeUser = async (user: User): Promise<SerializedUser> => {
     allowGroup: user.allowGroup,
     allowRealTime: user.allowRealTime,
     allowConnections: user.allowConnections,
-    allowedContactTags: user.allowedContactTags
+    allowedContactTags: user.allowedContactTags,
+    permissions: getUserPermissions(user)
   };
 };

@@ -188,6 +188,10 @@ class User extends Model<User> {
   @Column(DataType.ARRAY(DataType.INTEGER))
   allowedContactTags: number[];
 
+  @Default([])
+  @Column(DataType.ARRAY(DataType.STRING))
+  permissions: string[];
+
   @BeforeDestroy
   static async updateChatbotsUsersReferences(user: User) {
     await Chatbot.update({ optUserId: null }, { where: { optUserId: user.id } });

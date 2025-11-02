@@ -28,6 +28,7 @@ import ConfirmationModal from "../../components/ConfirmationModal";
 // import { SocketContext } from "../../context/Socket/SocketContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import ForbiddenPage from "../../components/ForbiddenPage";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
@@ -96,6 +97,7 @@ const Queues = () => {
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
   const companyId = user.companyId;
 
 
@@ -188,9 +190,7 @@ const Queues = () => {
           }
         }}
       />
-      {user.profile === "user" ?
-        <ForbiddenPage />
-        :
+      {hasPermission("queues.view") ? (
         <>
           <MainHeader>
             <Title>{i18n.t("queues.title")} ({queues.length})</Title>
@@ -293,7 +293,8 @@ const Queues = () => {
               </TableBody>
             </Table>
           </Paper>
-        </>}
+        </>
+      ) : <ForbiddenPage />}
     </MainContainer>
   );
 };

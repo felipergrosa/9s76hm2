@@ -50,6 +50,7 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import usePlans from "../../hooks/usePlans";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 import ForbiddenPage from "../../components/ForbiddenPage";
+import usePermissions from "../../hooks/usePermissions";
 
 const reducer = (state, action) => {
   if (action.type === "LOAD_INTEGRATIONS") {
@@ -124,6 +125,7 @@ const QueueIntegration = () => {
   const [queueIntegration, dispatch] = useReducer(reducer, []);
   //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
 
   const { getPlanCompany } = usePlans();
   const companyId = user.companyId;
@@ -256,9 +258,7 @@ const QueueIntegration = () => {
         aria-labelledby="form-dialog-title"
         integrationId={selectedIntegration && selectedIntegration.id}
       />
-      {user.profile === "user" ?
-        <ForbiddenPage />
-        :
+      {hasPermission("integrations.view") ? (
         <>
 
           <MainHeader>
@@ -354,7 +354,8 @@ const QueueIntegration = () => {
               </TableBody>
             </Table>
           </Paper>
-        </>}
+        </>
+      ) : <ForbiddenPage />}
     </MainContainer>
   );
 };
