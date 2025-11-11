@@ -11,8 +11,6 @@ const GetDefaultWhatsApp = async (
 ): Promise<Whatsapp> => {
   let connection: Whatsapp | null = null;
 
-  console.log({ whatsappId, companyId, userId })
-  
   if (whatsappId) {
     const explicitWhatsapp = await Whatsapp.findOne({
       where: { id: whatsappId, companyId }
@@ -20,14 +18,12 @@ const GetDefaultWhatsApp = async (
 
     if (explicitWhatsapp) {
       connection = explicitWhatsapp;
-      if (explicitWhatsapp.status !== CONNECTED_STATUS) {
-        const connectedFallback = await Whatsapp.findOne({
-          where: { status: CONNECTED_STATUS, companyId }
-        });
-        if (connectedFallback) {
-          connection = connectedFallback;
-        }
-      }
+    }
+
+    if (!connection) {
+      connection = await Whatsapp.findOne({
+        where: { status: CONNECTED_STATUS, companyId }
+      });
     }
   } else {
     connection = await Whatsapp.findOne({

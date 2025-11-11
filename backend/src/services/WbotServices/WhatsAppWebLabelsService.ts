@@ -164,6 +164,20 @@ class WhatsAppWebLabelsService {
   }
 
   async getDeviceLabels(companyId: number, whatsappId?: number): Promise<DeviceLabel[]> {
+    const getFallbackLabels = async (wppId: number) => {
+      try {
+        const GetDeviceTagsService = require("./GetDeviceTagsService").default;
+        const fallback = await GetDeviceTagsService(companyId, wppId);
+        if (Array.isArray(fallback) && fallback.length > 0) {
+          logger.info(`[WhatsAppWebLabels] Fallback Baileys retornou ${fallback.length} labels para whatsappId=${wppId}`);
+          return fallback;
+        }
+      } catch (fallbackErr: any) {
+        logger.warn(`[WhatsAppWebLabels] Fallback Baileys falhou: ${fallbackErr?.message}`);
+      }
+      return [];
+    };
+
     try {
       const defaultWhatsapp = await GetDefaultWhatsApp(whatsappId, companyId);
       this.setProgress(defaultWhatsapp.id, 5, 'iniciando');
@@ -172,6 +186,10 @@ class WhatsAppWebLabelsService {
       const client = await this.getOrCreateClient(defaultWhatsapp.id);
       
       if (!client) {
+        const fallback = await getFallbackLabels(defaultWhatsapp.id);
+        if (fallback.length > 0) {
+          return fallback;
+        }
         throw new Error("Cliente WhatsApp Web não disponível. Aguarde a conexão ou escaneie o QR Code.");
       }
 
@@ -213,7 +231,7 @@ class WhatsAppWebLabelsService {
       }
       this.setProgress(defaultWhatsapp.id, 20, 'labels_recebidas');
       
-      const deviceLabels: DeviceLabel[] = [];
+      let deviceLabels: DeviceLabel[] = [];
 
       const cpuCount = Number(os.cpus()?.length || 4);
       const batchSize = Math.min(10, Math.max(5, Math.floor(cpuCount / 2)));
@@ -249,6 +267,13 @@ class WhatsAppWebLabelsService {
         this.setProgress(defaultWhatsapp.id, progress, 'contagem_por_label');
       }
       this.setProgress(defaultWhatsapp.id, 40, 'contagem_por_label');
+
+      if (deviceLabels.length === 0) {
+        const fallback = await getFallbackLabels(defaultWhatsapp.id);
+        if (fallback.length > 0) {
+          return fallback;
+        }
+      }
 
       // Adicionar "Sem etiqueta" (apenas contatos salvos) - com cache 5 min (otimizado)
       try {
@@ -388,6 +413,15 @@ class WhatsAppWebLabelsService {
 
     } catch (error: any) {
       logger.error(`[WhatsAppWebLabels] 💥 Erro geral ao buscar labels: ${error?.message}`);
+      try {
+        const defaultWhatsapp = await GetDefaultWhatsApp(whatsappId, companyId);
+        const fallback = await getFallbackLabels(defaultWhatsapp.id);
+        if (fallback.length > 0) {
+          return fallback;
+        }
+      } catch (fallbackErr: any) {
+        logger.warn(`[WhatsAppWebLabels] Falha ao aplicar fallback após erro: ${fallbackErr?.message}`);
+      }
       throw error;
     }
   }
