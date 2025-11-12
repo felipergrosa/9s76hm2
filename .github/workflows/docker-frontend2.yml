@@ -44,6 +44,6 @@ jobs:
           build-args: |
             REACT_APP_FRONTEND_VERSION=${{ steps.vcalc.outputs.version_label }}
           tags: |
-            felipergrosa/taktchat-frontend:latest
-            felipergrosa/taktchat-frontend:${{ github.sha }}
-            felipergrosa/taktchat-frontend:v${{ steps.vcalc.outputs.version_label }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/taktchat-frontend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/taktchat-frontend:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/taktchat-frontend:v${{ steps.vcalc.outputs.version_label }}

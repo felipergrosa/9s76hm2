@@ -47,6 +47,6 @@ jobs:
             BUILD_DATE=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
             BACKEND_VERSION=${{ steps.vcalc.outputs.version_label }}
           tags: |
-            felipergrosa/taktchat-backend:latest
-            felipergrosa/taktchat-backend:${{ github.sha }}
-            felipergrosa/taktchat-backend:v${{ steps.vcalc.outputs.version_label }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/taktchat-backend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/taktchat-backend:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/taktchat-backend:v${{ steps.vcalc.outputs.version_label }}

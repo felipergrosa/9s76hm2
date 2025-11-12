@@ -1,0 +1,84 @@
+version: "3.8"
+
+services:
+  taktchat-backend:
+    image: zanonalivesolucoes/taktchat-backend:latest
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    networks:
+      - app_network
+      - traefik_public
+    volumes:
+      - taktchat_media:/usr/src/app/public
+    environment:
+      - NODE_ENV=production
+      - BACKEND_URL=https://taktchat-api.alivesolucoes.com.br
+      - FRONTEND_URL=https://taktchat.alivesolucoes.com.br
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=taktchat_database
+      - DB_USER=taktchat_user
+      - DB_PASS=T4ktch4tUs3r@2025
+      - DB_DIALECT=postgres
+      - JWT_SECRET=Qn3nSd2H6kR8xL1vZ5pA7tM9cF4gJ2wY
+      - JWT_REFRESH_SECRET=V6zP3lK9mS2dT5xH1qW8yR4bN7fC0vG5
+      - REDIS_URI=redis://:J40geW0tC8VoaUqoZ@redis:6379
+      - REDIS_URI_ACK=redis://:J40geW0tC8VoaUqoZ@redis:6379
+      - REDIS_URI_MSG_CONN=redis://:J40geW0tC8VoaUqoZ@redis:6379
+      - SOCKET_FALLBACK_NS_BROADCAST=true
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 768M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=traefik_public"
+        - "traefik.http.routers.taktchat-api.rule=Host(`taktchat-api.alivesolucoes.com.br`)"
+        - "traefik.http.routers.taktchat-api.entrypoints=websecure"
+        - "traefik.http.routers.taktchat-api.tls.certresolver=letsencrypt"
+        - "traefik.http.services.taktchat-api.loadbalancer.server.port=8080"
+
+  taktchat-frontend:
+    image: zanonalivesolucoes/taktchat-frontend:latest
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    networks:
+      - traefik_public
+    environment:
+      - REACT_APP_BACKEND_URL=https://taktchat-api.alivesolucoes.com.br
+      - REACT_APP_SOCKET_URL=https://taktchat-api.alivesolucoes.com.br
+      - REACT_APP_PRIMARY_COLOR=#2563EB
+      - REACT_APP_PRIMARY_DARK=#1E3A8A
+      - PUBLIC_URL=https://taktchat.alivesolucoes.com.br
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=traefik_public"
+        - "traefik.http.routers.taktchat-app.rule=Host(`taktchat.alivesolucoes.com.br`)"
+        - "traefik.http.routers.taktchat-app.entrypoints=websecure"
+        - "traefik.http.routers.taktchat-app.tls.certresolver=letsencrypt"
+        - "traefik.http.services.taktchat-app.loadbalancer.server.port=80"
+
+networks:
+  app_network:
+    external: true
+  traefik_public:
+    external: true
+
+volumes:
+  taktchat_media:
+    driver: local
+
