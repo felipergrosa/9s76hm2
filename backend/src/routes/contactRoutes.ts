@@ -14,7 +14,7 @@ const upload = multer(uploadConfig);
 contactRoutes.post("/contacts/import", isAuth, ImportPhoneContactsController.store);
 
 contactRoutes.post("/contactsImport", isAuth, ContactController.importXls);
-contactRoutes.get("/contacts/import-progress", isAuth, ContactController.importProgress);
+// contactRoutes.get("/contacts/import-progress", isAuth, ContactController.importProgress); // DEPRECATED: usar GET /contacts/import-jobs/:jobId/status
 contactRoutes.get("/contacts", isAuth, ContactController.index);
 contactRoutes.get("/contacts/duplicates", isAuth, ContactController.listDuplicates);
 contactRoutes.get("/contacts/pending-normalization", isAuth, ContactController.listPendingNormalization);
