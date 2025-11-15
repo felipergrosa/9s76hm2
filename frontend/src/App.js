@@ -14,7 +14,9 @@ import {
   Button,
   Typography,
   Box,
+  CircularProgress,
 } from "@material-ui/core";
+import Alert from "@material-ui/lab/Alert";
 import ColorModeContext from "./layout/themeContext";
 import { ActiveMenuProvider } from "./context/ActiveMenuContext";
 import Favicon from "react-favicon";
@@ -36,10 +38,18 @@ const App = () => {
   const [mode, setMode] = useState(preferredTheme ? preferredTheme : prefersDarkMode ? "dark" : "light");
   const [primaryColorLight, setPrimaryColorLight] = useState(appColorLocalStorage);
   const [primaryColorDark, setPrimaryColorDark] = useState(appColorLocalStorage);
+  const backendUrl = useMemo(() => {
+    const url = getBackendUrl() || "http://localhost:8080";
+    if (!url) return "";
+    return url.endsWith("/") ? url.slice(0, -1) : url;
+  }, []);
   const [appLogoLight, setAppLogoLight] = useState(defaultLogoLight);
   const [appLogoDark, setAppLogoDark] = useState(defaultLogoDark);
   const [appLogoFavicon, setAppLogoFavicon] = useState(defaultLogoFavicon);
   const [appName, setAppName] = useState(appNameLocalStorage);
+  const [apiStatus, setApiStatus] = useState("checking");
+  const [apiErrorMessage, setApiErrorMessage] = useState("");
+  const [showApiStatusDialog, setShowApiStatusDialog] = useState(false);
   const { getPublicSetting } = useSettings();
   // Estado para controlar o prompt de instalação do PWA
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -245,12 +255,83 @@ const App = () => {
     window.localStorage.setItem("preferredTheme", mode);
   }, [mode]);
 
+  const runHealthCheck = useCallback(async () => {
+    if (!backendUrl) {
+      setApiStatus("offline");
+      setApiErrorMessage("Variável REACT_APP_BACKEND_URL não configurada.");
+      return;
+    }
+
+    setApiStatus("checking");
+    setApiErrorMessage("");
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 4000);
+
+    try {
+      const response = await fetch(`${backendUrl}/health`, {
+        method: "GET",
+        signal: controller.signal,
+        cache: "no-store",
+      });
+      window.clearTimeout(timeoutId);
+
+      const contentType = response.headers.get("content-type") || "";
+      let payload = null;
+      if (contentType.includes("application/json")) {
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+      }
+
+      const hasDatabaseError = payload?.database?.status === "error";
+
+      if (!response.ok) {
+        if (response.status === 503 && hasDatabaseError) {
+          setApiStatus("degraded");
+          setApiErrorMessage(payload?.database?.error || "Falha ao conectar no banco de dados.");
+          return;
+        }
+        throw new Error(`Healthcheck retornou status ${response.status}`);
+      }
+
+      if (hasDatabaseError) {
+        setApiStatus("degraded");
+        setApiErrorMessage(payload?.database?.error || "Falha ao conectar no banco de dados.");
+        return;
+      }
+
+      setApiStatus("online");
+      setApiErrorMessage("");
+    } catch (error) {
+      window.clearTimeout(timeoutId);
+      const message =
+        error?.name === "AbortError"
+          ? "Tempo limite ao verificar o backend (4s)."
+          : error?.message || "Falha ao contactar o backend.";
+      setApiErrorMessage(message);
+      setApiStatus("offline");
+    }
+  }, [backendUrl]);
+
   useEffect(() => {
-    console.log("|=========== handleSaveSetting ==========|")
-    console.log("APP START")
-    console.log("|========================================|")
-   
-    
+    runHealthCheck();
+  }, [runHealthCheck]);
+
+  useEffect(() => {
+    setShowApiStatusDialog(apiStatus !== "online");
+  }, [apiStatus]);
+
+  useEffect(() => {
+    if (apiStatus !== "online") {
+      return;
+    }
+
+    console.log("|=========== handleSaveSetting ==========|");
+    console.log("APP START");
+    console.log("|========================================|");
+
     getPublicSetting("primaryColorLight")
       .then((color) => {
         setPrimaryColorLight(color || "#2563EB");
@@ -267,21 +348,21 @@ const App = () => {
       });
     getPublicSetting("appLogoLight")
       .then((file) => {
-        setAppLogoLight(file ? getBackendUrl() + "/public/" + file : defaultLogoLight);
+        setAppLogoLight(file ? backendUrl + "/public/" + file : defaultLogoLight);
       })
       .catch((error) => {
         console.log("Error reading setting", error);
       });
     getPublicSetting("appLogoDark")
       .then((file) => {
-        setAppLogoDark(file ? getBackendUrl() + "/public/" + file : defaultLogoDark);
+        setAppLogoDark(file ? backendUrl + "/public/" + file : defaultLogoDark);
       })
       .catch((error) => {
         console.log("Error reading setting", error);
       });
     getPublicSetting("appLogoFavicon")
       .then((file) => {
-        setAppLogoFavicon(file ? getBackendUrl() + "/public/" + file : defaultLogoFavicon);
+        setAppLogoFavicon(file ? backendUrl + "/public/" + file : defaultLogoFavicon);
       })
       .catch((error) => {
         console.log("Error reading setting", error);
@@ -295,7 +376,7 @@ const App = () => {
         setAppName("Taktchat_Flow");
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [apiStatus]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -303,6 +384,9 @@ const App = () => {
   }, [primaryColorLight, primaryColorDark, mode]);
 
   useEffect(() => {
+    if (apiStatus !== "online") {
+      return;
+    }
     async function fetchVersionData() {
       try {
         const response = await api.get("/version");
@@ -313,21 +397,87 @@ const App = () => {
       }
     }
     fetchVersionData();
-  }, []);
+  }, [apiStatus]);
 
   return (
     <>
-      <Favicon url={appLogoFavicon ? getBackendUrl() + "/public/" + appLogoFavicon : defaultLogoFavicon} />
+      <Favicon url={appLogoFavicon ? backendUrl + "/public/" + appLogoFavicon : defaultLogoFavicon} />
       <ColorModeContext.Provider value={{ colorMode }}>
         <ThemeProvider theme={theme}>
           <QueryClientProvider client={queryClient}>
             <ActiveMenuProvider>
               <div style={{ position: "relative", overflow: "visible", zIndex: 0, minHeight: "100vh" }}>
-                <Routes />
+                {apiStatus === "online" && <Routes />}
 
                 <Dialog
-                  open={showInstallDialog}
-                  onClose={handleRemindLaterThisSession}
+                  open={showApiStatusDialog}
+                  aria-labelledby="api-offline-dialog-title"
+                  onClose={(_, reason) => {
+                    if (reason === "backdropClick") {
+                      return;
+                    }
+                    setShowApiStatusDialog(false);
+                  }}
+                >
+                  <DialogTitle id="api-offline-dialog-title">
+                    {apiStatus === "degraded" ? "Banco de Dados indisponível" : "Servidor de API indisponível"}
+                  </DialogTitle>
+                  <DialogContent>
+                    <DialogContentText component="div">
+                      {apiStatus === "degraded" ? (
+                        <>
+                          <Typography gutterBottom>
+                            1. Servidor de API acessível em <strong>{backendUrl}</strong> ✅
+                          </Typography>
+                          <Typography gutterBottom>
+                            2. Não foi possível conectar ao servidor de Banco de Dados. Revise as variáveis `DB_HOST`,
+                            `DB_PORT`, `DB_USER`, `DB_PASS` e confirme se o Postgres está rodando
+                            (<code>docker compose up postgres</code>).
+                          </Typography>
+                          <Typography variant="body2" color="textSecondary">
+                            Após ajustar o banco, clique em “Tentar novamente” para revalidar a conexão.
+                          </Typography>
+                        </>
+                      ) : (
+                        <>
+                          <Typography gutterBottom>
+                            1. Não foi possível acessar o Servidor de API em <strong>{backendUrl}</strong>. Verifique se o backend está
+                            rodando (`npm run dev` ou `docker compose up backend`).
+                          </Typography>
+                          <Typography gutterBottom>
+                            2. Enquanto o servidor não responde, o login e demais recursos permanecem indisponíveis.
+                            Inicie o backend e clique em “Tentar novamente”.
+                          </Typography>
+                        </>
+                      )}
+                    </DialogContentText>
+                    {apiErrorMessage && (
+                      <Box mt={2}>
+                        <Alert severity="warning">{apiErrorMessage}</Alert>
+                      </Box>
+                    )}
+                  </DialogContent>
+                  <DialogActions>
+                    <Button onClick={runHealthCheck} color="default" disabled={apiStatus === "checking"}>
+                      {apiStatus === "checking" ? (
+                        <>
+                          <CircularProgress size={18} style={{ marginRight: 8 }} /> Verificando…
+                        </>
+                      ) : (
+                        "Tentar novamente"
+                      )}
+                    </Button>
+                  </DialogActions>
+                </Dialog>
+
+                <Dialog
+                  open={showInstallDialog && apiStatus === "online"}
+                  onClose={(event, reason) => {
+                    if (reason === "backdropClick") {
+                      return;
+                    }
+                    handleRemindLaterThisSession();
+                  }}
                   aria-labelledby="install-dialog-title"
                 >
                   <DialogTitle id="install-dialog-title">Instalar o TaktChat?</DialogTitle>

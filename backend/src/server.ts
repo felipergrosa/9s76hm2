@@ -7,6 +7,7 @@ import Version from "./models/Versions";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
+import { getDatabaseStatus, setDatabaseStatus } from "./libs/databaseStatus";
 
 const getBackendVersion = async () => {
   const version = await Version.findByPk(1);
@@ -17,9 +18,61 @@ const getBackendVersion = async () => {
 import app from "./app";
 import sequelize from "./database";
 
+let dbRecheckPromise: PromiseLike<void> | null = null;
+const scheduleDatabaseRecheck = (): void => {
+  if (dbRecheckPromise) {
+    return;
+  }
+
+  dbRecheckPromise = sequelize
+    .authenticate()
+    .then(() => {
+      setDatabaseStatus(true, null);
+    })
+    .catch((err: any) => {
+      setDatabaseStatus(false, err?.message || "Unknown database error");
+    })
+    .finally(() => {
+      dbRecheckPromise = null;
+    });
+};
+
 // --- Endpoint de Healthcheck ---
-app.get('/health', (req, res) => {
-  res.status(200).send('ok');
+app.get('/health', async (req, res) => {
+  const dbState = getDatabaseStatus();
+  const responseBody: {
+    status: "ok" | "degraded";
+    api: { status: "ok" };
+    database: { status: "ok" | "error"; error: string | null };
+    timestamp: string;
+  } = {
+    status: dbState.online ? "ok" : "degraded",
+    api: { status: "ok" },
+    database: dbState.online ? { status: "ok", error: null } : { status: "error", error: dbState.lastError || "Banco de dados indisponível." },
+    timestamp: new Date().toISOString(),
+  };
+
+  if (!dbState.online) {
+    scheduleDatabaseRecheck();
+    res.status(200).json(responseBody);
+    return;
+  }
+
+  try {
+    await sequelize.authenticate();
+    setDatabaseStatus(true, null);
+    res.status(200).json(responseBody);
+  } catch (err: any) {
+    const message = err?.message || "Unknown database error";
+    setDatabaseStatus(false, message);
+    responseBody.status = "degraded";
+    responseBody.database = {
+      status: "error",
+      error: message,
+    };
+    scheduleDatabaseRecheck();
+    res.status(200).json(responseBody);
+  }
 });
 // --- Fim do Healthcheck ---
 
@@ -30,7 +83,7 @@ import Company from "./models/Company";
 import BullQueue from './libs/queue';
 import { initSavedFilterCron } from "./jobs/SavedFilterCronManager";
 
-import { startQueueProcess } from "./queues";
+import { initBackgroundJobs, startQueueProcess } from "./queues";
 import tagRulesCron from "./cron/tagRulesCron";
 import tagRulesRecentContactsCron from "./cron/tagRulesRecentContactsCron";
 
@@ -59,9 +112,26 @@ const startQueuesWithFallback = async (origin = "startup") => {
 // import { ScheduledMessagesJob, ScheduleMessagesGenerateJob, ScheduleMessagesEnvioJob, ScheduleMessagesEnvioForaHorarioJob } from "./wbotScheduledMessages";
 
 const port = Number(process.env.PORT) || 8080;
+const logStartupAvailability = async (): Promise<boolean> => {
+  try {
+    await sequelize.authenticate();
+    setDatabaseStatus(true, null);
+    logger.info("Servidor disponível: API e banco conectados.");
+    return true;
+  } catch (err: any) {
+    const message = err?.message || String(err);
+    logger.info(`Servidor disponível: API ativa, mas banco indisponível (${message}).`);
+    setDatabaseStatus(false, message);
+    return false;
+  }
+};
+
 const server = app.listen(port, async () => {
-  // Log de versão após inicialização do Sequelize (evita ModelNotInitializedError)
-  (async () => {
+  const dbAvailable = await logStartupAvailability();
+
+  if (dbAvailable) {
+    // Log de versão após inicialização do Sequelize (evita ModelNotInitializedError)
+    await (async () => {
     const safeRead = (p: string) => {
       try { return fs.readFileSync(p, "utf8").trim(); } catch { return ""; }
     };
@@ -153,53 +223,63 @@ const server = app.listen(port, async () => {
     const commit = process.env.GIT_COMMIT || fileCommit || gitCommit || "N/A";
     const buildDate = process.env.BUILD_DATE || safeRead(path.join(process.cwd(), ".build-date")) || new Date().toISOString();
 
-    // eslint-disable-next-line no-console
-    console.log(`BACKEND BUILD: ${buildDate} | Commit: ${commit} | Version: ${backendVersion}`);
-  })();
-  const companies = await Company.findAll({
-    where: { status: true },
-    attributes: ["id"]
-  });
+      // eslint-disable-next-line no-console
+      console.log(`BACKEND BUILD: ${buildDate} | Commit: ${commit} | Version: ${backendVersion}`);
+    })();
 
-  const allPromises: any[] = [];
-  companies.forEach(c => {
-    const promise = StartAllWhatsAppsSessions(c.id).catch(err => {
-      logger.error(`Falha ao iniciar sessão WhatsApp da empresa ${c.id}: ${err?.message || err}`);
-    });
-    allPromises.push(promise);
-  });
-
-  Promise.all(allPromises)
-    .then(() => startQueuesWithFallback("after-whatsapp-sessions"))
-    .catch(err => {
-      logger.error(`Erros ao iniciar sessões WhatsApp: ${err?.message || err}`);
-      startQueuesWithFallback("after-whatsapp-sessions-error");
-    })
-    .finally(() => {
-      if (!queuesStarted) {
-        const delay = isProduction ? 5000 : 0;
-        setTimeout(() => startQueuesWithFallback("finalizer"), delay);
-      }
+    const companies = await Company.findAll({
+      where: { status: true },
+      attributes: ["id"]
     });
 
-  const hasRedisQueues = Boolean((process.env.REDIS_URI_ACK && process.env.REDIS_URI_ACK !== '') || (process.env.REDIS_URI && process.env.REDIS_URI !== ''));
-  if (hasRedisQueues) {
-    BullQueue.process();
-  } else {
-    logger.warn("BullQueue desabilitado: defina REDIS_URI ou REDIS_URI_ACK para habilitar processamento de filas.");
-  }
+    const allPromises: any[] = [];
+    companies.forEach(c => {
+      const promise = StartAllWhatsAppsSessions(c.id).catch(err => {
+        logger.error(`Falha ao iniciar sessão WhatsApp da empresa ${c.id}: ${err?.message || err}`);
+      });
+      allPromises.push(promise);
+    });
 
-  // Checagem da extensão pgvector
-  try {
-    const [rows] = await sequelize.query("SELECT extname FROM pg_extension WHERE extname = 'vector'");
-    const ok = Array.isArray(rows) && rows.length > 0;
-    if (ok) {
-      logger.info("pgvector: OK (extensão 'vector' instalada)");
+    Promise.all(allPromises)
+      .then(() => startQueuesWithFallback("after-whatsapp-sessions"))
+      .catch(err => {
+        logger.error(`Erros ao iniciar sessões WhatsApp: ${err?.message || err}`);
+        startQueuesWithFallback("after-whatsapp-sessions-error");
+      })
+      .finally(() => {
+        if (!queuesStarted) {
+          const delay = isProduction ? 5000 : 0;
+          setTimeout(() => startQueuesWithFallback("finalizer"), delay);
+        }
+      });
+
+    const hasRedisQueues = Boolean((process.env.REDIS_URI_ACK && process.env.REDIS_URI_ACK !== '') || (process.env.REDIS_URI && process.env.REDIS_URI !== ''));
+    if (hasRedisQueues) {
+      BullQueue.process();
     } else {
-      logger.warn("pgvector: extensão 'vector' NÃO encontrada. Habilite com: CREATE EXTENSION IF NOT EXISTS vector;");
+      logger.warn("BullQueue desabilitado: defina REDIS_URI ou REDIS_URI_ACK para habilitar processamento de filas.");
     }
-  } catch (e: any) {
-    logger.error(`pgvector: falha ao checar extensão: ${e?.message || e}`);
+
+    // Checagem da extensão pgvector
+    try {
+      const [rows] = await sequelize.query("SELECT extname FROM pg_extension WHERE extname = 'vector'");
+      const ok = Array.isArray(rows) && rows.length > 0;
+      if (ok) {
+        logger.info("pgvector: OK (extensão 'vector' instalada)");
+      } else {
+        logger.warn("pgvector: extensão 'vector' NÃO encontrada. Habilite com: CREATE EXTENSION IF NOT EXISTS vector;");
+      }
+    } catch (e: any) {
+      logger.error(`pgvector: falha ao checar extensão: ${e?.message || e}`);
+    }
+
+    initSavedFilterCron();
+    tagRulesCron(); // Executa diariamente às 2h (processamento completo)
+    tagRulesRecentContactsCron(); // Executa a cada 5 minutos (apenas contatos recentes)
+    initBackgroundJobs();
+  } else {
+    logger.warn("Banco indisponível no startup: sessões WhatsApp, filas e crons não foram inicializados. Reinicie o backend após corrigir o banco.");
+    scheduleDatabaseRecheck();
   }
 
   logger.info(`Server started on port: ${port}`);
@@ -217,13 +297,6 @@ process.on("unhandledRejection", (reason, p) => {
     p
   );
 });
-
-// Inicializa o cron de sincronização de savedFilter (configurável por env/Settings)
-initSavedFilterCron();
-
-// Inicializa os crons de aplicação automática de tag rules
-tagRulesCron(); // Executa diariamente às 2h (processamento completo)
-tagRulesRecentContactsCron(); // Executa a cada 5 minutos (apenas contatos recentes)
 
 initIO(server);
 gracefulShutdown(server);

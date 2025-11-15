@@ -9,6 +9,7 @@ import compression from "compression";
 import * as Sentry from "@sentry/node";
 import { config as dotenvConfig } from "dotenv";
 import bodyParser from 'body-parser';
+import type { BaseError as SequelizeBaseError } from "sequelize";
 
 import "./database";
 import uploadConfig from "./config/upload";
@@ -97,11 +98,70 @@ app.use(routes);
 // Manipulador de erros do Sentry
 app.use(Sentry.Handlers.errorHandler());
 
+const mapDatabaseConnectionError = (
+  error: any
+): { status: number; code: string; message: string } | null => {
+  if (!error) {
+    return null;
+  }
+
+  const parent = error.parent || error.original || {};
+  const pgCode = parent.code;
+  const normalizedMessage = String(parent.message || error.message || "").toLowerCase();
+  const isSequelizeConnectionError =
+    /SequelizeConnection/i.test(error.name || "") ||
+    /database/i.test(error.name || "") ||
+    Boolean(pgCode);
+
+  if (!isSequelizeConnectionError) {
+    return null;
+  }
+
+  if (pgCode === "28P01") {
+    return {
+      status: 503,
+      code: "DB_INVALID_CREDENTIALS",
+      message: "Credenciais inválidas para o banco de dados. Verifique usuário e senha configurados."
+    };
+  }
+
+  if (pgCode === "3D000" || (normalizedMessage.includes("database") && normalizedMessage.includes("does not exist"))) {
+    return {
+      status: 503,
+      code: "DB_NOT_FOUND",
+      message: "Banco de dados não encontrado. Crie o banco configurado em DB_NAME antes de continuar."
+    };
+  }
+
+  if (
+    pgCode === "28000" ||
+    (normalizedMessage.includes("role") && normalizedMessage.includes("does not exist"))
+  ) {
+    return {
+      status: 503,
+      code: "DB_ROLE_NOT_FOUND",
+      message: "Usuário do banco de dados não existe. Crie o usuário definido em DB_USER."
+    };
+  }
+
+  return {
+    status: 503,
+    code: "DB_CONNECTION_ERROR",
+    message: "Não foi possível conectar ao banco de dados. Aguarde alguns instantes ou contate o suporte."
+  };
+};
+
 // Middleware de tratamento de erros
 app.use(async (err: Error, req: Request, res: Response, _: NextFunction) => {
   if (err instanceof AppError) {
     logger.warn(err);
     return res.status(err.statusCode).json({ error: err.message });
+  }
+
+  const dbError = mapDatabaseConnectionError(err);
+  if (dbError) {
+    logger.error(`Erro de conexão com o banco (${dbError.code}): ${err.message}`);
+    return res.status(dbError.status).json({ error: dbError.message, code: dbError.code });
   }
 
   logger.error(err);

@@ -10,7 +10,7 @@
     "start": "nodemon dist/server.js",
     "start:prod": "node dist/server.js",
     "start:prod:migrate": "sh ./scripts/auto-migrate.sh",
-    "dev": "node ./scripts/check_and_kill_port.js && npm run build && npx sequelize db:migrate && ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev": "node ./scripts/check_and_kill_port.js && npm run build && node ./scripts/run_migrations_safe.js && ts-node-dev --respawn --transpile-only src/server.ts",
     "dev:fast": "node ./scripts/check_and_kill_port.js && nodemon --exec ts-node src/server.ts",
     "dev:server": "ts-node-dev --respawn --transpile-only --ignore node_modules src/server.ts",
     "db:migrate": "npx sequelize db:migrate",

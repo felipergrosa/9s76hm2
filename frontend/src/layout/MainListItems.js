@@ -206,7 +206,7 @@ const MainListItems = ({ collapsed }) => {
   const theme = useTheme();
   const classes = useStyles();
   const { whatsApps } = useContext(WhatsAppsContext);
-  const { user, socket } = useContext(AuthContext);
+  const { user, socket, isAuth } = useContext(AuthContext);
   const { setActiveMenu } = useActiveMenu();
   const location = useLocation();
   const { hasPermission, hasAnyPermission, isAdmin } = usePermissions();
@@ -238,12 +238,30 @@ const MainListItems = ({ collapsed }) => {
 
 
   useEffect(() => {
+    let isMounted = true;
+    if (!isAuth) {
+      setHasHelps(false);
+      return undefined;
+    }
+
     async function checkHelps() {
-      const helps = await list();
-      setHasHelps(helps.length > 0);
+      try {
+        const helps = await list();
+        if (isMounted) {
+          setHasHelps(Array.isArray(helps) && helps.length > 0);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setHasHelps(false);
+        }
+      }
     }
     checkHelps();
-  }, []);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuth, list]);
 
   const isManagementActive =
     location.pathname === "/" || location.pathname.startsWith("/reports") || location.pathname.startsWith("/moments");
@@ -270,28 +288,41 @@ const MainListItems = ({ collapsed }) => {
   const { getVersion } = useVersion();
 
   useEffect(() => {
+    let isMounted = true;
+    if (!isAuth) {
+      return undefined;
+    }
     async function fetchVersion() {
-      const data = await getVersion();
-      const frontendVersion = data?.version || "N/A";
-      const backendVersion = data?.backend?.version || "N/A";
-      // backendLabel não será usado na UI (exibiremos apenas a versão pura do backend)
-      const commit = data?.backend?.commit || "N/A";
-      const commitShort = data?.backend?.commitShort || (commit && commit.length >= 6 ? commit.substring(0,6) : commit);
-      const buildDateRaw = data?.backend?.buildDate || "N/A";
-      let buildDate = buildDateRaw;
       try {
-        const d = new Date(buildDateRaw);
-        if (!isNaN(d.getTime())) {
-          buildDate = d.toLocaleString();
+        const data = await getVersion();
+        if (!isMounted) return;
+        const frontendVersion = data?.version || "N/A";
+        const backendVersion = data?.backend?.version || "N/A";
+        const commit = data?.backend?.commit || "N/A";
+        const commitShort = data?.backend?.commitShort || (commit && commit.length >= 6 ? commit.substring(0, 6) : commit);
+        const buildDateRaw = data?.backend?.buildDate || "N/A";
+        let buildDate = buildDateRaw;
+        try {
+          const d = new Date(buildDateRaw);
+          if (!isNaN(d.getTime())) {
+            buildDate = d.toLocaleString();
+          }
+        } catch (e) {
+          // ignore parse errors, keep raw string
         }
+        setVersionInfo({ frontend: frontendVersion, backend: backendVersion, commit, commitShort, buildDate });
       } catch (e) {
-        // ignore parse errors, keep raw string
+        if (isMounted) {
+          setVersionInfo({ frontend: "N/A", backend: "N/A", commit: "N/A", commitShort: "N/A", buildDate: "N/A" });
+        }
       }
-      setVersionInfo({ frontend: frontendVersion, backend: backendVersion, commit, commitShort, buildDate });
     }
     fetchVersion();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuth, getVersion]);
 
   useEffect(() => {
     dispatch({ type: "RESET" });
@@ -299,6 +330,16 @@ const MainListItems = ({ collapsed }) => {
   }, [searchParam]);
 
   useEffect(() => {
+    if (!isAuth || !user?.companyId) {
+      setShowCampaigns(false);
+      setShowKanban(false);
+      setShowOpenAi(false);
+      setShowIntegrations(false);
+      setShowSchedules(false);
+      setShowInternalChat(false);
+      setShowExternalApi(false);
+      return;
+    }
     async function fetchData() {
       const companyId = user.companyId;
       const planConfigs = await getPlanCompany(undefined, companyId);
@@ -313,7 +354,7 @@ const MainListItems = ({ collapsed }) => {
     }
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isAuth, user?.companyId]);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {

@@ -22,6 +22,8 @@ FRONT_PRIMARY_COLOR="${FRONT_PRIMARY_COLOR:-#2563EB}"
 FRONT_PRIMARY_DARK="${FRONT_PRIMARY_DARK:-#1E3A8A}"
 FRONT_PUBLIC_URL="${FRONT_PUBLIC_URL:-http://localhost:3000}"
 FRONT_VERSION="${FRONT_VERSION:-${IMAGE_TAG}}"
+FORCE_REBUILD="${FORCE_REBUILD:-false}"
+COMMON_BUILD_ARGS=()
 
 log() {
   printf '\n[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -53,6 +55,7 @@ build_and_push() {
 
   run_with_feedback "Construindo ${image_name}:${IMAGE_TAG}" \
     "${BUILD_CMD[@]}" \
+      "${COMMON_BUILD_ARGS[@]}" \
       -f "${dockerfile}" \
       -t "${image_name}:${IMAGE_TAG}" \
       "${context_dir}" \
@@ -69,6 +72,11 @@ setup_build_command() {
     log "Docker Buildx detectado; usando buildx --load"
   else
     warn "Buildx não detectado; usando builder legado (considere instalar buildx para evitar o aviso)."
+  fi
+
+  if [ "${FORCE_REBUILD}" = "true" ]; then
+    COMMON_BUILD_ARGS+=(--no-cache --pull)
+    log "FORCE_REBUILD habilitado: adicionando --no-cache e --pull ao comando de build."
   fi
 }
 

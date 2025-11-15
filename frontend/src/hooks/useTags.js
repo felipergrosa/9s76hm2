@@ -6,9 +6,15 @@ import { AuthContext } from "../context/Auth/AuthContext";
 const useTags = () => {
   const [tags, setTags] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useContext(AuthContext);
+  const { user, isAuth } = useContext(AuthContext);
 
   useEffect(() => {
+    if (!isAuth || !user?.companyId) {
+      setTags([]);
+      setLoading(false);
+      return;
+    }
+
     const fetchTags = async () => {
       try {
         const { data } = await api.get(`/tags`, {
@@ -23,7 +29,7 @@ const useTags = () => {
     };
 
     fetchTags();
-  }, [user]);
+  }, [isAuth, user?.companyId]);
 
   return { tags, loading };
 };

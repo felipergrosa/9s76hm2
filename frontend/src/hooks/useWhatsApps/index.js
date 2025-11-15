@@ -59,11 +59,17 @@ const useWhatsApps = () => {
   const [whatsApps, dispatch] = useReducer(reducer, []);
   const [loading, setLoading] = useState(true);
 //   const socketManager = useContext(SocketContext);
-  const { user, socket } = useContext(AuthContext);
+  const { user, socket, isAuth } = useContext(AuthContext);
 
 
 
   useEffect(() => {
+    if (!isAuth) {
+      dispatch({ type: "RESET" });
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const fetchSession = async () => {
       try {
@@ -76,10 +82,12 @@ const useWhatsApps = () => {
       }
     };
     fetchSession();
-  }, []);
+  }, [isAuth]);
 
   useEffect(() => {
-    if (user.companyId) {
+    if (!isAuth || !user.companyId || !socket) {
+      return undefined;
+    }
 
       const companyId = user.companyId;
 //    const socket = socketManager.GetSocket();
@@ -106,8 +114,7 @@ const useWhatsApps = () => {
         socket.off(`company-${companyId}-whatsapp`, onCompanyWhatsapp);
         socket.off(`company-${companyId}-whatsappSession`, onCompanyWhatsappSession);
       };
-    }
-  }, [socket]);
+    }, [socket, user.companyId, isAuth]);
 
   return { whatsApps, loading };
 };

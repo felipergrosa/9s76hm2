@@ -2216,12 +2216,13 @@ Qualquer duvida estamos a disposição!
 }
 
 
-handleInvoiceCreate()
-
-handleWhatsapp();
-handleProcessLanes();
-handleCloseTicketsAutomatic();
-handleRandomUser();
+export function initBackgroundJobs(): void {
+  handleInvoiceCreate();
+  handleWhatsapp();
+  handleProcessLanes();
+  handleCloseTicketsAutomatic();
+  handleRandomUser();
+}
 
 export async function startQueueProcess() {
   logger.info("Iniciando processamento de filas");

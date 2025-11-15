@@ -297,7 +297,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { handleLogout, loading } = useContext(AuthContext);
+  const { handleLogout, loading, isAuth } = useContext(AuthContext);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerVariant, setDrawerVariant] = useState("permanent");
   // const [dueDate, setDueDate] = useState("");
@@ -323,25 +323,40 @@ const LoggedInLayout = ({ children, themeToggle }) => {
   const { setVersion } = useVersion();
 
   useEffect(() => {
+    if (!isAuth) {
+      setUserToken("disabled");
+      return;
+    }
+    let isMounted = true;
     const getSetting = async () => {
-      const response = await settings.get("wtV");
-
-
-      if (response) {
-
-        setUserToken("disabled");
-
-      } else {
-        setUserToken("disabled");
+      try {
+        const response = await settings.get("wtV");
+        if (!isMounted) return;
+        if (response) {
+          setUserToken("disabled");
+        } else {
+          setUserToken("disabled");
+        }
+      } catch (err) {
+        if (isMounted) {
+          setUserToken("disabled");
+        }
       }
     };
 
     getSetting();
-  });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuth, settings]);
 
   
 
   useEffect(() => {
+    if (!isAuth) {
+      return;
+    }
     // Envia a versão do frontend para o backend (/version)
     // Usa a versão injetada pelo CI (REACT_APP_FRONTEND_VERSION) com fallback para package.json
     // Envia somente se a versão atual for diferente da última registrada
@@ -373,7 +388,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
     if (user.defaultTheme === "dark" && theme.mode === "light") {
       colorMode.toggleColorMode();
     }
-  }, [user.defaultMenu, document.body.offsetWidth]);
+  }, [isAuth, user.defaultMenu, document.body.offsetWidth]);
 
   useEffect(() => {
     if (document.body.offsetWidth < 600) {

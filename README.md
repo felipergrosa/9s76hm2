@@ -55,8 +55,11 @@ Toda a documentação foi reorganizada em `.docs/`. Principais pontos de entrada
 - Operação, monitoramento e suporte: `.docs/operacao/`
 - Funcionalidades por módulo: `.docs/funcionalidades/`
 - Procedimentos de diagnóstico: `.docs/diagnosticos/`
+- Diagnóstico de banco (erros DB_* do backend): `.docs/diagnosticos/banco.md`
 - Checklists e histórico: `.docs/anexos/`
 - Scripts SQL organizados: `.docs/sql/`
+- Build/publicação de imagens Docker: `.docs/docker-build.md`
+- Script rápido para publicar imagens na VPS (forçando rebuild e `PUBLIC_URL` correto): `scripts/publish-vps.sh` (detalhes em `.docs/docker-build.md`).
 
 Documentos anteriores permanecem disponíveis como referência em `.docs/legacy/`.
 

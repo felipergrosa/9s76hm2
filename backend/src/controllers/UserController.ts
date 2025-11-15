@@ -404,9 +404,11 @@ export const getUserCreationStatus = async (
 
     return res.status(200).json({ userCreation: setting.value });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ error: "Failed to fetch user creation status" });
+    return res.status(503).json({
+      error: "DB_UNAVAILABLE",
+      message: "Não foi possível verificar userCreation porque o banco está indisponível.",
+      details: (error as any)?.message || String(error)
+    });
   }
 };
 

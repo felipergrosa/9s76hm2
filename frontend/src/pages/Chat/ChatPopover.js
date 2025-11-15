@@ -99,7 +99,7 @@ export default function ChatPopover() {
   const classes = useStyles();
 
 //   const socketManager = useContext(SocketContext);
-  const { user, socket } = useContext(AuthContext);
+  const { user, socket, isAuth } = useContext(AuthContext);
 
 
   const [loading, setLoading] = useState(false);
@@ -124,21 +124,31 @@ export default function ChatPopover() {
   }, [play]);
 
   useEffect(() => {
+    if (!isAuth) {
+      dispatch({ type: "RESET" });
+      setPageNumber(1);
+      return;
+    }
     dispatch({ type: "RESET" });
     setPageNumber(1);
-  }, [searchParam]);
+  }, [searchParam, isAuth]);
 
   useEffect(() => {
+    if (!isAuth) {
+      return;
+    }
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
       fetchChats();
     }, 500);
     return () => clearTimeout(delayDebounceFn);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParam, pageNumber]);
+  }, [searchParam, pageNumber, isAuth]);
 
   useEffect(() => {
-    if (user.companyId) {
+    if (!isAuth || !user?.companyId || !socket) {
+      return undefined;
+    }
 
       const companyId = user.companyId;
 //    const socket = socketManager.GetSocket();
@@ -161,12 +171,15 @@ export default function ChatPopover() {
       return () => {
         socket.off(`company-${companyId}-chat`, onCompanyChatPopover);
       };
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, isAuth, socket]);
 
 
   useEffect(() => {
+    if (!isAuth) {
+      setInvisible(true);
+      return;
+    }
     let unreadsCount = 0;
     if (chats.length > 0) {
       for (let chat of chats) {
@@ -182,9 +195,13 @@ export default function ChatPopover() {
     } else {
       setInvisible(true);
     }
-  }, [chats, user.id]);
+  }, [chats, user.id, isAuth]);
 
   const fetchChats = async () => {
+    if (!isAuth) {
+      setLoading(false);
+      return;
+    }
     try {
       const { data } = await api.get("/chats/", {
         params: { searchParam, pageNumber },
