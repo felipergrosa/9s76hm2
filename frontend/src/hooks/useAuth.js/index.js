@@ -89,23 +89,33 @@ const useAuth = () => {
     if (Object.keys(user).length && user.id > 0) {
       // console.log("Entrou useWhatsapp com user", Object.keys(user).length, Object.keys(socket).length ,user, socket)
       let io;
-      if (!Object.keys(socket).length) {
+      if (!socket || !socket.on || typeof socket.on !== 'function') {
         io = socketConnection({ user });
-        setSocket(io)
-      } else {
-        io = socket
-      }
-      io.on(`company-${user.companyId}-user`, (data) => {
-        if (data.action === "update" && data.user.id === user.id) {
-          setUser(data.user);
+        if (io && typeof io.on === 'function') {
+          setSocket(io);
+        } else {
+          console.error('[useAuth] socketConnection não retornou uma instância válida', io);
+          return;
         }
-      });
+      } else {
+        io = socket;
+      }
+      
+      if (io && typeof io.on === 'function') {
+        io.on(`company-${user.companyId}-user`, (data) => {
+          if (data.action === "update" && data.user.id === user.id) {
+            setUser(data.user);
+          }
+        });
 
-      return () => {
-        // console.log("desconectou o company user ", user.id)
-        io.off(`company-${user.companyId}-user`);
-        // io.disconnect();
-      };
+        return () => {
+          // console.log("desconectou o company user ", user.id)
+          if (io && typeof io.off === 'function') {
+            io.off(`company-${user.companyId}-user`);
+          }
+          // io.disconnect();
+        };
+      }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }
   }, [user]);
