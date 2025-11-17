@@ -10,14 +10,16 @@
 
 1. [Introdução](#introdução)
 2. [Acesso e Permissões](#acesso-e-permissões)
-3. [Gestão de Empresas](#gestão-de-empresas)
-4. [Gestão de Planos](#gestão-de-planos)
-5. [Gestão de Conexões Globais](#gestão-de-conexões-globais)
-6. [Comunicados e Anúncios](#comunicados-e-anúncios)
-7. [Monitoramento e Diagnósticos](#monitoramento-e-diagnósticos)
-8. [Financeiro e Assinaturas](#financeiro-e-assinaturas)
-9. [Troubleshooting Administrativo](#troubleshooting-administrativo)
-10. [Boas Práticas](#boas-práticas)
+3. [Gestão de Super Admins](#gestão-de-super-admins)
+4. [Gestão de Empresas](#gestão-de-empresas)
+   - [Conceito de Workspace](#conceito-de-workspace)
+5. [Gestão de Planos](#gestão-de-planos)
+6. [Gestão de Conexões Globais](#gestão-de-conexões-globais)
+7. [Comunicados e Anúncios](#comunicados-e-anúncios)
+8. [Monitoramento e Diagnósticos](#monitoramento-e-diagnósticos)
+9. [Financeiro e Assinaturas](#financeiro-e-assinaturas)
+10. [Troubleshooting Administrativo](#troubleshooting-administrativo)
+11. [Boas Práticas](#boas-práticas)
 
 ---
 
@@ -82,6 +84,131 @@ if (user.super === true) {
 - `companies.delete` - Deletar empresas
 - `all-connections.view` - Ver todas as conexões
 - `announcements.*` - Todas as permissões de anúncios
+
+---
+
+## Gestão de Super Admins
+
+### Criar Novo Super Admin
+
+**Rota:** `/users`  
+**Menu:** "Usuários" (apenas para Super Admin)
+
+**Passo a Passo:**
+
+1. Acesse a tela de **Usuários** no menu lateral
+2. Clique no botão **"+"** ou **"Novo Usuário"** no cabeçalho
+3. Preencha o formulário:
+   - **Nome** (obrigatório)
+   - **Email** (obrigatório, único)
+   - **Senha** (obrigatória, mínimo 5 caracteres)
+   - **Profile** - Selecione "Admin" ou "User"
+   - **Super Admin** - Marque o checkbox (⚠️ **apenas Super Admins veem esta opção**)
+4. Configure outras opções conforme necessário (filas, horários, etc.)
+5. Clique em **"Salvar"**
+
+**O que acontece:**
+- ✅ Usuário é criado no banco de dados
+- ✅ Campo `super: true` é definido
+- ✅ Usuário recebe **todas as permissões** automaticamente
+- ✅ Usuário pode acessar todas as empresas
+- ✅ Menu "Empresas" e "Todas as Conexões" aparecem para o novo Super Admin
+
+**Validações:**
+- ⚠️ **Apenas Super Admins podem criar outros Super Admins**
+- ⚠️ Se um usuário não-Super Admin tentar criar um Super Admin, receberá erro 403
+- Email: formato válido, único no sistema
+- Senha: mínimo 5 caracteres
+
+### Editar Usuário para Super Admin
+
+**Passo a Passo:**
+
+1. Acesse a tela de **Usuários**
+2. Clique no ícone de **lápis** na linha do usuário que deseja tornar Super Admin
+3. No modal de edição, role até o campo **"Super Admin"**
+4. Marque o checkbox **"Super Admin"**
+5. Clique em **"Salvar"**
+
+**O que acontece:**
+- ✅ Campo `super` do usuário é atualizado para `true`
+- ✅ Usuário recebe todas as permissões automaticamente
+- ✅ Usuário pode acessar todas as empresas
+- ✅ Menu administrativo é atualizado
+
+**Validações:**
+- ⚠️ **Apenas Super Admins podem alterar o campo `super` de outros usuários**
+- ⚠️ Se um usuário não-Super Admin tentar alterar, receberá erro 403
+
+### Remover Status de Super Admin
+
+**Passo a Passo:**
+
+1. Acesse a tela de **Usuários**
+2. Clique no ícone de **lápis** na linha do Super Admin
+3. No modal de edição, desmarque o checkbox **"Super Admin"**
+4. Clique em **"Salvar"**
+
+**O que acontece:**
+- ✅ Campo `super` do usuário é atualizado para `false`
+- ✅ Usuário perde acesso a funcionalidades de Super Admin
+- ✅ Menu "Empresas" e "Todas as Conexões" desaparecem
+- ✅ Usuário volta a ter permissões baseadas em seu `profile` e `permissions`
+
+**⚠️ ATENÇÃO:**
+- Remover o status de Super Admin de um usuário pode limitar significativamente seu acesso
+- Certifique-se de que o usuário não precisa mais de acesso administrativo global
+- Considere atribuir permissões específicas via campo `permissions` se necessário
+
+### Segurança e Boas Práticas
+
+**Recomendações:**
+
+1. **Limitar número de Super Admins:**
+   - Ter muitos Super Admins aumenta o risco de segurança
+   - Recomenda-se ter apenas 2-3 Super Admins ativos
+
+2. **Auditoria:**
+   - Monitore quem são os Super Admins no sistema
+   - Revise periodicamente se todos ainda precisam desse acesso
+
+3. **Senhas fortes:**
+   - Super Admins devem ter senhas muito fortes
+   - Considere implementar 2FA (se disponível)
+
+4. **Backup de acesso:**
+   - Sempre mantenha pelo menos 1 Super Admin ativo
+   - Evite deletar o último Super Admin do sistema
+
+5. **Documentação:**
+   - Mantenha registro de quem são os Super Admins
+   - Documente quando e por que um usuário foi promovido/removido
+
+### Verificar Super Admins no Sistema
+
+**Via Banco de Dados:**
+```sql
+SELECT id, name, email, super, companyId 
+FROM "Users" 
+WHERE super = true;
+```
+
+**Via Interface:**
+- Acesse a tela de Usuários
+- Super Admins podem ser identificados visualmente (se houver indicador)
+- Ou verifique o campo `super` ao editar o usuário
+
+### Campos do Formulário de Usuário (Super Admin)
+
+| Campo | Tipo | Obrigatório | Descrição |
+|--------|------|-------------|-----------|
+| Nome | Texto | Sim | Nome completo do usuário |
+| Email | Email | Sim | Email único, usado para login |
+| Senha | Senha | Sim | Mínimo 5 caracteres |
+| Profile | Select | Sim | "admin" ou "user" |
+| **Super Admin** | Boolean | Não | ⚠️ Apenas Super Admins veem/alteram |
+| Filas | Multi-select | Não | Filas de atendimento |
+| Horário de Trabalho | Hora | Não | Início e fim do expediente |
 
 ---
 
@@ -210,6 +337,130 @@ A tela exibe uma tabela com todas as empresas cadastradas:
 | Número Atendentes | Número | Não | Limite de usuários |
 | Número Conexões | Número | Não | Limite de conexões WhatsApp |
 | Status | Boolean | Sim | Ativo/Inativo |
+
+### Conceito de Workspace
+
+#### O que é um Workspace?
+
+No **TaktChat**, **Workspace e Company (Empresa) são conceitos idênticos (1:1)**. Cada empresa cadastrada no sistema corresponde a um workspace isolado e independente.
+
+**Importante:**
+- ✅ **1 Company = 1 Workspace**
+- ✅ Cada Company **é** um workspace completo
+- ✅ Não existe entidade separada "Workspace" no banco de dados
+- ✅ Não é possível ter múltiplas empresas dentro do mesmo workspace
+
+#### Arquitetura Multi-Tenant
+
+O TaktChat é uma **plataforma multi-tenant nativa**, onde:
+
+- **Uma única instalação** suporta múltiplas empresas (workspaces)
+- Cada empresa possui seus próprios dados **completamente isolados**
+- Múltiplos usuários de diferentes empresas podem estar **logados simultaneamente**
+- O isolamento é garantido através do `companyId` em todas as entidades
+
+#### Como Funciona o Isolamento?
+
+**1. Isolamento de Dados:**
+- Todas as entidades principais possuem `companyId` como chave estrangeira:
+  - `Users` → `companyId`
+  - `Tickets` → `companyId`
+  - `Contacts` → `companyId`
+  - `Messages` → `companyId`
+  - `Queues` → `companyId`
+  - `Whatsapps` → `companyId`
+  - `Chats` → `companyId`
+  - E todas as outras entidades...
+
+**2. Isolamento de Comunicação (Socket.IO):**
+- Cada empresa possui seu próprio **namespace Socket.IO**
+- Padrão: `/workspace-${companyId}`
+- Usuários conectam usando `user.companyId` do token JWT
+- Eventos são emitidos apenas para o workspace da empresa específica
+
+**Exemplo:**
+```javascript
+// Frontend conecta ao namespace da empresa
+const nsUrl = `${backendUrl}/workspace-${companyId}`;
+socket = io(nsUrl, { query: { token, userId } });
+
+// Backend emite eventos apenas para a empresa correta
+io.of(`/workspace-${companyId}`).emit(`company-${companyId}-ticket`, data);
+```
+
+**3. Isolamento de Arquivos:**
+- Mídias organizadas por empresa: `/public/company{companyId}/`
+- Uploads isolados por empresa
+- Backups podem ser feitos por empresa
+
+#### Estrutura da Arquitetura
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              INSTALAÇÃO ÚNICA DO TAKTCHAT                │
+│                                                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
+│  │  Empresa 1   │  │  Empresa 2   │  │  Empresa 3   │ │
+│  │ Workspace 1  │  │ Workspace 2  │  │ Workspace 3  │ │
+│  │  (ID: 1)     │  │  (ID: 2)     │  │  (ID: 3)     │ │
+│  │              │  │              │  │              │ │
+│  │  Usuários:   │  │  Usuários:   │  │  Usuários:   │ │
+│  │  - admin@1   │  │  - admin@2   │  │  - admin@3   │ │
+│  │  - user1@1   │  │  - user1@2   │  │  - user1@3   │ │
+│  │              │  │              │  │              │ │
+│  │  Dados:      │  │  Dados:      │  │  Dados:      │ │
+│  │  - Tickets   │  │  - Tickets   │  │  - Tickets   │ │
+│  │  - Contatos  │  │  - Contatos  │  │  - Contatos  │ │
+│  │  - Mensagens │  │  - Mensagens │  │  - Mensagens │ │
+│  │  - WhatsApps │  │  - WhatsApps │  │  - WhatsApps │ │
+│  │              │  │              │  │              │ │
+│  │ Namespace:   │  │ Namespace:   │  │ Namespace:   │ │
+│  │ /workspace-1 │  │ /workspace-2 │  │ /workspace-3 │ │
+│  └──────────────┘  └──────────────┘  └──────────────┘ │
+│                                                          │
+│  Todos isolados por companyId no mesmo banco de dados  │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Perguntas Frequentes
+
+**Q: Posso ter múltiplas empresas dentro do mesmo workspace?**  
+❌ **Não.** Workspace e Company são a mesma coisa (1:1). Cada empresa é um workspace isolado.
+
+**Q: Como criar um novo workspace?**  
+✅ Criando uma nova empresa através do menu "Empresas" (apenas Super Admin). Cada empresa criada automaticamente recebe seu próprio workspace.
+
+**Q: Empresas podem compartilhar dados?**  
+❌ **Não.** Cada empresa tem seus dados completamente isolados. Não há compartilhamento de dados entre empresas diferentes.
+
+**Q: Um usuário pode acessar múltiplos workspaces?**  
+⚠️ **Não diretamente.** Cada usuário pertence a uma única empresa (`user.companyId`). Apenas Super Admins podem acessar dados de múltiplas empresas através da interface administrativa.
+
+**Q: Como funciona o isolamento de eventos Socket.IO?**  
+✅ Cada empresa possui seu namespace dedicado (`/workspace-${companyId}`). Eventos são emitidos apenas para os usuários daquela empresa específica, garantindo isolamento completo.
+
+#### Implicações para Administradores
+
+1. **Ao criar uma nova empresa:**
+   - Um novo workspace é criado automaticamente
+   - Namespace Socket.IO `/workspace-{companyId}` é disponibilizado
+   - Dados são isolados desde o início
+
+2. **Ao deletar uma empresa:**
+   - Todo o workspace é removido
+   - Todos os dados isolados são deletados
+   - Namespace Socket.IO é desativado
+
+3. **Isolamento é automático:**
+   - Não é necessário configurar isolamento manualmente
+   - O sistema garante isolamento em todos os níveis (banco, Socket.IO, arquivos)
+
+#### Referências Técnicas
+
+- **Modelo Company:** `backend/src/models/Company.ts`
+- **Socket.IO Namespace:** `backend/src/libs/socket.ts` (linha 10: `ALLOWED_NAMESPACES = /^\/workspace-\d+$/`)
+- **Frontend Connection:** `frontend/src/services/SocketWorker.js` (linha 47: `workspace-${companyId}`)
+- **Documentação Completa:** `.docs/branchs/main/arquitetura-multi-tenant.md`
 
 ---
 
@@ -665,6 +916,7 @@ A tela exibe informações financeiras de todas as empresas:
 |------|------|------|
 | Listar empresas | `/companies` | Empresas |
 | Criar empresa | `/companies` → "+" | Empresas |
+| Criar Super Admin | `/users` → "+" → Marcar "Super Admin" | Usuários |
 | Ver conexões | `/allConnections` | Todas as Conexões |
 | Criar anúncio | `/announcements` → "+" | Anúncios |
 | Ver financeiro | `/financeiro` | Financeiro |
@@ -702,6 +954,26 @@ Esta documentação cobre as principais funcionalidades administrativas do TaktC
 - `.docs/operacao/` - Operação e manutenção
 - `.docs/configuracao/` - Configurações avançadas
 
-**Última atualização:** 2025-01-27
+**Última atualização:** 2025-01-27 (Adicionada seção de Gestão de Super Admins)
+
+---
+
+## Apêndice: Gestão de Super Admins
+
+### Resumo da Funcionalidade
+
+A partir da versão atual, é possível criar e gerenciar múltiplos Super Admins através da interface do sistema. Esta funcionalidade está disponível **apenas para Super Admins existentes**, garantindo segurança e controle de acesso.
+
+**Características:**
+- ✅ Interface visual no modal de usuários
+- ✅ Validação de segurança no backend
+- ✅ Campo visível apenas para Super Admins
+- ✅ Permite criar, editar e remover status de Super Admin
+- ✅ Auditoria e controle de acesso
+
+**Restrições de Segurança:**
+- ⚠️ Apenas Super Admins podem criar outros Super Admins
+- ⚠️ Apenas Super Admins podem editar o campo `super` de outros usuários
+- ⚠️ Validações no backend impedem bypass via API direta
 
 
