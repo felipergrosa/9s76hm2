@@ -9,7 +9,7 @@ import DeleteBaileysService from "../services/BaileysServices/DeleteBaileysServi
 import ShowCompanyService from "../services/CompanyService/ShowCompanyService";
 import { getAccessTokenFromPage, getPageProfile, subscribeApp } from "../services/FacebookServices/graphAPI";
 import ShowPlanService from "../services/PlanService/ShowPlanService";
-import { StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSession";
+import { StartWhatsAppSessionUnified } from "../services/WbotServices/StartWhatsAppSessionUnified";
 
 import CreateWhatsAppService from "../services/WhatsappService/CreateWhatsAppService";
 import DeleteWhatsAppService from "../services/WhatsappService/DeleteWhatsAppService";
@@ -189,7 +189,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     wabaWebhookVerifyToken
   });
 
-  StartWhatsAppSession(whatsapp, companyId);
+  StartWhatsAppSessionUnified(whatsapp, companyId);
 
   const io = getIO();
   await emitToCompanyNamespace(
