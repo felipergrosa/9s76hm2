@@ -50,6 +50,11 @@ interface Request {
   queueIdImportMessages?: number;
   flowIdNotPhrase?: number;
   flowIdWelcome?: number;
+  channelType?: string;
+  wabaPhoneNumberId?: string;
+  wabaAccessToken?: string;
+  wabaBusinessAccountId?: string;
+  wabaWebhookVerifyToken?: string;
 }
 
 interface Response {
@@ -100,7 +105,12 @@ const CreateWhatsAppService = async ({
   collectiveVacationStart,
   queueIdImportMessages,
   flowIdNotPhrase,
-  flowIdWelcome
+  flowIdWelcome,
+  channelType,
+  wabaPhoneNumberId,
+  wabaAccessToken,
+  wabaBusinessAccountId,
+  wabaWebhookVerifyToken,
 }: Request): Promise<Response> => {
   const company = await Company.findOne({
     where: {
@@ -235,7 +245,12 @@ const CreateWhatsAppService = async ({
       collectiveVacationStart,
       queueIdImportMessages,
       flowIdNotPhrase,
-      flowIdWelcome
+      flowIdWelcome,
+      channelType,
+      wabaPhoneNumberId,
+      wabaAccessToken,
+      wabaBusinessAccountId,
+      wabaWebhookVerifyToken
     },
     { include: ["queues"] }
   );

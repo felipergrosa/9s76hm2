@@ -60,6 +60,11 @@ interface WhatsappData {
   queueIdImportMessages?: number;
   flowIdNotPhrase?: number;
   flowIdWelcome?: number;
+  channelType?: string;
+  wabaPhoneNumberId?: string;
+  wabaAccessToken?: string;
+  wabaBusinessAccountId?: string;
+  wabaWebhookVerifyToken?: string;
 }
 
 interface QueryParams {
@@ -120,7 +125,12 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     collectiveVacationStart,
     queueIdImportMessages,
     flowIdNotPhrase,
-    flowIdWelcome
+    flowIdWelcome,
+    channelType,
+    wabaPhoneNumberId,
+    wabaAccessToken,
+    wabaBusinessAccountId,
+    wabaWebhookVerifyToken
   }: WhatsappData = req.body;
   const { companyId } = req.user;
 
@@ -171,7 +181,12 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     collectiveVacationStart,
     queueIdImportMessages,
     flowIdNotPhrase,
-    flowIdWelcome
+    flowIdWelcome,
+    channelType,
+    wabaPhoneNumberId,
+    wabaAccessToken,
+    wabaBusinessAccountId,
+    wabaWebhookVerifyToken
   });
 
   StartWhatsAppSession(whatsapp, companyId);

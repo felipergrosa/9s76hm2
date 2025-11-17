@@ -1,0 +1,476 @@
+import axios, { AxiosInstance, AxiosError } from "axios";
+import {
+  IWhatsAppAdapter,
+  IWhatsAppMessage,
+  ISendMessageOptions,
+  IProfileInfo,
+  ConnectionStatus,
+  WhatsAppAdapterError
+} from "./IWhatsAppAdapter";
+import logger from "../../utils/logger";
+
+/**
+ * Configuração do adapter oficial
+ */
+interface OfficialAPIConfig {
+  phoneNumberId: string;
+  accessToken: string;
+  businessAccountId: string;
+  webhookVerifyToken?: string;
+  apiVersion?: string;
+}
+
+/**
+ * Adapter para WhatsApp Business API Oficial (Meta)
+ * Usa a Graph API do Facebook
+ */
+export class OfficialAPIAdapter implements IWhatsAppAdapter {
+  public readonly whatsappId: number;
+  public readonly channelType: "official" = "official";
+  
+  private client: AxiosInstance;
+  private phoneNumberId: string;
+  private accessToken: string;
+  private businessAccountId: string;
+  private status: ConnectionStatus = "disconnected";
+  private phoneNumber: string | null = null;
+  
+  // Callbacks de eventos (webhooks processam externamente)
+  private messageCallbacks: Array<(message: IWhatsAppMessage) => void> = [];
+  private connectionCallbacks: Array<(status: ConnectionStatus) => void> = [];
+
+  constructor(whatsappId: number, config: OfficialAPIConfig) {
+    this.whatsappId = whatsappId;
+    this.phoneNumberId = config.phoneNumberId;
+    this.accessToken = config.accessToken;
+    this.businessAccountId = config.businessAccountId;
+
+    const apiVersion = config.apiVersion || "v18.0";
+
+    // Cliente HTTP para Graph API
+    this.client = axios.create({
+      baseURL: `https://graph.facebook.com/${apiVersion}`,
+      headers: {
+        "Authorization": `Bearer ${this.accessToken}`,
+        "Content-Type": "application/json"
+      },
+      timeout: 30000
+    });
+
+    // Interceptor para logs
+    this.client.interceptors.response.use(
+      response => response,
+      (error: AxiosError) => {
+        logger.error(
+          `[OfficialAPI] Erro HTTP ${error.response?.status}: ${JSON.stringify(error.response?.data)}`
+        );
+        return Promise.reject(error);
+      }
+    );
+  }
+
+  /**
+   * Inicializa conexão (verifica credenciais)
+   */
+  async initialize(): Promise<void> {
+    try {
+      logger.info(`[OfficialAPI] Inicializando whatsappId=${this.whatsappId}`);
+      
+      // Verificar se credenciais são válidas
+      const response = await this.client.get(`/${this.phoneNumberId}`);
+      
+      this.phoneNumber = response.data.display_phone_number;
+      this.status = "connected";
+      
+      logger.info(`[OfficialAPI] Inicializado com sucesso: ${this.phoneNumber}`);
+      
+      // Notificar callbacks
+      this.emitConnectionUpdate("connected");
+      
+    } catch (error: any) {
+      this.status = "disconnected";
+      const message = error.response?.data?.error?.message || error.message;
+      
+      logger.error(`[OfficialAPI] Erro ao inicializar: ${message}`);
+      
+      throw new WhatsAppAdapterError(
+        `Falha ao inicializar WhatsApp Official API: ${message}`,
+        error.response?.data?.error?.code || "INITIALIZATION_ERROR",
+        error
+      );
+    }
+  }
+
+  /**
+   * Desconecta (apenas marca status)
+   */
+  async disconnect(): Promise<void> {
+    this.status = "disconnected";
+    this.emitConnectionUpdate("disconnected");
+    logger.info(`[OfficialAPI] Desconectado whatsappId=${this.whatsappId}`);
+  }
+
+  /**
+   * Envia mensagem (método principal)
+   */
+  async sendMessage(options: ISendMessageOptions): Promise<IWhatsAppMessage> {
+    try {
+      const { to, body, mediaType, mediaUrl, caption, buttons, listSections, listTitle, listButtonText, vcard } = options;
+
+      // Normalizar número (remover caracteres não numéricos)
+      const recipient = to.replace(/\D/g, "");
+
+      let payload: any = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: recipient
+      };
+
+      // Mensagem de texto simples
+      if (mediaType === "text" || !mediaType) {
+        payload.type = "text";
+        payload.text = { body: body || "" };
+      }
+      // Mensagem com botões interativos
+      else if (buttons && buttons.length > 0) {
+        payload.type = "interactive";
+        payload.interactive = {
+          type: "button",
+          body: { text: body || "" },
+          action: {
+            buttons: buttons.slice(0, 3).map(btn => ({  // Max 3 botões
+              type: "reply",
+              reply: {
+                id: btn.id,
+                title: btn.title.substring(0, 20)  // Max 20 chars
+              }
+            }))
+          }
+        };
+      }
+      // Mensagem com lista interativa
+      else if (listSections && listSections.length > 0) {
+        payload.type = "interactive";
+        payload.interactive = {
+          type: "list",
+          body: { text: body || "" },
+          action: {
+            button: listButtonText || "Ver opções",
+            sections: listSections.slice(0, 10).map(section => ({  // Max 10 seções
+              title: section.title.substring(0, 24),  // Max 24 chars
+              rows: section.rows.slice(0, 10).map(row => ({  // Max 10 linhas por seção
+                id: row.id,
+                title: row.title.substring(0, 24),
+                description: row.description?.substring(0, 72)  // Max 72 chars
+              }))
+            }))
+          }
+        };
+        
+        // Header opcional
+        if (listTitle) {
+          payload.interactive.header = {
+            type: "text",
+            text: listTitle.substring(0, 60)  // Max 60 chars
+          };
+        }
+      }
+      // vCard (contato)
+      else if (vcard) {
+        payload.type = "contacts";
+        payload.contacts = [{ vcard }];
+      }
+      // Mensagem com mídia (imagem, vídeo, documento, áudio)
+      else if (mediaUrl) {
+        switch (mediaType) {
+          case "image":
+            payload.type = "image";
+            payload.image = {
+              link: mediaUrl,
+              caption: caption?.substring(0, 1024)  // Max 1024 chars
+            };
+            break;
+            
+          case "video":
+            payload.type = "video";
+            payload.video = {
+              link: mediaUrl,
+              caption: caption?.substring(0, 1024)
+            };
+            break;
+            
+          case "audio":
+          case "ptt":
+            payload.type = "audio";
+            payload.audio = {
+              link: mediaUrl
+            };
+            break;
+            
+          case "document":
+            payload.type = "document";
+            payload.document = {
+              link: mediaUrl,
+              filename: caption || "documento.pdf"
+            };
+            break;
+            
+          default:
+            throw new WhatsAppAdapterError(
+              `Tipo de mídia não suportado: ${mediaType}`,
+              "UNSUPPORTED_MEDIA_TYPE"
+            );
+        }
+      }
+
+      // Enviar mensagem
+      const response = await this.client.post(
+        `/${this.phoneNumberId}/messages`,
+        payload
+      );
+
+      const messageId = response.data.messages[0].id;
+
+      logger.info(`[OfficialAPI] Mensagem enviada: ${messageId}`);
+
+      // Retornar mensagem normalizada
+      return {
+        id: messageId,
+        from: this.phoneNumber!,
+        to: recipient,
+        body: body || "",
+        timestamp: Date.now(),
+        fromMe: true,
+        mediaType: mediaType as any,
+        mediaUrl,
+        caption,
+        ack: 1  // Enviado
+      };
+      
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.message;
+      const code = error.response?.data?.error?.code || "SEND_MESSAGE_ERROR";
+      
+      logger.error(`[OfficialAPI] Erro ao enviar mensagem: ${message}`);
+      
+      throw new WhatsAppAdapterError(
+        `Falha ao enviar mensagem: ${message}`,
+        code,
+        error
+      );
+    }
+  }
+
+  /**
+   * Envia mensagem de texto simples
+   */
+  async sendTextMessage(to: string, body: string): Promise<IWhatsAppMessage> {
+    return this.sendMessage({ to, body, mediaType: "text" });
+  }
+
+  /**
+   * Envia mensagem com mídia
+   */
+  async sendMediaMessage(
+    to: string,
+    mediaUrl: string,
+    mediaType: string,
+    caption?: string
+  ): Promise<IWhatsAppMessage> {
+    return this.sendMessage({
+      to,
+      mediaUrl,
+      mediaType: mediaType as any,
+      caption
+    });
+  }
+
+  /**
+   * Envia template aprovado
+   * Templates precisam ser criados e aprovados previamente no Meta Business Manager
+   */
+  async sendTemplate(
+    to: string,
+    templateName: string,
+    languageCode: string = "pt_BR",
+    components?: any[]
+  ): Promise<IWhatsAppMessage> {
+    try {
+      const recipient = to.replace(/\D/g, "");
+
+      const payload = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: recipient,
+        type: "template",
+        template: {
+          name: templateName,
+          language: {
+            code: languageCode
+          },
+          components: components || []
+        }
+      };
+
+      const response = await this.client.post(
+        `/${this.phoneNumberId}/messages`,
+        payload
+      );
+
+      const messageId = response.data.messages[0].id;
+
+      logger.info(`[OfficialAPI] Template enviado: ${messageId}`);
+
+      return {
+        id: messageId,
+        from: this.phoneNumber!,
+        to: recipient,
+        body: `Template: ${templateName}`,
+        timestamp: Date.now(),
+        fromMe: true,
+        ack: 1
+      };
+      
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.message;
+      
+      logger.error(`[OfficialAPI] Erro ao enviar template: ${message}`);
+      
+      throw new WhatsAppAdapterError(
+        `Falha ao enviar template: ${message}`,
+        error.response?.data?.error?.code || "SEND_TEMPLATE_ERROR",
+        error
+      );
+    }
+  }
+
+  /**
+   * Marca mensagem como lida
+   */
+  async markAsRead(messageId: string): Promise<void> {
+    try {
+      await this.client.post(`/${this.phoneNumberId}/messages`, {
+        messaging_product: "whatsapp",
+        status: "read",
+        message_id: messageId
+      });
+      
+      logger.debug(`[OfficialAPI] Mensagem marcada como lida: ${messageId}`);
+    } catch (error: any) {
+      logger.error(`[OfficialAPI] Erro ao marcar como lida: ${error.message}`);
+    }
+  }
+
+  /**
+   * Obtém foto de perfil (API oficial não tem endpoint público para isso)
+   * Retorna null - usar cache de avatars do Baileys se disponível
+   */
+  async getProfilePicture(jid: string): Promise<string | null> {
+    logger.debug(`[OfficialAPI] getProfilePicture não disponível na API oficial`);
+    return null;
+  }
+
+  /**
+   * Obtém status (API oficial não tem endpoint para isso)
+   */
+  async getStatus(jid: string): Promise<string | null> {
+    logger.debug(`[OfficialAPI] getStatus não disponível na API oficial`);
+    return null;
+  }
+
+  /**
+   * Obtém informações do perfil (limitado na API oficial)
+   */
+  async getProfileInfo(jid: string): Promise<IProfileInfo | null> {
+    return {
+      name: jid.replace(/\D/g, ""),
+      about: undefined,
+      pictureUrl: undefined
+    };
+  }
+
+  /**
+   * Retorna status da conexão
+   */
+  getConnectionStatus(): ConnectionStatus {
+    return this.status;
+  }
+
+  /**
+   * Retorna número de telefone
+   */
+  getPhoneNumber(): string | null {
+    return this.phoneNumber;
+  }
+
+  /**
+   * Registra callback para mensagens recebidas
+   * Nota: Mensagens chegam via webhooks, não por polling
+   */
+  onMessage(callback: (message: IWhatsAppMessage) => void): void {
+    this.messageCallbacks.push(callback);
+  }
+
+  /**
+   * Registra callback para mudanças de conexão
+   */
+  onConnectionUpdate(callback: (status: ConnectionStatus) => void): void {
+    this.connectionCallbacks.push(callback);
+  }
+
+  /**
+   * Envia presença (não disponível na API oficial)
+   */
+  async sendPresenceUpdate(
+    jid: string,
+    type: "available" | "unavailable" | "composing" | "recording"
+  ): Promise<void> {
+    logger.debug(`[OfficialAPI] sendPresenceUpdate não disponível na API oficial`);
+  }
+
+  /**
+   * Retorna cliente Axios (para uso avançado)
+   */
+  getRawClient(): AxiosInstance {
+    return this.client;
+  }
+
+  /**
+   * Dispara callbacks de mensagem (chamado pelo webhook handler)
+   */
+  public emitMessage(message: IWhatsAppMessage): void {
+    this.messageCallbacks.forEach(callback => {
+      try {
+        callback(message);
+      } catch (error: any) {
+        logger.error(`[OfficialAPI] Erro em callback de mensagem: ${error.message}`);
+      }
+    });
+  }
+
+  /**
+   * Dispara callbacks de conexão
+   */
+  public emitConnectionUpdate(status: ConnectionStatus): void {
+    this.status = status;
+    this.connectionCallbacks.forEach(callback => {
+      try {
+        callback(status);
+      } catch (error: any) {
+        logger.error(`[OfficialAPI] Erro em callback de conexão: ${error.message}`);
+      }
+    });
+  }
+
+  /**
+   * Health check da API
+   */
+  async healthCheck(): Promise<boolean> {
+    try {
+      await this.client.get(`/${this.phoneNumberId}`);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+}

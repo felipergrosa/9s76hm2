@@ -27,8 +27,10 @@ const config: any = {
   pool: {
     max: parseInt(process.env.DB_POOL_MAX) || 100,
     min: parseInt(process.env.DB_POOL_MIN) || 15,
-    acquire: parseInt(process.env.DB_POOL_ACQUIRE) || 30000,
-    idle: parseInt(process.env.DB_POOL_IDLE) || 600000
+    acquire: parseInt(process.env.DB_POOL_ACQUIRE) || 60000, // 60s para dar tempo de recuperar conexão
+    idle: parseInt(process.env.DB_POOL_IDLE) || 300000, // 5min para liberar conexões ociosas mais rápido
+    evict: parseInt(process.env.DB_POOL_EVICT) || 10000, // Verificar e remover conexões quebradas a cada 10s
+    handleDisconnects: true // Reconectar automaticamente se a conexão cair
   },
   dialect: process.env.DB_DIALECT || "postgres",
   timezone: 'America/Sao_Paulo',
