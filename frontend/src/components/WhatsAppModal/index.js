@@ -36,11 +36,12 @@ import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
 import QueueSelect from "../QueueSelect";
 import TabPanel from "../TabPanel";
-import { Autorenew, FileCopy } from "@material-ui/icons";
+import { Autorenew, FileCopy, WhatsApp, CheckCircle } from "@material-ui/icons";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import SchedulesForm from "../SchedulesForm";
 import usePlans from "../../hooks/usePlans";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import OfficialAPIFields from "./OfficialAPIFields";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -100,6 +101,25 @@ const SessionSchema = Yup.object().shape({
     .min(2, "Parâmetros incompletos!")
     .max(50, "Parâmetros acima do esperado!")
     .required("Required"),
+  channelType: Yup.string()
+    .oneOf(["baileys", "official"], "Tipo de canal inválido")
+    .required("Selecione o tipo de canal"),
+  // Validações condicionais para API Oficial
+  wabaPhoneNumberId: Yup.string().when("channelType", {
+    is: "official",
+    then: Yup.string().required("Phone Number ID é obrigatório para API Oficial"),
+    otherwise: Yup.string()
+  }),
+  wabaAccessToken: Yup.string().when("channelType", {
+    is: "official",
+    then: Yup.string().required("Access Token é obrigatório para API Oficial"),
+    otherwise: Yup.string()
+  }),
+  wabaBusinessAccountId: Yup.string().when("channelType", {
+    is: "official",
+    then: Yup.string().required("Business Account ID é obrigatório para API Oficial"),
+    otherwise: Yup.string()
+  })
 });
 
 const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
@@ -143,7 +163,12 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
     collectiveVacationEnd: "",
     collectiveVacationStart: "",
     collectiveVacationMessage: "",
-    queueIdImportMessages: null
+    queueIdImportMessages: null,
+    channelType: "baileys",
+    wabaPhoneNumberId: "",
+    wabaAccessToken: "",
+    wabaBusinessAccountId: "",
+    wabaWebhookVerifyToken: ""
   };
   const [whatsApp, setWhatsApp] = useState(initialState);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
@@ -623,6 +648,54 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                       </Grid>
                     </div>
 
+                    {/* SELETOR DE TIPO DE CANAL */}
+                    <Divider style={{ margin: "20px 0" }} />
+                    <Typography variant="h6" gutterBottom>
+                      Tipo de Conexão
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <FormControl
+                          variant="outlined"
+                          margin="dense"
+                          fullWidth
+                        >
+                          <InputLabel>Tipo de Canal</InputLabel>
+                          <Field
+                            as={Select}
+                            label="Tipo de Canal"
+                            name="channelType"
+                          >
+                            <MenuItem value="baileys">
+                              <Box display="flex" alignItems="center" gap={1}>
+                                <WhatsApp />
+                                <span>Baileys (Não Oficial - Grátis)</span>
+                              </Box>
+                            </MenuItem>
+                            <MenuItem value="official">
+                              <Box display="flex" alignItems="center" gap={1}>
+                                <CheckCircle color="primary" />
+                                <span>WhatsApp Business API (Meta - Pago)</span>
+                              </Box>
+                            </MenuItem>
+                          </Field>
+                        </FormControl>
+                      </Grid>
+                    </Grid>
+
+                    {/* CAMPOS DA API OFICIAL - Mostrar apenas se oficial */}
+                    {values.channelType === "official" && (
+                      <>
+                        <Divider style={{ margin: "20px 0" }} />
+                        <OfficialAPIFields 
+                          values={values}
+                          errors={errors}
+                          touched={touched}
+                        />
+                      </>
+                    )}
+
+                    <Divider style={{ margin: "20px 0" }} />
 
                     <div className={classes.importMessage}>
                       <div className={classes.multFieldLine}>

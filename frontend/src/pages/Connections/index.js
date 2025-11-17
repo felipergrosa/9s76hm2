@@ -24,6 +24,7 @@ import {
   Box,
   Card,
   CardContent,
+  Chip
 } from "@material-ui/core";
 import {
   Edit,
@@ -728,7 +729,27 @@ const Connections = () => {
                       whatsApps.map((whatsApp) => (
                         <TableRow key={whatsApp.id}>
                           <TableCell align="center">{IconChannel(whatsApp.channel)}</TableCell>
-                          <TableCell align="center">{whatsApp.name}</TableCell>
+                          <TableCell align="center">
+                            <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
+                              <span>{whatsApp.name}</span>
+                              {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
+                                <Chip 
+                                  label="API Oficial" 
+                                  color="primary" 
+                                  size="small"
+                                  style={{ fontSize: '0.7rem', height: '20px' }}
+                                />
+                              )}
+                              {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "baileys" && (
+                                <Chip 
+                                  label="Baileys" 
+                                  size="small"
+                                  variant="outlined"
+                                  style={{ fontSize: '0.7rem', height: '20px' }}
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
                           <TableCell align="center">{whatsApp.number && whatsApp.channel === 'whatsapp' ? (<>{formatSerializedId(whatsApp.number)}</>) : whatsApp.number}</TableCell>
                           <TableCell align="center">{renderStatusToolTips(whatsApp)}</TableCell>
                           <TableCell align="center">{renderActionButtons(whatsApp)}</TableCell>

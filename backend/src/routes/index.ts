@@ -57,6 +57,7 @@ import whatsappWebLabelsRoutes from "./whatsappWebLabelsRoutes";
 import tagRuleRoutes from "./tagRuleRoutes";
 import permissionRoutes from "./permissionRoutes";
 import auditLogRoutes from "./auditLogRoutes";
+import whatsappWebhookRoutes from "./whatsappWebhookRoutes";
 
 
 const routes = Router();
@@ -120,5 +121,6 @@ routes.use(whatsappWebLabelsRoutes);
 routes.use(tagRuleRoutes);
 routes.use(permissionRoutes);
 routes.use(auditLogRoutes);
+routes.use(whatsappWebhookRoutes);
 
 export default routes;

@@ -128,6 +128,35 @@ class Whatsapp extends Model<Whatsapp> {
   @Column(DataType.TEXT)
   channel: string;
 
+  @Default("baileys")
+  @Column
+  channelType: string;
+
+  @Column(DataType.TEXT)
+  wabaPhoneNumberId: string;
+
+  @Column(DataType.TEXT)
+  wabaAccessToken: string;
+
+  @Column(DataType.TEXT)
+  wabaBusinessAccountId: string;
+
+  @Column(DataType.TEXT)
+  wabaWebhookVerifyToken: string;
+
+  @Column({
+    type: DataType.JSONB
+  })
+  wabaConfig: {
+    displayName?: string;
+    about?: string;
+    address?: string;
+    description?: string;
+    email?: string;
+    vertical?: string;
+    websites?: string[];
+  };
+
   @Default(3)
   @Column
   maxUseBotQueues: number;
