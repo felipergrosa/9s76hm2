@@ -379,25 +379,86 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             );
 
             if (connection === "close") {
+              // Log completo do erro de desconexão para diagnóstico
+              const error = lastDisconnect?.error as Boom;
+              const statusCode = error?.output?.statusCode;
+              const errorData = error?.data;
+              const errorMessage = error?.message || error?.output?.payload?.message || "Unknown error";
+              
+              // Log detalhado do erro completo
+              logger.error(`[wbot] DESCONEXÃO DETECTADA para whatsappId=${whatsapp.id}:`);
+              logger.error(`[wbot] - Status Code: ${statusCode || "N/A"}`);
+              logger.error(`[wbot] - Mensagem: ${errorMessage}`);
+              logger.error(`[wbot] - Error Data: ${JSON.stringify(errorData, null, 2)}`);
+              
+              // Log do erro completo se existir
+              if (error) {
+                try {
+                  logger.error(`[wbot] - Error completo: ${JSON.stringify({
+                    statusCode: error.output?.statusCode,
+                    error: error.output?.payload?.error,
+                    message: error.output?.payload?.message,
+                    data: error.data,
+                    output: error.output,
+                    isBoom: error.isBoom,
+                    isServer: error.isServer
+                  }, null, 2)}`);
+                } catch (e: any) {
+                  logger.error(`[wbot] - Erro ao serializar error completo: ${e?.message}`);
+                  logger.error(`[wbot] - Error raw: ${error.toString()}`);
+                }
+              }
+              
+              // Log completo do lastDisconnect
+              try {
+                logger.error(`[wbot] - lastDisconnect completo: ${JSON.stringify(lastDisconnect, null, 2)}`);
+              } catch (e: any) {
+                logger.error(`[wbot] - Erro ao serializar lastDisconnect: ${e?.message}`);
+              }
+              
+              // Log original mantido para compatibilidade
               console.log("DESCONECTOU", JSON.stringify(lastDisconnect, null, 2))
               logger.info(
-                `Socket  ${name} Connection Update ${connection || ""} ${lastDisconnect ? lastDisconnect.error.message : ""
-                }`
+                `Socket  ${name} Connection Update ${connection || ""} ${errorMessage}`
               );
               
-              const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
-              const errorData = (lastDisconnect?.error as Boom)?.data;
-              
-              // Verificar se é erro 401 (device_removed)
-              const isDeviceRemoved = statusCode === 401 && 
-                errorData && 
-                typeof errorData === 'object' && 
-                'content' in errorData && 
-                Array.isArray(errorData.content) &&
-                errorData.content.some((item: any) => 
-                  item?.tag === 'conflict' && 
-                  item?.attrs?.type === 'device_removed'
-                );
+              // Verificar se é erro 401 (device_removed) com log detalhado
+              let isDeviceRemoved = false;
+              if (statusCode === 401) {
+                logger.warn(`[wbot] Erro 401 detectado para whatsappId=${whatsapp.id}. Verificando se é device_removed...`);
+                logger.warn(`[wbot] - errorData tipo: ${typeof errorData}`);
+                logger.warn(`[wbot] - errorData: ${JSON.stringify(errorData, null, 2)}`);
+                
+                if (errorData && typeof errorData === 'object' && 'content' in errorData) {
+                  const content = errorData.content;
+                  logger.warn(`[wbot] - content tipo: ${Array.isArray(content) ? 'array' : typeof content}`);
+                  logger.warn(`[wbot] - content: ${JSON.stringify(content, null, 2)}`);
+                  
+                  if (Array.isArray(content)) {
+                    const conflictItems = content.filter((item: any) => 
+                      item?.tag === 'conflict' && item?.attrs?.type === 'device_removed'
+                    );
+                    logger.warn(`[wbot] - Conflict items encontrados: ${conflictItems.length}`);
+                    if (conflictItems.length > 0) {
+                      logger.warn(`[wbot] - Conflict items: ${JSON.stringify(conflictItems, null, 2)}`);
+                    }
+                    
+                    isDeviceRemoved = conflictItems.length > 0;
+                  }
+                } else {
+                  // Verificar também no output.payload se não encontrou em data
+                  const payload = error?.output?.payload;
+                  if (payload) {
+                    logger.warn(`[wbot] - Verificando output.payload: ${JSON.stringify(payload, null, 2)}`);
+                  }
+                  
+                  // Verificar se a mensagem indica device_removed
+                  if (errorMessage && errorMessage.toLowerCase().includes('device_removed')) {
+                    logger.warn(`[wbot] - Mensagem contém 'device_removed': ${errorMessage}`);
+                    isDeviceRemoved = true;
+                  }
+                }
+              }
               
               // Verificar se é erro 515 (restart required)
               const isRestartRequired = statusCode === 515;
