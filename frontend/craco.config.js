@@ -127,46 +127,18 @@ module.exports = {
         };
       }
 
-      // Configuração do TerserPlugin para remover console.logs em produção
-      // DEVE SER FEITO DEPOIS de configurar optimization
-      if (process.env.NODE_ENV === 'production') {
-        const TerserPlugin = require('terser-webpack-plugin');
-        
-        // Garantir que minimizer existe
-        if (!webpackConfig.optimization.minimizer) {
-          webpackConfig.optimization.minimizer = [];
-        }
-        
-        // Procurar TerserPlugin existente
-        const terserPluginIndex = webpackConfig.optimization.minimizer.findIndex(
-          (plugin) => plugin.constructor.name === 'TerserPlugin' || 
-                      (plugin.constructor && plugin.constructor.name && plugin.constructor.name.includes('Terser'))
-        );
-        
-        // Criar configuração do TerserPlugin para remover console.logs
-        const terserConfig = new TerserPlugin({
-          terserOptions: {
-            compress: {
-              drop_console: true, // Remove todos os console.* em produção
-              drop_debugger: true, // Remove debugger
-              pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.trace'], // Remove funções específicas
-            },
-            output: {
-              comments: false, // Remove comentários
-            },
-          },
-          extractComments: false, // Não extrai comentários para arquivo separado
-        });
-        
-        if (terserPluginIndex >= 0) {
-          // Substituir configuração existente
-          webpackConfig.optimization.minimizer[terserPluginIndex] = terserConfig;
-        } else {
-          // Adicionar TerserPlugin se não existir (deve estar presente por padrão no CRA)
-          // Mas se não estiver, adicionamos
-          webpackConfig.optimization.minimizer.push(terserConfig);
-        }
-      }
+      // NOTA: TerserPlugin customizado foi desabilitado temporariamente
+      // devido a problemas de corrupção de código durante minificação.
+      // O CRA usa TerserPlugin por padrão com configurações seguras.
+      // 
+      // Se precisar remover console.logs no futuro, considere:
+      // 1. Usar babel-plugin-transform-remove-console
+      // 2. Ou usar uma configuração muito mais conservadora do TerserPlugin
+      //
+      // if (process.env.NODE_ENV === 'production') {
+      //   // Deixar TerserPlugin padrão do CRA fazer o trabalho
+      //   // Não sobrescrever configuração padrão para evitar corrupção
+      // }
 
       return webpackConfig;
     }
