@@ -373,7 +373,23 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 `Socket  ${name} Connection Update ${connection || ""} ${lastDisconnect ? lastDisconnect.error.message : ""
                 }`
               );
-              if ((lastDisconnect?.error as Boom)?.output?.statusCode === 403) {
+              
+              const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+              const errorData = (lastDisconnect?.error as Boom)?.data;
+              
+              // Verificar se é erro 401 (device_removed)
+              const isDeviceRemoved = statusCode === 401 && 
+                errorData && 
+                typeof errorData === 'object' && 
+                'content' in errorData && 
+                Array.isArray(errorData.content) &&
+                errorData.content.some((item: any) => 
+                  item?.tag === 'conflict' && 
+                  item?.attrs?.type === 'device_removed'
+                );
+              
+              if (statusCode === 403 || isDeviceRemoved) {
+                logger.warn(`[wbot] Erro ${statusCode} (${isDeviceRemoved ? 'device_removed' : 'forbidden'}) para whatsappId=${whatsapp.id}. Limpando sessão.`);
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
                 await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
@@ -386,7 +402,10 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     String(whatsapp.id)
                   );
                   await fs.promises.rm(baseDir, { recursive: true, force: true });
-                } catch {}
+                  logger.info(`[wbot] Diretório de sessão removido: ${baseDir}`);
+                } catch (err: any) {
+                  logger.warn(`[wbot] Erro ao remover diretório de sessão: ${err?.message}`);
+                }
                 io.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",
