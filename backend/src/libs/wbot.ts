@@ -175,6 +175,17 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         let wsocket: Session = null;
         const { state, saveCreds } = await useMultiFileAuthState(whatsapp);
 
+        // Log sobre estado das credenciais antes de criar socket
+        try {
+          const hasMeId = !!state.creds.me?.id;
+          const isRegistered = state.creds.registered || false;
+          logger.info(
+            `[wbot] Criando socket para whatsappId=${whatsapp.id} | Tem MeId: ${hasMeId} | Registrado: ${isRegistered} | Vai gerar QR: ${!hasMeId}`
+          );
+        } catch (err: any) {
+          logger.debug(`[wbot] Erro ao logar estado das credenciais: ${err?.message}`);
+        }
+
         wsocket = makeWASocket({
           version,
           logger: loggerBaileys,
@@ -514,6 +525,10 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             }
 
             if (qr !== undefined) {
+              logger.info(
+                `[wbot] QR Code gerado para whatsappId=${whatsapp.id} | Tentativa: ${retriesQrCodeMap.get(id) || 0} | Isso indica que não há credenciais válidas salvas.`
+              );
+              
               if (retriesQrCodeMap.get(id) && retriesQrCodeMap.get(id) >= 3) {
                 await whatsappUpdate.update({
                   status: "DISCONNECTED",

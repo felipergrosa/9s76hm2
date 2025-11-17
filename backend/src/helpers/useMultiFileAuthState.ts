@@ -94,23 +94,36 @@ export const useMultiFileAuthState = async (
     } catch {}
   };
 
+  // Tentar carregar credenciais salvas
   const savedCreds = await readData("creds");
-  const creds: AuthenticationCreds = savedCreds || initAuthCreds();
-
-  // Log informativo sobre carregamento de credenciais
-  if (savedCreds) {
-    try {
+  
+  // Log detalhado sobre carregamento
+  try {
+    const credsPath = fsPathFor("creds");
+    const credsExists = await fs.promises.access(credsPath).then(() => true).catch(() => false);
+    
+    if (savedCreds) {
+      const meId = savedCreds.me?.id || 'N/A';
+      const registered = savedCreds.registered || false;
       console.log(
-        `[BaileysAuth] Credenciais carregadas do arquivo para whatsappId=${whatsapp.id}. MeId: ${savedCreds.me?.id || 'N/A'}`
+        `[BaileysAuth] ✅ Credenciais carregadas do arquivo para whatsappId=${whatsapp.id} | MeId: ${meId} | Registrado: ${registered} | Arquivo: ${credsPath}`
       );
-    } catch {}
-  } else {
-    try {
-      console.log(
-        `[BaileysAuth] Nenhuma credencial salva encontrada para whatsappId=${whatsapp.id}. Inicializando novas credenciais.`
-      );
-    } catch {}
+    } else {
+      if (credsExists) {
+        console.log(
+          `[BaileysAuth] ⚠️  Arquivo creds.json existe mas não foi possível carregar para whatsappId=${whatsapp.id} | Arquivo: ${credsPath}`
+        );
+      } else {
+        console.log(
+          `[BaileysAuth] ❌ Nenhuma credencial salva encontrada para whatsappId=${whatsapp.id} | Arquivo não existe: ${credsPath} | Inicializando novas credenciais.`
+        );
+      }
+    }
+  } catch (err: any) {
+    console.log(`[BaileysAuth] ⚠️  Erro ao verificar credenciais: ${err?.message}`);
   }
+
+  const creds: AuthenticationCreds = savedCreds || initAuthCreds();
 
   return {
     state: {
