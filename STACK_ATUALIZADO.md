@@ -87,7 +87,7 @@ WABA_API_VERSION=v18.0
 
 ### 3. Testar Webhook
 ```bash
-curl -X GET "https://chatsapi.nobreluminarias.com.br/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=602536nblumi2025&hub.challenge=test123"
+curl -X GET "https://taktchat-api.alivesolucoes.com.br/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=602536nblumi2025&hub.challenge=test123"
 ```
 
 **Esperado:** Retornar `test123`
@@ -106,7 +106,7 @@ Após aplicar as mudanças e reiniciar:
 2. **WhatsApp → Configuration → Webhooks**
 
 3. **Preencher:**
-   - **Callback URL:** `https://chatsapi.nobreluminarias.com.br/webhooks/whatsapp`
+   - **Callback URL:** `https://taktchat-api.alivesolucoes.com.br/webhooks/whatsapp`
    - **Verify Token:** `602536nblumi2025`
 
 4. **Clicar "Verify and Save"**
@@ -158,7 +158,7 @@ REACT_APP_BACKEND_URL: https://taktchat-api.alivesolucoes.com.br
 Certifique-se que o Traefik está configurado para:
 
 ```yaml
-traefik.http.routers.whaticketback.rule: Host(`chatsapi.nobreluminarias.com.br`)
+traefik.http.routers.whaticketback.rule: Host(`taktchat-api.alivesolucoes.com.br`)
 traefik.http.routers.whaticketback.entrypoints: websecure
 traefik.http.routers.whaticketback.tls.certresolver: letsencryptresolver
 ```
