@@ -431,6 +431,14 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             }
 
             if (connection === "open") {
+              // Salvar credenciais imediatamente após conexão abrir
+              try {
+                await saveCreds();
+                logger.info(`[wbot] Credenciais salvas após conexão aberta para whatsappId=${whatsapp.id}`);
+              } catch (error: any) {
+                logger.error(`[wbot] Erro ao salvar credenciais após conexão: ${error?.message}`);
+              }
+
               await whatsapp.update({
                 status: "CONNECTED",
                 qrcode: "",
