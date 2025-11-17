@@ -399,6 +399,38 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   item?.attrs?.type === 'device_removed'
                 );
               
+              // Verificar se é erro 515 (restart required)
+              const isRestartRequired = statusCode === 515;
+              
+              // Tratamento específico para erro 515 (restart required)
+              // Este erro NÃO deve limpar credenciais, apenas reconectar com delay maior
+              if (isRestartRequired) {
+                logger.warn(`[wbot] Erro 515 (restart required) para whatsappId=${whatsapp.id}. Reconectando em 15 segundos (SEM limpar credenciais).`);
+                
+                // Salvar credenciais antes de reconectar
+                try {
+                  await saveCreds();
+                  logger.info(`[wbot] Credenciais salvas antes de reconectar após erro 515 para whatsappId=${whatsapp.id}`);
+                } catch (err: any) {
+                  logger.warn(`[wbot] Erro ao salvar credenciais antes de reconectar: ${err?.message}`);
+                }
+                
+                await whatsapp.update({ status: "OPENING", session: "" });
+                io.of(`/workspace-${companyId}`)
+                  .emit(`company-${whatsapp.companyId}-whatsappSession`, {
+                    action: "update",
+                    session: whatsapp
+                  });
+                removeWbot(id, false);
+                
+                // Delay maior para erro 515 (15 segundos) para evitar conflito
+                setTimeout(
+                  () => StartWhatsAppSession(whatsapp, whatsapp.companyId),
+                  15000
+                );
+                return; // Não continuar para outros tratamentos
+              }
+              
               if (statusCode === 403 || isDeviceRemoved) {
                 logger.warn(`[wbot] Erro ${statusCode} (${isDeviceRemoved ? 'device_removed' : 'forbidden'}) para whatsappId=${whatsapp.id}. Limpando sessão.`);
                 await whatsapp.update({ status: "PENDING", session: "" });
@@ -423,15 +455,26 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     session: whatsapp
                   });
                 removeWbot(id, false);
+                return; // Não continuar para reconexão automática após device_removed
               }
+              
               if (
                 (lastDisconnect?.error as Boom)?.output?.statusCode !==
                 DisconnectReason.loggedOut
               ) {
+                // Salvar credenciais antes de reconectar para outros erros
+                try {
+                  await saveCreds();
+                  logger.debug(`[wbot] Credenciais salvas antes de reconectar após desconexão para whatsappId=${whatsapp.id}`);
+                } catch (err: any) {
+                  logger.warn(`[wbot] Erro ao salvar credenciais antes de reconectar: ${err?.message}`);
+                }
+                
                 removeWbot(id, false);
+                // Delay maior para evitar reconexões muito rápidas (5 segundos)
                 setTimeout(
                   () => StartWhatsAppSession(whatsapp, whatsapp.companyId),
-                  2000
+                  5000
                 );
               } else {
                 await whatsapp.update({ status: "PENDING", session: "" });
@@ -453,9 +496,10 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     session: whatsapp
                   });
                 removeWbot(id, false);
+                // Delay maior após logout (10 segundos)
                 setTimeout(
                   () => StartWhatsAppSession(whatsapp, whatsapp.companyId),
-                  2000
+                  10000
                 );
               }
             }
