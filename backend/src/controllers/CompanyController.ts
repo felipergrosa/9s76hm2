@@ -230,6 +230,11 @@ export const remove = async (
 export const listPlan = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
 
+  // Validar se o id foi fornecido
+  if (!id || id === 'undefined') {
+    return res.status(400).json({ error: "ID da empresa não fornecido" });
+  }
+
   const authHeader = req.headers.authorization;
   const [, token] = authHeader.split(" ");
   const decoded = verify(token, authConfig.secret);

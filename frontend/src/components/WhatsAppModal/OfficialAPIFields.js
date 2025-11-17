@@ -14,10 +14,25 @@ import {
   Button,
   IconButton,
   Tooltip,
-  Link
+  Link,
+  Menu,
+  ListItemIcon,
+  ListItemText
 } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
-import { Info, CheckCircle, FileCopy, Launch, Help } from "@material-ui/icons";
+import { 
+  Info, 
+  CheckCircle, 
+  FileCopy, 
+  Launch, 
+  Help,
+  MoreVert,
+  Link as LinkIcon,
+  Security,
+  Assessment,
+  Payment,
+  Phone
+} from "@material-ui/icons";
 
 const useStyles = makeStyles((theme) => ({
   sectionTitle: {
@@ -88,10 +103,24 @@ const OfficialAPIFields = ({ values, errors, touched }) => {
   const classes = useStyles();
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
+  const [anchorEl, setAnchorEl] = useState(null);
 
   // Usar URL do backend (API) em vez do frontend
   const backendUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
   const webhookUrl = `${backendUrl}/webhooks/whatsapp`;
+
+  const handleMenuOpen = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleMenuItemClick = (url) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    handleMenuClose();
+  };
 
   const handleCopyWebhook = () => {
     navigator.clipboard.writeText(webhookUrl);
@@ -116,7 +145,7 @@ const OfficialAPIFields = ({ values, errors, touched }) => {
             <strong>WhatsApp Business API Oficial (Meta):</strong> Configure as credenciais obtidas no Meta Business Manager. 
             As primeiras 1.000 conversas/mês são gratuitas.
           </Typography>
-          <Box mt={1} display="flex" gap={1} flexWrap="wrap">
+          <Box mt={1} display="flex" gap={1} flexWrap="wrap" alignItems="center">
             <Button
               size="small"
               variant="outlined"
@@ -138,6 +167,80 @@ const OfficialAPIFields = ({ values, errors, touched }) => {
             >
               Tutorial Oficial
             </Button>
+            
+            <Tooltip title="Links Úteis da Meta">
+              <IconButton
+                size="small"
+                onClick={handleMenuOpen}
+                color="primary"
+                aria-label="menu de links úteis"
+              >
+                <MoreVert />
+              </IconButton>
+            </Tooltip>
+
+            <Menu
+              anchorEl={anchorEl}
+              open={Boolean(anchorEl)}
+              onClose={handleMenuClose}
+              anchorOrigin={{
+                vertical: 'bottom',
+                horizontal: 'left',
+              }}
+              transformOrigin={{
+                vertical: 'top',
+                horizontal: 'left',
+              }}
+            >
+              <MenuItem onClick={() => handleMenuItemClick('https://business.facebook.com/wa/manage/message-templates')}>
+                <ListItemIcon>
+                  <Launch fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary="Templates de Mensagem" />
+              </MenuItem>
+              
+              <MenuItem onClick={() => handleMenuItemClick('https://business.facebook.com/wa/manage/phone-numbers/')}>
+                <ListItemIcon>
+                  <Phone fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary="Números de Telefone" />
+              </MenuItem>
+              
+              <MenuItem onClick={() => handleMenuItemClick('https://developers.facebook.com/docs/whatsapp/pricing')}>
+                <ListItemIcon>
+                  <Payment fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary="Forma de Pagamento" />
+              </MenuItem>
+              
+              <MenuItem onClick={() => handleMenuItemClick('https://business.facebook.com/settings/info')}>
+                <ListItemIcon>
+                  <Security fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary="Verificação da Conta" />
+              </MenuItem>
+              
+              <MenuItem onClick={() => handleMenuItemClick('https://developers.facebook.com/docs/whatsapp/cloud-api/')}>
+                <ListItemIcon>
+                  <LinkIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary="Catálogo" />
+              </MenuItem>
+              
+              <MenuItem onClick={() => handleMenuItemClick('https://developers.facebook.com/docs/whatsapp/business-management-api/authentication')}>
+                <ListItemIcon>
+                  <Security fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary="Autenticação de 2 Fatores" />
+              </MenuItem>
+              
+              <MenuItem onClick={() => handleMenuItemClick('https://business.facebook.com/wa/manage/analytics/')}>
+                <ListItemIcon>
+                  <Assessment fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary="Modelos de Mensagens" />
+              </MenuItem>
+            </Menu>
           </Box>
         </Box>
       </Box>
