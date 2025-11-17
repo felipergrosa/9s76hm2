@@ -19,6 +19,8 @@ import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import DeleteWhatsAppMessage from "../services/WbotServices/DeleteWhatsAppMessage";
 import SendWhatsAppMedia from "../services/WbotServices/SendWhatsAppMedia";
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
+import SendWhatsAppMessageUnified from "../services/WbotServices/SendWhatsAppMessageUnified";
+import SendWhatsAppMediaUnified from "../services/WbotServices/SendWhatsAppMediaUnified";
 import CreateMessageService from "../services/MessageServices/CreateMessageService";
 import { sendFacebookMessageMedia } from "../services/FacebookServices/sendFacebookMessageMedia";
 import sendFaceMessage from "../services/FacebookServices/sendFacebookMessage";
@@ -718,7 +720,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       await Promise.all(
         medias.map(async (media: Express.Multer.File, index) => {
           if (ticket.channel === "whatsapp") {
-            await SendWhatsAppMedia({
+            await SendWhatsAppMediaUnified({
               media,
               ticket,
               body: Array.isArray(body) ? body[index] : body,
@@ -752,7 +754,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       );
     } else {
       if (ticket.channel === "whatsapp" && isPrivate === "false") {
-        await SendWhatsAppMessage({ body, ticket, quotedMsg, vCard });
+        await SendWhatsAppMessageUnified({ body, ticket, quotedMsg, vCard });
       } else if (ticket.channel === "whatsapp" && isPrivate === "true") {
         const messageData = {
           wid: `PVT${ticket.updatedAt.toString().replace(" ", "")}`,

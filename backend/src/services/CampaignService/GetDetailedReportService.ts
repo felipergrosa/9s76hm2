@@ -6,6 +6,7 @@ import ContactListItem from "../../models/ContactListItem";
 import Whatsapp from "../../models/Whatsapp";
 import ContactList from "../../models/ContactList";
 import logger from "../../utils/logger";
+import { CalculateCampaignCost } from "./CalculateCostService";
 
 interface ReportFilters {
   status?: string; // pending, processing, delivered, failed, suppressed
@@ -32,6 +33,17 @@ interface DetailedReportResponse {
     delivered: number;
     failed: number;
   }>;
+  cost?: {
+    totalMessages: number;
+    deliveredMessages: number;
+    freeUsed: number;
+    chargeableMessages: number;
+    costPerMessage: number;
+    totalCost: number;
+    currency: string;
+    monthlyFreeLimit: number;
+    remainingFree: number;
+  } | null;
   records: any[];
   count: number;
   hasMore: boolean;
@@ -202,10 +214,19 @@ const GetDetailedReportService = async (
     whatsappUsage = [];
   }
 
+  // Calcular custo se for API Oficial
+  let cost = null;
+  try {
+    cost = await CalculateCampaignCost(campaignId);
+  } catch (error) {
+    logger.warn("[GetDetailedReportService] Erro ao calcular custo", { error });
+  }
+
   return {
     campaign,
     summary,
     whatsappUsage,
+    cost,
     records,
     count,
     hasMore: count > offset + limit

@@ -1822,3 +1822,44 @@ export const getContactProfileURL = async (req: Request, res: Response) => {
       });
     }
   };
+
+  export const refreshDeviceTags = async (
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<Response> => {
+    const { companyId } = req.user;
+    const { whatsappId } = req.query;
+
+    try {
+      logger.info(`[refreshDeviceTags] Atualizando tags para company=${companyId}, whatsapp=${whatsappId}`);
+
+      // Limpar cache
+      const { clearCache } = require("../libs/labelCache");
+      if (whatsappId) {
+        clearCache(Number(whatsappId));
+        logger.info(`[refreshDeviceTags] Cache limpo para whatsappId=${whatsappId}`);
+      }
+
+      // Buscar tags atualizadas com forceRefresh
+      const tags = await GetDeviceTagsService(
+        companyId,
+        whatsappId ? Number(whatsappId) : undefined,
+        true // forceRefresh
+      );
+
+      logger.info(`[refreshDeviceTags] ${tags.length} tags atualizadas com sucesso`);
+
+      return res.status(200).json({
+        success: true,
+        tags,
+        count: tags.length,
+        message: "Tags atualizadas com sucesso"
+      });
+    } catch (error: any) {
+      logger.error(`[refreshDeviceTags] Erro: ${error.message}`);
+      return res.status(500).json({
+        success: false,
+        error: error.message || "Erro ao atualizar tags"
+      });
+    }
+  };

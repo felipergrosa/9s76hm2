@@ -12,6 +12,7 @@ import UpdateService from "../services/CampaignService/UpdateService";
 import DeleteService from "../services/CampaignService/DeleteService";
 import FindService from "../services/CampaignService/FindService";
 import GetDetailedReportService from "../services/CampaignService/GetDetailedReportService";
+import { CalculateCampaignCost, CalculateMonthlyCost } from "../services/CampaignService/CalculateCostService";
 
 import Campaign from "../models/Campaign";
 
@@ -322,6 +323,43 @@ export const detailedReport = async (
       pageNumber
     });
 
+    return res.status(200).json(report);
+  } catch (err: any) {
+    throw new AppError(err.message);
+  }
+};
+
+export const campaignCost = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+
+  try {
+    const cost = await CalculateCampaignCost(+id);
+    
+    if (!cost) {
+      return res.status(200).json({
+        message: "Campanha não usa API Oficial. Não há custo.",
+        cost: null
+      });
+    }
+
+    return res.status(200).json({ cost });
+  } catch (err: any) {
+    throw new AppError(err.message);
+  }
+};
+
+export const monthlyCost = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { month } = req.query as any; // YYYY-MM
+  const { companyId } = (req as any).user;
+
+  try {
+    const report = await CalculateMonthlyCost(companyId, month);
     return res.status(200).json(report);
   } catch (err: any) {
     throw new AppError(err.message);

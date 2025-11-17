@@ -11,6 +11,8 @@ const routes = express.Router();
 
 routes.get("/campaigns/list", isAuth, CampaignController.findList);
 routes.get("/campaigns/:id/detailed-report", isAuth, CampaignController.detailedReport);
+routes.get("/campaigns/:id/cost", isAuth, CampaignController.campaignCost);
+routes.get("/campaigns/monthly-cost", isAuth, CampaignController.monthlyCost);
 routes.get("/campaigns", isAuth, CampaignController.index);
 routes.get("/campaigns/:id", isAuth, CampaignController.show);
 routes.post("/campaigns", isAuth, CampaignController.store);

@@ -50,6 +50,7 @@ contactRoutes.put("/contacts/toggleDisableBot/:contactId", isAuth, ContactContro
 contactRoutes.put("/contact-wallet/:contactId", isAuth, ContactController.updateContactWallet);
 contactRoutes.post("/contacts/bulk-refresh-avatars", isAuth, ContactController.bulkRefreshAvatars);
 contactRoutes.get("/contacts/device-tags", isAuth, ContactController.getDeviceTags);
+contactRoutes.get("/contacts/device-tags/refresh", isAuth, ContactController.refreshDeviceTags);
 contactRoutes.get("/contacts/device-contacts", isAuth, ContactController.getDeviceContacts);
 contactRoutes.post("/contacts/import-device-contacts", isAuth, ContactController.importDeviceContactsAuto);
 contactRoutes.post("/contacts/rebuild-device-tags", isAuth, ContactController.rebuildDeviceTags);

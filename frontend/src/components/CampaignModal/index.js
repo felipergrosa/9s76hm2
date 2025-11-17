@@ -41,13 +41,18 @@ import {
   Select,
   Tab,
   Tabs,
+  Paper,
+  Divider,
+  FormHelperText,
 } from "@material-ui/core";
+import { Alert } from "@material-ui/lab";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import ConfirmationModal from "../ConfirmationModal";
 import UserStatusIcon from "../UserModal/statusIcon";
 import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete";
 import useQueues from "../../hooks/useQueues";
 import ChatAssistantPanel from "../ChatAssistantPanel";
+import WhatsAppPreview from "./WhatsAppPreview";
 import { Sparkles } from "lucide-react";
 
 const useStyles = makeStyles((theme) => ({
@@ -250,11 +255,15 @@ const CampaignModal = ({
 
   const [campaign, setCampaign] = useState(initialState);
   const [campaignLoading, setCampaignLoading] = useState(false);
+  const [dispatchMode, setDispatchMode] = useState("single"); // single | custom | all | baileys | official
   const [whatsapps, setWhatsapps] = useState([]);
   const [selectedWhatsapps, setSelectedWhatsapps] = useState([]);
   const [dispatchStrategy, setDispatchStrategy] = useState("single");
   const [allowedWhatsappIds, setAllowedWhatsappIds] = useState([]);
   const [whatsappId, setWhatsappId] = useState(false);
+  const [availableTemplates, setAvailableTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   useEffect(() => {
     if (!campaignId && defaultWhatsappId) {
@@ -495,6 +504,35 @@ const CampaignModal = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Carregar templates da Meta quando selecionar WhatsApp da API Oficial
+  useEffect(() => {
+    const loadTemplates = async () => {
+      if (!whatsappId) {
+        setAvailableTemplates([]);
+        return;
+      }
+      
+      const whatsapp = whatsapps.find(w => w.id === whatsappId);
+      if (whatsapp?.channelType !== "official") {
+        setAvailableTemplates([]);
+        return;
+      }
+      
+      setLoadingTemplates(true);
+      try {
+        const { data } = await api.get(`/whatsapp/${whatsappId}/templates`);
+        setAvailableTemplates(data.templates || []);
+      } catch (err) {
+        console.error("Erro ao carregar templates", err);
+        toastError(err);
+      } finally {
+        setLoadingTemplates(false);
+      }
+    };
+    
+    loadTemplates();
+  }, [whatsappId, whatsapps]);
 
   // Carrega todos os usuários sob demanda (ao abrir o campo)
   const ensureUsersLoaded = async () => {
@@ -797,7 +835,7 @@ const CampaignModal = ({
         open={open}
         onClose={handleClose}
         fullWidth
-        maxWidth="md"
+        maxWidth="xl"
         scroll="paper"
       >
         <DialogTitle id="form-dialog-title">
@@ -846,7 +884,9 @@ const CampaignModal = ({
 
             return (
               <Form>
-                <DialogContent dividers>
+                <DialogContent dividers style={{ padding: 0, display: "flex" }}>
+                  {/* Coluna esquerda - Formulário */}
+                  <Box flex={1} style={{ overflowY: "auto", padding: "20px 24px" }}>
                   <Grid spacing={2} container>
                   {/* Popover de #Tags */}
                   <Popover
@@ -1100,29 +1140,96 @@ const CampaignModal = ({
                       fullWidth
                       className={classes.formControl}
                     >
-                      <InputLabel id="dispatchStrategy-selection-label">
-                        Estratégia de envio
+                      <InputLabel id="dispatch-strategy-label">
+                        Estratégia de Envio
                       </InputLabel>
                       <Select
-                        labelId="dispatchStrategy-selection-label"
-                        id="dispatchStrategy"
-                        label="Estratégia de envio"
-                        value={dispatchStrategy}
-                        onChange={(e) => setDispatchStrategy(e.target.value)}
+                        labelId="dispatch-strategy-label"
+                        id="dispatch-strategy"
+                        value={dispatchMode}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setDispatchMode(value);
+                          
+                          if (value === "all") {
+                            setAllowedWhatsappIds(whatsapps.map(w => w.id));
+                            setDispatchStrategy("round_robin");
+                          } else if (value === "baileys") {
+                            const ids = whatsapps.filter(w => w.channelType !== "official").map(w => w.id);
+                            setAllowedWhatsappIds(ids);
+                            setDispatchStrategy("round_robin");
+                          } else if (value === "official") {
+                            const ids = whatsapps.filter(w => w.channelType === "official").map(w => w.id);
+                            setAllowedWhatsappIds(ids);
+                            setDispatchStrategy("round_robin");
+                          } else if (value === "single") {
+                            setAllowedWhatsappIds([]);
+                            setDispatchStrategy("single");
+                          } else if (value === "custom") {
+                            setDispatchStrategy("round_robin");
+                          }
+                        }}
+                        label="Estratégia de Envio"
                         disabled={!campaignEditable}
                       >
-                        <MenuItem value="single">Única conexão</MenuItem>
-                        <MenuItem value="round_robin">Rodízio entre conexões</MenuItem>
+                        <MenuItem value="single">
+                          <Box>
+                            <Typography variant="body2">📱 Única conexão</Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              Usa apenas a conexão principal
+                            </Typography>
+                          </Box>
+                        </MenuItem>
+                        
+                        <MenuItem value="custom">
+                          <Box>
+                            <Typography variant="body2">🎯 Rodízio personalizado</Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              Você escolhe quais conexões usar
+                            </Typography>
+                          </Box>
+                        </MenuItem>
+                        
+                        <MenuItem value="all">
+                          <Box>
+                            <Typography variant="body2">🔄 Todas as conexões</Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              Usa todas as {whatsapps.length} conexões disponíveis
+                            </Typography>
+                          </Box>
+                        </MenuItem>
+                        
+                        <MenuItem value="baileys">
+                          <Box>
+                            <Typography variant="body2">📱 Apenas Baileys (Grátis)</Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              {whatsapps.filter(w => w.channelType !== "official").length} conexões disponíveis
+                            </Typography>
+                          </Box>
+                        </MenuItem>
+                        
+                        <MenuItem value="official">
+                          <Box>
+                            <Typography variant="body2">✅ Apenas API Oficial (R$ 0,50/msg)</Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              {whatsapps.filter(w => w.channelType === "official").length} conexões disponíveis
+                            </Typography>
+                          </Box>
+                        </MenuItem>
                       </Select>
                     </FormControl>
                   </Grid>
 
-                  {dispatchStrategy === 'round_robin' && (
-                    <Grid xs={12} md={8} item>
+                  {dispatchMode === "custom" && (
+                    <Grid xs={12} md={12} item>
                       <Autocomplete
                         multiple
                         options={whatsapps}
-                        getOptionLabel={(option) => option.name}
+                        getOptionLabel={(option) => {
+                          const type = option.channelType === "official" ? "API" : "Baileys";
+                          const icon = option.channelType === "official" ? "✅" : "📱";
+                          return `${icon} ${option.name} (${type})`;
+                        }}
                         value={
                           Array.isArray(allowedWhatsappIds)
                             ? whatsapps.filter(w => allowedWhatsappIds.includes(w.id))
@@ -1134,7 +1241,12 @@ const CampaignModal = ({
                         }}
                         renderTags={(value, getTagProps) =>
                           value.map((option, index) => (
-                            <Chip variant="default" label={option.name} {...getTagProps({ index })} />
+                            <Chip
+                              variant="outlined"
+                              color={option.channelType === "official" ? "primary" : "default"}
+                              label={option.name}
+                              {...getTagProps({ index })}
+                            />
                           ))
                         }
                         renderInput={(params) => (
@@ -1142,13 +1254,51 @@ const CampaignModal = ({
                             {...params}
                             variant="outlined"
                             margin="dense"
-                            label="Conexões (quando rodízio)"
-                            placeholder="Selecione as conexões para o rodízio"
+                            label="Escolha as conexões"
+                            placeholder="Ex: Selecione A, C, D..."
+                            helperText={`${allowedWhatsappIds.length} selecionadas`}
                           />
                         )}
                         disableCloseOnSelect
                         disabled={!campaignEditable}
                       />
+                    </Grid>
+                  )}
+
+                  {allowedWhatsappIds.length > 0 && dispatchMode !== "single" && (
+                    <Grid xs={12} md={12} item>
+                      <Paper style={{ padding: 16, background: "#f5f5f5" }}>
+                        <Typography variant="subtitle2" gutterBottom>📊 Resumo da Estratégia</Typography>
+                        <Divider style={{ marginBottom: 12 }} />
+                        {(() => {
+                          const selected = whatsapps.filter(w => allowedWhatsappIds.includes(w.id));
+                          const baileys = selected.filter(w => w.channelType !== "official");
+                          const official = selected.filter(w => w.channelType === "official");
+                          return (
+                            <>
+                              <Typography variant="body2"><strong>Total:</strong> {selected.length} conexões</Typography>
+                              <Typography variant="body2"><strong>📱 Baileys:</strong> {baileys.length}</Typography>
+                              <Typography variant="body2"><strong>✅ API Oficial:</strong> {official.length}</Typography>
+                              <Typography variant="body2" style={{ marginTop: 8 }}><strong>Ordem do rodízio:</strong></Typography>
+                              <Box display="flex" gap={0.5} flexWrap="wrap" mt={1}>
+                                {selected.map((w, idx) => (
+                                  <Chip
+                                    key={w.id}
+                                    size="small"
+                                    label={`${idx + 1}. ${w.name}`}
+                                    color={w.channelType === "official" ? "primary" : "default"}
+                                  />
+                                ))}
+                              </Box>
+                              {baileys.length > 0 && official.length > 0 && (
+                                <Alert severity="warning" style={{ marginTop: 12 }}>
+                                  ⚠️ Você está misturando Baileys e API Oficial: velocidades diferentes, custos variáveis.
+                                </Alert>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </Paper>
                     </Grid>
                   )}
 
@@ -1310,6 +1460,112 @@ const CampaignModal = ({
                     </FormControl>
                   </Grid>
 
+                  {/* Seletor de Templates Meta (API Oficial) */}
+                  {(() => {
+                    const selectedWhatsapp = whatsapps.find(w => w.id === whatsappId);
+                    return selectedWhatsapp?.channelType === "official" ? (
+                      <Grid xs={12} item>
+                        <Alert severity="info" icon={<InfoOutlinedIcon />} style={{ marginBottom: 16 }}>
+                          <Typography variant="subtitle2" gutterBottom>
+                            <strong>✅ API Oficial detectada</strong>
+                          </Typography>
+                          <Typography variant="body2">
+                            Templates devem ser aprovados no Facebook Business Manager antes do uso em campanhas de marketing.
+                          </Typography>
+                        </Alert>
+                        
+                        <FormControl fullWidth margin="dense" variant="outlined">
+                          <InputLabel>Template Aprovado (Opcional)</InputLabel>
+                          <Select
+                            value={selectedTemplate?.id || ""}
+                            onChange={(e) => {
+                              const template = availableTemplates.find(t => t.id === e.target.value);
+                              setSelectedTemplate(template);
+                              
+                              // Preencher primeira mensagem com corpo do template
+                              if (template?.components && setFieldValueRef.current) {
+                                const bodyComponent = template.components.find(c => c.type === "BODY");
+                                if (bodyComponent?.text) {
+                                  setFieldValueRef.current("message1", bodyComponent.text);
+                                }
+                              }
+                            }}
+                            disabled={loadingTemplates || !campaignEditable}
+                            label="Template Aprovado (Opcional)"
+                          >
+                            <MenuItem value="">
+                              <em>Não usar template (mensagem livre)</em>
+                            </MenuItem>
+                            {loadingTemplates ? (
+                              <MenuItem disabled>
+                                <CircularProgress size={20} style={{ marginRight: 8 }} />
+                                Carregando templates...
+                              </MenuItem>
+                            ) : (
+                              availableTemplates.map(template => (
+                                <MenuItem key={template.id} value={template.id}>
+                                  <Box>
+                                    <Typography variant="body2">
+                                      <strong>{template.name}</strong> ({template.language})
+                                    </Typography>
+                                    <Typography variant="caption" color="textSecondary">
+                                      {template.category} • Status: {template.status}
+                                    </Typography>
+                                  </Box>
+                                </MenuItem>
+                              ))
+                            )}
+                          </Select>
+                          
+                          {availableTemplates.length > 0 && (
+                            <FormHelperText style={{ color: "#4caf50" }}>
+                              ✅ {availableTemplates.length} template(s) disponível(is)
+                            </FormHelperText>
+                          )}
+                          
+                          {availableTemplates.length === 0 && !loadingTemplates && (
+                            <FormHelperText error>
+                              ⚠️ Nenhum template aprovado encontrado. Crie templates no Facebook Business Manager.
+                            </FormHelperText>
+                          )}
+                        </FormControl>
+                        
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => window.open("https://business.facebook.com/wa/manage/message-templates", "_blank")}
+                          style={{ marginTop: 8 }}
+                        >
+                          📝 Gerenciar Templates no Facebook
+                        </Button>
+                        
+                        {selectedTemplate && (
+                          <Paper style={{ padding: 16, marginTop: 16, background: "#f5f5f5" }}>
+                            <Typography variant="subtitle2" gutterBottom>
+                              📄 Preview do Template Selecionado
+                            </Typography>
+                            <Divider style={{ marginBottom: 12 }} />
+                            {selectedTemplate.components.map((comp, idx) => (
+                              <Box key={idx} mb={1}>
+                                <Chip 
+                                  label={comp.type} 
+                                  size="small" 
+                                  style={{ marginRight: 8, marginBottom: 4 }}
+                                  color={comp.type === "BODY" ? "primary" : "default"}
+                                />
+                                {comp.text && (
+                                  <Typography variant="body2" style={{ fontFamily: "monospace", whiteSpace: "pre-wrap", marginTop: 4 }}>
+                                    {comp.text}
+                                  </Typography>
+                                )}
+                              </Box>
+                            ))}
+                          </Paper>
+                        )}
+                      </Grid>
+                    ) : null;
+                  })()}
+
                   <Grid xs={12} item>
                     <Tabs
                       value={messageTab}
@@ -1444,6 +1700,43 @@ const CampaignModal = ({
                       </Box>
                   </Grid>
                 </Grid>
+                  </Box>
+                  
+                  {/* Coluna direita - Preview */}
+                  <Box 
+                    width={360} 
+                    style={{ 
+                      borderLeft: "1px solid #e0e0e0",
+                      background: "#fafafa",
+                      padding: "20px",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "center",
+                      position: "sticky",
+                      top: 0,
+                      height: "calc(100vh - 240px)",
+                      overflowY: "auto"
+                    }}
+                  >
+                    <WhatsAppPreview
+                      messages={[
+                        values.message1,
+                        values.message2,
+                        values.message3,
+                        values.message4,
+                        values.message5,
+                      ].filter(Boolean)}
+                      mediaUrls={{
+                        mediaUrl1: values.mediaUrl1,
+                        mediaUrl2: values.mediaUrl2,
+                        mediaUrl3: values.mediaUrl3,
+                        mediaUrl4: values.mediaUrl4,
+                        mediaUrl5: values.mediaUrl5,
+                      }}
+                      contactName="João Silva"
+                      companyName={user?.company?.name || "Empresa"}
+                    />
+                  </Box>
                   {/* Dialog de Pré-visualização de Mídia */}
                   <Dialog open={previewOpen} onClose={closePreview} maxWidth="md" fullWidth>
                     <DialogTitle>{previewName || 'Pré-visualização'}</DialogTitle>

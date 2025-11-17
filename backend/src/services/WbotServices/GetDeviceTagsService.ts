@@ -12,11 +12,22 @@ interface DeviceTag {
   count?: number;
 }
 
-const GetDeviceTagsService = async (companyId: number, whatsappId?: number): Promise<DeviceTag[]> => {
+const GetDeviceTagsService = async (
+  companyId: number, 
+  whatsappId?: number,
+  forceRefresh: boolean = false
+): Promise<DeviceTag[]> => {
   const defaultWhatsapp = await GetDefaultWhatsApp(whatsappId, companyId);
 
   try {
-    logger.info(`[GetDeviceTagsService] Buscando tags para company=${companyId}, whatsappId=${defaultWhatsapp.id}`);
+    logger.info(`[GetDeviceTagsService] Buscando tags para company=${companyId}, whatsappId=${defaultWhatsapp.id}, forceRefresh=${forceRefresh}`);
+
+    // Se forceRefresh, limpar cache antes de buscar
+    if (forceRefresh) {
+      const { clearCache } = require("../../libs/labelCache");
+      clearCache(defaultWhatsapp.id);
+      logger.info(`[GetDeviceTagsService] Cache limpo devido a forceRefresh`);
+    }
 
     const tagsMap = new Map<string, DeviceTag>();
 

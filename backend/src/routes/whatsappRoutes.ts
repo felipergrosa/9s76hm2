@@ -2,6 +2,7 @@ import express from "express";
 import isAuth from "../middleware/isAuth";
 
 import * as WhatsAppController from "../controllers/WhatsAppController";
+import * as MetaController from "../controllers/MetaController";
 
 import multer from "multer";
 import uploadConfig from "../config/upload";
@@ -36,5 +37,8 @@ whatsappRoutes.delete("/whatsapp-admin/:whatsappId", isAuth, WhatsAppController.
 whatsappRoutes.put("/whatsapp-admin/:whatsappId", isAuth, WhatsAppController.updateAdmin);
 
 whatsappRoutes.get("/whatsapp-admin/:whatsappId", isAuth, WhatsAppController.showAdmin);
+
+// Meta API Official - Templates
+whatsappRoutes.get("/whatsapp/:whatsappId/templates", isAuth, MetaController.getTemplates);
 
 export default whatsappRoutes;

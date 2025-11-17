@@ -1,0 +1,153 @@
+import * as Sentry from "@sentry/node";
+import fs from "fs";
+import path from "path";
+import AppError from "../../errors/AppError";
+import { GetTicketAdapter } from "../../helpers/GetWhatsAppAdapter";
+import Ticket from "../../models/Ticket";
+import Contact from "../../models/Contact";
+import formatBody from "../../helpers/Mustache";
+import logger from "../../utils/logger";
+import { IWhatsAppMessage } from "../../libs/whatsapp";
+
+interface Request {
+  media: Express.Multer.File;
+  ticket: Ticket;
+  body?: string;
+  isPrivate?: boolean;
+  isForwarded?: boolean;
+}
+
+/**
+ * Serviço unificado de envio de mídia WhatsApp
+ * Suporta Baileys e Official API
+ * 
+ * Tipos de mídia suportados:
+ * - Imagem: jpg, jpeg, png, gif, webp
+ * - Áudio: mp3, ogg, aac, opus
+ * - Vídeo: mp4, 3gp, avi, mov
+ * - Documento: pdf, doc, docx, xls, xlsx, ppt, pptx, txt, zip
+ */
+const SendWhatsAppMediaUnified = async ({
+  media,
+  ticket,
+  body,
+  isPrivate = false,
+  isForwarded = false
+}: Request): Promise<IWhatsAppMessage | any> => {
+  
+  try {
+    logger.info(`[SendMediaUnified] Enviando mídia para ticket ${ticket.id}`);
+    
+    // Obter adapter apropriado
+    const adapter = await GetTicketAdapter(ticket);
+    const channelType = adapter.channelType;
+    
+    logger.debug(`[SendMediaUnified] Tipo: ${media.mimetype}, Canal: ${channelType}`);
+    
+    // Obter contato
+    const contact = await Contact.findByPk(ticket.contactId);
+    if (!contact) {
+      throw new AppError("ERR_CONTACT_NOT_FOUND", 404);
+    }
+
+    // Determinar número de destino
+    let number: string;
+    if (
+      contact.remoteJid &&
+      contact.remoteJid !== "" &&
+      contact.remoteJid.includes("@")
+    ) {
+      number = contact.remoteJid;
+    } else {
+      number = `${contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
+    }
+
+    // Determinar tipo de mídia baseado no mimetype
+    let mediaType: "image" | "audio" | "video" | "document" = "document";
+    
+    if (media.mimetype.startsWith("image/")) {
+      mediaType = "image";
+    } else if (media.mimetype.startsWith("audio/")) {
+      mediaType = "audio";
+    } else if (media.mimetype.startsWith("video/")) {
+      mediaType = "video";
+    }
+
+    // Formatar corpo da mensagem (caption)
+    const formattedBody = body ? formatBody(body, ticket) : undefined;
+
+    let sentMessage: IWhatsAppMessage;
+
+    // ===== BAILEYS: Envia arquivo local =====
+    if (channelType === "baileys") {
+      // Caminho completo do arquivo
+      const publicPath = path.join(
+        process.cwd(),
+        "public",
+        `company${ticket.companyId}`,
+        media.filename
+      );
+
+      if (!fs.existsSync(publicPath)) {
+        throw new AppError(`Arquivo não encontrado: ${publicPath}`, 404);
+      }
+
+      // Ler arquivo
+      const fileBuffer = fs.readFileSync(publicPath);
+      const base64File = fileBuffer.toString("base64");
+      const dataUri = `data:${media.mimetype};base64,${base64File}`;
+
+      sentMessage = await adapter.sendMessage({
+        to: number.split("@")[0],
+        mediaUrl: dataUri,
+        mediaType,
+        caption: formattedBody,
+        filename: media.originalname
+      });
+    } 
+    // ===== OFFICIAL API: Precisa de URL pública =====
+    else if (channelType === "official") {
+      // Construir URL pública do arquivo
+      const backendUrl = process.env.BACKEND_URL || "http://localhost:8080";
+      const mediaUrl = `${backendUrl}/public/company${ticket.companyId}/${media.filename}`;
+
+      logger.info(`[SendMediaUnified] URL pública da mídia: ${mediaUrl}`);
+
+      sentMessage = await adapter.sendMessage({
+        to: number.split("@")[0],
+        mediaUrl,
+        mediaType,
+        caption: formattedBody,
+        filename: media.originalname
+      });
+    } else {
+      throw new AppError(`Tipo de canal não suportado: ${channelType}`, 400);
+    }
+
+    // Atualizar última mensagem do ticket
+    const lastMessage = formattedBody || `📎 ${media.originalname}`;
+    await ticket.update({
+      lastMessage,
+      imported: null
+    });
+
+    logger.info(`[SendMediaUnified] Mídia enviada com sucesso para ticket ${ticket.id}`);
+
+    return sentMessage;
+
+  } catch (error: any) {
+    Sentry.captureException(error);
+    logger.error(`[SendMediaUnified] Erro ao enviar mídia: ${error.message}`);
+    
+    if (error instanceof AppError) {
+      throw error;
+    }
+    
+    throw new AppError(
+      error.message || "ERR_SENDING_MEDIA_MSG",
+      error.statusCode || 500
+    );
+  }
+};
+
+export default SendWhatsAppMediaUnified;

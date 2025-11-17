@@ -28,6 +28,7 @@ import {
 import { Refresh, ExpandMore } from "@material-ui/icons";
 import { Alert } from '@material-ui/lab';
 import { makeStyles } from "@material-ui/core/styles";
+import { toast } from 'react-toastify';
 import toastError from '../../errors/toastError';
 import api from '../../services/api';
 
@@ -77,6 +78,7 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
   const [deviceTags, setDeviceTags] = useState([]);
   const [systemTags, setSystemTags] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ total: 0, processed: 0, created: 0, updated: 0, tagged: 0 });
   const importPollRef = useRef(null);
@@ -149,6 +151,29 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
     setLoading(false);
     setLabelsProgress({ percent: 0, phase: 'idle' });
   }, [selectedWhatsappId, stopProgressPolling]);
+
+  const handleRefreshTags = useCallback(async () => {
+    if (!selectedWhatsappId) {
+      toast.warning("Selecione uma conexão primeiro");
+      return;
+    }
+
+    setRefreshing(true);
+    try {
+      const { data } = await api.get("/contacts/device-tags/refresh", {
+        params: { whatsappId: selectedWhatsappId }
+      });
+
+      toast.success(`✅ ${data.count} tags atualizadas!`);
+      
+      // Recarregar dados
+      loadData();
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [selectedWhatsappId, loadData]);
 
   // Escolhe automaticamente cor de texto (preto/branco) com base na cor da tag
   const getContrastColor = (hexColor) => {
@@ -621,26 +646,40 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
         ))}
 
         {!loading && !importing && !importSummary && (
-          <FormControl fullWidth variant="outlined" margin="dense">
-            <InputLabel id="whatsapp-select-label">Conexão WhatsApp</InputLabel>
-            <Select
-              labelId="whatsapp-select-label"
-              id="whatsapp-select"
-              value={selectedWhatsappId}
-              onChange={(e) => setSelectedWhatsappId(e.target.value)}
-              label="Conexão WhatsApp"
-            >
-              <MenuItem value="">
-                <em>Padrão</em>
-              </MenuItem>
-              {Array.isArray(whatsapps) &&
-                whatsapps.map((whatsapp) => (
-                  <MenuItem key={whatsapp.id} value={whatsapp.id}>
-                    {whatsapp.name}
-                  </MenuItem>
-                ))}
-            </Select>
-          </FormControl>
+          <Box display="flex" alignItems="flex-start" gap={1}>
+            <FormControl fullWidth variant="outlined" margin="dense">
+              <InputLabel id="whatsapp-select-label">Conexão WhatsApp</InputLabel>
+              <Select
+                labelId="whatsapp-select-label"
+                id="whatsapp-select"
+                value={selectedWhatsappId}
+                onChange={(e) => setSelectedWhatsappId(e.target.value)}
+                label="Conexão WhatsApp"
+              >
+                <MenuItem value="">
+                  <em>Padrão</em>
+                </MenuItem>
+                {Array.isArray(whatsapps) &&
+                  whatsapps.map((whatsapp) => (
+                    <MenuItem key={whatsapp.id} value={whatsapp.id}>
+                      {whatsapp.name}
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+            <Tooltip title="Atualizar tags do aparelho">
+              <span>
+                <IconButton
+                  onClick={handleRefreshTags}
+                  disabled={!selectedWhatsappId || refreshing || loading}
+                  color="primary"
+                  style={{ marginTop: 8 }}
+                >
+                  {refreshing ? <CircularProgress size={24} /> : <Refresh />}
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
         )}
 
         {!loading && !importing && !importSummary && (!Array.isArray(deviceTags) || deviceTags.length === 0) ? (

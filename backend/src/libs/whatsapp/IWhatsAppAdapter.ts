@@ -52,6 +52,7 @@ export interface ISendMessageOptions {
   }>;
   mentionedJidList?: string[];
   vcard?: string;
+  filename?: string;
 }
 
 /**
@@ -85,6 +86,10 @@ export interface IWhatsAppAdapter {
   sendMessage(options: ISendMessageOptions): Promise<IWhatsAppMessage>;
   sendTextMessage(to: string, body: string): Promise<IWhatsAppMessage>;
   sendMediaMessage(to: string, mediaUrl: string, mediaType: string, caption?: string): Promise<IWhatsAppMessage>;
+  
+  // Gestão de mensagens
+  deleteMessage?(messageId: string): Promise<void>;
+  editMessage?(messageId: string, newBody: string): Promise<void>;
   
   // Gestão de perfil e status
   getProfilePicture(jid: string): Promise<string | null>;

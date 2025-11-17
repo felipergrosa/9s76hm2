@@ -89,7 +89,9 @@ const OfficialAPIFields = ({ values, errors, touched }) => {
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
 
-  const webhookUrl = `${window.location.origin}/webhooks/whatsapp`;
+  // Usar URL do backend (API) em vez do frontend
+  const backendUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
+  const webhookUrl = `${backendUrl}/webhooks/whatsapp`;
 
   const handleCopyWebhook = () => {
     navigator.clipboard.writeText(webhookUrl);

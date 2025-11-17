@@ -252,6 +252,52 @@ export class BaileysAdapter implements IWhatsAppAdapter {
   }
 
   /**
+   * Deleta mensagem
+   */
+  async deleteMessage(messageId: string): Promise<void> {
+    if (!this.socket) {
+      throw new WhatsAppAdapterError(
+        "Socket não inicializado",
+        "SOCKET_NOT_INITIALIZED"
+      );
+    }
+
+    try {
+      const key = {
+        remoteJid: messageId.split("_")[0],
+        id: messageId.split("_")[1],
+        fromMe: true
+      };
+
+      await this.socket.sendMessage(key.remoteJid, {
+        delete: key
+      });
+
+      logger.info(`[BaileysAdapter] Mensagem deletada: ${messageId}`);
+    } catch (error) {
+      logger.error(`[BaileysAdapter] Erro ao deletar mensagem: ${error.message}`);
+      throw new WhatsAppAdapterError(
+        "Falha ao deletar mensagem",
+        "DELETE_MESSAGE_ERROR",
+        error
+      );
+    }
+  }
+
+  /**
+   * Edita mensagem (Baileys suporta edição limitada)
+   */
+  async editMessage(messageId: string, newBody: string): Promise<void> {
+    // Baileys não tem suporte nativo para edição de mensagens
+    // Esta função está aqui por compatibilidade com a interface
+    logger.warn(`[BaileysAdapter] Edição de mensagens não suportada no Baileys`);
+    throw new WhatsAppAdapterError(
+      "Edição de mensagens não suportada no Baileys",
+      "EDIT_NOT_SUPPORTED"
+    );
+  }
+
+  /**
    * Obtém foto de perfil
    */
   async getProfilePicture(jid: string): Promise<string | null> {

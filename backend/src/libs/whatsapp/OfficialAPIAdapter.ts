@@ -32,6 +32,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
   private phoneNumberId: string;
   private accessToken: string;
   private businessAccountId: string;
+  private apiVersion: string;
   private status: ConnectionStatus = "disconnected";
   private phoneNumber: string | null = null;
   
@@ -44,8 +45,9 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
     this.phoneNumberId = config.phoneNumberId;
     this.accessToken = config.accessToken;
     this.businessAccountId = config.businessAccountId;
+    this.apiVersion = config.apiVersion || "v18.0";
 
-    const apiVersion = config.apiVersion || "v18.0";
+    const apiVersion = this.apiVersion;
 
     // Cliente HTTP para Graph API
     this.client = axios.create({
@@ -283,6 +285,73 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
       mediaType: mediaType as any,
       caption
     });
+  }
+
+  /**
+   * Deleta mensagem (suporte limitado - até 24h)
+   * API Oficial só permite deletar mensagens próprias até 24h após envio
+   */
+  async deleteMessage(messageId: string): Promise<void> {
+    try {
+      const url = `https://graph.facebook.com/${this.apiVersion}/${messageId}`;
+
+      await this.client.delete(url);
+
+      logger.info(`[OfficialAPIAdapter] Mensagem deletada: ${messageId}`);
+    } catch (error: any) {
+      logger.error(`[OfficialAPIAdapter] Erro ao deletar mensagem: ${error.response?.data || error.message}`);
+      
+      if (error.response?.status === 400 && error.response?.data?.error?.code === 100) {
+        throw new WhatsAppAdapterError(
+          "Não é possível deletar mensagens com mais de 24 horas",
+          "MESSAGE_TOO_OLD",
+          error
+        );
+      }
+      
+      throw new WhatsAppAdapterError(
+        "Falha ao deletar mensagem",
+        "DELETE_MESSAGE_ERROR",
+        error
+      );
+    }
+  }
+
+  /**
+   * Edita mensagem (API Oficial suporta edição até 15 minutos)
+   */
+  async editMessage(messageId: string, newBody: string): Promise<void> {
+    try {
+      const url = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/messages`;
+
+      const payload = {
+        messaging_product: "whatsapp",
+        message_id: messageId,
+        text: {
+          body: newBody
+        }
+      };
+
+      await this.client.post(url, payload);
+
+      logger.info(`[OfficialAPIAdapter] Mensagem editada: ${messageId}`);
+    } catch (error: any) {
+      logger.error(`[OfficialAPIAdapter] Erro ao editar mensagem: ${error.response?.data || error.message}`);
+      
+      if (error.response?.status === 400 && error.response?.data?.error?.code === 131051) {
+        throw new WhatsAppAdapterError(
+          "Não é possível editar mensagens após 15 minutos",
+          "MESSAGE_TOO_OLD",
+          error
+        );
+      }
+      
+      throw new WhatsAppAdapterError(
+        "Falha ao editar mensagem",
+        "EDIT_MESSAGE_ERROR",
+        error
+      );
+    }
   }
 
   /**
