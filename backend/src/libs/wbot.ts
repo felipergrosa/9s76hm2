@@ -493,7 +493,15 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               }
               
               if (statusCode === 403 || isDeviceRemoved) {
-                logger.warn(`[wbot] Erro ${statusCode} (${isDeviceRemoved ? 'device_removed' : 'forbidden'}) para whatsappId=${whatsapp.id}. Limpando sessão.`);
+                logger.error(`[wbot] ============================================`);
+                logger.error(`[wbot] ERRO CRÍTICO: ${statusCode} (${isDeviceRemoved ? 'device_removed' : 'forbidden'}) para whatsappId=${whatsapp.id}`);
+                logger.error(`[wbot] ============================================`);
+                logger.error(`[wbot] Limpando sessão e removendo credenciais...`);
+                logger.error(`[wbot] Status Code: ${statusCode}`);
+                logger.error(`[wbot] Is Device Removed: ${isDeviceRemoved}`);
+                logger.error(`[wbot] Error Message: ${errorMessage}`);
+                logger.error(`[wbot] Error Data: ${JSON.stringify(errorData, null, 2)}`);
+                logger.error(`[wbot] ============================================`);
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
                 await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
