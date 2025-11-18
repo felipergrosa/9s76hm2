@@ -754,7 +754,37 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       );
     } else {
       if (ticket.channel === "whatsapp" && isPrivate === "false") {
-        await SendWhatsAppMessageUnified({ body, ticket, quotedMsg, vCard });
+        // Enviar mensagem
+        const sentMessage = await SendWhatsAppMessageUnified({ body, ticket, quotedMsg, vCard });
+        
+        // Extrair ID da mensagem (suporta ambos os tipos)
+        let messageId: string;
+        if ('id' in sentMessage) {
+          // IWhatsAppMessage (Official API)
+          messageId = sentMessage.id;
+        } else if (sentMessage.key?.id) {
+          // WebMessageInfo (Baileys)
+          messageId = sentMessage.key.id;
+        } else {
+          // Fallback
+          messageId = `${Date.now()}`;
+        }
+        
+        // Salvar mensagem no banco para aparecer no chat
+        const messageData = {
+          wid: messageId,
+          ticketId: ticket.id,
+          contactId: ticket.contactId,
+          body: body || "",
+          fromMe: true,
+          mediaType: !isNil(vCard) ? "contactMessage" : "extendedTextMessage",
+          read: true,
+          quotedMsgId: quotedMsg?.id || null,
+          ack: 1, // Enviado
+          remoteJid: ticket.contact?.remoteJid,
+        };
+        
+        await CreateMessageService({ messageData, companyId: ticket.companyId });
       } else if (ticket.channel === "whatsapp" && isPrivate === "true") {
         const messageData = {
           wid: `PVT${ticket.updatedAt.toString().replace(" ", "")}`,

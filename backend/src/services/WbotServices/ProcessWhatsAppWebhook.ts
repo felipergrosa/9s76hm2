@@ -9,6 +9,7 @@ import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateConta
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import { getIO } from "../../libs/socket";
+import DownloadOfficialMediaService from "./DownloadOfficialMediaService";
 
 /**
  * Interface para mudança (change) do webhook Meta
@@ -207,25 +208,82 @@ async function processIncomingMessage(
     case "image":
       body = message.image?.caption || "";
       mediaType = "image";
-      mediaUrl = message.image?.id; // ID temporário da Meta
+      
+      // Baixar mídia da Meta API
+      if (message.image?.id) {
+        try {
+          mediaUrl = await DownloadOfficialMediaService({
+            mediaId: message.image.id,
+            whatsapp,
+            companyId,
+            mediaType: "image"
+          });
+          logger.info(`[WebhookProcessor] Imagem baixada: ${mediaUrl}`);
+        } catch (error: any) {
+          logger.error(`[WebhookProcessor] Erro ao baixar imagem: ${error.message}`);
+          mediaUrl = undefined; // Falha silenciosa, mensagem será texto
+        }
+      }
       break;
 
     case "video":
       body = message.video?.caption || "";
       mediaType = "video";
-      mediaUrl = message.video?.id;
+      
+      if (message.video?.id) {
+        try {
+          mediaUrl = await DownloadOfficialMediaService({
+            mediaId: message.video.id,
+            whatsapp,
+            companyId,
+            mediaType: "video"
+          });
+          logger.info(`[WebhookProcessor] Vídeo baixado: ${mediaUrl}`);
+        } catch (error: any) {
+          logger.error(`[WebhookProcessor] Erro ao baixar vídeo: ${error.message}`);
+          mediaUrl = undefined;
+        }
+      }
       break;
 
     case "audio":
       body = "";
       mediaType = "audio";
-      mediaUrl = message.audio?.id;
+      
+      if (message.audio?.id) {
+        try {
+          mediaUrl = await DownloadOfficialMediaService({
+            mediaId: message.audio.id,
+            whatsapp,
+            companyId,
+            mediaType: "audio"
+          });
+          logger.info(`[WebhookProcessor] Áudio baixado: ${mediaUrl}`);
+        } catch (error: any) {
+          logger.error(`[WebhookProcessor] Erro ao baixar áudio: ${error.message}`);
+          mediaUrl = undefined;
+        }
+      }
       break;
 
     case "document":
       body = message.document?.caption || message.document?.filename || "";
       mediaType = "document";
-      mediaUrl = message.document?.id;
+      
+      if (message.document?.id) {
+        try {
+          mediaUrl = await DownloadOfficialMediaService({
+            mediaId: message.document.id,
+            whatsapp,
+            companyId,
+            mediaType: "document"
+          });
+          logger.info(`[WebhookProcessor] Documento baixado: ${mediaUrl}`);
+        } catch (error: any) {
+          logger.error(`[WebhookProcessor] Erro ao baixar documento: ${error.message}`);
+          mediaUrl = undefined;
+        }
+      }
       break;
 
     case "button":

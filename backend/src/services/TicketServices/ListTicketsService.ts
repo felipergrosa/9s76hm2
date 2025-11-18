@@ -142,45 +142,15 @@ const ListTicketsService = async ({
         };
       }
       else
-        if (user.profile === "user" && status === "pending" && showTicketWithoutQueue) {
-          const TicketsUserFilter: any[] | null = [];
-
-          let ticketsIds = [];
-
-          if (!showTicketAllQueues) {
-            ticketsIds = await Ticket.findAll({
-              where: {
-                userId: { [Op.or]: [user.id, null] },
-                queueId: { [Op.or]: [queueIds, null] },
-                status: "pending",
-                companyId
-              },
-            });
-          } else {
-            ticketsIds = await Ticket.findAll({
-              where: {
-                userId: { [Op.or]: [user.id, null] },
-                // queueId: { [Op.or]: [queueIds, null] },
-                status: "pending",
-                companyId
-              },
-            });
-          }
-
-          if (ticketsIds) {
-            TicketsUserFilter.push(ticketsIds.map(t => t.id));
-          }
-          // }
-
-          const ticketsIntersection: number[] = intersection(...TicketsUserFilter);
-
+        if (status === "bot") {
           whereCondition = {
-            ...whereCondition,
-            id: ticketsIntersection
+            companyId,
+            isBot: true,
+            queueId: { [Op.or]: [queueIds, null] }
           };
         }
         else
-          if (user.profile === "user" && status === "pending" && !showTicketWithoutQueue) {
+          if (user.profile === "user" && status === "pending" && showTicketWithoutQueue) {
             const TicketsUserFilter: any[] | null = [];
 
             let ticketsIds = [];

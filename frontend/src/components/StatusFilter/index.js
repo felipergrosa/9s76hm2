@@ -24,6 +24,7 @@ export function StatusFilter({ onFiltered }) {
     { status: 'closed', name: `${i18n.t("tickets.search.filterConectionsOptions.closed")}` },
     { status: 'pending', name: `${i18n.t("tickets.search.filterConectionsOptions.pending")}` },
     { status: 'group', name: 'Grupos' },
+    { status: 'bot', name: 'Bot' },
 
   ]
 
