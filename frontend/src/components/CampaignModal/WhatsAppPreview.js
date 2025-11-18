@@ -9,7 +9,7 @@ const useStyles = makeStyles((theme) => ({
     height: 640,
     borderRadius: 40,
     border: "12px solid #1f1f1f",
-    background: "#e5ddd5", // Fundo do WhatsApp
+    background: "#e5ddd5", // Fundo do WhatsApp 
     backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'260\' height=\'260\'%3E%3Cpath d=\'M129.92 0c71.686 0 129.92 58.234 129.92 129.92s-58.234 129.92-129.92 129.92S0 201.606 0 129.92 58.234 0 129.92 0z\' fill=\'%23d9d9d9\' fill-opacity=\'.05\'/%3E%3C/svg%3E")',
     position: "relative",
     overflow: "hidden",
@@ -44,7 +44,7 @@ const useStyles = makeStyles((theme) => ({
     background: "#333",
   },
   header: {
-    background: "#075e54", // Verde WhatsApp
+    background: "#075e54", // Verde cor WhatsApp
     color: "#fff",
     padding: "32px 16px 12px", // Espaço para notch
     display: "flex",
