@@ -547,16 +547,12 @@ const TicketActionButtonsCustom = ({ ticket
                             </MenuItem>
                         </>
                     )}
-                    <MenuItem onClick={handleOpenConfirmationModal}>
-                        <DeleteForeverIcon style={{ color: '#d32f2f', marginRight: 10 }} />
-                        <Can
-                            role={user.profile}
-                            perform="ticket-options:deleteTicket"
-                            yes={() => (
-                                i18n.t("tickets.buttons.deleteTicket")
-                            )}
-                        />
-                    </MenuItem>
+                    {(user.profile === "admin" || user.profile === "super") && (
+                        <MenuItem onClick={handleOpenConfirmationModal}>
+                            <DeleteForeverIcon style={{ color: '#d32f2f', marginRight: 10 }} />
+                            {i18n.t("tickets.buttons.deleteTicket")}
+                        </MenuItem>
+                    )}
                     <MenuItem onClick={handleEnableIntegration}>
                         <DeviceHubOutlined style={{ color: enableIntegration ? '#ef5350' : '#00897b', marginRight: 10 }} />
                         {enableIntegration === true ? i18n.t("messagesList.header.buttons.disableIntegration") : i18n.t("messagesList.header.buttons.enableIntegration")}

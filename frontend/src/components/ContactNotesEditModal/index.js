@@ -25,7 +25,7 @@ export default function ContactNotesEditModal({ open, onClose, note, onSave }) {
           label="Edit Note"
           fullWidth
           multiline
-          rows={4}
+          minRows={4}
           value={note}
           onChange={(e) => setEditedNote(e.target.value)}
         />

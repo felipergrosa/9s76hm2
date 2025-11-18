@@ -132,15 +132,11 @@ const TicketOptionsMenu = ({ ticket, menuOpen, handleClose, anchorEl }) => {
 					/>
 					{i18n.t("ticketOptionsMenu.acceptAudioMessage")}
 				</MenuItem>
-				<Can
-					role={user.profile}
-					perform="ticket-options:deleteTicket"
-					yes={() => (
-						<MenuItem onClick={handleOpenConfirmationModal}>
-							{i18n.t("ticketOptionsMenu.delete")}
-						</MenuItem>
-					)}
-				/>
+				{user.profile === "admin" || user.profile === "super" ? (
+					<MenuItem onClick={handleOpenConfirmationModal}>
+						{i18n.t("ticketOptionsMenu.delete")}
+					</MenuItem>
+				) : null}
 			</Menu>
 			<ConfirmationModal
 				title={`${i18n.t("ticketOptionsMenu.confirmationModal.title")} ${ticket.contact.name
