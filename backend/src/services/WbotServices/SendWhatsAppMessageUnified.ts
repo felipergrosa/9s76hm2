@@ -137,6 +137,39 @@ const SendWhatsAppMessageUnified = async ({
         imported: null,
       });
 
+      // Criar registro da mensagem no banco de dados
+      try {
+        const CreateMessageService = (await import("../MessageServices/CreateMessageService")).default;
+        const messageId = (sentMessage as any)?.key?.id || (sentMessage as any)?.id || `SENT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        const messageData = {
+          wid: messageId,
+          ticketId: ticket.id,
+          contactId: ticket.contactId,
+          body: formatBody(vcardContent, ticket),
+          fromMe: true,
+          mediaType: "contactMessage",
+          read: true,
+          quotedMsgId: null,
+          ack: 2, // Enviado
+          remoteJid: contactNumber.remoteJid || number,
+          participant: ticket.isGroup ? (sentMessage as any)?.key?.participant : null,
+          dataJson: JSON.stringify(sentMessage),
+          ticketTrakingId: null,
+          isPrivate: false,
+          companyId: ticket.companyId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        await CreateMessageService({ messageData, companyId: ticket.companyId });
+        logger.debug(`[SendUnified] Mensagem vCard criada no banco: ${messageId}`);
+      } catch (createError: any) {
+        // Não bloquear envio se falhar ao criar registro
+        logger.warn(`[SendUnified] Erro ao criar mensagem vCard no banco: ${createError.message}`);
+        Sentry.captureException(createError);
+      }
+
       return sentMessage;
     }
 
@@ -176,6 +209,39 @@ const SendWhatsAppMessageUnified = async ({
         imported: null
       });
 
+      // Criar registro da mensagem no banco de dados
+      try {
+        const CreateMessageService = (await import("../MessageServices/CreateMessageService")).default;
+        const messageId = (sentMessage as any)?.key?.id || (sentMessage as any)?.id || `SENT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        const messageData = {
+          wid: messageId,
+          ticketId: ticket.id,
+          contactId: ticket.contactId,
+          body: formattedBody,
+          fromMe: true,
+          mediaType: imageUrl ? "imageMessage" : "interactiveMessage",
+          read: true,
+          quotedMsgId: null,
+          ack: 2, // Enviado
+          remoteJid: contactNumber.remoteJid || number,
+          participant: ticket.isGroup ? (sentMessage as any)?.key?.participant : null,
+          dataJson: JSON.stringify(sentMessage),
+          ticketTrakingId: null,
+          isPrivate: false,
+          companyId: ticket.companyId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        await CreateMessageService({ messageData, companyId: ticket.companyId });
+        logger.debug(`[SendUnified] Mensagem com botões criada no banco: ${messageId}`);
+      } catch (createError: any) {
+        // Não bloquear envio se falhar ao criar registro
+        logger.warn(`[SendUnified] Erro ao criar mensagem com botões no banco: ${createError.message}`);
+        Sentry.captureException(createError);
+      }
+
       return sentMessage;
     }
 
@@ -199,6 +265,40 @@ const SendWhatsAppMessageUnified = async ({
         lastMessage: formattedBody,
         imported: null,
       });
+
+      // Criar registro da mensagem no banco de dados
+      try {
+        const CreateMessageService = (await import("../MessageServices/CreateMessageService")).default;
+        const messageId = (sentMessage as any)?.key?.id || (sentMessage as any)?.id || `SENT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const quotedMsgId_db = quotedMsg?.id || null;
+        
+        const messageData = {
+          wid: messageId,
+          ticketId: ticket.id,
+          contactId: ticket.contactId,
+          body: formattedBody,
+          fromMe: true,
+          mediaType: "extendedTextMessage",
+          read: true,
+          quotedMsgId: quotedMsgId_db,
+          ack: 2, // Enviado
+          remoteJid: contactNumber.remoteJid || number,
+          participant: ticket.isGroup ? (sentMessage as any)?.key?.participant : null,
+          dataJson: JSON.stringify(sentMessage),
+          ticketTrakingId: null,
+          isPrivate: false,
+          companyId: ticket.companyId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        await CreateMessageService({ messageData, companyId: ticket.companyId });
+        logger.debug(`[SendUnified] Mensagem criada no banco: ${messageId}`);
+      } catch (createError: any) {
+        // Não bloquear envio se falhar ao criar registro
+        logger.warn(`[SendUnified] Erro ao criar mensagem no banco: ${createError.message}`);
+        Sentry.captureException(createError);
+      }
 
       return sentMessage;
     }
