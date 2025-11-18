@@ -10,6 +10,7 @@ import { isNil } from "lodash";
 import Whatsapp from "../../models/Whatsapp";
 import * as Sentry from "@sentry/node";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { Op } from "sequelize";
 
 const axios = require('axios');
 
@@ -186,9 +187,26 @@ const CreateOrUpdateContactService = async ({
     const io = getIO();
     let contact: Contact | null;
 
-    contact = await Contact.findOne({
-      where: isGroup ? { number: rawNumberDigits, companyId } : { companyId, canonicalNumber: number }
-    });
+    // Busca contato existente: primeiro por canonicalNumber, depois por number
+    // Isso previne erro de constraint única quando contato existe mas canonicalNumber não está definido
+    if (!isGroup) {
+      // Para contatos individuais, busca primeiro por canonicalNumber
+      contact = await Contact.findOne({
+        where: { companyId, canonicalNumber: number }
+      });
+      
+      // Se não encontrou por canonicalNumber, busca por number diretamente
+      if (!contact) {
+        contact = await Contact.findOne({
+          where: { companyId, number: number }
+        });
+      }
+    } else {
+      // Para grupos, busca apenas por number
+      contact = await Contact.findOne({
+        where: { number: rawNumberDigits, companyId }
+      });
+    }
 
     let updateImage = (!contact || contact?.profilePicUrl !== profilePicUrl && profilePicUrl !== "") && wbot || false;
 
@@ -297,18 +315,67 @@ const CreateOrUpdateContactService = async ({
       {
         const incomingName = (name || "").trim();
         const effectiveName = incomingName && incomingName !== number ? incomingName : number;
-        contact = await Contact.create({
-          ...contactData,
-          name: effectiveName,
-          channel,
-          acceptAudioMessage: acceptAudioMessageContact === 'enabled' ? true : false,
-          remoteJid: newRemoteJid,
-          whatsappId,
-          canonicalNumber: isGroup ? null : number
-        });
+        try {
+          contact = await Contact.create({
+            ...contactData,
+            name: effectiveName,
+            channel,
+            acceptAudioMessage: acceptAudioMessageContact === 'enabled' ? true : false,
+            remoteJid: newRemoteJid,
+            whatsappId,
+            canonicalNumber: isGroup ? null : number
+          });
+          createContact = true;
+        } catch (createError: any) {
+          // Se erro de constraint única, contato já existe - buscar novamente e atualizar
+          if (createError.name === 'SequelizeUniqueConstraintError' || 
+              (createError.parent && createError.parent.code === '23505')) {
+            logger.warn("[CreateOrUpdateContactService] Contato já existe (constraint única), buscando novamente", {
+              number,
+              companyId,
+              error: createError.message
+            });
+            
+            // Tentar buscar novamente por number e canonicalNumber
+            if (isGroup) {
+              contact = await Contact.findOne({
+                where: { number: rawNumberDigits, companyId }
+              });
+            } else {
+              // Buscar por canonicalNumber ou number
+              contact = await Contact.findOne({
+                where: {
+                  companyId,
+                  [Op.or]: [
+                    { canonicalNumber: number },
+                    { number: number }
+                  ]
+                }
+              });
+            }
+            
+            // Fallback: buscar apenas por number se ainda não encontrou
+            if (!contact && !isGroup) {
+              contact = await Contact.findOne({
+                where: { companyId, number: number }
+              });
+            }
+            
+            if (contact) {
+              // Contato encontrado, atualizar com novos dados
+              await contact.update(contactData);
+              await contact.reload();
+              shouldEmitUpdate = true;
+            } else {
+              // Se ainda não encontrou, relançar erro original
+              throw createError;
+            }
+          } else {
+            // Outro tipo de erro, relançar
+            throw createError;
+          }
+        }
       }
-      
-      createContact = true;
     } else if (['facebook', 'instagram'].includes(channel)) {
       // Mesma proteção ao criar via outros canais
       {

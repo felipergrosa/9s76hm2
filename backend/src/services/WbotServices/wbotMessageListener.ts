@@ -904,8 +904,43 @@ const verifyContact = async (
     wbot
   };
 
-  const contact = await CreateOrUpdateContactService(contactData);
-  return contact;
+  try {
+    const contact = await CreateOrUpdateContactService(contactData);
+    return contact;
+  } catch (error: any) {
+    // Se erro ao criar/atualizar contato, logar e retornar null para não bloquear processamento de mensagem
+    logger.error("[verifyContact] Erro ao criar/atualizar contato", {
+      error: error.message,
+      contactData: { name: contactData.name, number: contactData.number, companyId, isGroup }
+    });
+    
+    // Tentar buscar contato existente como fallback
+    try {
+      const existingContact = await Contact.findOne({
+        where: contactData.isGroup 
+          ? { number: contactData.number, companyId }
+          : [
+              { companyId, canonicalNumber: contactData.number },
+              { companyId, number: contactData.number }
+            ]
+      });
+      
+      if (existingContact) {
+        logger.info("[verifyContact] Contato encontrado no fallback após erro", {
+          contactId: existingContact.id,
+          number: contactData.number
+        });
+        return existingContact;
+      }
+    } catch (fallbackError: any) {
+      logger.error("[verifyContact] Erro no fallback de busca de contato", {
+        error: fallbackError.message
+      });
+    }
+    
+    // Se não conseguiu encontrar, retornar null e deixar processamento continuar
+    return null as any;
+  }
 };
 
 const verifyQuotedMessage = async (
