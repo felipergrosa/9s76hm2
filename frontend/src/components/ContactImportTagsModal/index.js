@@ -267,7 +267,7 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
   useEffect(() => {
     fetchWhatsapps();
     // Não carregar automaticamente ao abrir
-  }, [fetchWhatsapps, isOpen, loadData]);
+  }, [fetchWhatsapps, isOpen]);
 
   // Recarrega automaticamente quando a conexão selecionada muda
   useEffect(() => {
