@@ -153,7 +153,7 @@ const SendWhatsAppMediaUnified = async ({
           body: formattedBody || media.originalname,
           fromMe: true,
           mediaType: mediaTypeDb,
-          mediaUrl: `/public/company${ticket.companyId}/${media.filename}`,
+          mediaUrl: `contact${ticket.contactId}/${media.filename}`, // Incluir contactId no caminho
           read: true,
           ack: 1,
           remoteJid: ticket.contact?.remoteJid,
