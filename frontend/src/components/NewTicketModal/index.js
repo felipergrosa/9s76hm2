@@ -49,13 +49,42 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
   const [selectedWhatsapp, setSelectedWhatsapp] = useState("");
   const [newContact, setNewContact] = useState({});
   const [whatsapps, setWhatsapps] = useState([]);
+  const [queues, setQueues] = useState([]);
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const { user } = useContext(AuthContext);
   const { companyId, whatsappId } = user;
+  const { findAll: findAllQueues } = useQueues();
+  const isMounted = useRef(true);
 
   const [openAlert, setOpenAlert] = useState(false);
   const [userTicketOpen, setUserTicketOpen] = useState("");
   const [queueTicketOpen, setQueueTicketOpen] = useState("");
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // Carregar todas as filas disponíveis
+  useEffect(() => {
+    if (isMounted.current && modalOpen) {
+      const loadQueues = async () => {
+        try {
+          const list = await findAllQueues();
+          setQueues(list || []);
+          
+          // Se usuário tem apenas uma fila, selecionar automaticamente
+          if (list && list.length === 1) {
+            setSelectedQueue(list[0].id);
+          }
+        } catch (err) {
+          toastError(err);
+        }
+      };
+      loadQueues();
+    }
+  }, [modalOpen, findAllQueues]);
 
   useEffect(() => {
     if (initialContact?.id !== undefined) {
@@ -89,9 +118,6 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
         setSelectedWhatsapp(whatsappId)
       }
 
-      if (user.queues.length === 1) {
-        setSelectedQueue(user.queues[0].id)
-      }
       fetchContacts();
       setLoading(false);
     }, 500);
@@ -354,12 +380,12 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
                   if (selectedQueue === "") {
                     return "Selecione uma fila"
                   }
-                  const queue = user.queues.find(q => q.id === selectedQueue)
-                  return queue.name
+                  const queue = queues.find(q => q.id === selectedQueue)
+                  return queue?.name || "Selecione uma fila"
                 }}
               >
-                {user.queues?.length > 0 &&
-                  user.queues.map((queue, key) => (
+                {queues?.length > 0 &&
+                  queues.map((queue, key) => (
                     <MenuItem dense key={key} value={queue.id}>
                       <ListItemText primary={queue.name} />
                     </MenuItem>
