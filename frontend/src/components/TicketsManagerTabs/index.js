@@ -141,7 +141,7 @@ const useStyles = makeStyles((theme) => ({
       fontSize: 8,
       padding: "5px 8px !important",
       minWidth: 70,
-      maxWidth: 90,
+      maxWidth: 110,
     },
   },
 
