@@ -343,19 +343,36 @@ const TicketsManagerTabs = () => {
   const [isHoveredSort, setIsHoveredSort] = useState(false);
 
   const [isFilterActive, setIsFilterActive] = useState(false);
+  const queuesLoadedRef = useRef(false);
+  const loadingQueuesRef = useRef(false);
 
-  // Carregar todas as filas disponíveis
+  // Carregar todas as filas disponíveis (apenas uma vez)
   useEffect(() => {
+    // Evitar múltiplas chamadas simultâneas
+    if (queuesLoadedRef.current || loadingQueuesRef.current || allQueues.length > 0) {
+      return;
+    }
+
     const loadQueues = async () => {
+      loadingQueuesRef.current = true;
       try {
         const list = await findAllQueues();
-        setAllQueues(list || []);
+        if (list && list.length > 0) {
+          setAllQueues(list);
+          queuesLoadedRef.current = true;
+        }
       } catch (err) {
-        console.error("[TicketsManagerTabs] Erro ao carregar filas:", err);
+        // Não logar erro se backend estiver desligado - é esperado em desenvolvimento
+        if (err.message && !err.message.includes('Connection refused')) {
+          console.error("[TicketsManagerTabs] Erro ao carregar filas:", err);
+        }
+      } finally {
+        loadingQueuesRef.current = false;
       }
     };
     loadQueues();
-  }, [findAllQueues]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Executar apenas uma vez ao montar
 
   useEffect(() => {
     setSelectedQueuesMessage(selectedQueueIds);
