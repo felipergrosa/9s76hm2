@@ -385,8 +385,15 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               const errorData = error?.data;
               const errorMessage = error?.message || error?.output?.payload?.message || "Unknown error";
               
+              // Log temporal: calcular tempo desde conexão aberta
+              const disconnectTime = Date.now();
+              const connectionOpenTime = (wsocket as any)?._connectionOpenTime;
+              const timeSinceOpen = connectionOpenTime ? (disconnectTime - connectionOpenTime) / 1000 : null;
+              
               // Log detalhado do erro completo
               logger.error(`[wbot] DESCONEXÃO DETECTADA para whatsappId=${whatsapp.id}:`);
+              logger.error(`[wbot] - Tempo desde conexão aberta: ${timeSinceOpen ? `${timeSinceOpen.toFixed(2)} segundos` : 'N/A'}`);
+              logger.error(`[wbot] - Timestamp desconexão: ${new Date(disconnectTime).toISOString()}`);
               logger.error(`[wbot] - Status Code: ${statusCode || "N/A"}`);
               logger.error(`[wbot] - Mensagem: ${errorMessage}`);
               logger.error(`[wbot] - Error Data: ${JSON.stringify(errorData, null, 2)}`);
@@ -574,6 +581,10 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             }
 
             if (connection === "open") {
+              // Log temporal de quando conexão abriu
+              const connectionOpenTime = Date.now();
+              logger.info(`[wbot][TIMING] Conexão aberta para whatsappId=${whatsapp.id} em ${new Date(connectionOpenTime).toISOString()}`);
+              
               // Salvar credenciais imediatamente após conexão abrir
               try {
                 await saveCreds();
@@ -612,6 +623,9 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               // 
               // Se necessário sincronizar labels posteriormente, fazer com delay e apenas labels específicos
               logger.info(`[wbot] Conexão aberta para whatsappId=${whatsapp.id}. ResyncAppState completo desabilitado para evitar device_removed.`);
+              
+              // Armazenar timestamp de abertura para rastreamento
+              (wsocket as any)._connectionOpenTime = connectionOpenTime;
 
               // Salvar credenciais periodicamente enquanto conectado (a cada 30 segundos)
               // Isso garante que credenciais estejam sempre atualizadas
@@ -724,7 +738,11 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           // Redundância: capturar labels.edit aqui também para garantir inventário
           (wsocket.ev as any).on("labels.edit", (payload: any) => {
             try {
-              logger.info(`[wbot] labels.edit recebido: ${JSON.stringify(payload)}`);
+              const eventTime = Date.now();
+              const connectionOpenTime = (wsocket as any)?._connectionOpenTime;
+              const timeSinceOpen = connectionOpenTime ? ((eventTime - connectionOpenTime) / 1000).toFixed(2) : 'N/A';
+              
+              logger.info(`[wbot][TIMING] labels.edit recebido ${timeSinceOpen}s após conexão: ${JSON.stringify(payload)}`);
               const items = Array.isArray(payload) ? payload : [payload];
               for (const item of items) {
                 const id = String(item?.id || "");

@@ -21,26 +21,12 @@ const GetDeviceLabelsService = async (companyId: number, whatsappId?: number): P
     let labels = getLabels(defaultWhatsapp.id);
     logger.info(`[GetDeviceLabelsService] Labels no cache: ${labels.length}`);
 
-    // Se não há labels no cache, tentar forçar um resync
+    // DESABILITADO: resyncAppState pode causar device_removed
+    // Em vez de forçar resync, retornar labels vazio e esperar sincronização natural
     if (labels.length === 0) {
-      logger.info(`[GetDeviceLabelsService] Cache vazio, tentando forçar resync do App State`);
-      try {
-        const wbot = getWbot(defaultWhatsapp.id) as any;
-        if (wbot && typeof wbot.resyncAppState === 'function') {
-          const { ALL_WA_PATCH_NAMES } = require("@whiskeysockets/baileys");
-          // true = solicitar snapshot completo
-          await wbot.resyncAppState(ALL_WA_PATCH_NAMES, true);
-          
-          // Aguardar um pouco para os eventos chegarem (labels.edit / labels.association)
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          
-          // Tentar novamente
-          labels = getLabels(defaultWhatsapp.id);
-          logger.info(`[GetDeviceLabelsService] Após resync: ${labels.length} labels no cache`);
-        }
-      } catch (error) {
-        logger.warn(`[GetDeviceLabelsService] Erro ao forçar resync: ${error}`);
-      }
+      logger.warn(`[GetDeviceLabelsService] Cache vazio para whatsappId=${defaultWhatsapp.id}. NÃO forçando resync (pode causar device_removed). Aguardando sincronização natural.`);
+      // Não forçar resync - pode causar device_removed
+      // O Baileys sincronizará naturalmente através dos eventos labels.edit
     }
 
     if (labels.length === 0) {
