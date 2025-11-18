@@ -10,7 +10,6 @@ import api from "../../services/api";
 import ConfirmationModal from "../ConfirmationModal";
 import TransferTicketModalCustom from "../TransferTicketModalCustom";
 import toastError from "../../errors/toastError";
-import { Can } from "../Can";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import ScheduleModal from "../ScheduleModal";
 
