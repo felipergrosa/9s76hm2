@@ -525,6 +525,13 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 } catch (err: any) {
                   logger.warn(`[wbot] Erro ao remover diretório de sessão: ${err?.message}`);
                 }
+                // Remover adapter do cache do WhatsAppFactory
+                try {
+                  const { WhatsAppFactory } = require("./whatsapp/WhatsAppFactory");
+                  WhatsAppFactory.removeAdapter(whatsapp.id);
+                } catch (err: any) {
+                  logger.warn(`[wbot] Erro ao remover adapter do cache: ${err?.message}`);
+                }
                 io.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",

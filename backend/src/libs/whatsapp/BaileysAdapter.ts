@@ -123,10 +123,30 @@ export class BaileysAdapter implements IWhatsAppAdapter {
    */
   async sendMessage(options: ISendMessageOptions): Promise<IWhatsAppMessage> {
     if (!this.socket) {
-      throw new WhatsAppAdapterError(
-        "Socket não conectado",
-        "NOT_CONNECTED"
-      );
+      // Se não tem socket, tentar obter novamente
+      this.socket = getWbot(this.whatsappId);
+      if (!this.socket) {
+        throw new WhatsAppAdapterError(
+          "Socket não conectado. Inicie a sessão primeiro.",
+          "NOT_CONNECTED"
+        );
+      }
+    }
+
+    // Verificar se socket está realmente conectado
+    if (!this.socket.user?.id || this.socket.ws?.readyState !== 1) {
+      // Socket desconectado, atualizar status e tentar obter novo socket
+      this.status = "disconnected";
+      this.socket = getWbot(this.whatsappId);
+      
+      if (!this.socket || !this.socket.user?.id || this.socket.ws?.readyState !== 1) {
+        throw new WhatsAppAdapterError(
+          "Socket não está conectado. Reconecte a sessão WhatsApp.",
+          "NOT_CONNECTED"
+        );
+      }
+      
+      this.status = "connected";
     }
 
     try {
