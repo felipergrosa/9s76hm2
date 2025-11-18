@@ -78,7 +78,14 @@ const ModalImageCors = ({ imageUrl }) => {
 		setIsSticker(isStickerUrl);
 		
 		const fetchImage = async () => {
-			const { data, headers } = await api.get(imageUrl, {
+			// Limpar duplicação de caminho se existir
+			let cleanUrl = imageUrl;
+			if (cleanUrl.includes('/public/company') && cleanUrl.match(/\/public\/company\d+\/public\/company\d+\//)) {
+				// Remove a primeira ocorrência de /public/companyX/
+				cleanUrl = cleanUrl.replace(/^\/public\/company\d+\//, '/');
+			}
+			
+			const { data, headers } = await api.get(cleanUrl, {
 				responseType: "blob",
 			});
 			const contentType = headers["content-type"] || "";

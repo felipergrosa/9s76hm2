@@ -55,7 +55,7 @@ const FindOrCreateTicketService = async (
   let ticket = await Ticket.findOne({
     where: {
       status: {
-        [Op.or]: ["open", "pending", "group", "nps", "lgpd"]
+        [Op.or]: ["open", "pending", "group", "nps", "lgpd", "bot"]
       },
       contactId: groupContact ? groupContact.id : contact.id,
       companyId,
@@ -137,7 +137,7 @@ const FindOrCreateTicketService = async (
         && openAsLGPD && !groupContact) ? //verifica se lgpd está habilitada e não é grupo e se tem a mensagem e link da política
         "lgpd" :  //abre como LGPD caso habilitado parâmetro
         (whatsapp.groupAsTicket === "enabled" || !groupContact) ? // se lgpd estiver desabilitado, verifica se é para tratar ticket como grupo ou se é contato normal
-          "pending" : //caso  é para tratar grupo como ticket ou não é grupo, abre como pendente
+          (!groupContact && !isCampaign ? "bot" : "pending") : //caso não é grupo e não é campanha, abre como bot, senão pendente
           "group", // se não é para tratar grupo como ticket, vai direto para grupos
       isGroup: !!groupContact,
       unreadMessages,
