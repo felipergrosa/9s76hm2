@@ -109,19 +109,36 @@ const ContactRow = memo(({
       <td className="text-center pl-1 pr-1 py-1 max-w-[50px]">
         <div className="flex justify-center gap-1">
           {contact.tags && contact.tags.slice(0, 4).map((tag) => (
-            <Tooltip {...CustomTooltipProps} title={tag.name} key={tag.id}>
+            tag.name ? (
+              <Tooltip {...CustomTooltipProps} title={tag.name} key={tag.id}>
+                <span
+                  className="inline-block w-[10px] h-[10px] rounded-full"
+                  style={{ backgroundColor: tag.color || '#9CA3AF' }}
+                ></span>
+              </Tooltip>
+            ) : (
               <span
+                key={tag.id}
                 className="inline-block w-[10px] h-[10px] rounded-full"
                 style={{ backgroundColor: tag.color || '#9CA3AF' }}
               ></span>
-            </Tooltip>
+            )
           ))}
           {contact.tags && contact.tags.length > 4 && (
-            <Tooltip {...CustomTooltipProps} title={contact.tags.slice(4).map(t => t.name).join(", ")}>
-              <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-semibold text-white rounded-full bg-gray-400 dark:bg-gray-600 select-none">
-                +{contact.tags.length - 4}
-              </span>
-            </Tooltip>
+            (() => {
+              const remainingTags = contact.tags.slice(4).map(t => t.name).filter(Boolean).join(", ");
+              return remainingTags ? (
+                <Tooltip {...CustomTooltipProps} title={remainingTags}>
+                  <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-semibold text-white rounded-full bg-gray-400 dark:bg-gray-600 select-none">
+                    +{contact.tags.length - 4}
+                  </span>
+                </Tooltip>
+              ) : (
+                <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-semibold text-white rounded-full bg-gray-400 dark:bg-gray-600 select-none">
+                  +{contact.tags.length - 4}
+                </span>
+              );
+            })()
           )}
         </div>
       </td>
