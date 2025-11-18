@@ -204,7 +204,7 @@ const SendWhatsAppMessageUnified = async ({
     }
 
     // Nenhum conteúdo fornecido
-    throw new AppError("ERR_NO_MESSAGE_CONTENT_PROVIDED");
+    throw new AppError("ERR_NO_MESSAGE_CONTENT_PROVIDED - Nenhum conteúdo fornecido para enviar. Forneça body, vCard ou templateButtons.", 400);
 
   } catch (error: any) {
     Sentry.captureException(error);

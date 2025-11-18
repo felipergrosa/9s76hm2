@@ -753,6 +753,16 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
         })
       );
     } else {
+      // Validar se há conteúdo para enviar (body, vCard ou medias)
+      if (!body && !vCard && !medias) {
+        return res.status(400).json({ error: "Nenhum conteúdo fornecido para enviar. Forneça body, vCard ou medias." });
+      }
+      
+      // Validar se body não está vazio quando fornecido
+      if (body !== undefined && (!body || (typeof body === "string" && body.trim() === ""))) {
+        return res.status(400).json({ error: "Mensagem não pode estar vazia." });
+      }
+      
       if (ticket.channel === "whatsapp" && isPrivate === "false") {
         await SendWhatsAppMessageUnified({ body, ticket, quotedMsg, vCard });
       } else if (ticket.channel === "whatsapp" && isPrivate === "true") {
