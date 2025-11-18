@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect, useRef } from "react";
 import { useHistory } from "react-router-dom";
 
 import {
@@ -12,7 +12,7 @@ import {
     makeStyles,
     MenuItem,
     Select
- } from "@material-ui/core";
+} from "@material-ui/core";
 import { v4 as uuidv4 } from "uuid";
 
 import api from "../../services/api";
@@ -24,6 +24,7 @@ import { Form, Formik } from "formik";
 import ShowTicketOpen from "../ShowTicketOpenModal";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
+import useQueues from "../../hooks/useQueues";
 
 // const filter = createFilterOptions({
 // 	trim: true,
@@ -48,24 +49,45 @@ const AcceptTicketWithouSelectQueue = ({ modalOpen, onClose, ticketId, ticket })
 	const classes = useStyles();
 	const [selectedQueue, setSelectedQueue] = useState('');
 	const [loading, setLoading] = useState(false);
+	const [queues, setQueues] = useState([]);
 	const { user } = useContext(AuthContext);
 	const [ openAlert, setOpenAlert ] = useState(false);
 	const [ userTicketOpen, setUserTicketOpen] = useState("");
 	const [ queueTicketOpen, setQueueTicketOpen] = useState("");
 	const { tabOpen, setTabOpen } = useContext(TicketsContext);
+	const { findAll: findAllQueues } = useQueues();
+	const isMounted = useRef(true);
 
 	const {get:getSetting} = useCompanySettings();
 
-useEffect(() => {
-	try {
-	if (user.queues.length === 1) {
-        setSelectedQueue(user.queues[0].id)
-      }
-	} catch (err) {
-		setLoading(false);
-		toastError(err);
-	}
-},[selectedQueue])
+	// Carregar todas as filas disponíveis quando modal abre
+	useEffect(() => {
+		return () => {
+			isMounted.current = false;
+		};
+	}, []);
+
+	useEffect(() => {
+		if (isMounted.current && modalOpen) {
+			const loadQueues = async () => {
+				try {
+					const list = await findAllQueues();
+					setQueues(list || []);
+					
+					// Se usuário tem apenas uma fila associada, selecionar automaticamente
+					if (user.queues && user.queues.length === 1) {
+						setSelectedQueue(user.queues[0].id);
+					} else if (list && list.length === 1) {
+						// Se houver apenas uma fila cadastrada no total, selecionar automaticamente
+						setSelectedQueue(list[0].id);
+					}
+				} catch (err) {
+					toastError(err);
+				}
+			};
+			loadQueues();
+		}
+	}, [modalOpen, findAllQueues, user.queues]);
 
 const handleClose = () => {
 	onClose();
@@ -165,9 +187,13 @@ return (
 						label={i18n.t("ticketsList.acceptModal.queue")}
 					>
 						<MenuItem value={''}>&nbsp;</MenuItem>
-						{user.queues.map((queue) => (
-							<MenuItem key={queue.id} value={queue.id}>{queue.name}</MenuItem>
-						))}
+						{queues && queues.length > 0 ? (
+							queues.map((queue) => (
+								<MenuItem key={queue.id} value={queue.id}>{queue.name}</MenuItem>
+							))
+						) : (
+							<MenuItem value={''} disabled>Nenhuma fila cadastrada</MenuItem>
+						)}
 					</Select>
 				</FormControl>
 			</DialogContent>
