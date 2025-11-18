@@ -152,29 +152,6 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
     setLabelsProgress({ percent: 0, phase: 'idle' });
   }, [selectedWhatsappId, stopProgressPolling]);
 
-  const handleRefreshTags = useCallback(async () => {
-    if (!selectedWhatsappId) {
-      toast.warning("Selecione uma conexão primeiro");
-      return;
-    }
-
-    setRefreshing(true);
-    try {
-      const { data } = await api.get("/contacts/device-tags/refresh", {
-        params: { whatsappId: selectedWhatsappId }
-      });
-
-      toast.success(`✅ ${data.count} tags atualizadas!`);
-      
-      // Recarregar dados
-      loadData();
-    } catch (err) {
-      toastError(err);
-    } finally {
-      setRefreshing(false);
-    }
-  }, [selectedWhatsappId, loadData]);
-
   // Escolhe automaticamente cor de texto (preto/branco) com base na cor da tag
   const getContrastColor = (hexColor) => {
     if (!hexColor || typeof hexColor !== 'string') return '#fff';
@@ -234,7 +211,30 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
         setLabelsProgress({ percent: 0, phase: 'idle' });
       }, 700);
     }
-  }, [selectedWhatsappId]);
+  }, [selectedWhatsappId, startProgressPolling, stopProgressPolling]);
+
+  const handleRefreshTags = useCallback(async () => {
+    if (!selectedWhatsappId) {
+      toast.warning("Selecione uma conexão primeiro");
+      return;
+    }
+
+    setRefreshing(true);
+    try {
+      const { data } = await api.get("/contacts/device-tags/refresh", {
+        params: { whatsappId: selectedWhatsappId }
+      });
+
+      toast.success(`✅ ${data.count} tags atualizadas!`);
+      
+      // Recarregar dados
+      loadData();
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [selectedWhatsappId, loadData]);
 
   // Carrega uma página de contatos
   const loadContactsPage = useCallback(async (page = 1, append = true) => {
