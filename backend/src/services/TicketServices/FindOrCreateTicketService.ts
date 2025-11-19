@@ -79,32 +79,68 @@ const FindOrCreateTicketService = async (
       logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} encontrado: status=${ticket.status}, queueId=${ticket.queueId}, isBot=${ticket.isBot}`);
       await ticket.update({ unreadMessages });
       
-      // Se ticket está "pending" SEM fila, verificar se conexão tem fila padrão com bot agora
-      if (ticket.status === "pending" && !ticket.queueId) {
-        logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} está pending sem fila, verificando se deve virar bot...`);
+      // Se ticket está "pending", verificar se conexão tem fila com bot agora
+      if (ticket.status === "pending") {
+        logger.info(
+          `[FindOrCreateTicket] Ticket ${ticket.id} está pending (queueId=${ticket.queueId}), verificando se deve virar bot...`
+        );
+
         const Queue = (await import("../../models/Queue")).default;
         const Chatbot = (await import("../../models/Chatbot")).default;
         const Prompt = (await import("../../models/Prompt")).default;
-        
-        const whatsappWithQueues = await Whatsapp.findByPk(whatsapp.id, {
-          include: [{
-            model: Queue,
-            as: "queues",
-            attributes: ["id", "name"],
+
+        let firstQueue: any = null;
+
+        if (ticket.queueId) {
+          // Ticket já tem fila: usar a própria fila do ticket
+          firstQueue = await Queue.findByPk(ticket.queueId, {
             include: [
               { model: Chatbot, as: "chatbots", attributes: ["id"] },
               { model: Prompt, as: "prompt", attributes: ["id"] }
             ]
-          }],
-          order: [["queues", "orderQueue", "ASC"]]
-        });
-        
-        const hasQueues = whatsappWithQueues?.queues && whatsappWithQueues.queues.length > 0;
-        const firstQueue = hasQueues ? whatsappWithQueues.queues[0] : null;
+          });
+          logger.info(
+            `[FindOrCreateTicket] Ticket ${ticket.id} já possui fila ${ticket.queueId}, verificando se fila tem bot/prompt...`
+          );
+        } else {
+          // Ticket sem fila: buscar filas da conexão
+          const whatsappWithQueues = await Whatsapp.findByPk(whatsapp.id, {
+            include: [
+              {
+                model: Queue,
+                as: "queues",
+                attributes: ["id", "name"],
+                include: [
+                  { model: Chatbot, as: "chatbots", attributes: ["id"] },
+                  { model: Prompt, as: "prompt", attributes: ["id"] }
+                ]
+              }
+            ],
+            order: [["queues", "orderQueue", "ASC"]]
+          });
+
+          const hasQueues =
+            whatsappWithQueues?.queues && whatsappWithQueues.queues.length > 0;
+          firstQueue = hasQueues ? whatsappWithQueues.queues[0] : null;
+
+          // Fallback: se não houver associação em WhatsappQueues, usar fila de redirecionamento (sendIdQueue)
+          if (!firstQueue && whatsappWithQueues?.sendIdQueue) {
+            logger.info(
+              `[FindOrCreateTicket] Conexão ${whatsapp.id} sem queues associadas, usando sendIdQueue=${whatsappWithQueues.sendIdQueue} como fila padrão`
+            );
+            firstQueue = await Queue.findByPk(whatsappWithQueues.sendIdQueue, {
+              include: [
+                { model: Chatbot, as: "chatbots", attributes: ["id"] },
+                { model: Prompt, as: "prompt", attributes: ["id"] }
+              ]
+            });
+          }
+        }
+
         const hasChatbot = firstQueue?.chatbots && firstQueue.chatbots.length > 0;
         const hasPrompt = firstQueue?.prompt && firstQueue.prompt.length > 0;
         const hasBotInDefaultQueue = hasChatbot || hasPrompt;
-        
+
         if (hasBotInDefaultQueue) {
           // Atualizar ticket para bot se agora tem fila com bot configurado
           await ticket.update({
@@ -112,7 +148,9 @@ const FindOrCreateTicketService = async (
             isBot: true,
             queueId: firstQueue.id
           });
-          logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} atualizado para bot (fila ${firstQueue.id})`);
+          logger.info(
+            `[FindOrCreateTicket] Ticket ${ticket.id} atualizado para bot (fila ${firstQueue.id})`
+          );
         }
       }
     }
@@ -174,31 +212,49 @@ const FindOrCreateTicketService = async (
     const Queue = (await import("../../models/Queue")).default;
     const Chatbot = (await import("../../models/Chatbot")).default;
     const Prompt = (await import("../../models/Prompt")).default;
-    
+
     const whatsappWithQueues = await Whatsapp.findByPk(whatsapp.id, {
-      include: [{
-        model: Queue,
-        as: "queues",
-        attributes: ["id", "name"],
-        include: [
-          {
-            model: Chatbot,
-            as: "chatbots",
-            attributes: ["id", "name"]
-          },
-          {
-            model: Prompt,
-            as: "prompt",
-            attributes: ["id", "name"]
-          }
-        ]
-      }],
+      include: [
+        {
+          model: Queue,
+          as: "queues",
+          attributes: ["id", "name"],
+          include: [
+            {
+              model: Chatbot,
+              as: "chatbots",
+              attributes: ["id", "name"]
+            },
+            {
+              model: Prompt,
+              as: "prompt",
+              attributes: ["id", "name"]
+            }
+          ]
+        }
+      ],
       order: [["queues", "orderQueue", "ASC"]]
     });
-    
+
+    let firstQueue: any = null;
+    const hasQueues =
+      whatsappWithQueues?.queues && whatsappWithQueues.queues.length > 0;
+    firstQueue = hasQueues ? whatsappWithQueues.queues[0] : null;
+
+    // Fallback: se não houver associação em WhatsappQueues, usar fila de redirecionamento (sendIdQueue)
+    if (!firstQueue && whatsappWithQueues?.sendIdQueue) {
+      logger.info(
+        `[FindOrCreateTicket] Conexão ${whatsapp.id} sem queues associadas, usando sendIdQueue=${whatsappWithQueues.sendIdQueue} como fila padrão (criação de ticket)`
+      );
+      firstQueue = await Queue.findByPk(whatsappWithQueues.sendIdQueue, {
+        include: [
+          { model: Chatbot, as: "chatbots", attributes: ["id", "name"] },
+          { model: Prompt, as: "prompt", attributes: ["id", "name"] }
+        ]
+      });
+    }
+
     // Verificar se conexão tem fila padrão com chatbot OU prompt (IA/RAG)
-    const hasQueues = whatsappWithQueues?.queues && whatsappWithQueues.queues.length > 0;
-    const firstQueue = hasQueues ? whatsappWithQueues.queues[0] : null;
     const hasChatbot = firstQueue?.chatbots && firstQueue.chatbots.length > 0;
     const hasPrompt = firstQueue?.prompt && firstQueue.prompt.length > 0;
     const hasBotInDefaultQueue = hasChatbot || hasPrompt;
