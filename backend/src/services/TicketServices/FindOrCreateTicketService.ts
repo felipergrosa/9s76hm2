@@ -76,10 +76,12 @@ const FindOrCreateTicketService = async (
     } else {
       // Não forçar isBot: false! Manter estado atual do bot
       // Se ticket está em "bot", continua bot. Se está em "pending", continua pending.
+      logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} encontrado: status=${ticket.status}, queueId=${ticket.queueId}, isBot=${ticket.isBot}`);
       await ticket.update({ unreadMessages });
       
       // Se ticket está "pending" SEM fila, verificar se conexão tem fila padrão com bot agora
       if (ticket.status === "pending" && !ticket.queueId) {
+        logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} está pending sem fila, verificando se deve virar bot...`);
         const Queue = (await import("../../models/Queue")).default;
         const Chatbot = (await import("../../models/Chatbot")).default;
         const Prompt = (await import("../../models/Prompt")).default;
