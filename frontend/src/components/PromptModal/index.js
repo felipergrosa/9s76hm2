@@ -35,6 +35,7 @@ import {
 } from "@material-ui/core";
 import QueueSelectSingle from "../QueueSelectSingle";
 import AIIntegrationSelector from "../AIIntegrationSelector";
+import PromptEnhancements from "../PromptEnhancements";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { i18n } from "../../translate/i18n";
@@ -116,6 +117,7 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
   const [selectedIntegration, setSelectedIntegration] = useState(null);
   const [encryptionEnabled, setEncryptionEnabled] = useState(true);
   const [useGlobalConfig, setUseGlobalConfig] = useState(false);
+  const [enhancementsOpen, setEnhancementsOpen] = useState(false);
 
   const initialState = {
     name: "",
@@ -233,13 +235,19 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
         const { data } = await api.get(`/prompt/${promptId}`);
         // Debug: verificar se integrationId foi carregado
         console.log('Prompt carregado - integrationId:', data.integrationId);
-        
+
+        // Inferir se o prompt está usando configuração global de IA
+        const inferredUseGlobal = !data.integrationId && (!data.apiKey || data.apiKey === "") && (!data.model || data.model === "");
+
         setPrompt({
           ...initialState,
           ...data,
           queueId: data.queueId || null,
           integrationId: data.integrationId || null,
+          useGlobalConfig: inferredUseGlobal,
         });
+
+        setUseGlobalConfig(inferredUseGlobal);
         
         // Buscar dados completos da integração se existir integrationId
         if (data.integrationId) {
@@ -366,19 +374,21 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
     try {
       // Debug: verificar dados antes de salvar
       console.log('Salvando prompt com integrationId:', values.integrationId);
-      
+
+      const globalFlag = typeof values.useGlobalConfig === "boolean" ? values.useGlobalConfig : useGlobalConfig;
+
       const promptData = {
         ...values,
         // IMPORTANTE: Tratar configurações globais vs específicas
-        integrationId: useGlobalConfig ? null : values.integrationId,
+        integrationId: globalFlag ? null : values.integrationId,
         voice: (selectedIntegration?.model === "gpt-3.5-turbo-1106") ? values.voice : "texto",
         attachments: JSON.stringify(selectedOptions || []),
         // Usar dados da integração específica OU valores do template/form para configurações globais
-        apiKey: useGlobalConfig ? "" : (selectedIntegration?.apiKey || ""),
-        model: useGlobalConfig ? "" : (selectedIntegration?.model || "gpt-3.5-turbo-1106"),
-        maxTokens: useGlobalConfig ? values.maxTokens : (Number(selectedIntegration?.maxTokens) || values.maxTokens || 300),
-        temperature: useGlobalConfig ? values.temperature : (Number(selectedIntegration?.temperature) || values.temperature || 0.9),
-        useGlobalConfig: useGlobalConfig,
+        apiKey: globalFlag ? "" : (selectedIntegration?.apiKey || ""),
+        model: globalFlag ? "" : (selectedIntegration?.model || "gpt-3.5-turbo-1106"),
+        maxTokens: globalFlag ? values.maxTokens : (Number(selectedIntegration?.maxTokens) || values.maxTokens || 300),
+        temperature: globalFlag ? values.temperature : (Number(selectedIntegration?.temperature) || values.temperature || 0.9),
+        useGlobalConfig: globalFlag,
       };
       
       if (promptId) {
@@ -431,21 +441,31 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
         }}
       >
         <DialogTitle id="form-dialog-title">
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {promptId ? i18n.t("promptModal.title.edit") : i18n.t("promptModal.title.add")}
-            <Tooltip
-              title={(
-                <span>
-                  Crie prompts para uso com modelos de IA no WhatsApp e campanhas.<br/>
-                  • A API Key é usada somente no servidor e será criptografada se a criptografia estiver habilitada.<br/>
-                  • Use variáveis no texto, por exemplo: {"{nome}"} {"{empresa}"}.
-                </span>
-              )}
-              placement="right"
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {promptId ? i18n.t("promptModal.title.edit") : i18n.t("promptModal.title.add")}
+              <Tooltip
+                title={(
+                  <span>
+                    Crie prompts para uso com modelos de IA no WhatsApp e campanhas.<br/>
+                    • A API Key é usada somente no servidor e será criptografada se a criptografia estiver habilitada.<br/>
+                    • Use variáveis no texto, por exemplo: {"{nome}"} {"{empresa}"}.
+                  </span>
+                )}
+                placement="right"
+              >
+                <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
+              </Tooltip>
+            </span>
+            <Button
+              variant="outlined"
+              color="primary"
+              size="small"
+              onClick={() => setEnhancementsOpen(true)}
             >
-              <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
-            </Tooltip>
-          </span>
+              🚀 Melhorias
+            </Button>
+          </div>
         </DialogTitle>
         <Formik
           initialValues={prompt}
@@ -455,6 +475,23 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
         >
           {({ touched, errors, isSubmitting, values, setFieldValue }) => (
             <Form style={{ width: "100%" }}>
+              <PromptEnhancements
+                open={enhancementsOpen}
+                onClose={() => setEnhancementsOpen(false)}
+                onSelectTemplate={(template) => {
+                  // Aplicar template diretamente no formulário aberto
+                  if (template.prompt) {
+                    setFieldValue("prompt", template.prompt);
+                  }
+                  if (template.temperature) {
+                    setFieldValue("temperature", template.temperature);
+                  }
+                  if (template.maxTokens) {
+                    setFieldValue("maxTokens", template.maxTokens);
+                  }
+                  setEnhancementsOpen(false);
+                }}
+              />
               <DialogContent 
                 dividers 
                 style={{ 
@@ -492,12 +529,16 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
                         </Typography>
                         <input
                           type="checkbox"
-                          checked={useGlobalConfig}
+                          checked={values.useGlobalConfig ?? useGlobalConfig}
                           onChange={(e) => {
-                            setUseGlobalConfig(e.target.checked);
-                            if (e.target.checked) {
+                            const checked = e.target.checked;
+                            setUseGlobalConfig(checked);
+                            setFieldValue('useGlobalConfig', checked);
+                            if (checked) {
                               setFieldValue('integrationId', null);
                               setSelectedIntegration(null);
+                              setFieldValue('apiKey', "");
+                              setFieldValue('model', "");
                             }
                           }}
                           style={{ margin: '0 4px' }}

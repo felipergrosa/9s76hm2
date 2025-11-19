@@ -164,40 +164,7 @@ export async function processOfficialBot({
 
     } catch (aiError: any) {
       logger.error(`[ProcessOfficialBot] Erro ao processar IA: ${aiError.message}`);
-      
-      // Enviar mensagem de fallback se a IA falhar
-      const fallbackMessage = "Desculpe, estou com dificuldades técnicas para processar sua solicitação no momento. Por favor, tente novamente mais tarde.";
-      
-      try {
-        const { GetTicketAdapter } = await import("../../helpers/GetWhatsAppAdapter");
-        const adapter = await GetTicketAdapter(ticket);
-        const to = contact.number;
-        
-        await adapter.sendTextMessage(to, fallbackMessage);
-        
-        logger.info(`[ProcessOfficialBot] Mensagem de fallback enviada para ticket ${ticket.id}`);
-        
-        // Salvar mensagem de fallback no banco
-        if (adapter.channelType === "official") {
-          const CreateMessageService = (await import("../MessageServices/CreateMessageService")).default;
-          await CreateMessageService({
-            messageData: {
-              wid: `fallback_${Date.now()}`,
-              ticketId: ticket.id,
-              contactId: ticket.contactId,
-              body: fallbackMessage,
-              fromMe: true,
-              read: true,
-              ack: 1
-            },
-            companyId
-          });
-        }
-      } catch (fallbackError: any) {
-        logger.error(`[ProcessOfficialBot] Erro ao enviar mensagem de fallback: ${fallbackError.message}`);
-      }
-      
-      // Não propagar erro para não quebrar o fluxo
+      // Fallback (mensagem de desculpas) já é tratado dentro de handleOpenAi
       Sentry.captureException(aiError);
     }
 

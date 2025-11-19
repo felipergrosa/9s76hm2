@@ -41,30 +41,43 @@ const UpdatePromptService = async ({
       .min(5, "ERR_PROMPT_NAME_MIN")
       .max(100, "ERR_PROMPT_NAME_MAX"),
     prompt: Yup.string().min(50, "ERR_PROMPT_INTELLIGENCE_MIN"),
-    apiKey: Yup.string().nullable(),
-    queueId: Yup.number().nullable(),
+    apiKey: Yup.string().nullable().notRequired(),
+    queueId: Yup.number().nullable().notRequired(),
     maxMessages: Yup.number()
       .min(1, "ERR_PROMPT_MAX_MESSAGES_MIN")
-      .max(50, "ERR_PROMPT_MAX_MESSAGES_MAX"),
-    model: Yup.string().oneOf(
-      [
-        "gpt-3.5-turbo-1106",
-        "gpt-4o",
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
-        "gemini-2.0-flash",
-        "gemini-2.0-pro"
-      ],
-      "ERR_PROMPT_MODEL_INVALID"
-    ).nullable(),
+      .max(50, "ERR_PROMPT_MAX_MESSAGES_MAX")
+      .nullable()
+      .notRequired(),
+    // Campo model deve ser opcional para permitir uso de configuração global
+    model: Yup.string()
+      .nullable()
+      .notRequired()
+      .test("valid-model", "ERR_PROMPT_MODEL_INVALID", function (value) {
+        // Se não for informado (null, undefined ou string vazia), considerar válido
+        if (!value || value === null || value === "") return true;
+        return [
+          "gpt-3.5-turbo-1106",
+          "gpt-4o",
+          "gemini-1.5-flash",
+          "gemini-1.5-pro",
+          "gemini-2.0-flash",
+          "gemini-2.0-pro",
+        ].includes(value);
+      }),
     maxTokens: Yup.number()
-      .min(10, "ERR_PROMPT_MAX_TOKENS_MIN")
-      .max(4096, "ERR_PROMPT_MAX_TOKENS_MAX")
-      .nullable(),
+      .nullable()
+      .notRequired()
+      .test("valid-tokens", "ERR_PROMPT_MAX_TOKENS_MAX", function (value) {
+        if (value === undefined || value === null) return true;
+        return value >= 10 && value <= 4096;
+      }),
     temperature: Yup.number()
-      .min(0, "ERR_PROMPT_TEMPERATURE_MIN")
-      .max(1, "ERR_PROMPT_TEMPERATURE_MAX")
-      .nullable(),
+      .nullable()
+      .notRequired()
+      .test("valid-temperature", "ERR_PROMPT_TEMPERATURE_MAX", function (value) {
+        if (value === undefined || value === null) return true;
+        return value >= 0 && value <= 1;
+      }),
     voice: Yup.string().when("model", {
       is: (val) => val === "gpt-3.5-turbo-1106",
       then: Yup.string().required("ERR_PROMPT_VOICE_REQUIRED"),

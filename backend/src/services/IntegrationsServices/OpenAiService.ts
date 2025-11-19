@@ -226,8 +226,21 @@ export const handleOpenAi = async (
     });
     const cfg = resolved?.config || {};
 
+    try {
+      // Log de debug sem expor a chave, apenas a origem
+      console.log("[IA][wbot][resolve-config]", {
+        companyId: ticket.companyId,
+        queueId: openAiSettings?.queueId || ticket.queueId,
+        whatsappId: ticket.whatsappId,
+        provider: resolved?.provider,
+        hasPromptApiKey: !!openAiSettings?.apiKey,
+        hasIntegrationApiKey: !!cfg.apiKey,
+        chosenSource: cfg.apiKey ? "integration" : (openAiSettings?.apiKey ? "prompt" : "none")
+      });
+    } catch {}
+
     const model = openAiSettings?.model || cfg.model || (resolved?.provider === "gemini" ? "gemini-2.0-pro" : "gpt-4o-mini");
-    const apiKey = openAiSettings?.apiKey || cfg.apiKey;
+    const apiKey = cfg.apiKey || openAiSettings?.apiKey;
     const maxTokens = (openAiSettings?.maxTokens ?? cfg.maxTokens ?? 400) as number;
     const temperature = (openAiSettings?.temperature ?? cfg.temperature ?? 0.7) as number;
 
