@@ -145,6 +145,9 @@ restore-list-staged.txt
 restore-list-unstaged.txt
 restore-list-vs-origin.txt
 
+# Documentação privada (correções, guias internos)
+docs-privadas/
+
 # Não ignore arquivos importantes do código
 !backend/**/src/**
 !frontend/**/src/**

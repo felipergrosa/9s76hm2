@@ -335,6 +335,26 @@ async function processIncomingMessage(
       contact
     });
 
+  // Processar bot/IA se ticket está marcado como bot
+  if (ticket.status === "bot" && ticket.queueId && !message.from.includes(whatsapp.wabaPhoneNumberId || "")) {
+    logger.info(`[WebhookProcessor] Ticket ${ticket.id} é bot (status: ${ticket.status}, queue: ${ticket.queueId}), processando IA/Prompt...`);
+    
+    try {
+      // Importar dinamicamente para evitar circular dependencies
+      const { processOfficialBot } = await import("./ProcessOfficialBot");
+      await processOfficialBot({
+        message: createdMessage,
+        ticket,
+        contact,
+        whatsapp,
+        companyId
+      });
+    } catch (error: any) {
+      logger.error(`[WebhookProcessor] Erro ao processar bot: ${error.message}`);
+      Sentry.captureException(error);
+    }
+  }
+
   // Marcar mensagem como lida automaticamente (se configurado)
   const adapter = WhatsAppFactory.getAdapter(whatsapp.id);
   if (adapter && adapter.markAsRead) {

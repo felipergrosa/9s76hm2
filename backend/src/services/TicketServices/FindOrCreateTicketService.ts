@@ -74,7 +74,45 @@ const FindOrCreateTicketService = async (
         queueId: queueId !== ticket.queueId ? ticket.queueId : queueId,
       })
     } else {
-      await ticket.update({ unreadMessages, isBot: false });
+      // Não forçar isBot: false! Manter estado atual do bot
+      // Se ticket está em "bot", continua bot. Se está em "pending", continua pending.
+      await ticket.update({ unreadMessages });
+      
+      // Se ticket está "pending" SEM fila, verificar se conexão tem fila padrão com bot agora
+      if (ticket.status === "pending" && !ticket.queueId) {
+        const Queue = (await import("../../models/Queue")).default;
+        const Chatbot = (await import("../../models/Chatbot")).default;
+        const Prompt = (await import("../../models/Prompt")).default;
+        
+        const whatsappWithQueues = await Whatsapp.findByPk(whatsapp.id, {
+          include: [{
+            model: Queue,
+            as: "queues",
+            attributes: ["id", "name"],
+            include: [
+              { model: Chatbot, as: "chatbots", attributes: ["id"] },
+              { model: Prompt, as: "prompt", attributes: ["id"] }
+            ]
+          }],
+          order: [["queues", "orderQueue", "ASC"]]
+        });
+        
+        const hasQueues = whatsappWithQueues?.queues && whatsappWithQueues.queues.length > 0;
+        const firstQueue = hasQueues ? whatsappWithQueues.queues[0] : null;
+        const hasChatbot = firstQueue?.chatbots && firstQueue.chatbots.length > 0;
+        const hasPrompt = firstQueue?.prompt && firstQueue.prompt.length > 0;
+        const hasBotInDefaultQueue = hasChatbot || hasPrompt;
+        
+        if (hasBotInDefaultQueue) {
+          // Atualizar ticket para bot se agora tem fila com bot configurado
+          await ticket.update({
+            status: "bot",
+            isBot: true,
+            queueId: firstQueue.id
+          });
+          logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} atualizado para bot (fila ${firstQueue.id})`);
+        }
+      }
     }
 
     ticket = await ShowTicketService(ticket.id, companyId);
