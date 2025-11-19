@@ -133,25 +133,35 @@ const FindOrCreateTicketService = async (
     // Buscar filas do whatsapp para verificar se deve iniciar como bot
     const Queue = (await import("../../models/Queue")).default;
     const Chatbot = (await import("../../models/Chatbot")).default;
+    const Prompt = (await import("../../models/Prompt")).default;
     
     const whatsappWithQueues = await Whatsapp.findByPk(whatsapp.id, {
       include: [{
         model: Queue,
         as: "queues",
         attributes: ["id", "name"],
-        include: [{
-          model: Chatbot,
-          as: "chatbots",
-          attributes: ["id", "name"]
-        }]
+        include: [
+          {
+            model: Chatbot,
+            as: "chatbots",
+            attributes: ["id", "name"]
+          },
+          {
+            model: Prompt,
+            as: "prompt",
+            attributes: ["id", "name"]
+          }
+        ]
       }],
       order: [["queues", "orderQueue", "ASC"]]
     });
     
-    // Verificar se conexão tem fila padrão com chatbot
+    // Verificar se conexão tem fila padrão com chatbot OU prompt (IA/RAG)
     const hasQueues = whatsappWithQueues?.queues && whatsappWithQueues.queues.length > 0;
     const firstQueue = hasQueues ? whatsappWithQueues.queues[0] : null;
-    const hasBotInDefaultQueue = firstQueue?.chatbots && firstQueue.chatbots.length > 0;
+    const hasChatbot = firstQueue?.chatbots && firstQueue.chatbots.length > 0;
+    const hasPrompt = firstQueue?.prompt && firstQueue.prompt.length > 0;
+    const hasBotInDefaultQueue = hasChatbot || hasPrompt;
     
     // Determinar status inicial:
     // - Se é LGPD: "lgpd"
@@ -222,22 +232,32 @@ const FindOrCreateTicketService = async (
 
   if (queueId != 0 && !isNil(queueId)) {
     //Determina qual a fila esse ticket pertence.
-    // Buscar fila com chatbots para verificar se deve ativar bot
+    // Buscar fila com chatbots E prompts para verificar se deve ativar bot
     const Queue = (await import("../../models/Queue")).default;
     const Chatbot = (await import("../../models/Chatbot")).default;
+    const Prompt = (await import("../../models/Prompt")).default;
     
     const queue = await Queue.findByPk(queueId, {
-      include: [{ 
-        model: Chatbot, 
-        as: "chatbots",
-        attributes: ["id", "name"]
-      }]
+      include: [
+        { 
+          model: Chatbot, 
+          as: "chatbots",
+          attributes: ["id", "name"]
+        },
+        {
+          model: Prompt,
+          as: "prompt",
+          attributes: ["id", "name"]
+        }
+      ]
     });
     
     if (queue) {
-      const hasBot = queue.chatbots && queue.chatbots.length > 0;
+      const hasChatbot = queue.chatbots && queue.chatbots.length > 0;
+      const hasPrompt = queue.prompt && queue.prompt.length > 0;
+      const hasBot = hasChatbot || hasPrompt;
       
-      // Atualiza status para bot somente se fila tiver chatbot configurado
+      // Atualiza status para bot somente se fila tiver chatbot OU prompt configurado
       await ticket.update({ 
         queueId: queueId,
         status: ticket.status === "pending" ? (hasBot ? "bot" : "pending") : ticket.status,
