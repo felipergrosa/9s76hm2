@@ -111,12 +111,16 @@ const processResponse = async (
 
   const publicFolder: string = path.resolve(__dirname, "..", "..", "..", "public", `company${ticket.companyId}`);
 
+  const isOfficial = (wbot as any)?.channelType === "official" || (wbot as any)?.isOfficial;
+
   // Send response based on preferred format (text or voice)
   if (openAiSettings.voice === "texto") {
     const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
       text: `\u200e ${response}`,
     });
-    await verifyMessage(sentMessage!, ticket, contact);
+    if (!isOfficial) {
+      await verifyMessage(sentMessage as any, ticket, contact);
+    }
   } else {
     const fileNameWithOutExtension = `${ticket.id}_${Date.now()}`;
     try {
@@ -133,7 +137,9 @@ const processResponse = async (
         mimetype: "audio/mpeg",
         ptt: true,
       });
-      await verifyMediaMessage(sendMessage!, ticket, contact, ticketTraking, false, false, wbot);
+      if (!isOfficial) {
+        await verifyMediaMessage(sendMessage as any, ticket, contact, ticketTraking, false, false, wbot);
+      }
       deleteFileSync(`${publicFolder}/${fileNameWithOutExtension}.mp3`);
       deleteFileSync(`${publicFolder}/${fileNameWithOutExtension}.wav`);
     } catch (error) {
@@ -142,7 +148,9 @@ const processResponse = async (
       const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
         text: `\u200e ${response}`,
       });
-      await verifyMessage(sentMessage!, ticket, contact);
+      if (!isOfficial) {
+        await verifyMessage(sentMessage as any, ticket, contact);
+      }
     }
   }
 };
@@ -379,7 +387,10 @@ export const handleOpenAi = async (
       const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
         text: "Desculpe, estou com dificuldades técnicas para processar sua solicitação no momento. Por favor, tente novamente mais tarde.",
       });
-      await verifyMessage(sentMessage!, ticket, contact);
+      const isOfficial = (wbot as any)?.channelType === "official" || (wbot as any)?.isOfficial;
+      if (!isOfficial) {
+        await verifyMessage(sentMessage as any, ticket, contact);
+      }
     }
   }
   // Handle audio message

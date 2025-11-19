@@ -99,6 +99,8 @@ export async function processOfficialBot({
     // Mock do wbot (Session) para API Oficial
     const mockWbot = {
       id: whatsapp.id,
+      channelType: "official",
+      isOfficial: true,
       sendMessage: async (jid: string, content: any) => {
         logger.info(`[ProcessOfficialBot] Enviando resposta do bot para ${jid}`);
         
