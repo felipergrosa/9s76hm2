@@ -55,7 +55,7 @@ const FindOrCreateTicketService = async (
   let ticket = await Ticket.findOne({
     where: {
       status: {
-        [Op.or]: ["open", "pending", "group", "nps", "lgpd"]
+        [Op.or]: ["open", "pending", "group", "nps", "lgpd", "bot"]
       },
       contactId: groupContact ? groupContact.id : contact.id,
       companyId,
@@ -130,20 +130,58 @@ const FindOrCreateTicketService = async (
   }
 
   if (!ticket) {
-
+    // Buscar filas do whatsapp para verificar se deve iniciar como bot
+    const Queue = (await import("../../models/Queue")).default;
+    const Chatbot = (await import("../../models/Chatbot")).default;
+    
+    const whatsappWithQueues = await Whatsapp.findByPk(whatsapp.id, {
+      include: [{
+        model: Queue,
+        as: "queues",
+        attributes: ["id", "name"],
+        include: [{
+          model: Chatbot,
+          as: "chatbots",
+          attributes: ["id", "name"]
+        }]
+      }],
+      order: [["queues", "orderQueue", "ASC"]]
+    });
+    
+    // Verificar se conexão tem fila padrão com chatbot
+    const hasQueues = whatsappWithQueues?.queues && whatsappWithQueues.queues.length > 0;
+    const firstQueue = hasQueues ? whatsappWithQueues.queues[0] : null;
+    const hasBotInDefaultQueue = firstQueue?.chatbots && firstQueue.chatbots.length > 0;
+    
+    // Determinar status inicial:
+    // - Se é LGPD: "lgpd"
+    // - Se é grupo: "group"
+    // - Se conexão tem fila com bot: "bot" (atende automaticamente)
+    // - Senão: "pending" (aguarda atendente aceitar)
+    let initialStatus = "pending";
+    let initialIsBot = false;
+    let initialQueueId = null;
+    
+    if (!isImported && !isNil(settings.enableLGPD) && openAsLGPD && !groupContact) {
+      initialStatus = "lgpd";
+    } else if (groupContact && whatsapp.groupAsTicket !== "enabled") {
+      initialStatus = "group";
+    } else if (!groupContact && hasBotInDefaultQueue) {
+      // Conexão tem fila padrão com bot: inicia como bot (vale para clientes novos E campanhas)
+      initialStatus = "bot";
+      initialIsBot = true;
+      initialQueueId = firstQueue.id;
+    }
+    
     const ticketData: any = {
       contactId: groupContact ? groupContact.id : contact.id,
-      status: (!isImported && !isNil(settings.enableLGPD)
-        && openAsLGPD && !groupContact) ? //verifica se lgpd está habilitada e não é grupo e se tem a mensagem e link da política
-        "lgpd" :  //abre como LGPD caso habilitado parâmetro
-        (whatsapp.groupAsTicket === "enabled" || !groupContact) ? // se lgpd estiver desabilitado, verifica se é para tratar ticket como grupo ou se é contato normal
-          "pending" : //caso  é para tratar grupo como ticket ou não é grupo, abre como pendente
-          "group", // se não é para tratar grupo como ticket, vai direto para grupos
+      status: initialStatus,
       isGroup: !!groupContact,
       unreadMessages,
       whatsappId: whatsapp.id,
       companyId,
-      isBot: groupContact ? false : true,
+      isBot: initialIsBot,
+      queueId: initialQueueId, // Atribui fila padrão se tem bot
       channel,
       imported: isImported ? new Date() : null,
       isActiveDemand: false,
@@ -178,7 +216,30 @@ const FindOrCreateTicketService = async (
 
   if (queueId != 0 && !isNil(queueId)) {
     //Determina qual a fila esse ticket pertence.
-    await ticket.update({ queueId: queueId });
+    // Buscar fila com chatbots para verificar se deve ativar bot
+    const Queue = (await import("../../models/Queue")).default;
+    const Chatbot = (await import("../../models/Chatbot")).default;
+    
+    const queue = await Queue.findByPk(queueId, {
+      include: [{ 
+        model: Chatbot, 
+        as: "chatbots",
+        attributes: ["id", "name"]
+      }]
+    });
+    
+    if (queue) {
+      const hasBot = queue.chatbots && queue.chatbots.length > 0;
+      
+      // Atualiza status para bot somente se fila tiver chatbot configurado
+      await ticket.update({ 
+        queueId: queueId,
+        status: ticket.status === "pending" ? (hasBot ? "bot" : "pending") : ticket.status,
+        isBot: hasBot
+      });
+    } else {
+      await ticket.update({ queueId: queueId });
+    }
   }
 
   if (userId != 0 && !isNil(userId)) {

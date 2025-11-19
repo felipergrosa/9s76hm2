@@ -780,7 +780,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
           messageId = `${Date.now()}`;
         }
         
-        // Salvar mensagem no banco para aparecer no chat
+        // Salvar a mensagem no banco para aparecer no chat
         const messageData = {
           wid: messageId,
           ticketId: ticket.id,

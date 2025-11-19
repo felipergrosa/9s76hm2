@@ -9,6 +9,7 @@ interface DownloadMediaOptions {
   mediaId: string;
   whatsapp: Whatsapp;
   companyId: number;
+  contactId: number;
   mediaType: "image" | "video" | "audio" | "document";
 }
 
@@ -18,15 +19,16 @@ interface DownloadMediaOptions {
  * Fluxo:
  * 1. Obtém URL da mídia (exige accessToken)
  * 2. Baixa o arquivo
- * 3. Salva em /public/companyX/
+ * 3. Salva em /public/companyX/contactY/
  * 4. Retorna URL local
  * 
- * @returns URL local da mídia (ex: /public/company1/abc123.jpg)
+ * @returns URL local da mídia (ex: contact123/abc123.jpg)
  */
 export const DownloadOfficialMediaService = async ({
   mediaId,
   whatsapp,
   companyId,
+  contactId,
   mediaType
 }: DownloadMediaOptions): Promise<string> => {
   try {
@@ -71,11 +73,12 @@ export const DownloadOfficialMediaService = async ({
     const timestamp = Date.now();
     const filename = `${mediaId}-${timestamp}.${ext}`;
 
-    // 4. Criar pasta se não existir
+    // 4. Criar pasta por contato se não existir
     const publicDir = path.join(
       process.cwd(),
       "public",
-      `company${companyId}`
+      `company${companyId}`,
+      `contact${contactId}`
     );
 
     if (!fs.existsSync(publicDir)) {
@@ -89,8 +92,8 @@ export const DownloadOfficialMediaService = async ({
 
     logger.info(`[DownloadOfficialMedia] Mídia salva: ${filename} (${(mediaResponse.data.length / 1024).toFixed(2)} KB)`);
 
-    // 6. Retornar URL pública (relativa)
-    const publicUrl = `/public/company${companyId}/${filename}`;
+    // 6. Retornar apenas o caminho relativo (contact123/arquivo.jpg)
+    const publicUrl = `contact${contactId}/${filename}`;
     
     return publicUrl;
 

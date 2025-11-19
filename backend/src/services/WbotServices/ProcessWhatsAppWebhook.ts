@@ -216,6 +216,7 @@ async function processIncomingMessage(
             mediaId: message.image.id,
             whatsapp,
             companyId,
+            contactId: contact.id,
             mediaType: "image"
           });
           logger.info(`[WebhookProcessor] Imagem baixada: ${mediaUrl}`);
@@ -236,6 +237,7 @@ async function processIncomingMessage(
             mediaId: message.video.id,
             whatsapp,
             companyId,
+            contactId: contact.id,
             mediaType: "video"
           });
           logger.info(`[WebhookProcessor] Vídeo baixado: ${mediaUrl}`);
@@ -256,6 +258,7 @@ async function processIncomingMessage(
             mediaId: message.audio.id,
             whatsapp,
             companyId,
+            contactId: contact.id,
             mediaType: "audio"
           });
           logger.info(`[WebhookProcessor] Áudio baixado: ${mediaUrl}`);
@@ -276,6 +279,7 @@ async function processIncomingMessage(
             mediaId: message.document.id,
             whatsapp,
             companyId,
+            contactId: contact.id,
             mediaType: "document"
           });
           logger.info(`[WebhookProcessor] Documento baixado: ${mediaUrl}`);

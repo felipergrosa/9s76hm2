@@ -1061,18 +1061,20 @@ export const verifyMediaMessage = async (
     }
 
     try {
+      // Criar pasta por contato para melhor organização
       const folder = path.resolve(
         __dirname,
         "..",
         "..",
         "..",
         "public",
-        `company${companyId}`
+        `company${companyId}`,
+        `contact${contact.id}`
       );
 
-      // const folder = `public/company${companyId}`; // Correção adicionada por Altemir 16-08-2023
+      // Criar pasta recursivamente se não existir
       if (!fs.existsSync(folder)) {
-        fs.mkdirSync(folder, { recursive: true }); // Correção adicionada por Altemir 16-08-2023
+        fs.mkdirSync(folder, { recursive: true });
         fs.chmodSync(folder, 0o777);
       }
 
@@ -1144,7 +1146,7 @@ export const verifyMediaMessage = async (
       body: body || media.filename,
       fromMe: msg.key.fromMe,
       read: msg.key.fromMe,
-      mediaUrl: media.filename,
+      mediaUrl: `contact${contact.id}/${media.filename}`, // Incluir contactId no caminho
       mediaType: media.mimetype.split("/")[0],
       quotedMsgId: quotedMsg?.id,
       ack:

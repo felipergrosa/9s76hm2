@@ -4,7 +4,6 @@
 
 Ótima notícia! O **Whaticket já possui integração completa** com Facebook Messenger e Instagram Direct! 🎉
 
----
 
 ## 🎯 O Que Você Pode Fazer
 
@@ -634,3 +633,4 @@ Com a integração completa, você terá:
 **PRONTO PARA COMEÇAR!** 🚀
 
 Seu Whaticket já está 100% preparado para Facebook e Instagram. Basta seguir os passos acima para ativar! 🎊
+
