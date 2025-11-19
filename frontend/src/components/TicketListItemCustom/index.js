@@ -795,7 +795,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                         {/* Ícone de Espiar ao lado do Fechar (será colocado após o botão de fechar) */}
                     </span>
                     <span className={classes.secondaryContentSecond}>
-                        {(ticket.status === "pending" && (ticket.queueId === null || ticket.queueId === undefined)) && (
+                        {((ticket.status === "pending" || ticket.status === "bot") && (ticket.queueId === null || ticket.queueId === undefined)) && (
                             <ButtonWithSpinner
                                 style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '80px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto', position: 'absolute' }}
                                 variant="contained"
@@ -811,7 +811,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                         )}
                     </span>
                     <span className={classes.secondaryContentSecond} >
-                        {(ticket.status === "pending" && ticket.queueId !== null) && (
+                        {((ticket.status === "pending" || ticket.status === "bot") && ticket.queueId !== null) && (
                             <ButtonWithSpinner
                                 style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '80px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto', position: 'absolute' }}
                                 variant="contained"

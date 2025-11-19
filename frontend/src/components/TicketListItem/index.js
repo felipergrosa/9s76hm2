@@ -502,7 +502,7 @@ const TicketListItem = ({ ticket }) => {
                         </span>
                     }
                 />
-                {ticket.status === "pending" && (
+                {(ticket.status === "pending" || ticket.status === "bot") && (
                     <IconButton
                         className={classes.bottomButton}
                         color="primary"

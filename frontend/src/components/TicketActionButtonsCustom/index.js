@@ -480,7 +480,7 @@ const TicketActionButtonsCustom = ({ ticket
                         ticket={ticket}
                     />
                 )}
-                {ticket.status === "pending" && (ticket.queueId === null || ticket.queueId === undefined) && (
+                {(ticket.status === "pending" || ticket.status === "bot") && (ticket.queueId === null || ticket.queueId === undefined) && (
                     <ButtonWithSpinner
                         loading={loading}
                         size="small"
@@ -490,7 +490,7 @@ const TicketActionButtonsCustom = ({ ticket
                         {i18n.t("messagesList.header.buttons.accept")}
                     </ButtonWithSpinner>
                 )}
-                {ticket.status === "pending" && ticket.queueId !== null && (
+                {(ticket.status === "pending" || ticket.status === "bot") && ticket.queueId !== null && (
                     <ButtonWithSpinner
                         loading={loading}
                         size="small"
