@@ -80,13 +80,24 @@ const SendWhatsAppMediaUnified = async ({
 
     // ===== BAILEYS: Envia arquivo local =====
     if (channelType === "baileys") {
-      // Caminho completo do arquivo
-      const publicPath = path.join(
+      // Caminho completo do arquivo (com contact{id}/ se necessário)
+      let publicPath = path.join(
         process.cwd(),
         "public",
         `company${ticket.companyId}`,
         media.filename
       );
+      
+      // Se arquivo não existe, tentar com contact{id}/ prefixo
+      if (!fs.existsSync(publicPath)) {
+        publicPath = path.join(
+          process.cwd(),
+          "public",
+          `company${ticket.companyId}`,
+          `contact${contact.id}`,
+          media.filename
+        );
+      }
 
       if (!fs.existsSync(publicPath)) {
         throw new AppError(`Arquivo não encontrado: ${publicPath}`, 404);
@@ -109,7 +120,23 @@ const SendWhatsAppMediaUnified = async ({
     else if (channelType === "official") {
       // Construir URL pública do arquivo
       const backendUrl = process.env.BACKEND_URL || "http://localhost:8080";
-      const mediaUrl = `${backendUrl}/public/company${ticket.companyId}/${media.filename}`;
+      
+      // Tentar primeiro com contact{id}/ prefixo (formato novo)
+      let mediaUrl = `${backendUrl}/public/company${ticket.companyId}/contact${contact.id}/${media.filename}`;
+      
+      // Verificar se arquivo existe com contact{id}/
+      const pathWithContact = path.join(
+        process.cwd(),
+        "public",
+        `company${ticket.companyId}`,
+        `contact${contact.id}`,
+        media.filename
+      );
+      
+      // Se não existir, usar formato antigo (raiz)
+      if (!fs.existsSync(pathWithContact)) {
+        mediaUrl = `${backendUrl}/public/company${ticket.companyId}/${media.filename}`;
+      }
 
       logger.info(`[SendMediaUnified] URL pública da mídia: ${mediaUrl}`);
 

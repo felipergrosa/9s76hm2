@@ -3,6 +3,7 @@ import multer from "multer";
 import fs from "fs";
 import { Request } from "express";
 import Whatsapp from "../models/Whatsapp";
+import Ticket from "../models/Ticket";
 import { isEmpty, isNil } from "lodash";
 import { ParamsDictionary } from 'express-serve-static-core';
 import { ParsedQs } from 'qs';
@@ -99,7 +100,28 @@ export default {
           break;
         }
         default: {
-          // Compatibilidade com estrutura antiga
+          // ✅ NOVO: Detectar se é upload de mensagem (rota /messages/:ticketId)
+          const ticketId = req.params?.ticketId || (req.path?.match(/\/messages\/(\d+)/) || [])[1];
+          
+          if (ticketId) {
+            // É upload de mensagem! Buscar contactId do ticket
+            try {
+              const ticket = await Ticket.findByPk(ticketId, { attributes: ['contactId'] });
+              if (ticket?.contactId) {
+                // Salvar em contact{id}/
+                folder = path.resolve(
+                  publicFolder,
+                  `company${companyId}`,
+                  `contact${ticket.contactId}`
+                );
+                break;
+              }
+            } catch (err) {
+              console.error("Erro ao buscar ticket para upload:", err);
+            }
+          }
+          
+          // Fallback: Compatibilidade com estrutura antiga
           folder = path.resolve(
             publicFolder,
             `company${companyId}`,

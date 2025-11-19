@@ -157,7 +157,8 @@ const FindOrCreateTicketService = async (
     // - Se é LGPD: "lgpd"
     // - Se é grupo: "group"
     // - Se conexão tem fila com bot: "bot" (atende automaticamente)
-    // - Senão: "pending" (aguarda atendente aceitar)
+    // - Se conexão tem fila sem bot: "pending" MAS com fila atribuída
+    // - Senão: "pending" sem fila
     let initialStatus = "pending";
     let initialIsBot = false;
     let initialQueueId = null;
@@ -167,9 +168,14 @@ const FindOrCreateTicketService = async (
     } else if (groupContact && whatsapp.groupAsTicket !== "enabled") {
       initialStatus = "group";
     } else if (!groupContact && hasBotInDefaultQueue) {
-      // Conexão tem fila padrão com bot: inicia como bot (vale para clientes novos E campanhas)
+      // Conexão tem fila padrão COM bot: inicia como bot (vale para clientes novos E campanhas)
       initialStatus = "bot";
       initialIsBot = true;
+      initialQueueId = firstQueue.id;
+    } else if (!groupContact && firstQueue) {
+      // Conexão tem fila padrão SEM bot: inicia como pending mas JÁ com fila atribuída
+      initialStatus = "pending";
+      initialIsBot = false;
       initialQueueId = firstQueue.id;
     }
     
