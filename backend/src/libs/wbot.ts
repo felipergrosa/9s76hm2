@@ -59,6 +59,15 @@ const sessions: Session[] = [];
 
 const retriesQrCodeMap = new Map<number, number>();
 
+// Rastreamento de erros por número de telefone
+// Estrutura: Map<phoneNumber, { count: number, lastError: Date, errors: string[] }>
+const phoneNumberErrorTracker = new Map<string, { 
+  count: number; 
+  lastError: Date; 
+  errors: string[];
+  whatsappId: number;
+}>();
+
 export default function msg() {
   return {
     get: (key: WAMessageKey) => {
@@ -155,7 +164,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
         if (!whatsappUpdate) return;
 
-        const { id, name, allowGroup, companyId } = whatsappUpdate;
+        const { id, name, allowGroup, companyId, number: whatsappNumber } = whatsappUpdate;
 
         const { version, isLatest } = await fetchLatestWaWebVersion({});
         // Log com timestamp e versão do pacote Baileys instalado
@@ -197,6 +206,58 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         
         let wsocket: Session = null;
         const { state, saveCreds } = await useMultiFileAuthState(whatsapp);
+        
+        // Função helper para obter o número de telefone atual
+        const getPhoneNumber = (): string => {
+          // Tentar obter do socket conectado primeiro
+          if (wsocket?.user?.id) {
+            return wsocket.user.id.split("@")[0];
+          }
+          // Tentar obter das credenciais salvas
+          if (state?.creds?.me?.id) {
+            return state.creds.me.id.split("@")[0];
+          }
+          // Usar o número do banco de dados
+          return whatsappNumber || "N/A";
+        };
+        
+        // Função helper para registrar erros por número
+        const trackPhoneNumberError = (errorType: string, errorMessage: string) => {
+          const phoneNumber = getPhoneNumber();
+          if (phoneNumber === "N/A") return null;
+          
+          const existing = phoneNumberErrorTracker.get(phoneNumber) || {
+            count: 0,
+            lastError: new Date(),
+            errors: [],
+            whatsappId: id
+          };
+          
+          existing.count += 1;
+          existing.lastError = new Date();
+          existing.errors.push(`${errorType}: ${errorMessage}`);
+          existing.whatsappId = id;
+          
+          // Manter apenas os últimos 10 erros
+          if (existing.errors.length > 10) {
+            existing.errors = existing.errors.slice(-10);
+          }
+          
+          phoneNumberErrorTracker.set(phoneNumber, existing);
+          
+          // Log específico se número tem histórico de problemas
+          if (existing.count >= 3) {
+            logger.warn(`[wbot] ⚠️ ATENÇÃO: Número ${phoneNumber} tem ${existing.count} erros registrados. Último erro: ${errorType}`);
+            logger.warn(`[wbot] ⚠️ Este número pode estar com problemas específicos no WhatsApp.`);
+            logger.warn(`[wbot] ⚠️ Recomendações:`);
+            logger.warn(`[wbot] ⚠️ 1. Verificar se o dispositivo está conectado no WhatsApp Mobile`);
+            logger.warn(`[wbot] ⚠️ 2. Verificar se o dispositivo não foi removido manualmente`);
+            logger.warn(`[wbot] ⚠️ 3. Tentar desconectar e reconectar o dispositivo no WhatsApp`);
+            logger.warn(`[wbot] ⚠️ 4. Verificar histórico de erros: ${existing.errors.slice(-3).join("; ")}`);
+          }
+          
+          return existing;
+        };
 
         // Log detalhado sobre estado das credenciais antes de criar socket
         try {
@@ -462,13 +523,21 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               const connectionOpenTime = (wsocket as any)?._connectionOpenTime;
               const timeSinceOpen = connectionOpenTime ? (disconnectTime - connectionOpenTime) / 1000 : null;
               
+              // Obter número do WhatsApp para logs
+              const phoneNumber = getPhoneNumber();
+              
               // Log detalhado do erro completo
-              logger.error(`[wbot] DESCONEXÃO DETECTADA para whatsappId=${whatsapp.id}:`);
+              logger.error(`[wbot] DESCONEXÃO DETECTADA para whatsappId=${whatsapp.id} (Número: ${phoneNumber}):`);
               logger.error(`[wbot] - Tempo desde conexão aberta: ${timeSinceOpen ? `${timeSinceOpen.toFixed(2)} segundos` : 'N/A'}`);
               logger.error(`[wbot] - Timestamp desconexão: ${new Date(disconnectTime).toISOString()}`);
               logger.error(`[wbot] - Status Code: ${statusCode || "N/A"}`);
               logger.error(`[wbot] - Mensagem: ${errorMessage}`);
               logger.error(`[wbot] - Error Data: ${JSON.stringify(errorData, null, 2)}`);
+              
+              // Registrar erro por número para rastreamento
+              if (statusCode) {
+                trackPhoneNumberError(`Status ${statusCode}`, errorMessage);
+              }
               
               // Log do erro completo se existir
               if (error) {
@@ -546,9 +615,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               // Verificar se é erro 428 (Connection Terminated / Precondition Required)
               // Este erro geralmente indica credenciais inválidas ou ausentes
               if (statusCode === 428) {
+                const phoneNumber = getPhoneNumber();
+                const errorTrack = trackPhoneNumberError(`Connection Terminated (428)`, errorMessage);
+                
                 logger.warn(`[wbot] ============================================`);
-                logger.warn(`[wbot] Erro 428 (Connection Terminated) para whatsappId=${whatsapp.id}`);
+                logger.warn(`[wbot] Erro 428 (Connection Terminated) para whatsappId=${whatsapp.id} (Número: ${phoneNumber})`);
                 logger.warn(`[wbot] ============================================`);
+                if (errorTrack && errorTrack.count >= 3) {
+                  logger.warn(`[wbot] ⚠️ ALERTA: Este número (${phoneNumber}) já teve ${errorTrack.count} erros 428.`);
+                  logger.warn(`[wbot] ⚠️ Isso pode indicar um problema específico com as credenciais deste número.`);
+                }
                 logger.warn(`[wbot] Status Code: 428`);
                 logger.warn(`[wbot] Mensagem: ${errorMessage}`);
                 logger.warn(`[wbot] Tem credenciais válidas (MeId): ${hasValidCreds}`);
@@ -663,7 +739,9 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               // Tratamento específico para erro 515 (restart required)
               // Este erro NÃO deve limpar credenciais, apenas reconectar com delay maior
               if (isRestartRequired) {
-                logger.warn(`[wbot] Erro 515 (restart required) para whatsappId=${whatsapp.id}. Reconectando em 15 segundos (SEM limpar credenciais).`);
+                const phoneNumber = getPhoneNumber();
+                trackPhoneNumberError(`Restart Required (515)`, errorMessage);
+                logger.warn(`[wbot] Erro 515 (restart required) para whatsappId=${whatsapp.id} (Número: ${phoneNumber}). Reconectando em 15 segundos (SEM limpar credenciais).`);
                 
                 // Salvar credenciais antes de reconectar
                 try {
@@ -699,9 +777,17 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               }
               
               if (statusCode === 403 || isDeviceRemoved) {
+                const phoneNumber = getPhoneNumber();
+                const errorTrack = trackPhoneNumberError(`device_removed (${statusCode})`, errorMessage);
+                
                 logger.error(`[wbot] ============================================`);
-                logger.error(`[wbot] ERRO CRÍTICO: ${statusCode} (${isDeviceRemoved ? 'device_removed' : 'forbidden'}) para whatsappId=${whatsapp.id}`);
+                logger.error(`[wbot] ERRO CRÍTICO: ${statusCode} (${isDeviceRemoved ? 'device_removed' : 'forbidden'}) para whatsappId=${whatsapp.id} (Número: ${phoneNumber})`);
                 logger.error(`[wbot] ============================================`);
+                if (errorTrack && errorTrack.count >= 3) {
+                  logger.error(`[wbot] ⚠️ ALERTA: Este número (${phoneNumber}) já teve ${errorTrack.count} erros de desconexão.`);
+                  logger.error(`[wbot] ⚠️ Isso indica um problema específico com este número WhatsApp.`);
+                  logger.error(`[wbot] ⚠️ Verifique se o dispositivo está conectado no WhatsApp Mobile e se não foi removido manualmente.`);
+                }
                 logger.error(`[wbot] Limpando sessão e removendo credenciais...`);
                 logger.error(`[wbot] Status Code: ${statusCode}`);
                 logger.error(`[wbot] Is Device Removed: ${isDeviceRemoved}`);
