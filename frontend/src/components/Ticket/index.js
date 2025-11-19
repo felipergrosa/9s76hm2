@@ -103,6 +103,14 @@ const Ticket = () => {
   const [ticket, setTicket] = useState({});
   const [dragDropFiles, setDragDropFiles] = useState([]);
   const [showComposer, setShowComposer] = useState(false);
+  const [hasExternalHeader, setHasExternalHeader] = useState(() => {
+    try {
+      if (typeof window !== "undefined") {
+        return !!window.__externalHeaderActive;
+      }
+    } catch (e) { }
+    return false;
+  });
   const { companyId } = user;
 
   useEffect(() => {
@@ -181,6 +189,33 @@ const Ticket = () => {
     window.addEventListener('open-contact-drawer', onOpenContactDrawer);
     return () => {
       window.removeEventListener('open-contact-drawer', onOpenContactDrawer);
+    };
+  }, []);
+
+  // Escuta ativação do header externo (TicketsAdvanced) para evitar cabeçalho duplicado
+  useEffect(() => {
+    const handleExternalHeaderToggle = (e) => {
+      try {
+        if (e && typeof e.detail !== "undefined") {
+          setHasExternalHeader(!!e.detail.active);
+        }
+      } catch { }
+    };
+
+    try {
+      if (typeof window !== "undefined") {
+        // Estado inicial, se já tiver sido sinalizado antes do mount
+        setHasExternalHeader(!!window.__externalHeaderActive);
+        window.addEventListener("external-header-toggle", handleExternalHeaderToggle);
+      }
+    } catch { }
+
+    return () => {
+      try {
+        if (typeof window !== "undefined") {
+          window.removeEventListener("external-header-toggle", handleExternalHeaderToggle);
+        }
+      } catch { }
     };
   }, []);
 
@@ -331,20 +366,22 @@ const Ticket = () => {
         })}
         style={{ background: "transparent", boxShadow: "none", border: 0 }}
       >
-        <TicketHeader loading={loading}>
-          {ticket.contact !== undefined && (
-            <div id="TicketHeader" style={{ flex: 1, minWidth: 0 }}>
-              <TicketInfo
-                contact={contact}
-                ticket={ticket}
-                onClick={handleDrawerToggle}
-              />
-            </div>
-          )}
-          <TicketActionButtons
-            ticket={ticket}
-          />
-        </TicketHeader>
+        {!hasExternalHeader && (
+          <TicketHeader loading={loading}>
+            {ticket.contact !== undefined && (
+              <div id="TicketHeader" style={{ flex: 1, minWidth: 0 }}>
+                <TicketInfo
+                  contact={contact}
+                  ticket={ticket}
+                  onClick={handleDrawerToggle}
+                />
+              </div>
+            )}
+            <TicketActionButtons
+              ticket={ticket}
+            />
+          </TicketHeader>
+        )}
         <ReplyMessageProvider>
           <ForwardMessageProvider>
             <EditMessageProvider>

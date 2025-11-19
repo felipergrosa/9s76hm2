@@ -78,22 +78,60 @@ const ModalImageCors = ({ imageUrl }) => {
 		setIsSticker(isStickerUrl);
 		
 		const fetchImage = async () => {
-			const { data, headers } = await api.get(imageUrl, {
-				responseType: "blob",
-			});
-			const contentType = headers["content-type"] || "";
-			if (contentType.includes("gif")) {
-				setIsGif(true);
-				setIsSticker(true); // GIFs são tratados como stickers
+			try {
+				// Limpar duplicação de caminho se existir
+				let cleanUrl = imageUrl;
+				if (cleanUrl.includes('/public/company') && cleanUrl.match(/\/public\/company\d+\/public\/company\d+\//)) {
+					// Remove a primeira ocorrência de /public/companyX/
+					cleanUrl = cleanUrl.replace(/^\/public\/company\d+\//, '/');
+				}
+				
+				// Verificar se URL é absoluta (começa com http:// ou https://)
+				const isAbsoluteUrl = /^https?:\/\//i.test(cleanUrl);
+				
+				let data, headers;
+				
+				if (isAbsoluteUrl) {
+					// URL absoluta: usar fetch direto para evitar conflito com baseURL do axios
+					const response = await fetch(cleanUrl, {
+						credentials: 'include'  // Enviar cookies para autenticação
+					});
+					
+					if (!response.ok) {
+						throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+					}
+					
+					data = await response.blob();
+					headers = {
+						"content-type": response.headers.get("content-type") || "image/jpeg"
+					};
+				} else {
+					// URL relativa: usar api.get normal (axios com baseURL)
+					const res = await api.get(cleanUrl, {
+						responseType: "blob",
+					});
+					data = res.data;
+					headers = res.headers;
+				}
+				
+				const contentType = headers["content-type"] || "";
+				if (contentType.includes("gif")) {
+					setIsGif(true);
+					setIsSticker(true); // GIFs são tratados como stickers
+				}
+				if (contentType.includes("webp")) {
+					setIsSticker(true);
+				}
+				const url = window.URL.createObjectURL(
+					new Blob([data], { type: contentType })
+				);
+				setBlobUrl(url);
+				setFetching(false);
+			} catch (error) {
+				console.error('[ModalImageCors] Erro ao carregar imagem:', error);
+				console.error('[ModalImageCors] URL tentada:', imageUrl);
+				setFetching(false);
 			}
-			if (contentType.includes("webp")) {
-				setIsSticker(true);
-			}
-			const url = window.URL.createObjectURL(
-				new Blob([data], { type: contentType })
-			);
-			setBlobUrl(url);
-			setFetching(false);
 		};
 		fetchImage();
 	}, [imageUrl]);

@@ -80,7 +80,7 @@ Authorization: Bearer {token}
         },
         {
           "type": "BODY",
-          "text": "Olá {{1}}, seja bem-vindo à nossa loja!"
+          "text": "Olá {{1}}, seja bem-vindo à nossa indústria!"
         },
         {
           "type": "FOOTER",

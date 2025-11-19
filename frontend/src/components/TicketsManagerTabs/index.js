@@ -117,9 +117,33 @@ const useStyles = makeStyles((theme) => ({
   },
 
   tabPanelItem: {
-    minWidth: "33%",
+    minWidth: 120,
+    maxWidth: 150,
     fontSize: 11,
     marginLeft: 0,
+    padding: "10px 14px !important",
+    whiteSpace: "nowrap",
+    
+    [theme.breakpoints.down("lg")]: {
+      fontSize: 10,
+      padding: "8px 12px !important",
+      minWidth: 100,
+      maxWidth: 130,
+    },
+    
+    [theme.breakpoints.down("md")]: {
+      fontSize: 9,
+      padding: "6px 10px !important",
+      minWidth: 85,
+      maxWidth: 110,
+    },
+    
+    [theme.breakpoints.down("sm")]: {
+      fontSize: 8,
+      padding: "5px 8px !important",
+      minWidth: 70,
+      maxWidth: 110,
+    },
   },
 
   tabIndicator: {
@@ -964,6 +988,7 @@ const TicketsManagerTabs = () => {
           indicatorColor="primary"
           textColor="primary"
           variant="fullWidth"
+          scrollButtons={false}
         >
           {/* ATENDENDO */}
           <Tab
@@ -978,7 +1003,7 @@ const TicketsManagerTabs = () => {
                   >
                     <MessageSharpIcon
                       style={{
-                        fontSize: 18,
+                        fontSize: 16,
                       }}
                     />
                   </Badge>
@@ -986,7 +1011,7 @@ const TicketsManagerTabs = () => {
                 <Grid item>
                   <Typography
                     style={{
-                      marginLeft: 8,
+                      marginLeft: 6,
                       fontSize: 10,
                       fontWeight: 600,
                     }}
@@ -1014,7 +1039,7 @@ const TicketsManagerTabs = () => {
                   >
                     <ClockIcon
                       style={{
-                        fontSize: 18,
+                        fontSize: 16,
                       }}
                     />
                   </Badge>
@@ -1022,7 +1047,7 @@ const TicketsManagerTabs = () => {
                 <Grid item>
                   <Typography
                     style={{
-                      marginLeft: 8,
+                      marginLeft: 6,
                       fontSize: 10,
                       fontWeight: 600,
                     }}
@@ -1051,7 +1076,7 @@ const TicketsManagerTabs = () => {
                     >
                       <Group
                         style={{
-                          fontSize: 18,
+                          fontSize: 16,
                         }}
                       />
                     </Badge>
@@ -1059,7 +1084,7 @@ const TicketsManagerTabs = () => {
                   <Grid item>
                     <Typography
                       style={{
-                        marginLeft: 8,
+                        marginLeft: 6,
                         fontSize: 10,
                         fontWeight: 600,
                       }}
@@ -1088,7 +1113,7 @@ const TicketsManagerTabs = () => {
                   >
                     <BotIcon
                       style={{
-                        fontSize: 18,
+                        fontSize: 16,
                       }}
                     />
                   </Badge>
@@ -1096,7 +1121,7 @@ const TicketsManagerTabs = () => {
                 <Grid item>
                   <Typography
                     style={{
-                      marginLeft: 8,
+                      marginLeft: 6,
                       fontSize: 10,
                       fontWeight: 600,
                     }}
