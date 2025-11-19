@@ -102,13 +102,49 @@ export async function processOfficialBot({
       sendMessage: async (jid: string, content: any) => {
         logger.info(`[ProcessOfficialBot] Enviando resposta do bot para ${jid}`);
         
-        // Importar serviço de envio unificado
-        const SendWhatsAppMessage = (await import("./SendWhatsAppMessage")).default;
-        await SendWhatsAppMessage({
-          body: content.text || "",
-          ticket,
-          quotedMsg: undefined
-        });
+        try {
+          // Usar adapter correto (Official ou Baileys)
+          const { GetTicketAdapter } = await import("../../helpers/GetWhatsAppAdapter");
+          const adapter = await GetTicketAdapter(ticket);
+          
+          // Extrair número do JID (remove @s.whatsapp.net)
+          const to = jid.split("@")[0];
+          const body = content.text || "";
+          
+          // Enviar mensagem via adapter
+          const sentMessage = await adapter.sendTextMessage(to, body);
+          
+          logger.info(`[ProcessOfficialBot] Mensagem enviada com sucesso: ${sentMessage.id}`);
+          
+          // Salvar mensagem no banco (apenas para API Oficial)
+          if (adapter.channelType === "official") {
+            const CreateMessageService = (await import("../MessageServices/CreateMessageService")).default;
+            await CreateMessageService({
+              messageData: {
+                wid: sentMessage.id,
+                ticketId: ticket.id,
+                contactId: ticket.contactId,
+                body: body,
+                fromMe: true,
+                read: true,
+                ack: 1
+              },
+              companyId
+            });
+            
+            logger.info(`[ProcessOfficialBot] Mensagem do bot salva no banco: ${sentMessage.id}`);
+          }
+          
+          // Atualizar última mensagem do ticket
+          await ticket.update({
+            lastMessage: body,
+            imported: null
+          });
+          
+        } catch (error: any) {
+          logger.error(`[ProcessOfficialBot] Erro ao enviar mensagem: ${error.message}`);
+          throw error;
+        }
       }
     } as any;
 
