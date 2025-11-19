@@ -41,8 +41,8 @@ const UpdatePromptService = async ({
       .min(5, "ERR_PROMPT_NAME_MIN")
       .max(100, "ERR_PROMPT_NAME_MAX"),
     prompt: Yup.string().min(50, "ERR_PROMPT_INTELLIGENCE_MIN"),
-    apiKey: Yup.string(),
-    queueId: Yup.number(),
+    apiKey: Yup.string().nullable(),
+    queueId: Yup.number().nullable(),
     maxMessages: Yup.number()
       .min(1, "ERR_PROMPT_MAX_MESSAGES_MIN")
       .max(50, "ERR_PROMPT_MAX_MESSAGES_MAX"),
@@ -56,13 +56,15 @@ const UpdatePromptService = async ({
         "gemini-2.0-pro"
       ],
       "ERR_PROMPT_MODEL_INVALID"
-    ),
+    ).nullable(),
     maxTokens: Yup.number()
       .min(10, "ERR_PROMPT_MAX_TOKENS_MIN")
-      .max(4096, "ERR_PROMPT_MAX_TOKENS_MAX"),
+      .max(4096, "ERR_PROMPT_MAX_TOKENS_MAX")
+      .nullable(),
     temperature: Yup.number()
       .min(0, "ERR_PROMPT_TEMPERATURE_MIN")
-      .max(1, "ERR_PROMPT_TEMPERATURE_MAX"),
+      .max(1, "ERR_PROMPT_TEMPERATURE_MAX")
+      .nullable(),
     voice: Yup.string().when("model", {
       is: (val) => val === "gpt-3.5-turbo-1106",
       then: Yup.string().required("ERR_PROMPT_VOICE_REQUIRED"),
@@ -78,6 +80,7 @@ const UpdatePromptService = async ({
       then: Yup.string().notRequired(),
       otherwise: Yup.string().notRequired(),
     }),
+    integrationId: Yup.number().nullable().notRequired(),
   });
 
   try {

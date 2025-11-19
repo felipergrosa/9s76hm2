@@ -44,6 +44,7 @@ const CreatePromptService = async (promptData: PromptData): Promise<Prompt> => {
     integrationId,
   } = promptData;
 
+  // Validação flexível: aceita integrationId OU campos diretos OU config global
   const promptSchema = Yup.object().shape({
     name: Yup.string()
       .min(5, "ERR_PROMPT_NAME_MIN")
@@ -52,32 +53,45 @@ const CreatePromptService = async (promptData: PromptData): Promise<Prompt> => {
     prompt: Yup.string()
       .min(50, "ERR_PROMPT_INTELLIGENCE_MIN")
       .required("ERR_PROMPT_INTELLIGENCE_INVALID"),
-    apiKey: Yup.string().required("ERR_PROMPT_APIKEY_INVALID"),
     queueId: Yup.number().required("ERR_PROMPT_QUEUEID_INVALID"),
     maxMessages: Yup.number()
       .min(1, "ERR_PROMPT_MAX_MESSAGES_MIN")
       .max(50, "ERR_PROMPT_MAX_MESSAGES_MAX")
       .required("ERR_PROMPT_MAX_MESSAGES_INVALID"),
     companyId: Yup.number().required("ERR_PROMPT_companyId_INVALID"),
+    
+    // Campos opcionais: permite integrationId, config global ou valores diretos
+    apiKey: Yup.string().nullable().notRequired(),
     model: Yup.string()
-      .oneOf(
-        ["gpt-3.5-turbo-1106", "gpt-4o", "gemini-2.0-pro", "gemini-2.0-flash"],
-        "ERR_PROMPT_MODEL_INVALID"
-      )
-      .required("ERR_PROMPT_MODEL_REQUIRED"),
+      .nullable()
+      .notRequired()
+      .test('valid-model', 'ERR_PROMPT_MODEL_INVALID', function(value) {
+        // Se fornecido, deve ser um dos modelos válidos
+        if (!value || value === null || value === '') return true;
+        return ["gpt-3.5-turbo-1106", "gpt-4o", "gemini-2.0-pro", "gemini-2.0-flash"].includes(value);
+      }),
     maxTokens: Yup.number()
-      .min(10, "ERR_PROMPT_MAX_TOKENS_MIN")
-      .max(4096, "ERR_PROMPT_MAX_TOKENS_MAX")
-      .required("ERR_PROMPT_MAX_TOKENS_REQUIRED"),
+      .nullable()
+      .notRequired()
+      .test('valid-tokens', 'ERR_PROMPT_MAX_TOKENS_RANGE', function(value) {
+        // Se fornecido, deve estar no range válido
+        if (!value || value === null) return true;
+        return value >= 10 && value <= 4096;
+      }),
     temperature: Yup.number()
-      .min(0, "ERR_PROMPT_TEMPERATURE_MIN")
-      .max(1, "ERR_PROMPT_TEMPERATURE_MAX")
-      .required("ERR_PROMPT_TEMPERATURE_REQUIRED"),
+      .nullable()
+      .notRequired()
+      .test('valid-temperature', 'ERR_PROMPT_TEMPERATURE_RANGE', function(value) {
+        // Se fornecido, deve estar no range válido
+        if (!value || value === null) return true;
+        return value >= 0 && value <= 1;
+      }),
     voice: Yup.string().when("model", {
       is: (val) => val === "gpt-3.5-turbo-1106",
       then: Yup.string().required("ERR_PROMPT_VOICE_REQUIRED"),
       otherwise: Yup.string().notRequired(),
     }),
+    integrationId: Yup.number().nullable().notRequired(),
   });
 
   try {
@@ -93,6 +107,7 @@ const CreatePromptService = async (promptData: PromptData): Promise<Prompt> => {
         maxTokens,
         temperature,
         voice,
+        integrationId, // Incluir integrationId na validação
       },
       { abortEarly: false }
     );

@@ -74,18 +74,22 @@ const useStyles = makeStyles(theme => ({
 
 const PromptSchema = Yup.object().shape({
   name: Yup.string()
-    .min(5, "Muito curto!")
+    .min(5, "Muito curto! Mínimo 5 caracteres")
     .max(100, "Muito longo!")
-    .required("Obrigatório"),
+    .required("⚠️ Nome é obrigatório"),
   prompt: Yup.string()
-    .min(50, "Muito curto!")
-    .required("Descreva o treinamento para Inteligência Artificial"),
+    .min(50, "Muito curto! Mínimo 50 caracteres para descrever o comportamento da IA")
+    .required("⚠️ Descreva o treinamento para Inteligência Artificial"),
   integrationId: Yup.number().when('useGlobalConfig', {
     is: false,
-    then: Yup.number().required("Selecione uma integração IA"),
-    otherwise: Yup.number().notRequired(),
+    then: Yup.number()
+      .nullable()
+      .required("⚠️ Selecione uma integração IA ou marque 'Usar Config Global'"),
+    otherwise: Yup.number().nullable().notRequired(),
   }),
-  queueId: Yup.number().required("Informe a fila"),
+  queueId: Yup.number()
+    .nullable()
+    .required("⚠️ Selecione uma fila para associar este prompt"),
   maxMessages: Yup.number()
     .min(1, "Mínimo 1 mensagem")
     .max(50, "Máximo 50 mensagens")
