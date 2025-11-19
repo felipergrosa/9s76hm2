@@ -149,20 +149,62 @@ export async function processOfficialBot({
     } as any;
 
     // Chamar handleOpenAi
-    await handleOpenAi(
-      aiConfig,
-      mockBaileysMessage as any,
-      mockWbot,
-      ticket,
-      contact,
-      message,
-      null // ticketTraking
-    );
+    try {
+      await handleOpenAi(
+        aiConfig,
+        mockBaileysMessage as any,
+        mockWbot,
+        ticket,
+        contact,
+        message,
+        null // ticketTraking
+      );
+
+      logger.info(`[ProcessOfficialBot] Processamento IA concluído para ticket ${ticket.id}`);
+
+    } catch (aiError: any) {
+      logger.error(`[ProcessOfficialBot] Erro ao processar IA: ${aiError.message}`);
+      
+      // Enviar mensagem de fallback se a IA falhar
+      const fallbackMessage = "Desculpe, estou com dificuldades técnicas para processar sua solicitação no momento. Por favor, tente novamente mais tarde.";
+      
+      try {
+        const { GetTicketAdapter } = await import("../../helpers/GetWhatsAppAdapter");
+        const adapter = await GetTicketAdapter(ticket);
+        const to = contact.number;
+        
+        await adapter.sendTextMessage(to, fallbackMessage);
+        
+        logger.info(`[ProcessOfficialBot] Mensagem de fallback enviada para ticket ${ticket.id}`);
+        
+        // Salvar mensagem de fallback no banco
+        if (adapter.channelType === "official") {
+          const CreateMessageService = (await import("../MessageServices/CreateMessageService")).default;
+          await CreateMessageService({
+            messageData: {
+              wid: `fallback_${Date.now()}`,
+              ticketId: ticket.id,
+              contactId: ticket.contactId,
+              body: fallbackMessage,
+              fromMe: true,
+              read: true,
+              ack: 1
+            },
+            companyId
+          });
+        }
+      } catch (fallbackError: any) {
+        logger.error(`[ProcessOfficialBot] Erro ao enviar mensagem de fallback: ${fallbackError.message}`);
+      }
+      
+      // Não propagar erro para não quebrar o fluxo
+      Sentry.captureException(aiError);
+    }
 
     logger.info(`[ProcessOfficialBot] Processamento concluído para ticket ${ticket.id}`);
 
   } catch (error: any) {
-    logger.error(`[ProcessOfficialBot] Erro: ${error.message}`);
+    logger.error(`[ProcessOfficialBot] Erro crítico: ${error.message}`);
     Sentry.captureException(error);
     throw error;
   }
