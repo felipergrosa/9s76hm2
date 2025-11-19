@@ -178,6 +178,12 @@ async function processIncomingMessage(
     whatsappId: whatsapp.id
   });
 
+  // Buscar settings da empresa
+  const CompaniesSettings = (await import("../../models/CompaniesSettings")).default;
+  const settings = await CompaniesSettings.findOne({
+    where: { companyId }
+  });
+
   // Encontrar ou criar ticket
   const ticket = await FindOrCreateTicketService(
     contact,
@@ -190,10 +196,12 @@ async function processIncomingMessage(
     "whatsapp", // channel
     false, // isImported
     false, // isForward
-    {}, // settings
+    settings, // settings da empresa
     false, // isTransfered
     false // isCampaign
   );
+  
+  logger.info(`[WebhookProcessor] Ticket ${ticket.id} criado/encontrado: status=${ticket.status}, queueId=${ticket.queueId}, isBot=${ticket.isBot}`);
 
   // Extrair corpo da mensagem
   let body = "";
