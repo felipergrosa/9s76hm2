@@ -159,7 +159,8 @@ const FlowBuilderConditionModal = ({ open, onSave, onUpdate, data, close }) => {
       <Dialog
         open={activeModal}
         onClose={handleClose}
-        fullWidth="md"
+        fullWidth
+        maxWidth="md"
         scroll="paper"
       >
         <DialogTitle id="form-dialog-title">{labels.title}</DialogTitle>
@@ -170,7 +171,7 @@ const FlowBuilderConditionModal = ({ open, onSave, onUpdate, data, close }) => {
           >
             <TextField
               label={"Campo da condição (Digiter apenas 1 chave)"}
-              rows={7}
+              minRows={7}
               name="text"
               variant="outlined"
               value={textDig}
@@ -201,7 +202,7 @@ const FlowBuilderConditionModal = ({ open, onSave, onUpdate, data, close }) => {
             </FormControl>
             <TextField
               label={"Valor da condição a ser analisada"}
-              rows={7}
+              minRows={7}
               name="text"
               variant="outlined"
               value={valueCondition}

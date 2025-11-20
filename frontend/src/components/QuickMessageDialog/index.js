@@ -257,7 +257,7 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload }) => {
                       margin="dense"
                       disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
                       multiline={true}
-                      rows={7}
+                      minRows={7}
                       fullWidth
                     // disabled={quickemessage.mediaPath || attachment ? true : false}
                     />

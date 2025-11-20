@@ -742,7 +742,7 @@ const FlowBuilderSingleBlockModal = ({
           label={"Mensagem"}
           defaultValue={valueDefault}
           multiline
-          rows={7}
+          minRows={7}
           className={`message${number}`}
           name="text"
           variant="outlined"
@@ -1143,7 +1143,7 @@ const FlowBuilderSingleBlockModal = ({
   };
   return (
     <div>
-      <Dialog open={activeModal} fullWidth="md" scroll="paper">
+      <Dialog open={activeModal} fullWidth maxWidth="md" scroll="paper">
         {!loading && (
           <DialogTitle id="form-dialog-title">
             Adicionar conteúdo ao fluxo

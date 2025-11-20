@@ -124,6 +124,7 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 	const [searchParam, setSearchParam] = useState("");
 
 	useEffect(() => {
+		isMounted.current = true;
 		return () => {
 			isMounted.current = false;
 		};
@@ -143,20 +144,26 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 
 	useEffect(() => {
 		if (searchParam.length < 3) {
-			setLoading(false);
-			setSelectedQueue("");
+			if (isMounted.current) {
+				setLoading(false);
+				setSelectedQueue("");
+			}
 			return;
 		}
 		const delayDebounceFn = setTimeout(() => {
+			if (!isMounted.current) return;
 			setLoading(true);
 			const fetchUsers = async () => {
 				try {
 					const { data } = await api.get("/users/");
+					if (!isMounted.current) return;
 					setOptions(data.users);
 					setLoading(false);
 				} catch (err) {
-					setLoading(false);
-					toastError(err);
+					if (isMounted.current) {
+						setLoading(false);
+						toastError(err);
+					}
 				}
 			};
 
@@ -166,9 +173,14 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 	}, [searchParam]);
 
 	useEffect(() => {
+		if (!isMounted.current) return;
+		
 		api
 			.get(`/whatsapp/filter`, { params: { session: 0, channel: channelFilter } })
 			.then(({ data }) => {
+				// Verificar se o componente ainda está montado antes de atualizar o estado
+				if (!isMounted.current) return;
+				
 				// Mapear os dados recebidos da API para adicionar a propriedade 'selected'
 				const mappedWhatsapps = data.map((whatsapp) => ({
 					...whatsapp,
@@ -178,6 +190,11 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 				setWhatsapps(mappedWhatsapps);
 				if (mappedWhatsapps.length && mappedWhatsapps?.length === 1){
 					setSelectedWhatsapps(mappedWhatsapps[0].id)
+				}
+			})
+			.catch((err) => {
+				if (isMounted.current) {
+					toastError(err);
 				}
 			});
 	}, [currentContact, channelFilter])
@@ -427,7 +444,7 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 								<div className={classes.multFieldLine}>
 									<Field
 										as={TextField}
-										rows={9}
+										minRows={9}
 										multiline={true}
 										label={i18n.t("scheduleModal.form.body")}
 										name="body"

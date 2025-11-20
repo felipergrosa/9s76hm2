@@ -532,7 +532,7 @@ const UserModal = ({ open, onClose, userId }) => {
                       label={i18n.t("userModal.form.farewellMessage")}
                       type="farewellMessage"
                       multiline
-                      rows={4}
+                      minRows={4}
                       fullWidth
                       name="farewellMessage"
                       error={touched.farewellMessage && Boolean(errors.farewellMessage)}

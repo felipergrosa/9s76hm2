@@ -310,7 +310,7 @@ const ButtonModal = ({ modalOpen, onClose, ticketId }) => {
                 label="Descrição"
                 variant="outlined"
                 multiline
-                rows={5}
+                minRows={5}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
@@ -382,7 +382,7 @@ const ButtonModal = ({ modalOpen, onClose, ticketId }) => {
                 label="Mensagem"
                 variant="outlined"
                 multiline
-                rows={5}
+                minRows={5}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}  // Campo para a mensagem
               />
@@ -444,7 +444,7 @@ const ButtonModal = ({ modalOpen, onClose, ticketId }) => {
                 label="Mensagem"
                 variant="outlined"
                 multiline
-                rows={5}
+                minRows={5}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}  // Campo para a mensagem
               />
@@ -464,7 +464,7 @@ const ButtonModal = ({ modalOpen, onClose, ticketId }) => {
                 label="Texto para copiar"
                 variant="outlined"
                 multiline
-                rows={4}
+                minRows={4}
                 value={copyText}
                 onChange={(e) => setCopyText(e.target.value)}  // Campo para o texto de copiar
               />
@@ -508,7 +508,7 @@ const ButtonModal = ({ modalOpen, onClose, ticketId }) => {
                 label="Mensagem"
                 variant="outlined"
                 multiline
-                rows={5}
+                minRows={5}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)} // Campo para a mensagem
               />

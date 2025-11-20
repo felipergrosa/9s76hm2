@@ -1418,7 +1418,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                             <TextField
                               fullWidth
                               multiline
-                              rows={3}
+                              minRows={3}
                               label="Voz da Marca (Brand Voice)"
                               value={config.brandVoice}
                               onChange={(e) => handleProviderChange(providerName, 'brandVoice', e.target.value)}
@@ -1836,7 +1836,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                   <TextField
                     fullWidth
                     multiline
-                    rows={4}
+                    minRows={4}
                     label="Prompt do Sistema"
                     value={newPreset.systemPrompt}
                     onChange={(e) => setNewPreset(prev => ({ ...prev, systemPrompt: e.target.value }))}
@@ -1922,7 +1922,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                   <TextField
                     fullWidth
                     multiline
-                    rows={3}
+                    minRows={3}
                     label="Voz da Marca (Brand Voice)"
                     value={newPreset.brandVoice}
                     onChange={(e) => setNewPreset(prev => ({ ...prev, brandVoice: e.target.value }))}

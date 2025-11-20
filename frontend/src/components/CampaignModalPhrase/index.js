@@ -124,7 +124,8 @@ const CampaignModalPhrase = ({ open, onClose, FlowCampaignId, onSave, defaultWha
 
   const detailsPhrase = async flows => {
     setLoading(true);
-    await api.get(`/flowcampaign/${FlowCampaignId}`).then(res => {
+    try {
+      const res = await api.get(`/flowcampaign/${FlowCampaignId}`);
       console.log("dete", res.data);
       setDataItem({
         name: res.data.details.name,
@@ -137,13 +138,15 @@ const CampaignModalPhrase = ({ open, onClose, FlowCampaignId, onSave, defaultWha
       if (nameFlow.length > 0) {
         setFlowSelected(nameFlow[0].name);
         if (res.data.details.whatsappId) {
-        console.log("Aplicando whatsappId do banco:", res.data.details.whatsappId);
-        setSelectedWhatsapp(res.data.details.whatsappId);
-     }
-
+          console.log("Aplicando whatsappId do banco:", res.data.details.whatsappId);
+          setSelectedWhatsapp(res.data.details.whatsappId);
+        }
       }
       setLoading(false);
-    });
+    } catch (err) {
+      setLoading(false);
+      toastError(err);
+    }
   };
 
   const handleClose = () => {

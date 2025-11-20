@@ -111,3 +111,4 @@ echo "- Relatório salvo em \`${report_file}\`" | tee -a "$report_file"
 
 exit 0
 
+

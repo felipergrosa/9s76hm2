@@ -153,7 +153,7 @@ const FlowBuilderAddAudioModal = ({ open, onSave, onUpdate, data, close }) => {
 
   return (
     <div className={classes.root}>
-      <Dialog open={activeModal} onClose={handleClose} fullWidth="md" scroll="paper">
+      <Dialog open={activeModal} onClose={handleClose} fullWidth maxWidth="md" scroll="paper">
         <DialogTitle id="form-dialog-title">{labels.title}</DialogTitle>
         <Stack>
           <DialogContent dividers>

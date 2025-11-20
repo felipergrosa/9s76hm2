@@ -129,7 +129,8 @@ const FlowBuilderAddTextModal = ({ open, onSave, onUpdate, data, close }) => {
       <Dialog
         open={activeModal}
         onClose={handleClose}
-        fullWidth="md"
+        fullWidth
+        maxWidth="md"
         scroll="paper"
       >
         <DialogTitle id="form-dialog-title">{labels.title}</DialogTitle>
@@ -138,7 +139,7 @@ const FlowBuilderAddTextModal = ({ open, onSave, onUpdate, data, close }) => {
             <TextField
               label={"Mensagem"}
               multiline
-              rows={7}
+              minRows={7}
               name="text"
               variant="outlined"
               value={textDig}

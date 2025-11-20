@@ -411,7 +411,7 @@ const WhatsAppModalCompany = ({
               <Stack>
                 <Typography
                   variant="h5"
-                  color="black"
+                  color="textPrimary"
                   style={{
                     fontWeight: "bold",
                     marginLeft: "10px",

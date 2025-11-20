@@ -827,7 +827,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                         }
                         name="confirmationTemplate"
                         multiline
-                        rows={3}
+                        minRows={3}
                         fullWidth
                         variant="outlined"
                         margin="dense"
@@ -892,7 +892,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                         label={i18n.t("queueModal.form.outOfHoursMessage")}
                         type="outOfHoursMessage"
                         multiline
-                        rows={5}
+                        minRows={5}
                         fullWidth
                         required={schedulesEnabled}
                         name="outOfHoursMessage"

@@ -141,15 +141,15 @@ const FlowDefault = () => {
   }, [searchParam]);
 
   const getFlows = async () => {
-    return await api.get("/flowbuilder").then(res => {
-      setFlowsData(res.data.flows.map(flow => flow.name));
-      setFlowsDataObj(res.data.flows);
-      return res.data.flows
-    });
+    const res = await api.get("/flowbuilder");
+    setFlowsData(res.data.flows.map(flow => flow.name));
+    setFlowsDataObj(res.data.flows);
+    return res.data.flows;
   };
 
   const getFlowsDefault = async (flowData) => {
-    await api.get("/flowdefault").then(res => {
+    try {
+      const res = await api.get("/flowdefault");
       if (res.data.flow?.companyId) {
         setConfigExist(true)
       }
@@ -172,7 +172,10 @@ const FlowDefault = () => {
 
       }
       setLoading(false)
-    });
+    } catch (err) {
+      setLoading(false);
+      toastError(err);
+    }
   };
 
   useEffect(() => {
@@ -215,10 +218,9 @@ const FlowDefault = () => {
 
   const handleDeleteWebhook = async webhookId => {
     try {
-      await api.delete(`/flowbuilder/${webhookId}`).then(res => {
-        setDeletingContact(null);
-        setReloadData(old => !old);
-      });
+      await api.delete(`/flowbuilder/${webhookId}`);
+      setDeletingContact(null);
+      setReloadData(old => !old);
       toast.success("Fluxo excluído com sucesso");
     } catch (err) {
       toastError(err);
@@ -243,20 +245,18 @@ const FlowDefault = () => {
 
     if (configExist) {
       try {
-        await api.put(`/flowdefault`, { flowIdWelcome: idWelcome, flowIdPhrase: idPhrase }).then(res => {
-          setDeletingContact(null);
-          setReloadData(old => !old);
-        });
+        await api.put(`/flowdefault`, { flowIdWelcome: idWelcome, flowIdPhrase: idPhrase });
+        setDeletingContact(null);
+        setReloadData(old => !old);
         toast.success("Fluxos padrões atualizados");
       } catch (err) {
         toastError(err);
       }
     } else {
       try {
-        await api.post(`/flowdefault`, { flowIdWelcome: idWelcome, flowIdPhrase: idPhrase }).then(res => {
-          setDeletingContact(null);
-          setReloadData(old => !old);
-        });
+        await api.post(`/flowdefault`, { flowIdWelcome: idWelcome, flowIdPhrase: idPhrase });
+        setDeletingContact(null);
+        setReloadData(old => !old);
         toast.success("Fluxos padrões atualizados");
       } catch (err) {
         toastError(err);

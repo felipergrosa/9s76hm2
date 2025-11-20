@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState, useContext, useRef } from "react";
 import { Field } from "formik";
 import { useHistory } from "react-router-dom";
 import { makeStyles } from "@material-ui/core/styles";
@@ -77,6 +77,7 @@ const initialSettings = {
 const CampaignsConfig = () => {
   const classes = useStyles();
   const history = useHistory();
+  const isMountedRef = useRef(true);
 
   const [settings, setSettings] = useState(initialSettings);
   const [showVariablesForm, setShowVariablesForm] = useState(false);
@@ -99,9 +100,17 @@ const CampaignsConfig = () => {
   // IA global removida desta tela: configuração agora é por campanha no modal de Nova Campanha
 
   useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     async function fetchData() {
       const companyId = user.companyId;
       const planConfigs = await getPlanCompany(undefined, companyId);
+      if (!isMountedRef.current) return;
       if (!planConfigs.plan.useCampaigns) {
         toast.error("Esta empresa não possui permissão para acessar essa página! Estamos lhe redirecionando.");
         setTimeout(() => {
@@ -114,26 +123,37 @@ const CampaignsConfig = () => {
   }, []);
 
   useEffect(() => {
-    api.get("/campaign-settings").then(({ data }) => {
-      const settingsList = [];
-      console.log(data)
-      if (Array.isArray(data) && data.length > 0) {
-        data.forEach((item) => {
-          settingsList.push([item.key, item.value]);
-          if (item.key === "sabado") setSabado(item?.value === "true");
-          if (item.key === "domingo") setDomingo(item?.value === "true");
-          if (item.key === "startHour") setStartHour(item?.value);
-          if (item.key === "endHour") setEndHour(item?.value);
-          if (item.key === "suppressionTagNames") {
-            try {
-              const arr = JSON.parse(item.value);
-              if (Array.isArray(arr)) setSuppressionTagNamesStr(arr.join(", "));
-            } catch (e) {}
-          }
-        });
-        setSettings(Object.fromEntries(settingsList));
-      }
-    });
+    if (!isMountedRef.current) return;
+    
+    api.get("/campaign-settings")
+      .then(({ data }) => {
+        // Verificar se o componente ainda está montado antes de atualizar o estado
+        if (!isMountedRef.current) return;
+        
+        const settingsList = [];
+        console.log(data)
+        if (Array.isArray(data) && data.length > 0) {
+          data.forEach((item) => {
+            settingsList.push([item.key, item.value]);
+            if (item.key === "sabado") setSabado(item?.value === "true");
+            if (item.key === "domingo") setDomingo(item?.value === "true");
+            if (item.key === "startHour") setStartHour(item?.value);
+            if (item.key === "endHour") setEndHour(item?.value);
+            if (item.key === "suppressionTagNames") {
+              try {
+                const arr = JSON.parse(item.value);
+                if (Array.isArray(arr)) setSuppressionTagNamesStr(arr.join(", "));
+              } catch (e) {}
+            }
+          });
+          setSettings(Object.fromEntries(settingsList));
+        }
+      })
+      .catch((err) => {
+        if (isMountedRef.current) {
+          toastError(err);
+        }
+      });
   }, []);
 
   // Removido: status de criptografia. A configuração de IA passou para o modal de campanha.
@@ -375,13 +395,13 @@ const CampaignsConfig = () => {
                         <MenuItem value={100}>100 segundos</MenuItem>
                         <MenuItem value={120}>120 segundos</MenuItem>
                       </Select>
-                      <FormHelperText>
-                        <Box display="flex" alignItems="center" gridGap={6}>
+                      <FormHelperText component="span">
+                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <Tooltip title="Intervalo aplicado entre mensagens para cada conexão. Variações maiores reduzem risco de bloqueio.">
                             <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
                           </Tooltip>
                           Sugestão: 10-30s para contas aquecidas
-                        </Box>
+                        </span>
                       </FormHelperText>
                     </FormControl>
                   </Grid>
@@ -412,13 +432,13 @@ const CampaignsConfig = () => {
                         <MenuItem value={50}>50 {i18n.t("campaigns.settings.messages")}</MenuItem>
                         <MenuItem value={60}>60 {i18n.t("campaigns.settings.messages")}</MenuItem>
                       </Select>
-                      <FormHelperText>
-                        <Box display="flex" alignItems="center" gridGap={6}>
+                      <FormHelperText component="span">
+                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <Tooltip title="A cada N mensagens, aplicamos um intervalo maior (abaixo). Ajuda a reduzir padrões repetitivos.">
                             <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
                           </Tooltip>
                           Ex.: após 20 mensagens, aplicar pausa maior
-                        </Box>
+                        </span>
                       </FormHelperText>
                     </FormControl>
                   </Grid>
@@ -458,13 +478,13 @@ const CampaignsConfig = () => {
                         <MenuItem value={170}>170 segundos</MenuItem>
                         <MenuItem value={180}>180 segundos</MenuItem>
                       </Select>
-                      <FormHelperText>
-                        <Box display="flex" alignItems="center" gridGap={6}>
+                      <FormHelperText component="span">
+                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <Tooltip title="Intervalo maior aplicado quando a regra acima é atingida (após N mensagens).">
                             <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
                           </Tooltip>
                           Ex.: 60-120s
-                        </Box>
+                        </span>
                       </FormHelperText>
                     </FormControl>
                   </Grid>

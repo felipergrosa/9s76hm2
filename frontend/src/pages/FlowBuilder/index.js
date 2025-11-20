@@ -212,10 +212,9 @@ const FlowBuilder = () => {
 
   const handleDeleteWebhook = async webhookId => {
     try {
-      await api.delete(`/flowbuilder/${webhookId}`).then(res => {
-        setDeletingContact(null);
-        setReloadData(old => !old);
-      });
+      await api.delete(`/flowbuilder/${webhookId}`);
+      setDeletingContact(null);
+      setReloadData(old => !old);
       toast.success("Fluxo excluído com sucesso");
     } catch (err) {
       toastError(err);
@@ -224,10 +223,9 @@ const FlowBuilder = () => {
 
   const handleDuplicateFlow = async flowId => {
     try {
-      await api.post(`/flowbuilder/duplicate`, { flowId: flowId }).then(res => {
-        setDeletingContact(null);
-        setReloadData(old => !old);
-      });
+      await api.post(`/flowbuilder/duplicate`, { flowId: flowId });
+      setDeletingContact(null);
+      setReloadData(old => !old);
       toast.success("Fluxo duplicado com sucesso");
     } catch (err) {
       toastError(err);

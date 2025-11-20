@@ -1040,7 +1040,7 @@ const PromptEnhancements = ({ open, onClose, onSelectTemplate, filterByProvider,
               </Typography>
               <TextField
                 multiline
-                rows={12}
+                minRows={12}
                 fullWidth
                 variant="outlined"
                 value={selectedTemplate.prompt}

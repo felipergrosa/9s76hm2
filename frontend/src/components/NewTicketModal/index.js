@@ -98,32 +98,31 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
       const fetchContacts = async () => {
-        api
-          // .get(`/whatsapp/filter`, { params: { companyId, session: 0, channel: channelFilter } })
-          .get(`/whatsapp`, { params: { companyId, session: 0 } })
-          .then(({ data }) => setWhatsapps(data));
-
-          // .then(({ data }) => {
-          //   const mappedWhatsapps = data.map((whatsapp) => ({
-          //     ...whatsapp,
-          //     selected: false,
-          //   }));
-          //   setWhatsapps(mappedWhatsapps);
-          //   if (channelFilter && mappedWhatsapps.length && mappedWhatsapps?.length === 1 && (user.whatsappId === null || user?.whatsapp?.channel !== channelFilter)) {
-          //     setSelectedWhatsapp(mappedWhatsapps[0].id)
-          //   }
-          // });
+        try {
+          const { data } = await api.get(`/whatsapp`, { params: { companyId, session: 0 } });
+          
+          // Verificar se o componente ainda está montado antes de atualizar o estado
+          if (isMounted.current) {
+            setWhatsapps(data);
+            
+            if (whatsappId !== null && whatsappId !== undefined) {
+              setSelectedWhatsapp(whatsappId);
+            }
+            
+            setLoading(false);
+          }
+        } catch (err) {
+          if (isMounted.current) {
+            toastError(err);
+            setLoading(false);
+          }
+        }
       };
 
-      if (whatsappId !== null && whatsappId !== undefined) {
-        setSelectedWhatsapp(whatsappId)
-      }
-
       fetchContacts();
-      setLoading(false);
     }, 500);
     return () => clearTimeout(delayDebounceFn);
-  }, [selectedContact, channelFilter])
+  }, [selectedContact, channelFilter, companyId, whatsappId])
 
   useEffect(() => {
     if (!modalOpen || searchParam.length < 3) {
@@ -137,11 +136,17 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
           const { data } = await api.get("contacts", {
             params: { searchParam },
           });
-          setOptions(data.contacts);
-          setLoading(false);
+          
+          // Verificar se o componente ainda está montado antes de atualizar o estado
+          if (isMounted.current) {
+            setOptions(data.contacts);
+            setLoading(false);
+          }
         } catch (err) {
-          setLoading(false);
-          toastError(err);
+          if (isMounted.current) {
+            setLoading(false);
+            toastError(err);
+          }
         }
       };
       fetchContacts();

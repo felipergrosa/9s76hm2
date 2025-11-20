@@ -359,12 +359,17 @@ const MainListItems = ({ collapsed }) => {
   }, [isAuth, user?.companyId]);
 
   useEffect(() => {
+    // Aguardar autenticação completa antes de fazer requisições
+    if (!isAuth || !user?.id) {
+      return;
+    }
+    
     const delayDebounceFn = setTimeout(() => {
       fetchChats();
     }, 500);
     return () => clearTimeout(delayDebounceFn);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParam, pageNumber]);
+  }, [searchParam, pageNumber, isAuth, user?.id]);
 
   useEffect(() => {
     if (user.id && socket && typeof socket.on === 'function') {
