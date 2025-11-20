@@ -76,9 +76,14 @@ const Contact = () => {
   };
 
   const formatPhoneDisplay = (phone) => {
-    // Formata para exibição: (14) 98125-2988
+    // Formata para exibição: +55 (14) 98125-2988
     const cleaned = phone.replace(/\D/g, "");
-    if (cleaned.length === 13) {
+    if (cleaned.length === 13 && cleaned.startsWith("55")) {
+      // Formato: +55 (DDD) NNNNN-NNNN
+      return cleaned.replace(/(\d{2})(\d{2})(\d{5})(\d{4})/, "+$1 ($2) $3-$4");
+    }
+    if (cleaned.length === 11) {
+      // Formato local: (DDD) NNNNN-NNNN
       return cleaned.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
     }
     return phone;
