@@ -68,7 +68,7 @@ Este documento consolida as principais capacidades da plataforma considerando o 
 - **Ferramentas de suporte**: `Helps`, `ToDoList`, `Announcements`, `AuditLogs`, `SettingsCustom` centralizam governança e comunicação com clientes.
 - **Scripts e diagnósticos**: diretórios `lib/`, `utils/`, `backend/scripts/` e `.docs/sql/` oferecem automações para migrações, correções e análises.
 
-### 14. Próximas evoluções (relacionadas)
+### 13. Próximas evoluções (relacionadas)
 - **Auto-onboarding SaaS** conforme análise em `.docs/branchs/main/auto-onboarding-saas.md`.
 - **Console de administração SaaS** (`.docs/branchs/main/admin-saas-console.md`) para consolidar gestão de empresas, planos e billing.
 - **Otimizações de build** (docker multi-stage, Buildx, `.dockerignore`) já implementadas e documentadas em `.docs/docker-build.md`.
