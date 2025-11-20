@@ -5,6 +5,7 @@ Bem-vindo ao hub oficial de documentação do projeto **Taktchat**. Esta pasta c
 ## Como navegar
 
 - `visao-geral/`: contexto do produto, arquitetura, fluxos críticos e roadmap.
+  - **Roadmap centralizado:** `visao-geral/roadmap.md` - Melhorias futuras e funcionalidades pendentes do projeto
 - `instalacao/`: requisitos, preparação de ambiente, passo a passo para rodar localmente e via Docker.
 - `configuracao/`: variáveis de ambiente, parâmetros sensíveis e políticas de segurança.
 - `operacao/`: rotinas diárias, monitoramento, backup/restore e troubleshooting.

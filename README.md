@@ -64,6 +64,7 @@ Toda a documentação foi reorganizada em `.docs/`. Principais pontos de entrada
 
 - **🚀 Guia de Onboarding:** `.docs/onboarding.md` - Documentação completa explicando todas as funcionalidades e como utilizá-las
 - **📚 Documentação Admin:** `.docs/docs_admin.md` - Guia completo para administradores (Super Admin)
+- **🗺️ Roadmap e Melhorias Futuras:** `.docs/visao-geral/roadmap.md` - Documento centralizado com todas as melhorias futuras do projeto
 - Visão geral do produto: `.docs/visao-geral/produto.md`
 - Arquitetura e fluxos críticos: `.docs/visao-geral/arquitetura.md` e `.docs/visao-geral/fluxos-criticos.md`
 - Instalação e ambientes: `.docs/instalacao/`
