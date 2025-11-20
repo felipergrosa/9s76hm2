@@ -440,7 +440,7 @@ const AllConnections = () => {
           <Paper className={classes.mainPaper} style={{ overflow: "hidden" }} variant="outlined">
             <MainHeader>
               <Stack>
-                <Typography variant="h5" color="black" style={{ fontWeight: "bold", marginLeft: "10px", marginTop: "10px" }} gutterBottom>
+                <Typography variant="h5" color="textPrimary" style={{ fontWeight: "bold", marginLeft: "10px", marginTop: "10px" }} gutterBottom>
                   {i18n.t("connections.title")}
                 </Typography>
                 <Typography style={{ marginTop: "-10px", marginLeft: "10px" }} variant="caption" color="textSecondary">

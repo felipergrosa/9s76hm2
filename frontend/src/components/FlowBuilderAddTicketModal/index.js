@@ -67,10 +67,13 @@ const FlowBuilderTicketModal = ({
     const [selectedQueue, setQueueSelected] = useState()
 
     useEffect(() => {
+        isMounted.current = true;
+        
         if (open === 'edit') {
             (async () => {
                 try {
                     const { data: old } = await api.get("/queue");
+                    if (!isMounted.current) return;
                     setQueues(old)
                     const queue = old.find((item) => item.id === data.data.id)
                     console.log('queue', queue)
@@ -79,7 +82,9 @@ const FlowBuilderTicketModal = ({
                     }
                     setActiveModal(true)
                 } catch (error) {
-                    console.log(error)
+                    if (isMounted.current) {
+                        console.log(error)
+                    }
                 }
             })();
 
@@ -87,17 +92,20 @@ const FlowBuilderTicketModal = ({
             (async () => {
                 try {
                     const { data } = await api.get("/queue");
+                    if (!isMounted.current) return;
                     setQueues(data)
                     setActiveModal(true)
                 } catch (error) {
-                    console.log(error)
+                    if (isMounted.current) {
+                        console.log(error)
+                    }
                 }
             })()
         }
         return () => {
             isMounted.current = false;
         };
-    }, [open]);
+    }, [open, data]);
 
 
     const handleClose = () => {
@@ -127,7 +135,7 @@ const FlowBuilderTicketModal = ({
 
     return (
         <div className={classes.root}>
-            <Dialog open={activeModal} onClose={handleClose} fullWidth="md" scroll="paper">
+            <Dialog open={activeModal} onClose={handleClose} fullWidth maxWidth="md" scroll="paper">
                 <DialogTitle id="form-dialog-title">
                     {open === 'create' ? `Adicionar uma fila ao fluxo` : `Editar fila`}
                 </DialogTitle>

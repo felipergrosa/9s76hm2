@@ -21,6 +21,10 @@ const useAuth = () => {
   
   // Ref para rastrear se o componente está montado
   const isMountedRef = useRef(true);
+  // Ref para evitar múltiplas tentativas simultâneas de refresh
+  const isRefreshingRef = useRef(false);
+  // Ref para controlar se já tentou fazer refresh inicial
+  const hasTriedInitialRefreshRef = useRef(false);
 
   // Cleanup quando o componente desmonta
   useEffect(() => {
@@ -58,30 +62,59 @@ const useAuth = () => {
       const originalRequest = error.config;
       const status = error?.response?.status;
       const isAuthRefreshCall = originalRequest?.url?.includes("/auth/refresh_token");
-      if ((status === 401 || status === 403) && !originalRequest._retry && !isAuthRefreshCall) {
+      
+      // Evitar loop infinito: se já está tentando refresh ou é uma chamada de refresh, não tentar novamente
+      if ((status === 401 || status === 403) && !originalRequest._retry && !isAuthRefreshCall && !isRefreshingRef.current) {
         originalRequest._retry = true;
+        isRefreshingRef.current = true;
+        
         try {
           const { data } = await api.post("/auth/refresh_token");
           if (data?.token) {
             localStorage.setItem("token", JSON.stringify(data.token));
             api.defaults.headers.Authorization = `Bearer ${data.token}`;
+            isRefreshingRef.current = false;
             return api(originalRequest);
           }
         } catch (e) {
-          // queda para logout abaixo
+          // Refresh falhou: limpar estado e redirecionar para login
+          isRefreshingRef.current = false;
+          localStorage.removeItem("token");
+          api.defaults.headers.Authorization = undefined;
+          safeSetState(setIsAuth, false);
+          
+          // Redirecionar para login apenas se não estiver já na página de login
+          if (history.location.pathname !== "/login") {
+            history.push("/login");
+          }
         }
       }
+      
       if (status === 401) {
         localStorage.removeItem("token");
         api.defaults.headers.Authorization = undefined;
         safeSetState(setIsAuth, false);
+        
+        // Redirecionar para login apenas se não estiver já na página de login
+        if (history.location.pathname !== "/login") {
+          history.push("/login");
+        }
       }
+      
       return Promise.reject(error);
     }
   );
 
   useEffect(() => {
     isMountedRef.current = true;
+    
+    // Evitar múltiplas tentativas de refresh inicial
+    if (hasTriedInitialRefreshRef.current) {
+      return;
+    }
+    
+    hasTriedInitialRefreshRef.current = true;
+    isRefreshingRef.current = true;
     
     (async () => {
       try {
@@ -95,18 +128,24 @@ const useAuth = () => {
       } catch (err) {
         // falha de refresh inicial: garantir estado limpo
         if (isMountedRef.current) {
-        localStorage.removeItem("token");
-        api.defaults.headers.Authorization = undefined;
+          localStorage.removeItem("token");
+          api.defaults.headers.Authorization = undefined;
           safeSetState(setIsAuth, false);
-        // não exibir toast aqui para não poluir ao simplesmente abrir o app sem sessão
+          
+          // Redirecionar para login apenas se não estiver já na página de login
+          if (history.location.pathname !== "/login") {
+            history.push("/login");
+          }
+          // não exibir toast aqui para não poluir ao simplesmente abrir o app sem sessão
         }
       } finally {
+        isRefreshingRef.current = false;
         if (isMountedRef.current) {
           safeSetState(setLoading, false);
         }
       }
     })();
-  }, []);
+  }, [history]);
 
   useEffect(() => {
     if (Object.keys(user).length && user.id > 0) {

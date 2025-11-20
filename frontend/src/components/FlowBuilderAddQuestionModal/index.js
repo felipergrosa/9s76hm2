@@ -173,7 +173,7 @@ const FlowBuilderAddQuestionModal = ({
                 <TextField
                   label={"Mensagem"}
                   multiline
-                  rows={7}
+                  minRows={7}
                   name="message"
                   error={touched.message && Boolean(errors.message)}
                   helperText={touched.message && errors.message}

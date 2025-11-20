@@ -109,7 +109,7 @@ const WebhookModal = ({ open, onClose, webhookId, nameWebhook, initialValues, on
 
 	return (
 		<div className={classes.root}>
-			<Dialog open={open} onClose={handleClose} fullWidth="md" scroll="paper">
+			<Dialog open={open} onClose={handleClose} fullWidth maxWidth="md" scroll="paper">
 				<DialogTitle id="form-dialog-title">
 					{webhookId
 						? `${i18n.t("webhookModal.title.edit")}`

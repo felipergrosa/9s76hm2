@@ -162,7 +162,8 @@ const FlowBuilderMenuModal = ({ open, onSave, onUpdate, data, close }) => {
       <Dialog
         open={activeModal}
         onClose={handleClose}
-        fullWidth="md"
+        fullWidth
+        maxWidth="md"
         scroll="paper"
       >
         <DialogTitle id="form-dialog-title">{labels.title}</DialogTitle>
@@ -170,7 +171,7 @@ const FlowBuilderMenuModal = ({ open, onSave, onUpdate, data, close }) => {
           <Stack dividers style={{ gap: "8px", padding: "16px" }}>
             <TextField
               label={"Mensagem de explicação do menu"}
-              rows={4}
+              minRows={4}
               name="text"
               multiline
               variant="outlined"

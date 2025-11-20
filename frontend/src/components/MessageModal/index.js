@@ -622,7 +622,7 @@ const MessageModal = ({ open, onClose, messageId, reload }) => {
                   <Grid item xs={12} md={12} xl={12}>
                     <Field
                       as={TextField}
-                      rows={9}
+                      minRows={9}
                       multiline={true}
                       label={i18n.t("scheduleModal.form.body")}
                       name="mensagem"

@@ -642,7 +642,7 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
                   margin="dense"
                   fullWidth
                   required
-                  rows={10}
+                  minRows={10}
                   multiline
                   inputRef={promptInputRef}
                 />

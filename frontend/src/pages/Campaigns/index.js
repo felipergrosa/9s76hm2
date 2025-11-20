@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 
-import React, { useState, useEffect, useReducer, useContext } from "react";
+import React, { useState, useEffect, useReducer, useContext, useRef } from "react";
 import { toast } from "react-toastify";
 
 import { useHistory } from "react-router-dom";
@@ -112,6 +112,7 @@ const useStyles = makeStyles((theme) => ({
 const Campaigns = () => {
   const classes = useStyles();
   const history = useHistory();
+  const isMountedRef = useRef(true);
 
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
@@ -125,6 +126,12 @@ const Campaigns = () => {
   const [campaigns, dispatch] = useReducer(reducer, []);
   //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
 
   const { datetimeToClient } = useDate();
@@ -184,12 +191,17 @@ const Campaigns = () => {
       const { data } = await api.get("/campaigns/", {
         params: { searchParam, pageNumber },
       });
+      // Verificar se o componente ainda está montado antes de atualizar o estado
+      if (!isMountedRef.current) return;
       // Substitui a lista ao trocar de página/filtro
       dispatch({ type: "SET_CAMPAIGNS", payload: data.records });
       setTotalCampaigns(typeof data.count === "number" ? data.count : 0);
       setLoading(false);
     } catch (err) {
-      toastError(err);
+      if (isMountedRef.current) {
+        toastError(err);
+        setLoading(false);
+      }
     }
   };
 

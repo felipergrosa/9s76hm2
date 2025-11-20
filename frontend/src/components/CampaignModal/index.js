@@ -767,7 +767,7 @@ const CampaignModal = ({
         id={identifier}
         name={identifier}
         fullWidth
-        rows={5}
+        minRows={5}
         label={i18n.t(`campaigns.dialog.form.${identifier}`)}
         placeholder={i18n.t("campaigns.dialog.form.messagePlaceholder")}
         multiline={true}
@@ -785,7 +785,7 @@ const CampaignModal = ({
         id={identifier}
         name={identifier}
         fullWidth
-        rows={5}
+        minRows={5}
         label={i18n.t(`campaigns.dialog.form.${identifier}`)}
         placeholder={i18n.t("campaigns.dialog.form.messagePlaceholder")}
         multiline={true}

@@ -1048,7 +1048,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                           label={i18n.t("whatsappModal.form.greetingMessage")}
                           type="greetingMessage"
                           multiline
-                          rows={4}
+                          minRows={4}
                           fullWidth
                           name="greetingMessage"
                           error={
@@ -1068,7 +1068,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                           as={TextField}
                           label={i18n.t("whatsappModal.form.complationMessage")}
                           multiline
-                          rows={4}
+                          minRows={4}
                           fullWidth
                           name="complationMessage"
                           error={
@@ -1089,7 +1089,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                           as={TextField}
                           label={i18n.t("whatsappModal.form.outOfHoursMessage")}
                           multiline
-                          rows={4}
+                          minRows={4}
                           fullWidth
                           name="outOfHoursMessage"
                           error={touched.outOfHoursMessage && Boolean(errors.outOfHoursMessage)}
@@ -1104,7 +1104,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                           as={TextField}
                           label={i18n.t("whatsappModal.form.collectiveVacationMessage")}
                           multiline
-                          rows={4}
+                          minRows={4}
                           fullWidth
                           name="collectiveVacationMessage"
                           error={touched.collectiveVacationMessage && Boolean(errors.collectiveVacationMessage)}
@@ -1267,7 +1267,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                         as={TextField}
                         label={i18n.t("whatsappModal.form.expiresInactiveMessage")}
                         multiline
-                        rows={4}
+                        minRows={4}
                         fullWidth
                         name="expiresInactiveMessage"
                         error={touched.expiresInactiveMessage && Boolean(errors.expiresInactiveMessage)}
@@ -1294,7 +1294,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                         as={TextField}
                         label={i18n.t("whatsappModal.form.inactiveMessage")}
                         multiline
-                        rows={4}
+                        minRows={4}
                         fullWidth
                         name="inactiveMessage"
                         error={touched.inactiveMessage && Boolean(errors.inactiveMessage)}
@@ -1317,7 +1317,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                         as={TextField}
                         label={i18n.t("whatsappModal.form.ratingMessage")}
                         multiline
-                        rows={4}
+                        minRows={4}
                         fullWidth
                         name="ratingMessage"
                         error={touched.ratingMessage && Boolean(errors.ratingMessage)}

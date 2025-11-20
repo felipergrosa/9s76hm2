@@ -554,7 +554,7 @@ const TagModal = ({ open, onClose, tagId, kanban }) => {
 													as={TextField}
 													label={i18n.t("tagModal.form.greetingMessageLane")}
 													name="greetingMessageLane"
-													rows={5}
+													minRows={5}
 													multiline
 													error={touched.greetingMessageLane && Boolean(errors.greetingMessageLane)}
 													helperText={touched.greetingMessageLane && errors.greetingMessageLane}

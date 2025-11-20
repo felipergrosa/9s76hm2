@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer, useContext, useCallback } from "react";
+import React, { useState, useEffect, useReducer, useContext, useCallback, useRef } from "react";
 import { toast } from "react-toastify";
 
 import { makeStyles } from "@material-ui/core/styles";
@@ -97,6 +97,7 @@ const useStyles = makeStyles((theme) => ({
 
 const Quickemessages = () => {
   const classes = useStyles();
+  const isMountedRef = useRef(true);
 
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
@@ -111,6 +112,12 @@ const Quickemessages = () => {
   const { user, socket } = useContext(AuthContext);
 
   const { profile } = user;
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     dispatch({ type: "RESET" });
@@ -153,11 +160,17 @@ const Quickemessages = () => {
         params: { searchParam, pageNumber },
       });
 
-      dispatch({ type: "LOAD_QUICKMESSAGES", payload: data.records });
-      setHasMore(data.hasMore);
-      setLoading(false);
+      // Verificar se o componente ainda está montado antes de atualizar o estado
+      if (isMountedRef.current) {
+        dispatch({ type: "LOAD_QUICKMESSAGES", payload: data.records });
+        setHasMore(data.hasMore);
+        setLoading(false);
+      }
     } catch (err) {
-      toastError(err);
+      if (isMountedRef.current) {
+        toastError(err);
+        setLoading(false);
+      }
     }
   };
 

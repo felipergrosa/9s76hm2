@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import toastError from "../../errors/toastError";
 import { format, sub } from 'date-fns'
 import api from "../../services/api";
@@ -25,8 +25,16 @@ const useTickets = ({
   const [hasMore, setHasMore] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [count, setCount] = useState(0);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
       const fetchTickets = async () => {
@@ -51,17 +59,24 @@ const useTickets = ({
               },
             });
             
+            // Verificar se o componente ainda está montado antes de atualizar o estado
+            if (!isMountedRef.current) {
+              return;
+            }
+            
             let tickets = [];
             
             tickets = data.tickets;
           
             setTickets(tickets);
             setHasMore(data.hasMore);
-            setCount(data.count)
+            setCount(data.count);
             setLoading(false);
           } catch (err) {
-            setLoading(false);
-            toastError(err);
+            if (isMountedRef.current) {
+              setLoading(false);
+              toastError(err);
+            }
           }
         } else {
           try {
@@ -84,6 +99,11 @@ const useTickets = ({
               }
             })
 
+            // Verificar se o componente ainda está montado antes de atualizar o estado
+            if (!isMountedRef.current) {
+              return;
+            }
+
             // console.log(data)
             let tickets = [];
             tickets = data.filter(item => item.userId == userFilter);            
@@ -92,14 +112,18 @@ const useTickets = ({
             setHasMore(null);
             setLoading(false);
           } catch (err) {
-            setLoading(false);
-            toastError(err);
+            if (isMountedRef.current) {
+              setLoading(false);
+              toastError(err);
+            }
           }
         }
       };
     fetchTickets();
     }, 500);
-    return () => clearTimeout(delayDebounceFn);
+    return () => {
+      clearTimeout(delayDebounceFn);
+    };
   }, [
     searchParam,
     tags,
@@ -115,7 +139,8 @@ const useTickets = ({
     statusFilter,
     forceSearch,
     sortTickets,
-    searchOnMessages
+    searchOnMessages,
+    userFilter
   ]);
 
   return { tickets, loading, hasMore, count };

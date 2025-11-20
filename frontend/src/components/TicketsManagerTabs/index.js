@@ -988,7 +988,7 @@ const TicketsManagerTabs = () => {
           indicatorColor="primary"
           textColor="primary"
           variant="fullWidth"
-          scrollButtons={false}
+          scrollButtons="off"
         >
           {/* ATENDENDO */}
           <Tab

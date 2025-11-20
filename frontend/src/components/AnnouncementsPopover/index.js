@@ -159,13 +159,18 @@ export default function AnnouncementsPopover() {
   }, [searchParam]);
 
   useEffect(() => {
+    // Aguardar autenticação completa antes de fazer requisições
+    if (!user?.id || !user?.companyId) {
+      return;
+    }
+    
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
       fetchAnnouncements();
     }, 500);
     return () => clearTimeout(delayDebounceFn);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParam, pageNumber]);
+  }, [searchParam, pageNumber, user?.id, user?.companyId]);
 
   useEffect(() => {
     if (user.companyId) {

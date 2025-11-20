@@ -211,7 +211,7 @@ Content-Type: application/json
                 <Form className={classes.formContainer}>
                   <Field as={TextField} name="token" label="Token Cadastrado" variant="outlined" required className={classes.formField} />
                   <Field as={TextField} name="number" label="Número" variant="outlined" required className={classes.formField} />
-                  <Field as={TextField} name="body" label="Mensagem" variant="outlined" required multiline rows={4} className={classes.formField} />
+                  <Field as={TextField} name="body" label="Mensagem" variant="outlined" required multiline minRows={4} className={classes.formField} />
                   <Field as={TextField} name="userId" label="ID do Usuário (Opcional)" variant="outlined" className={classes.formField} />
                   <Field as={TextField} name="queueId" label="ID da Fila (Opcional)" variant="outlined" className={classes.formField} />
                   <Button type="submit" color="primary" variant="contained" size="large" disabled={isSubmitting} className={classes.submitButton} endIcon={<SendIcon />}>

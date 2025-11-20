@@ -385,7 +385,7 @@ const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
                 variant="outlined"
                 margin="dense"
                 multiline
-                rows={8}
+                minRows={8}
                 fullWidth
                 required
                 inputRef={promptInputRef}

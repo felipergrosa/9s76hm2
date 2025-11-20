@@ -233,7 +233,7 @@ const AnnouncementModal = ({ open, onClose, announcementId, reload }) => {
                       variant="outlined"
                       margin="dense"
                       multiline={true}
-                      rows={7}
+                      minRows={7}
                       fullWidth
                     />
                   </Grid>

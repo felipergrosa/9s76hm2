@@ -1,4 +1,5 @@
 import React, { useState, useContext, useEffect, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import clsx from "clsx";
 // import moment from "moment";
 
@@ -292,6 +293,7 @@ const SmallAvatar = withStyles((theme) => ({
 
 const LoggedInLayout = ({ children, themeToggle }) => {
   const classes = useStyles();
+  const location = useLocation();
   const [userToken, setUserToken] = useState("disabled");
   const [loadingUserToken, setLoadingUserToken] = useState(false);
   const [userModalOpen, setUserModalOpen] = useState(false);
@@ -307,6 +309,13 @@ const LoggedInLayout = ({ children, themeToggle }) => {
   const theme = useTheme();
   const { colorMode } = useContext(ColorModeContext);
   const greaterThenSm = useMediaQuery(theme.breakpoints.up("sm"));
+
+  // Rotas públicas que não devem mostrar os menus
+  const publicRoutes = ["/login", "/signup", "/forgot-password", "/reset-password"];
+  const isPublicRoute = publicRoutes.includes(location.pathname);
+  
+  // Só mostrar menus se estiver autenticado e não estiver em rota pública
+  const shouldShowMenus = isAuth && !isPublicRoute && user?.id;
 
   const [volume, setVolume] = useState(localStorage.getItem("volume") || 1);
 
@@ -474,6 +483,11 @@ const LoggedInLayout = ({ children, themeToggle }) => {
 
   if (loading) {
     return <BackdropLoading />;
+  }
+
+  // Se não deve mostrar menus (não autenticado ou rota pública), renderizar apenas o conteúdo
+  if (!shouldShowMenus) {
+    return <>{children}</>;
   }
 
   return (

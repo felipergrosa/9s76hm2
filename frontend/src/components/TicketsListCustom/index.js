@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer, useContext, useMemo } from "react";
+import React, { useState, useEffect, useReducer, useContext, useMemo, useRef } from "react";
 
 import { makeStyles } from "@material-ui/core/styles";
 import List from "@material-ui/core/List";
@@ -216,6 +216,7 @@ const TicketsListCustom = (props) => {
     } = props;
 
     const classes = useStyles();
+    const isMountedRef = useRef(true);
     const [pageNumber, setPageNumber] = useState(1);
     let [ticketsList, dispatch] = useReducer(reducer, []);
     //   const socketManager = useContext(SocketContext);
@@ -224,6 +225,12 @@ const TicketsListCustom = (props) => {
     const { profile, queues } = user;
     const showTicketWithoutQueue = user.allTicket === 'enable';
     const companyId = user.companyId;
+
+    useEffect(() => {
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
 
     useEffect(() => {
         dispatch({ type: "RESET" });
@@ -247,6 +254,11 @@ const TicketsListCustom = (props) => {
 
 
     useEffect(() => {
+        // Verificar se o componente ainda está montado antes de atualizar o estado
+        if (!isMountedRef.current) {
+            return;
+        }
+        
         // const queueIds = queues.map((q) => q.id);
         // const filteredTickets = tickets.filter(
         //     (t) => queueIds.indexOf(t.queueId) > -1
@@ -265,7 +277,7 @@ const TicketsListCustom = (props) => {
         //  dispatch({ type: "LOAD_TICKETS", payload: filteredTickets });
         // }
 
-    }, [tickets]);
+    }, [tickets, companyId, status, sortTickets]);
 
     useEffect(() => {
         if (!socket || typeof socket.on !== 'function' || !user?.companyId) {
