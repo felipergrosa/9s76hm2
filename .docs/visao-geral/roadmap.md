@@ -47,9 +47,6 @@ Este documento centraliza todas as melhorias futuras, funcionalidades pendentes 
 **Documentação completa:** `.docs/branchs/landing-page-vendas/melhorias-futuras.md`
 
 ### Prioridade Alta
-- [ ] Notificação para administradores quando novo lead é criado
-- [ ] Dashboard de leads na área administrativa
-- [ ] Sistema de status de leads (novo, contatado, qualificado, convertido, perdido)
 - [ ] LGPD Compliance (banner de cookies, política de privacidade, termos de uso)
 - [ ] Proteção contra Spam (CAPTCHA - reCAPTCHA v3 ou hCaptcha)
 
@@ -199,6 +196,25 @@ Este documento centraliza todas as melhorias futuras, funcionalidades pendentes 
 - [ ] Compartilhamento de listas entre usuários
 - [ ] Histórico de alterações
 - [ ] Exportação de listas (CSV, Excel)
+
+### Formulário de Leads
+- [ ] Criar funcionalidade de "Formulário de leads" para ser embedado ou usado pela empresa cliente
+- [ ] Integração com backend `/leads` existente
+- [ ] Geração automática de Contacts a partir dos leads
+- [ ] Componente React reutilizável e configurável
+- [ ] Suporte a embed via iframe ou script
+- [ ] Customização de campos do formulário
+- [ ] Validação de dados (Yup schema configurável)
+- [ ] Integração com reCAPTCHA
+- [ ] Redirecionamento configurável após envio (WhatsApp, página de agradecimento, etc.)
+- [ ] Dashboard de leads na área administrativa
+- [ ] Notificações para administradores quando novo lead é criado
+- [ ] Sistema de status de leads (novo, contatado, qualificado, convertido, perdido)
+- [ ] Histórico de conversões de leads em contatos
+- [ ] Analytics de origem dos leads (UTM, referrer, etc.)
+- [ ] API para gerenciar formulários e leads
+- [ ] Múltiplos formulários por empresa
+- [ ] Templates de formulários pré-configurados
 
 ---
 
@@ -392,6 +408,11 @@ Este documento centraliza todas as melhorias futuras, funcionalidades pendentes 
 ---
 
 ## 📝 Histórico de Atualizações
+
+- **2025-01-27:** Adicionada funcionalidade "Formulário de Leads" ao roadmap
+  - Funcionalidade para ser embedada ou usada por empresas clientes
+  - Integração com backend `/leads` e geração automática de Contacts
+  - Baseada na implementação existente em `/landing` do TaktChat
 
 - **2025-01-27:** Consolidação completa de todas as melhorias futuras
   - Análise de todos os documentos das branches

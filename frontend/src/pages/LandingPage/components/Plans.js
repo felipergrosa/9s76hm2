@@ -20,75 +20,89 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     flexDirection: "column",
     padding: theme.spacing(3),
-    transition: "transform 0.3s ease, box-shadow 0.3s ease",
+    borderRadius: "16px",
+    transition: "all 0.3s ease",
     position: "relative",
+    border: "1px solid rgba(0,0,0,0.08)",
     "&:hover": {
-      transform: "translateY(-5px)",
-      boxShadow: theme.shadows[8],
-    },
-    [theme.breakpoints.down("xs")]: {
-      padding: theme.spacing(2),
+      transform: "translateY(-8px)",
+      boxShadow: "0 12px 24px rgba(0,0,0,0.1)",
     },
   },
   planCardFeatured: {
-    border: `3px solid ${theme.palette.primary.main}`,
+    border: `2px solid ${theme.palette.primary.main}`,
     transform: "scale(1.05)",
+    boxShadow: "0 8px 20px rgba(0,0,0,0.12)",
+    zIndex: 2,
     [theme.breakpoints.down("md")]: {
       transform: "scale(1)",
+      marginTop: theme.spacing(2),
+      marginBottom: theme.spacing(2),
+    },
+    "&:hover": {
+      transform: "scale(1.05) translateY(-8px)",
+      boxShadow: "0 16px 32px rgba(0,0,0,0.15)",
     },
   },
   featuredBadge: {
     position: "absolute",
     top: theme.spacing(2),
     right: theme.spacing(2),
+    backgroundColor: theme.palette.primary.main,
+    color: "#fff",
+    fontWeight: 600,
   },
   planName: {
-    fontWeight: 700,
-    fontSize: "1.8rem",
+    fontWeight: 800,
+    fontSize: "1.5rem",
     marginBottom: theme.spacing(1),
-    [theme.breakpoints.down("xs")]: {
-      fontSize: "1.5rem",
-    },
+    color: theme.palette.text.primary,
   },
   planPrice: {
-    fontSize: "2.5rem",
-    fontWeight: 700,
+    fontSize: "3rem",
+    fontWeight: 800,
     color: theme.palette.primary.main,
     marginBottom: theme.spacing(0.5),
-    [theme.breakpoints.down("xs")]: {
-      fontSize: "2rem",
-    },
+    lineHeight: 1,
   },
   planRecurrence: {
     color: theme.palette.text.secondary,
-    marginBottom: theme.spacing(3),
+    marginBottom: theme.spacing(4),
+    fontSize: "1rem",
+    fontWeight: 500,
   },
   planFeatures: {
     listStyle: "none",
     padding: 0,
-    margin: theme.spacing(2, 0),
+    margin: theme.spacing(0, 0, 4, 0),
     flexGrow: 1,
   },
   planFeatureItem: {
-    padding: theme.spacing(1, 0),
+    padding: theme.spacing(1.2, 0),
     display: "flex",
     alignItems: "center",
     color: theme.palette.text.secondary,
+    fontSize: "0.95rem",
+    borderBottom: "1px dashed rgba(0,0,0,0.05)",
+    "&:last-child": {
+      borderBottom: "none",
+    },
   },
   planFeatureIcon: {
     color: theme.palette.success.main,
-    marginRight: theme.spacing(1),
-    fontSize: "1.2rem",
+    marginRight: theme.spacing(1.5),
+    fontSize: "1.1rem",
   },
   planButton: {
-    marginTop: theme.spacing(3),
     padding: theme.spacing(1.5),
     fontSize: "1rem",
-    fontWeight: 600,
+    fontWeight: 700,
     textTransform: "none",
-  },
-  trialBadge: {
-    marginTop: theme.spacing(1),
+    borderRadius: "8px",
+    boxShadow: "none",
+    "&:hover": {
+      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+    },
   },
   loadingContainer: {
     display: "flex",
@@ -112,14 +126,14 @@ const Plans = ({ plans, loading }) => {
 
   const getFeatureLabel = (feature) => {
     const labels = {
-      useWhatsapp: "WhatsApp",
-      useCampaigns: "Campanhas",
-      useKanban: "Kanban",
-      useOpenAi: "Inteligência Artificial",
-      useSchedules: "Agendamentos",
-      useInternalChat: "Chat Interno",
-      useExternalApi: "API Externa",
-      useIntegrations: "Integrações",
+      useWhatsapp: "Conexão WhatsApp",
+      useCampaigns: "Campanhas em Massa",
+      useKanban: "Kanban de Atendimento",
+      useOpenAi: "Inteligência Artificial (ChatGPT)",
+      useSchedules: "Agendamento de Mensagens",
+      useInternalChat: "Chat Interno da Equipe",
+      useExternalApi: "API para Integrações",
+      useIntegrations: "Webhooks e Integrações",
     };
     return labels[feature] || feature;
   };
@@ -156,63 +170,68 @@ const Plans = ({ plans, loading }) => {
   }
 
   return (
-    <Box>
+    <Box id="plans">
       <Typography variant="h2" className={classes.sectionTitle}>
-        Planos de Assinatura
+        Planos Flexíveis
       </Typography>
       <Typography variant="h6" className={classes.sectionSubtitle}>
-        Escolha o plano ideal para sua empresa
+        Escale seu atendimento com o plano perfeito para o seu momento
       </Typography>
-      <Grid container spacing={4} justifyContent="center">
+      <Grid container spacing={4} justifyContent="center" alignItems="stretch">
         {plans.map((plan, index) => {
-          const isFeatured = index === Math.floor(plans.length / 2);
-          // Extrair features diretamente do objeto plan
-          const enabledFeatures = [];
-          if (plan.useWhatsapp) enabledFeatures.push("useWhatsapp");
-          if (plan.useCampaigns) enabledFeatures.push("useCampaigns");
-          if (plan.useKanban) enabledFeatures.push("useKanban");
-          if (plan.useOpenAi) enabledFeatures.push("useOpenAi");
-          if (plan.useSchedules) enabledFeatures.push("useSchedules");
-          if (plan.useInternalChat) enabledFeatures.push("useInternalChat");
-          if (plan.useExternalApi) enabledFeatures.push("useExternalApi");
-          if (plan.useIntegrations) enabledFeatures.push("useIntegrations");
+          // Lógica melhorada para destaque: destaca o plano do meio ou o que tiver "Premium" no nome
+          const isFeatured = plan.name.toLowerCase().includes("premium") || (plans.length === 3 && index === 1);
+
+          const enabledFeatures = [
+            plan.useWhatsapp && "useWhatsapp",
+            plan.useCampaigns && "useCampaigns",
+            plan.useKanban && "useKanban",
+            plan.useOpenAi && "useOpenAi",
+            plan.useSchedules && "useSchedules",
+            plan.useInternalChat && "useInternalChat",
+            plan.useExternalApi && "useExternalApi",
+            plan.useIntegrations && "useIntegrations",
+          ].filter(Boolean);
 
           return (
             <Grid item xs={12} sm={6} md={4} key={plan.id || index}>
               <Card
                 className={`${classes.planCard} ${isFeatured ? classes.planCardFeatured : ""}`}
-                variant="outlined"
+                elevation={isFeatured ? 8 : 0}
               >
                 {isFeatured && (
                   <Chip
-                    icon={<StarIcon />}
-                    label="Mais Popular"
-                    color="primary"
+                    icon={<StarIcon style={{ color: "#fff", fontSize: 16 }} />}
+                    label="Recomendado"
                     className={classes.featuredBadge}
+                    size="small"
                   />
                 )}
-                <CardContent>
+                <CardContent style={{ display: "flex", flexDirection: "column", height: "100%" }}>
                   <Typography variant="h4" className={classes.planName}>
                     {plan.name}
                   </Typography>
-                  <Typography variant="h3" className={classes.planPrice}>
-                    {formatPrice(plan.amount)}
-                  </Typography>
+                  <Box display="flex" alignItems="baseline">
+                    <Typography variant="h3" className={classes.planPrice}>
+                      {formatPrice(plan.amount)}
+                    </Typography>
+                  </Box>
                   <Typography variant="body2" className={classes.planRecurrence}>
-                    /{plan.recurrence || "mês"}
+                    por {plan.recurrence === "MENSAL" ? "mês" : plan.recurrence || "mês"}
                   </Typography>
+
                   <ul className={classes.planFeatures}>
                     <li className={classes.planFeatureItem}>
                       <CheckIcon className={classes.planFeatureIcon} />
-                      <span>{plan.users} Usuários</span>
+                      <span style={{ fontWeight: 600 }}>{plan.users} Usuários</span>
                     </li>
                     <li className={classes.planFeatureItem}>
                       <CheckIcon className={classes.planFeatureIcon} />
-                      <span>{plan.connections} Conexões WhatsApp</span>
+                      <span style={{ fontWeight: 600 }}>{plan.connections} Conexões WhatsApp</span>
                     </li>
                     <li className={classes.planFeatureItem}>
                       <CheckIcon className={classes.planFeatureIcon} />
-                      <span>{plan.queues} Filas de Atendimento</span>
+                      <span style={{ fontWeight: 600 }}>{plan.queues} Filas de Atendimento</span>
                     </li>
                     {enabledFeatures.map((feature, featureIndex) => (
                       <li key={featureIndex} className={classes.planFeatureItem}>
@@ -221,23 +240,28 @@ const Plans = ({ plans, loading }) => {
                       </li>
                     ))}
                   </ul>
-                  {plan.trial && (
-                    <Chip
-                      label={`${plan.trialDays || 14} dias grátis`}
-                      color="secondary"
-                      size="small"
-                      className={classes.trialBadge}
-                    />
-                  )}
-                  <Button
-                    variant={isFeatured ? "contained" : "outlined"}
-                    color="primary"
-                    fullWidth
-                    className={classes.planButton}
-                    onClick={scrollToForm}
-                  >
-                    Assinar Agora
-                  </Button>
+
+                  <Box mt="auto">
+                    {plan.trial && (
+                      <Box mb={2} display="flex" justifyContent="center">
+                        <Chip
+                          label={`Teste Grátis por ${plan.trialDays || 14} dias`}
+                          color="secondary"
+                          variant="outlined"
+                          size="small"
+                        />
+                      </Box>
+                    )}
+                    <Button
+                      variant={isFeatured ? "contained" : "outlined"}
+                      color="primary"
+                      fullWidth
+                      className={classes.planButton}
+                      onClick={scrollToForm}
+                    >
+                      {isFeatured ? "Assinar Agora" : "Escolher este Plano"}
+                    </Button>
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>

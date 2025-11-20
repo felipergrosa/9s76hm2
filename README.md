@@ -50,13 +50,21 @@ Consulte `.docs/instalacao/` para requisitos e variações (Docker completo, pro
 ### Landing Page de Vendas
 
 A plataforma inclui uma landing page pública de vendas acessível em `/landing` que apresenta:
-- Funcionalidades e benefícios do TaktChat
-- Planos de assinatura dinâmicos
-- Formulário de coleta de leads com integração ao banco de dados
-- Redirecionamento automático para WhatsApp
-- Design responsivo e moderno
+- **Design moderno**: Hero com gradiente escuro, tipografia aprimorada e elementos visuais abstratos
+- **Componentes essenciais**:
+  - FAQ com accordion (6 perguntas frequentes)
+  - ChatWidget flutuante para contato WhatsApp
+  - CookieBanner para conformidade LGPD
+- **Planos dinâmicos**: Cards modernizados com destaque visual para plano recomendado
+- **Formulário de leads**: Validação aprimorada com Yup, feedback visual e máscara de telefone
+- **SEO otimizado**:
+  - Meta tags avançadas (Open Graph, Twitter Cards, Mobile)
+  - Dados estruturados Schema.org (SoftwareApplication, Organization, FAQPage)
+  - Lazy loading com React.lazy para melhor performance
+- **Performance**: Code splitting e carregamento sob demanda de componentes
+- **Responsivo**: Design adaptado para todos os dispositivos
 
-> Detalhes da implementação: `.docs/branchs/landing-page-vendas/`
+> Detalhes da implementação: `.docs/branchs/feature/melhorias-pagina-vendas/`
 
 ### Documentação
 
