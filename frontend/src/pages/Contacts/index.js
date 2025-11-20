@@ -50,6 +50,8 @@ import ConfirmationModal from "../../components/ConfirmationModal";
 import { i18n } from "../../translate/i18n";
 import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
+import { makeStyles, useTheme, useMediaQuery } from "@material-ui/core/styles";
+import { Paper, Box } from "@material-ui/core";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { Can } from "../../components/Can";
@@ -67,6 +69,195 @@ import useCompanySettings from "../../hooks/useSettings/companySettings";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import BulkEditContactsModal from "../../components/BulkEditContactsModal";
 import DuplicateContactsModal from "../../components/DuplicateContactsModal";
+
+const useStyles = makeStyles((theme) => ({
+  root: {
+    flex: 1,
+    backgroundColor: theme.palette.background.default,
+    minHeight: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
+  container: {
+    width: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
+  header: {
+    marginBottom: theme.spacing(3),
+    padding: theme.spacing(2),
+    backgroundColor: theme.palette.background.paper,
+    borderRadius: theme.shape.borderRadius,
+    boxShadow: theme.shadows[1],
+  },
+  title: {
+    fontSize: "1.75rem",
+    fontWeight: 700,
+    color: theme.palette.text.primary,
+    marginBottom: theme.spacing(0.5),
+    [theme.breakpoints.down("sm")]: {
+      fontSize: "1.5rem",
+    },
+  },
+  subtitle: {
+    fontSize: "1rem",
+    color: theme.palette.text.secondary,
+    marginLeft: theme.spacing(1),
+  },
+  searchContainer: {
+    marginBottom: theme.spacing(2),
+  },
+  searchInput: {
+    width: "100%",
+    padding: theme.spacing(1.5),
+    paddingLeft: theme.spacing(5),
+    fontSize: "0.875rem",
+    backgroundColor: theme.palette.background.paper,
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: theme.shape.borderRadius,
+    "&:focus": {
+      outline: "none",
+      borderColor: theme.palette.primary.main,
+      boxShadow: `0 0 0 2px ${theme.palette.primary.main}20`,
+    },
+  },
+  actionsBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    marginBottom: theme.spacing(2),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 40,
+    height: 40,
+    padding: theme.spacing(1),
+    borderRadius: theme.shape.borderRadius,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+    color: theme.palette.text.primary,
+    cursor: "pointer",
+    transition: "all 0.2s",
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover,
+    },
+    "&:disabled": {
+      opacity: 0.5,
+      cursor: "not-allowed",
+    },
+  },
+  tableContainer: {
+    backgroundColor: theme.palette.background.paper,
+    borderRadius: theme.shape.borderRadius,
+    boxShadow: theme.shadows[2],
+    overflow: "hidden",
+    marginBottom: theme.spacing(2),
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  tableHead: {
+    backgroundColor: theme.palette.grey[100],
+    "& th": {
+      padding: theme.spacing(1.5),
+      textAlign: "left",
+      fontSize: "0.75rem",
+      fontWeight: 600,
+      textTransform: "uppercase",
+      color: theme.palette.text.secondary,
+      borderBottom: `2px solid ${theme.palette.divider}`,
+    },
+  },
+  tableBody: {
+    "& tr": {
+      borderBottom: `1px solid ${theme.palette.divider}`,
+      transition: "background-color 0.2s",
+      "&:hover": {
+        backgroundColor: theme.palette.action.hover,
+      },
+      "&:last-child": {
+        borderBottom: "none",
+      },
+    },
+    "& td": {
+      padding: theme.spacing(1.5),
+      fontSize: "0.875rem",
+      color: theme.palette.text.primary,
+    },
+  },
+  emptyState: {
+    padding: theme.spacing(4),
+    textAlign: "center",
+    color: theme.palette.text.secondary,
+  },
+  pagination: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: theme.spacing(2),
+    backgroundColor: theme.palette.background.paper,
+    borderRadius: theme.shape.borderRadius,
+    boxShadow: theme.shadows[1],
+    marginTop: theme.spacing(2),
+  },
+  paginationInfo: {
+    fontSize: "0.875rem",
+    color: theme.palette.text.secondary,
+  },
+  paginationControls: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+  },
+  pageButton: {
+    minWidth: 32,
+    height: 32,
+    padding: theme.spacing(0.5),
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: theme.shape.borderRadius,
+    backgroundColor: theme.palette.background.paper,
+    color: theme.palette.text.primary,
+    cursor: "pointer",
+    transition: "all 0.2s",
+    "&:hover:not(:disabled)": {
+      backgroundColor: theme.palette.action.hover,
+    },
+    "&:disabled": {
+      opacity: 0.5,
+      cursor: "not-allowed",
+    },
+  },
+  pageButtonActive: {
+    backgroundColor: theme.palette.primary.main,
+    color: theme.palette.primary.contrastText,
+    borderColor: theme.palette.primary.main,
+    "&:hover": {
+      backgroundColor: theme.palette.primary.dark,
+    },
+  },
+  filterChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: theme.spacing(0.5, 1),
+    margin: theme.spacing(0.25),
+    backgroundColor: theme.palette.success.light,
+    color: theme.palette.success.dark,
+    borderRadius: theme.shape.borderRadius,
+    fontSize: "0.75rem",
+    border: `1px solid ${theme.palette.success.main}`,
+  },
+  mobileCardContainer: {
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1),
+    marginTop: theme.spacing(2),
+  },
+}));
 
 const CustomTooltipProps = {
   arrow: true,
@@ -128,6 +319,9 @@ const reducer = (state, action) => {
 };
 
 const Contacts = () => {
+    const classes = useStyles();
+    const theme = useTheme();
+    const isDesktop = useMediaQuery(theme.breakpoints.up(1200));
     const history = useHistory();
     const location = useLocation();
 
@@ -815,9 +1009,9 @@ const Contacts = () => {
     // Função renderPageNumbers já está disponibilizada pelo hook useContactPagination
 
     return (
-        <div className="flex-1 bg-gray-50 dark:bg-gray-900 min-h-full">
+        <Box className={classes.root}>
             <MainContainer useWindowScroll>
-                <div className="w-full p-4 md:p-6 lg:p-8 overflow-x-hidden">
+                <Box className={classes.container}>
                 <LoadingOverlay open={loading} message="Aguarde..." />
                 <NewTicketModal
                     modalOpen={newTicketModalOpen}
@@ -932,14 +1126,18 @@ const Contacts = () => {
                 />
 
                 {/* Cabeçalho */}
-                <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-                    <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">
-                        {i18n.t("contacts.title")}
-                        <span className="text-lg font-normal text-gray-500 dark:text-gray-400 ml-2">
-                            ({totalContacts})
-                        </span>
-                    </h1>
-                </header>
+                <Paper className={classes.header} elevation={1}>
+                    <Box display="flex" flexDirection={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }}>
+                        <Box>
+                            <h1 className={classes.title}>
+                                {i18n.t("contacts.title")}
+                                <span className={classes.subtitle}>
+                                    ({totalContacts})
+                                </span>
+                            </h1>
+                        </Box>
+                    </Box>
+                </Paper>
 
                 {/* Barra de Ações e Filtros - Mobile (2 linhas) */}
                 <div className="min-[1200px]:hidden flex flex-col gap-2 w-full max-w-[375px] mx-auto mb-4">
@@ -1048,19 +1246,22 @@ const Contacts = () => {
                     </div>
 
                     {/* Linha 2: Busca sozinha */}
-                    <div className="relative w-full">
+                    <Box className={classes.searchContainer} position="relative">
+                        <Search style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9CA3AF", zIndex: 1 }} />
                         <input
                             type="text"
                             placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
                             value={searchParam}
                             onChange={handleSearch}
-                            className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className={classes.searchInput}
+                            style={{ paddingLeft: 40 }}
                         />
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         {isSearching && (
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
+                            <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: "0.75rem", color: "#6B7280" }}>
+                                Buscando...
+                            </span>
                         )}
-                    </div>
+                    </Box>
                 </div>
 
                 {hasActiveFilters && filtersSummary.length > 0 && (
@@ -1233,10 +1434,11 @@ const Contacts = () => {
                 </div>
 
     {/* Tabela de Contatos (Desktop) */}
-    <div className="hidden min-[1200px]:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-        <div className="overflow-x-hidden">
-            <table className="w-full table-fixed text-sm text-left text-gray-500 dark:text-gray-400">
-                <thead className="uppercase text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400 tracking-wider">
+    {isDesktop && (
+    <Paper className={classes.tableContainer} elevation={2}>
+        <Box style={{ overflowX: "auto" }}>
+            <table className={classes.table}>
+                <thead className={classes.tableHead}>
                     <tr>
                         <th scope="col" className="w-[48px] p-2 text-center">
                             <input type="checkbox"
@@ -1283,10 +1485,10 @@ const Contacts = () => {
                         <th scope="col" className="pl-3 pr-3 py-2 text-center w-[120px] font-medium">AÇÕES</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody className={classes.tableBody}>
                     {!loading && sortedContacts.length === 0 && (
                         <tr>
-                            <td colSpan={8} className="px-6 py-10 text-center text-sm text-gray-500 dark:text-gray-300">
+                            <td colSpan={8} className={classes.emptyState}>
                                 Nenhum contato encontrado com os filtros selecionados. Tente ajustar os campos.
                             </td>
                         </tr>
@@ -1310,26 +1512,26 @@ const Contacts = () => {
                     {loading && <TableRowSkeleton avatar columns={9} />}
                 </tbody>
             </table>
-        </div>
+        </Box>
         {/* Paginação da Tabela (Desktop) */}
-        <nav className="hidden min-[1200px]:flex items-center justify-between p-4" aria-label="Table navigation">
-            <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+        <Box className={classes.pagination} component="nav" aria-label="Table navigation">
+            <span className={classes.paginationInfo}>
                 Página {" "}
-                <span className="font-semibold text-gray-900 dark:text-white">{pageNumber}</span>
+                <strong>{pageNumber}</strong>
                 {" "} de {" "}
-                <span className="font-semibold text-gray-900 dark:text-white">{totalPages}</span>
+                <strong>{totalPages}</strong>
                 {" "} • {" "}
-                <span className="font-semibold text-gray-900 dark:text-white">{totalContacts}</span> contatos
+                <strong>{totalContacts}</strong> contatos
             </span>
-            <div className="flex items-center gap-2">
-                <span className="text-sm">Itens por página:</span>
+            <Box className={classes.paginationControls}>
+                <span style={{ fontSize: "0.875rem", marginRight: 8 }}>Itens por página:</span>
                 <select
                     value={contactsPerPage}
                     onChange={(e) => {
                         setContactsPerPage(Number(e.target.value));
                         setPageNumber(1);
                     }}
-                    className="text-sm bg-gray-50 border border-gray-300 rounded-md p-1 dark:bg-gray-700 dark:border-gray-600"
+                    style={{ fontSize: "0.875rem", padding: "4px 8px", border: "1px solid #E5E7EB", borderRadius: "4px" }}
                 >
                     <option value={5}>5</option>
                     <option value={25}>25</option>
@@ -1338,13 +1540,14 @@ const Contacts = () => {
                     <option value={500}>500</option>
                     <option value={1000}>1000</option>
                 </select>
-            </div>
-            <ul className="inline-flex items-center -space-x-px">
+            </Box>
+            <Box className={classes.paginationControls} component="ul" style={{ listStyle: "none", display: "flex", gap: 4, margin: 0, padding: 0 }}>
                 <li>
                     <button
                         onClick={() => handlePageChange(1)}
                         disabled={pageNumber === 1}
-                        className="flex items-center justify-center px-3 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={classes.pageButton}
+                        style={{ borderRadius: "4px 0 0 4px" }}
                     >
                         <ChevronsLeft className="w-5 h-5" />
                     </button>
@@ -1362,11 +1565,7 @@ const Contacts = () => {
                     <li key={index}>
                         <button
                             onClick={() => handlePageChange(page)}
-                            className={`flex items-center justify-center px-3 h-8 leading-tight border
-                                ${page === pageNumber
-                                    ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
-                                    : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-                                }`}
+                            className={`${classes.pageButton} ${page === pageNumber ? classes.pageButtonActive : ""}`}
                         >
                             {page}
                         </button>
@@ -1376,7 +1575,8 @@ const Contacts = () => {
                     <button
                         onClick={() => handlePageChange(pageNumber + 1)}
                         disabled={pageNumber === totalPages}
-                        className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={classes.pageButton}
+                        style={{ borderRadius: "0 4px 4px 0" }}
                     >
                         <ChevronRight className="w-5 h-5" />
                     </button>
@@ -1385,14 +1585,16 @@ const Contacts = () => {
                     <button
                         onClick={() => handlePageChange(totalPages)}
                         disabled={pageNumber === totalPages}
-                        className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={classes.pageButton}
+                        style={{ borderRadius: "0 4px 4px 0", marginLeft: 4 }}
                     >
                         <ChevronsRight className="w-5 h-5" />
                     </button>
                 </li>
-            </ul>
-        </nav>
-    </div>
+            </Box>
+        </Box>
+    </Paper>
+    )}
 
     {/* Lista de Contatos (Mobile) */}
     <div className="min-[1200px]:hidden flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
@@ -1500,9 +1702,9 @@ const Contacts = () => {
                         </ul>
                     </div>
                 </nav>
-                </div>
+                </Box>
             </MainContainer>
-        </div>
+        </Box>
     );
 };
 

@@ -18,6 +18,7 @@ Plataforma de mensageria omnichannel voltada para operações de atendimento e c
 - Multi-empresa nativa, perfis e permissões granulares, painel financeiro e billing.
 - Webhooks, APIs externas, monitoramento (audit logs, announcements) e recursos de AI/RAG.
 - **WhatsApp Dual Channel**: Suporte simultâneo a Baileys (gratuito) e WhatsApp Business API Oficial (Meta, pago).
+- **Landing Page de Vendas**: Página pública de apresentação do produto com coleta de leads e integração WhatsApp.
 
 > Detalhamento completo: `.docs/visao-geral/funcionalidades.md`.
 > WhatsApp API Oficial: `.docs/funcionalidades/whatsapp-api-oficial/`
@@ -45,6 +46,17 @@ npm start
 ```
 
 Consulte `.docs/instalacao/` para requisitos e variações (Docker completo, produção, etc.).
+
+### Landing Page de Vendas
+
+A plataforma inclui uma landing page pública de vendas acessível em `/landing` que apresenta:
+- Funcionalidades e benefícios do TaktChat
+- Planos de assinatura dinâmicos
+- Formulário de coleta de leads com integração ao banco de dados
+- Redirecionamento automático para WhatsApp
+- Design responsivo e moderno
+
+> Detalhes da implementação: `.docs/branchs/landing-page-vendas/`
 
 ### Documentação
 

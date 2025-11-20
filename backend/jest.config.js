@@ -76,7 +76,11 @@ module.exports = {
   // ],
 
   // A map from regular expressions to module names or to arrays of module names that allow to stub out resources with a single module
-  // moduleNameMapper: {},
+  moduleNameMapper: {
+    "^@whiskeysockets/baileys$": "<rootDir>/src/__mocks__/baileys.js",
+    "^@whiskeysockets/baileys/(.*)$": "<rootDir>/src/__mocks__/baileys.js",
+    "^axios$": "<rootDir>/src/__mocks__/axios.js"
+  },
 
   // An array of regexp pattern strings, matched against all module paths before considered 'visible' to the module loader
   // modulePathIgnorePatterns: [],
@@ -141,7 +145,16 @@ module.exports = {
   // testLocationInResults: false,
 
   // The glob patterns Jest uses to detect test files
-  testMatch: ["**/__tests__/**/*.spec.ts"]
+  testMatch: ["**/__tests__/**/*.spec.ts"],
+  
+  // TypeScript configuration for tests
+  globals: {
+    "ts-jest": {
+      tsconfig: {
+        types: ["node", "jest"]
+      }
+    }
+  },
 
   // An array of regexp pattern strings that are matched against all test paths, matched tests are skipped
   // testPathIgnorePatterns: [
@@ -173,7 +186,15 @@ module.exports = {
   // ],
 
   // An array of regexp pattern strings that are matched against all modules before the module loader will automatically return a mock for them
-  // unmockedModulePathPatterns: undefined,
+  unmockedModulePathPatterns: ["@whiskeysockets/baileys"],
+  
+  // Transform ignore patterns - modules ES6 que não devem ser transformados
+  transformIgnorePatterns: [
+    "/node_modules/(?!(@whiskeysockets/baileys)/)"
+  ],
+  
+  // Extensions to treat as modules
+  moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
 
   // Indicates whether each individual test should be reported during the run
   // verbose: undefined,

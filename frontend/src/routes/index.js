@@ -1,5 +1,5 @@
 import React, { useEffect, useState, lazy } from "react";
-import { BrowserRouter, Switch } from "react-router-dom";
+import { BrowserRouter, Switch, Route as RouterRoute } from "react-router-dom";
 
 import LoggedInLayout from "../layout";
 import { AuthProvider } from "../context/Auth/AuthContext";
@@ -12,6 +12,7 @@ import Login from "../pages/Login";
 import Signup from "../pages/Signup";
 import ForgotPassword from "../pages/ForgetPassWord";
 import ResetPassword from "../pages/ResetPassword";
+import LandingPage from "../pages/LandingPage";
 
 // Lazy loading para todas as outras páginas (code splitting automático)
 const Dashboard = lazy(() => import("../pages/Dashboard"));
@@ -66,9 +67,10 @@ const Routes = () => {
 
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <TicketsContextProvider>
-            <Switch>
+      <Switch>
+        <RouterRoute exact path="/landing" component={LandingPage} />
+        <AuthProvider>
+          <TicketsContextProvider>
             <Route exact path="/docs" component={OnboardingDocs} />
             <Route exact path="/docs_admin" component={AdminDocs} />
             <Route exact path="/login" component={Login} />
@@ -135,9 +137,9 @@ const Routes = () => {
                 )}
               </LoggedInLayout>
             </WhatsAppsProvider>
-          </Switch>
-        </TicketsContextProvider>
-      </AuthProvider>
+          </TicketsContextProvider>
+        </AuthProvider>
+      </Switch>
     </BrowserRouter>
   );
 };

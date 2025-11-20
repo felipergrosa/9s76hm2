@@ -25,7 +25,8 @@
     ],
     "types": [
       "node",
-      "express"
+      "express",
+      "jest"
     ],
   },
   "include": ["src/**/*","src/@types/**/*"],
