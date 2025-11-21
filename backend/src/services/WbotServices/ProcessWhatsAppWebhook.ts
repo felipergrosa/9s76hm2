@@ -97,7 +97,8 @@ const ProcessWhatsAppWebhook = async (change: WebhookChange): Promise<void> => {
     }
 
     const phoneNumberId = value.metadata.phone_number_id;
-    logger.debug(`[WebhookProcessor] Processando webhook para phoneNumberId: ${phoneNumberId}`);
+    logger.info(`[WebhookProcessor] Processando webhook para phoneNumberId: ${phoneNumberId}`);
+    logger.debug(`[WebhookProcessor] Webhook value: ${JSON.stringify(value).substring(0, 500)}`);
 
     // Buscar conexão WhatsApp pelo phoneNumberId
     const whatsapp = await Whatsapp.findOne({
