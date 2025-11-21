@@ -78,13 +78,36 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
     try {
       logger.info(`[OfficialAPI] Inicializando whatsappId=${this.whatsappId}`);
       
-      // Verificar se credenciais são válidas
+      // Verificar se credenciais são válidas e buscar dados do número
       const response = await this.client.get(`/${this.phoneNumberId}`);
       
       this.phoneNumber = response.data.display_phone_number;
+      const verifiedName = response.data.verified_name;
+      const qualityRating = response.data.quality_rating;
+      
       this.status = "connected";
       
       logger.info(`[OfficialAPI] Inicializado com sucesso: ${this.phoneNumber}`);
+      logger.info(`[OfficialAPI] Nome verificado: ${verifiedName}, Quality: ${qualityRating}`);
+      
+      // Atualizar banco de dados com informações corretas
+      try {
+        const Whatsapp = (await import("../../models/Whatsapp")).default;
+        await Whatsapp.update(
+          {
+            wabaPhoneNumberId: this.phoneNumberId,
+            wabaBusinessAccountId: this.businessAccountId,
+            status: "CONNECTED",
+            number: this.phoneNumber
+          },
+          {
+            where: { id: this.whatsappId }
+          }
+        );
+        logger.info(`[OfficialAPI] Dados atualizados no banco: phoneNumberId=${this.phoneNumberId}`);
+      } catch (dbError: any) {
+        logger.warn(`[OfficialAPI] Falha ao atualizar banco: ${dbError.message}`);
+      }
       
       // Notificar callbacks
       this.emitConnectionUpdate("connected");

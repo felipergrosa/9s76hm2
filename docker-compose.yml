@@ -19,7 +19,7 @@ services:
       DB_PASS: efe487b6a861100fb704ad9f5c160cb8 # senha igual à do seu banco
       TZ: America/Sao_Paulo
       FRONTEND_URL: ${FRONTEND_URL:-https://chats.nobreluminarias.com.br}
-      BACKEND_URL: ${BACKEND_URL:-https://chats.nobreluminarias.com.br}
+      BACKEND_URL: ${BACKEND_URL:-https://chatsapi.nobreluminarias.com.br}
       REDIS_URI: redis://redis:6379/0
       REDIS_URI_ACK: redis://redis:6379/0
       BULL_USER: admin
