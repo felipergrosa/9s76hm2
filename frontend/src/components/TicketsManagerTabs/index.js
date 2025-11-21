@@ -29,8 +29,8 @@ import {
 import VisibilityIcon from "@material-ui/icons/Visibility";
 import VisibilityOffIcon from "@material-ui/icons/VisibilityOff";
 import ToggleButton from "@material-ui/lab/ToggleButton";
-
-import { FilterAltOff, FilterAlt, PlaylistAddCheckOutlined } from "@mui/icons-material";
+import FilterListIcon from "@material-ui/icons/FilterList";
+import CheckCircleIcon from "@material-ui/icons/CheckCircle";
 
 import NewTicketModal from "../NewTicketModal";
 import TicketsList from "../TicketsListCustom";
@@ -644,11 +644,10 @@ const TicketsManagerTabs = () => {
             handleFilter();
           }}
         >
-          {isFilterActive ? (
-            <FilterAlt className={classes.icon} />
-          ) : (
-            <FilterAltOff className={classes.icon} />
-          )}
+          <FilterListIcon 
+            className={classes.icon} 
+            style={{ opacity: isFilterActive ? 1 : 0.5 }} 
+          />
         </IconButton>
       </div>
 
@@ -803,7 +802,7 @@ const TicketsManagerTabs = () => {
                   className={classes.button}
                   onClick={handleSnackbarOpen}
                 >
-                  <PlaylistAddCheckOutlined style={{ color: theme.mode === "light" ? "green" : "#FFF" }} />
+                  <CheckCircleIcon style={{ color: theme.mode === "light" ? "green" : "#FFF" }} />
                 </IconButton>
               </Badge>
             )}

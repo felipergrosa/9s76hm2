@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from "react";
 import { Link as RouterLink } from "react-router-dom";
-import { Button, TextField, Typography } from "@material-ui/core";
+import { Button, TextField, Typography, Fab, Tooltip } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
 import { IconButton, InputAdornment, Switch } from "@mui/material";
 import Visibility from "@material-ui/icons/Visibility";
@@ -8,8 +8,10 @@ import VisibilityOff from "@material-ui/icons/VisibilityOff";
 import EmailIcon from "@material-ui/icons/Email";
 import LockIcon from "@material-ui/icons/Lock";
 import HelpOutlineIcon from "@material-ui/icons/HelpOutline";
+import WhatsAppIcon from "@material-ui/icons/WhatsApp";
 import { Helmet } from "react-helmet";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import { getNumberSupport } from "../../config";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -69,6 +71,15 @@ const useStyles = makeStyles((theme) => ({
     maxWidth: "150px",
     height: "auto",
   },
+  tagline: {
+    textAlign: "center",
+    marginBottom: "20px",
+    fontSize: "0.95rem",
+    color: theme.palette.text.secondary,
+    fontStyle: "italic",
+    fontWeight: 500,
+    letterSpacing: "0.3px",
+  },
   submitBtn: {
     marginTop: "20px",
     background: theme.palette.primary.main,
@@ -117,39 +128,33 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     marginTop: "10px",
   },
-  whatsappButton: {
+  fab: {
     position: "fixed",
-    bottom: "20px",
-    right: "20px",
-    backgroundColor: theme.palette.primary.main,
-    borderRadius: "50%",
+    bottom: theme.spacing(4),
+    right: theme.spacing(4),
+    zIndex: 1000,
+    backgroundColor: "#25D366",
+    color: "#ffffff",
     width: "60px",
     height: "60px",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    boxShadow: "0 4px 12px #044012",
-    transition: "all 0.3s ease",
-    animation: "$bounce 2s infinite",
-    cursor: "pointer",
-    zIndex: 999,
+    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
     "&:hover": {
-      backgroundColor: theme.palette.primary.dark,
-      transform: "scale(1.1)",
-      boxShadow: "0 8px 16px #05491c",
+      backgroundColor: "#20BA5A",
     },
+    animation: "$pulse 2s infinite",
   },
-  whatsappIcon: {
-    width: "64px",
-    height: "64px",
-    objectFit: "contain",
+  icon: {
+    fontSize: "2rem",
   },
-  "@keyframes bounce": {
-    "0%, 100%": {
-      transform: "translateY(0)",
+  "@keyframes pulse": {
+    "0%": {
+      boxShadow: "0 0 0 0 rgba(37, 211, 102, 0.7)",
     },
-    "50%": {
-      transform: "translateY(-5px)",
+    "70%": {
+      boxShadow: "0 0 0 15px rgba(37, 211, 102, 0)",
+    },
+    "100%": {
+      boxShadow: "0 0 0 0 rgba(37, 211, 102, 0)",
     },
   },
   docsLink: {
@@ -244,6 +249,9 @@ const Login = () => {
         </a>
         <form className={classes.formContainer} onSubmit={handleSubmit}>
           <img src="/logo.png" alt="Logo" className={classes.logoImg} />
+          <Typography className={classes.tagline}>
+            Conectando pessoas, acelerando negócios
+          </Typography>
           {error && <Typography color="error">{error}</Typography>}
           <TextField
             label="Email"
@@ -335,16 +343,19 @@ const Login = () => {
             </RouterLink>
           </div>
         </form>
-        <div
-          className={classes.whatsappButton}
-          onClick={() => window.open("https://wa.me/5514981252988")}
-        >
-          <img
-            src="https://clickscertos.com.br/wp-content/uploads/2025/05/iconzapzap.png"
-            alt="WhatsApp"
-            className={classes.whatsappIcon}
-          />
-        </div>
+        <Tooltip title="Fale conosco no WhatsApp" placement="left" arrow>
+          <Fab 
+            className={classes.fab} 
+            onClick={() => {
+              const supportNumber = getNumberSupport() || "5514981252988";
+              const link = `https://wa.me/${supportNumber.replace(/\D/g, "")}?text=Olá! Gostaria de saber mais sobre o TaktChat.`;
+              window.open(link, "_blank");
+            }} 
+            aria-label="whatsapp-contact"
+          >
+            <WhatsAppIcon className={classes.icon} />
+          </Fab>
+        </Tooltip>
       </div>
     </>
   );

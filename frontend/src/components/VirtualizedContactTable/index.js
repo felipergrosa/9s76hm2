@@ -1,8 +1,8 @@
 import React, { memo, useMemo } from "react";
 import { FixedSizeList as List } from "react-window";
-import { Tooltip } from "@material-ui/core";
-import { WhatsApp } from "@material-ui/icons";
-import { Trash2, Edit, Lock, Unlock, CheckCircle, Ban } from "lucide-react";
+import { Tooltip, IconButton } from "@material-ui/core";
+import { WhatsApp, Edit as EditIcon, DeleteOutline as DeleteOutlineIcon, Lock as LockIcon } from "@material-ui/icons";
+import { Unlock, CheckCircle, Ban } from "lucide-react";
 import LazyContactAvatar from "../LazyContactAvatar";
 
 // Altura aproximada da linha (ajuste se necessário para casar com a tabela)
@@ -77,15 +77,19 @@ const VirtualizedContactTable = ({
 
           {/* Telefone + Validação */}
           <div className="pl-3 pr-3 py-3 w-[120px]">
-            <div className="flex items-center gap-2 text-[16px] leading-tight">
-              <span className="flex-1 min-w-4 truncate text-[16px] leading-tight text-gray-800 dark:text-gray-100">{itemData.formatPhoneNumber(contact.number)}</span>
+            <div className="flex items-center gap-1.5 text-[16px] leading-tight min-w-0" style={{ whiteSpace: 'nowrap' }}>
+              <span className="flex-1 min-w-0 truncate text-[16px] leading-tight text-gray-800 dark:text-gray-100" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{itemData.formatPhoneNumber(contact.number)}</span>
               {!!contact.isWhatsappValid ? (
                 <Tooltip {...itemData.CustomTooltipProps} title={`WhatsApp válido${contact.validatedAt ? ` • ${new Date(contact.validatedAt).toLocaleString('pt-BR')}` : ''}`}>
-                  <CheckCircle className="w-5 h-5 text-green-700 flex-shrink-0" />
+                  <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center" style={{ flexShrink: 0 }}>
+                    <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-500" strokeWidth={2.5} />
+                  </div>
                 </Tooltip>
               ) : (
                 <Tooltip {...itemData.CustomTooltipProps} title={`WhatsApp inválido${contact.validatedAt ? ` • ${new Date(contact.validatedAt).toLocaleString('pt-BR')}` : ''}`}>
-                  <Ban className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                  <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-red-50 dark:bg-red-900/20" style={{ flexShrink: 0 }}>
+                    <Ban className="w-4 h-4 text-red-600 dark:text-red-400" strokeWidth={2.5} />
+                  </div>
                 </Tooltip>
               )}
             </div>
@@ -137,31 +141,42 @@ const VirtualizedContactTable = ({
 
           {/* Ações */}
           <div className="pl-3 pr-3 py-3 text-center w-[120px]">
-            <div className="flex items-center justify-center gap-1.5">
-              <Tooltip {...itemData.CustomTooltipProps} title="Enviar mensagem pelo WhatsApp">
-                <button onClick={() => itemData.onSendMessage(contact)} className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300">
-                  <WhatsApp className="w-4 h-4" />
-                </button>
-              </Tooltip>
-              <Tooltip {...itemData.CustomTooltipProps} title="Editar contato">
-                <button onClick={() => itemData.onEdit(contact.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                  <Edit className="w-5 h-5" />
-                </button>
-              </Tooltip>
-              <Tooltip {...itemData.CustomTooltipProps} title={contact.active ? "Bloquear contato" : "Desbloquear contato"}>
-                <button
-                  onClick={() => contact.active ? itemData.onBlock(contact) : itemData.onUnblock(contact)}
-                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                >
-                  {contact.active ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
-                </button>
-              </Tooltip>
-              <Tooltip {...itemData.CustomTooltipProps} title="Deletar contato">
-                <button onClick={() => itemData.onDelete(contact)} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              </Tooltip>
-            </div>
+            <Tooltip {...itemData.CustomTooltipProps} title="Enviar mensagem pelo WhatsApp">
+              <IconButton 
+                size="small" 
+                onClick={() => itemData.onSendMessage(contact)}
+                style={{ color: "#16a34a" }}
+              >
+                <WhatsApp />
+              </IconButton>
+            </Tooltip>
+            <Tooltip {...itemData.CustomTooltipProps} title="Editar contato">
+              <IconButton 
+                size="small" 
+                onClick={() => itemData.onEdit(contact.id)}
+                style={{ color: "#2563eb" }}
+              >
+                <EditIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip {...itemData.CustomTooltipProps} title={contact.active ? "Bloquear contato" : "Desbloquear contato"}>
+              <IconButton 
+                size="small" 
+                onClick={() => contact.active ? itemData.onBlock(contact) : itemData.onUnblock(contact)}
+                style={{ color: "#6b7280" }}
+              >
+                {contact.active ? <LockIcon /> : <Unlock style={{ width: 20, height: 20 }} />}
+              </IconButton>
+            </Tooltip>
+            <Tooltip {...itemData.CustomTooltipProps} title="Deletar contato">
+              <IconButton 
+                size="small" 
+                onClick={() => itemData.onDelete(contact)}
+                style={{ color: "#dc2626" }}
+              >
+                <DeleteOutlineIcon />
+              </IconButton>
+            </Tooltip>
           </div>
         </div>
       </div>

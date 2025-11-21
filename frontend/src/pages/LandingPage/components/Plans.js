@@ -1,8 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import { makeStyles } from "@material-ui/core/styles";
-import { Typography, Grid, Box, Card, CardContent, Button, Chip, CircularProgress } from "@material-ui/core";
+import { Typography, Grid, Box, Card, CardContent, Button, Chip, CircularProgress, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from "@material-ui/core";
+import { ToggleButton, ToggleButtonGroup } from "@material-ui/lab";
 import CheckIcon from "@material-ui/icons/Check";
 import StarIcon from "@material-ui/icons/Star";
+import ViewModuleIcon from "@material-ui/icons/ViewModule";
+import ViewListIcon from "@material-ui/icons/ViewList";
 
 const useStyles = makeStyles((theme) => ({
   sectionTitle: {
@@ -110,10 +113,52 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     minHeight: "400px",
   },
+  viewToggle: {
+    display: "flex",
+    justifyContent: "center",
+    marginBottom: theme.spacing(4),
+  },
+  comparisonTable: {
+    marginTop: theme.spacing(4),
+    borderRadius: "8px",
+    overflow: "hidden",
+  },
+  tableHeader: {
+    backgroundColor: theme.palette.primary.main,
+    color: "#fff",
+    fontWeight: 700,
+  },
+  tableCell: {
+    padding: theme.spacing(2),
+  },
+  tableRowFeatured: {
+    backgroundColor: "rgba(25, 118, 210, 0.05)",
+  },
+  planCard: {
+    height: "100%",
+    display: "flex",
+    flexDirection: "column",
+    padding: theme.spacing(3),
+    borderRadius: "16px",
+    transition: "all 0.3s ease, opacity 0.6s ease",
+    position: "relative",
+    border: "1px solid rgba(0,0,0,0.08)",
+    opacity: 0,
+    transform: "translateY(20px)",
+    "&.visible": {
+      opacity: 1,
+      transform: "translateY(0)",
+    },
+    "&:hover": {
+      transform: "translateY(-8px)",
+      boxShadow: "0 12px 24px rgba(0,0,0,0.1)",
+    },
+  },
 }));
 
 const Plans = ({ plans, loading }) => {
   const classes = useStyles();
+  const [viewMode, setViewMode] = useState("cards");
 
   const formatPrice = (amount) => {
     if (!amount) return "R$ 0,00";
@@ -169,6 +214,33 @@ const Plans = ({ plans, loading }) => {
     );
   }
 
+  const handleViewChange = (event, newView) => {
+    if (newView !== null) {
+      setViewMode(newView);
+    }
+  };
+
+  const allFeatures = [
+    { key: "users", label: "Usuários" },
+    { key: "connections", label: "Conexões WhatsApp" },
+    { key: "queues", label: "Filas de Atendimento" },
+    { key: "useWhatsapp", label: "Conexão WhatsApp" },
+    { key: "useCampaigns", label: "Campanhas em Massa" },
+    { key: "useKanban", label: "Kanban de Atendimento" },
+    { key: "useOpenAi", label: "Inteligência Artificial" },
+    { key: "useSchedules", label: "Agendamento de Mensagens" },
+    { key: "useInternalChat", label: "Chat Interno" },
+    { key: "useExternalApi", label: "API para Integrações" },
+    { key: "useIntegrations", label: "Webhooks e Integrações" },
+  ];
+
+  // Ordenar planos por preço (do mais barato para o mais caro)
+  const sortedPlans = [...(plans || [])].sort((a, b) => {
+    const priceA = parseFloat(a.amount || 0);
+    const priceB = parseFloat(b.amount || 0);
+    return priceA - priceB;
+  });
+
   return (
     <Box id="plans">
       <Typography variant="h2" className={classes.sectionTitle}>
@@ -177,10 +249,116 @@ const Plans = ({ plans, loading }) => {
       <Typography variant="h6" className={classes.sectionSubtitle}>
         Escale seu atendimento com o plano perfeito para o seu momento
       </Typography>
-      <Grid container spacing={4} justifyContent="center" alignItems="stretch">
-        {plans.map((plan, index) => {
+      
+      {sortedPlans && sortedPlans.length > 0 && (
+        <Box className={classes.viewToggle}>
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            onChange={handleViewChange}
+            aria-label="modo de visualização"
+          >
+            <ToggleButton value="cards" aria-label="visualização em cards">
+              <ViewModuleIcon style={{ marginRight: 8 }} />
+              Cards
+            </ToggleButton>
+            <ToggleButton value="table" aria-label="visualização em tabela">
+              <ViewListIcon style={{ marginRight: 8 }} />
+              Comparar
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      )}
+
+      {viewMode === "table" && sortedPlans && sortedPlans.length > 0 ? (
+        <TableContainer component={Paper} className={classes.comparisonTable}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell className={`${classes.tableHeader} ${classes.tableCell}`}>Recurso</TableCell>
+                {sortedPlans.map((plan, index) => {
+                  const isFeatured = plan.name.toLowerCase().includes("premium") || (sortedPlans.length === 3 && index === 1);
+                  return (
+                    <TableCell 
+                      key={plan.id || index}
+                      className={`${classes.tableHeader} ${classes.tableCell} ${isFeatured ? classes.tableRowFeatured : ""}`}
+                      align="center"
+                    >
+                      {plan.name}
+                      {isFeatured && (
+                        <Chip
+                          icon={<StarIcon style={{ color: "#fff", fontSize: 14 }} />}
+                          label="Recomendado"
+                          size="small"
+                          style={{ marginTop: 8, backgroundColor: "rgba(255,255,255,0.2)", color: "#fff" }}
+                        />
+                      )}
+                      <Typography variant="h6" style={{ marginTop: 8, color: "#fff" }}>
+                        {formatPrice(plan.amount)}
+                      </Typography>
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {allFeatures.map((feature) => (
+                <TableRow key={feature.key}>
+                  <TableCell className={classes.tableCell} component="th" scope="row">
+                    {feature.label}
+                  </TableCell>
+                  {sortedPlans.map((plan, index) => {
+                    const isFeatured = plan.name.toLowerCase().includes("premium") || (sortedPlans.length === 3 && index === 1);
+                    let value = "";
+                    if (feature.key === "users") value = plan.users;
+                    else if (feature.key === "connections") value = plan.connections;
+                    else if (feature.key === "queues") value = plan.queues;
+                    else value = plan[feature.key] ? "✓" : "—";
+                    
+                    return (
+                      <TableCell 
+                        key={plan.id || index}
+                        className={`${classes.tableCell} ${isFeatured ? classes.tableRowFeatured : ""}`}
+                        align="center"
+                      >
+                        {typeof value === "boolean" ? (value ? "✓" : "—") : value}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))}
+              <TableRow>
+                <TableCell className={classes.tableCell} component="th" scope="row">
+                  Ação
+                </TableCell>
+                {sortedPlans.map((plan, index) => {
+                  const isFeatured = plan.name.toLowerCase().includes("premium") || (sortedPlans.length === 3 && index === 1);
+                  return (
+                    <TableCell 
+                      key={plan.id || index}
+                      className={`${classes.tableCell} ${isFeatured ? classes.tableRowFeatured : ""}`}
+                      align="center"
+                    >
+                      <Button
+                        variant={isFeatured ? "contained" : "outlined"}
+                        color="primary"
+                        size="small"
+                        onClick={scrollToForm}
+                      >
+                        {isFeatured ? "Assinar" : "Escolher"}
+                      </Button>
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            </TableBody>
+          </Table>
+        </TableContainer>
+      ) : (
+        <Grid container spacing={4} justifyContent="center" alignItems="stretch">
+        {sortedPlans.map((plan, index) => {
           // Lógica melhorada para destaque: destaca o plano do meio ou o que tiver "Premium" no nome
-          const isFeatured = plan.name.toLowerCase().includes("premium") || (plans.length === 3 && index === 1);
+          const isFeatured = plan.name.toLowerCase().includes("premium") || (sortedPlans.length === 3 && index === 1);
 
           const enabledFeatures = [
             plan.useWhatsapp && "useWhatsapp",
@@ -196,8 +374,9 @@ const Plans = ({ plans, loading }) => {
           return (
             <Grid item xs={12} sm={6} md={4} key={plan.id || index}>
               <Card
-                className={`${classes.planCard} ${isFeatured ? classes.planCardFeatured : ""}`}
+                className={`${classes.planCard} visible ${isFeatured ? classes.planCardFeatured : ""}`}
                 elevation={isFeatured ? 8 : 0}
+                style={{ transitionDelay: `${index * 0.1}s` }}
               >
                 {isFeatured && (
                   <Chip
@@ -268,6 +447,7 @@ const Plans = ({ plans, loading }) => {
           );
         })}
       </Grid>
+      )}
     </Box>
   );
 };

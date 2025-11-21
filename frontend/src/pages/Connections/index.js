@@ -2,21 +2,14 @@
 import React, { useState, useCallback, useContext, useEffect } from "react";
 import { toast } from "react-toastify";
 import { add, format, parseISO } from "date-fns";
-
 import Menu from "@material-ui/core/Menu";
 import MenuItem from "@material-ui/core/MenuItem";
 import PopupState, { bindTrigger, bindMenu } from "material-ui-popup-state";
-// import { SocketContext } from "../../context/Socket/SocketContext";
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
 import { green } from "@material-ui/core/colors";
 import {
   Button,
-  TableBody,
-  TableRow,
-  TableCell,
   IconButton,
-  Table,
-  TableHead,
   Paper,
   Tooltip,
   Typography,
@@ -24,7 +17,9 @@ import {
   Box,
   Card,
   CardContent,
-  Chip
+  Chip,
+  Grid,
+  useMediaQuery
 } from "@material-ui/core";
 import {
   Edit,
@@ -62,11 +57,63 @@ import ForbiddenPage from "../../components/ForbiddenPage";
 import { Can } from "../../components/Can";
 
 const useStyles = makeStyles((theme) => ({
+  root: {
+    flex: 1,
+    backgroundColor: theme.palette.background.default,
+    minHeight: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
+  container: {
+    width: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
   mainPaper: {
     flex: 1,
-    // padding: theme.spacing(1),
-    padding: theme.padding,
-    ...theme.scrollbarStyles,
+    padding: theme.spacing(1),
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  tableHead: {
+    backgroundColor: theme.palette.grey[100],
+    "& th": {
+      padding: theme.spacing(1.5),
+      textAlign: "left",
+      fontSize: "0.75rem",
+      fontWeight: 600,
+      textTransform: "uppercase",
+      color: theme.palette.text.secondary,
+      borderBottom: `2px solid ${theme.palette.divider}`,
+    },
+  },
+  tableBody: {
+    "& tr": {
+      borderBottom: `1px solid ${theme.palette.divider}`,
+      transition: "background-color 0.2s",
+      "&:hover": {
+        backgroundColor: theme.palette.action.hover,
+      },
+      "&:last-child": {
+        borderBottom: "none",
+      },
+    },
+    "& td": {
+      padding: theme.spacing(1.5),
+      fontSize: "0.875rem",
+      color: theme.palette.text.primary,
+    },
+  },
+  emptyState: {
+    padding: theme.spacing(4),
+    textAlign: "center",
+    color: theme.palette.text.secondary,
   },
   customTableCell: {
     display: "flex",
@@ -87,6 +134,14 @@ const useStyles = makeStyles((theme) => ({
     color: green[500],
   },
 }));
+
+const CustomTooltipProps = {
+  arrow: true,
+  enterTouchDelay: 0,
+  leaveTouchDelay: 5000,
+  enterDelay: 300,
+  leaveDelay: 100,
+};
 
 function CircularProgressWithLabel(props) {
   return (
@@ -151,6 +206,8 @@ const IconChannel = (channel) => {
 
 const Connections = () => {
   const classes = useStyles();
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up(1200));
 
   const { whatsApps, loading } = useContext(WhatsAppsContext);
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
@@ -523,7 +580,9 @@ const Connections = () => {
   }
 
   return (
-    <MainContainer>
+    <Box className={classes.root}>
+      <MainContainer useWindowScroll>
+        <Box className={classes.container}>
       <ConfirmationModal
         title={confirmModalInfo.title}
         open={confirmModalOpen}
@@ -549,23 +608,45 @@ const Connections = () => {
         :
         <>
           <MainHeader>
+                <Grid style={{ width: "99.6%" }} container>
+                  <Grid xs={12} sm={5} item>
             <Title>{i18n.t("connections.title")} ({whatsApps.length})</Title>
-            <MainHeaderButtonsWrapper>
+                  </Grid>
+                  <Grid xs={12} sm={7} item>
+                    <Grid container alignItems="center" spacing={2} justifyContent="flex-end">
+                      <Grid item>
               <Button
                 variant="contained"
-                color="primary"
+                          size="small"
                 onClick={restartWhatsapps}
+                          style={{ 
+                            backgroundColor: "#6366f1",
+                            color: "#ffffff",
+                            textTransform: "uppercase",
+                            fontWeight: 600,
+                            borderRadius: "8px"
+                          }}
               >
                 {i18n.t("connections.restartConnections")}
               </Button>
-
+                      </Grid>
+                      <Grid item>
               <Button
                 variant="contained"
-                color="primary"
+                          size="small"
                 onClick={() => openInNewTab(`https://wa.me/${process.env.REACT_APP_NUMBER_SUPPORT}`)}
+                          style={{ 
+                            backgroundColor: "#6366f1",
+                            color: "#ffffff",
+                            textTransform: "uppercase",
+                            fontWeight: 600,
+                            borderRadius: "8px"
+                          }}
               >
                 {i18n.t("connections.callSupport")}
               </Button>
+                      </Grid>
+                      <Grid item>
               <PopupState variant="popover" popupId="demo-popup-menu">
                 {(popupState) => (
                   <React.Fragment>
@@ -576,8 +657,15 @@ const Connections = () => {
                         <>
                           <Button
                             variant="contained"
-                            color="primary"
+                                      size="small"
                             {...bindTrigger(popupState)}
+                                      style={{ 
+                                        backgroundColor: "#4ade80",
+                                        color: "#ffffff",
+                                        textTransform: "uppercase",
+                                        fontWeight: 600,
+                                        borderRadius: "8px"
+                                      }}
                           >
                             {i18n.t("connections.newConnection")}
                           </Button>
@@ -658,7 +746,10 @@ const Connections = () => {
                   </React.Fragment>
                 )}
               </PopupState>
-            </MainHeaderButtonsWrapper>
+                      </Grid>
+                    </Grid>
+                  </Grid>
+                </Grid>
           </MainHeader>
 
           {
@@ -700,36 +791,49 @@ const Connections = () => {
             ) : null
           }
 
+              {isDesktop ? (
           <Paper className={classes.mainPaper} variant="outlined">
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell align="center">Channel</TableCell>
-                  <TableCell align="center">{i18n.t("connections.table.name")}</TableCell>
-                  <TableCell align="center">{i18n.t("connections.table.number")}</TableCell>
-                  <TableCell align="center">{i18n.t("connections.table.status")}</TableCell>
-                  <TableCell align="center">{i18n.t("connections.table.session")}</TableCell>
-                  <TableCell align="center">{i18n.t("connections.table.lastUpdate")}</TableCell>
-                  <TableCell align="center">{i18n.t("connections.table.default")}</TableCell>
+                  <Box style={{ overflowX: "auto" }}>
+                    <table className={classes.table}>
+                      <thead className={classes.tableHead}>
+                        <tr>
+                          <th scope="col" style={{ textAlign: "center" }}>CHANNEL</th>
+                          <th scope="col" style={{ textAlign: "center" }}>{i18n.t("connections.table.name").toUpperCase()}</th>
+                          <th scope="col" style={{ textAlign: "center" }}>{i18n.t("connections.table.number").toUpperCase()}</th>
+                          <th scope="col" style={{ textAlign: "center" }}>{i18n.t("connections.table.status").toUpperCase()}</th>
+                          <th scope="col" style={{ textAlign: "center" }}>{i18n.t("connections.table.session").toUpperCase()}</th>
+                          <th scope="col" style={{ textAlign: "center" }}>{i18n.t("connections.table.lastUpdate").toUpperCase()}</th>
+                          <th scope="col" style={{ textAlign: "center" }}>{i18n.t("connections.table.default").toUpperCase()}</th>
                   <Can
                     role={user.profile === "user" && user.allowConnections === "enabled" ? "admin" : user.profile}
                     perform="connections-page:addConnection"
                     yes={() => (
-                      <TableCell align="center">{i18n.t("connections.table.actions")}</TableCell>
+                              <th scope="col" style={{ textAlign: "center" }}>{i18n.t("connections.table.actions").toUpperCase()}</th>
                     )}
                   />
-                </TableRow>
-              </TableHead>
-              <TableBody>
+                        </tr>
+                      </thead>
+                      <tbody className={classes.tableBody}>
                 {loading ? (
+                          <tr>
+                            <td colSpan={8}>
                   <TableRowSkeleton />
+                            </td>
+                          </tr>
                 ) : (
                   <>
+                            {!loading && whatsApps?.length === 0 && (
+                              <tr>
+                                <td colSpan={8} className={classes.emptyState}>
+                                  Nenhuma conexão encontrada.
+                                </td>
+                              </tr>
+                            )}
                     {whatsApps?.length > 0 &&
                       whatsApps.map((whatsApp) => (
-                        <TableRow key={whatsApp.id}>
-                          <TableCell align="center">{IconChannel(whatsApp.channel)}</TableCell>
-                          <TableCell align="center">
+                                <tr key={whatsApp.id}>
+                                  <td style={{ textAlign: "center" }}>{IconChannel(whatsApp.channel)}</td>
+                                  <td style={{ textAlign: "center" }}>
                             <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
                               <span>{whatsApp.name}</span>
                               {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
@@ -749,52 +853,166 @@ const Connections = () => {
                                 />
                               )}
                             </Box>
-                          </TableCell>
-                          <TableCell align="center">{whatsApp.number && whatsApp.channel === 'whatsapp' ? (<>{formatSerializedId(whatsApp.number)}</>) : whatsApp.number}</TableCell>
-                          <TableCell align="center">{renderStatusToolTips(whatsApp)}</TableCell>
-                          <TableCell align="center">{renderActionButtons(whatsApp)}</TableCell>
-                          <TableCell align="center">{format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm")}</TableCell>
-                          <TableCell align="center">
+                                  </td>
+                                  <td style={{ textAlign: "center" }}>{whatsApp.number && whatsApp.channel === 'whatsapp' ? (<>{formatSerializedId(whatsApp.number)}</>) : whatsApp.number}</td>
+                                  <td style={{ textAlign: "center" }}>{renderStatusToolTips(whatsApp)}</td>
+                                  <td style={{ textAlign: "center" }}>{renderActionButtons(whatsApp)}</td>
+                                  <td style={{ textAlign: "center" }}>{format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm")}</td>
+                                  <td style={{ textAlign: "center" }}>
                             {whatsApp.isDefault && (
                               <div className={classes.customTableCell}>
                                 <CheckCircle style={{ color: green[500] }} />
                               </div>
                             )}
-                          </TableCell>
+                                  </td>
                           <Can
                             role={user.profile}
                             perform="connections-page:addConnection"
                             yes={() => (
-                              <TableCell align="center">
+                                      <td style={{ textAlign: "center" }}>
+                                        <Tooltip {...CustomTooltipProps} title="Editar">
                                 <IconButton
                                   size="small"
                                   onClick={() => handleEditWhatsApp(whatsApp)}
+                                            style={{
+                                              color: "#374151",
+                                              backgroundColor: "#ffffff",
+                                              border: "1px solid #d1d5db",
+                                              borderRadius: "8px",
+                                              marginRight: 4
+                                            }}
                                 >
-                                  <Edit />
+                                            <Edit fontSize="small" />
                                 </IconButton>
-
+                                        </Tooltip>
+                                        <Tooltip {...CustomTooltipProps} title="Deletar">
                                 <IconButton
                                   size="small"
                                   onClick={(e) => {
                                     handleOpenConfirmationModal("delete", whatsApp.id);
                                   }}
+                                            style={{
+                                              color: "#dc2626",
+                                              backgroundColor: "#ffffff",
+                                              border: "1px solid #d1d5db",
+                                              borderRadius: "8px"
+                                            }}
                                 >
-                                  <DeleteOutline />
+                                            <DeleteOutline fontSize="small" />
                                 </IconButton>
-                              </TableCell>
+                                        </Tooltip>
+                                      </td>
                             )}
                           />
-                        </TableRow>
+                                </tr>
                       ))}
                   </>
                 )}
-              </TableBody>
-            </Table>
+                      </tbody>
+                    </table>
+                  </Box>
           </Paper>
-        </>
-      }
-    </MainContainer >
-
+              ) : (
+                /* Mobile View */
+                <>
+                  <div className="flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
+                    {!loading && whatsApps?.length === 0 && (
+                      <div className="text-center text-sm text-gray-500 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                        Nenhuma conexão encontrada.
+                      </div>
+                    )}
+                    {whatsApps?.length > 0 && whatsApps.map((whatsApp) => (
+                      <div key={whatsApp.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            {IconChannel(whatsApp.channel)}
+                            <div>
+                              <span className="font-semibold text-sm">{whatsApp.name}</span>
+                              {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
+                                <Chip 
+                                  label="API Oficial" 
+                                  color="primary" 
+                                  size="small"
+                                  style={{ fontSize: '0.6rem', height: '18px', marginLeft: 4 }}
+                                />
+                              )}
+                              {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "baileys" && (
+                                <Chip 
+                                  label="Baileys" 
+                                  size="small"
+                                  variant="outlined"
+                                  style={{ fontSize: '0.6rem', height: '18px', marginLeft: 4 }}
+                                />
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Can
+                              role={user.profile}
+                              perform="connections-page:addConnection"
+                              yes={() => (
+                                <>
+                                  <Tooltip {...CustomTooltipProps} title="Editar">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleEditWhatsApp(whatsApp)}
+                                      style={{
+                                        color: "#374151",
+                                        backgroundColor: "#ffffff",
+                                        border: "1px solid #d1d5db",
+                                        borderRadius: "8px"
+                                      }}
+                                    >
+                                      <Edit fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip {...CustomTooltipProps} title="Deletar">
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        handleOpenConfirmationModal("delete", whatsApp.id);
+                                      }}
+                                      style={{
+                                        color: "#dc2626",
+                                        backgroundColor: "#ffffff",
+                                        border: "1px solid #d1d5db",
+                                        borderRadius: "8px"
+                                      }}
+                                    >
+                                      <DeleteOutline fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                </>
+                              )}
+                            />
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                          <div>Número: {whatsApp.number && whatsApp.channel === 'whatsapp' ? formatSerializedId(whatsApp.number) : whatsApp.number}</div>
+                          <div className="flex items-center gap-2">
+                            <span>Status:</span>
+                            {renderStatusToolTips(whatsApp)}
+                          </div>
+                          <div>{renderActionButtons(whatsApp)}</div>
+                          <div>Última atualização: {format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm")}</div>
+                          {whatsApp.isDefault && (
+                            <div className="flex items-center gap-1">
+                              <CheckCircle style={{ color: green[500], fontSize: '1rem' }} />
+                              <span>Padrão</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {loading && <TableRowSkeleton />}
+                  </div>
+                </>
+              )}
+            </>
+          }
+        </Box>
+      </MainContainer>
+    </Box>
   );
 };
 

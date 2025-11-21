@@ -95,8 +95,8 @@ const Contact = () => {
     {
       icon: <EmailIcon />,
       title: "Email",
-      info: "contato@taktchat.com",
-      link: "mailto:contato@taktchat.com",
+      info: "contato@taktchat.com.br",
+      link: "mailto:contato@taktchat.com.br",
     },
     {
       icon: <PhoneIcon />,

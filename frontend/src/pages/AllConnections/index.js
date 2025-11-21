@@ -1,12 +1,11 @@
 import React, { useState, useCallback, useContext, useEffect } from "react";
 import { toast } from "react-toastify";
 import { format, parseISO, set } from "date-fns";
-
 import Menu from "@material-ui/core/Menu";
 import MenuItem from "@material-ui/core/MenuItem";
 import PopupState, { bindTrigger, bindMenu } from "material-ui-popup-state";
 import { Stack } from "@mui/material";
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
 import { useHistory } from "react-router-dom";
 import { green } from "@material-ui/core/colors";
 import {
@@ -21,7 +20,10 @@ import {
   Tooltip,
   Typography,
   CircularProgress,
-  Divider
+  Divider,
+  Box,
+  Grid,
+  useMediaQuery
 } from "@material-ui/core";
 import {
   Edit,
@@ -56,6 +58,22 @@ import toastError from "../../errors/toastError";
 import ForbiddenPage from "../../components/ForbiddenPage";
 
 const useStyles = makeStyles(theme => ({
+  root: {
+    flex: 1,
+    backgroundColor: theme.palette.background.default,
+    minHeight: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
+  container: {
+    width: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
   mainPaper: {
     flex: 1,
     padding: theme.spacing(1),
@@ -82,11 +100,45 @@ const useStyles = makeStyles(theme => ({
     color: green[500]
   },
   TableHead: {
-    backgroundColor: theme.palette.barraSuperior,//"#3d3d3d",
+    backgroundColor: theme.palette.barraSuperior || "#3d3d3d",
     color: "textSecondary",
     borderRadius: "5px"
-  }
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  tableBody: {
+    "& tr": {
+      borderBottom: `1px solid ${theme.palette.divider}`,
+      transition: "background-color 0.2s",
+      "&:hover": {
+        backgroundColor: theme.palette.action.hover,
+      },
+      "&:last-child": {
+        borderBottom: "none",
+      },
+    },
+    "& td": {
+      padding: theme.spacing(1.5),
+      fontSize: "0.875rem",
+      color: theme.palette.text.primary,
+    },
+  },
+  emptyState: {
+    padding: theme.spacing(4),
+    textAlign: "center",
+    color: theme.palette.text.secondary,
+  },
 }));
+
+const CustomTooltipProps = {
+  arrow: true,
+  enterTouchDelay: 0,
+  leaveTouchDelay: 5000,
+  enterDelay: 300,
+  leaveDelay: 100,
+};
 
 const CustomToolTip = ({ title, content, children }) => {
   const classes = useStyles();
@@ -127,6 +179,8 @@ const IconChannel = channel => {
 
 const AllConnections = () => {
   const classes = useStyles();
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up(1200));
   const { user, socket } = useContext(AuthContext);
   const { list } = useCompanies();
   const [loadingWhatsapp, setLoadingWhatsapp] = useState(true);
@@ -411,7 +465,9 @@ const AllConnections = () => {
     );
   };
   return (
-    <MainContainer>
+    <Box className={classes.root}>
+      <MainContainer useWindowScroll>
+        <Box className={classes.container}>
       <ConfirmationModal
         title={confirmModalInfo.title}
         open={confirmModalOpen}
@@ -439,6 +495,8 @@ const AllConnections = () => {
         <>
           <Paper className={classes.mainPaper} style={{ overflow: "hidden" }} variant="outlined">
             <MainHeader>
+                  <Grid style={{ width: "99.6%" }} container>
+                    <Grid xs={12} sm={8} item>
               <Stack>
                 <Typography variant="h5" color="textPrimary" style={{ fontWeight: "bold", marginLeft: "10px", marginTop: "10px" }} gutterBottom>
                   {i18n.t("connections.title")}
@@ -447,11 +505,27 @@ const AllConnections = () => {
                   Conecte seus canais de atendimento para receber mensagens e iniciar conversas com seus clientes.
                 </Typography>
               </Stack>
-
-              <MainHeaderButtonsWrapper>
+                    </Grid>
+                    <Grid xs={12} sm={4} item>
+                      <Grid container alignItems="center" spacing={2} justifyContent="flex-end">
+                        <Grid item>
                 <PopupState variant="popover" popupId="demo-popup-menu">
                   {popupState => (
                     <React.Fragment>
+                                <Button
+                                  variant="contained"
+                                  size="small"
+                                  {...bindTrigger(popupState)}
+                                  style={{ 
+                                    backgroundColor: "#4ade80",
+                                    color: "#ffffff",
+                                    textTransform: "uppercase",
+                                    fontWeight: 600,
+                                    borderRadius: "8px"
+                                  }}
+                                >
+                                  {i18n.t("connections.newConnection")}
+                                </Button>
                       <Menu {...bindMenu(popupState)}>
                         <MenuItem
                           onClick={() => {
@@ -510,7 +584,10 @@ const AllConnections = () => {
                     </React.Fragment>
                   )}
                 </PopupState>
-              </MainHeaderButtonsWrapper>
+                        </Grid>
+                      </Grid>
+                    </Grid>
+                  </Grid>
             </MainHeader>
             <Stack
               style={{
@@ -521,86 +598,147 @@ const AllConnections = () => {
                 height: "93%"
               }}
             >
-              <Paper >
-                <Table size="small">
-                  <TableHead className={classes.TableHead}>
-                    <TableRow style={{ color: "#fff" }}>
-                      <TableCell style={{ color: "#fff" }} align="center">
-                        {i18n.t("Cliente")}
-                      </TableCell>
-                      <TableCell style={{ color: "#fff" }} align="center">
-                        {i18n.t("Conexões conectadas")}
-                      </TableCell>
-                      <TableCell style={{ color: "#fff" }} align="center">
-                        {i18n.t("Conexões desconectadas")}
-                      </TableCell>
-                      <TableCell style={{ color: "#fff" }} align="center">
-                        {i18n.t("Total de Conexões")}
-                      </TableCell>
+                  <Paper>
+                    {isDesktop ? (
+                      <Box style={{ overflowX: "auto" }}>
+                        <table className={classes.table}>
+                          <thead className={classes.TableHead}>
+                            <tr style={{ color: "#fff" }}>
+                              <th scope="col" style={{ color: "#fff", textAlign: "center" }}>
+                                {i18n.t("Cliente").toUpperCase()}
+                              </th>
+                              <th scope="col" style={{ color: "#fff", textAlign: "center" }}>
+                                {i18n.t("Conexões conectadas").toUpperCase()}
+                              </th>
+                              <th scope="col" style={{ color: "#fff", textAlign: "center" }}>
+                                {i18n.t("Conexões desconectadas").toUpperCase()}
+                              </th>
+                              <th scope="col" style={{ color: "#fff", textAlign: "center" }}>
+                                {i18n.t("Total de Conexões").toUpperCase()}
+                              </th>
                       {user.profile === "admin" && (
-                        <TableCell style={{ color: "#fff" }} align="center">
-                          {i18n.t("connections.table.actions")}
-                        </TableCell>
+                                <th scope="col" style={{ color: "#fff", textAlign: "center" }}>
+                                  {i18n.t("connections.table.actions").toUpperCase()}
+                                </th>
                       )}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
+                            </tr>
+                          </thead>
+                          <tbody className={classes.tableBody}>
                     {loadingWhatsapp ? (
+                              <tr>
+                                <td colSpan={user.profile === "admin" ? 5 : 4}>
                       <TableRowSkeleton />
+                                </td>
+                              </tr>
                     ) : (
                       <>
-                        {console.log(companies, whats)}
+                                {!loadingWhatsapp && companies?.length === 0 && (
+                                  <tr>
+                                    <td colSpan={user.profile === "admin" ? 5 : 4} className={classes.emptyState}>
+                                      Nenhuma empresa encontrada.
+                                    </td>
+                                  </tr>
+                                )}
                         {companies?.length > 0 && companies.map(company => (
-                          <TableRow key={company.id}>
-                            <TableCell align="center">
+                                  <tr key={company.id}>
+                                    <td style={{ textAlign: "center" }}>
                               {company?.name}
-                            </TableCell>
-                            <TableCell align="center">
+                                    </td>
+                                    <td style={{ textAlign: "center" }}>
                               {whats?.length && whats.filter((item) => item?.companyId === company?.id && item?.status === 'CONNECTED').length}
-                            </TableCell>
-                            <TableCell align="center">
+                                    </td>
+                                    <td style={{ textAlign: "center" }}>
                               {whats?.length && whats.filter((item) => item?.companyId === company?.id && item?.status !== 'CONNECTED').length}
-                            </TableCell>
-                            <TableCell align="center">
+                                    </td>
+                                    <td style={{ textAlign: "center" }}>
                               {whats?.length && whats.filter((item) => item?.companyId === company?.id).length}
-                            </TableCell>
+                                    </td>
                             {user.profile === "admin" && (
-                              <TableCell align="center">
+                                      <td style={{ textAlign: "center" }}>
+                                        <Tooltip {...CustomTooltipProps} title="Editar">
                                 <IconButton
                                   size="small"
                                   onClick={() => handleOpenWhatsAppModal(whats.filter((item) => item?.companyId === company?.id), company)}
+                                            style={{
+                                              color: "#374151",
+                                              backgroundColor: "#ffffff",
+                                              border: "1px solid #d1d5db",
+                                              borderRadius: "8px"
+                                            }}
                                 >
-                                  <Edit />
+                                            <Edit fontSize="small" />
                                 </IconButton>
-                              </TableCell>
+                                        </Tooltip>
+                                      </td>
                             )}
-                          </TableRow>
-                        )
-                        )}
-                        <TableRow className={classes.TableHead}>
-                          <TableCell style={{ color: "#fff" }} align="center">{i18n.t("Total")}</TableCell>
-                          <TableCell style={{ color: "#fff" }} align="center">
+                                  </tr>
+                                ))}
+                                <tr className={classes.TableHead}>
+                                  <td style={{ color: "#fff", textAlign: "center" }}>{i18n.t("Total")}</td>
+                                  <td style={{ color: "#fff", textAlign: "center" }}>
                             {whats?.length &&
                               whats.filter((item) => item?.status === 'CONNECTED').length}
-                          </TableCell>
-                          <TableCell style={{ color: "#fff" }} align="center">
+                                  </td>
+                                  <td style={{ color: "#fff", textAlign: "center" }}>
                             {whats?.length &&
                               whats.filter((item) => item?.status !== 'CONNECTED').length}
-                          </TableCell>
-                          <TableCell style={{ color: "#fff" }} align="center">
+                                  </td>
+                                  <td style={{ color: "#fff", textAlign: "center" }}>
                             {whats?.length && whats.length}
-                          </TableCell>
-                          {user.profile === "admin" && <TableCell style={{ color: "#fff" }} align="center"></TableCell>}
-                        </TableRow>
-                      </>
+                                  </td>
+                                  {user.profile === "admin" && <td style={{ color: "#fff", textAlign: "center" }}></td>}
+                                </tr>
+                              </>
+                            )}
+                          </tbody>
+                        </table>
+                      </Box>
+                    ) : (
+                      /* Mobile View */
+                      <div className="flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
+                        {!loadingWhatsapp && companies?.length === 0 && (
+                          <div className="text-center text-sm text-gray-500 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                            Nenhuma empresa encontrada.
+                          </div>
+                        )}
+                        {companies?.length > 0 && companies.map(company => (
+                          <div key={company.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-semibold text-sm">{company?.name}</span>
+                              {user.profile === "admin" && (
+                                <Tooltip {...CustomTooltipProps} title="Editar">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenWhatsAppModal(whats.filter((item) => item?.companyId === company?.id), company)}
+                                    style={{
+                                      color: "#374151",
+                                      backgroundColor: "#ffffff",
+                                      border: "1px solid #d1d5db",
+                                      borderRadius: "8px"
+                                    }}
+                                  >
+                                    <Edit fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
                     )}
-                  </TableBody>
-                </Table>
+                            </div>
+                            <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                              <div>Conectadas: {whats?.length && whats.filter((item) => item?.companyId === company?.id && item?.status === 'CONNECTED').length}</div>
+                              <div>Desconectadas: {whats?.length && whats.filter((item) => item?.companyId === company?.id && item?.status !== 'CONNECTED').length}</div>
+                              <div>Total: {whats?.length && whats.filter((item) => item?.companyId === company?.id).length}</div>
+                            </div>
+                          </div>
+                        ))}
+                        {loadingWhatsapp && <TableRowSkeleton />}
+                      </div>
+                    )}
               </Paper>
             </Stack>
           </Paper>
         </>}
+        </Box>
     </MainContainer>
+    </Box>
   );
 };
 

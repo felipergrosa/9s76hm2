@@ -149,9 +149,31 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 
 	useEffect(() => {
 		const fetchContact = async () => {
+			// Função para normalizar valores null para string vazia
+			const normalizeContactData = (data) => {
+				if (!data) return initialState;
+				
+				const normalized = { ...data };
+				// Lista de campos que devem ser strings (não podem ser null)
+				const stringFields = [
+					'name', 'number', 'email', 'cpfCnpj', 'representativeCode', 
+					'city', 'instagram', 'situation', 'fantasyName', 'creditLimit', 
+					'segment', 'contactName', 'bzEmpresa', 'region', 'lgpdAcceptedAt',
+					'dtUltCompra', 'vlUltCompra', 'foundationDate'
+				];
+				
+				stringFields.forEach(field => {
+					if (normalized[field] === null || normalized[field] === undefined) {
+						normalized[field] = "";
+					}
+				});
+				
+				return normalized;
+			};
+
 			if (initialValues) {
 				setContact(prevState => {
-					return { ...prevState, ...initialValues };
+					return { ...prevState, ...normalizeContactData(initialValues) };
 				});
 			}
 
@@ -160,8 +182,9 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			try {
 				const { data } = await api.get(`/contacts/${contactId}`);
 				if (isMounted.current) {
-					setContact(data);
-					setDisableBot(data.disableBot)
+					const normalizedData = normalizeContactData(data);
+					setContact(normalizedData);
+					setDisableBot(data.disableBot || false);
 				}
 			} catch (err) {
 				toastError(err);
@@ -237,7 +260,28 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 					</div>
 				</DialogTitle>
 				<Formik
-					initialValues={contact}
+					initialValues={{
+						...contact,
+						// Garantir que todos os campos de string sejam strings vazias em vez de null
+						name: contact.name || "",
+						number: contact.number || "",
+						email: contact.email || "",
+						cpfCnpj: contact.cpfCnpj || "",
+						representativeCode: contact.representativeCode || "",
+						city: contact.city || "",
+						instagram: contact.instagram || "",
+						situation: contact.situation || "Ativo",
+						fantasyName: contact.fantasyName || "",
+						creditLimit: contact.creditLimit || "",
+						segment: contact.segment || "",
+						contactName: contact.contactName || "",
+						bzEmpresa: contact.bzEmpresa || "",
+						region: contact.region || "",
+						lgpdAcceptedAt: contact.lgpdAcceptedAt || "",
+						dtUltCompra: contact.dtUltCompra || "",
+						vlUltCompra: contact.vlUltCompra || "",
+						foundationDate: contact.foundationDate || "",
+					}}
 					enableReinitialize={true}
 					validationSchema={ContactSchema}
 					onSubmit={(values, actions) => {

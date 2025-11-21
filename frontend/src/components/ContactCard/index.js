@@ -1,7 +1,7 @@
 import React, { memo, useRef, useCallback, useState } from "react";
-import { Trash2, Edit, Lock, Unlock, CheckCircle, Ban } from "lucide-react";
-import { WhatsApp } from "@material-ui/icons";
-import { Tooltip } from "@material-ui/core";
+import { Unlock, CheckCircle, Ban } from "lucide-react";
+import { WhatsApp, Edit as EditIcon, DeleteOutline as DeleteOutlineIcon, Lock as LockIcon } from "@material-ui/icons";
+import { Tooltip, IconButton } from "@material-ui/core";
 import LazyContactAvatar from "../LazyContactAvatar";
 
 // Componente de card de contato para versão mobile, memoizado para evitar re-renders
@@ -97,36 +97,148 @@ const ContactCard = memo(({
       </div>
       
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-600 dark:text-gray-300">{formatPhoneNumber(contact.number)}</span>
+        <div className="flex items-center gap-1 min-w-0 whitespace-nowrap">
+          <span className="flex-1 min-w-0 truncate text-xs text-gray-600 dark:text-gray-300">{formatPhoneNumber(contact.number)}</span>
           {!!contact.isWhatsappValid ? (
             <Tooltip {...CustomTooltipProps} title="WhatsApp válido">
-              <CheckCircle className="w-4 h-4 text-green-700 flex-shrink-0" />
+              <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
+                <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-500" strokeWidth={2.5} />
+              </div>
             </Tooltip>
           ) : (
             <Tooltip {...CustomTooltipProps} title="WhatsApp inválido">
-              <Ban className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full bg-red-50 dark:bg-red-900/20 p-0.5">
+                <Ban className="w-3.5 h-3.5 text-red-600 dark:text-red-400" strokeWidth={2.5} />
+              </div>
             </Tooltip>
           )}
         </div>
         
         {/* Tags */}
         <div className="flex justify-end gap-1">
-          {contact.tags && contact.tags.slice(0, 3).map((tag) => (
-            <Tooltip {...CustomTooltipProps} title={tag.name} key={tag.id}>
-              <span
-                className="inline-block w-[8px] h-[8px] rounded-full"
-                style={{ backgroundColor: tag.color || '#9CA3AF' }}
-              ></span>
-            </Tooltip>
-          ))}
-          {contact.tags && contact.tags.length > 3 && (
-            <Tooltip {...CustomTooltipProps} title={contact.tags.slice(3).map(t => t.name).join(", ")}>
-              <span className="inline-flex items-center justify-center w-4 h-4 text-[9px] font-semibold text-white rounded-full bg-gray-400 dark:bg-gray-600 select-none">
-                +{contact.tags.length - 3}
-              </span>
-            </Tooltip>
-          )}
+          {(() => {
+            // Normaliza as tags para lidar com diferentes formatos da API
+            const normalizeTags = (raw) => {
+              try {
+                let arr = [];
+                if (Array.isArray(raw)) {
+                  arr = raw;
+                } else if (Array.isArray(raw?.tags)) {
+                  arr = raw.tags;
+                } else if (Array.isArray(raw?.tags?.rows)) {
+                  arr = raw.tags.rows;
+                } else if (Array.isArray(raw?.rows)) {
+                  arr = raw.rows;
+                }
+                
+                if (!arr || arr.length === 0) return [];
+                
+                return arr.map((t, idx) => {
+                  if (!t || typeof t !== 'object') return null;
+                  
+                  const obj = t;
+                  const nested = obj.tag || obj.Tag || obj.Tags || {};
+                  
+                  const name = obj.name || nested.name || obj.label;
+                  if (!name) return null;
+                  
+                  const color = obj.color || nested.color || obj.hex || '#9CA3AF';
+                  
+                  // PRIORIDADE: tagId > id > nested.id > idx
+                  let id;
+                  if (obj.tagId !== undefined && obj.tagId !== null) {
+                    id = obj.tagId;
+                  } else if (obj.id !== undefined && obj.id !== null) {
+                    id = obj.id;
+                  } else if (nested.id !== undefined && nested.id !== null) {
+                    id = nested.id;
+                  } else {
+                    id = `tag-${contact.id}-${idx}`;
+                  }
+                  
+                  return { id, name, color };
+                }).filter(Boolean);
+              } catch (error) {
+                return [];
+              }
+            };
+            
+            // Função para calcular luminosidade relativa e determinar cor do texto
+            const getTextColor = (backgroundColor) => {
+              if (!backgroundColor) return '#000000';
+              
+              // Remove # se existir
+              let hex = backgroundColor.replace('#', '');
+              
+              // Converte hex de 3 dígitos para 6
+              if (hex.length === 3) {
+                hex = hex.split('').map(char => char + char).join('');
+              }
+              
+              // Converte para RGB
+              const r = parseInt(hex.substring(0, 2), 16);
+              const g = parseInt(hex.substring(2, 4), 16);
+              const b = parseInt(hex.substring(4, 6), 16);
+              
+              // Calcula luminosidade relativa (fórmula WCAG)
+              const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+              
+              // Se a cor for clara (luminosidade > 0.5), usa texto preto, senão branco
+              return luminance > 0.5 ? '#000000' : '#FFFFFF';
+            };
+
+            const rawTags = contact.tags || contact.contactTags || [];
+            const tags = normalizeTags(rawTags);
+            
+            if (!tags || tags.length === 0) {
+              return null;
+            }
+            
+            return (
+              <>
+                {tags.slice(0, 3).map((tag, tagIdx) => {
+                  const key = `contact-${contact.id}-tag-${tag.id}-${tagIdx}`;
+                  const tagColor = tag.color || '#9CA3AF';
+                  const textColor = getTextColor(tagColor);
+                  
+                  return (
+                    <Tooltip {...CustomTooltipProps} title={tag.name} key={key}>
+                      <div
+                        className="inline-flex items-center px-2.5 py-1 rounded-full flex-shrink-0"
+                        style={{ 
+                          backgroundColor: tagColor,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          border: `2px solid ${tagColor}`,
+                          borderRadius: '9999px',
+                          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)'
+                        }}
+                      >
+                        <span
+                          className="text-xs font-semibold truncate"
+                          style={{ 
+                            color: textColor,
+                            fontSize: '0.75rem',
+                            lineHeight: '1rem',
+                            fontWeight: 600
+                          }}
+                        >
+                          {tag.name}
+                        </span>
+                      </div>
+                    </Tooltip>
+                  );
+                })}
+                {tags.length > 3 && (
+                  <Tooltip {...CustomTooltipProps} title={tags.slice(3).map(t => t.name).join(", ")}>
+                    <span className="inline-flex items-center justify-center w-4 h-4 text-[9px] font-semibold text-white rounded-full bg-gray-400 dark:bg-gray-600 select-none">
+                      +{tags.length - 3}
+                    </span>
+                  </Tooltip>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
       
@@ -146,27 +258,40 @@ const ContactCard = memo(({
         {/* Ações */}
         <div className="flex items-center gap-2">
           <Tooltip {...CustomTooltipProps} title="Enviar mensagem pelo WhatsApp">
-            <button onClick={() => onSendMessage(contact)} className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300">
-              <WhatsApp className="w-4 h-4" />
-            </button>
+            <IconButton 
+              size="small" 
+              onClick={() => onSendMessage(contact)}
+              style={{ color: "#16a34a" }}
+            >
+              <WhatsApp />
+            </IconButton>
           </Tooltip>
           <Tooltip {...CustomTooltipProps} title="Editar contato">
-            <button onClick={() => onEdit(contact.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-              <Edit className="w-4 h-4" />
-            </button>
+            <IconButton 
+              size="small" 
+              onClick={() => onEdit(contact.id)}
+              style={{ color: "#2563eb" }}
+            >
+              <EditIcon />
+            </IconButton>
           </Tooltip>
           <Tooltip {...CustomTooltipProps} title={contact.active ? "Bloquear contato" : "Desbloquear contato"}>
-            <button 
-              onClick={() => contact.active ? onBlock(contact) : onUnblock(contact)} 
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            <IconButton 
+              size="small" 
+              onClick={() => contact.active ? onBlock(contact) : onUnblock(contact)}
+              style={{ color: "#6b7280" }}
             >
-              {contact.active ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-            </button>
+              {contact.active ? <LockIcon /> : <Unlock style={{ width: 20, height: 20 }} />}
+            </IconButton>
           </Tooltip>
           <Tooltip {...CustomTooltipProps} title="Deletar contato">
-            <button onClick={() => onDelete(contact)} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
-              <Trash2 className="w-4 h-4" />
-            </button>
+            <IconButton 
+              size="small" 
+              onClick={() => onDelete(contact)}
+              style={{ color: "#dc2626" }}
+            >
+              <DeleteOutlineIcon />
+            </IconButton>
           </Tooltip>
         </div>
       </div>

@@ -30,10 +30,12 @@ import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { Can } from "../../components/Can";
 import useContactLists from "../../hooks/useContactLists";
-import { Chip, Typography, Tooltip, Popover, Button } from "@material-ui/core";
+import { Chip, Typography, Tooltip, Popover, Button, useMediaQuery, Paper, Box } from "@material-ui/core";
+import { useTheme, makeStyles } from "@material-ui/core/styles";
 import IconButton from "@material-ui/core/IconButton";
+import { Edit as EditIcon, DeleteOutline as DeleteOutlineIcon } from "@material-ui/icons";
 import ContactAvatar from "../../components/ContactAvatar";
-import { Search, List as ListIcon, Upload as UploadIcon, Filter as FilterIcon, Plus as PlusIcon, Edit, Trash2, CheckCircle, Ban, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Eraser as EraserIcon } from "lucide-react";
+import { Search, List as ListIcon, Upload as UploadIcon, Filter as FilterIcon, Plus as PlusIcon, Trash2, CheckCircle, Ban, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Eraser as EraserIcon } from "lucide-react";
 import LoadingOverlay from "../../components/LoadingOverlay";
 
 import planilhaExemplo from "../../assets/planilha.xlsx";
@@ -49,6 +51,96 @@ const CustomTooltipProps = {
   enterDelay: 300,
   leaveDelay: 100,
 };
+
+const useStyles = makeStyles((theme) => ({
+  mainPaper: {
+    flex: 1,
+    padding: theme.spacing(1),
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  tableHead: {
+    backgroundColor: theme.palette.grey[100],
+    "& th": {
+      padding: theme.spacing(1.5),
+      textAlign: "left",
+      fontSize: "0.75rem",
+      fontWeight: 600,
+      textTransform: "uppercase",
+      color: theme.palette.text.secondary,
+      borderBottom: `2px solid ${theme.palette.divider}`,
+    },
+  },
+  tableBody: {
+    "& tr": {
+      borderBottom: `1px solid ${theme.palette.divider}`,
+      transition: "background-color 0.2s",
+      "&:hover": {
+        backgroundColor: theme.palette.action.hover,
+      },
+      "&:last-child": {
+        borderBottom: "none",
+      },
+    },
+    "& td": {
+      padding: theme.spacing(1.5),
+      fontSize: "0.875rem",
+      color: theme.palette.text.primary,
+    },
+  },
+  emptyState: {
+    padding: theme.spacing(4),
+    textAlign: "center",
+    color: theme.palette.text.secondary,
+  },
+  pagination: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: theme.spacing(2),
+    backgroundColor: theme.palette.background.paper,
+    borderRadius: theme.shape.borderRadius,
+    boxShadow: theme.shadows[1],
+    marginTop: theme.spacing(2),
+  },
+  paginationInfo: {
+    fontSize: "0.875rem",
+    color: theme.palette.text.secondary,
+  },
+  paginationControls: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+  },
+  pageButton: {
+    minWidth: 32,
+    height: 32,
+    padding: theme.spacing(0.5),
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: theme.shape.borderRadius,
+    backgroundColor: theme.palette.background.paper,
+    color: theme.palette.text.primary,
+    cursor: "pointer",
+    transition: "all 0.2s",
+    "&:hover:not(:disabled)": {
+      backgroundColor: theme.palette.action.hover,
+    },
+    "&:disabled": {
+      opacity: 0.5,
+      cursor: "not-allowed",
+    },
+  },
+  pageButtonActive: {
+    backgroundColor: theme.palette.primary.main,
+    color: theme.palette.primary.contrastText,
+    borderColor: theme.palette.primary.main,
+    "&:hover": {
+      backgroundColor: theme.palette.primary.dark,
+    },
+  },
+}));
 
 const reducer = (state, action) => {
   if (action.type === "SET_CONTACTS") {
@@ -107,7 +199,9 @@ const reducer = (state, action) => {
 };
 
 const ContactListItems = () => {
-  
+  const classes = useStyles();
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up(1200));
 
   //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
@@ -439,22 +533,7 @@ const ContactListItems = () => {
     } else {
       pages.push(1, 2, 3, "...");
     }
-    return pages.map((page, index) => (
-      <li key={index}>
-        {page === "..." ? (
-          <span className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 dark:bg-gray-800 dark:border-gray-700">...</span>
-        ) : (
-          <button
-            onClick={() => handlePageChange(page)}
-            className={`flex items-center justify-center px-3 h-8 leading-tight border ${page === pageNumber
-              ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
-              : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"}`}
-          >
-            {page}
-          </button>
-        )}
-      </li>
-    ));
+    return pages;
   };
 
   const goToContactLists = () => {
@@ -481,12 +560,60 @@ const ContactListItems = () => {
   const formatPhoneNumber = (number) => {
     if (!number) return "";
     const cleaned = ('' + number).replace(/\D/g, '');
-    if (cleaned.startsWith("55") && cleaned.length === 13) {
-      const match = cleaned.match(/^(\d{2})(\d{2})(\d{5})(\d{4})$/);
-      if (match) {
-        return `BR (${match[2]}) ${match[3]}-${match[4]}`;
+    
+    // Verifica se tem código do país (55 = Brasil)
+    const hasCountryCode = cleaned.startsWith("55") && cleaned.length >= 12;
+    
+    if (hasCountryCode) {
+      // Formato: +55 (14) 98125-2988
+      const withoutCountryCode = cleaned.substring(2);
+      
+      if (withoutCountryCode.length >= 10) {
+        const ddd = withoutCountryCode.substring(0, 2);
+        const phone = withoutCountryCode.substring(2);
+        
+        if (phone.length === 9) {
+          // Celular: 9 dígitos
+          const prefix = phone.substring(0, 5);
+          const suffix = phone.substring(5);
+          return `+55 (${ddd}) ${prefix}-${suffix}`;
+        } else if (phone.length === 8) {
+          // Fixo: 8 dígitos
+          const prefix = phone.substring(0, 4);
+          const suffix = phone.substring(4);
+          return `+55 (${ddd}) ${prefix}-${suffix}`;
+        }
+      }
+    } else {
+      // Sem código do país: (14) 98125-2988
+      if (cleaned.length >= 10) {
+        const ddd = cleaned.substring(0, 2);
+        const phone = cleaned.substring(2);
+        
+        if (phone.length === 9) {
+          // Celular: 9 dígitos
+          const prefix = phone.substring(0, 5);
+          const suffix = phone.substring(5);
+          return `(${ddd}) ${prefix}-${suffix}`;
+        } else if (phone.length === 8) {
+          // Fixo: 8 dígitos
+          const prefix = phone.substring(0, 4);
+          const suffix = phone.substring(4);
+          return `(${ddd}) ${prefix}-${suffix}`;
+        }
+      } else if (cleaned.length === 9) {
+        // Apenas o número sem DDD (celular)
+        const prefix = cleaned.substring(0, 5);
+        const suffix = cleaned.substring(5);
+        return `${prefix}-${suffix}`;
+      } else if (cleaned.length === 8) {
+        // Apenas o número sem DDD (fixo)
+        const prefix = cleaned.substring(0, 4);
+        const suffix = cleaned.substring(4);
+        return `${prefix}-${suffix}`;
       }
     }
+    
     return number;
   };
 
@@ -826,11 +953,12 @@ const ContactListItems = () => {
             />
 
             {/* Tabela (Desktop) */}
-            <div className="hidden md:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-              <div className="overflow-x-hidden">
-                <table className="w-full table-auto text-sm text-left text-gray-500 dark:text-gray-400">
-                  <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 sticky top-0 z-10">
-                    <tr className="uppercase text-xs text-gray-500 dark:text-gray-400 tracking-wider">
+            {isDesktop ? (
+              <Paper className={classes.mainPaper} variant="outlined">
+                <Box style={{ overflowX: "auto" }}>
+                  <table className={classes.table}>
+                    <thead className={classes.tableHead}>
+                      <tr>
                       <th scope="col" className="pl-3 pr-3 py-2 w-[150px]">
                         <button onClick={() => handleSort('name')} className="flex items-center gap-1 select-none font-medium">
                           NOME
@@ -881,10 +1009,17 @@ const ContactListItems = () => {
                       </th>
                       <th scope="col" className="px-2 py-2 text-center w-[100px]">Ações</th>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {sortedContacts.map((contact) => (
-                      <tr key={contact.id} className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                    </thead>
+                    <tbody className={classes.tableBody}>
+                      {!loading && sortedContacts.length === 0 && (
+                        <tr>
+                          <td colSpan={9} className={classes.emptyState}>
+                            Nenhum contato encontrado.
+                          </td>
+                        </tr>
+                      )}
+                      {sortedContacts.map((contact) => (
+                        <tr key={contact.id}>
                         <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap dark:text-white flex items-center gap-2 max-w-[260px] overflow-hidden text-ellipsis">
                           <Tooltip {...CustomTooltipProps} title={contact.name}>
                             <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 flex-shrink-0 overflow-hidden">
@@ -901,15 +1036,19 @@ const ContactListItems = () => {
                           </Tooltip>
                         </td>
                         <td className="pl-3 pr-3 py-2">
-                          <div className="flex items-center gap-1 text-[14px] leading-tight">
-                            <span className="truncate max-w-[140px]">{formatPhoneNumber(contact.number)}</span>
+                          <div className="flex items-center gap-1 text-[14px] leading-tight min-w-0" style={{ whiteSpace: 'nowrap' }}>
+                            <span className="flex-1 min-w-0 truncate max-w-[140px]" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatPhoneNumber(contact.number)}</span>
                             {!!contact.isWhatsappValid ? (
                               <Tooltip {...CustomTooltipProps} title={`WhatsApp válido${contact.validatedAt ? ` • ${new Date(contact.validatedAt).toLocaleString('pt-BR')}` : ""}`}>
-                                <CheckCircle className="w-4 h-4 text-green-700 flex-shrink-0" />
+                                <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center" style={{ flexShrink: 0 }}>
+                                  <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-500" strokeWidth={2.5} />
+                                </div>
                               </Tooltip>
                             ) : (
                               <Tooltip {...CustomTooltipProps} title={`WhatsApp inválido${contact.validatedAt ? ` • ${new Date(contact.validatedAt).toLocaleString('pt-BR')}` : ""}`}>
-                                <Ban className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full bg-red-50 dark:bg-red-900/20" style={{ flexShrink: 0 }}>
+                                  <Ban className="w-3.5 h-3.5 text-red-600 dark:text-red-400" strokeWidth={2.5} />
+                                </div>
                               </Tooltip>
                             )}
                           </div>
@@ -974,77 +1113,111 @@ const ContactListItems = () => {
                             )}
                           </div>
                         </td>
-                        <td className="px-2 py-2 text-center align-middle whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-2">
-                            <Tooltip {...CustomTooltipProps} title={contact?.contact?.id ? "Editar" : "Contato não vinculado"}>
-                              <span className="inline-flex">
-                                <button
-                                  disabled={!contact?.contact?.id}
-                                  onClick={() => contact?.contact?.id && hadleEditContact(contact.contact.id)}
-                                  className={`inline-flex items-center justify-center w-6 h-6 leading-none rounded hover:bg-blue-50/70 dark:hover:bg-gray-700/40 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 ${!contact?.contact?.id ? 'opacity-50 cursor-not-allowed hover:text-blue-600 dark:hover:text-blue-400' : ''}`}
+                        <td align="right" className="px-2 py-2 text-center align-middle whitespace-nowrap">
+                          <Tooltip {...CustomTooltipProps} title={contact?.contact?.id ? "Editar" : "Contato não vinculado"}>
+                            <IconButton
+                              size="small"
+                              disabled={!contact?.contact?.id}
+                              onClick={() => contact?.contact?.id && hadleEditContact(contact.contact.id)}
+                              style={{ color: contact?.contact?.id ? "#2563eb" : "#9ca3af" }}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Can
+                            role={user.profile}
+                            perform="contacts-page:deleteContact"
+                            yes={() => (
+                              <Tooltip {...CustomTooltipProps} title="Excluir">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
+                                  style={{ color: "#dc2626" }}
                                 >
-                                  <Edit className="w-4 h-4" />
-                                </button>
-                              </span>
-                            </Tooltip>
-                            <Can
-                              role={user.profile}
-                              perform="contacts-page:deleteContact"
-                              yes={() => (
-                                <Tooltip {...CustomTooltipProps} title="Excluir">
-                                  <button
-                                    onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
-                                    className="inline-flex items-center justify-center w-6 h-6 leading-none rounded hover:bg-red-50/70 dark:hover:bg-gray-700/40 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </Tooltip>
-                              )}
-                            />
-                          </div>
+                                  <DeleteOutlineIcon />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                          />
                         </td>
                       </tr>
                     ))}
-                    {loading && <TableRowSkeleton avatar columns={9} />}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Paginação (Desktop) */}
-            <div className="hidden md:flex justify-between items-center mt-4">
-              <div className="text-sm text-gray-600 dark:text-gray-300">
-                Página {pageNumber} de {totalPages} • {totalContacts} itens
-              </div>
-              <nav>
-                <ul className="inline-flex -space-x-px">
-                  <li>
-                    <button onClick={() => handlePageChange(1)} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
-                      <ChevronsLeft className="w-4 h-4" />
-                    </button>
-                  </li>
-                  <li>
-                    <button onClick={() => handlePageChange(pageNumber - 1)} disabled={pageNumber === 1} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                  </li>
-                  {renderPageNumbers()}
-                  <li>
-                    <button onClick={() => handlePageChange(pageNumber + 1)} disabled={pageNumber === totalPages} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </li>
-                  <li>
-                    <button onClick={() => handlePageChange(totalPages)} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
-                      <ChevronsRight className="w-4 h-4" />
-                    </button>
-                  </li>
-                </ul>
-              </nav>
-            </div>
-
-            {/* Lista (Mobile) */}
-            <div className="md:hidden flex flex-col gap-2 mt-4 items-center">
+                      {loading && <TableRowSkeleton avatar columns={9} />}
+                    </tbody>
+                  </table>
+                </Box>
+                {/* Paginação Desktop */}
+                <Box className={classes.pagination} component="nav" aria-label="Table navigation">
+                  <span className={classes.paginationInfo}>
+                    Página {" "}
+                    <strong>{pageNumber}</strong>
+                    {" "} de {" "}
+                    <strong>{totalPages}</strong>
+                    {" "} • {" "}
+                    <strong>{totalContacts}</strong> itens
+                  </span>
+                  <Box className={classes.paginationControls} component="ul" style={{ listStyle: "none", display: "flex", gap: 4, margin: 0, padding: 0 }}>
+                    <li>
+                      <button
+                        onClick={() => handlePageChange(1)}
+                        disabled={pageNumber === 1}
+                        className={classes.pageButton}
+                        style={{ borderRadius: "4px 0 0 4px" }}
+                      >
+                        <ChevronsLeft className="w-5 h-5" />
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        onClick={() => handlePageChange(pageNumber - 1)}
+                        disabled={pageNumber === 1}
+                        className={classes.pageButton}
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                    </li>
+                    {renderPageNumbers().map((page, index) => (
+                      <li key={index}>
+                        {page === "..." ? (
+                          <span className={classes.pageButton} style={{ cursor: "default" }}>
+                            ...
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handlePageChange(page)}
+                            className={`${classes.pageButton} ${page === pageNumber ? classes.pageButtonActive : ""}`}
+                          >
+                            {page}
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                    <li>
+                      <button
+                        onClick={() => handlePageChange(pageNumber + 1)}
+                        disabled={pageNumber === totalPages}
+                        className={classes.pageButton}
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        onClick={() => handlePageChange(totalPages)}
+                        disabled={pageNumber === totalPages}
+                        className={classes.pageButton}
+                        style={{ borderRadius: "0 4px 4px 0", marginLeft: 4 }}
+                      >
+                        <ChevronsRight className="w-5 h-5" />
+                      </button>
+                    </li>
+                  </Box>
+                </Box>
+              </Paper>
+            ) : (
+              /* Lista (Mobile) */
+              <>
+                <div className="flex flex-col gap-2 mt-4 items-center">
               {sortedContacts.map((contact) => (
                 <div key={contact.id} className="bg-white dark:bg-gray-800 shadow rounded-lg p-3 flex items-center gap-3 w-full max-w-[375px] mx-auto">
                   <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 overflow-hidden flex-shrink-0">
@@ -1094,64 +1267,101 @@ const ContactListItems = () => {
                   </div>
                   <div className="flex items-center gap-2 flex-nowrap whitespace-nowrap shrink-0">
                     <Tooltip {...CustomTooltipProps} title={contact?.contact?.id ? "Editar" : "Contato não vinculado"}>
-                      <span className="inline-flex">
-                        <button
-                          disabled={!contact?.contact?.id}
-                          onClick={() => contact?.contact?.id && hadleEditContact(contact.contact.id)}
-                          className={`inline-flex items-center justify-center w-6 h-6 leading-none rounded hover:bg-blue-50/70 dark:hover:bg-gray-700/40 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 ${!contact?.contact?.id ? 'opacity-50 cursor-not-allowed hover:text-blue-600 dark:hover:text-blue-400' : ''}`}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                      </span>
+                      <IconButton
+                        size="small"
+                        disabled={!contact?.contact?.id}
+                        onClick={() => contact?.contact?.id && hadleEditContact(contact.contact.id)}
+                        style={{ color: contact?.contact?.id ? "#2563eb" : "#9ca3af" }}
+                      >
+                        <EditIcon />
+                      </IconButton>
                     </Tooltip>
                     <Can
                       role={user.profile}
                       perform="contacts-page:deleteContact"
                       yes={() => (
-                        <button
-                          onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
-                          className="inline-flex items-center justify-center w-6 h-6 leading-none rounded hover:bg-red-50/70 dark:hover:bg-gray-700/40 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <Tooltip {...CustomTooltipProps} title="Excluir">
+                          <IconButton
+                            size="small"
+                            onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
+                            style={{ color: "#dc2626" }}
+                          >
+                            <DeleteOutlineIcon />
+                          </IconButton>
+                        </Tooltip>
                       )}
                     />
                   </div>
                 </div>
               ))}
-            </div>
-
-            {/* Paginação (Mobile) */}
-            <div className="md:hidden flex justify-between items-center mt-4">
-              <div className="text-sm text-gray-600 dark:text-gray-300">
-                Página {pageNumber} de {totalPages}
-              </div>
-              <nav>
-                <ul className="inline-flex -space-x-px">
-                  <li>
-                    <button onClick={() => handlePageChange(1)} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
-                      <ChevronsLeft className="w-4 h-4" />
-                    </button>
-                  </li>
-                  <li>
-                    <button onClick={() => handlePageChange(pageNumber - 1)} disabled={pageNumber === 1} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                  </li>
-                  {renderPageNumbers()}
-                  <li>
-                    <button onClick={() => handlePageChange(pageNumber + 1)} disabled={pageNumber === totalPages} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </li>
-                  <li>
-                    <button onClick={() => handlePageChange(totalPages)} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
-                      <ChevronsRight className="w-4 h-4" />
-                    </button>
-                  </li>
-                </ul>
-              </nav>
-            </div>
+                </div>
+                {/* Paginação Mobile */}
+                <nav className="flex items-center justify-between p-3 mt-2 w-full max-w-[375px] mx-auto" aria-label="Mobile navigation">
+                  <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                    Página <span className="font-semibold text-gray-900 dark:text-white">{pageNumber}</span>
+                    {" "} de {" "}
+                    <span className="font-semibold text-gray-900 dark:text-white">{totalPages}</span>
+                    {" "} • {" "}
+                    <span className="font-semibold text-gray-900 dark:text-white">{totalContacts}</span> itens
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <ul className="inline-flex items-center -space-x-px">
+                      <li>
+                        <button
+                          onClick={() => handlePageChange(1)}
+                          disabled={pageNumber === 1}
+                          className="flex items-center justify-center px-2 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <ChevronsLeft className="w-4 h-4" />
+                        </button>
+                      </li>
+                      <li>
+                        <button
+                          onClick={() => handlePageChange(pageNumber - 1)}
+                          disabled={pageNumber === 1}
+                          className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                      </li>
+                      {renderPageNumbers().map((page, index) => (
+                        <li key={index}>
+                          <button
+                            onClick={() => handlePageChange(page)}
+                            className={`flex items-center justify-center px-2 h-8 leading-tight border
+                              ${page === pageNumber
+                                  ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
+                                  : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                                }`}
+                            disabled={page === "..."}
+                          >
+                            {page}
+                          </button>
+                        </li>
+                      ))}
+                      <li>
+                        <button
+                          onClick={() => handlePageChange(pageNumber + 1)}
+                          disabled={pageNumber === totalPages}
+                          className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </li>
+                      <li>
+                        <button
+                          onClick={() => handlePageChange(totalPages)}
+                          disabled={pageNumber === totalPages}
+                          className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <ChevronsRight className="w-4 h-4" />
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                </nav>
+              </>
+            )}
           </>
       }
         </div>

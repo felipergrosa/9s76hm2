@@ -270,12 +270,60 @@ const AddManualContactsModal = ({ open, onClose, contactListId, onSuccess }) => 
   const formatPhoneNumber = (number) => {
     if (!number) return "";
     const cleaned = number.replace(/\D/g, "");
-    if (cleaned.startsWith("55") && cleaned.length >= 12) {
-      const withoutCountry = cleaned.substring(2);
-      const ddd = withoutCountry.substring(0, 2);
-      const phone = withoutCountry.substring(2);
-      return `BR (${ddd}) ${phone.substring(0, phone.length - 4)}-${phone.substring(phone.length - 4)}`;
+    
+    // Verifica se tem código do país (55 = Brasil)
+    const hasCountryCode = cleaned.startsWith("55") && cleaned.length >= 12;
+    
+    if (hasCountryCode) {
+      // Formato: +55 (14) 98125-2988
+      const withoutCountryCode = cleaned.substring(2);
+      
+      if (withoutCountryCode.length >= 10) {
+        const ddd = withoutCountryCode.substring(0, 2);
+        const phone = withoutCountryCode.substring(2);
+        
+        if (phone.length === 9) {
+          // Celular: 9 dígitos
+          const prefix = phone.substring(0, 5);
+          const suffix = phone.substring(5);
+          return `+55 (${ddd}) ${prefix}-${suffix}`;
+        } else if (phone.length === 8) {
+          // Fixo: 8 dígitos
+          const prefix = phone.substring(0, 4);
+          const suffix = phone.substring(4);
+          return `+55 (${ddd}) ${prefix}-${suffix}`;
+        }
+      }
+    } else {
+      // Sem código do país: (14) 98125-2988
+      if (cleaned.length >= 10) {
+        const ddd = cleaned.substring(0, 2);
+        const phone = cleaned.substring(2);
+        
+        if (phone.length === 9) {
+          // Celular: 9 dígitos
+          const prefix = phone.substring(0, 5);
+          const suffix = phone.substring(5);
+          return `(${ddd}) ${prefix}-${suffix}`;
+        } else if (phone.length === 8) {
+          // Fixo: 8 dígitos
+          const prefix = phone.substring(0, 4);
+          const suffix = phone.substring(4);
+          return `(${ddd}) ${prefix}-${suffix}`;
+        }
+      } else if (cleaned.length === 9) {
+        // Apenas o número sem DDD (celular)
+        const prefix = cleaned.substring(0, 5);
+        const suffix = cleaned.substring(5);
+        return `${prefix}-${suffix}`;
+      } else if (cleaned.length === 8) {
+        // Apenas o número sem DDD (fixo)
+        const prefix = cleaned.substring(0, 4);
+        const suffix = cleaned.substring(4);
+        return `${prefix}-${suffix}`;
+      }
     }
+    
     return number;
   };
 

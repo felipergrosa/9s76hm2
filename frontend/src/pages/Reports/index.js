@@ -1,17 +1,9 @@
-import React, { useState, useEffect, useReducer, useContext } from "react";
-
+import React, { useState, useEffect, useReducer, useContext, useMemo } from "react";
 import { toast } from "react-toastify";
 import { useHistory } from "react-router-dom";
-
-import { makeStyles } from "@material-ui/core/styles";
-import Table from "@material-ui/core/Table";
-import TableBody from "@material-ui/core/TableBody";
-import TableCell from "@material-ui/core/TableCell";
-import TableHead from "@material-ui/core/TableHead";
-import TableRow from "@material-ui/core/TableRow";
-import Paper from "@material-ui/core/Paper";
-import Button from "@material-ui/core/Button";
-import Pagination from "@material-ui/lab/Pagination";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+import { Paper, Box, useMediaQuery, TextField, InputAdornment, Grid, IconButton, Button, Tooltip, CircularProgress, FormControl, FormControlLabel, InputLabel, MenuItem, Select, Switch, Typography } from "@material-ui/core";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import * as XLSX from 'xlsx';
 
 import api from "../../services/api";
@@ -26,8 +18,6 @@ import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { Can } from "../../components/Can";
-
-import { CircularProgress, FormControl, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Select, Switch, TextField, Tooltip, Typography } from "@material-ui/core";
 import { UsersFilter } from "../../components/UsersFilter";
 import { TagsFilter } from "../../components/TagsFilter";
 import { WhatsappsFilter } from "../../components/WhatsappsFilter";
@@ -44,28 +34,25 @@ import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete
 import { Field } from "formik";
 
 const useStyles = makeStyles((theme) => ({
-  mainContainer: {
-    background: theme.palette.fancyBackground,
-    // Usar apenas o scroll da janela via MainContainer useWindowScroll
-
+  root: {
+    flex: 1,
+    backgroundColor: theme.palette.background.default,
+    minHeight: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
   },
-  formControl: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+  container: {
+    width: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
   },
   mainPaper: {
     flex: 1,
-    marginTop: 40,
-    borderRadius: 20,
-    border: '0px !important',
-    marginBottom: 40,
-    overflow: 'hidden'
-  },
-  mainPaperTable: {
-    flex: 1,
-    // Removido overflow/height para usar scroll externo da janela
+    padding: theme.spacing(1),
   },
   mainPaperFilter: {
     flex: 1,
@@ -73,10 +60,87 @@ const useStyles = makeStyles((theme) => ({
     height: '20vh',
     ...theme.scrollbarStylesSoftBig,
   },
-  mainHeaderBlock: {
-    [theme.breakpoints.down('md')]: {
-      display: 'flex',
-      flexWrap: 'wrap'
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  tableHead: {
+    backgroundColor: theme.palette.grey[100],
+    "& th": {
+      padding: theme.spacing(1.5),
+      textAlign: "left",
+      fontSize: "0.75rem",
+      fontWeight: 600,
+      textTransform: "uppercase",
+      color: theme.palette.text.secondary,
+      borderBottom: `2px solid ${theme.palette.divider}`,
+    },
+  },
+  tableBody: {
+    "& tr": {
+      borderBottom: `1px solid ${theme.palette.divider}`,
+      transition: "background-color 0.2s",
+      "&:hover": {
+        backgroundColor: theme.palette.action.hover,
+      },
+      "&:last-child": {
+        borderBottom: "none",
+      },
+    },
+    "& td": {
+      padding: theme.spacing(1.5),
+      fontSize: "0.875rem",
+      color: theme.palette.text.primary,
+    },
+  },
+  emptyState: {
+    padding: theme.spacing(4),
+    textAlign: "center",
+    color: theme.palette.text.secondary,
+  },
+  pagination: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: theme.spacing(2),
+    backgroundColor: theme.palette.background.paper,
+    borderRadius: theme.shape.borderRadius,
+    boxShadow: theme.shadows[1],
+    marginTop: theme.spacing(2),
+  },
+  paginationInfo: {
+    fontSize: "0.875rem",
+    color: theme.palette.text.secondary,
+  },
+  paginationControls: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+  },
+  pageButton: {
+    minWidth: 32,
+    height: 32,
+    padding: theme.spacing(0.5),
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: theme.shape.borderRadius,
+    backgroundColor: theme.palette.background.paper,
+    color: theme.palette.text.primary,
+    cursor: "pointer",
+    transition: "all 0.2s",
+    "&:hover:not(:disabled)": {
+      backgroundColor: theme.palette.action.hover,
+    },
+    "&:disabled": {
+      opacity: 0.5,
+      cursor: "not-allowed",
+    },
+  },
+  pageButtonActive: {
+    backgroundColor: theme.palette.primary.main,
+    color: theme.palette.primary.contrastText,
+    borderColor: theme.palette.primary.main,
+    "&:hover": {
+      backgroundColor: theme.palette.primary.dark,
     },
   },
   filterItem: {
@@ -87,8 +151,18 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
+const CustomTooltipProps = {
+  arrow: true,
+  enterTouchDelay: 0,
+  leaveTouchDelay: 5000,
+  enterDelay: 300,
+  leaveDelay: 100,
+};
+
 const Reports = () => {
   const classes = useStyles();
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up(1200));
   const history = useHistory();
   const { getReport } = useDashboard();
 
@@ -210,40 +284,55 @@ const Reports = () => {
   };
 
 
-  const handleFilter = async (pageNumber) => {
-    setLoading(true); // Define o estado de loading como true durante o carregamento
-    console.log(onlyRated)
+  const handleFilter = async (page) => {
+    setLoading(true);
     try {
       const data = await getReport({
         searchParam,
         contactId: selectedContactId,
         whatsappId: JSON.stringify(selectedWhatsapp),
-        // tags: JSON.stringify(tagIds),
         users: JSON.stringify(userIds),
         queueIds: JSON.stringify(queueIds),
         status: JSON.stringify(selectedStatus),
-        // tags: tagIds,
         dateFrom,
         dateTo,
-        page: pageNumber, // Passa o número da página para a API
-        pageSize: pageSize, // Passa o tamanho da página para a API
+        page: page,
+        pageSize: pageSize,
         onlyRated: onlyRated ? "true" : "false"
       });
 
       setTotalTickets(data.totalTickets.total);
-
-      // Verifica se há mais resultados para definir hasMore
       setHasMore(data.tickets.length === pageSize);
-
-      setTickets(data.tickets); // Se for a primeira página, substitua os tickets
-
-      setPageNumber(pageNumber); // Atualiza o estado da página atual
+      setTickets(data.tickets);
+      setPageNumber(page);
     } catch (error) {
       toastError(error);
     } finally {
-      setLoading(false); // Define o estado de loading como false após o carregamento
+      setLoading(false);
     }
-  }
+  };
+
+  const totalPages = useMemo(() => {
+    return totalTickets === 0 ? 1 : Math.ceil(totalTickets / pageSize);
+  }, [totalTickets, pageSize]);
+
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      handleFilter(page);
+    }
+  };
+
+  const renderPageNumbers = useMemo(() => {
+    const pages = [];
+    if (totalPages <= 3) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      const start = Math.max(1, Math.min(pageNumber - 1, totalPages - 2));
+      const end = Math.min(totalPages, start + 2);
+      for (let i = start; i <= end; i++) pages.push(i);
+    }
+    return pages;
+  }, [pageNumber, totalPages]);
 
   const handleSelectedUsers = (selecteds) => {
     const users = selecteds.map((t) => t.id);
@@ -355,7 +444,9 @@ const Reports = () => {
   }
 
   return (
-    <MainContainer className={classes.mainContainer} useWindowScroll>
+    <Box className={classes.root}>
+      <MainContainer useWindowScroll>
+        <Box className={classes.container}>
       {openTicketMessageDialog && (
         <ShowTicketLogModal
           isOpen={openTicketMessageDialog}
@@ -363,10 +454,17 @@ const Reports = () => {
           ticketId={ticketOpen.id}
         />
       )}
-      <Title>{i18n.t("reports.title")}</Title>
+          <MainHeader>
+            <Grid style={{ width: "99.6%" }} container>
+              <Grid xs={12} sm={8} item>
+                <Title>
+                  {i18n.t("reports.title")} ({totalTickets})
+                </Title>
+              </Grid>
+            </Grid>
+          </MainHeader>
 
-      <MainHeader className={classes.mainHeaderFilter} style={{ display: 'flex' }}>
-        <Paper className={classes.mainPaperFilter}>
+          <Paper className={classes.mainPaperFilter} variant="outlined">
           <div style={{ paddingTop: '15px' }} />
           <Grid container spacing={1}>
             <Grid item xs={12} md={3} xl={3}>
@@ -381,16 +479,12 @@ const Reports = () => {
             <Grid item xs={12} md={3} xl={3}>
               <UsersFilter onFiltered={handleSelectedUsers} />
             </Grid>
-            {/* <Grid item xs={12} md={4} xl={4}>
-              <TagsFilter onFiltered={handleSelectedTags} />
-            </Grid> */}
             <Grid item xs={12} md={3} xl={3} style={{ marginTop: '-13px' }}>
               <QueueSelectCustom
                 selectedQueueIds={queueIds}
                 onChange={values => setQueueIds(values)}
               />
             </Grid>
-
             <Grid item xs={12} sm={3} md={3}>
               <TextField
                 label="Data Inicial"
@@ -419,7 +513,7 @@ const Reports = () => {
                 }}
               />
             </Grid>
-            <Grid item xs={12} sm={3} md={3} style={{ display: 'flex', justifyContent: 'center' }}>
+              <Grid item xs={12} sm={3} md={3} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
               <FormControlLabel
                 control={
                   <Switch
@@ -428,159 +522,356 @@ const Reports = () => {
                     onChange={() => setOnlyRated(!onlyRated)}
                   />
                 }
-
                 label={i18n.t("reports.buttons.onlyRated")}
               />
+                <Tooltip {...CustomTooltipProps} title="Exportar para Excel">
               <IconButton onClick={exportarGridParaExcel} aria-label="Exportar para Excel">
-
                 <SaveAlt />
               </IconButton>
+                </Tooltip>
               <Button
                 variant="contained"
                 color="primary"
                 onClick={() => handleFilter(pageNumber)}
                 size="small"
-              >{i18n.t("reports.buttons.filter")}</Button>
+                >
+                  {i18n.t("reports.buttons.filter")}
+                </Button>
+              </Grid>
             </Grid>
-          </Grid>
-
         </Paper>
 
-      </MainHeader>
-      <Paper
-        className={classes.mainPaperTable}
-        variant="outlined"
-      >
-        <Table size="small" id="grid-attendants">
-          <TableHead>
-            <TableRow>
-              {/* <TableCell padding="checkbox" /> */}
-              <TableCell align="center">{i18n.t("reports.table.id")}</TableCell>
-              <TableCell align="left">{i18n.t("reports.table.whatsapp")}</TableCell>
-              <TableCell align="left">{i18n.t("reports.table.contact")}</TableCell>
-              <TableCell align="left">{i18n.t("reports.table.user")}</TableCell>
-              <TableCell align="left">{i18n.t("reports.table.queue")}</TableCell>
-              <TableCell align="center">{i18n.t("reports.table.status")}</TableCell>
-              <TableCell align="left">{i18n.t("reports.table.lastMessage")}</TableCell>
-              <TableCell align="center">{i18n.t("reports.table.dateOpen")}</TableCell>
-              <TableCell align="center">{i18n.t("reports.table.dateClose")}</TableCell>
-              <TableCell align="center">{i18n.t("reports.table.supportTime")}</TableCell>
-              <TableCell align="center">{i18n.t("reports.table.NPS")}</TableCell>
-              <TableCell align="center">{i18n.t("reports.table.actions")}</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            <>
-              {tickets.map((ticket) => (
-                <TableRow key={ticket.id}>
-                  <TableCell align="center">{ticket.id}</TableCell>
-                  <TableCell align="left">{ticket?.whatsappName}</TableCell>
-                  <TableCell align="left">{ticket?.contactName}</TableCell>
-                  <TableCell align="left">{ticket?.userName}</TableCell>
-                  <TableCell align="left">{ticket?.queueName}</TableCell>
-                  <TableCell align="center">{ticket?.status}</TableCell>
-                  <TableCell align="left">{ticket?.lastMessage}</TableCell>
-                  <TableCell align="center">{ticket?.createdAt}</TableCell>
-                  <TableCell align="center">{ticket?.closedAt}</TableCell>
-                  <TableCell align="center">{ticket?.supportTime}</TableCell>
-                  <TableCell align="center">{ticket?.NPS}</TableCell>
-                  <TableCell align="center">
-                    <Typography
-                      noWrap
-                      component="span"
-                      variant="body2"
-                      color="textPrimary"
+          {isDesktop ? (
+            <Paper className={classes.mainPaper} variant="outlined">
+              <Box style={{ overflowX: "auto" }}>
+                <table className={classes.table} id="grid-attendants">
+                  <thead className={classes.tableHead}>
+                    <tr>
+                      <th scope="col" style={{ textAlign: "center" }}>
+                        {i18n.t("reports.table.id").toUpperCase()}
+                      </th>
+                      <th scope="col" style={{ textAlign: "left" }}>
+                        {i18n.t("reports.table.whatsapp").toUpperCase()}
+                      </th>
+                      <th scope="col" style={{ textAlign: "left" }}>
+                        {i18n.t("reports.table.contact").toUpperCase()}
+                      </th>
+                      <th scope="col" style={{ textAlign: "left" }}>
+                        {i18n.t("reports.table.user").toUpperCase()}
+                      </th>
+                      <th scope="col" style={{ textAlign: "left" }}>
+                        {i18n.t("reports.table.queue").toUpperCase()}
+                      </th>
+                      <th scope="col" style={{ textAlign: "center" }}>
+                        {i18n.t("reports.table.status").toUpperCase()}
+                      </th>
+                      <th scope="col" style={{ textAlign: "left" }}>
+                        {i18n.t("reports.table.lastMessage").toUpperCase()}
+                      </th>
+                      <th scope="col" style={{ textAlign: "center" }}>
+                        {i18n.t("reports.table.dateOpen").toUpperCase()}
+                      </th>
+                      <th scope="col" style={{ textAlign: "center" }}>
+                        {i18n.t("reports.table.dateClose").toUpperCase()}
+                      </th>
+                      <th scope="col" style={{ textAlign: "center" }}>
+                        {i18n.t("reports.table.supportTime").toUpperCase()}
+                      </th>
+                      <th scope="col" style={{ textAlign: "center" }}>
+                        {i18n.t("reports.table.NPS").toUpperCase()}
+                      </th>
+                      <th scope="col" style={{ textAlign: "center" }}>
+                        {i18n.t("reports.table.actions").toUpperCase()}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className={classes.tableBody}>
+                    {!loading && tickets.length === 0 && (
+                      <tr>
+                        <td colSpan={12} className={classes.emptyState}>
+                          Nenhum ticket encontrado.
+                        </td>
+                      </tr>
+                    )}
+                    {tickets.map((ticket) => (
+                      <tr key={ticket.id}>
+                        <td style={{ textAlign: "center" }}>{ticket.id}</td>
+                        <td style={{ textAlign: "left" }}>{ticket?.whatsappName}</td>
+                        <td style={{ textAlign: "left" }}>{ticket?.contactName}</td>
+                        <td style={{ textAlign: "left" }}>{ticket?.userName}</td>
+                        <td style={{ textAlign: "left" }}>{ticket?.queueName}</td>
+                        <td style={{ textAlign: "center" }}>{ticket?.status}</td>
+                        <td style={{ textAlign: "left" }}>{ticket?.lastMessage}</td>
+                        <td style={{ textAlign: "center" }}>{ticket?.createdAt}</td>
+                        <td style={{ textAlign: "center" }}>{ticket?.closedAt}</td>
+                        <td style={{ textAlign: "center" }}>{ticket?.supportTime}</td>
+                        <td style={{ textAlign: "center" }}>{ticket?.NPS}</td>
+                        <td style={{ textAlign: "center" }}>
+                          <Tooltip {...CustomTooltipProps} title="Logs do Ticket">
+                            <IconButton
+                              onClick={() => {
+                                setOpenTicketMessageDialog(true);
+                                setTicketOpen(ticket);
+                              }}
+                              size="small"
+                              style={{
+                                color: blue[700],
+                                backgroundColor: "#ffffff",
+                                border: "1px solid #d1d5db",
+                                borderRadius: "8px",
+                                marginRight: 4
+                              }}
+                            >
+                              <History fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip {...CustomTooltipProps} title="Acessar Ticket">
+                            <IconButton
+                              onClick={() => { history.push(`/tickets/${ticket.uuid}`) }}
+                              size="small"
+                              style={{
+                                color: green[700],
+                                backgroundColor: "#ffffff",
+                                border: "1px solid #d1d5db",
+                                borderRadius: "8px"
+                              }}
+                            >
+                              <Forward fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </td>
+                      </tr>
+                    ))}
+                    {loading && (
+                      <tr>
+                        <td colSpan={12}>
+                          <TableRowSkeleton avatar columns={3} />
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </Box>
+              {/* Paginação Desktop */}
+              <Box className={classes.pagination} component="nav" aria-label="Table navigation">
+                <span className={classes.paginationInfo}>
+                  Página <strong>{pageNumber}</strong> de <strong>{totalPages}</strong> • 
+                  <strong>{totalTickets}</strong> tickets
+                </span>
+                <Box className={classes.paginationControls}>
+                  <span style={{ fontSize: "0.875rem", marginRight: 8 }}>Itens por página:</span>
+                  <FormControl size="small" variant="outlined" style={{ minWidth: 80 }}>
+                    <Select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(e.target.value);
+                        handleFilter(1);
+                      }}
                     >
-                      <Tooltip title="Logs do Ticket">
-                        <History
+                      <MenuItem value={5}>5</MenuItem>
+                      <MenuItem value={10}>10</MenuItem>
+                      <MenuItem value={20}>20</MenuItem>
+                      <MenuItem value={50}>50</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Box>
+                <Box className={classes.paginationControls} component="ul" style={{ listStyle: "none", display: "flex", gap: 4, margin: 0, padding: 0 }}>
+                  <li>
+                    <button
+                      onClick={() => handlePageChange(1)}
+                      disabled={pageNumber === 1}
+                      className={classes.pageButton}
+                    >
+                      <ChevronsLeft className="w-5 h-5" />
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => handlePageChange(pageNumber - 1)}
+                      disabled={pageNumber === 1}
+                      className={classes.pageButton}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                  </li>
+                  {renderPageNumbers.map((page, index) => (
+                    <li key={index}>
+                      <button
+                        onClick={() => handlePageChange(page)}
+                        className={`${classes.pageButton} ${page === pageNumber ? classes.pageButtonActive : ""}`}
+                      >
+                        {page}
+                      </button>
+                    </li>
+                  ))}
+                  <li>
+                    <button
+                      onClick={() => handlePageChange(pageNumber + 1)}
+                      disabled={pageNumber === totalPages}
+                      className={classes.pageButton}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => handlePageChange(totalPages)}
+                      disabled={pageNumber === totalPages}
+                      className={classes.pageButton}
+                    >
+                      <ChevronsRight className="w-5 h-5" />
+                    </button>
+                  </li>
+                </Box>
+              </Box>
+            </Paper>
+          ) : (
+            /* Mobile View */
+            <>
+              <div className="flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
+                {!loading && tickets.length === 0 && (
+                  <div className="text-center text-sm text-gray-500 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    Nenhum ticket encontrado.
+                  </div>
+                )}
+              {tickets.map((ticket) => (
+                  <div key={ticket.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <span className="font-semibold text-sm">#{ticket.id}</span>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">{ticket?.status}</div>
+                      </div>
+                      <div className="flex gap-1">
+                        <Tooltip {...CustomTooltipProps} title="Logs">
+                          <IconButton
                           onClick={() => {
-                            setOpenTicketMessageDialog(true)
-                            setTicketOpen(ticket)
+                              setOpenTicketMessageDialog(true);
+                              setTicketOpen(ticket);
                           }}
-                          fontSize="small"
+                            size="small"
                           style={{
                             color: blue[700],
-                            cursor: "pointer",
-                            marginLeft: 10,
-                            verticalAlign: "middle"
+                              backgroundColor: "#ffffff",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "8px"
                           }}
-                        />
+                          >
+                            <History fontSize="small" />
+                          </IconButton>
                       </Tooltip>
-                      <Tooltip title="Acessar Ticket">
-                        <Forward
-                          onClick={() => { history.push(`/tickets/${ticket.uuid}`) }}
-                          fontSize="small"
+                        <Tooltip {...CustomTooltipProps} title="Acessar">
+                          <IconButton
+                            onClick={() => history.push(`/tickets/${ticket.uuid}`)}
+                            size="small"
                           style={{
                             color: green[700],
-                            cursor: "pointer",
-                            marginLeft: 10,
-                            verticalAlign: "middle"
+                              backgroundColor: "#ffffff",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "8px"
                           }}
-                        />
+                          >
+                            <Forward fontSize="small" />
+                          </IconButton>
                       </Tooltip>
-                    </Typography>
-                  </TableCell>
-                </TableRow>
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                      <div>WhatsApp: {ticket?.whatsappName}</div>
+                      <div>Contato: {ticket?.contactName}</div>
+                      <div>Usuário: {ticket?.userName}</div>
+                      <div>Fila: {ticket?.queueName}</div>
+                      <div>Última Mensagem: {ticket?.lastMessage}</div>
+                      <div>Abertura: {ticket?.createdAt}</div>
+                      <div>Fechamento: {ticket?.closedAt || "—"}</div>
+                      <div>Tempo: {ticket?.supportTime}</div>
+                      <div>NPS: {ticket?.NPS || "—"}</div>
+                    </div>
+                  </div>
               ))}
               {loading && <TableRowSkeleton avatar columns={3} />}
-            </>
-          </TableBody>
-        </Table>
-
-      </Paper>
-
-      <div>
-        <Grid container>
-          <Grid item xs={12} sm={10} md={10}>
-
-            <Pagination
-              count={Math.ceil(totalTickets / pageSize)} // Calcula o nmero total de páginas com base no nmero total de tickets e no tamanho da página
-              page={pageNumber} // Define a página atual
-              onChange={(event, value) => handleFilter(value)} // Função de callback para mudanças de página
-            />
-          </Grid>
-          <Grid item xs={12} sm={2} md={2}>
-
-            <FormControl
-              margin="dense"
-              variant="outlined"
-              fullWidth
-            >
-              <InputLabel>
-                {i18n.t("tickets.search.ticketsPerPage")}
-              </InputLabel>
-              <Select
-                labelId="dialog-select-prompt-label"
-                id="dialog-select-prompt"
-                name="pageSize"
+              </div>
+              {/* Paginação Mobile */}
+              <nav className="flex items-center justify-between p-3 mt-2 w-full max-w-[375px] mx-auto" aria-label="Mobile navigation">
+                <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                  Página <span className="font-semibold text-gray-900 dark:text-white">{pageNumber}</span>
+                  {" "} de {" "}
+                  <span className="font-semibold text-gray-900 dark:text-white">{totalPages}</span>
+                  {" "} • {" "}
+                  <span className="font-semibold text-gray-900 dark:text-white">{totalTickets}</span> tickets
+                </span>
+                <div className="flex items-center gap-2">
+                  <select
                 value={pageSize}
                 onChange={(e) => {
-                  setPageSize(e.target.value)
-                }}
-                label={i18n.t("tickets.search.ticketsPerPage")}
-                fullWidth
-                MenuProps={{
-                  anchorOrigin: {
-                    vertical: "center",
-                    horizontal: "left",
-                  },
-                  transformOrigin: {
-                    vertical: "center",
-                    horizontal: "left",
-                  },
-                  getContentAnchorEl: null,
-                }}
+                      setPageSize(Number(e.target.value));
+                      handleFilter(1);
+                    }}
+                    className="text-xs bg-gray-50 border border-gray-300 rounded-md p-1 dark:bg-gray-700 dark:border-gray-600"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                  <ul className="inline-flex items-center -space-x-px">
+                    <li>
+                      <button
+                        onClick={() => handlePageChange(1)}
+                        disabled={pageNumber === 1}
+                        className="flex items-center justify-center px-2 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <ChevronsLeft className="w-4 h-4" />
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        onClick={() => handlePageChange(pageNumber - 1)}
+                        disabled={pageNumber === 1}
+                        className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                    </li>
+                    {renderPageNumbers.map((page, index) => (
+                      <li key={index}>
+                        <button
+                          onClick={() => handlePageChange(page)}
+                          className={`flex items-center justify-center px-2 h-8 leading-tight border
+                            ${page === pageNumber
+                                ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
+                                : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                              }`}
               >
-                <MenuItem value={5} >{"5"}</MenuItem>
-                <MenuItem value={10} >{"10"}</MenuItem>
-                <MenuItem value={20} >{"20"}</MenuItem>
-                <MenuItem value={50} >{"50"}</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-        </Grid>
+                          {page}
+                        </button>
+                      </li>
+                    ))}
+                    <li>
+                      <button
+                        onClick={() => handlePageChange(pageNumber + 1)}
+                        disabled={pageNumber === totalPages}
+                        className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        onClick={() => handlePageChange(totalPages)}
+                        disabled={pageNumber === totalPages}
+                        className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <ChevronsRight className="w-4 h-4" />
+                      </button>
+                    </li>
+                  </ul>
       </div>
-    </MainContainer >
+              </nav>
+            </>
+          )}
+        </Box>
+      </MainContainer>
+    </Box>
   );
 };
 

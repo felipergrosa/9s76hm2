@@ -1,25 +1,6 @@
-import React, { useState, useEffect, useReducer, useContext } from "react";
-import { makeStyles } from "@material-ui/core/styles";
-import Paper from "@material-ui/core/Paper";
-import Button from "@material-ui/core/Button";
-import Table from "@material-ui/core/Table";
-import TableBody from "@material-ui/core/TableBody";
-import TableCell from "@material-ui/core/TableCell";
-import TableHead from "@material-ui/core/TableHead";
-import TableRow from "@material-ui/core/TableRow";
-import Chip from "@material-ui/core/Chip";
-import Typography from "@material-ui/core/Typography";
-import Grid from "@material-ui/core/Grid";
-import Box from "@material-ui/core/Box";
-import Card from "@material-ui/core/Card";
-import CardContent from "@material-ui/core/CardContent";
-import CardHeader from "@material-ui/core/CardHeader";
-import Divider from "@material-ui/core/Divider";
-import Avatar from "@material-ui/core/Avatar";
-import CircularProgress from "@material-ui/core/CircularProgress";
-import Tooltip from "@material-ui/core/Tooltip";
-import useMediaQuery from "@material-ui/core/useMediaQuery";
-import { useTheme } from "@material-ui/core/styles";
+import React, { useState, useEffect, useReducer, useContext, useMemo } from "react";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+import { Paper, Button, Chip, Typography, Grid, Box, Card, CardContent, CardHeader, Divider, Avatar, CircularProgress, Tooltip, useMediaQuery } from "@material-ui/core";
 
 // Ícones
 import PaymentIcon from "@material-ui/icons/Payment";
@@ -90,36 +71,63 @@ const reducer = (state, action) => {
 };
 
 const useStyles = makeStyles((theme) => ({
+  root: {
+    flex: 1,
+    backgroundColor: theme.palette.background.default,
+    minHeight: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
+  container: {
+    width: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
   mainPaper: {
     flex: 1,
-    padding: theme.spacing(2),
-    borderRadius: 16,
-    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
-    ...theme.scrollbarStyles,
-  },
-  tableContainer: {
-    overflowX: "auto",
+    padding: theme.spacing(1),
   },
   table: {
-    minWidth: 600,
+    width: "100%",
+    borderCollapse: "collapse",
   },
   tableHead: {
-    backgroundColor: "#f9f9f9",
-  },
-  tableHeadCell: {
-    fontWeight: "bold",
+    backgroundColor: theme.palette.grey[100],
+    "& th": {
+      padding: theme.spacing(1.5),
+      textAlign: "left",
+      fontSize: "0.75rem",
+      fontWeight: 600,
+      textTransform: "uppercase",
     color: theme.palette.text.secondary,
-    padding: theme.spacing(2),
-  },
-  tableRow: {
-    "&:hover": {
-      backgroundColor: "rgba(0, 0, 0, 0.04)",
+      borderBottom: `2px solid ${theme.palette.divider}`,
     },
-    transition: "background-color 0.2s",
   },
-  tableCell: {
-    padding: theme.spacing(2),
-    borderBottom: "1px solid rgba(224, 224, 224, 0.5)",
+  tableBody: {
+    "& tr": {
+      borderBottom: `1px solid ${theme.palette.divider}`,
+      transition: "background-color 0.2s",
+    "&:hover": {
+        backgroundColor: theme.palette.action.hover,
+      },
+      "&:last-child": {
+        borderBottom: "none",
+    },
+    },
+    "& td": {
+      padding: theme.spacing(1.5),
+      fontSize: "0.875rem",
+      color: theme.palette.text.primary,
+    },
+  },
+  emptyState: {
+    padding: theme.spacing(4),
+    textAlign: "center",
+    color: theme.palette.text.secondary,
   },
   chipPaid: {
     backgroundColor: theme.palette.success.main,
@@ -243,6 +251,7 @@ const Invoices = () => {
   const classes = useStyles();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isDesktop = useMediaQuery(theme.breakpoints.up(1200));
   const { user } = useContext(AuthContext);
 
   const [loading, setLoading] = useState(false);
@@ -512,7 +521,9 @@ const Invoices = () => {
   };
 
   return (
-    <MainContainer>
+    <Box className={classes.root}>
+      <MainContainer useWindowScroll>
+        <Box className={classes.container}>
       <SubscriptionModal
         open={contactModalOpen}
         onClose={handleCloseContactModal}
@@ -522,100 +533,105 @@ const Invoices = () => {
       />
       
       <MainHeader>
+            <Grid style={{ width: "99.6%" }} container>
+              <Grid xs={12} sm={8} item>
         <Box className={classes.title}>
           <ReceiptIcon fontSize="large" />
-          <Title>Faturas</Title>
-          <span className={classes.invoiceCount}>{invoices.length}</span>
+                  <Title>Faturas ({invoices.length})</Title>
         </Box>
+              </Grid>
+            </Grid>
       </MainHeader>
       
-      <Paper
-        className={classes.mainPaper}
-        variant="outlined"
-        onScroll={handleScroll}
-      >
-        {/* Visualização móvel (cards) */}
-        <div className={classes.mobileView}>
+          {isMobile ? (
+            /* Mobile View - Cards */
+            <div className={classes.cardGrid}>
           {renderMobileCards()}
         </div>
-
-        {/* Visualização desktop (tabela) */}
-        <div className={classes.desktopView}>
-          <div className={classes.tableContainer}>
-            <Table className={classes.table} size="small">
-              <TableHead className={classes.tableHead}>
-                <TableRow>
-                  <TableCell className={classes.tableHeadCell}>
+          ) : (
+            /* Desktop View - Table */
+            <Paper className={classes.mainPaper} variant="outlined">
+              <Box style={{ overflowX: "auto" }}>
+                <table className={classes.table}>
+                  <thead className={classes.tableHead}>
+                    <tr>
+                      <th scope="col">
                     <Tooltip title="Detalhes da fatura">
                       <Box display="flex" alignItems="center">
                         <InfoIcon fontSize="small" style={{ marginRight: 8 }} />
-                        Detalhes
+                            DETALHES
                       </Box>
                     </Tooltip>
-                  </TableCell>
-                  <TableCell className={classes.tableHeadCell} align="center">
+                      </th>
+                      <th scope="col" style={{ textAlign: "center" }}>
                     <Tooltip title="Número de usuários">
                       <Box display="flex" alignItems="center" justifyContent="center">
                         <PersonIcon fontSize="small" style={{ marginRight: 8 }} />
-                        Usuários
+                            USUÁRIOS
                       </Box>
                     </Tooltip>
-                  </TableCell>
-                  <TableCell className={classes.tableHeadCell} align="center">
+                      </th>
+                      <th scope="col" style={{ textAlign: "center" }}>
                     <Tooltip title="Número de conexões">
                       <Box display="flex" alignItems="center" justifyContent="center">
                         <DevicesIcon fontSize="small" style={{ marginRight: 8 }} />
-                        Conexões
+                            CONEXÕES
                       </Box>
                     </Tooltip>
-                  </TableCell>
-                  <TableCell className={classes.tableHeadCell} align="center">
+                      </th>
+                      <th scope="col" style={{ textAlign: "center" }}>
                     <Tooltip title="Número de filas">
                       <Box display="flex" alignItems="center" justifyContent="center">
                         <QueueIcon fontSize="small" style={{ marginRight: 8 }} />
-                        Filas
+                            FILAS
                       </Box>
                     </Tooltip>
-                  </TableCell>
-                  <TableCell className={classes.tableHeadCell} align="center">
+                      </th>
+                      <th scope="col" style={{ textAlign: "center" }}>
                     <Tooltip title="Valor da fatura">
                       <Box display="flex" alignItems="center" justifyContent="center">
                         <MoneyIcon fontSize="small" style={{ marginRight: 8 }} />
-                        Valor
+                            VALOR
                       </Box>
                     </Tooltip>
-                  </TableCell>
-                  <TableCell className={classes.tableHeadCell} align="center">
+                      </th>
+                      <th scope="col" style={{ textAlign: "center" }}>
                     <Tooltip title="Data de vencimento">
                       <Box display="flex" alignItems="center" justifyContent="center">
                         <DateRangeIcon fontSize="small" style={{ marginRight: 8 }} />
-                        Vencimento
+                            VENCIMENTO
                       </Box>
                     </Tooltip>
-                  </TableCell>
-                  <TableCell className={classes.tableHeadCell} align="center">Status</TableCell>
-                  <TableCell className={classes.tableHeadCell} align="center">Ação</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
+                      </th>
+                      <th scope="col" style={{ textAlign: "center" }}>STATUS</th>
+                      <th scope="col" style={{ textAlign: "center" }}>AÇÃO</th>
+                    </tr>
+                  </thead>
+                  <tbody className={classes.tableBody}>
+                    {!loading && invoices.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className={classes.emptyState}>
+                          Nenhuma fatura encontrada.
+                        </td>
+                      </tr>
+                    )}
                 {invoices.map((invoice) => {
                   const statusInfo = getInvoiceStatus(invoice);
                   return (
-                    <TableRow 
+                        <tr 
                       key={invoice.id} 
                       style={rowStyle(invoice)} 
-                      className={classes.tableRow}
                     >
-                      <TableCell className={classes.tableCell}>{companyPlan.name}</TableCell>
-                      <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.users}</TableCell>
-                      <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.connections}</TableCell>
-                      <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.queues}</TableCell>
-                      <TableCell className={classes.tableCell} align="center" style={{ fontWeight: 'bold' }}>
+                          <td>{companyPlan.name}</td>
+                          <td style={{ textAlign: "center" }}>{companyPlan && companyPlan.users}</td>
+                          <td style={{ textAlign: "center" }}>{companyPlan && companyPlan.connections}</td>
+                          <td style={{ textAlign: "center" }}>{companyPlan && companyPlan.queues}</td>
+                          <td style={{ textAlign: "center", fontWeight: 'bold' }}>
                         {companyPlan && companyPlan.amount 
                           ? parseFloat(companyPlan.amount).toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })
                           : invoice.value.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
-                      </TableCell>
-                      <TableCell className={classes.tableCell} align="center">
+                          </td>
+                          <td style={{ textAlign: "center" }}>
                         <Box display="flex" flexDirection="column">
                           <Typography variant="body2">
                             {moment(invoice.dueDate).format("DD/MM/YYYY")}
@@ -624,16 +640,16 @@ const Invoices = () => {
                             {renderDaysLeft(invoice)}
                           </Typography>
                         </Box>
-                      </TableCell>
-                      <TableCell className={classes.tableCell} align="center">
+                          </td>
+                          <td style={{ textAlign: "center" }}>
                         <Chip
                           icon={statusInfo.icon}
                           label={statusInfo.text}
                           className={statusInfo.chip}
                           size="small"
                         />
-                      </TableCell>
-                      <TableCell className={classes.tableCell} align="center">
+                          </td>
+                          <td style={{ textAlign: "center" }}>
                         {statusInfo.text !== "Pago" ? (
                           <Button
                             size="small"
@@ -654,17 +670,25 @@ const Invoices = () => {
                             PAGO
                           </Button>
                         )}
-                      </TableCell>
-                    </TableRow>
+                          </td>
+                        </tr>
                   );
                 })}
-                {loading && <TableRowSkeleton columns={8} />}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+                    {loading && (
+                      <tr>
+                        <td colSpan={8}>
+                          <TableRowSkeleton columns={8} />
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </Box>
       </Paper>
+          )}
+        </Box>
     </MainContainer>
+    </Box>
   );
 };
 

@@ -1,29 +1,16 @@
-import React, { useContext, useEffect, useReducer, useState } from "react";
-
-// import openSocket from "socket.io-client"; // Não utilizado
-
-import {
-  Button,
-  IconButton,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow
-} from "@material-ui/core";
-
-import { makeStyles } from "@material-ui/core/styles";
-
+import React, { useContext, useEffect, useReducer, useState, useMemo } from "react";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+import { Paper, Box, useMediaQuery, TextField, InputAdornment, Grid, IconButton, Button, Tooltip } from "@material-ui/core";
+import SearchIcon from "@material-ui/icons/Search";
+import { DeleteOutline, Edit } from "@material-ui/icons";
+import { Plus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Sparkles } from "lucide-react";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
-import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
-import TableRowSkeleton from "../../components/TableRowSkeleton";
 import Title from "../../components/Title";
+import TableRowSkeleton from "../../components/TableRowSkeleton";
 import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
 import api from "../../services/api";
-import { DeleteOutline, Edit } from "@material-ui/icons";
 import PromptModal from "../../components/PromptModal";
 import PromptEnhancements from "../../components/PromptEnhancements";
 import { toast } from "react-toastify";
@@ -33,21 +20,93 @@ import usePlans from "../../hooks/usePlans";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import usePermissions from "../../hooks/usePermissions";
-// import { SocketContext } from "../../context/Socket/SocketContext";
 
 const useStyles = makeStyles((theme) => ({
+  root: {
+    flex: 1,
+    backgroundColor: theme.palette.background.default,
+    minHeight: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
+  container: {
+    width: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
   mainPaper: {
     flex: 1,
     padding: theme.spacing(1),
-    overflowY: "scroll",
-    ...theme.scrollbarStyles,
   },
-  customTableCell: {
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  tableHead: {
+    backgroundColor: theme.palette.grey[100],
+    "& th": {
+      padding: theme.spacing(1.5),
+      textAlign: "left",
+      fontSize: "0.75rem",
+      fontWeight: 600,
+      textTransform: "uppercase",
+      color: theme.palette.text.secondary,
+      borderBottom: `2px solid ${theme.palette.divider}`,
+    },
+  },
+  sortButton: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
+    gap: theme.spacing(0.5),
+    background: "none",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
+    font: "inherit",
+    color: "inherit",
+    "&:hover": {
+      opacity: 0.8,
+    },
+  },
+  sortIcon: {
+    fontSize: "0.75rem",
+    opacity: 0.6,
+  },
+  tableBody: {
+    "& tr": {
+      borderBottom: `1px solid ${theme.palette.divider}`,
+      transition: "background-color 0.2s",
+      "&:hover": {
+        backgroundColor: theme.palette.action.hover,
+      },
+      "&:last-child": {
+        borderBottom: "none",
+      },
+    },
+    "& td": {
+      padding: theme.spacing(1.5),
+      fontSize: "0.875rem",
+      color: theme.palette.text.primary,
+    },
+  },
+  emptyState: {
+    padding: theme.spacing(4),
+    textAlign: "center",
+    color: theme.palette.text.secondary,
   },
 }));
+
+const CustomTooltipProps = {
+  arrow: true,
+  enterTouchDelay: 0,
+  leaveTouchDelay: 5000,
+  enterDelay: 300,
+  leaveDelay: 100,
+};
 
 const reducer = (state, action) => {
   if (action.type === "LOAD_PROMPTS") {
@@ -94,22 +153,33 @@ const reducer = (state, action) => {
 
 const Prompts = () => {
   const classes = useStyles();
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up(1200));
 
   const [prompts, dispatch] = useReducer(reducer, []);
   const [loading, setLoading] = useState(false);
-
+  const [sortField, setSortField] = useState(null);
+  const [sortDirection, setSortDirection] = useState('asc');
   const [promptModalOpen, setPromptModalOpen] = useState(false);
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [enhancementsOpen, setEnhancementsOpen] = useState(false);
   const [templateData, setTemplateData] = useState(null);
-  //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
 
   const { getPlanCompany } = usePlans();
   const history = useHistory();
   const companyId = user.companyId;
   const { hasPermission } = usePermissions();
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
 
   useEffect(() => {
     async function fetchData() {
@@ -230,7 +300,9 @@ const Prompts = () => {
   };
 
   return (
-    <MainContainer>
+    <Box className={classes.root}>
+      <MainContainer useWindowScroll>
+        <Box className={classes.container}>
       <ConfirmationModal
         title={
           selectedPrompt &&
@@ -257,78 +329,217 @@ const Prompts = () => {
       {hasPermission("prompts.view") ? (
         <>
           <MainHeader>
-            <Title>{i18n.t("prompts.title")}</Title>
-            <MainHeaderButtonsWrapper>
+                <Grid style={{ width: "99.6%" }} container>
+                  <Grid xs={12} sm={5} item>
+                    <Title>
+                      {i18n.t("prompts.title")} ({prompts.length})
+                    </Title>
+                  </Grid>
+                  <Grid xs={12} sm={7} item>
+                    <Grid container alignItems="center" spacing={2}>
+                      <Grid item>
+                        <Tooltip {...CustomTooltipProps} title="Melhorias">
               <Button
                 variant="outlined"
-                color="primary"
+                            size="small"
                 onClick={() => setEnhancementsOpen(true)}
-                style={{ marginRight: 8 }}
-              >
-                🚀 Melhorias
+                            style={{ 
+                              color: "#6366f1",
+                              backgroundColor: "#ffffff",
+                              border: "1px solid #6366f1",
+                              borderRadius: "8px",
+                              marginRight: 8
+                            }}
+                            startIcon={<Sparkles className="w-4 h-4" />}
+                          >
+                            Melhorias
               </Button>
+                        </Tooltip>
+                      </Grid>
+                      <Grid item>
+                        <Tooltip {...CustomTooltipProps} title={i18n.t("prompts.buttons.add")}>
               <Button
+                            onClick={handleOpenPromptModal}
                 variant="contained"
-                color="primary"
-                onClick={handleOpenPromptModal}
+                            size="small"
+                            style={{ 
+                              backgroundColor: "#4ade80",
+                              color: "#ffffff",
+                              textTransform: "uppercase",
+                              fontWeight: 600,
+                              borderRadius: "8px"
+                            }}
+                            startIcon={<Plus className="w-4 h-4" />}
+                            aria-label={i18n.t("prompts.buttons.add")}
               >
                 {i18n.t("prompts.buttons.add")}
               </Button>
-            </MainHeaderButtonsWrapper>
+                        </Tooltip>
+                      </Grid>
+                    </Grid>
+                  </Grid>
+                </Grid>
           </MainHeader>
+              {isDesktop ? (
           <Paper className={classes.mainPaper} variant="outlined">
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell align="left">
-                    {i18n.t("prompts.table.name")}
-                  </TableCell>
-                  <TableCell align="left">
-                    {i18n.t("prompts.table.queue")}
-                  </TableCell>
-                  <TableCell align="left">
-                    {i18n.t("prompts.table.max_tokens")}
-                  </TableCell>
-                  <TableCell align="center">
-                    {i18n.t("prompts.table.actions")}
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
+                  <Box style={{ overflowX: "auto" }}>
+                    <table className={classes.table}>
+                      <thead className={classes.tableHead}>
+                        <tr>
+                          <th scope="col" style={{ textAlign: "left" }}>
+                            <button 
+                              onClick={() => handleSort('name')} 
+                              className={classes.sortButton}
+                            >
+                              {i18n.t("prompts.table.name").toUpperCase()}
+                              <span className={classes.sortIcon}>
+                                {sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                              </span>
+                            </button>
+                          </th>
+                          <th scope="col" style={{ textAlign: "left" }}>
+                            <button 
+                              onClick={() => handleSort('queue')} 
+                              className={classes.sortButton}
+                            >
+                              {i18n.t("prompts.table.queue").toUpperCase()}
+                              <span className={classes.sortIcon}>
+                                {sortField === 'queue' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                              </span>
+                            </button>
+                          </th>
+                          <th scope="col" style={{ textAlign: "left" }}>
+                            <button 
+                              onClick={() => handleSort('maxTokens')} 
+                              className={classes.sortButton}
+                            >
+                              {i18n.t("prompts.table.max_tokens").toUpperCase()}
+                              <span className={classes.sortIcon}>
+                                {sortField === 'maxTokens' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                              </span>
+                            </button>
+                          </th>
+                          <th scope="col" style={{ textAlign: "center" }}>
+                            {i18n.t("prompts.table.actions").toUpperCase()}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className={classes.tableBody}>
+                        {!loading && prompts.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className={classes.emptyState}>
+                              Nenhum prompt encontrado.
+                            </td>
+                          </tr>
+                        )}
+                        {prompts.map((prompt) => (
+                          <tr key={prompt.id}>
+                            <td style={{ textAlign: "left" }}>{prompt.name}</td>
+                            <td style={{ textAlign: "left" }}>{prompt.queue?.name || '-'}</td>
+                            <td style={{ textAlign: "left" }}>{prompt.maxTokens}</td>
+                            <td style={{ textAlign: "center" }}>
+                              <Tooltip {...CustomTooltipProps} title="Editar">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleEditPrompt(prompt)}
+                                  style={{
+                                    color: "#374151",
+                                    backgroundColor: "#ffffff",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "8px",
+                                    marginRight: 4
+                                  }}
+                                >
+                                  <Edit fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip {...CustomTooltipProps} title="Deletar">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => {
+                                    setSelectedPrompt(prompt);
+                                    setConfirmModalOpen(true);
+                                  }}
+                                  style={{
+                                    color: "#dc2626",
+                                    backgroundColor: "#ffffff",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "8px"
+                                  }}
+                                >
+                                  <DeleteOutline fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </td>
+                          </tr>
+                        ))}
+                        {loading && <TableRowSkeleton columns={4} />}
+                      </tbody>
+                    </table>
+                  </Box>
+                </Paper>
+              ) : (
+                /* Mobile View */
                 <>
+                  <div className="flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
+                    {!loading && prompts.length === 0 && (
+                      <div className="text-center text-sm text-gray-500 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                        Nenhum prompt encontrado.
+                      </div>
+                    )}
                   {prompts.map((prompt) => (
-                    <TableRow key={prompt.id}>
-                      <TableCell align="left">{prompt.name}</TableCell>
-                      <TableCell align="left">{prompt.queue.name}</TableCell>
-                      <TableCell align="left">{prompt.maxTokens}</TableCell>
-                      <TableCell align="center">
+                      <div key={prompt.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-sm">{prompt.name}</span>
+                          <div className="flex gap-1">
+                            <Tooltip {...CustomTooltipProps} title="Editar">
                         <IconButton
                           size="small"
                           onClick={() => handleEditPrompt(prompt)}
+                                style={{
+                                  color: "#374151",
+                                  backgroundColor: "#ffffff",
+                                  border: "1px solid #d1d5db",
+                                  borderRadius: "8px"
+                                }}
                         >
-                          <Edit />
+                                <Edit fontSize="small" />
                         </IconButton>
-
+                            </Tooltip>
+                            <Tooltip {...CustomTooltipProps} title="Deletar">
                         <IconButton
                           size="small"
                           onClick={() => {
                             setSelectedPrompt(prompt);
                             setConfirmModalOpen(true);
                           }}
+                                style={{
+                                  color: "#dc2626",
+                                  backgroundColor: "#ffffff",
+                                  border: "1px solid #d1d5db",
+                                  borderRadius: "8px"
+                                }}
                         >
-                          <DeleteOutline />
+                                <DeleteOutline fontSize="small" />
                         </IconButton>
-                      </TableCell>
-                    </TableRow>
+                            </Tooltip>
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                          <div>Fila: {prompt.queue?.name || '-'}</div>
+                          <div>Max Tokens: {prompt.maxTokens}</div>
+                        </div>
+                      </div>
                   ))}
                   {loading && <TableRowSkeleton columns={4} />}
+                  </div>
                 </>
-              </TableBody>
-            </Table>
-          </Paper>
+              )}
         </>
       ) : <ForbiddenPage />}
+        </Box>
     </MainContainer>
+    </Box>
   );
 };
 

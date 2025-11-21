@@ -1,13 +1,8 @@
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState, useContext, useMemo } from "react";
 import { useParams, useHistory } from "react-router-dom";
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
 import {
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   InputAdornment,
   Grid,
@@ -23,7 +18,8 @@ import {
   Card,
   CardContent,
   Box,
-  LinearProgress
+  LinearProgress,
+  useMediaQuery
 } from "@material-ui/core";
 import SearchIcon from "@material-ui/icons/Search";
 import RefreshIcon from "@material-ui/icons/Refresh";
@@ -59,6 +55,22 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 
 const useStyles = makeStyles((theme) => ({
+  root: {
+    flex: 1,
+    backgroundColor: theme.palette.background.default,
+    minHeight: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
+  container: {
+    width: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
   mainPaper: {
     flex: 1,
     width: "100%",
@@ -66,6 +78,44 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     flexDirection: "column",
     gap: theme.spacing(2),
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  tableHead: {
+    backgroundColor: theme.palette.grey[100],
+    "& th": {
+      padding: theme.spacing(1.5),
+      textAlign: "left",
+      fontSize: "0.75rem",
+      fontWeight: 600,
+      textTransform: "uppercase",
+      color: theme.palette.text.secondary,
+      borderBottom: `2px solid ${theme.palette.divider}`,
+    },
+  },
+  tableBody: {
+    "& tr": {
+      borderBottom: `1px solid ${theme.palette.divider}`,
+      transition: "background-color 0.2s",
+      "&:hover": {
+        backgroundColor: theme.palette.action.hover,
+      },
+      "&:last-child": {
+        borderBottom: "none",
+      },
+    },
+    "& td": {
+      padding: theme.spacing(1.5),
+      fontSize: "0.875rem",
+      color: theme.palette.text.primary,
+    },
+  },
+  emptyState: {
+    padding: theme.spacing(4),
+    textAlign: "center",
+    color: theme.palette.text.secondary,
   },
   dashboardCard: {
     height: "100%",
@@ -178,6 +228,8 @@ const useStyles = makeStyles((theme) => ({
 
 const CampaignDetailedReport = () => {
   const classes = useStyles();
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up(1200));
   const history = useHistory();
   const { campaignId } = useParams();
   const { datetimeToClient } = useDate();
@@ -402,7 +454,9 @@ const CampaignDetailedReport = () => {
   };
 
   return (
-    <MainContainer>
+    <Box className={classes.root}>
+      <MainContainer useWindowScroll>
+        <Box className={classes.container}>
       <MainHeader>
         <Grid style={{ width: "99.6%" }} container>
           <Grid xs={12} item>
@@ -869,27 +923,32 @@ const CampaignDetailedReport = () => {
         </Grid>
 
         {/* Tabela */}
-        <div className={classes.tableWrapper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Status</TableCell>
-                <TableCell>Contato</TableCell>
-                <TableCell>Número</TableCell>
-                <TableCell>Mensagem Enviada</TableCell>
-                <TableCell>Tentativas</TableCell>
-                <TableCell>Data de Envio</TableCell>
-                <TableCell>Último Erro</TableCell>
-                <TableCell>Data do Erro</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <TableRowSkeleton columns={8} />
-              ) : (
-                records.map((record) => (
-                  <TableRow key={record.id}>
-                    <TableCell>
+        {isDesktop ? (
+          <Box className={classes.tableWrapper} style={{ overflowX: "auto" }}>
+            <table className={classes.table}>
+              <thead className={classes.tableHead}>
+                <tr>
+                  <th scope="col">STATUS</th>
+                  <th scope="col">CONTATO</th>
+                  <th scope="col">NÚMERO</th>
+                  <th scope="col">MENSAGEM ENVIADA</th>
+                  <th scope="col">TENTATIVAS</th>
+                  <th scope="col">DATA DE ENVIO</th>
+                  <th scope="col">ÚLTIMO ERRO</th>
+                  <th scope="col">DATA DO ERRO</th>
+                </tr>
+              </thead>
+              <tbody className={classes.tableBody}>
+                {!loading && records.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className={classes.emptyState}>
+                      Nenhum registro encontrado.
+                    </td>
+                  </tr>
+                )}
+                {records.map((record) => (
+                  <tr key={record.id}>
+                    <td>
                       <Tooltip title={getStatusLabel(record.status)}>
                         <Chip
                           icon={getStatusIcon(record.status)}
@@ -898,10 +957,10 @@ const CampaignDetailedReport = () => {
                           color={getStatusColor(record.status)}
                         />
                       </Tooltip>
-                    </TableCell>
-                    <TableCell>{record.contact?.name || "-"}</TableCell>
-                    <TableCell>{record.number}</TableCell>
-                    <TableCell>
+                    </td>
+                    <td>{record.contact?.name || "-"}</td>
+                    <td>{record.number}</td>
+                    <td>
                       {record.message ? (
                         <Tooltip title={record.message.trim()} placement="top-start">
                           <span className={classes.messageCell}>{getMessagePreview(record.message)}</span>
@@ -915,8 +974,8 @@ const CampaignDetailedReport = () => {
                       ) : (
                         "-"
                       )}
-                    </TableCell>
-                    <TableCell>
+                    </td>
+                    <td>
                       {record.attempts > 0 ? (
                         <Chip
                           label={record.attempts}
@@ -926,11 +985,11 @@ const CampaignDetailedReport = () => {
                       ) : (
                         "-"
                       )}
-                    </TableCell>
-                    <TableCell>
+                    </td>
+                    <td>
                       {record.deliveredAt ? datetimeToClient(record.deliveredAt) : "-"}
-                    </TableCell>
-                    <TableCell>
+                    </td>
+                    <td>
                       {record.lastError ? (
                         <Tooltip title={record.lastError}>
                           <span className={classes.errorCell}>{record.lastError}</span>
@@ -938,16 +997,66 @@ const CampaignDetailedReport = () => {
                       ) : (
                         "-"
                       )}
-                    </TableCell>
-                    <TableCell>
+                    </td>
+                    <td>
                       {record.lastErrorAt ? datetimeToClient(record.lastErrorAt) : "-"}
-                    </TableCell>
-                  </TableRow>
-                ))
+                    </td>
+                  </tr>
+                ))}
+                {loading && (
+                  <tr>
+                    <td colSpan={8}>
+                      <TableRowSkeleton columns={8} />
+                    </td>
+                  </tr>
               )}
-            </TableBody>
-          </Table>
+              </tbody>
+            </table>
+          </Box>
+        ) : (
+          /* Mobile View */
+          <div className="flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
+            {!loading && records.length === 0 && (
+              <div className="text-center text-sm text-gray-500 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                Nenhum registro encontrado.
         </div>
+            )}
+            {records.map((record) => (
+              <div key={record.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <span className="font-semibold text-sm">{record.contact?.name || record.number}</span>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">{record.number}</div>
+                  </div>
+                  <Chip
+                    icon={getStatusIcon(record.status)}
+                    label={getStatusLabel(record.status)}
+                    size="small"
+                    color={getStatusColor(record.status)}
+                  />
+                </div>
+                <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                  {record.message && (
+                    <div>Mensagem: {getMessagePreview(record.message)}</div>
+                  )}
+                  {record.attempts > 0 && (
+                    <div>Tentativas: {record.attempts}</div>
+                  )}
+                  {record.deliveredAt && (
+                    <div>Enviado: {datetimeToClient(record.deliveredAt)}</div>
+                  )}
+                  {record.lastError && (
+                    <div className="text-red-600">Erro: {record.lastError.substring(0, 50)}...</div>
+                  )}
+                  {record.lastErrorAt && (
+                    <div>Data do Erro: {datetimeToClient(record.lastErrorAt)}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+            {loading && <TableRowSkeleton columns={8} />}
+          </div>
+        )}
 
         {/* Paginação */}
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
@@ -968,7 +1077,9 @@ const CampaignDetailedReport = () => {
           </Button>
         </div>
       </Paper>
+        </Box>
     </MainContainer>
+    </Box>
   );
 };
 

@@ -1,23 +1,17 @@
 import React, { useState, useEffect, useReducer, useCallback, useContext } from "react";
 import { toast } from "react-toastify";
 import { useHistory } from "react-router-dom";
-import { makeStyles } from "@material-ui/core/styles";
-import Paper from "@material-ui/core/Paper";
-import Button from "@material-ui/core/Button";
-import TextField from "@material-ui/core/TextField";
-import InputAdornment from "@material-ui/core/InputAdornment";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+import { Paper, Box, useMediaQuery, TextField, InputAdornment, Grid, Button, Tooltip } from "@material-ui/core";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
-import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
-// import MessageModal from "../../components/MessageModal"
 import ScheduleModal from "../../components/ScheduleModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
 import moment from "moment";
-// import { SocketContext } from "../../context/Socket/SocketContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import usePlans from "../../hooks/usePlans";
 import { Calendar, momentLocalizer } from "react-big-calendar";
@@ -26,6 +20,7 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import SearchIcon from "@material-ui/icons/Search";
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import EditIcon from "@material-ui/icons/Edit";
+import { Plus } from "lucide-react";
 
 import "./Schedules.css"; // Importe o arquivo CSS
 
@@ -109,6 +104,22 @@ const reducer = (state, action) => {
 };
 
 const useStyles = makeStyles((theme) => ({
+  root: {
+    flex: 1,
+    backgroundColor: theme.palette.background.default,
+    minHeight: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
+  container: {
+    width: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
   mainPaper: {
     flex: 1,
     padding: theme.spacing(1),
@@ -137,11 +148,19 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
+const CustomTooltipProps = {
+  arrow: true,
+  enterTouchDelay: 0,
+  leaveTouchDelay: 5000,
+  enterDelay: 300,
+  leaveDelay: 100,
+};
+
 const Schedules = () => {
   const classes = useStyles();
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up(1200));
   const history = useHistory();
-
-  //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
 
 
@@ -292,91 +311,118 @@ const Schedules = () => {
   };
 
   return (
-    <MainContainer>
-      <ConfirmationModal
-        title={
-          deletingSchedule &&
-          `${i18n.t("schedules.confirmationModal.deleteTitle")}`
-        }
-        open={confirmModalOpen}
-        onClose={() => setConfirmModalOpen(false)}
-        onConfirm={() => handleDeleteSchedule(deletingSchedule.id)}
-      >
-        {i18n.t("schedules.confirmationModal.deleteMessage")}
-      </ConfirmationModal>
-      {scheduleModalOpen && (
-        <ScheduleModal
-          open={scheduleModalOpen}
-          onClose={handleCloseScheduleModal}
-          reload={fetchSchedules}
-          // aria-labelledby="form-dialog-title"
-          scheduleId={
-            selectedSchedule ? selectedSchedule.id : null
-          }
-          contactId={contactId}
-          cleanContact={cleanContact}
-        />
-      )}
-      <MainHeader>
-        <Title>{i18n.t("schedules.title")} ({schedules.length})</Title>
-        <MainHeaderButtonsWrapper>
-          <TextField
-            placeholder={i18n.t("contacts.searchPlaceholder")}
-            type="search"
-            value={searchParam}
-            onChange={handleSearch}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon style={{ color: "gray" }} />
-                </InputAdornment>
-              ),
-            }}
-          />
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleOpenScheduleModal}
+    <Box className={classes.root}>
+      <MainContainer useWindowScroll>
+        <Box className={classes.container}>
+          <ConfirmationModal
+            title={
+              deletingSchedule &&
+              `${i18n.t("schedules.confirmationModal.deleteTitle")}`
+            }
+            open={confirmModalOpen}
+            onClose={() => setConfirmModalOpen(false)}
+            onConfirm={() => handleDeleteSchedule(deletingSchedule.id)}
           >
-            {i18n.t("schedules.buttons.add")}
-          </Button>
-        </MainHeaderButtonsWrapper>
-      </MainHeader>
-      <Paper className={classes.mainPaper} variant="outlined" onScroll={handleScroll}>
-        <Calendar
-          messages={defaultMessages}
-          formats={{
-            agendaDateFormat: "DD/MM ddd",
-            weekdayFormat: "dddd"
-          }}
-          localizer={localizer}
-          events={schedules.map((schedule) => ({
-            title: (
-              <div key={schedule.id} className="event-container">
-                <div style={eventTitleStyle}>{schedule?.contact?.name}</div>
-                <DeleteOutlineIcon
-                  onClick={() => handleDeleteSchedule(schedule.id)}
-                  className="delete-icon"
-                />
-                <EditIcon
-                  onClick={() => {
-                    handleEditSchedule(schedule);
-                    setScheduleModalOpen(true);
-                  }}
-                  className="edit-icon"
-                />
-              </div>
-            ),
-            start: new Date(schedule.sendAt),
-            end: new Date(schedule.sendAt),
-          }))}
-          startAccessor="start"
-          endAccessor="end"
-          style={{ height: 500 }}
-          className={classes.calendarToolbar}
-        />
-      </Paper>
-    </MainContainer>
+            {i18n.t("schedules.confirmationModal.deleteMessage")}
+          </ConfirmationModal>
+          {scheduleModalOpen && (
+            <ScheduleModal
+              open={scheduleModalOpen}
+              onClose={handleCloseScheduleModal}
+              reload={fetchSchedules}
+              scheduleId={
+                selectedSchedule ? selectedSchedule.id : null
+              }
+              contactId={contactId}
+              cleanContact={cleanContact}
+            />
+          )}
+          <MainHeader>
+            <Grid style={{ width: "99.6%" }} container>
+              <Grid xs={12} sm={5} item>
+                <Title>
+                  {i18n.t("schedules.title")} ({schedules.length})
+                </Title>
+              </Grid>
+              <Grid xs={12} sm={7} item>
+                <Grid container alignItems="center" spacing={2}>
+                  <Grid item xs>
+                    <TextField
+                      fullWidth
+                      placeholder={i18n.t("contacts.searchPlaceholder")}
+                      type="search"
+                      value={searchParam}
+                      onChange={handleSearch}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon style={{ color: "gray" }} />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
+                  <Grid item>
+                    <Tooltip {...CustomTooltipProps} title={i18n.t("schedules.buttons.add")}>
+                      <Button
+                        onClick={handleOpenScheduleModal}
+                        variant="contained"
+                        size="small"
+                        style={{ 
+                          backgroundColor: "#4ade80",
+                          color: "#ffffff",
+                          textTransform: "uppercase",
+                          fontWeight: 600,
+                          borderRadius: "8px"
+                        }}
+                        startIcon={<Plus className="w-4 h-4" />}
+                        aria-label={i18n.t("schedules.buttons.add")}
+                      >
+                        {i18n.t("schedules.buttons.add")}
+                      </Button>
+                    </Tooltip>
+                  </Grid>
+                </Grid>
+              </Grid>
+            </Grid>
+          </MainHeader>
+          <Paper className={classes.mainPaper} variant="outlined" onScroll={handleScroll}>
+            <Calendar
+              messages={defaultMessages}
+              formats={{
+                agendaDateFormat: "DD/MM ddd",
+                weekdayFormat: "dddd"
+              }}
+              localizer={localizer}
+              events={schedules.map((schedule) => ({
+                title: (
+                  <div key={schedule.id} className="event-container">
+                    <div style={eventTitleStyle}>{schedule?.contact?.name}</div>
+                    <DeleteOutlineIcon
+                      onClick={() => handleDeleteSchedule(schedule.id)}
+                      className="delete-icon"
+                    />
+                    <EditIcon
+                      onClick={() => {
+                        handleEditSchedule(schedule);
+                        setScheduleModalOpen(true);
+                      }}
+                      className="edit-icon"
+                    />
+                  </div>
+                ),
+                start: new Date(schedule.sendAt),
+                end: new Date(schedule.sendAt),
+              }))}
+              startAccessor="start"
+              endAccessor="end"
+              style={{ height: 500 }}
+              className={classes.calendarToolbar}
+            />
+          </Paper>
+        </Box>
+      </MainContainer>
+    </Box>
   );
 };
 

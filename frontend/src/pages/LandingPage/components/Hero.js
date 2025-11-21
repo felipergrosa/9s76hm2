@@ -3,13 +3,15 @@ import { makeStyles } from "@material-ui/core/styles";
 import { Container, Typography, Button, Box, Grid } from "@material-ui/core";
 import WhatsAppIcon from "@material-ui/icons/WhatsApp";
 import ArrowDownwardIcon from "@material-ui/icons/ArrowDownward";
+import PeopleIcon from "@material-ui/icons/People";
+import StarIcon from "@material-ui/icons/Star";
 
 const useStyles = makeStyles((theme) => ({
   hero: {
     minHeight: "90vh",
     display: "flex",
     alignItems: "center",
-    background: "linear-gradient(135deg, #0F2027 0%, #203A43 50%, #2C5364 100%)", // Modern dark gradient
+    background: "linear-gradient(135deg, #1E3A8A 0%, #2563EB 50%, #3B82F6 100%)", // Azul escuro do logo
     color: "#ffffff",
     position: "relative",
     overflow: "hidden",
@@ -23,12 +25,34 @@ const useStyles = makeStyles((theme) => ({
     zIndex: 2,
     padding: theme.spacing(4, 0),
   },
+  logoContainer: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: theme.spacing(3),
+    [theme.breakpoints.down("md")]: {
+      marginTop: theme.spacing(4),
+      marginBottom: theme.spacing(2),
+    },
+  },
+  logo: {
+    maxWidth: "420px",
+    height: "auto",
+    width: "100%",
+    filter: "drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2))",
+    [theme.breakpoints.down("md")]: {
+      maxWidth: "360px",
+    },
+    [theme.breakpoints.down("sm")]: {
+      maxWidth: "300px",
+    },
+  },
   title: {
     fontWeight: 800,
     marginBottom: theme.spacing(3),
     fontSize: "4rem",
     lineHeight: 1.1,
-    background: "linear-gradient(45deg, #FE6B8B 30%, #FF8E53 90%)",
+    background: "linear-gradient(45deg, #25D366 30%, #20BA5A 90%)", // Verde vibrante do logo
     WebkitBackgroundClip: "text",
     WebkitTextFillColor: "transparent",
     [theme.breakpoints.down("md")]: {
@@ -41,7 +65,7 @@ const useStyles = makeStyles((theme) => ({
   },
   subtitle: {
     fontSize: "1.5rem",
-    marginBottom: theme.spacing(5),
+    marginBottom: theme.spacing(3),
     opacity: 0.9,
     maxWidth: "600px",
     lineHeight: 1.6,
@@ -49,7 +73,19 @@ const useStyles = makeStyles((theme) => ({
       fontSize: "1.2rem",
       textAlign: "center",
       margin: "0 auto",
-      marginBottom: theme.spacing(4),
+      marginBottom: theme.spacing(2),
+    },
+  },
+  tagline: {
+    fontSize: "1.1rem",
+    textAlign: "center",
+    opacity: 0.85,
+    fontStyle: "italic",
+    fontWeight: 500,
+    color: "#ffffff",
+    letterSpacing: "0.5px",
+    [theme.breakpoints.down("sm")]: {
+      fontSize: "1rem",
     },
   },
   ctaContainer: {
@@ -118,14 +154,62 @@ const useStyles = makeStyles((theme) => ({
     right: "-10%",
     width: "500px",
     height: "500px",
-    background: "#764ba2",
+    background: "#25D366", // Verde vibrante do logo
+    opacity: 0.3,
   },
   shape2: {
     bottom: "-10%",
     left: "-10%",
     width: "400px",
     height: "400px",
-    background: "#667eea",
+    background: "#1E3A8A", // Azul escuro do logo
+    opacity: 0.3,
+  },
+  socialProof: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(2),
+    marginTop: theme.spacing(4),
+    flexWrap: "wrap",
+    [theme.breakpoints.down("sm")]: {
+      justifyContent: "center",
+      marginTop: theme.spacing(3),
+    },
+  },
+  socialProofBadge: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    padding: theme.spacing(1, 2),
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    borderRadius: "50px",
+    backdropFilter: "blur(10px)",
+    border: "1px solid rgba(255, 255, 255, 0.2)",
+    fontSize: "0.95rem",
+    fontWeight: 600,
+    color: "#ffffff",
+    [theme.breakpoints.down("xs")]: {
+      fontSize: "0.85rem",
+      padding: theme.spacing(0.75, 1.5),
+    },
+  },
+  socialProofIcon: {
+    fontSize: "1.2rem",
+  },
+  ctaButtonEnhanced: {
+    animation: "$pulse 2s infinite",
+    boxShadow: "0 4px 20px rgba(37, 211, 102, 0.4), 0 0 0 0 rgba(37, 211, 102, 0.7)",
+  },
+  "@keyframes pulse": {
+    "0%": {
+      boxShadow: "0 4px 20px rgba(37, 211, 102, 0.4), 0 0 0 0 rgba(37, 211, 102, 0.7)",
+    },
+    "70%": {
+      boxShadow: "0 4px 20px rgba(37, 211, 102, 0.4), 0 0 0 10px rgba(37, 211, 102, 0)",
+    },
+    "100%": {
+      boxShadow: "0 4px 20px rgba(37, 211, 102, 0.4), 0 0 0 0 rgba(37, 211, 102, 0)",
+    },
   },
 }));
 
@@ -155,10 +239,11 @@ const Hero = () => {
             </Typography>
             <Box className={classes.ctaContainer}>
               <Button
-                className={`${classes.ctaButton} ${classes.ctaPrimary}`}
+                className={`${classes.ctaButton} ${classes.ctaPrimary} ${classes.ctaButtonEnhanced}`}
                 startIcon={<WhatsAppIcon />}
                 onClick={scrollToForm}
                 size="large"
+                aria-label="Começar agora - Ir para formulário de cadastro"
               >
                 Começar Agora
               </Button>
@@ -166,13 +251,34 @@ const Hero = () => {
                 className={`${classes.ctaButton} ${classes.ctaSecondary}`}
                 onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
                 size="large"
+                aria-label="Saiba mais - Ver funcionalidades"
               >
                 Saiba Mais
               </Button>
             </Box>
+            <Box className={classes.socialProof} role="region" aria-label="Prova social">
+              <Box className={classes.socialProofBadge} role="status" aria-label="Mais de 500 empresas confiam no TaktChat">
+                <PeopleIcon className={classes.socialProofIcon} aria-hidden="true" />
+                <span>Mais de 500 empresas confiam</span>
+              </Box>
+              <Box className={classes.socialProofBadge} role="status" aria-label="Avaliação média de 4.8 de 5 estrelas">
+                <StarIcon className={classes.socialProofIcon} aria-hidden="true" />
+                <span>4.8/5 avaliação média</span>
+              </Box>
+            </Box>
           </Grid>
-          {/* Placeholder for a Hero Image/Illustration if we had one */}
-          {/* <Grid item xs={12} md={5}> ... </Grid> */}
+          <Grid item xs={12} md={5}>
+            <Box className={classes.logoContainer}>
+              <img 
+                src="/logo_quadrado.png" 
+                alt="TaktChat Logo" 
+                className={classes.logo}
+              />
+            </Box>
+            <Typography variant="body1" className={classes.tagline}>
+              Conectando pessoas, acelerando negócios!
+            </Typography>            
+          </Grid>
         </Grid>
       </Container>
 

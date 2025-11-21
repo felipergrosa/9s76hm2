@@ -16,7 +16,6 @@ import { useHistory, useLocation } from "react-router-dom";
 import useContactUpdates from "../../hooks/useContactUpdates";
 
 import {
-    Search,
     Trash2,
     Edit,
     Lock,
@@ -49,9 +48,12 @@ import ConfirmationModal from "../../components/ConfirmationModal";
 
 import { i18n } from "../../translate/i18n";
 import MainContainer from "../../components/MainContainer";
+import MainHeader from "../../components/MainHeader";
+import Title from "../../components/Title";
 import toastError from "../../errors/toastError";
 import { makeStyles, useTheme } from "@material-ui/core/styles";
-import { Paper, Box, useMediaQuery } from "@material-ui/core";
+import { Paper, Box, useMediaQuery, TextField, InputAdornment, Grid, IconButton, Button } from "@material-ui/core";
+import SearchIcon from "@material-ui/icons/Search";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { Can } from "../../components/Can";
@@ -87,75 +89,9 @@ const useStyles = makeStyles((theme) => ({
             padding: theme.spacing(1),
         },
     },
-    header: {
-        marginBottom: theme.spacing(3),
-        padding: theme.spacing(2),
-        backgroundColor: theme.palette.background.paper,
-        borderRadius: theme.shape.borderRadius,
-        boxShadow: theme.shadows[1],
-    },
-    title: {
-        fontSize: "1.75rem",
-        fontWeight: 700,
-        color: theme.palette.text.primary,
-        marginBottom: theme.spacing(0.5),
-        [theme.breakpoints.down("sm")]: {
-            fontSize: "1.5rem",
-        },
-    },
-    subtitle: {
-        fontSize: "1rem",
-        color: theme.palette.text.secondary,
-        marginLeft: theme.spacing(1),
-    },
-    searchContainer: {
-        marginBottom: theme.spacing(2),
-    },
-    searchInput: {
-        width: "100%",
-        padding: theme.spacing(1.5),
-        paddingLeft: theme.spacing(5),
-        fontSize: "0.875rem",
-        backgroundColor: theme.palette.background.paper,
-        border: `1px solid ${theme.palette.divider}`,
-        borderRadius: theme.shape.borderRadius,
-        "&:focus": {
-            outline: "none",
-            borderColor: theme.palette.primary.main,
-            boxShadow: `0 0 0 2px ${theme.palette.primary.main}20`,
-        },
-    },
-    actionsBar: {
-        display: "flex",
-        alignItems: "center",
-        gap: theme.spacing(1),
-        marginBottom: theme.spacing(2),
-        flexWrap: "wrap",
-    },
-    actionButton: {
-        minWidth: 40,
-        height: 40,
+    mainPaper: {
+        flex: 1,
         padding: theme.spacing(1),
-        borderRadius: theme.shape.borderRadius,
-        border: `1px solid ${theme.palette.divider}`,
-        backgroundColor: theme.palette.background.paper,
-        color: theme.palette.text.primary,
-        cursor: "pointer",
-        transition: "all 0.2s",
-        "&:hover": {
-            backgroundColor: theme.palette.action.hover,
-        },
-        "&:disabled": {
-            opacity: 0.5,
-            cursor: "not-allowed",
-        },
-    },
-    tableContainer: {
-        backgroundColor: theme.palette.background.paper,
-        borderRadius: theme.shape.borderRadius,
-        boxShadow: theme.shadows[2],
-        overflow: "hidden",
-        marginBottom: theme.spacing(2),
     },
     table: {
         width: "100%",
@@ -172,6 +108,24 @@ const useStyles = makeStyles((theme) => ({
             color: theme.palette.text.secondary,
             borderBottom: `2px solid ${theme.palette.divider}`,
         },
+    },
+    sortButton: {
+        display: "flex",
+        alignItems: "center",
+        gap: theme.spacing(0.5),
+        background: "none",
+        border: "none",
+        padding: 0,
+        cursor: "pointer",
+        font: "inherit",
+        color: "inherit",
+        "&:hover": {
+            opacity: 0.8,
+        },
+    },
+    sortIcon: {
+        fontSize: "0.75rem",
+        opacity: 0.6,
     },
     tableBody: {
         "& tr": {
@@ -971,29 +925,69 @@ const Contacts = () => {
 
     const formatPhoneNumber = useCallback((number, isGroup = false) => {
         if (!number) return "";
-        const formatted = safeFormatPhoneNumber(number, false, isGroup);
-        if (formatted && formatted !== number) {
-            return formatted;
-        }
+        if (isGroup) return number;
 
         const cleaned = String(number).replace(/\D/g, "");
         if (!cleaned) return number;
 
-        if (cleaned.startsWith("55")) {
-            if (cleaned.length >= 12) {
-                const ddd = cleaned.substring(2, 4);
-                const phone = cleaned.substring(4);
-                const prefix = phone.substring(0, phone.length - 4);
-                const suffix = phone.substring(phone.length - 4);
-                return `+55 (${ddd}) ${prefix}-${suffix}`;
+        // Verifica se tem código do país (55 = Brasil)
+        const hasCountryCode = cleaned.startsWith("55") && cleaned.length >= 12;
+        
+        if (hasCountryCode) {
+            // Formato: +55 (14) 98125-2988
+            // Remove o código do país (55)
+            const withoutCountryCode = cleaned.substring(2);
+            
+            if (withoutCountryCode.length >= 10) {
+                const ddd = withoutCountryCode.substring(0, 2);
+                const phone = withoutCountryCode.substring(2);
+                
+                if (phone.length === 9) {
+                    // Celular: 9 dígitos (ex: 98125-2988)
+                    const prefix = phone.substring(0, 5);
+                    const suffix = phone.substring(5);
+                    return `+55 (${ddd}) ${prefix}-${suffix}`;
+                } else if (phone.length === 8) {
+                    // Fixo: 8 dígitos (ex: 1234-5678)
+                    const prefix = phone.substring(0, 4);
+                    const suffix = phone.substring(4);
+                    return `+55 (${ddd}) ${prefix}-${suffix}`;
+                }
             }
+        } else {
+            // Sem código do país: (14) 98125-2988
+            if (cleaned.length >= 10) {
+                const ddd = cleaned.substring(0, 2);
+                const phone = cleaned.substring(2);
+                
+                if (phone.length === 9) {
+                    // Celular: 9 dígitos
+                    const prefix = phone.substring(0, 5);
+                    const suffix = phone.substring(5);
+                    return `(${ddd}) ${prefix}-${suffix}`;
+                } else if (phone.length === 8) {
+                    // Fixo: 8 dígitos
+                    const prefix = phone.substring(0, 4);
+                    const suffix = phone.substring(4);
+                    return `(${ddd}) ${prefix}-${suffix}`;
+                }
+            } else if (cleaned.length === 9) {
+                // Apenas o número sem DDD (celular)
+                const prefix = cleaned.substring(0, 5);
+                const suffix = cleaned.substring(5);
+                return `${prefix}-${suffix}`;
+            } else if (cleaned.length === 8) {
+                // Apenas o número sem DDD (fixo)
+                const prefix = cleaned.substring(0, 4);
+                const suffix = cleaned.substring(4);
+                return `${prefix}-${suffix}`;
+            }
+        }
 
-            if (cleaned.length === 11) {
-                const ddd = cleaned.substring(2, 4);
-                const prefix = cleaned.substring(4, cleaned.length - 4);
-                const suffix = cleaned.substring(cleaned.length - 4);
-                return `+55 (${ddd}) ${prefix}-${suffix}`;
-            }
+        // Fallback: usa a função original se não conseguir formatar
+        const formatted = safeFormatPhoneNumber(number, false, isGroup);
+        if (formatted && formatted !== number) {
+            return formatted;
         }
 
         const mask = new FormatMask();
@@ -1126,45 +1120,65 @@ const Contacts = () => {
                     />
 
                     {/* Cabeçalho */}
-                    <Paper className={classes.header} elevation={1}>
-                        <Box display="flex" flexDirection={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }}>
-                            <Box>
-                                <h1 className={classes.title}>
-                                    {i18n.t("contacts.title")}
-                                    <span className={classes.subtitle}>
-                                        ({totalContacts})
-                                    </span>
-                                </h1>
-                            </Box>
-                        </Box>
-                    </Paper>
-
-                    {/* Barra de Ações e Filtros - Mobile (2 linhas) */}
-                    <div className="min-[1200px]:hidden flex flex-col gap-2 w-full max-w-[375px] mx-auto mb-4">
-                        {/* Linha 1: Filtros + Botões */}
-                        <div className="w-full flex items-center gap-2 flex-wrap">
-                            {/* NOVO BOTÃO DE FILTRO (MOBILE) */}
+                    <MainHeader>
+                        <Grid style={{ width: "99.6%" }} container>
+                            <Grid xs={12} sm={5} item>
+                                <Title>
+                                    {i18n.t("contacts.title")} ({totalContacts})
+                                </Title>
+                            </Grid>
+                            <Grid xs={12} sm={7} item>
+                                <Grid container alignItems="center" spacing={2}>
+                                    <Grid item xs>
+                                        <TextField
+                                            fullWidth
+                                            placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
+                                            type="search"
+                                            value={searchParam}
+                                            onChange={handleSearch}
+                                            InputProps={{
+                                                startAdornment: (
+                                                    <InputAdornment position="start">
+                                                        <SearchIcon style={{ color: "gray" }} />
+                                                    </InputAdornment>
+                                                ),
+                                            }}
+                                        />
+                                    </Grid>
+                                    <Grid item>
+                                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                             <Tooltip {...CustomTooltipProps} title="Filtrar Contatos">
-                                <button
+                                <IconButton
                                     onClick={handleOpenFilterContactModal}
-                                    className={filterButtonClass}
+                                    size="small"
+                                    style={{
+                                        color: hasActiveFilters ? "#059669" : "#374151",
+                                        backgroundColor: hasActiveFilters ? "#d1fae5" : "#ffffff",
+                                        border: hasActiveFilters ? "1px solid #10b981" : "1px solid #d1d5db",
+                                        borderRadius: "8px"
+                                    }}
                                     aria-label="Filtrar Contatos"
                                 >
-                                    <SlidersHorizontal className={filterIconClass} />
-                                </button>
+                                    <SlidersHorizontal className="w-5 h-5" />
+                                </IconButton>
                             </Tooltip>
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <PopupState variant="popover" popupId="contacts-import-export-menu-mobile">
+                                            <PopupState variant="popover" popupId="contacts-import-export-menu">
                                     {(popupState) => (
                                         <>
                                             <Tooltip {...CustomTooltipProps} title="Importar/Exportar">
-                                                <button
-                                                    className="shrink-0 w-10 h-10 flex items-center justify-center text-gray-700 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                <IconButton
+                                                    size="small"
                                                     aria-label="Importar/Exportar"
                                                     {...bindTrigger(popupState)}
+                                                    style={{ 
+                                                        color: "#374151",
+                                                        backgroundColor: "#ffffff",
+                                                        border: "1px solid #d1d5db",
+                                                        borderRadius: "8px"
+                                                    }}
                                                 >
                                                     <ImportExport fontSize="small" />
-                                                </button>
+                                                </IconButton>
                                             </Tooltip>
                                             <Menu {...bindMenu(popupState)}>
                                                 <MenuItem onClick={() => { setImportTagsModalOpen(true); popupState.close(); }}>
@@ -1185,14 +1199,35 @@ const Contacts = () => {
                                     yes={() => (
                                         selectedContactIds.length > 0 ? (
                                             <Tooltip {...CustomTooltipProps} title={`Deletar (${selectedContactIds.length})`}>
-                                                <button
-                                                    onClick={() => setConfirmDeleteManyOpen(true)}
-                                                    disabled={loading}
-                                                    className="w-10 h-10 flex items-center justify-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-                                                    aria-label={`Deletar ${selectedContactIds.length} contato(s)`}
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                {loading ? (
+                                                    <span>
+                                                        <IconButton
+                                                            disabled
+                                                            size="small"
+                                                            style={{ 
+                                                                color: "#ffffff",
+                                                                backgroundColor: "#dc2626",
+                                                                borderRadius: "8px"
+                                                            }}
+                                                            aria-label={`Deletar ${selectedContactIds.length} contato(s)`}
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </IconButton>
+                                                    </span>
+                                                ) : (
+                                                    <IconButton
+                                                        onClick={() => setConfirmDeleteManyOpen(true)}
+                                                        size="small"
+                                                        style={{ 
+                                                            color: "#ffffff",
+                                                            backgroundColor: "#dc2626",
+                                                            borderRadius: "8px"
+                                                        }}
+                                                        aria-label={`Deletar ${selectedContactIds.length} contato(s)`}
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </IconButton>
+                                                )}
                                             </Tooltip>
                                         ) : null
                                     )}
@@ -1204,14 +1239,35 @@ const Contacts = () => {
                                     yes={() => (
                                         selectedContactIds.length > 0 ? (
                                             <Tooltip {...CustomTooltipProps} title={`Editar em massa (${selectedContactIds.length})`}>
-                                                <button
-                                                    onClick={() => setBulkEditOpen(true)}
-                                                    disabled={loading}
-                                                    className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                                    aria-label={`Editar em massa ${selectedContactIds.length} contato(s)`}
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                </button>
+                                                {loading ? (
+                                                    <span>
+                                                        <IconButton
+                                                            disabled
+                                                            size="small"
+                                                            style={{ 
+                                                                color: "#ffffff",
+                                                                backgroundColor: "#ca8a04",
+                                                                borderRadius: "8px"
+                                                            }}
+                                                            aria-label={`Editar em massa ${selectedContactIds.length} contato(s)`}
+                                                        >
+                                                            <Edit className="w-4 h-4" />
+                                                        </IconButton>
+                                                    </span>
+                                                ) : (
+                                                    <IconButton
+                                                        onClick={() => setBulkEditOpen(true)}
+                                                        size="small"
+                                                        style={{ 
+                                                            color: "#ffffff",
+                                                            backgroundColor: "#ca8a04",
+                                                            borderRadius: "8px"
+                                                        }}
+                                                        aria-label={`Editar em massa ${selectedContactIds.length} contato(s)`}
+                                                    >
+                                                        <Edit className="w-4 h-4" />
+                                                    </IconButton>
+                                                )}
                                             </Tooltip>
                                         ) : null
                                     )}
@@ -1219,53 +1275,65 @@ const Contacts = () => {
                                 />
                                 {String(user?.profile || "").toLowerCase() === "admin" && (
                                     <Tooltip {...CustomTooltipProps} title="Deduplicar contatos">
-                                        <span>
-                                            <button
+                                        {loading ? (
+                                            <span>
+                                                <IconButton
+                                                    disabled
+                                                    size="small"
+                                                    style={{ 
+                                                        color: "#6366f1",
+                                                        backgroundColor: "#ffffff",
+                                                        border: "1px solid #6366f1",
+                                                        borderRadius: "8px"
+                                                    }}
+                                                    aria-label="Gerenciar duplicados"
+                                                >
+                                                    <GitMerge className="w-5 h-5" />
+                                                </IconButton>
+                                            </span>
+                                        ) : (
+                                            <IconButton
                                                 onClick={() => setDuplicateModalOpen(true)}
-                                                disabled={loading}
-                                                className="shrink-0 w-10 h-10 flex items-center justify-center text-indigo-600 bg-white dark:bg-gray-800 border border-indigo-500 dark:border-indigo-400 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                size="small"
+                                                style={{ 
+                                                    color: "#6366f1",
+                                                    backgroundColor: "#ffffff",
+                                                    border: "1px solid #6366f1",
+                                                    borderRadius: "8px"
+                                                }}
                                                 aria-label="Gerenciar duplicados"
                                             >
                                                 <GitMerge className="w-5 h-5" />
-                                            </button>
-                                        </span>
+                                            </IconButton>
+                                        )}
                                     </Tooltip>
                                 )}
-                                <Tooltip {...CustomTooltipProps} title="Novo Contato">
-                                    <span>
-                                        <button
-                                            onClick={handleOpenContactModal}
-                                            className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            aria-label="Novo Contato"
-                                        >
-                                            <UserPlus className="w-6 h-6" />
-                                        </button>
-                                    </span>
-                                </Tooltip>
+                                <Button
+                                    onClick={handleOpenContactModal}
+                                    variant="contained"
+                                    size="small"
+                                    style={{ 
+                                        backgroundColor: "#4ade80",
+                                        color: "#ffffff",
+                                        textTransform: "uppercase",
+                                        fontWeight: 600,
+                                        borderRadius: "8px"
+                                    }}
+                                    startIcon={<UserPlus className="w-4 h-4" />}
+                                    aria-label="Novo Contato"
+                                >
+                                    {i18n.t("contactLists.buttons.add") || "Adicionar"}
+                                </Button>
                             </div>
-                        </div>
+                                    </Grid>
+                                </Grid>
+                            </Grid>
+                        </Grid>
+                    </MainHeader>
 
-                        {/* Linha 2: Busca sozinha */}
-                        <Box className={classes.searchContainer} position="relative">
-                            <Search style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9CA3AF", zIndex: 1 }} />
-                            <input
-                                type="text"
-                                placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
-                                value={searchParam}
-                                onChange={handleSearch}
-                                className={classes.searchInput}
-                                style={{ paddingLeft: 40 }}
-                            />
-                            {isSearching && (
-                                <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: "0.75rem", color: "#6B7280" }}>
-                                    Buscando...
-                                </span>
-                            )}
-                        </Box>
-                    </div>
-
+                    {/* Filtros Ativos - Unificado (Responsivo) */}
                     {hasActiveFilters && filtersSummary.length > 0 && (
-                        <div className="min-[1200px]:hidden flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mt-1 w-full max-w-[375px] mx-auto">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mb-4">
                             <SlidersHorizontal className="w-4 h-4 text-green-600" />
                             {filtersSummary.map((item, index) => (
                                 <span
@@ -1285,204 +1353,89 @@ const Contacts = () => {
                         </div>
                     )}
 
-                    {hasActiveFilters && filtersSummary.length > 0 && (
-                        <div className="hidden min-[1200px]:flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mb-4">
-                            <SlidersHorizontal className="w-4 h-4 text-green-600" />
-                            {filtersSummary.map((item, index) => (
-                                <span
-                                    key={`${item.label}-${index}`}
-                                    className="px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded dark:bg-green-900/20 dark:text-green-300 dark:border-green-700"
-                                >
-                                    <span className="font-semibold">{item.label}:</span> {item.value}
-                                </span>
-                            ))}
-                            <button
-                                type="button"
-                                onClick={handleClearFilters}
-                                className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
-                            >
-                                Limpar filtros
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Barra de Ações e Filtros - Desktop (1 linha) */}
-                    <div className="hidden min-[1200px]:flex items-center gap-3 flex-nowrap mb-4">
-                        {/* Filtros e Busca (Esquerda) */}
-                        <div className="w-full flex items-center gap-2 flex-1 min-w-0 justify-start">
-                            {/* Busca com largura limitada */}
-                            <div className="relative flex-1 ">
-                                <input
-                                    type="text"
-                                    placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
-                                    value={searchParam}
-                                    onChange={handleSearch}
-                                    className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                {isSearching && (
-                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Ações Principais (Direita) */}
-                        <div className="w-full md:w-auto flex flex-row gap-2 flex-none whitespace-nowrap items-center ">
-                            {/* NOVO BOTÃO DE FILTRO (DESKTOP) */}
-                            <Tooltip {...CustomTooltipProps} title="Filtrar Contatos">
-                                <button
-                                    onClick={handleOpenFilterContactModal}
-                                    className={filterButtonClass}
-                                    aria-label="Filtrar Contatos"
-                                >
-                                    <SlidersHorizontal className={filterIconClass} />
-                                </button>
-                            </Tooltip>
-                            <PopupState variant="popover" popupId="contacts-import-export-menu">
-                                {(popupState) => (
-                                    <>
-                                        <Tooltip {...CustomTooltipProps} title="Importar/Exportar">
-                                            <button
-                                                className="w-10 h-10 flex items-center justify-center text-gray-700 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                aria-label="Importar/Exportar"
-                                                {...bindTrigger(popupState)}
-                                            >
-                                                <ImportExport fontSize="small" />
-                                            </button>
-                                        </Tooltip>
-                                        <Menu {...bindMenu(popupState)}>
-                                            <MenuItem onClick={() => { setImportTagsModalOpen(true); popupState.close(); }}>
-                                                <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
-                                                Importar com Tags
-                                            </MenuItem>
-                                            <MenuItem onClick={() => { setImportContactModalOpen(true) }}>
-                                                <Backup fontSize="small" color="primary" style={{ marginRight: 10 }} />
-                                                {i18n.t("contacts.menu.importToExcel")}
-                                            </MenuItem>
-                                        </Menu>
-                                    </>
-                                )}
-                            </PopupState>
-
-                            <Can
-                                role={user.profile}
-                                perform="contacts-page:deleteContact"
-                                yes={() => (
-                                    selectedContactIds.length > 0 ? (
-                                        <Tooltip {...CustomTooltipProps} title={`Deletar (${selectedContactIds.length})`}>
-                                            <button
-                                                onClick={() => setConfirmDeleteManyOpen(true)}
-                                                disabled={loading}
-                                                className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-                                                aria-label={`Deletar ${selectedContactIds.length} contato(s)`}
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </Tooltip>
-                                    ) : null
-                                )}
-                                no={() => null}
-                            />
-
-                            <Can
-                                role={user.profile}
-                                perform="contacts-page:bulkEdit"
-                                yes={() => (
-                                    selectedContactIds.length > 0 ? (
-                                        <Tooltip {...CustomTooltipProps} title={`Editar em massa (${selectedContactIds.length})`}>
-                                            <span>
-                                                <button
-                                                    onClick={() => setBulkEditOpen(true)}
-                                                    disabled={loading}
-                                                    className="w-10 h-10 flex items-center justify-center text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                                    aria-label={`Editar em massa ${selectedContactIds.length} contato(s)`}
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                </button>
-                                            </span>
-                                        </Tooltip>
-                                    ) : null
-                                )}
-                                no={() => null}
-                            />
-                            {String(user?.profile || "").toLowerCase() === "admin" && (
-                                <Tooltip {...CustomTooltipProps} title="Deduplicar contatos">
-                                    <span>
-                                        <button
-                                            onClick={() => setDuplicateModalOpen(true)}
-                                            disabled={loading}
-                                            className="shrink-0 w-10 h-10 flex items-center justify-center text-indigo-600 bg-white dark:bg-gray-800 border border-indigo-500 dark:border-indigo-400 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                            aria-label="Gerenciar duplicados"
-                                        >
-                                            <GitMerge className="w-5 h-5" />
-                                        </button>
-                                    </span>
-                                </Tooltip>
-                            )}
-                            <Tooltip {...CustomTooltipProps} title="Novo Contato">
-                                <span>
-                                    <button
-                                        onClick={handleOpenContactModal}
-                                        className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        aria-label="Novo Contato"
-                                    >
-                                        <UserPlus className="w-6 h-6" />
-                                    </button>
-                                </span>
-                            </Tooltip>
-                        </div>
-                    </div>
-
-                    {/* Tabela de Contatos (Desktop) */}
-                    {isDesktop && (
-                        <Paper className={classes.tableContainer} elevation={2}>
+                    {/* Lista de Contatos - Desktop (Tabela) */}
+                    {isDesktop ? (
+                        <Paper className={classes.mainPaper} variant="outlined">
                             <Box style={{ overflowX: "auto" }}>
                                 <table className={classes.table}>
                                     <thead className={classes.tableHead}>
                                         <tr>
-                                            <th scope="col" className="w-[48px] p-2 text-center">
+                                            <th scope="col" style={{ width: "48px", textAlign: "center" }}>
                                                 <input type="checkbox"
                                                     checked={isSelectAllChecked}
                                                     onChange={handleSelectAllContacts}
                                                     className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
                                             </th>
-                                            <th scope="col" className="pl-14 pr-3 py-2 w-[300px]">
-                                                <button onClick={() => handleSort('name')} className="flex items-center gap-1 select-none font-medium">
+                                            <th scope="col" style={{ width: "300px" }}>
+                                                <button 
+                                                    onClick={() => handleSort('name')} 
+                                                    className={classes.sortButton}
+                                                >
                                                     NOME
-                                                    <span className="text-[15px] opacity-70">{sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                                                    <span className={classes.sortIcon}>
+                                                        {sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                                                    </span>
                                                 </button>
                                             </th>
-                                            <th scope="col" className="pl-3 pr-3 py-2 w-[167px]">
-                                                <button onClick={() => handleSort('number')} className="flex items-center gap-1 select-none w-full font-medium">
+                                            <th scope="col" style={{ width: "167px" }}>
+                                                <button 
+                                                    onClick={() => handleSort('number')} 
+                                                    className={classes.sortButton}
+                                                    style={{ width: "100%" }}
+                                                >
                                                     WHATSAPP
-                                                    <span className="text-[15px] opacity-70">{sortField === 'number' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                                                    <span className={classes.sortIcon}>
+                                                        {sortField === 'number' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                                                    </span>
                                                 </button>
                                             </th>
-                                            <th scope="col" className="hidden lg:table-cell pl-1 pr-3 py-2 w-[140px]">
-                                                <button onClick={() => handleSort('email')} className="flex items-center gap-1 select-none font-medium">
+                                            <th scope="col" className="hidden lg:table-cell" style={{ width: "140px" }}>
+                                                <button 
+                                                    onClick={() => handleSort('email')} 
+                                                    className={classes.sortButton}
+                                                >
                                                     EMAIL
-                                                    <span className="text-[15px] opacity-70">{sortField === 'email' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                                                    <span className={classes.sortIcon}>
+                                                        {sortField === 'email' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                                                    </span>
                                                 </button>
                                             </th>
-                                            <th scope="col" className="pl-3 pr-3 py-2 w-[100px]">
-                                                <button onClick={() => handleSort('city')} className="flex items-center gap-1 select-none font-medium">
+                                            <th scope="col" style={{ width: "100px" }}>
+                                                <button 
+                                                    onClick={() => handleSort('city')} 
+                                                    className={classes.sortButton}
+                                                >
                                                     CIDADE/UF
-                                                    <span className="text-[15px] opacity-70">{sortField === 'city' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                                                    <span className={classes.sortIcon}>
+                                                        {sortField === 'city' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                                                    </span>
                                                 </button>
                                             </th>
-                                            <th scope="col" className="pl-3 pr-3 py-2 text-center w-[50px]">
-                                                <button onClick={() => handleSort('tags')} className="flex items-center justify-center gap-1 w-full select-none font-medium">
+                                            <th scope="col" style={{ textAlign: "center", width: "auto", minWidth: "80px", maxWidth: "200px" }}>
+                                                <button 
+                                                    onClick={() => handleSort('tags')} 
+                                                    className={classes.sortButton}
+                                                    style={{ width: "100%", justifyContent: "center" }}
+                                                >
                                                     TAGS
-                                                    <span className="text-[15px] opacity-70">{sortField === 'tags' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                                                    <span className={classes.sortIcon}>
+                                                        {sortField === 'tags' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                                                    </span>
                                                 </button>
                                             </th>
-                                            <th scope="col" className="pl-4 pr-3 py-2 text-center w-[80px]">
-                                                <button onClick={() => handleSort('status')} className="flex items-center justify-center gap-1 w-full select-none font-medium">
+                                            <th scope="col" style={{ textAlign: "center", width: "80px" }}>
+                                                <button 
+                                                    onClick={() => handleSort('status')} 
+                                                    className={classes.sortButton}
+                                                    style={{ width: "100%", justifyContent: "center" }}
+                                                >
                                                     STATUS
-                                                    <span className="text-[15px] opacity-70">{sortField === 'status' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                                                    <span className={classes.sortIcon}>
+                                                        {sortField === 'status' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                                                    </span>
                                                 </button>
                                             </th>
-                                            <th scope="col" className="pl-3 pr-3 py-2 text-center w-[120px] font-medium">AÇÕES</th>
+                                            <th scope="col" style={{ textAlign: "center", width: "120px" }}>AÇÕES</th>
                                         </tr>
                                     </thead>
                                     <tbody className={classes.tableBody}>
@@ -1513,7 +1466,7 @@ const Contacts = () => {
                                     </tbody>
                                 </table>
                             </Box>
-                            {/* Paginação da Tabela (Desktop) */}
+                            {/* Paginação Desktop */}
                             <Box className={classes.pagination} component="nav" aria-label="Table navigation">
                                 <span className={classes.paginationInfo}>
                                     Página {" "}
@@ -1594,10 +1547,10 @@ const Contacts = () => {
                                 </Box>
                             </Box>
                         </Paper>
-                    )}
-
-                    {/* Lista de Contatos (Mobile) */}
-                    <div className="min-[1200px]:hidden flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
+                    ) : (
+                        /* Lista de Contatos - Mobile (Cards) */
+                        <>
+                            <div className="flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
                         {!loading && sortedContacts.length === 0 && (
                             <div className="text-center text-sm text-gray-500 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                                 Nenhum contato encontrado com os filtros selecionados. Tente ajustar os campos.
@@ -1614,7 +1567,6 @@ const Contacts = () => {
                                 onUnblock={handleShowUnblockConfirm}
                                 formatPhoneNumber={formatPhoneNumber}
                                 CustomTooltipProps={CustomTooltipProps}
-                                // Mobile: seleção por long-press/arrastar
                                 isSelectionMode={isSelectionMode}
                                 onLongPressStart={handleCardLongPressStart}
                                 onDragSelect={handleCardDragSelect}
@@ -1624,9 +1576,8 @@ const Contacts = () => {
                             />
                         ))}
                     </div>
-
-                    {/* Paginação (Mobile) */}
-                    <nav className="min-[1200px]:hidden flex items-center justify-between p-3 mt-2 w-full max-w-[375px] mx-auto" aria-label="Mobile navigation">
+                            {/* Paginação Mobile */}
+                            <nav className="flex items-center justify-between p-3 mt-2 w-full max-w-[375px] mx-auto" aria-label="Mobile navigation">
                         <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
                             Página <span className="font-semibold text-gray-900 dark:text-white">{pageNumber}</span>
                             {" "} de {" "}
@@ -1702,6 +1653,8 @@ const Contacts = () => {
                             </ul>
                         </div>
                     </nav>
+                        </>
+                    )}
                 </Box>
             </MainContainer>
         </Box>

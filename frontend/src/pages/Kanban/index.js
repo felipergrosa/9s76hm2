@@ -6,8 +6,9 @@ import Board from 'react-trello';
 import { toast } from "react-toastify";
 import { i18n } from "../../translate/i18n";
 import { useHistory } from 'react-router-dom';
-import { Facebook, Instagram, WhatsApp, FilterList } from "@material-ui/icons";
-import { Badge, Tooltip, Typography, Button, TextField, Box, InputBase, Select, MenuItem, Paper, FormControl, InputLabel, Checkbox, ListItemText, Popover } from "@material-ui/core";
+import { Facebook, Instagram, WhatsApp, FilterList, Add, Refresh } from "@material-ui/icons";
+import SearchIcon from "@material-ui/icons/Search";
+import { Badge, Tooltip, Typography, Button, TextField, Box, Select, MenuItem, Paper, FormControl, InputLabel, Checkbox, ListItemText, Popover, Grid, useMediaQuery, InputAdornment, IconButton } from "@material-ui/core";
 import { DateRangePicker } from 'materialui-daterange-picker';
 import KanbanCard from "./KanbanCard";
 import KanbanLaneHeader from "./KanbanLaneHeader";
@@ -16,41 +17,38 @@ import { Can } from "../../components/Can";
 import KanbanFiltersModal from "./KanbanFiltersModal";
 import useQueues from "../../hooks/useQueues";
 import toastError from "../../errors/toastError";
+import MainContainer from "../../components/MainContainer";
+import MainHeader from "../../components/MainHeader";
+import Title from "../../components/Title";
+
+const CustomTooltipProps = {
+  arrow: true,
+  enterTouchDelay: 0,
+  leaveTouchDelay: 5000,
+  enterDelay: 300,
+  leaveDelay: 100,
+};
 
 const useStyles = makeStyles(theme => ({
   root: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "stretch",
-    padding: "16px",
+    flex: 1,
+    backgroundColor: theme.palette.background.default,
+    minHeight: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
+  container: {
+    width: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
   },
   kanbanContainer: {
     width: "100%",
-  },
-  topbar: {
-    width: "100%",
-    margin: "0 0 16px",
-  },
-  tabsWrap: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  actionsBar: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    padding: 12,
-    background: theme.palette.background.paper,
-    borderRadius: 12,
-    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-  },
-  searchInput: {
-    padding: "6px 10px",
-    borderRadius: 8,
-    background: theme.palette.action.hover,
-    minWidth: 240,
+    marginTop: theme.spacing(2),
   },
   connectionTag: {
     background: "green",
@@ -91,7 +89,8 @@ const useStyles = makeStyles(theme => ({
 
 const Kanban = () => {
   const classes = useStyles();
-  const theme = useTheme(); // Obter o tema atual
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up(1200));
   const history = useHistory();
   const { user, socket } = useContext(AuthContext);
   const { findAll: findAllQueues } = useQueues();
@@ -461,41 +460,97 @@ const Kanban = () => {
     };
   }, [tags, tickets]);
 
+  const totalTickets = useMemo(() => {
+    return tickets.length;
+  }, [tickets]);
+
   return (
-    <div className={classes.root}>
-      <div className={classes.topbar}>
-        <div className={classes.tabsWrap}>
-          <Typography variant="h6" style={{ fontWeight: 800 }}>{i18n.t('kanban.title')}</Typography>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Can role={user.profile} perform="dashboard:view" yes={() => (
-              <Button variant="outlined" color="default" onClick={handleAddConnectionClick}>
-                {i18n.t('kanban.addColumns')}
-              </Button>
-            )} />
-            <Button variant="text" color="primary" onClick={handleResetHiddenLanes}>{i18n.t('kanban.resetColumns')}</Button>
-          </div>
-        </div>
-        {/* Filtros removidos da barra principal — agora acessíveis via modal */}
-        {/* Menu de abas removido conforme solicitação */}
-        <div className={classes.actionsBar}>
-          <InputBase
-            placeholder={i18n.t('kanban.searchContact')}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            className={classes.searchInput}
-          />
-          <div style={{ flex: 1 }} />
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<FilterList />}
-            onClick={() => setFiltersModalOpen(true)}
-          >
-            Filtrar e ordenar
-          </Button>
-        </div>
-      </div>
-      <div className={classes.kanbanContainer}>
+    <Box className={classes.root}>
+      <MainContainer useWindowScroll>
+        <Box className={classes.container}>
+          <MainHeader>
+            <Grid style={{ width: "99.6%" }} container>
+              <Grid xs={12} sm={5} item>
+                <Title>
+                  {i18n.t('kanban.title')} ({totalTickets})
+                </Title>
+              </Grid>
+              <Grid xs={12} sm={7} item>
+                <Grid container alignItems="center" spacing={2}>
+                  <Grid item xs>
+                    <TextField
+                      fullWidth
+                      placeholder={i18n.t('kanban.searchContact')}
+                      type="search"
+                      value={searchText}
+                      onChange={(e) => setSearchText(e.target.value)}
+                      variant="outlined"
+                      size="small"
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon style={{ color: "gray" }} />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
+                  <Grid item>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <Tooltip {...CustomTooltipProps} title="Filtrar e ordenar">
+                        <IconButton
+                          size="small"
+                          onClick={() => setFiltersModalOpen(true)}
+                          style={{
+                            color: "#374151",
+                            backgroundColor: "#ffffff",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "8px"
+                          }}
+                          aria-label="Filtrar e ordenar"
+                        >
+                          <FilterList fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Can role={user.profile} perform="dashboard:view" yes={() => (
+                        <Tooltip {...CustomTooltipProps} title={i18n.t('kanban.addColumns')}>
+                          <IconButton
+                            size="small"
+                            onClick={handleAddConnectionClick}
+                            style={{
+                              color: "#374151",
+                              backgroundColor: "#ffffff",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "8px"
+                            }}
+                            aria-label={i18n.t('kanban.addColumns')}
+                          >
+                            <Add fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )} />
+                      <Tooltip {...CustomTooltipProps} title={i18n.t('kanban.resetColumns')}>
+                        <IconButton
+                          size="small"
+                          onClick={handleResetHiddenLanes}
+                          style={{
+                            color: "#6366f1",
+                            backgroundColor: "#ffffff",
+                            border: "1px solid #6366f1",
+                            borderRadius: "8px"
+                          }}
+                          aria-label={i18n.t('kanban.resetColumns')}
+                        >
+                          <Refresh fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </div>
+                  </Grid>
+                </Grid>
+              </Grid>
+            </Grid>
+          </MainHeader>
+          <Box className={classes.kanbanContainer}>
         {!file || !file.lanes ? (
           // Loader simples: blocos placeholder
           <div style={{ display: 'flex', gap: 12 }}>
@@ -522,9 +577,9 @@ const Kanban = () => {
             />
           )
         )}
-      </div>
-      {/* Modal de filtros */}
-      <KanbanFiltersModal
+          </Box>
+          {/* Modal de filtros */}
+          <KanbanFiltersModal
         open={filtersModalOpen}
         onClose={() => setFiltersModalOpen(false)}
         queueOptions={queueOptions}
@@ -555,8 +610,10 @@ const Kanban = () => {
           setStartDate(sd);
           setEndDate(ed);
         }}
-      />
-    </div>
+          />
+        </Box>
+      </MainContainer>
+    </Box>
   );
 };
 

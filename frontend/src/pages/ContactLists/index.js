@@ -1,25 +1,16 @@
-import React, { useState, useEffect, useReducer, useContext } from "react";
+import React, { useState, useEffect, useReducer, useContext, useMemo } from "react";
 import { toast } from "react-toastify";
 
 import { useHistory } from "react-router-dom";
 
-import { makeStyles } from "@material-ui/core/styles";
-import Paper from "@material-ui/core/Paper";
- 
-import Table from "@material-ui/core/Table";
-import TableBody from "@material-ui/core/TableBody";
-import TableCell from "@material-ui/core/TableCell";
-import TableHead from "@material-ui/core/TableHead";
-import TableRow from "@material-ui/core/TableRow";
-import IconButton from "@material-ui/core/IconButton";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+import { Paper, Box, useMediaQuery, TextField, InputAdornment, Grid, IconButton, Button, Tooltip, Popover, Typography } from "@material-ui/core";
 import SearchIcon from "@material-ui/icons/Search";
-import TextField from "@material-ui/core/TextField";
-import InputAdornment from "@material-ui/core/InputAdornment";
-
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import EditIcon from "@material-ui/icons/Edit";
 import PeopleIcon from "@material-ui/icons/People";
 import DownloadIcon from "@material-ui/icons/GetApp";
+import { Plus as PlusIcon, Filter as FilterIcon, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
@@ -31,8 +22,6 @@ import TableRowSkeleton from "../../components/TableRowSkeleton";
 import ContactListDialog from "../../components/ContactListDialog";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
-import { Grid, Popover, Button, Typography, Chip } from "@material-ui/core";
-import { Plus as PlusIcon, Filter as FilterIcon } from "lucide-react";
 
 import planilhaExemplo from "../../assets/planilha.xlsx";
 // import { SocketContext } from "../../context/Socket/SocketContext";
@@ -87,28 +76,164 @@ const reducer = (state, action) => {
 };
 
 const useStyles = makeStyles((theme) => ({
+  root: {
+    flex: 1,
+    backgroundColor: theme.palette.background.default,
+    minHeight: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
+  container: {
+    width: "100%",
+    padding: theme.spacing(2),
+    [theme.breakpoints.down("sm")]: {
+      padding: theme.spacing(1),
+    },
+  },
   mainPaper: {
     flex: 1,
     padding: theme.spacing(1),
-    // Removido overflow e scrollbar interna para usar scroll da janela
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  tableHead: {
+    backgroundColor: theme.palette.grey[100],
+    "& th": {
+      padding: theme.spacing(1.5),
+      textAlign: "left",
+      fontSize: "0.75rem",
+      fontWeight: 600,
+      textTransform: "uppercase",
+      color: theme.palette.text.secondary,
+      borderBottom: `2px solid ${theme.palette.divider}`,
+    },
+  },
+  sortButton: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    background: "none",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
+    font: "inherit",
+    color: "inherit",
+    "&:hover": {
+      opacity: 0.8,
+    },
+  },
+  sortIcon: {
+    fontSize: "0.75rem",
+    opacity: 0.6,
+  },
+  tableBody: {
+    "& tr": {
+      borderBottom: `1px solid ${theme.palette.divider}`,
+      transition: "background-color 0.2s",
+      "&:hover": {
+        backgroundColor: theme.palette.action.hover,
+      },
+      "&:last-child": {
+        borderBottom: "none",
+      },
+    },
+    "& td": {
+      padding: theme.spacing(1.5),
+      fontSize: "0.875rem",
+      color: theme.palette.text.primary,
+    },
+  },
+  emptyState: {
+    padding: theme.spacing(4),
+    textAlign: "center",
+    color: theme.palette.text.secondary,
+  },
+  pagination: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: theme.spacing(2),
+    backgroundColor: theme.palette.background.paper,
+    borderRadius: theme.shape.borderRadius,
+    boxShadow: theme.shadows[1],
+    marginTop: theme.spacing(2),
+  },
+  paginationInfo: {
+    fontSize: "0.875rem",
+    color: theme.palette.text.secondary,
+  },
+  paginationControls: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+  },
+  pageButton: {
+    minWidth: 32,
+    height: 32,
+    padding: theme.spacing(0.5),
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: theme.shape.borderRadius,
+    backgroundColor: theme.palette.background.paper,
+    color: theme.palette.text.primary,
+    cursor: "pointer",
+    transition: "all 0.2s",
+    "&:hover:not(:disabled)": {
+      backgroundColor: theme.palette.action.hover,
+    },
+    "&:disabled": {
+      opacity: 0.5,
+      cursor: "not-allowed",
+    },
+  },
+  pageButtonActive: {
+    backgroundColor: theme.palette.primary.main,
+    color: theme.palette.primary.contrastText,
+    borderColor: theme.palette.primary.main,
+    "&:hover": {
+      backgroundColor: theme.palette.primary.dark,
+    },
   },
 }));
 
+const CustomTooltipProps = {
+  arrow: true,
+  enterTouchDelay: 0,
+  leaveTouchDelay: 5000,
+  enterDelay: 300,
+  leaveDelay: 100,
+};
+
 const ContactLists = () => {
   const classes = useStyles();
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up(1200));
   const history = useHistory();
 
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
   const [totalContactLists, setTotalContactLists] = useState(0);
+  const [sortField, setSortField] = useState(null);
+  const [sortDirection, setSortDirection] = useState('asc');
   const [selectedContactList, setSelectedContactList] = useState(null);
   const [deletingContactList, setDeletingContactList] = useState(null);
   const [contactListModalOpen, setContactListModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [searchParam, setSearchParam] = useState("");
   const [contactLists, dispatch] = useReducer(reducer, []);
-  //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
 
   // Popover de detalhes do filtro salvo
   const [detailsAnchorEl, setDetailsAnchorEl] = useState(null);
@@ -263,45 +388,36 @@ const ContactLists = () => {
 
   // Paginação numerada
   const CONTACTLISTS_PER_PAGE = 20; // manter alinhado ao backend
-  const totalPages = totalContactLists === 0 ? 1 : Math.ceil(totalContactLists / CONTACTLISTS_PER_PAGE);
+  const totalPages = useMemo(() => {
+    return totalContactLists === 0 ? 1 : Math.ceil(totalContactLists / CONTACTLISTS_PER_PAGE);
+  }, [totalContactLists]);
+  
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
       setPageNumber(page);
     }
   };
-  const renderPageNumbers = () => {
+  
+  const renderPageNumbers = useMemo(() => {
     const pages = [];
     if (totalPages <= 3) {
       for (let i = 1; i <= totalPages; i++) pages.push(i);
     } else {
-      pages.push(1, 2, 3, "...");
+      const start = Math.max(1, Math.min(pageNumber - 1, totalPages - 2));
+      const end = Math.min(totalPages, start + 2);
+      for (let i = start; i <= end; i++) pages.push(i);
     }
-    return pages.map((page, index) => (
-      <li key={index}>
-        {page === "..." ? (
-          <span className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 dark:bg-gray-800 dark:border-gray-700">...</span>
-        ) : (
-          <button
-            onClick={() => handlePageChange(page)}
-            className={`flex items-center justify-center px-3 h-8 leading-tight border ${
-              page === pageNumber
-                ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
-                : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-            }`}
-          >
-            {page}
-          </button>
-        )}
-      </li>
-    ));
-  };
+    return pages;
+  }, [pageNumber, totalPages]);
 
   const goToContacts = (id) => {
     history.push(`/contact-lists/${id}/contacts`);
   };
 
   return (
+    <Box className={classes.root}>
     <MainContainer useWindowScroll>
+        <Box className={classes.container}>
       <ConfirmationModal
         title={
           deletingContactList &&
@@ -323,7 +439,9 @@ const ContactLists = () => {
       <MainHeader>
         <Grid style={{ width: "99.6%" }} container>
           <Grid xs={12} sm={5} item>
-            <Title>{i18n.t("contactLists.title")}</Title>
+                <Title>
+                  {i18n.t("contactLists.title")} ({totalContactLists})
+                </Title>
           </Grid>
           <Grid xs={12} sm={7} item>
             <Grid container alignItems="center" spacing={2}>
@@ -344,40 +462,74 @@ const ContactLists = () => {
                 />
               </Grid>
               <Grid item>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                  <button
+                    <Tooltip {...CustomTooltipProps} title={i18n.t("contactLists.buttons.add")}>
+                      <Button
                     onClick={handleOpenContactListModal}
-                    className="px-4 py-2 text-sm font-semibold uppercase text-white bg-green-400 hover:bg-green-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 flex items-center"
-                  >
-                    <PlusIcon className="w-4 h-4 mr-2" />
+                        variant="contained"
+                        size="small"
+                        style={{ 
+                          backgroundColor: "#4ade80",
+                          color: "#ffffff",
+                          textTransform: "uppercase",
+                          fontWeight: 600,
+                          borderRadius: "8px"
+                        }}
+                        startIcon={<PlusIcon className="w-4 h-4" />}
+                        aria-label={i18n.t("contactLists.buttons.add")}
+                      >
                     {i18n.t("contactLists.buttons.add")}
-                  </button>
-                </div>
+                      </Button>
+                    </Tooltip>
               </Grid>
             </Grid>
           </Grid>
         </Grid>
       </MainHeader>
-      <Paper
-        className={classes.mainPaper}
-        variant="outlined"
-      >
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell align="left">{i18n.t("contactLists.table.name")}</TableCell>
-              <TableCell align="left">{i18n.t("contactLists.table.contacts")}</TableCell>
-              <TableCell align="left">Filtro salvo</TableCell>
-              <TableCell align="right">{i18n.t("contactLists.table.actions")}</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            <>
+          {isDesktop ? (
+            <Paper className={classes.mainPaper} variant="outlined">
+        <Box style={{ overflowX: "auto" }}>
+          <table className={classes.table}>
+            <thead className={classes.tableHead}>
+              <tr>
+                      <th scope="col" align="left">
+                        <button 
+                          onClick={() => handleSort('name')} 
+                          className={classes.sortButton}
+                        >
+                          {i18n.t("contactLists.table.name").toUpperCase()}
+                          <span className={classes.sortIcon}>
+                            {sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                          </span>
+                        </button>
+                      </th>
+                      <th scope="col" align="left">
+                        <button 
+                          onClick={() => handleSort('contactsCount')} 
+                          className={classes.sortButton}
+                        >
+                          {i18n.t("contactLists.table.contacts").toUpperCase()}
+                          <span className={classes.sortIcon}>
+                            {sortField === 'contactsCount' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                          </span>
+                        </button>
+                      </th>
+                      <th scope="col" align="left">FILTRO SALVO</th>
+                      <th scope="col" align="right">{i18n.t("contactLists.table.actions").toUpperCase()}</th>
+              </tr>
+            </thead>
+            <tbody className={classes.tableBody}>
+              {!loading && contactLists.length === 0 && (
+                <tr>
+                  <td colSpan={4} className={classes.emptyState}>
+                    Nenhuma lista de contatos encontrada.
+                  </td>
+                </tr>
+              )}
               {contactLists.map((contactList) => (
-                <TableRow key={contactList.id}>
-                  <TableCell align="left">{contactList.name}</TableCell>
-                  <TableCell align="left">{contactList.contactsCount || 0}</TableCell>
-                  <TableCell align="left" style={{ maxWidth: 560 }}>
+                <tr key={contactList.id}>
+                  <td align="left">{contactList.name}</td>
+                  <td align="left">{contactList.contactsCount || 0}</td>
+                  <td align="left" style={{ maxWidth: 560 }}>
                     {(() => {
                       const sf = contactList && contactList.savedFilter ? contactList.savedFilter : null;
                       if (!sf) return <span style={{ color: '#999' }}>—</span>;
@@ -420,45 +572,299 @@ const ContactLists = () => {
                         </Button>
                       );
                     })()}
-                  </TableCell>
-                  <TableCell align="right">
+                  </td>
+                  <td align="right">
+                    <Tooltip {...CustomTooltipProps} title="Baixar Planilha Exemplo">
                     <a href={planilhaExemplo} download="planilha.xlsx">
-                      <IconButton size="small" title="Baixar Planilha Exemplo">
-                        <DownloadIcon />
+                        <IconButton 
+                          size="small" 
+                          style={{
+                            color: "#374151",
+                            backgroundColor: "#ffffff",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "8px",
+                            marginRight: 4
+                          }}
+                        >
+                          <DownloadIcon fontSize="small" />
                       </IconButton>
                     </a>
+                    </Tooltip>
 
+                    <Tooltip {...CustomTooltipProps} title="Ver Contatos">
                     <IconButton
                       size="small"
                       onClick={() => goToContacts(contactList.id)}
+                        style={{
+                          color: "#374151",
+                          backgroundColor: "#ffffff",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "8px",
+                          marginRight: 4
+                        }}
                     >
-                      <PeopleIcon />
+                        <PeopleIcon fontSize="small" />
                     </IconButton>
+                    </Tooltip>
 
+                    <Tooltip {...CustomTooltipProps} title="Editar">
                     <IconButton
                       size="small"
                       onClick={() => handleEditContactList(contactList)}
+                        style={{
+                          color: "#374151",
+                          backgroundColor: "#ffffff",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "8px",
+                          marginRight: 4
+                        }}
                     >
-                      <EditIcon />
+                        <EditIcon fontSize="small" />
                     </IconButton>
+                    </Tooltip>
 
+                    <Tooltip {...CustomTooltipProps} title="Deletar">
                     <IconButton
                       size="small"
                       onClick={(e) => {
                         setConfirmModalOpen(true);
                         setDeletingContactList(contactList);
                       }}
+                        style={{
+                          color: "#dc2626",
+                          backgroundColor: "#ffffff",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "8px"
+                        }}
                     >
-                      <DeleteOutlineIcon />
+                        <DeleteOutlineIcon fontSize="small" />
                     </IconButton>
-                  </TableCell>
-                </TableRow>
+                    </Tooltip>
+                  </td>
+                </tr>
               ))}
               {loading && <TableRowSkeleton columns={4} />}
-            </>
-          </TableBody>
-        </Table>
+            </tbody>
+          </table>
+            </Box>
+              {/* Paginação Desktop */}
+              <Box className={classes.pagination} component="nav" aria-label="Table navigation">
+                <span className={classes.paginationInfo}>
+                  Página <strong>{pageNumber}</strong> de <strong>{totalPages}</strong> • 
+                  <strong>{totalContactLists}</strong> listas
+                </span>
+                <Box className={classes.paginationControls} component="ul" style={{ listStyle: "none", display: "flex", gap: 4, margin: 0, padding: 0 }}>
+                  <li>
+                    <button
+                      onClick={() => handlePageChange(1)}
+                      disabled={pageNumber === 1}
+                      className={classes.pageButton}
+                    >
+                      <ChevronsLeft className="w-5 h-5" />
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => handlePageChange(pageNumber - 1)}
+                      disabled={pageNumber === 1}
+                      className={classes.pageButton}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                  </li>
+                  {renderPageNumbers.map((page, index) => (
+                    <li key={index}>
+                      <button
+                        onClick={() => handlePageChange(page)}
+                        className={`${classes.pageButton} ${page === pageNumber ? classes.pageButtonActive : ""}`}
+                      >
+                        {page}
+                      </button>
+                    </li>
+                  ))}
+                  <li>
+                    <button
+                      onClick={() => handlePageChange(pageNumber + 1)}
+                      disabled={pageNumber === totalPages}
+                      className={classes.pageButton}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => handlePageChange(totalPages)}
+                      disabled={pageNumber === totalPages}
+                      className={classes.pageButton}
+                    >
+                      <ChevronsRight className="w-5 h-5" />
+                    </button>
+                  </li>
+                </Box>
+        </Box>
       </Paper>
+          ) : (
+            /* Mobile View */
+            <>
+              <div className="flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
+                {!loading && contactLists.length === 0 && (
+                  <div className="text-center text-sm text-gray-500 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    Nenhuma lista de contatos encontrada.
+                  </div>
+                )}
+                {contactLists.map((contactList) => (
+                  <div key={contactList.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-sm">{contactList.name}</span>
+                      <div className="flex gap-1">
+                        <Tooltip {...CustomTooltipProps} title="Baixar Planilha">
+                          <a href={planilhaExemplo} download="planilha.xlsx">
+                            <IconButton 
+                              size="small"
+                              style={{
+                                color: "#374151",
+                                backgroundColor: "#ffffff",
+                                border: "1px solid #d1d5db",
+                                borderRadius: "8px"
+                              }}
+                            >
+                              <DownloadIcon fontSize="small" />
+                            </IconButton>
+                          </a>
+                        </Tooltip>
+                        <Tooltip {...CustomTooltipProps} title="Ver Contatos">
+                          <IconButton
+                            size="small"
+                            onClick={() => goToContacts(contactList.id)}
+                            style={{
+                              color: "#374151",
+                              backgroundColor: "#ffffff",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "8px"
+                            }}
+                          >
+                            <PeopleIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip {...CustomTooltipProps} title="Editar">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEditContactList(contactList)}
+                            style={{
+                              color: "#374151",
+                              backgroundColor: "#ffffff",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "8px"
+                            }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip {...CustomTooltipProps} title="Deletar">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              setConfirmModalOpen(true);
+                              setDeletingContactList(contactList);
+                            }}
+                            style={{
+                              color: "#dc2626",
+                              backgroundColor: "#ffffff",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "8px"
+                            }}
+                          >
+                            <DeleteOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      {i18n.t("contactLists.table.contacts")}: {contactList.contactsCount || 0}
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                      Filtro salvo: {contactList.savedFilter ? (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onMouseEnter={(e) => openDetails(e, contactList.savedFilter)}
+                          onClick={(e) => openDetails(e, contactList.savedFilter)}
+                          startIcon={<FilterIcon size={16} color="#059669" />}
+                        >
+                          Ver filtro
+                        </Button>
+                      ) : (
+                        <span style={{ color: '#999' }}>—</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {loading && <TableRowSkeleton columns={4} />}
+              </div>
+              {/* Paginação Mobile */}
+              <nav className="flex items-center justify-between p-3 mt-2 w-full max-w-[375px] mx-auto" aria-label="Mobile navigation">
+                <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                  Página <span className="font-semibold text-gray-900 dark:text-white">{pageNumber}</span>
+                  {" "} de {" "}
+                  <span className="font-semibold text-gray-900 dark:text-white">{totalPages}</span>
+                  {" "} • {" "}
+                  <span className="font-semibold text-gray-900 dark:text-white">{totalContactLists}</span> listas
+                </span>
+                <ul className="inline-flex items-center -space-x-px">
+                  <li>
+                    <button
+                      onClick={() => handlePageChange(1)}
+                      disabled={pageNumber === 1}
+                      className="flex items-center justify-center px-2 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronsLeft className="w-4 h-4" />
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => handlePageChange(pageNumber - 1)}
+                      disabled={pageNumber === 1}
+                      className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                  </li>
+                  {renderPageNumbers.map((page, index) => (
+                    <li key={index}>
+                      <button
+                        onClick={() => handlePageChange(page)}
+                        className={`flex items-center justify-center px-2 h-8 leading-tight border
+                          ${page === pageNumber
+                              ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
+                              : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                            }`}
+                      >
+                        {page}
+                      </button>
+                    </li>
+                  ))}
+                  <li>
+                    <button
+                      onClick={() => handlePageChange(pageNumber + 1)}
+                      disabled={pageNumber === totalPages}
+                      className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => handlePageChange(totalPages)}
+                      disabled={pageNumber === totalPages}
+                      className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronsRight className="w-4 h-4" />
+                    </button>
+                  </li>
+                </ul>
+              </nav>
+            </>
+          )}
       {/* Popover de detalhes do filtro salvo */}
       <Popover
         open={Boolean(detailsAnchorEl)}
@@ -514,65 +920,64 @@ const ContactLists = () => {
           )}
         </div>
       </Popover>
-      {/* Paginação (baseada no totalPages/renderPageNumbers) */}
-      <nav className="flex justify-between items-center mt-4">
-        <ul className="inline-flex items-center -space-x-px">
-          <li>
-            <button
-              onClick={() => handlePageChange(1)}
-              disabled={pageNumber === 1}
-              className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-l-lg ${
-                pageNumber === 1
-                  ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                  : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-              }`}
-            >
-              «
-            </button>
-          </li>
-          <li>
-            <button
-              onClick={() => handlePageChange(pageNumber - 1)}
-              disabled={pageNumber === 1}
-              className={`flex items-center justify-center px-3 h-8 leading-tight border ${
-                pageNumber === 1
-                  ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                  : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-              }`}
-            >
-              ‹
-            </button>
-          </li>
-          {renderPageNumbers()}
-          <li>
-            <button
-              onClick={() => handlePageChange(pageNumber + 1)}
-              disabled={pageNumber === totalPages}
-              className={`flex items-center justify-center px-3 h-8 leading-tight border ${
-                pageNumber === totalPages
-                  ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                  : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-              }`}
-            >
-              ›
-            </button>
-          </li>
-          <li>
-            <button
-              onClick={() => handlePageChange(totalPages)}
-              disabled={pageNumber === totalPages}
-              className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-r-lg ${
-                pageNumber === totalPages
-                  ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                  : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-              }`}
-            >
-              »
-            </button>
-          </li>
-        </ul>
-      </nav>
-    </MainContainer>
+          {/* Popover de detalhes do filtro salvo */}
+          <Popover
+            open={Boolean(detailsAnchorEl)}
+            anchorEl={detailsAnchorEl}
+            onClose={closeDetails}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+            PaperProps={{ onMouseLeave: closeDetails, tabIndex: -1, role: 'tooltip', 'aria-live': 'polite' }}
+            disableAutoFocus
+            disableEnforceFocus
+            disableRestoreFocus
+          >
+            <div style={{ padding: 16, maxWidth: 440 }}>
+              <Typography variant="subtitle2" gutterBottom>Detalhes do filtro salvo</Typography>
+              {detailsFilter ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {Array.isArray(detailsFilter.channel) && detailsFilter.channel.length > 0 && (
+                    <div><strong>Canal:</strong> {detailsFilter.channel.join(', ')}</div>
+                  )}
+                  {Array.isArray(detailsFilter.representativeCode) && detailsFilter.representativeCode.length > 0 && (
+                    <div><strong>Representante:</strong> {detailsFilter.representativeCode.join(', ')}</div>
+                  )}
+                  {Array.isArray(detailsFilter.city) && detailsFilter.city.length > 0 && (
+                    <div><strong>Cidade:</strong> {detailsFilter.city.join(', ')}</div>
+                  )}
+                  {Array.isArray(detailsFilter.segment) && detailsFilter.segment.length > 0 && (
+                    <div><strong>Segmento:</strong> {detailsFilter.segment.join(', ')}</div>
+                  )}
+                  {Array.isArray(detailsFilter.situation) && detailsFilter.situation.length > 0 && (
+                    <div><strong>Situação:</strong> {detailsFilter.situation.join(', ')}</div>
+                  )}
+                  {Array.isArray(detailsFilter.foundationMonths) && detailsFilter.foundationMonths.length > 0 && (
+                    <div><strong>Fundação (mês):</strong> {detailsFilter.foundationMonths.join(', ')}</div>
+                  )}
+                  {!!detailsFilter.minCreditLimit || !!detailsFilter.maxCreditLimit ? (
+                    <div><strong>Crédito:</strong> {fmtCurrency(detailsFilter.minCreditLimit)} – {detailsFilter.maxCreditLimit ? fmtCurrency(detailsFilter.maxCreditLimit) : '∞'}</div>
+                  ) : null}
+                  {typeof detailsFilter.florder !== 'undefined' && (
+                    <div><strong>Encomenda:</strong> {detailsFilter.florder ? 'Sim' : 'Não'}</div>
+                  )}
+                  {!!detailsFilter.dtUltCompraStart || !!detailsFilter.dtUltCompraEnd ? (
+                    <div><strong>Última compra (período):</strong> {fmtDate(detailsFilter.dtUltCompraStart)} – {fmtDate(detailsFilter.dtUltCompraEnd)}</div>
+                  ) : null}
+                  {detailsFilter.minVlUltCompra != null || detailsFilter.maxVlUltCompra != null ? (
+                    <div><strong>Valor da última compra:</strong> {fmtCurrency(detailsFilter.minVlUltCompra)} – {fmtCurrency(detailsFilter.maxVlUltCompra)}</div>
+                  ) : null}
+                  {Array.isArray(detailsFilter.tags) && detailsFilter.tags.length > 0 && (
+                    <div><strong>Tags:</strong> {(allTags.length ? allTags.filter(t => detailsFilter.tags.includes(t.id)).map(t => t.name) : detailsFilter.tags.map(id => `#${id}`)).join(', ')}</div>
+                  )}
+                </div>
+              ) : (
+                <Typography variant="body2" color="textSecondary">—</Typography>
+              )}
+            </div>
+          </Popover>
+        </Box>
+      </MainContainer>
+      </Box>
   );
 };
 
