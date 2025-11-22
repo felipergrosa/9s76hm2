@@ -42,6 +42,7 @@ import SchedulesForm from "../SchedulesForm";
 import usePlans from "../../hooks/usePlans";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import OfficialAPIFields from "./OfficialAPIFields";
+import OfficialAPIGuide from "./OfficialAPIGuide";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -168,7 +169,8 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
     wabaPhoneNumberId: "",
     wabaAccessToken: "",
     wabaBusinessAccountId: "",
-    wabaWebhookVerifyToken: ""
+    wabaWebhookVerifyToken: "",
+    wabaTwoFactorPin: ""
   };
   const [whatsApp, setWhatsApp] = useState(initialState);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
@@ -546,10 +548,18 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                   <Tab label="Chatbot" value={"chatbot"} />
                   <Tab label={i18n.t("whatsappModal.tabs.assessments")} value={"nps"} />
                   <Tab label="Fluxo Padrão" value={"flowbuilder"} />
-                  {schedulesEnabled && <Tab label={i18n.t("whatsappModal.tabs.schedules")} value={"schedules"} />}
+                  {schedulesEnabled && (
+                    <Tab
+                      label={i18n.t("whatsappModal.tabs.schedules")}
+                      value={"schedules"}
+                    />
+                  )}
+                  {values.channelType === "official" && (
+                    <Tab label="📚 Tutorial API Oficial" value={"tutorial"} />
+                  )}
                 </Tabs>
-              </Paper>
-              <Paper className={classes.paper} elevation={0}>
+
+                {/* Aba Geral */}
                 <TabPanel
                   className={classes.container}
                   value={tab}
@@ -558,10 +568,10 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                   <DialogContent dividers>
                     {attachmentName && (
                       <div
-                        style={{ display: 'flex', flexDirection: 'row-reverse' }}
+                        style={{ display: "flex", flexDirection: "row-reverse" }}
                       >
                         <Button
-                          variant='outlined'
+                          variant="outlined"
                           color="primary"
                           endIcon={<DeleteOutlineIcon />}
                           onClick={handleDeleFile}
@@ -571,20 +581,25 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                       </div>
                     )}
                     <div
-                      style={{ display: 'flex', flexDirection: "column-reverse" }}
+                      style={{ display: "flex", flexDirection: "column-reverse" }}
                     >
                       <input
                         type="file"
                         accept="video/*,image/*"
                         ref={inputFileRef}
-                        style={{ display: 'none' }}
+                        style={{ display: "none" }}
                         onChange={handleFileUpload}
                       />
-                      <Button variant="contained" color="primary" onClick={() => inputFileRef.current.click()}>
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={() => inputFileRef.current.click()}
+                      >
                         {i18n.t("userModal.buttons.addImage")}
                       </Button>
                     </div>
-                    {/* NOME E PADRAO */}
+
+                    {/* NOME E PADRÃO */}
                     <div className={classes.multFieldLine}>
                       <Grid spacing={2} container>
                         <Grid item>
@@ -631,7 +646,9 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                             fullWidth
                             className={classes.formControl}
                           >
-                            <InputLabel id="groupAsTicket-selection-label">{i18n.t("whatsappModal.form.groupAsTicket")}</InputLabel>
+                            <InputLabel id="groupAsTicket-selection-label">
+                              {i18n.t("whatsappModal.form.groupAsTicket")}
+                            </InputLabel>
                             <Field
                               as={Select}
                               label={i18n.t("whatsappModal.form.groupAsTicket")}
@@ -640,8 +657,12 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                               id="groupAsTicket"
                               name="groupAsTicket"
                             >
-                              <MenuItem value={"disabled"}>{i18n.t("whatsappModal.menuItem.disabled")}</MenuItem>
-                              <MenuItem value={"enabled"}>{i18n.t("whatsappModal.menuItem.enabled")}</MenuItem>
+                              <MenuItem value={"disabled"}>
+                                {i18n.t("whatsappModal.menuItem.disabled")}
+                              </MenuItem>
+                              <MenuItem value={"enabled"}>
+                                {i18n.t("whatsappModal.menuItem.enabled")}
+                              </MenuItem>
                             </Field>
                           </FormControl>
                         </Grid>
@@ -675,7 +696,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                             <MenuItem value="official">
                               <Box display="flex" alignItems="center" gap={1}>
                                 <CheckCircle color="primary" />
-                                <span>WhatsApp Business API (Meta - Pago)</span>
+                                <span>WhatsApp Business API Oficial</span>
                               </Box>
                             </MenuItem>
                           </Field>
@@ -687,7 +708,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                     {values.channelType === "official" && (
                       <>
                         <Divider style={{ margin: "20px 0" }} />
-                        <OfficialAPIFields 
+                        <OfficialAPIFields
                           values={values}
                           errors={errors}
                           touched={touched}
@@ -753,7 +774,8 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                                 />
                               }
                             />
-                          </>) : <></>}
+                          </>
+                        ) : null}
                       </div>
 
                       {enableImportMessage ? (
@@ -773,7 +795,6 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                                   .add(-2, "years")
                                   .format("YYYY-MM-DDTHH:mm"),
                               }}
-                              //min="2022-11-06T22:22:55"
                               InputLabelProps={{
                                 shrink: true,
                               }}
@@ -806,9 +827,8 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                                   .format("YYYY-MM-DDTHH:mm"),
                                 min: moment(importOldMessages).format(
                                   "YYYY-MM-DDTHH:mm"
-                                )
+                                ),
                               }}
-                              //min="2022-11-06T22:22:55"
                               InputLabelProps={{
                                 shrink: true,
                               }}
@@ -842,7 +862,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                                 as={Select}
                                 name="queueIdImportMessages"
                                 id="queueIdImportMessages"
-                                value={values.queueIdImportMessages || '0'}
+                                value={values.queueIdImportMessages || "0"}
                                 required={enableImportMessage}
                                 label={i18n.t("whatsappModal.form.queueIdImportMessages")}
                                 placeholder={i18n.t("whatsappModal.form.queueIdImportMessages")}
@@ -858,7 +878,6 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                             </FormControl>
                           </Grid>
                         </Grid>
-
                       ) : null}
                     </div>
                     {enableImportMessage && (
@@ -866,7 +885,6 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                         {i18n.t("whatsappModal.form.importAlert")}
                       </span>
                     )}
-
 
                     {/* TOKEN */}
                     <Box display="flex" alignItems="center">
@@ -876,7 +894,6 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                           label={i18n.t("whatsappModal.form.token")}
                           type="token"
                           fullWidth
-                          // name="token"
                           value={autoToken}
                           variant="outlined"
                           margin="dense"
@@ -888,13 +905,21 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                         disabled={isSubmitting}
                         className={classes.tokenRefresh}
                         variant="text"
-                        startIcon={<Autorenew style={{ marginLeft: 5, color: "green" }} />}
+                        startIcon={
+                          <Autorenew
+                            style={{ marginLeft: 5, color: "green" }}
+                          />
+                        }
                       />
                       <Button
                         onClick={handleCopyToken}
                         className={classes.tokenRefresh}
                         variant="text"
-                        startIcon={<FileCopy style={{ color: copied ? "blue" : "inherit" }} />}
+                        startIcon={
+                          <FileCopy
+                            style={{ color: copied ? "blue" : "inherit" }}
+                          />
+                        }
                       />
                     </Box>
 
@@ -902,7 +927,6 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                       <h3>{i18n.t("whatsappModal.form.queueRedirection")}</h3>
                       <p>{i18n.t("whatsappModal.form.queueRedirectionDesc")}</p>
                       <Grid spacing={2} container>
-
                         <Grid xs={6} md={6} item>
                           <FormControl
                             variant="outlined"
@@ -917,7 +941,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                               as={Select}
                               name="sendIdQueue"
                               id="sendIdQueue"
-                              value={values.sendIdQueue || '0'}
+                              value={values.sendIdQueue || "0"}
                               required={values.timeSendQueue > 0}
                               label={i18n.t("whatsappModal.form.sendIdQueue")}
                               placeholder={i18n.t("whatsappModal.form.sendIdQueue")}
@@ -931,9 +955,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                               ))}
                             </Field>
                           </FormControl>
-
                         </Grid>
-
                         <Grid xs={6} md={6} item>
                           <Field
                             as={TextField}
@@ -942,15 +964,32 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                             name="timeSendQueue"
                             variant="outlined"
                             margin="dense"
-                            error={touched.timeSendQueue && Boolean(errors.timeSendQueue)}
-                            helperText={touched.timeSendQueue && errors.timeSendQueue}
+                            error={
+                              touched.timeSendQueue &&
+                              Boolean(errors.timeSendQueue)
+                            }
+                            helperText={
+                              touched.timeSendQueue && errors.timeSendQueue
+                            }
                           />
                         </Grid>
-
                       </Grid>
                     </div>
                   </DialogContent>
                 </TabPanel>
+
+                {/* Aba Tutorial - apenas leitura */}
+                {values.channelType === "official" && (
+                  <TabPanel
+                    className={classes.container}
+                    value={tab}
+                    name={"tutorial"}
+                  >
+                    <DialogContent dividers>
+                      <OfficialAPIGuide />
+                    </DialogContent>
+                  </TabPanel>
+                )}
                 {/* INTEGRAÇÃO */}
                 <TabPanel
                   className={classes.container}

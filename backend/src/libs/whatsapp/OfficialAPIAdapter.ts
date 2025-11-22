@@ -90,6 +90,46 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
       logger.info(`[OfficialAPI] Inicializado com sucesso: ${this.phoneNumber}`);
       logger.info(`[OfficialAPI] Nome verificado: ${verifiedName}, Quality: ${qualityRating}`);
       
+      // Buscar PIN 2FA do banco para registro automático
+      let twoFactorPin: string | null = null;
+      try {
+        const Whatsapp = (await import("../../models/Whatsapp")).default;
+        const whatsappRecord = await Whatsapp.findByPk(this.whatsappId);
+        twoFactorPin = whatsappRecord?.wabaTwoFactorPin || null;
+      } catch (fetchError: any) {
+        logger.warn(`[OfficialAPI] Falha ao buscar PIN 2FA: ${fetchError.message}`);
+      }
+      
+      // 1. Subscrever WABA ao app (para habilitar webhooks de produção)
+      try {
+        await this.client.post(`/${this.businessAccountId}/subscribed_apps`);
+        logger.info(`[OfficialAPI] WABA subscrita ao app com sucesso`);
+      } catch (subscribeError: any) {
+        const errorMessage = subscribeError.response?.data?.error?.message || subscribeError.message;
+        // Se já estiver subscrito, não é erro crítico
+        if (subscribeError.response?.status === 400) {
+          logger.warn(`[OfficialAPI] WABA já subscrita ao app: ${errorMessage}`);
+        } else {
+          logger.error(`[OfficialAPI] Erro ao subscrever WABA: ${errorMessage}`);
+        }
+      }
+      
+      // 2. Registrar número com PIN 2FA (para ativar envio/recebimento)
+      if (twoFactorPin && twoFactorPin.length === 6) {
+        try {
+          await this.client.post(`/${this.phoneNumberId}/register`, {
+            messaging_product: "whatsapp",
+            pin: twoFactorPin
+          });
+          logger.info(`[OfficialAPI] Número registrado com PIN 2FA com sucesso`);
+        } catch (registerError: any) {
+          const errorMessage = registerError.response?.data?.error?.message || registerError.message;
+          logger.error(`[OfficialAPI] Erro ao registrar número: ${errorMessage}`);
+        }
+      } else {
+        logger.warn(`[OfficialAPI] PIN 2FA não configurado ou inválido. Configure um PIN de 6 dígitos para ativar o registro automático.`);
+      }
+      
       // Atualizar banco de dados com informações corretas
       try {
         const Whatsapp = (await import("../../models/Whatsapp")).default;

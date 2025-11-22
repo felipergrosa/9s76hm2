@@ -312,7 +312,7 @@ const OfficialAPIFields = ({ values, errors, touched }) => {
         </Grid>
 
         {/* Webhook Verify Token */}
-        <Grid item xs={12}>
+        <Grid item xs={12} md={6}>
           <Field
             as={TextField}
             label="Webhook Verify Token"
@@ -327,6 +327,27 @@ const OfficialAPIFields = ({ values, errors, touched }) => {
             margin="dense"
             fullWidth
             placeholder="meu_token_secreto_123"
+          />
+        </Grid>
+
+        {/* PIN 2FA - Two Factor Authentication */}
+        <Grid item xs={12} md={6}>
+          <Field
+            as={TextField}
+            label="PIN 2FA (Verificação de Dois Passos)"
+            name="wabaTwoFactorPin"
+            type="password"
+            error={touched.wabaTwoFactorPin && Boolean(errors.wabaTwoFactorPin)}
+            helperText={
+              touched.wabaTwoFactorPin && errors.wabaTwoFactorPin
+                ? errors.wabaTwoFactorPin
+                : "PIN de 6 dígitos configurado no Gestor do WhatsApp (obrigatório para produção)"
+            }
+            variant="outlined"
+            margin="dense"
+            fullWidth
+            placeholder="130420"
+            inputProps={{ maxLength: 6, pattern: "[0-9]*" }}
           />
         </Grid>
       </Grid>

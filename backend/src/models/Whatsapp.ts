@@ -144,6 +144,9 @@ class Whatsapp extends Model<Whatsapp> {
   @Column(DataType.TEXT)
   wabaWebhookVerifyToken: string;
 
+  @Column(DataType.TEXT)
+  wabaTwoFactorPin: string;
+
   @Column({
     type: DataType.JSONB
   })
