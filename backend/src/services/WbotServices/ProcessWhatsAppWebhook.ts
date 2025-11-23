@@ -213,6 +213,7 @@ async function processIncomingMessage(
   switch (message.type) {
     case "text":
       body = message.text?.body || "";
+      mediaType = "conversation";
       break;
 
     case "image":

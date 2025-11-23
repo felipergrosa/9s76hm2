@@ -129,7 +129,8 @@ export async function processOfficialBot({
                 body: body,
                 fromMe: true,
                 read: true,
-                ack: 1
+                ack: 1,
+                mediaType: "conversation"
               },
               companyId
             });

@@ -321,16 +321,34 @@ export const handleOpenAi = async (
 
   // Format system prompt
   const clientName = sanitizeName(contact.name || "Amigo(a)");
+  const fantasyName = (contact as any)?.fantasyName || "";
+  const contactPerson = (contact as any)?.contactName || "";
+  const city = (contact as any)?.city || "";
+  const region = (contact as any)?.region || "";
+  const segment = (contact as any)?.segment || "";
+  const situation = (contact as any)?.situation || "";
+
+  const crmContextLines: string[] = [];
+  if (fantasyName) crmContextLines.push(`- Empresa do cliente: ${fantasyName}`);
+  if (contactPerson) crmContextLines.push(`- Pessoa de contato: ${contactPerson}`);
+  if (city || region) crmContextLines.push(`- Localização: ${city || ""}${city && region ? " - " : ""}${region || ""}`.trim());
+  if (segment) crmContextLines.push(`- Segmento: ${segment}`);
+  if (situation) crmContextLines.push(`- Situação no CRM: ${situation}`);
+
+  const crmBlock = crmContextLines.length
+    ? `\nDados conhecidos do cliente (CRM, quando disponíveis):\n${crmContextLines.join("\n")}\n`
+    : "";
+
   const promptSystem = `Instruções do Sistema:
-  - Use o nome ${clientName} nas respostas para que o cliente se sinta mais próximo e acolhido.
+  - Use o nome ${clientName} nas respostas para que o cliente se sinta mais próximo e acolhido, sem exagerar nem repetir o nome em todas as frases.
   - Certifique-se de que a resposta tenha até ${openAiSettings.maxTokens} tokens e termine de forma completa, sem cortes.
-  - Sempre que der, inclua o nome do cliente para tornar o atendimento mais pessoal e gentil. se não souber o nome pergunte
+  - Evite repetir sempre a mesma saudação em todas as mensagens. Depois da primeira interação, foque em responder diretamente ao que o cliente pediu na última mensagem.
   - Se for preciso transferir para outro setor, comece a resposta com 'Ação: Transferir para o setor de atendimento'.
-  
+  ${crmBlock}
   Prompt Específico:
   ${openAiSettings.prompt}
   
-  Siga essas instruções com cuidado para garantir um atendimento claro e amigável em todas as respostas.`;
+  Siga essas instruções com cuidado para garantir um atendimento claro, personalizado e amigável em todas as respostas.`;
 
   // Handle text message
   if (msg.message?.conversation || msg.message?.extendedTextMessage?.text) {
