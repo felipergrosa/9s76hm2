@@ -2,36 +2,18 @@ import React, { useState } from "react";
 import { Field } from "formik";
 import {
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Typography,
   Box,
-  Divider,
   Grid,
   Chip,
-  Button,
   IconButton,
   Tooltip,
-  Link,
-  Menu,
-  ListItemIcon,
-  ListItemText
+  Divider
 } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
 import { 
   Info, 
-  CheckCircle, 
-  FileCopy, 
-  Launch, 
-  Help,
-  MoreVert,
-  Link as LinkIcon,
-  Security,
-  Assessment,
-  Payment,
-  Phone
+  FileCopy
 } from "@material-ui/icons";
 
 const useStyles = makeStyles((theme) => ({
@@ -103,24 +85,10 @@ const OfficialAPIFields = ({ values, errors, touched }) => {
   const classes = useStyles();
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
-  const [anchorEl, setAnchorEl] = useState(null);
 
   // Usar URL do backend (API) em vez do frontend
   const backendUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
   const webhookUrl = `${backendUrl}/webhooks/whatsapp`;
-
-  const handleMenuOpen = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleMenuItemClick = (url) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
-    handleMenuClose();
-  };
 
   const handleCopyWebhook = () => {
     navigator.clipboard.writeText(webhookUrl);
@@ -138,123 +106,16 @@ const OfficialAPIFields = ({ values, errors, touched }) => {
 
   return (
     <>
-      <Box className={classes.infoBox}>
-        <Info color="primary" />
-        <Box flex={1}>
-          <Typography variant="body2">
-            <strong>WhatsApp Business API Oficial (Meta):</strong> Configure as credenciais obtidas no Meta Business Manager. 
-            As primeiras 1.000 conversas/mês são gratuitas.
-          </Typography>
-          <Box mt={1} display="flex" gap={1} flexWrap="wrap" alignItems="center">
-            <Button
-              size="small"
-              variant="outlined"
-              color="primary"
-              startIcon={<Launch />}
-              href="https://business.facebook.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Criar Conta Meta
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<Help />}
-              href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Tutorial Oficial
-            </Button>
-            
-            <Tooltip title="Links Úteis da Meta">
-              <IconButton
-                size="small"
-                onClick={handleMenuOpen}
-                color="primary"
-                aria-label="menu de links úteis"
-              >
-                <MoreVert />
-              </IconButton>
-            </Tooltip>
-
-            <Menu
-              anchorEl={anchorEl}
-              open={Boolean(anchorEl)}
-              onClose={handleMenuClose}
-              anchorOrigin={{
-                vertical: 'bottom',
-                horizontal: 'left',
-              }}
-              transformOrigin={{
-                vertical: 'top',
-                horizontal: 'left',
-              }}
-            >
-              <MenuItem onClick={() => handleMenuItemClick('https://business.facebook.com/wa/manage/message-templates')}>
-                <ListItemIcon>
-                  <Launch fontSize="small" />
-                </ListItemIcon>
-                <ListItemText primary="Templates de Mensagem" />
-              </MenuItem>
-              
-              <MenuItem onClick={() => handleMenuItemClick('https://business.facebook.com/wa/manage/phone-numbers/')}>
-                <ListItemIcon>
-                  <Phone fontSize="small" />
-                </ListItemIcon>
-                <ListItemText primary="Números de Telefone" />
-              </MenuItem>
-              
-              <MenuItem onClick={() => handleMenuItemClick('https://developers.facebook.com/docs/whatsapp/pricing')}>
-                <ListItemIcon>
-                  <Payment fontSize="small" />
-                </ListItemIcon>
-                <ListItemText primary="Forma de Pagamento" />
-              </MenuItem>
-              
-              <MenuItem onClick={() => handleMenuItemClick('https://business.facebook.com/settings/info')}>
-                <ListItemIcon>
-                  <Security fontSize="small" />
-                </ListItemIcon>
-                <ListItemText primary="Verificação da Conta" />
-              </MenuItem>
-              
-              <MenuItem onClick={() => handleMenuItemClick('https://developers.facebook.com/docs/whatsapp/cloud-api/')}>
-                <ListItemIcon>
-                  <LinkIcon fontSize="small" />
-                </ListItemIcon>
-                <ListItemText primary="Catálogo" />
-              </MenuItem>
-              
-              <MenuItem onClick={() => handleMenuItemClick('https://developers.facebook.com/docs/whatsapp/business-management-api/authentication')}>
-                <ListItemIcon>
-                  <Security fontSize="small" />
-                </ListItemIcon>
-                <ListItemText primary="Autenticação de 2 Fatores" />
-              </MenuItem>
-              
-              <MenuItem onClick={() => handleMenuItemClick('https://business.facebook.com/wa/manage/analytics/')}>
-                <ListItemIcon>
-                  <Assessment fontSize="small" />
-                </ListItemIcon>
-                <ListItemText primary="Modelos de Mensagens" />
-              </MenuItem>
-            </Menu>
-          </Box>
-        </Box>
-      </Box>
-
-      <Divider className={classes.divider} />
 
       <Typography variant="h6" className={classes.sectionTitle}>
         Credenciais da API Oficial
         <Chip label="Meta" size="small" color="primary" className={classes.chip} />
       </Typography>
 
-      {/* Phone Number ID */}
+      {/* Linha 1: Phone Number ID + Webhook Verify Token + PIN 2FA */}
       <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
+        {/* Phone Number ID */}
+        <Grid item xs={12} md={4}>
           <Field
             as={TextField}
             label="Phone Number ID"
@@ -272,6 +133,47 @@ const OfficialAPIFields = ({ values, errors, touched }) => {
           />
         </Grid>
 
+        {/* Webhook Verify Token */}
+        <Grid item xs={12} md={4}>
+          <Field
+            as={TextField}
+            label="Webhook Verify Token"
+            name="wabaWebhookVerifyToken"
+            error={touched.wabaWebhookVerifyToken && Boolean(errors.wabaWebhookVerifyToken)}
+            helperText={
+              touched.wabaWebhookVerifyToken && errors.wabaWebhookVerifyToken
+                ? errors.wabaWebhookVerifyToken
+                : "Token personalizado para validação do webhook (criar valor único)"
+            }
+            variant="outlined"
+            margin="dense"
+            fullWidth
+            placeholder="meu_token_secreto_123"
+          />
+        </Grid>
+
+        {/* PIN 2FA - Two Factor Authentication */}
+        <Grid item xs={12} md={4}>
+          <Field
+            as={TextField}
+            label="PIN 2FA (Verificação de Dois Passos)"
+            name="wabaTwoFactorPin"
+            type="password"
+            error={touched.wabaTwoFactorPin && Boolean(errors.wabaTwoFactorPin)}
+            helperText={
+              touched.wabaTwoFactorPin && errors.wabaTwoFactorPin
+                ? errors.wabaTwoFactorPin
+                : "PIN de 6 dígitos configurado no Gestor do WhatsApp (obrigatório para produção)"
+            }
+            variant="outlined"
+            margin="dense"
+            fullWidth
+            placeholder="130420"
+            inputProps={{ maxLength: 6, pattern: "[0-9]*" }}
+          />
+        </Grid>
+
+        {/* Linha 2: Business Account ID + Access Token */}
         {/* Business Account ID */}
         <Grid item xs={12} md={6}>
           <Field
@@ -292,7 +194,7 @@ const OfficialAPIFields = ({ values, errors, touched }) => {
         </Grid>
 
         {/* Access Token */}
-        <Grid item xs={12}>
+        <Grid item xs={12} md={6}>
           <Field
             as={TextField}
             label="Access Token"
@@ -310,46 +212,6 @@ const OfficialAPIFields = ({ values, errors, touched }) => {
             placeholder="EAAxxxxxxxxxxxxxxxxxxxxxxxxxx"
           />
         </Grid>
-
-        {/* Webhook Verify Token */}
-        <Grid item xs={12} md={6}>
-          <Field
-            as={TextField}
-            label="Webhook Verify Token"
-            name="wabaWebhookVerifyToken"
-            error={touched.wabaWebhookVerifyToken && Boolean(errors.wabaWebhookVerifyToken)}
-            helperText={
-              touched.wabaWebhookVerifyToken && errors.wabaWebhookVerifyToken
-                ? errors.wabaWebhookVerifyToken
-                : "Token personalizado para validação do webhook (criar valor único)"
-            }
-            variant="outlined"
-            margin="dense"
-            fullWidth
-            placeholder="meu_token_secreto_123"
-          />
-        </Grid>
-
-        {/* PIN 2FA - Two Factor Authentication */}
-        <Grid item xs={12} md={6}>
-          <Field
-            as={TextField}
-            label="PIN 2FA (Verificação de Dois Passos)"
-            name="wabaTwoFactorPin"
-            type="password"
-            error={touched.wabaTwoFactorPin && Boolean(errors.wabaTwoFactorPin)}
-            helperText={
-              touched.wabaTwoFactorPin && errors.wabaTwoFactorPin
-                ? errors.wabaTwoFactorPin
-                : "PIN de 6 dígitos configurado no Gestor do WhatsApp (obrigatório para produção)"
-            }
-            variant="outlined"
-            margin="dense"
-            fullWidth
-            placeholder="130420"
-            inputProps={{ maxLength: 6, pattern: "[0-9]*" }}
-          />
-        </Grid>
       </Grid>
 
       <Divider className={classes.divider} />
@@ -357,92 +219,73 @@ const OfficialAPIFields = ({ values, errors, touched }) => {
       {/* Informações de Configuração do Webhook */}
       <Typography variant="h6" className={classes.sectionTitle}>
         Configuração do Webhook (Meta Business)
+        <Tooltip
+          title="Dica: Se você tem dúvidas sobre como obter essas credenciais, consulte a aba '📚 Tutorial API Oficial' acima para um guia completo passo a passo."
+        >
+          <IconButton size="small" className={classes.helpButton}>
+            <Info fontSize="small" color="primary" />
+          </IconButton>
+        </Tooltip>
       </Typography>
 
-      {/* Callback URL com botão de copiar */}
-      <Box mb={2}>
-        <Typography variant="body2" gutterBottom>
-          <strong>1. Callback URL</strong>
-        </Typography>
-        <Box className={classes.webhookUrlBox}>
-          <Typography className={classes.webhookUrl}>
-            {webhookUrl}
-          </Typography>
-          <Tooltip title={copiedWebhook ? "Copiado!" : "Copiar URL"}>
-            <IconButton size="small" onClick={handleCopyWebhook} color={copiedWebhook ? "primary" : "default"}>
-              <FileCopy fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Box>
-        <Typography variant="caption" color="textSecondary">
-          Esta URL será usada no Meta Business Manager para receber eventos
-        </Typography>
-      </Box>
-
-      {/* Verify Token */}
-      <Box mb={2}>
-        <Typography variant="body2" gutterBottom>
-          <strong>2. Verify Token</strong>
-        </Typography>
-        <Box className={classes.webhookUrlBox}>
-          <Typography className={classes.webhookUrl}>
-            {values.wabaWebhookVerifyToken || "(preencha o campo acima)"}
-          </Typography>
-          {values.wabaWebhookVerifyToken && (
-            <Tooltip title={copiedToken ? "Copiado!" : "Copiar Token"}>
-              <IconButton size="small" onClick={handleCopyToken} color={copiedToken ? "primary" : "default"}>
-                <FileCopy fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-        </Box>
-        <Typography variant="caption" color="textSecondary">
-          Use o mesmo token preenchido no campo "Webhook Verify Token" acima
-        </Typography>
-      </Box>
-
-      {/* Passo a passo */}
-      <Box className={classes.successBox}>
-        <CheckCircle style={{ color: "#4caf50" }} />
-        <Box flex={1}>
-          <Typography variant="body2" gutterBottom>
-            <strong>Passos para configurar no Meta Business:</strong>
-          </Typography>
-          <Box className={classes.stepBox}>
-            <Typography variant="caption">
-              <strong>1.</strong> Acesse <Link href="https://business.facebook.com/" target="_blank">Meta Business Manager</Link>
+      {/* Callback URL e Verify Token lado a lado */}
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={6}>
+          {/* Callback URL com botão de copiar */}
+          <Box mb={2}>
+            <Typography variant="body2" gutterBottom>
+              <strong>1. Callback URL</strong>
+            </Typography>
+            <Box className={classes.webhookUrlBox}>
+              <Typography className={classes.webhookUrl}>
+                {webhookUrl}
+              </Typography>
+              <Tooltip title={copiedWebhook ? "Copiado!" : "Copiar URL"}>
+                <IconButton
+                  size="small"
+                  onClick={handleCopyWebhook}
+                  color={copiedWebhook ? "primary" : "default"}
+                >
+                  <FileCopy fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+            <Typography variant="caption" color="textSecondary">
+              Esta URL será usada no Meta Business Manager para receber eventos
             </Typography>
           </Box>
-          <Box className={classes.stepBox}>
-            <Typography variant="caption">
-              <strong>2.</strong> WhatsApp → Configuration → Webhooks
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          {/* Verify Token */}
+          <Box mb={2}>
+            <Typography variant="body2" gutterBottom>
+              <strong>2. Verify Token</strong>
+            </Typography>
+            <Box className={classes.webhookUrlBox}>
+              <Typography className={classes.webhookUrl}>
+                {values.wabaWebhookVerifyToken || "(preencha o campo acima)"}
+              </Typography>
+              {values.wabaWebhookVerifyToken && (
+                <Tooltip title={copiedToken ? "Copiado!" : "Copiar Token"}>
+                  <IconButton
+                    size="small"
+                    onClick={handleCopyToken}
+                    color={copiedToken ? "primary" : "default"}
+                  >
+                    <FileCopy fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
+            <Typography variant="caption" color="textSecondary">
+              Use o mesmo token preenchido no campo "Webhook Verify Token" acima
             </Typography>
           </Box>
-          <Box className={classes.stepBox}>
-            <Typography variant="caption">
-              <strong>3.</strong> Cole a <strong>Callback URL</strong> e o <strong>Verify Token</strong>
-            </Typography>
-          </Box>
-          <Box className={classes.stepBox}>
-            <Typography variant="caption">
-              <strong>4.</strong> Subscribe aos eventos: <strong>messages</strong> e <strong>message_status</strong>
-            </Typography>
-          </Box>
-        </Box>
-      </Box>
+        </Grid>
+      </Grid>
 
-      <Divider className={classes.divider} />
-
-      {/* Informações Adicionais */}
-      <Typography variant="caption" color="textSecondary" style={{ display: "block", marginTop: 16 }}>
-        <strong>Nota:</strong> Após salvar, a conexão será testada automaticamente. 
-        Certifique-se de que as credenciais estão corretas e que o webhook está configurado no Meta Business Manager.
-      </Typography>
-
-      <Typography variant="caption" color="textSecondary" style={{ display: "block", marginTop: 8 }}>
-        <strong>Custos:</strong> Primeiras 1.000 conversas/mês grátis. 
-        Depois: R$ 0,17 (serviço) ou R$ 0,34 (marketing) por conversa.
-      </Typography>
+      {/* Dica agora exibida no tooltip do ícone (i) ao lado do título */}
     </>
   );
 };

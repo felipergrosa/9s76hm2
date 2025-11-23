@@ -373,9 +373,12 @@ const AllConnections = () => {
   };
 
   const renderStatusToolTips = whatsApp => {
+    const isBaileys = !whatsApp.channelType || whatsApp.channelType === "baileys";
+
     return (
       <div className={classes.customTableCell}>
-        {whatsApp.status === "DISCONNECTED" && (
+        {(whatsApp.status === "DISCONNECTED" ||
+          (whatsApp.status === "qrcode" && !isBaileys)) && (
           <CustomToolTip
             title={i18n.t("connections.toolTips.disconnected.title")}
             content={i18n.t("connections.toolTips.disconnected.content")}
@@ -386,7 +389,7 @@ const AllConnections = () => {
         {whatsApp.status === "OPENING" && (
           <CircularProgress size={24} className={classes.buttonProgress} />
         )}
-        {whatsApp.status === "qrcode" && (
+        {whatsApp.status === "qrcode" && isBaileys && (
           <CustomToolTip
             title={i18n.t("connections.toolTips.qrcode.title")}
             content={i18n.t("connections.toolTips.qrcode.content")}

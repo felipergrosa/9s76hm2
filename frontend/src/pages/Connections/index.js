@@ -37,6 +37,7 @@ import {
   Facebook,
   Instagram,
   WhatsApp,
+  MoreVert,
 } from "@material-ui/icons";
 
 import FacebookLogin from "react-facebook-login/dist/facebook-login-render-props";
@@ -158,7 +159,9 @@ const Connections = () => {
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [selectedWhatsApp, setSelectedWhatsApp] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [metaMenuAnchorEl, setMetaMenuAnchorEl] = useState(null);
   const history = useHistory();
+
   const confirmationModalInitialState = {
     action: "",
     title: "",
@@ -280,6 +283,14 @@ const Connections = () => {
     setWhatsAppModalOpen(true);
   };
 
+  const handleOpenMetaMenu = (event) => {
+    setMetaMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleCloseMetaMenu = () => {
+    setMetaMenuAnchorEl(null);
+  };
+
   const openInNewTab = url => {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
@@ -396,9 +407,11 @@ const Connections = () => {
   };
 
   const renderActionButtons = (whatsApp) => {
+    const isBaileys = !whatsApp.channelType || whatsApp.channelType === "baileys";
+
     return (
       <>
-        {whatsApp.status === "qrcode" && (
+        {whatsApp.status === "qrcode" && isBaileys && (
           <Can
             role={user.profile === "user" && user.allowConnections === "enabled" ? "admin" : user.profile}
             perform="connections-page:addConnection"
@@ -426,16 +439,20 @@ const Connections = () => {
                   color="primary"
                   onClick={() => handleStartWhatsAppSession(whatsApp.id)}
                 >
-                  {i18n.t("connections.buttons.tryAgain")}
+                  {isBaileys
+                    ? i18n.t("connections.buttons.tryAgain")
+                    : "Recarregar Conexão"}
                 </Button>{" "}
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="secondary"
-                  onClick={() => handleRequestNewQrCode(whatsApp.id)}
-                >
-                  {i18n.t("connections.buttons.newQr")}
-                </Button>
+                {isBaileys && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    onClick={() => handleRequestNewQrCode(whatsApp.id)}
+                  >
+                    {i18n.t("connections.buttons.newQr")}
+                  </Button>
+                )}
               </>
             )}
           />
@@ -474,9 +491,12 @@ const Connections = () => {
   };
 
   const renderStatusToolTips = (whatsApp) => {
+    const isBaileys = !whatsApp.channelType || whatsApp.channelType === "baileys";
+
     return (
       <div className={classes.customTableCell}>
-        {whatsApp.status === "DISCONNECTED" && (
+        {(whatsApp.status === "DISCONNECTED" ||
+          (whatsApp.status === "qrcode" && !isBaileys)) && (
           <CustomToolTip
             title={i18n.t("connections.toolTips.disconnected.title")}
             content={i18n.t("connections.toolTips.disconnected.content")}
@@ -487,7 +507,7 @@ const Connections = () => {
         {whatsApp.status === "OPENING" && (
           <CircularProgress size={24} className={classes.buttonProgress} />
         )}
-        {whatsApp.status === "qrcode" && (
+        {whatsApp.status === "qrcode" && isBaileys && (
           <CustomToolTip
             title={i18n.t("connections.toolTips.qrcode.title")}
             content={i18n.t("connections.toolTips.qrcode.content")}
@@ -544,6 +564,76 @@ const Connections = () => {
         onClose={handleCloseWhatsAppModal}
         whatsAppId={!qrModalOpen && selectedWhatsApp?.id}
       />
+      <Menu
+        anchorEl={metaMenuAnchorEl}
+        open={Boolean(metaMenuAnchorEl)}
+        onClose={handleCloseMetaMenu}
+      >
+        <MenuItem
+          onClick={() => {
+            openInNewTab("https://business.facebook.com/");
+            handleCloseMetaMenu();
+          }}
+        >
+          Meta Business Manager
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            openInNewTab("https://business.facebook.com/settings");
+            handleCloseMetaMenu();
+          }}
+        >
+          Configurações do Business Manager
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            openInNewTab("https://developers.facebook.com/apps");
+            handleCloseMetaMenu();
+          }}
+        >
+          Meta for Developers (Apps)
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            openInNewTab("https://business.facebook.com/wa/manage/phone-numbers/");
+            handleCloseMetaMenu();
+          }}
+        >
+          Gestor do WhatsApp - Números de telefone
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            openInNewTab("https://business.facebook.com/wa/manage/home");
+            handleCloseMetaMenu();
+          }}
+        >
+          Gestor do WhatsApp (Home)
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            openInNewTab("https://developers.facebook.com/docs/whatsapp/cloud-api/get-started");
+            handleCloseMetaMenu();
+          }}
+        >
+          Documentação Oficial da WhatsApp Cloud API
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            openInNewTab("https://developers.facebook.com/docs/whatsapp/pricing");
+            handleCloseMetaMenu();
+          }}
+        >
+          Preços da WhatsApp Cloud API
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            openInNewTab("https://business.facebook.com/wa/manage/message-templates");
+            handleCloseMetaMenu();
+          }}
+        >
+          Gerenciar Templates de Mensagem
+        </MenuItem>
+      </Menu>
       {user.profile === "user" && user.allowConnections === "disabled" ?
         <ForbiddenPage />
         :
@@ -733,16 +823,16 @@ const Connections = () => {
                             <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
                               <span>{whatsApp.name}</span>
                               {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
-                                <Chip 
-                                  label="API Oficial" 
-                                  color="primary" 
+                                <Chip
+                                  label="API Oficial"
+                                  color="primary"
                                   size="small"
                                   style={{ fontSize: '0.7rem', height: '20px' }}
                                 />
                               )}
                               {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "baileys" && (
-                                <Chip 
-                                  label="Baileys" 
+                                <Chip
+                                  label="Baileys"
                                   size="small"
                                   variant="outlined"
                                   style={{ fontSize: '0.7rem', height: '20px' }}
@@ -772,6 +862,18 @@ const Connections = () => {
                                 >
                                   <Edit />
                                 </IconButton>
+
+                                {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation && e.stopPropagation();
+                                      handleOpenMetaMenu(e);
+                                    }}
+                                  >
+                                    <MoreVert />
+                                  </IconButton>
+                                )}
 
                                 <IconButton
                                   size="small"

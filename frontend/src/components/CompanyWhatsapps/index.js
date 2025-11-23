@@ -262,9 +262,12 @@ const WhatsAppModalCompany = ({
   };
 
   const renderStatusToolTips = whatsApp => {
+    const isBaileys = !whatsApp.channelType || whatsApp.channelType === "baileys";
+
     return (
       <div className={classes.customTableCell}>
-        {whatsApp.status === "DISCONNECTED" && (
+        {(whatsApp.status === "DISCONNECTED" ||
+          (whatsApp.status === "qrcode" && !isBaileys)) && (
           <CustomToolTip
             title={i18n.t("connections.toolTips.disconnected.title")}
             content={i18n.t("connections.toolTips.disconnected.content")}
@@ -275,7 +278,7 @@ const WhatsAppModalCompany = ({
         {whatsApp.status === "OPENING" && (
           <CircularProgress size={24} className={classes.buttonProgress} />
         )}
-        {whatsApp.status === "qrcode" && (
+        {whatsApp.status === "qrcode" && isBaileys && (
           <CustomToolTip
             title={i18n.t("connections.toolTips.qrcode.title")}
             content={i18n.t("connections.toolTips.qrcode.content")}
@@ -301,9 +304,11 @@ const WhatsAppModalCompany = ({
   };
 
   const renderActionButtons = whatsApp => {
+    const isBaileys = !whatsApp.channelType || whatsApp.channelType === "baileys";
+
     return (
       <>
-        {whatsApp.status === "qrcode" && (
+        {whatsApp.status === "qrcode" && isBaileys && (
           <Button
             size="small"
             variant="contained"
@@ -321,16 +326,20 @@ const WhatsAppModalCompany = ({
               color="primary"
               onClick={() => handleStartWhatsAppSession(whatsApp.id)}
             >
-              {i18n.t("connections.buttons.tryAgain")}
+              {isBaileys
+                ? i18n.t("connections.buttons.tryAgain")
+                : "Recarregar Conexão"}
             </Button>{" "}
-            <Button
-              size="small"
-              variant="outlined"
-              color="secondary"
-              onClick={() => handleRequestNewQrCode(whatsApp.id)}
-            >
-              {i18n.t("connections.buttons.newQr")}
-            </Button>
+            {isBaileys && (
+              <Button
+                size="small"
+                variant="outlined"
+                color="secondary"
+                onClick={() => handleRequestNewQrCode(whatsApp.id)}
+              >
+                {i18n.t("connections.buttons.newQr")}
+              </Button>
+            )}
           </>
         )}
         {(whatsApp.status === "CONNECTED" ||

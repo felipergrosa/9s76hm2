@@ -28,7 +28,8 @@ import {
   Tabs,
   Paper,
   Box,
-  Typography
+  Typography,
+  Avatar
 } from "@material-ui/core";
 
 import api from "../../services/api";
@@ -189,7 +190,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
   const [showIntegrations, setShowIntegrations] = useState(false);
   const { user } = useContext(AuthContext);
 
-
+  const backendUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
 
   const [schedules, setSchedules] = useState([
     { weekday: i18n.t("queueModal.serviceHours.monday"), weekdayEn: "monday", startTimeA: "08:00", endTimeA: "12:00", startTimeB: "13:00", endTimeB: "18:00", },
@@ -567,9 +568,19 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                 >
                   <DialogContent dividers>
                     {attachmentName && (
-                      <div
-                        style={{ display: "flex", flexDirection: "row-reverse" }}
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        mb={1}
                       >
+                        {whatsApp.greetingMediaAttachment && (
+                          <Avatar
+                            variant="rounded"
+                            src={`${backendUrl}/public/company${user.companyId}/${whatsApp.greetingMediaAttachment}`}
+                            style={{ width: 56, height: 56 }}
+                          />
+                        )}
                         <Button
                           variant="outlined"
                           color="primary"
@@ -578,7 +589,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                         >
                           {attachmentName}
                         </Button>
-                      </div>
+                      </Box>
                     )}
                     <div
                       style={{ display: "flex", flexDirection: "column-reverse" }}
@@ -599,83 +610,15 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                       </Button>
                     </div>
 
-                    {/* NOME E PADRÃO */}
-                    <div className={classes.multFieldLine}>
-                      <Grid spacing={2} container>
-                        <Grid item>
-                          <Field
-                            as={TextField}
-                            label={i18n.t("whatsappModal.form.name")}
-                            autoFocus
-                            name="name"
-                            error={touched.name && Boolean(errors.name)}
-                            helperText={touched.name && errors.name}
-                            variant="outlined"
-                            margin="dense"
-                            className={classes.textField}
-                          />
-                        </Grid>
-                        <Grid style={{ paddingTop: 15 }} item>
-                          <FormControlLabel
-                            control={
-                              <Field
-                                as={Switch}
-                                color="primary"
-                                name="isDefault"
-                                checked={values.isDefault}
-                              />
-                            }
-                            label={i18n.t("whatsappModal.form.default")}
-                          />
-                          <FormControlLabel
-                            control={
-                              <Field
-                                as={Switch}
-                                color="primary"
-                                name="allowGroup"
-                                checked={values.allowGroup}
-                              />
-                            }
-                            label={i18n.t("whatsappModal.form.group")}
-                          />
-                        </Grid>
-                        <Grid xs={6} md={4} item>
-                          <FormControl
-                            variant="outlined"
-                            margin="dense"
-                            fullWidth
-                            className={classes.formControl}
-                          >
-                            <InputLabel id="groupAsTicket-selection-label">
-                              {i18n.t("whatsappModal.form.groupAsTicket")}
-                            </InputLabel>
-                            <Field
-                              as={Select}
-                              label={i18n.t("whatsappModal.form.groupAsTicket")}
-                              placeholder={i18n.t("whatsappModal.form.groupAsTicket")}
-                              labelId="groupAsTicket-selection-label"
-                              id="groupAsTicket"
-                              name="groupAsTicket"
-                            >
-                              <MenuItem value={"disabled"}>
-                                {i18n.t("whatsappModal.menuItem.disabled")}
-                              </MenuItem>
-                              <MenuItem value={"enabled"}>
-                                {i18n.t("whatsappModal.menuItem.enabled")}
-                              </MenuItem>
-                            </Field>
-                          </FormControl>
-                        </Grid>
-                      </Grid>
-                    </div>
-
-                    {/* SELETOR DE TIPO DE CANAL */}
-                    <Divider style={{ margin: "20px 0" }} />
-                    <Typography variant="h6" gutterBottom>
-                      Tipo de Conexão
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} md={6}>
+                    {/* PRIMEIRA LINHA: Tipo de Conexão | Nome | Padrão | Permitir grupos | Tratar grupos como tickets */}
+                    <Grid
+                      container
+                      spacing={2}
+                      alignItems="center"
+                      style={{ marginTop: 16 }}
+                    >
+                      {/* Tipo de Conexão */}
+                      <Grid item xs={12} md={3}>
                         <FormControl
                           variant="outlined"
                           margin="dense"
@@ -702,6 +645,79 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                           </Field>
                         </FormControl>
                       </Grid>
+
+                      {/* Nome */}
+                      <Grid item xs={12} md={3}>
+                        <Field
+                          as={TextField}
+                          label={i18n.t("whatsappModal.form.name")}
+                          autoFocus
+                          name="name"
+                          error={touched.name && Boolean(errors.name)}
+                          helperText={touched.name && errors.name}
+                          variant="outlined"
+                          margin="dense"
+                          fullWidth
+                        />
+                      </Grid>
+
+                      {/* Padrão */}
+                      <Grid item xs={12} md={2}>
+                        <FormControlLabel
+                          control={
+                            <Field
+                              as={Switch}
+                              color="primary"
+                              name="isDefault"
+                              checked={values.isDefault}
+                            />
+                          }
+                          label={i18n.t("whatsappModal.form.default")}
+                        />
+                      </Grid>
+
+                      {/* Permitir grupos */}
+                      <Grid item xs={12} md={2}>
+                        <FormControlLabel
+                          control={
+                            <Field
+                              as={Switch}
+                              color="primary"
+                              name="allowGroup"
+                              checked={values.allowGroup}
+                            />
+                          }
+                          label={i18n.t("whatsappModal.form.group")}
+                        />
+                      </Grid>
+
+                      {/* Tratar grupos como tickets */}
+                      <Grid item xs={12} md={2}>
+                        <FormControl
+                          variant="outlined"
+                          margin="dense"
+                          fullWidth
+                        >
+                          <InputLabel id="groupAsTicket-selection-label">
+                            {i18n.t("whatsappModal.form.groupAsTicket")}
+                          </InputLabel>
+                          <Field
+                            as={Select}
+                            label={i18n.t("whatsappModal.form.groupAsTicket")}
+                            placeholder={i18n.t("whatsappModal.form.groupAsTicket")}
+                            labelId="groupAsTicket-selection-label"
+                            id="groupAsTicket"
+                            name="groupAsTicket"
+                          >
+                            <MenuItem value={"disabled"}>
+                              {i18n.t("whatsappModal.menuItem.disabled")}
+                            </MenuItem>
+                            <MenuItem value={"enabled"}>
+                              {i18n.t("whatsappModal.menuItem.enabled")}
+                            </MenuItem>
+                          </Field>
+                        </FormControl>
+                      </Grid>
                     </Grid>
 
                     {/* CAMPOS DA API OFICIAL - Mostrar apenas se oficial */}
@@ -716,213 +732,217 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                       </>
                     )}
 
-                    <Divider style={{ margin: "20px 0" }} />
+                    {/* IMPORTAÇÃO DE MENSAGENS E TOKEN - apenas para Baileys */}
+                    {values.channelType !== "official" && (
+                      <>
+                        <Divider style={{ margin: "20px 0" }} />
 
-                    <div className={classes.importMessage}>
-                      <div className={classes.multFieldLine}>
-                        <FormControlLabel
-                          style={{ marginRight: 7, color: "gray" }}
-                          label={i18n.t("whatsappModal.form.importOldMessagesEnable")}
-                          labelPlacement="end"
-                          control={
-                            <Switch
-                              size="medium"
-                              checked={enableImportMessage}
-                              onChange={handleEnableImportMessage}
-                              name="importOldMessagesEnable"
-                              color="primary"
-                            />
-                          }
-                        />
-
-                        {enableImportMessage ? (
-                          <>
+                        <div className={classes.importMessage}>
+                          <div className={classes.multFieldLine}>
                             <FormControlLabel
                               style={{ marginRight: 7, color: "gray" }}
-                              label={i18n.t(
-                                "whatsappModal.form.importOldMessagesGroups"
-                              )}
+                              label={i18n.t("whatsappModal.form.importOldMessagesEnable")}
                               labelPlacement="end"
                               control={
                                 <Switch
                                   size="medium"
-                                  checked={importOldMessagesGroups}
-                                  onChange={(e) =>
-                                    setImportOldMessagesGroups(e.target.checked)
-                                  }
-                                  name="importOldMessagesGroups"
+                                  checked={enableImportMessage}
+                                  onChange={handleEnableImportMessage}
+                                  name="importOldMessagesEnable"
                                   color="primary"
                                 />
                               }
                             />
 
-                            <FormControlLabel
-                              style={{ marginRight: 7, color: "gray" }}
-                              label={i18n.t(
-                                "whatsappModal.form.closedTicketsPostImported"
-                              )}
-                              labelPlacement="end"
-                              control={
-                                <Switch
-                                  size="medium"
-                                  checked={closedTicketsPostImported}
-                                  onChange={(e) =>
-                                    setClosedTicketsPostImported(e.target.checked)
+                            {enableImportMessage ? (
+                              <>
+                                <FormControlLabel
+                                  style={{ marginRight: 7, color: "gray" }}
+                                  label={i18n.t(
+                                    "whatsappModal.form.importOldMessagesGroups"
+                                  )}
+                                  labelPlacement="end"
+                                  control={
+                                    <Switch
+                                      size="medium"
+                                      checked={importOldMessagesGroups}
+                                      onChange={(e) =>
+                                        setImportOldMessagesGroups(e.target.checked)
+                                      }
+                                      name="importOldMessagesGroups"
+                                      color="primary"
+                                    />
                                   }
-                                  name="closedTicketsPostImported"
-                                  color="primary"
                                 />
-                              }
-                            />
-                          </>
-                        ) : null}
-                      </div>
 
-                      {enableImportMessage ? (
-                        <Grid style={{ marginTop: 18 }} container spacing={1}>
-                          <Grid item xs={6}>
+                                <FormControlLabel
+                                  style={{ marginRight: 7, color: "gray" }}
+                                  label={i18n.t(
+                                    "whatsappModal.form.closedTicketsPostImported"
+                                  )}
+                                  labelPlacement="end"
+                                  control={
+                                    <Switch
+                                      size="medium"
+                                      checked={closedTicketsPostImported}
+                                      onChange={(e) =>
+                                        setClosedTicketsPostImported(e.target.checked)
+                                      }
+                                      name="closedTicketsPostImported"
+                                      color="primary"
+                                    />
+                                  }
+                                />
+                              </>
+                            ) : null}
+                          </div>
+
+                          {enableImportMessage ? (
+                            <Grid style={{ marginTop: 18 }} container spacing={1}>
+                              <Grid item xs={6}>
+                                <Field
+                                  fullWidth
+                                  as={TextField}
+                                  label={i18n.t("whatsappModal.form.importOldMessages")}
+                                  type="datetime-local"
+                                  name="importOldMessages"
+                                  inputProps={{
+                                    max: moment()
+                                      .add(0, "minutes")
+                                      .format("YYYY-MM-DDTHH:mm"),
+                                    min: moment()
+                                      .add(-2, "years")
+                                      .format("YYYY-MM-DDTHH:mm"),
+                                  }}
+                                  InputLabelProps={{
+                                    shrink: true,
+                                  }}
+                                  error={
+                                    touched.importOldMessages &&
+                                    Boolean(errors.importOldMessages)
+                                  }
+                                  helperText={
+                                    touched.importOldMessages && errors.importOldMessages
+                                  }
+                                  variant="outlined"
+                                  value={moment(importOldMessages).format(
+                                    "YYYY-MM-DDTHH:mm"
+                                  )}
+                                  onChange={(e) => {
+                                    setImportOldMessages(e.target.value);
+                                  }}
+                                />
+                              </Grid>
+                              <Grid item xs={6}>
+                                <Field
+                                  fullWidth
+                                  as={TextField}
+                                  label={i18n.t("whatsappModal.form.importRecentMessages")}
+                                  type="datetime-local"
+                                  name="importRecentMessages"
+                                  inputProps={{
+                                    max: moment()
+                                      .add(0, "minutes")
+                                      .format("YYYY-MM-DDTHH:mm"),
+                                    min: moment(importOldMessages).format(
+                                      "YYYY-MM-DDTHH:mm"
+                                    ),
+                                  }}
+                                  InputLabelProps={{
+                                    shrink: true,
+                                  }}
+                                  error={
+                                    touched.importRecentMessages &&
+                                    Boolean(errors.importRecentMessages)
+                                  }
+                                  helperText={
+                                    touched.importRecentMessages && errors.importRecentMessages
+                                  }
+                                  variant="outlined"
+                                  value={moment(importRecentMessages).format(
+                                    "YYYY-MM-DDTHH:mm"
+                                  )}
+                                  onChange={(e) => {
+                                    setImportRecentMessages(e.target.value);
+                                  }}
+                                />
+                              </Grid>
+                              <Grid xs={12} md={12} xl={12} item>
+                                <FormControl
+                                  variant="outlined"
+                                  margin="dense"
+                                  className={classes.FormControl}
+                                  fullWidth
+                                >
+                                  <InputLabel id="queueIdImportMessages-selection-label">
+                                    {i18n.t("whatsappModal.form.queueIdImportMessages")}
+                                  </InputLabel>
+                                  <Field
+                                    as={Select}
+                                    name="queueIdImportMessages"
+                                    id="queueIdImportMessages"
+                                    value={values.queueIdImportMessages || "0"}
+                                    required={enableImportMessage}
+                                    label={i18n.t("whatsappModal.form.queueIdImportMessages")}
+                                    placeholder={i18n.t("whatsappModal.form.queueIdImportMessages")}
+                                    labelId="queueIdImportMessages-selection-label"
+                                  >
+                                    <MenuItem value={0}>&nbsp;</MenuItem>
+                                    {queues.map(queue => (
+                                      <MenuItem key={queue.id} value={queue.id}>
+                                        {queue.name}
+                                      </MenuItem>
+                                    ))}
+                                  </Field>
+                                </FormControl>
+                              </Grid>
+                            </Grid>
+                          ) : null}
+                        </div>
+                        {enableImportMessage && (
+                          <span style={{ color: "red" }}>
+                            {i18n.t("whatsappModal.form.importAlert")}
+                          </span>
+                        )}
+
+                        {/* TOKEN */}
+                        <Box display="flex" alignItems="center">
+                          <Grid xs={6} md={12} item>
                             <Field
-                              fullWidth
                               as={TextField}
-                              label={i18n.t("whatsappModal.form.importOldMessages")}
-                              type="datetime-local"
-                              name="importOldMessages"
-                              inputProps={{
-                                max: moment()
-                                  .add(0, "minutes")
-                                  .format("YYYY-MM-DDTHH:mm"),
-                                min: moment()
-                                  .add(-2, "years")
-                                  .format("YYYY-MM-DDTHH:mm"),
-                              }}
-                              InputLabelProps={{
-                                shrink: true,
-                              }}
-                              error={
-                                touched.importOldMessages &&
-                                Boolean(errors.importOldMessages)
-                              }
-                              helperText={
-                                touched.importOldMessages && errors.importOldMessages
-                              }
-                              variant="outlined"
-                              value={moment(importOldMessages).format(
-                                "YYYY-MM-DDTHH:mm"
-                              )}
-                              onChange={(e) => {
-                                setImportOldMessages(e.target.value);
-                              }}
-                            />
-                          </Grid>
-                          <Grid item xs={6}>
-                            <Field
+                              label={i18n.t("whatsappModal.form.token")}
+                              type="token"
                               fullWidth
-                              as={TextField}
-                              label={i18n.t("whatsappModal.form.importRecentMessages")}
-                              type="datetime-local"
-                              name="importRecentMessages"
-                              inputProps={{
-                                max: moment()
-                                  .add(0, "minutes")
-                                  .format("YYYY-MM-DDTHH:mm"),
-                                min: moment(importOldMessages).format(
-                                  "YYYY-MM-DDTHH:mm"
-                                ),
-                              }}
-                              InputLabelProps={{
-                                shrink: true,
-                              }}
-                              error={
-                                touched.importRecentMessages &&
-                                Boolean(errors.importRecentMessages)
-                              }
-                              helperText={
-                                touched.importRecentMessages && errors.importRecentMessages
-                              }
-                              variant="outlined"
-                              value={moment(importRecentMessages).format(
-                                "YYYY-MM-DDTHH:mm"
-                              )}
-                              onChange={(e) => {
-                                setImportRecentMessages(e.target.value);
-                              }}
-                            />
-                          </Grid>
-                          <Grid xs={12} md={12} xl={12} item>
-                            <FormControl
+                              value={autoToken}
                               variant="outlined"
                               margin="dense"
-                              className={classes.FormControl}
-                              fullWidth
-                            >
-                              <InputLabel id="queueIdImportMessages-selection-label">
-                                {i18n.t("whatsappModal.form.queueIdImportMessages")}
-                              </InputLabel>
-                              <Field
-                                as={Select}
-                                name="queueIdImportMessages"
-                                id="queueIdImportMessages"
-                                value={values.queueIdImportMessages || "0"}
-                                required={enableImportMessage}
-                                label={i18n.t("whatsappModal.form.queueIdImportMessages")}
-                                placeholder={i18n.t("whatsappModal.form.queueIdImportMessages")}
-                                labelId="queueIdImportMessages-selection-label"
-                              >
-                                <MenuItem value={0}>&nbsp;</MenuItem>
-                                {queues.map(queue => (
-                                  <MenuItem key={queue.id} value={queue.id}>
-                                    {queue.name}
-                                  </MenuItem>
-                                ))}
-                              </Field>
-                            </FormControl>
+                              disabled
+                            />
                           </Grid>
-                        </Grid>
-                      ) : null}
-                    </div>
-                    {enableImportMessage && (
-                      <span style={{ color: "red" }}>
-                        {i18n.t("whatsappModal.form.importAlert")}
-                      </span>
+                          <Button
+                            onClick={handleRefreshToken}
+                            disabled={isSubmitting}
+                            className={classes.tokenRefresh}
+                            variant="text"
+                            startIcon={
+                              <Autorenew
+                                style={{ marginLeft: 5, color: "green" }}
+                              />
+                            }
+                          />
+                          <Button
+                            onClick={handleCopyToken}
+                            className={classes.tokenRefresh}
+                            variant="text"
+                            startIcon={
+                              <FileCopy
+                                style={{ color: copied ? "blue" : "inherit" }}
+                              />
+                            }
+                          />
+                        </Box>
+                      </>
                     )}
-
-                    {/* TOKEN */}
-                    <Box display="flex" alignItems="center">
-                      <Grid xs={6} md={12} item>
-                        <Field
-                          as={TextField}
-                          label={i18n.t("whatsappModal.form.token")}
-                          type="token"
-                          fullWidth
-                          value={autoToken}
-                          variant="outlined"
-                          margin="dense"
-                          disabled
-                        />
-                      </Grid>
-                      <Button
-                        onClick={handleRefreshToken}
-                        disabled={isSubmitting}
-                        className={classes.tokenRefresh}
-                        variant="text"
-                        startIcon={
-                          <Autorenew
-                            style={{ marginLeft: 5, color: "green" }}
-                          />
-                        }
-                      />
-                      <Button
-                        onClick={handleCopyToken}
-                        className={classes.tokenRefresh}
-                        variant="text"
-                        startIcon={
-                          <FileCopy
-                            style={{ color: copied ? "blue" : "inherit" }}
-                          />
-                        }
-                      />
-                    </Box>
-
                     <div>
                       <h3>{i18n.t("whatsappModal.form.queueRedirection")}</h3>
                       <p>{i18n.t("whatsappModal.form.queueRedirectionDesc")}</p>
@@ -997,6 +1017,29 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                   name={"integrations"}
                 >
                   <DialogContent dividers>
+                    <Box
+                      mb={2}
+                      p={2}
+                      borderRadius={4}
+                      style={{ backgroundColor: "rgba(0,0,0,0.03)" }}
+                    >
+                      <Typography variant="subtitle2">
+                        Integrações e filas desta conexão
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        <strong>Filas:</strong> escolha em quais filas esta conexão poderá
+                        receber atendimentos. Todos os tickets que entrarem por este
+                        número serão distribuídos apenas entre as filas selecionadas.
+                        <br />
+                        <strong>Integração:</strong> vincule uma integração externa
+                        (por exemplo, chatbot, CRM ou automação) que será utilizada
+                        somente para esta conexão.
+                        <br />
+                        <strong>Prompt:</strong> selecione o prompt de IA padrão que
+                        será usado para as respostas automáticas desta conexão
+                        (quando o seu plano incluir IA).
+                      </Typography>
+                    </Box>
                     {/* FILAS */}
                     <QueueSelect
                       selectedQueueIds={selectedQueueIds}
@@ -1021,8 +1064,9 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                           variant="outlined"
                           margin="dense"
                           placeholder={i18n.t("queueModal.form.integrationId")}
-                          labelId="integrationId-selection-label"                        >
-                          <MenuItem value={null} >{"Desabilitado"}</MenuItem>
+                          labelId="integrationId-selection-label"
+                        >
+                          <MenuItem value={null}>{"Desabilitado"}</MenuItem>
                           {integrations.map((integration) => (
                             <MenuItem key={integration.id} value={integration.id}>
                               {integration.name}
@@ -1061,10 +1105,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                           }}
                         >
                           {prompts.map((prompt) => (
-                            <MenuItem
-                              key={prompt.id}
-                              value={prompt.id}
-                            >
+                            <MenuItem key={prompt.id} value={prompt.id}>
                               {prompt.name}
                             </MenuItem>
                           ))}
@@ -1079,6 +1120,34 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                   name={"messages"}
                 >
                   <DialogContent dividers>
+                    <Box
+                      mb={2}
+                      p={2}
+                      borderRadius={4}
+                      style={{ backgroundColor: "rgba(0,0,0,0.03)" }}
+                    >
+                      <Typography variant="subtitle2">
+                        Mensagens automáticas desta conexão
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        <strong>Mensagem de saudação:</strong> enviada
+                        automaticamente quando o cliente fala com este número pela
+                        primeira vez. Se houver uma imagem configurada na aba
+                        Geral, ela será enviada junto com essa mensagem.
+                        <br />
+                        <strong>Mensagem de conclusão:</strong> enviada quando o
+                        atendente encerra manualmente o atendimento, agradecendo e
+                        finalizando a conversa.
+                        <br />
+                        <strong>Mensagem de fora de expediente:</strong> enviada
+                        somente quando o cliente envia mensagem fora do horário de
+                        funcionamento definido na aba de horários.
+                        <br />
+                        <strong>Mensagem de férias coletivas:</strong> substitui as
+                        mensagens automáticas normais apenas durante o período
+                        definido pelas datas de início e fim de férias.
+                      </Typography>
+                    </Box>
                     {/* MENSAGEM DE SAUDAÇÃO */}
                     <Grid container spacing={1}>
                       <Grid item xs={12} md={12} xl={12}>
@@ -1216,7 +1285,44 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                   name={"chatbot"}
                 >
                   <DialogContent dividers>
+                    <Box
+                      mb={2}
+                      p={2}
+                      borderRadius={4}
+                      style={{ backgroundColor: "rgba(0,0,0,0.03)" }}
+                    >
+                      <Typography variant="subtitle2">
+                        Comportamento do chatbot
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        <strong>Tempo para criar novo ticket:</strong> após esse
+                        tempo sem contato, uma nova mensagem do cliente gera um
+                        ticket novo em vez de reutilizar o anterior.
+                        <br />
+                        <strong>Qtd. máxima de vezes do chatbot:</strong> limita
+                        quantas vezes o fluxo do chatbot pode ser reenviado para o
+                        mesmo cliente, evitando mensagens repetitivas.
+                        <br />
+                        <strong>Tempo para envio do chatbot:</strong> define após
+                        quantos segundos/minutos sem resposta humana o chatbot é
+                        disparado automaticamente.
+                        <br />
+                        <strong>Encerrar chats abertos após X horas:</strong>
+                        encerra automaticamente tickets que ficaram sem resposta
+                        durante o período configurado.
+                        <br />
+                        <strong>Quando encerrar o ticket:</strong> define se o
+                        fechamento considera a última mensagem do bot ou do
+                        cliente.
+                        <br />
+                        <strong>Mensagem por inatividade e tempo de
+                        inatividade:</strong> permitem enviar um aviso automático
+                        avisando o cliente que o atendimento será encerrado caso
+                        ele não responda em X minutos.
+                      </Typography>
+                    </Box>
                     <Grid spacing={2} container>
+
                       {/* TEMPO PARA CRIAR NOVO TICKET */}
                       <Grid xs={6} md={4} item>
                         <Field
@@ -1259,6 +1365,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                       </Grid>
                     </Grid>
                     <Grid spacing={2} container>
+
                       {/* ENCERRAR CHATS ABERTOS APÓS X HORAS */}
                       <Grid xs={6} md={6} item>
                         <Field
@@ -1350,6 +1457,29 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                   name={"nps"}
                 >
                   <DialogContent dividers>
+                    <Box
+                      mb={2}
+                      p={2}
+                      borderRadius={4}
+                      style={{ backgroundColor: "rgba(0,0,0,0.03)" }}
+                    >
+                      <Typography variant="subtitle2">
+                        Pesquisa de satisfação (NPS)
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        <strong>Mensagem de avaliação:</strong> texto enviado ao
+                        cliente pedindo que ele avalie o atendimento (ex.: de 0 a
+                        10).
+                        <br />
+                        <strong>Qtd. máxima de disparos:</strong> quantas vezes o
+                        NPS pode ser enviado para o mesmo cliente dentro de um
+                        período, evitando pesquisas em excesso.
+                        <br />
+                        <strong>Encerrar chat de avaliação após X minutos:</strong>
+                        define em quanto tempo, sem resposta do cliente, o ticket
+                        de avaliação será encerrado automaticamente.
+                      </Typography>
+                    </Box>
                     {/* MENSAGEM DE AVALIAÇAO*/}
                     <div>
                       <Field
@@ -1401,7 +1531,29 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                       value={tab}
                       name={"flowbuilder"}
                     >
+                      <Box
+                        mb={2}
+                        p={2}
+                        borderRadius={4}
+                        style={{ backgroundColor: "rgba(0,0,0,0.03)" }}
+                      >
+                        <Typography variant="subtitle2">
+                          Fluxos automáticos no Flowbuilder
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          <strong>Fluxo de boas-vindas:</strong> disparado somente
+                          para novos contatos (números que ainda não possuem
+                          histórico de atendimento no sistema), logo após a
+                          primeira mensagem recebida.
+                          <br />
+                          <strong>Fluxo de resposta padrão:</strong> utilizado
+                          quando nenhuma palavra-chave de fluxo é reconhecida ou
+                          quando o atendimento já foi encerrado, garantindo que o
+                          cliente sempre receba uma resposta automática.
+                        </Typography>
+                      </Box>
                       <DialogContent>
+
                         <h3>Fluxo de boas vindas</h3>
                         <p>Este fluxo é disparado apenas para novos contatos, pessoas que voce não possui em sua lista de contatos e que mandaram uma mensagem
                         </p>
