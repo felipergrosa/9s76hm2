@@ -319,6 +319,18 @@ export const handleOpenAi = async (
     limit: openAiSettings.maxMessages,
   });
 
+  // Debug: log total de mensagens encontradas
+  console.log("[IA][DEBUG] Mensagens buscadas do banco:", {
+    ticketId: ticket.id,
+    totalMessages: messages.length,
+    messages: messages.map(m => ({
+      id: m.id,
+      fromMe: m.fromMe,
+      mediaType: m.mediaType,
+      body: m.body?.substring(0, 50)
+    }))
+  });
+
   // Format system prompt
   const clientName = sanitizeName(contact.name || "Amigo(a)");
   const fantasyName = (contact as any)?.fantasyName || "";
@@ -350,9 +362,26 @@ export const handleOpenAi = async (
   
   Siga essas instruções com cuidado para garantir um atendimento claro, personalizado e amigável em todas as respostas.`;
 
+  // Debug: log do promptSystem gerado
+  console.log("[IA][DEBUG] PromptSystem gerado:", {
+    ticketId: ticket.id,
+    promptLength: promptSystem.length,
+    promptPreview: promptSystem.substring(0, 300)
+  });
+
   // Handle text message
   if (msg.message?.conversation || msg.message?.extendedTextMessage?.text) {
     const messagesAI = prepareMessagesAI(messages, isGeminiModel, promptSystem);
+
+    // Debug: log do histórico preparado para IA
+    console.log("[IA][DEBUG] Histórico preparado para IA:", {
+      ticketId: ticket.id,
+      totalInHistory: messagesAI.length,
+      history: messagesAI.map(m => ({
+        role: m.role,
+        content: m.content?.substring(0, 50)
+      }))
+    });
 
     try {
       let responseText: string | null = null;
