@@ -429,6 +429,22 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
   ): Promise<IWhatsAppMessage> {
     try {
       const recipient = to.replace(/\D/g, "");
+      
+      // IMPORTANTE:
+      // O endpoint /message_templates retorna "components" com campos como
+      // type/format/text/example/buttons, mas ESSE formato NÃO é o mesmo
+      // esperado na chamada de envio de template.
+      // Ao enviar, a Graph API espera "components" com "parameters" (type,text,image,...)
+      // e não aceita a chave "format" dentro de template.components[x].
+      // Como ainda não estamos montando parâmetros dinamicamente,
+      // é mais seguro NÃO enviar components aqui e deixar o template usar
+      // o conteúdo padrão aprovado no Business Manager.
+
+      if (components && components.length) {
+        logger.warn(
+          `[OfficialAPI] sendTemplate recebeu components, mas eles serão ignorados por enquanto para evitar erro de formato. Template=${templateName}`
+        );
+      }
 
       const payload = {
         messaging_product: "whatsapp",
@@ -439,8 +455,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
           name: templateName,
           language: {
             code: languageCode
-          },
-          components: components || []
+          }
         }
       };
 

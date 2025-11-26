@@ -1344,6 +1344,24 @@ async function handleDispatchCampaign(job) {
     // ===== Caminho API Oficial com Template Meta =====
     const useOfficialTemplate = isOfficial && hasMetaTemplate;
 
+    // Se conexão é API Oficial mas campanha não tem template Meta configurado,
+    // não podemos usar wbot (Baileys) e nem enviar mensagem livre sem controle.
+    // Nesses casos, marcamos o envio como falho com uma mensagem clara.
+    if (isOfficial && !useOfficialTemplate) {
+      const errorMsg = "Campanha com API Oficial requer template Meta configurado (metaTemplateName).";
+      logger.error(
+        `[DispatchCampaign] Conexão API Oficial (whatsappId=${selectedWhatsappId}) sem metaTemplateName configurado. Campanha=${campaignId}; Registro=${campaignShippingId}`
+      );
+      await campaignShipping.update({
+        status: 'failed',
+        attempts: (campaignShipping.attempts || 0) + 1,
+        lastError: errorMsg,
+        lastErrorAt: moment().toDate()
+      });
+      await verifyAndFinalizeCampaign(campaign);
+      return;
+    }
+
     if (useOfficialTemplate) {
       const templateName = (campaign as any).metaTemplateName as string;
       const languageCode = ((campaign as any).metaTemplateLanguage as string) || "pt_BR";
@@ -1536,7 +1554,21 @@ async function handleDispatchCampaign(job) {
       }
     }
     else {
-
+      // Não usar wbot (Baileys) para conexões API Oficial
+      if (isOfficial) {
+        const errorMsg = "Conexão API Oficial não suporta uso de wbot (Baileys).";
+        logger.error(
+          `[DispatchCampaign] Conexão API Oficial (whatsappId=${selectedWhatsappId}) não suporta uso de wbot (Baileys). Campanha=${campaignId}; Registro=${campaignShippingId}`
+        );
+        await campaignShipping.update({
+          status: 'failed',
+          attempts: (campaignShipping.attempts || 0) + 1,
+          lastError: errorMsg,
+          lastErrorAt: moment().toDate()
+        });
+        await verifyAndFinalizeCampaign(campaign);
+        return;
+      }
 
       if (campaign.confirmation && campaignShipping.confirmation === null) {
         await wbot.sendMessage(chatId, {
