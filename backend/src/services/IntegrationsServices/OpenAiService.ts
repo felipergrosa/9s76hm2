@@ -14,10 +14,14 @@ import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ResolveAIIntegrationService from "../IA/ResolveAIIntegrationService";
 import IAClientFactory from "../IA/IAClientFactory";
+import GetIntegrationByTypeService from "../QueueIntegrationServices/GetIntegrationByTypeService";
+import FindCompanySettingOneService from "../CompaniesSettings/FindCompanySettingOneService";
+import { search as ragSearch } from "../RAG/RAGSearchService";
 import Ticket from "../../models/Ticket";
 import Contact from "../../models/Contact";
 import Message from "../../models/Message";
 import TicketTraking from "../../models/TicketTraking";
+import Queue from "../../models/Queue";
 
 type Session = WASocket & {
   id?: number;
@@ -89,6 +93,69 @@ const prepareMessagesAI = (pastMessages: Message[], isGeminiModel: boolean, prom
   }
 
   return messagesAI;
+};
+
+const resolveRAGConfigForTicket = async (
+  ticket: Ticket
+): Promise<{ enabled: boolean; k: number; tags: string[]; tagsMode?: "AND" | "OR" }> => {
+  let ragEnabled = false;
+  let ragTopK = 4;
+  const tags: string[] = [];
+  let tagsMode: "AND" | "OR" = "AND";
+
+  try {
+    const queue = await Queue.findByPk(ticket.queueId as any);
+
+    // NOVO: Usar sistema de pastas vinculadas via QueueRAGSource
+    try {
+      const { default: ResolveTagsForQueueService } = await import("../QueueRAGSourceService/ResolveTagsForQueueService");
+      const queueTags = await ResolveTagsForQueueService({ queueId: queue!.id });
+
+      if (queueTags && queueTags.length > 0) {
+        tags.push(...queueTags);
+        tagsMode = "OR"; // Usar OR para buscar em múltiplas pastas
+        console.log(`[RAG] Using ${queueTags.length} tags from linked folders for queue ${queue!.id}`);
+      }
+    } catch (err) {
+      console.warn("[RAG] QueueRAGSourceService not available or no folders linked, falling back to ragCollection");
+    }
+
+    // FALLBACK: Backward compatibility com ragCollection (sistema antigo)
+    if (tags.length === 0) {
+      const collVal = (queue as any)?.ragCollection;
+      const coll = collVal ? String(collVal).trim() : "";
+      if (coll) {
+        tags.push(`collection:${coll}`);
+        console.log(`[RAG] Using legacy ragCollection: ${coll}`);
+      }
+    }
+  } catch { }
+
+  try {
+    const knowledge = await GetIntegrationByTypeService({ companyId: ticket.companyId, type: "knowledge" });
+    const j = (knowledge?.jsonContent || {}) as any;
+    const ve = j?.ragEnabled;
+    if (typeof ve === "boolean") ragEnabled = ve;
+    if (typeof ve === "string") ragEnabled = ["enabled", "true", "on", "1"].includes(ve.toLowerCase());
+    const k = Number(j?.ragTopK);
+    if (!isNaN(k) && k > 0) ragTopK = Math.min(20, Math.max(1, k));
+  } catch { }
+
+  try {
+    if (!ragEnabled) {
+      const en = await FindCompanySettingOneService({ companyId: ticket.companyId, column: "ragEnabled" });
+      const v2 = (en as any)?.[0]?.["ragEnabled"];
+      ragEnabled = String(v2 || "").toLowerCase() === "enabled";
+    }
+  } catch { }
+
+  try {
+    const rk = await FindCompanySettingOneService({ companyId: ticket.companyId, column: "ragTopK" });
+    const k2 = Number((rk as any)?.[0]?.["ragTopK"]);
+    if (!isNaN(k2)) ragTopK = Math.min(20, Math.max(1, k2));
+  } catch { }
+
+  return { enabled: ragEnabled, k: ragTopK, tags, tagsMode };
 };
 
 // Processes the AI response (text or audio)
@@ -245,7 +312,7 @@ export const handleOpenAi = async (
         hasIntegrationApiKey: !!cfg.apiKey,
         chosenSource: cfg.apiKey ? "integration" : (openAiSettings?.apiKey ? "prompt" : "none")
       });
-    } catch {}
+    } catch { }
 
     const model = openAiSettings?.model || cfg.model || (resolved?.provider === "gemini" ? "gemini-2.0-pro" : "gpt-4o-mini");
     const apiKey = cfg.apiKey || openAiSettings?.apiKey;
@@ -351,7 +418,7 @@ export const handleOpenAi = async (
     ? `\nDados conhecidos do cliente (CRM, quando disponíveis):\n${crmContextLines.join("\n")}\n`
     : "";
 
-  const promptSystem = `Instruções do Sistema:
+  let promptSystem = `Instruções do Sistema:
   - Use o nome ${clientName} nas respostas para que o cliente se sinta mais próximo e acolhido, sem exagerar nem repetir o nome em todas as frases.
   - Certifique-se de que a resposta tenha até ${openAiSettings.maxTokens} tokens e termine de forma completa, sem cortes.
   - Evite repetir sempre a mesma saudação em todas as mensagens. Depois da primeira interação, foque em responder diretamente ao que o cliente pediu na última mensagem.
@@ -361,6 +428,32 @@ export const handleOpenAi = async (
   ${openAiSettings.prompt}
   
   Siga essas instruções com cuidado para garantir um atendimento claro, personalizado e amigável em todas as respostas.`;
+  try {
+    const ragCfg = await resolveRAGConfigForTicket(ticket);
+    if (ragCfg.enabled && bodyMessage) {
+      const hits = await ragSearch({
+        companyId: ticket.companyId,
+        query: bodyMessage,
+        k: ragCfg.k,
+        tags: ragCfg.tags,
+        tagsMode: ragCfg.tagsMode
+      });
+      if (Array.isArray(hits) && hits.length) {
+        const context = hits.map((h, i) => `Fonte ${i + 1}:\n${h.content}`).join("\n\n");
+        promptSystem = `${promptSystem}\nUse, se relevante, as fontes a seguir (não invente fatos):\n${context}`;
+        try {
+          console.log("[IA][rag][retrieve][wbot]", {
+            companyId: ticket.companyId,
+            ticketId: ticket.id,
+            hits: hits.length,
+            k: ragCfg.k,
+            tags: ragCfg.tags,
+            tagsMode: ragCfg.tagsMode
+          });
+        } catch { }
+      }
+    }
+  } catch { }
 
   // Debug: log do promptSystem gerado
   console.log("[IA][DEBUG] PromptSystem gerado:", {
@@ -426,7 +519,7 @@ export const handleOpenAi = async (
           companyId: ticket.companyId,
           ticketId: ticket.id,
         });
-      } catch {}
+      } catch { }
 
       await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
     } catch (error: any) {
@@ -470,9 +563,9 @@ export const handleOpenAi = async (
           }
           const latency = Date.now() - t0;
           if (transcription) {
-            try { console.log("[IA][wbot][transcribe]", { provider: "openai", model: "whisper-1", latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+            try { console.log("[IA][wbot][transcribe]", { provider: "openai", model: "whisper-1", latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch { }
           }
-        } catch {}
+        } catch { }
 
         // Fallback para implementação antiga, se necessário
         if (!transcription && openai) {
@@ -485,7 +578,7 @@ export const handleOpenAi = async (
           transcription = transcriptionResult.text;
           const latency = Date.now() - t0;
           if (transcription) {
-            try { console.log("[IA][wbot][transcribe]", { provider: "openai", model: "whisper-1", latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+            try { console.log("[IA][wbot][transcribe]", { provider: "openai", model: "whisper-1", latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch { }
           }
         }
 
@@ -496,6 +589,33 @@ export const handleOpenAi = async (
           await verifyMessage(sentTranscriptMessage!, ticket, contact);
 
           messagesAI.push({ role: "user", content: transcription });
+
+          try {
+            const ragCfg = await resolveRAGConfigForTicket(ticket);
+            if (ragCfg.enabled) {
+              const hits = await ragSearch({
+                companyId: ticket.companyId,
+                query: transcription,
+                k: ragCfg.k,
+                tags: ragCfg.tags,
+                tagsMode: ragCfg.tagsMode
+              });
+              if (Array.isArray(hits) && hits.length) {
+                const context = hits.map((h, i) => `Fonte ${i + 1}:\n${h.content}`).join("\n\n");
+                promptSystem = `${promptSystem}\nUse, se relevante, as fontes a seguir (não invente fatos):\n${context}`;
+                try {
+                  console.log("[IA][rag][retrieve][wbot][audio]", {
+                    companyId: ticket.companyId,
+                    ticketId: ticket.id,
+                    hits: hits.length,
+                    k: ragCfg.k,
+                    tags: ragCfg.tags,
+                    tagsMode: ragCfg.tagsMode
+                  });
+                } catch { }
+              }
+            }
+          } catch { }
 
           // Responder ao usuário: tenta via Factory com histórico, fallback para método antigo
           try {
@@ -514,7 +634,7 @@ export const handleOpenAi = async (
             });
             if (responseText) {
               const latency = Date.now() - t0resp;
-              try { console.log("[IA][wbot][audio-reply]", { provider: "openai", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+              try { console.log("[IA][wbot][audio-reply]", { provider: "openai", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch { }
               await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
             }
           } catch {
@@ -522,7 +642,7 @@ export const handleOpenAi = async (
             const responseText = await handleOpenAIRequest(openai as any, messagesAI, openAiSettings);
             if (responseText) {
               const latency = Date.now() - t0resp;
-              try { console.log("[IA][wbot][audio-reply]", { provider: "openai", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+              try { console.log("[IA][wbot][audio-reply]", { provider: "openai", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch { }
               await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
             }
           }
@@ -537,9 +657,9 @@ export const handleOpenAi = async (
           }
           const latency = Date.now() - t0;
           if (transcription) {
-            try { console.log("[IA][wbot][transcribe]", { provider: "gemini", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+            try { console.log("[IA][wbot][transcribe]", { provider: "gemini", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch { }
           }
-        } catch {}
+        } catch { }
 
         // Fallback para implementação antiga
         if (!transcription) {
@@ -581,7 +701,7 @@ export const handleOpenAi = async (
           transcription = transcriptionRequest.response.text();
           const latency = Date.now() - t0;
           if (transcription) {
-            try { console.log("[IA][wbot][transcribe]", { provider: "gemini", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+            try { console.log("[IA][wbot][transcribe]", { provider: "gemini", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch { }
           }
         }
 
@@ -610,7 +730,7 @@ export const handleOpenAi = async (
             });
             if (responseText) {
               const latency = Date.now() - t0resp;
-              try { console.log("[IA][wbot][audio-reply]", { provider: "gemini", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+              try { console.log("[IA][wbot][audio-reply]", { provider: "gemini", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch { }
               await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
             }
           } catch {
@@ -618,7 +738,7 @@ export const handleOpenAi = async (
             const responseText = await handleGeminiRequest(gemini, messagesAI, openAiSettings, transcription, promptSystem);
             if (responseText) {
               const latency = Date.now() - t0resp;
-              try { console.log("[IA][wbot][audio-reply]", { provider: "gemini", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch {}
+              try { console.log("[IA][wbot][audio-reply]", { provider: "gemini", model: openAiSettings.model, latencyMs: latency, companyId: ticket.companyId, ticketId: ticket.id }); } catch { }
               await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
             }
           }

@@ -21,6 +21,7 @@ import { Grid, ListItemText, MenuItem, Select } from "@material-ui/core";
 import { toast } from "react-toastify";
 import { Facebook, Instagram, WhatsApp } from "@material-ui/icons";
 import ShowTicketOpen from "../ShowTicketOpenModal";
+import OfficialTemplateStartModal from "../OfficialTemplateStartModal";
 
 const useStyles = makeStyles((theme) => ({
   online: {
@@ -56,6 +57,8 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
   const [openAlert, setOpenAlert] = useState(false);
   const [userTicketOpen, setUserTicketOpen] = useState("");
   const [queueTicketOpen, setQueueTicketOpen] = useState("");
+  const [officialTemplateModalOpen, setOfficialTemplateModalOpen] = useState(false);
+  const [pendingContactId, setPendingContactId] = useState(null);
 
   useEffect(() => {
     if (initialContact?.id !== undefined) {
@@ -164,6 +167,32 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
     try {
       const queueId = selectedQueue !== "" ? selectedQueue : null;
       const whatsappId = selectedWhatsapp !== "" ? selectedWhatsapp : null;
+
+      // Se conexão selecionada é API Oficial, checar janela de 24h
+      const selectedWpp = whatsapps.find(w => w.id === whatsappId);
+      const isOfficial = selectedWpp?.channelType === "official";
+
+      if (isOfficial && whatsappId) {
+        try {
+          const { data: session } = await api.get(`/whatsapp/${whatsappId}/session-window`, {
+            params: { contactId }
+          });
+
+          if (!session?.hasOpenSession) {
+            // Sem janela aberta: abrir modal de template oficial em vez de criar ticket
+            setPendingContactId(contactId);
+            setOfficialTemplateModalOpen(true);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          // Se der erro na checagem, evitar criar ticket às cegas
+          setLoading(false);
+          toastError(err);
+          return;
+        }
+      }
+
       const { data: ticket } = await api.post("/tickets", {
         contactId: contactId,
         queueId,
@@ -187,7 +216,6 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
 
         // Tratamento específico: já existe ticket aberto para o contato
         if (code === "ERR_OTHER_OPEN_TICKET") {
-          // Mensagem amigável via tradução
           toast.error(i18n.t("backendErrors.ERR_OTHER_OPEN_TICKET"));
           return;
         }
@@ -443,6 +471,24 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
             onClose={handleCloseContactModal}
             onSave={handleAddNewContactTicket}
           ></ContactModal>
+        )}
+        {officialTemplateModalOpen && (
+          <OfficialTemplateStartModal
+            open={officialTemplateModalOpen}
+            onClose={() => {
+              setOfficialTemplateModalOpen(false);
+              setPendingContactId(null);
+            }}
+            whatsappId={selectedWhatsapp}
+            contactId={pendingContactId || (selectedContact && selectedContact.id)}
+            queueId={selectedQueue}
+            onCompleted={ticket => {
+              setOfficialTemplateModalOpen(false);
+              setPendingContactId(null);
+              setLoading(false);
+              onClose(ticket);
+            }}
+          />
         )}
         {openAlert && (
           <ShowTicketOpen

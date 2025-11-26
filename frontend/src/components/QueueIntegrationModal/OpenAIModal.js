@@ -264,7 +264,7 @@ const OpenAIModal = ({
     loadData();
   }, [open, integrationId, initialData]);
 
-  // RAG: carregar lista de arquivos ao abrir
+  // RAG: carregar Arquivos ao abrir
   useEffect(() => {
     (async () => {
       if (!open) return;

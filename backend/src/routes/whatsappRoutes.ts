@@ -40,5 +40,7 @@ whatsappRoutes.get("/whatsapp-admin/:whatsappId", isAuth, WhatsAppController.sho
 
 // Meta API Official - Templates
 whatsappRoutes.get("/whatsapp/:whatsappId/templates", isAuth, MetaController.getTemplates);
+whatsappRoutes.get("/whatsapp/:whatsappId/session-window", isAuth, MetaController.getSessionWindow);
+whatsappRoutes.post("/whatsapp/:whatsappId/send-template-to-contact", isAuth, MetaController.sendTemplateToContact);
 
 export default whatsappRoutes;

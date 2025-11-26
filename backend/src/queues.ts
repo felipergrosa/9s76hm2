@@ -42,6 +42,8 @@ import TicketTag from "./models/TicketTag";
 import Tag from "./models/Tag";
 import { delay } from "@whiskeysockets/baileys";
 import Plan from "./models/Plan";
+import GetWhatsAppAdapter from "./helpers/GetWhatsAppAdapter";
+import SendTemplateToContact from "./services/MetaServices/SendTemplateToContact";
 
 const connection = process.env.REDIS_URI || "";
 const limiterMax = process.env.REDIS_OPT_LIMITER_MAX || 1;
@@ -1256,21 +1258,29 @@ async function handleDispatchCampaign(job) {
     const campaign = await getCampaign(campaignId);
     const selectedWhatsappId: number = (data as any)?.selectedWhatsappId || campaign.whatsappId;
     const whatsapp = await Whatsapp.findByPk(selectedWhatsappId);
-    const wbot = await GetWhatsappWbot(whatsapp);
-
-    if (!wbot) {
-      logger.error(`campaignQueue -> DispatchCampaign -> error: wbot not found`);
-      return;
-    }
 
     if (!whatsapp) {
       logger.error(`campaignQueue -> DispatchCampaign -> error: whatsapp not found`);
       return;
     }
 
-    if (!wbot?.user?.id) {
-      logger.error(`campaignQueue -> DispatchCampaign -> error: wbot user not found`);
-      return;
+    const isOfficial = whatsapp.channelType === "official";
+    const hasMetaTemplate = Boolean((campaign as any).metaTemplateName);
+
+    // Para conexões não-oficiais (Baileys), seguimos usando wbot normalmente
+    let wbot: any = null;
+    if (!isOfficial) {
+      wbot = await GetWhatsappWbot(whatsapp);
+
+      if (!wbot) {
+        logger.error(`campaignQueue -> DispatchCampaign -> error: wbot not found`);
+        return;
+      }
+
+      if (!wbot?.user?.id) {
+        logger.error(`campaignQueue -> DispatchCampaign -> error: wbot user not found`);
+        return;
+      }
     }
 
     logger.info(
@@ -1331,7 +1341,69 @@ async function handleDispatchCampaign(job) {
       ? `${campaignShipping.number}@g.us`
       : `${campaignShipping.number}@s.whatsapp.net`;
 
-    if (campaign.openTicket === "enabled") {
+    // ===== Caminho API Oficial com Template Meta =====
+    const useOfficialTemplate = isOfficial && hasMetaTemplate;
+
+    if (useOfficialTemplate) {
+      const templateName = (campaign as any).metaTemplateName as string;
+      const languageCode = ((campaign as any).metaTemplateLanguage as string) || "pt_BR";
+
+      try {
+        if (campaign.openTicket === "enabled") {
+          // Cria/usa contato no CRM para poder abrir ticket
+          const [contact] = await Contact.findOrCreate({
+            where: {
+              number: campaignShipping.number,
+              companyId: campaign.companyId
+            },
+            defaults: {
+              companyId: campaign.companyId,
+              name: campaignShipping.contact.name,
+              number: campaignShipping.number,
+              email: campaignShipping.contact.email,
+              whatsappId: selectedWhatsappId,
+              profilePicUrl: ""
+            }
+          });
+
+          await SendTemplateToContact({
+            whatsappId: selectedWhatsappId,
+            contactId: contact.id,
+            companyId: campaign.companyId,
+            userId: campaign.userId || 0,
+            queueId: campaign.queueId || undefined,
+            templateName,
+            languageCode,
+            components: undefined
+          });
+        } else {
+          // Envio direto de template sem abrir ticket
+          const adapter = await GetWhatsAppAdapter(whatsapp);
+          if (typeof adapter.sendTemplate === "function") {
+            await adapter.sendTemplate(
+              campaignShipping.number,
+              templateName,
+              languageCode
+            );
+          } else {
+            logger.error("[DispatchCampaign] Adapter oficial não suporta sendTemplate");
+            throw new Error("Adapter oficial não suporta sendTemplate");
+          }
+        }
+
+        await campaignShipping.update({ 
+          deliveredAt: moment(),
+          status: 'delivered',
+          attempts: (campaignShipping.attempts || 0) + 1
+        });
+        resetBackoffOnSuccess(selectedWhatsappId);
+        updatePacingOnSuccess(selectedWhatsappId, intervals);
+
+      } catch (err: any) {
+        logger.error(`[DispatchCampaign][OfficialTemplate] Erro ao enviar template: ${err.message}`);
+        throw err;
+      }
+    } else if (campaign.openTicket === "enabled") {
       const [contact] = await Contact.findOrCreate({
         where: {
           number: campaignShipping.number,

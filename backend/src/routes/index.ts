@@ -58,6 +58,9 @@ import tagRuleRoutes from "./tagRuleRoutes";
 import permissionRoutes from "./permissionRoutes";
 import auditLogRoutes from "./auditLogRoutes";
 import whatsappWebhookRoutes from "./whatsappWebhookRoutes";
+import libraryFolderRoutes from "./libraryFolderRoutes";
+import libraryFileRoutes from "./libraryFileRoutes";
+import queueRAGSourceRoutes from "./queueRAGSourceRoutes";
 
 
 const routes = Router();
@@ -122,5 +125,8 @@ routes.use(tagRuleRoutes);
 routes.use(permissionRoutes);
 routes.use(auditLogRoutes);
 routes.use(whatsappWebhookRoutes);
+routes.use(libraryFolderRoutes);
+routes.use(libraryFileRoutes);
+routes.use(queueRAGSourceRoutes);
 
 export default routes;

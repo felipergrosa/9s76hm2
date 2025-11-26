@@ -162,6 +162,13 @@ class Campaign extends Model<Campaign> {
 
   @Column
   mediaName5: string;
+
+  // Template oficial da Meta (API Oficial)
+  @Column({ type: DataType.TEXT, allowNull: true })
+  metaTemplateName: string;
+
+  @Column({ type: DataType.STRING, allowNull: true })
+  metaTemplateLanguage: string;
 }
 
 export default Campaign;

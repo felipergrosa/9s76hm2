@@ -210,7 +210,7 @@ const FilesModal = ({ open, onClose, fileListId, reload }) => {
                                     <Field
                                         as={TextField}
                                         label={i18n.t("fileModal.form.message")}
-                                        placeholder="Descrição opcional da lista de arquivos..."
+                                        placeholder="Descrição opcional da Arquivos..."
                                         type="message"
                                         multiline
                                         minRows={3}

@@ -5,6 +5,15 @@ import fs from 'fs';
 import OpenAI from 'openai';
 
 const execAsync = promisify(exec);
+const FFMPEG_PATH = (() => {
+  try {
+    const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+    if (ffmpegInstaller && ffmpegInstaller.path) {
+      return ffmpegInstaller.path as string;
+    }
+  } catch (error) {}
+  return 'ffmpeg';
+})();
 
 export interface VideoProcessResult {
   text: string;
@@ -122,7 +131,7 @@ export default class VideoProcessor {
    * Extrai áudio do vídeo usando ffmpeg
    */
   private static async extractAudio(videoPath: string, audioPath: string): Promise<void> {
-    const command = `ffmpeg -i "${videoPath}" -vn -acodec pcm_s16le -ar 16000 -ac 1 "${audioPath}" -y`;
+    const command = `"${FFMPEG_PATH}" -i "${videoPath}" -vn -acodec pcm_s16le -ar 16000 -ac 1 "${audioPath}" -y`;
     
     try {
       await execAsync(command);

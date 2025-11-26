@@ -6,6 +6,7 @@ export interface SearchParams {
   query: string;
   k?: number;
   tags?: string[];
+  tagsMode?: "AND" | "OR"; // Modo de filtro de tags: AND (todas) ou OR (qualquer uma)
   documentId?: number;
 }
 
@@ -18,25 +19,35 @@ export interface SearchResultItem {
 }
 
 export const search = async (params: SearchParams): Promise<SearchResultItem[]> => {
-  const { companyId, query, k = 5, tags = [], documentId } = params;
+  const { companyId, query, k = 5, tags = [], tagsMode = "AND", documentId } = params;
   if (!query || !query.trim()) return [];
 
   const [qvec] = await embedTexts(companyId, [query]);
   const qvecStr = `[${qvec.join(",")}]`;
 
-  const whereParts: string[] = [ 'c."companyId" = :companyId' ];
+  const whereParts: string[] = ['c."companyId" = :companyId'];
   const replacements: any = { companyId, qvec: qvecStr, k };
 
   if (documentId) {
     whereParts.push('c."documentId" = :documentId');
     replacements.documentId = documentId;
   }
+
   if (Array.isArray(tags) && tags.length) {
-    // filtro simples: match por substring nas tags serializadas
-    tags.forEach((t, idx) => {
-      whereParts.push(`c."tags" ILIKE :tag_${idx}`);
-      replacements[`tag_${idx}`] = `%"${t}"%`;
-    });
+    if (tagsMode === "OR") {
+      // Modo OR: documento deve ter pelo menos UMA das tags
+      const tagConditions = tags.map((t, idx) => {
+        replacements[`tag_${idx}`] = `%"${t}"%`;
+        return `c."tags" ILIKE :tag_${idx}`;
+      });
+      whereParts.push(`(${tagConditions.join(' OR ')})`);
+    } else {
+      // Modo AND: documento deve ter TODAS as tags (comportamento original)
+      tags.forEach((t, idx) => {
+        whereParts.push(`c."tags" ILIKE :tag_${idx}`);
+        replacements[`tag_${idx}`] = `%"${t}"%`;
+      });
+    }
   }
 
   const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';

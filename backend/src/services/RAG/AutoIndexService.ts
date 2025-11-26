@@ -243,6 +243,10 @@ export default class AutoIndexService {
       tags.push(`queue:${ticket.queue.name}`);
     }
 
+    if (ticket.queue?.ragCollection) {
+      tags.push(`collection:${ticket.queue.ragCollection}`);
+    }
+
     // Tags baseadas no conteúdo
     const allText = messages.map(m => m.body || '').join(' ').toLowerCase();
     

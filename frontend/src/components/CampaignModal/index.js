@@ -143,6 +143,8 @@ const CampaignModal = ({
     openTicket: "disabled",
     dispatchStrategy: "single",
     allowedWhatsappIds: [],
+    metaTemplateName: null,
+    metaTemplateLanguage: null,
   };
 
   // Validação de mídia permitida
@@ -1487,6 +1489,18 @@ const CampaignModal = ({
                                 const bodyComponent = template.components.find(c => c.type === "BODY");
                                 if (bodyComponent?.text) {
                                   setFieldValueRef.current("message1", bodyComponent.text);
+                                }
+                              }
+
+                              // Amarrar nome e idioma do template aos campos do formulário
+                              if (setFieldValueRef.current) {
+                                if (template) {
+                                  setFieldValueRef.current("metaTemplateName", template.name || null);
+                                  setFieldValueRef.current("metaTemplateLanguage", template.language || null);
+                                } else {
+                                  // Caso selecione "Não usar template"
+                                  setFieldValueRef.current("metaTemplateName", null);
+                                  setFieldValueRef.current("metaTemplateLanguage", null);
                                 }
                               }
                             }}

@@ -58,6 +58,9 @@ import AIUsageLog from "../models/AIUsageLog";
 import WhatsappLabel from "../models/WhatsappLabel";
 import ContactWhatsappLabel from "../models/ContactWhatsappLabel";
 import TagRule from "../models/TagRule";
+import LibraryFolder from "../models/LibraryFolder";
+import LibraryFile from "../models/LibraryFile";
+import QueueRAGSource from "../models/QueueRAGSource";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -123,7 +126,10 @@ const models = [
   AIUsageLog,
   WhatsappLabel,
   ContactWhatsappLabel,
-  TagRule
+  TagRule,
+  LibraryFolder,
+  LibraryFile,
+  QueueRAGSource
 ];
 
 sequelize.addModels(models);

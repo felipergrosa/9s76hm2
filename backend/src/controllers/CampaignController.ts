@@ -57,6 +57,8 @@ type StoreData = {
   mediaName4?: string | null;
   mediaUrl5?: string | null;
   mediaName5?: string | null;
+  metaTemplateName?: string | null;
+  metaTemplateLanguage?: string | null;
 };
 
 type FindParams = {

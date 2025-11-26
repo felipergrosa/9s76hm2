@@ -26,6 +26,7 @@ import Chatbot from "./Chatbot";
 import QueueIntegrations from "./QueueIntegrations";
 import Files from "./Files";
 import Prompt from "./Prompt";
+import QueueRAGSource from "./QueueRAGSource";
 
 @Table
 class Queue extends Model<Queue> {
@@ -58,7 +59,7 @@ class Queue extends Model<Queue> {
   @AllowNull(false)
   @Column
   tempoRoteador: number;
-  
+
   @Default("")
   @Column
   outOfHoursMessage: string;
@@ -107,7 +108,7 @@ class Queue extends Model<Queue> {
 
   @BelongsTo(() => Files)
   files: Files;
-  
+
   @Default(false)
   @Column
   closeTicket: boolean;
@@ -141,6 +142,13 @@ class Queue extends Model<Queue> {
     hooks: true // Ativa hooks para esta associação
   })
   optQueue: Chatbot[];
+
+  @HasMany(() => QueueRAGSource, {
+    onDelete: "CASCADE",
+    onUpdate: "CASCADE",
+    hooks: true
+  })
+  ragSources: QueueRAGSource[];
 
   @BeforeDestroy
   static async updateChatbotsQueueReferences(queue: Queue) {

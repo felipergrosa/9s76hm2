@@ -681,7 +681,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                     </Grid>
                   </Grid>
 
-                  {/* TERCEIRA LINHA: Integração + Lista de Arquivos */}
+                  {/* TERCEIRA LINHA: Integração + Arquivos */}
                   <Grid container spacing={2} style={{ marginBottom: 16 }}>
                     {showIntegrations && (
                       <Grid item xs={12} md={6}>
@@ -717,7 +717,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                         <InputLabel>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             {i18n.t("queueModal.form.fileListId")}
-                            <Tooltip title="Lista de arquivos que podem ser enviados automaticamente nesta fila. Configure catálogos, manuais, formulários, etc. Funciona com o sistema inteligente abaixo." arrow>
+                            <Tooltip title="Arquivos que podem ser enviados automaticamente nesta fila. Configure catálogos, manuais, formulários, etc. Funciona com o sistema inteligente abaixo." arrow>
                               <HelpOutlineIcon fontSize="small" color="action" style={{ cursor: 'help' }} />
                             </Tooltip>
                           </div>
@@ -729,7 +729,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                           id="fileListId"
                           value={values.fileListId || ""}
                         >
-                          <MenuItem value="">Nenhuma lista de arquivos</MenuItem>
+                          <MenuItem value="">Nenhuma Arquivos</MenuItem>
                           {file.map(f => (
                             <MenuItem key={f.id} value={f.id}>
                               {f.name}
@@ -743,7 +743,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                   {/* SEÇÃO: Configurações Inteligentes de Arquivos */}
                   <Typography variant="h6" style={{ marginTop: 24, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                     🤖 Configurações Inteligentes de Arquivos
-                    <Tooltip title="Sistema que automatiza o envio de arquivos baseado no comportamento do cliente. Funciona apenas se uma 'Lista de arquivos' estiver selecionada acima." arrow>
+                    <Tooltip title="Sistema que automatiza o envio de arquivos baseado no comportamento do cliente. Funciona apenas se uma 'Arquivos' estiver selecionada acima." arrow>
                       <HelpOutlineIcon fontSize="small" color="action" style={{ cursor: 'help' }} />
                     </Tooltip>
                   </Typography>
@@ -1470,7 +1470,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                 <ul style={{ textAlign: 'left', margin: 0, paddingLeft: 20 }}>
                   <li><strong>Nome da Fila:</strong> Use nomes claros como "Vendas", "Suporte", "Financeiro"</li>
                   <li><strong>Cor:</strong> Escolha cores distintas para facilitar identificação</li>
-                  <li><strong>Lista de Arquivos:</strong> Crie e selecione uma lista com seus documentos</li>
+                  <li><strong>Arquivos:</strong> Crie e selecione uma lista com seus documentos</li>
                   <li><strong>Estratégia de Envio:</strong> Defina quando os arquivos serão oferecidos</li>
                 </ul>
               </div>

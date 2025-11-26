@@ -43,7 +43,7 @@ import FlowDefault from "../pages/FlowDefault"
 import CampaignsPhrase from "../pages/CampaignsPhrase";
 import Subscription from "../pages/Subscription";
 import QueueIntegration from "../pages/QueueIntegration";
-import Files from "../pages/Files";
+import LibraryManager from "../pages/LibraryManager";
 import ToDoList from "../pages/ToDoList";
 import Kanban from "../pages/Kanban";
 import TagsKanban from "../pages/TagsKanban";
@@ -113,7 +113,7 @@ const Routes = () => {
                   isPrivate
                 />
                 <Route exact path="/chats/:id?" component={Chat} isPrivate />
-                <Route exact path="/files" component={Files} isPrivate />
+                <Route exact path="/files" component={LibraryManager} isPrivate />
                 <Route exact path="/moments" component={ChatMoments} isPrivate />
                 <Route exact path="/Kanban" component={Kanban} isPrivate />
                 <Route exact path="/TagsKanban" component={TagsKanban} isPrivate />

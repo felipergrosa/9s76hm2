@@ -13,6 +13,7 @@ import {
 } from "sequelize-typescript";
 import Company from "./Company";
 import KnowledgeChunk from "./KnowledgeChunk";
+import LibraryFile from "./LibraryFile";
 
 @Table({ tableName: "KnowledgeDocuments" })
 export default class KnowledgeDocument extends Model<KnowledgeDocument> {
@@ -56,4 +57,7 @@ export default class KnowledgeDocument extends Model<KnowledgeDocument> {
 
   @HasMany(() => KnowledgeChunk)
   chunks!: KnowledgeChunk[];
+
+  @HasMany(() => LibraryFile)
+  libraryFiles!: LibraryFile[];
 }

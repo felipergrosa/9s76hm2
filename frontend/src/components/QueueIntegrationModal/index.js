@@ -308,7 +308,7 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
 
   }, [integrationId, open]);
 
-  // RAG: carregar lista de arquivos ao abrir modal
+  // RAG: carregar Arquivos ao abrir modal
   useEffect(() => {
     (async () => {
       if (!open) return;

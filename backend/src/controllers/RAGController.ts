@@ -8,12 +8,20 @@ import AutoIndexService from "../services/RAG/AutoIndexService";
 import FilesOptions from "../models/FilesOptions";
 import path from "path";
 import fs from "fs";
+import uploadConfig from "../config/upload";
 
 export const indexText = async (req: Request, res: Response) => {
   try {
     const { companyId } = req.user;
-    const { title, text, tags, chunkSize, overlap } = req.body || {};
-    const tagsArr = Array.isArray(tags) ? tags : (typeof tags === 'string' ? tags.split(',').map((t: string) => t.trim()).filter(Boolean) : []);
+    const { title, text, tags, chunkSize, overlap, collection, ragCollection } = req.body || {};
+    const tagsArr = Array.isArray(tags)
+      ? tags
+      : (typeof tags === 'string' ? tags.split(',').map((t: string) => t.trim()).filter(Boolean) : []);
+
+    const coll = (ragCollection || collection || "").toString().trim();
+    if (coll) {
+      tagsArr.push(`collection:${coll}`);
+    }
     const result = await indexTextDocument({ companyId, title, text, tags: tagsArr, chunkSize, overlap });
     return res.status(200).json(result);
   } catch (error: any) {
@@ -65,10 +73,15 @@ export const removeDocument = async (req: Request, res: Response) => {
 export const indexFile = async (req: Request, res: Response) => {
   try {
     const { companyId } = req.user;
-    const { fileOptionId, title, tags, chunkSize, overlap } = req.body || {};
+    const { fileOptionId, title, tags, chunkSize, overlap, collection, ragCollection } = req.body || {};
     const tagsArr = Array.isArray(tags)
       ? tags
       : (typeof tags === 'string' ? tags.split(',').map((t: string) => t.trim()).filter(Boolean) : []);
+
+    const coll = (ragCollection || collection || "").toString().trim();
+    if (coll) {
+      tagsArr.push(`collection:${coll}`);
+    }
 
     const optId = Number(fileOptionId);
     if (!optId) return res.status(400).json({ error: 'fileOptionId inválido' });
@@ -82,8 +95,22 @@ export const indexFile = async (req: Request, res: Response) => {
     const fileId: number = anyOpt.fileId;
     const relPath: string = anyOpt.path;
     const mediaType: string = anyOpt.mediaType || '';
-    const basePublic = path.resolve(__dirname, "..", "..", "..", "public", `company${companyId}`, "files", String(fileId));
-    const absPath = path.resolve(basePublic, relPath);
+    const publicRoot = uploadConfig.directory;
+
+    let absPath: string;
+    if (path.isAbsolute(relPath)) {
+      absPath = relPath;
+    } else if (relPath.startsWith("company")) {
+      absPath = path.resolve(publicRoot, relPath);
+    } else {
+      absPath = path.resolve(
+        publicRoot,
+        `company${companyId}`,
+        "files",
+        String(fileId),
+        relPath
+      );
+    }
 
     // Tipos suportados expandidos (texto, PDF, imagens)
     const ext = path.extname(relPath || '').toLowerCase();

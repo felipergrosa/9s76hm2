@@ -6,6 +6,7 @@ import FilesOptions from "../../models/FilesOptions";
 import ShowService from "./ShowService";
 import fs from "fs";
 import path from "path";
+import uploadConfig from "../../config/upload";
 
 interface FileOption {
   id?: number;
@@ -32,20 +33,8 @@ const CreateService = async ({
     name: Yup.string()
       .required()
       .min(3)
-      .test(
-        "Check-unique-name",
-        "ERR_RATING_NAME_ALREADY_EXISTS",
-        async value => {
-          if (value) {
-            const tagWithSameName = await Files.findOne({
-              where: { name: value, companyId }
-            });
-
-            return !tagWithSameName;
-          }
-          return false;
-        }
-      )
+    // Removida validação de nome único - permite criar Files com mesmo nome
+    // Isso é intencional para permitir re-upload de arquivos deletados
   });
 
   try {
@@ -63,10 +52,17 @@ const CreateService = async ({
 
   if (options && options.length > 0) {
     // Arquivos do POST foram salvos em public/files por padrão. Move cada um para a pasta definitiva
-    const publicRoot = path.resolve(__dirname, "..", "..", "public");
+    const publicRoot = uploadConfig.directory; // mesmo diretório usado pelo express.static("/public")
     const tmpFolder = path.join(publicRoot, "files");
     const finalFolder = path.join(publicRoot, `company${companyId}`, "files", String(fileList.id));
-    fs.mkdirSync(finalFolder, { recursive: true });
+
+    // CORREÇÃO: Garantir permissões corretas na pasta
+    try {
+      fs.mkdirSync(finalFolder, { recursive: true, mode: 0o755 });
+    } catch (e) {
+      console.error("Erro ao criar pasta:", e);
+      throw new AppError("ERR_CREATE_FOLDER_FAILED");
+    }
 
     const normalized = await Promise.all(
       options.map(async info => {
@@ -81,8 +77,11 @@ const CreateService = async ({
         try {
           if (fs.existsSync(src)) {
             fs.renameSync(src, dest);
+            // CORREÇÃO: Garantir permissões de leitura
+            fs.chmodSync(dest, 0o644);
           }
         } catch (e) {
+          console.error("Erro ao mover arquivo:", e);
           // Se não mover, ainda assim seguimos e gravamos o path relativo se o arquivo já estiver em dest
         }
 
@@ -103,7 +102,7 @@ const CreateService = async ({
     );
   }
 
-   fileList = await ShowService(fileList.id, companyId)
+  fileList = await ShowService(fileList.id, companyId)
 
   return fileList;
 };

@@ -41,6 +41,8 @@ interface Data {
   mediaName4?: string | null;
   mediaUrl5?: string | null;
   mediaName5?: string | null;
+  metaTemplateName?: string | null;
+  metaTemplateLanguage?: string | null;
 }
 
 const CreateService = async (data: Data): Promise<Campaign> => {

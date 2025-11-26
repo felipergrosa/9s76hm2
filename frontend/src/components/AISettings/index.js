@@ -1631,7 +1631,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                     <CardContent style={{ padding: '12px' }}>
                       <Typography variant="subtitle2" color="primary" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         📁 FileManager
-                        <Tooltip title="Arquivos do módulo 'Lista de arquivos' (menu lateral) que foram indexados automaticamente. Para adicionar: Menu → Lista de arquivos → Adicionar projeto → Faça upload dos arquivos → Eles serão indexados automaticamente para a IA usar como conhecimento.">
+                        <Tooltip title="Arquivos do módulo 'Arquivos' (menu lateral) que foram indexados automaticamente. Para adicionar: Menu → Arquivos → Adicionar projeto → Faça upload dos arquivos → Eles serão indexados automaticamente para a IA usar como conhecimento.">
                           <InfoIcon fontSize="small" style={{ opacity: 0.6, cursor: 'help' }} />
                         </Tooltip>
                       </Typography>

@@ -3542,8 +3542,15 @@ export const transferQueue = async (
   ticket: Ticket,
   contact: Contact
 ): Promise<void> => {
+  // Quando a IA decide transferir (via "Ação: Transferir para o setor de atendimento"),
+  // tiramos o ticket do modo bot e colocamos em "pending" na fila indicada,
+  // para que um atendente humano possa assumi-lo normalmente.
   await UpdateTicketService({
-    ticketData: { queueId: queueId },
+    ticketData: {
+      queueId: queueId,
+      status: "pending",
+      isBot: false
+    },
     ticketId: ticket.id,
     companyId: ticket.companyId
   });

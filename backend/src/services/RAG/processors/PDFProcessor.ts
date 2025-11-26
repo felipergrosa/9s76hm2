@@ -173,7 +173,7 @@ export default class PDFProcessor {
       fs.closeSync(fd);
       const header = buffer.toString('ascii');
       
-      return header === '%PDF';
+      return header.startsWith('%PDF');
     } catch {
       return false;
     }

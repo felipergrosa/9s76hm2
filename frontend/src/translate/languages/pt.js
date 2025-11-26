@@ -519,13 +519,13 @@ const messages = {
           outOfHoursMessage: "Mensagem de fora de expediente",
           token: "Token",
           integrationId: "Integração",
-          fileListId: "Lista de arquivos",
+          fileListId: "Arquivos",
           closeTicket: "Fechar ticket",
           queueType: "Tipo de menu",
           message: "Mensagem de retorno",
           queue: "Fila para transferência",
           integration: "Integração",
-          file: "Lista de arquivos",
+          file: "Arquivos",
         },
         buttons: {
           okAdd: "Adicionar",
@@ -716,8 +716,8 @@ const messages = {
       },
       fileModal: {
         title: {
-          add: "Adicionar lista de arquivos",
-          edit: "Editar lista de arquivos",
+          add: "Adicionar Arquivos",
+          edit: "Editar Arquivos",
         },
         buttons: {
           okAdd: "Salvar",
@@ -726,13 +726,13 @@ const messages = {
           fileOptions: "Adicionar arquivo",
         },
         form: {
-          name: "Nome da lista de arquivos",
+          name: "Nome da Arquivos",
           message: "Detalhes da lista",
-          fileOptions: "Lista de arquivos",
+          fileOptions: "Arquivos",
           extraName: "Mensagem para enviar com arquivo",
           extraValue: "Valor da opção",
         },
-        success: "Lista de arquivos salva com sucesso!",
+        success: "Arquivos salva com sucesso!",
       },
       chat: {
         noTicketMessage: "Selecione um ticket para começar a conversar.",
@@ -889,7 +889,7 @@ const messages = {
           companies: "Empresas",
           users: "Usuários",
           settings: "Configurações",
-          files: "Lista de arquivos",
+          files: "Arquivos",
           helps: "Ajuda",
           messagesAPI: "API",
           schedules: "Agendamentos",
@@ -1575,7 +1575,7 @@ const messages = {
         }
       },
       files: {
-        title: "Lista de arquivos",
+        title: "Arquivos",
         table: {
           name: "Nome",
           contacts: "Contatos",

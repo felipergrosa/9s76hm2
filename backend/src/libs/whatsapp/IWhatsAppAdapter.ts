@@ -86,6 +86,12 @@ export interface IWhatsAppAdapter {
   sendMessage(options: ISendMessageOptions): Promise<IWhatsAppMessage>;
   sendTextMessage(to: string, body: string): Promise<IWhatsAppMessage>;
   sendMediaMessage(to: string, mediaUrl: string, mediaType: string, caption?: string): Promise<IWhatsAppMessage>;
+  sendTemplate?(
+    to: string,
+    templateName: string,
+    languageCode?: string,
+    components?: any[]
+  ): Promise<IWhatsAppMessage>;
   
   // Gestão de mensagens
   deleteMessage?(messageId: string): Promise<void>;

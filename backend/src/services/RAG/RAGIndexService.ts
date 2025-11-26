@@ -8,6 +8,7 @@ import ImageProcessor from "./processors/ImageProcessor";
 import VideoProcessor from "./processors/VideoProcessor";
 import AudioProcessor from "./processors/AudioProcessor";
 import GifProcessor from "./processors/GifProcessor";
+import ExcelProcessor from "./processors/ExcelProcessor";
 import path from "path";
 
 export interface IndexTextParams {
@@ -235,6 +236,11 @@ export const indexFileAuto = async (params: {
     return await indexImageDocument(params);
   }
   
+  // Excel
+  if (['.xls', '.xlsx'].includes(ext)) {
+    return await indexExcelDocumentInternal(params);
+  }
+  
   // Vídeos
   if (['.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv', '.wmv', '.m4v'].includes(ext)) {
     return await indexVideoDocumentInternal(params);
@@ -287,7 +293,7 @@ const indexVideoDocumentInternal = async (params: {
 
   try {
     // Obter API Key da OpenAI para transcrição
-    const { GetIntegrationByTypeService } = require('../../../services/IntegrationServices/GetIntegrationByTypeService');
+    const GetIntegrationByTypeService = require('../QueueIntegrationServices/GetIntegrationByTypeService').default;
     let openaiApiKey: string | undefined;
     
     try {
@@ -363,7 +369,7 @@ const indexAudioDocumentInternal = async (params: {
 
   try {
     // Obter API Key da OpenAI para transcrição
-    const { GetIntegrationByTypeService } = require('../../../services/IntegrationServices/GetIntegrationByTypeService');
+    const GetIntegrationByTypeService = require('../QueueIntegrationServices/GetIntegrationByTypeService').default;
     let openaiApiKey: string | undefined;
     
     try {
@@ -478,7 +484,68 @@ const indexGifDocumentInternal = async (params: {
   }
 };
 
+/**
+ * Indexa Excel extraindo texto
+ */
+const indexExcelDocumentInternal = async (params: {
+  companyId: number;
+  title: string;
+  filePath: string;
+  tags?: string[];
+  source?: string;
+  chunkSize?: number;
+  overlap?: number;
+}): Promise<IndexResult> => {
+  const { companyId, title, filePath, tags = [], source, chunkSize, overlap } = params;
+
+  console.log(`[RAG] Indexing Excel: ${title}`);
+
+  if (!ExcelProcessor.isValidExcel(filePath)) {
+    throw new Error("Arquivo não é um Excel suportado");
+  }
+
+  try {
+    const excelResult = await ExcelProcessor.extractText(filePath);
+
+    const enrichedTags = [
+      ...tags,
+      "excel",
+      ...(excelResult.metadata?.sheetNames || []).map(name => `sheet:${name}`)
+    ];
+
+    console.log(
+      `[RAG] Excel processed: ${excelResult.text.length} chars, ${excelResult.sheets} sheets`
+    );
+
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeType =
+      {
+        ".xls": "application/vnd.ms-excel",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }[ext] || "application/vnd.ms-excel";
+
+    return await indexTextDocument({
+      companyId,
+      title,
+      text: excelResult.text,
+      tags: enrichedTags,
+      source,
+      mimeType,
+      chunkSize,
+      overlap,
+      metadata: {
+        sheets: excelResult.sheets,
+        sheetNames: excelResult.metadata?.sheetNames
+      }
+    });
+  } catch (error: any) {
+    console.error(`[RAG] Failed to index Excel ${title}:`, error.message);
+    throw new Error(`Falha ao processar Excel: ${error.message}`);
+  }
+};
+
 // Funções exportadas para uso externo
 export const indexVideoDocument = indexVideoDocumentInternal;
 export const indexAudioDocument = indexAudioDocumentInternal;
 export const indexGifDocument = indexGifDocumentInternal;
+export const indexExcelDocument = indexExcelDocumentInternal;
