@@ -44,6 +44,7 @@ const TemplateVariableMapper = ({
             const { data } = await api.get(`/templates/${whatsappId}/${templateName}`, {
                 params: { language: languageCode },
             });
+            console.log("📦 Template Definition recebido:", data); // LOG PARA DEBUG
             setTemplate(data);
         } catch (err) {
             console.error("Erro ao buscar definição do template:", err);
@@ -55,8 +56,9 @@ const TemplateVariableMapper = ({
     };
 
     const handleTypeChange = (paramIndex, type) => {
+        const currentValue = value || {};
         const newValue = {
-            ...value,
+            ...currentValue,
             [paramIndex]: {
                 type,
                 source: getDefaultSource(type),
@@ -66,10 +68,14 @@ const TemplateVariableMapper = ({
     };
 
     const handleSourceChange = (paramIndex, source) => {
+        const currentValue = value || {};
+        // Se não existir no estado ainda, usa o padrão para preservar o 'type'
+        const currentParamConfig = currentValue[paramIndex] || { type: "crm_field", source: "name" };
+
         const newValue = {
-            ...value,
+            ...currentValue,
             [paramIndex]: {
-                ...value[paramIndex],
+                ...currentParamConfig,
                 source,
             },
         };

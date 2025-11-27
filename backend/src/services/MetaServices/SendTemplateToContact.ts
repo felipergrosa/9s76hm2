@@ -96,7 +96,31 @@ const SendTemplateToContact = async ({
       }
     }
 
-    // CORREÇÃO ERR_OTHER_OPEN_TICKET: Verificar se já existe ticket aberto
+    // Obter adapter oficial ANTES de criar ticket
+    const adapter = await GetWhatsAppAdapter(whatsapp);
+    if (adapter.channelType !== "official") {
+      throw new AppError("Adapter obtido não é API Oficial", 500);
+    }
+
+    const official: any = adapter as any;
+    if (typeof official.sendTemplate !== "function") {
+      throw new AppError("Adapter oficial não suporta envio de templates", 500);
+    }
+
+    // ENVIAR TEMPLATE PRIMEIRO (antes de criar ticket)
+    // Se falhar, lança exceção e não cria ticket
+    const sent = await official.sendTemplate(
+      contact.number,
+      templateName,
+      languageCode,
+      finalComponents
+    );
+
+    logger.info(
+      `[SendTemplateToContact] Template ${templateName} enviado com sucesso. messageId=${sent.id}`
+    );
+
+    // APENAS APÓS SUCESSO DO ENVIO: Verificar se já existe ticket aberto
     // Se existir, REUSAR o ticket (especialmente importante para campanhas)
     let ticket = await Ticket.findOne({
       where: {
@@ -109,7 +133,7 @@ const SendTemplateToContact = async ({
 
     if (ticket) {
       logger.info(
-        `[SendTemplateToContact] Reusando ticket existente #${ticket.id} para envio de template`
+        `[SendTemplateToContact] Reusando ticket existente #${ticket.id} para mensagem enviada`
       );
     } else {
       // Criar novo ticket apenas se não existir um aberto
@@ -122,32 +146,9 @@ const SendTemplateToContact = async ({
         whatsappId: String(whatsappId)
       });
       logger.info(
-        `[SendTemplateToContact] Novo ticket #${ticket.id} criado para envio de template`
+        `[SendTemplateToContact] Novo ticket #${ticket.id} criado para mensagem enviada com sucesso`
       );
     }
-
-    // Obter adapter oficial
-    const adapter = await GetWhatsAppAdapter(whatsapp);
-    if (adapter.channelType !== "official") {
-      throw new AppError("Adapter obtido não é API Oficial", 500);
-    }
-
-    const official: any = adapter as any;
-    if (typeof official.sendTemplate !== "function") {
-      throw new AppError("Adapter oficial não suporta envio de templates", 500);
-    }
-
-    // Enviar template
-    const sent = await official.sendTemplate(
-      contact.number,
-      templateName,
-      languageCode,
-      finalComponents
-    );
-
-    logger.info(
-      `[SendTemplateToContact] Template ${templateName} enviado com sucesso. messageId=${sent.id}`
-    );
 
     const message = await CreateMessageService({
       messageData: {
