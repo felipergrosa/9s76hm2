@@ -23,6 +23,7 @@ interface QueueData {
   confirmationTemplate?: string;
   maxFilesPerSession?: number;
   ragCollection?: string;
+  folderId?: number | null;
 }
 
 const UpdateQueueService = async (

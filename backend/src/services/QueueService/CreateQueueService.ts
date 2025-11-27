@@ -24,6 +24,7 @@ interface QueueData {
   confirmationTemplate?: string;
   maxFilesPerSession?: number;
   ragCollection?: string;
+  folderId?: number;
 }
 
 const CreateQueueService = async (queueData: QueueData): Promise<Queue> => {
