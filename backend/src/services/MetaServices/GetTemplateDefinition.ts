@@ -64,31 +64,62 @@ export const GetTemplateDefinition = async (
                 buttons.push(...component.buttons);
             }
 
-            // Extrair parâmetros do example
-            if (component.example) {
-                // Parâmetros do BODY
-                if (component.type === "BODY" && component.example.body_text) {
-                    // body_text é array de arrays: [[param1, param2, ...]]
-                    const bodyParams = component.example.body_text[0] || [];
-                    bodyParams.forEach((example, index) => {
-                        parameters.push({
-                            index: index + 1,
-                            component: "BODY",
-                            example
-                        });
-                    });
+            // NOVA LÓGICA: Extrair parâmetros do TEXTO do template
+            // Usa regex para detectar {{1}}, {{2}}, {{v1}}, {{v2}}, {{nome}}, {{email}}, etc.
+            if (component.text) {
+                // Regex genérico: detecta QUALQUER coisa entre {{}}
+                const paramRegex = /\{\{([^}]+)\}\}/g;
+                let match;
+                const detectedParams = new Map<number, string>();  // index -> nome da variável
+                let autoIndex = 1;  // Para variáveis sem número explícito
+
+                while ((match = paramRegex.exec(component.text)) !== null) {
+                    const varName = match[1].trim();  // "1", "v1", "nome", "email", etc
+                    let paramNum: number;
+
+                    // Detectar tipo de variável
+                    if (/^\d+$/.test(varName)) {
+                        // Numérica pura: {{1}}, {{2}}
+                        paramNum = parseInt(varName);
+                    } else if (/^v\d+$/.test(varName)) {
+                        // v-numérica: {{v1}}, {{v2}}
+                        paramNum = parseInt(varName.substring(1));
+                    } else {
+                        // Nomeada: {{nome}}, {{email}}, etc
+                        // Usar autoIndex e guardar o nome
+                        paramNum = autoIndex++;
+                    }
+
+                    // Guardar mapeamento (evita duplicatas)
+                    if (!detectedParams.has(paramNum)) {
+                        detectedParams.set(paramNum, varName);
+                    }
                 }
 
-                // Parâmetros do HEADER
-                if (component.type === "HEADER" && component.example.header_text) {
-                    component.example.header_text.forEach((example, index) => {
+                // Tentar também buscar do example se existir (fallback)
+                let exampleParams: string[] = [];
+                if (component.example) {
+                    if (component.type === "BODY" && component.example.body_text) {
+                        exampleParams = component.example.body_text[0] || [];
+                    }
+                    if (component.type === "HEADER" && component.example.header_text) {
+                        exampleParams = component.example.header_text || [];
+                    }
+                }
+
+                // Adicionar parâmetros detectados (ordenados por índice)
+                Array.from(detectedParams.keys())
+                    .sort((a, b) => a - b)
+                    .forEach(paramNum => {
+                        const varName = detectedParams.get(paramNum);
+                        const example = exampleParams[paramNum - 1] || undefined;
+
                         parameters.push({
-                            index: index + 1,
-                            component: "HEADER",
-                            example
+                            index: paramNum,
+                            component: component.type as "HEADER" | "BODY" | "FOOTER",
+                            example: example || varName  // Usa nome da variável como hint se não tem example
                         });
                     });
-                }
             }
         });
 
