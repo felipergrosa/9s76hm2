@@ -523,6 +523,10 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                           label="Arquivos"
                           name="folderId"
                                                     value={values.folderId || ""}
+                          onChange={(e) => {
+                            setFieldValue("folderId", e.target.value);
+                            setFieldValue("fileListId", null); // Limpa fileListId ao selecionar pasta
+                          }}
                         >
                           <MenuItem value="">Nenhuma</MenuItem>
                           <MenuItem value={-1}>📁 Tudo (Todas as Pastas)</MenuItem>                                                    {(folders || []).filter(f => f).map(folder => (
