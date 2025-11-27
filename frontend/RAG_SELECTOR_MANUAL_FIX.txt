@@ -1,0 +1,74 @@
+// ============================================
+// PASSO 1: ADICIONAR IMPORT (linha ~52-53)
+// ============================================
+// Adicione esta linha APÓS a linha:
+// import ColorBoxModal from "../ColorBoxModal";
+
+import useRAGCollections from "../../hooks/useRAGCollections";
+
+
+// ============================================
+// PASSO 2: INSTANCIAR HOOK (linha ~192)
+// ============================================
+// Adicione esta linha APÓS a linha:
+// const isMounted = useRef(true);
+
+const { collections: ragCollections, loading: ragLoading } = useRAGCollections();
+
+
+// ============================================
+// PASSO 3: SUBSTITUIR CAMPO RAG COLLECTION (linhas ~840-868)
+// ============================================
+// SUBSTITUA TODO O BLOCO que começa com:
+// <Grid item xs={12}>
+//   <Field
+//     as={TextField}
+//     label={...}
+//     name="ragCollection"
+// ...
+// </Grid>
+
+// PELO SEGUINTE CÓDIGO:
+
+<Grid item xs={12}>
+  <FormControl variant="outlined" margin="dense" fullWidth>
+    <InputLabel>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        Coleção RAG
+        <Tooltip title="Base de conhecimento que a IA usará para responder perguntas. Selecione uma coleção ou deixe vazio para desativar o bot inteligente." arrow>
+          <HelpOutlineIcon fontSize="small" color="action" style={{ cursor: 'help' }} />
+        </Tooltip>
+      </div>
+    </InputLabel>
+    <Field
+      as={Select}
+      label="Coleção RAG"
+      name="ragCollection"
+      value={values.ragCollection || ""}
+      disabled={ragLoading}
+    >
+      <MenuItem value="">
+        <em>Nenhuma (Bot desativado)</em>
+      </MenuItem>
+      {ragCollections.map((coll) => (
+        <MenuItem key={coll.id} value={coll.name}>
+          {coll.label}
+        </MenuItem>
+      ))}
+    </Field>
+  </FormControl>
+  
+  {ragLoading && (
+    <Typography variant="caption" color="textSecondary" style={{ display: 'block', marginTop: 4 }}>
+      Carregando coleções disponíveis...
+    </Typography>
+  )}
+  
+  {values.ragCollection && (
+    <Box mt={1} p={1.5} bgcolor="#f5f5f5" borderRadius={1}>
+      <Typography variant="caption" color="textSecondary">
+        ✅ Bot ativado com coleção: <strong>{values.ragCollection}</strong>
+      </Typography>
+    </Box>
+  )}
+</Grid>

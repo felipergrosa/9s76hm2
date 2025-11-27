@@ -56,6 +56,30 @@ const CreateTicketService = async ({
 
   const { isGroup } = await ShowContactService(contactId, companyId);
 
+  // Lógica inteligente de bot: prioriza chatbot, fallback para RAG, desabilita se não tiver nenhum
+  let shouldEnableBot = true;  // Default: bot ativo
+
+  if (queueId) {
+    const queue = await Queue.findByPk(queueId, {
+      include: [
+        {
+          association: 'chatbots',
+          required: false
+        }
+      ]
+    });
+
+    if (queue) {
+      const hasChatbot = queue.chatbots && queue.chatbots.length > 0;
+      const hasRAG = !!(queue.ragCollection && queue.ragCollection.trim());
+
+      // Ativar bot SE tiver chatbot OU RAG
+      shouldEnableBot = hasChatbot || hasRAG;
+
+      console.log(`[CreateTicket] Fila ${queue.name}: chatbot=${hasChatbot}, RAG=${hasRAG}, isBot=${shouldEnableBot}`);
+    }
+  }
+
   let ticket = await Ticket.create({
     contactId,
     companyId,
@@ -63,7 +87,7 @@ const CreateTicketService = async ({
     channel: defaultWhatsapp.channel,
     isGroup,
     userId,
-    isBot: true,
+    isBot: shouldEnableBot,  // Dinâmico baseado em chatbot OU RAG
     queueId,
     status: isGroup ? "group" : "open",
     isActiveDemand: true

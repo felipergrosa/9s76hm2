@@ -131,7 +131,7 @@ const TemplateVariableMapper = ({
             </Typography>
 
             {template.parameters.map((param) => {
-                const config = value[param.index] || { type: "crm_field", source: "name" };
+                const config = (value && value[param.index]) || { type: "crm_field", source: "name" };
 
                 return (
                     <Box key={param.index} mb={2}>
@@ -172,10 +172,24 @@ const TemplateVariableMapper = ({
                                             onChange={(e) => handleSourceChange(param.index, e.target.value)}
                                             label="Campo"
                                         >
-                                            <MenuItem value="name">Nome do Contato</MenuItem>
+                                            <MenuItem value="name">Nome</MenuItem>
                                             <MenuItem value="email">E-mail</MenuItem>
-                                            <MenuItem value="number">Telefone</MenuItem>
+                                            <MenuItem value="number">Telefone/WhatsApp</MenuItem>
                                             <MenuItem value="id">ID do Contato</MenuItem>
+                                            <MenuItem value="cpfCnpj">CPF/CNPJ</MenuItem>
+                                            <MenuItem value="representativeCode">Código do Representante</MenuItem>
+                                            <MenuItem value="city">Cidade</MenuItem>
+                                            <MenuItem value="instagram">Instagram</MenuItem>
+                                            <MenuItem value="contactName">Nome do Contato</MenuItem>
+                                            <MenuItem value="segment">Segmento de Mercado</MenuItem>
+                                            <MenuItem value="situation">Situação</MenuItem>
+                                            <MenuItem value="fantasyName">Nome Fantasia</MenuItem>
+                                            <MenuItem value="foundationDate">Data de Fundação</MenuItem>
+                                            <MenuItem value="creditLimit">Limite de Crédito</MenuItem>
+                                            <MenuItem value="dtUltCompra">Data da Última Compra</MenuItem>
+                                            <MenuItem value="vlUltCompra">Valor da Última Compra</MenuItem>
+                                            <MenuItem value="bzEmpresa">Empresa</MenuItem>
+                                            <MenuItem value="region">Região</MenuItem>
                                         </Select>
                                     </FormControl>
                                 )}

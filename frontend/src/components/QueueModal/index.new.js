@@ -246,8 +246,8 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
     useEffect(() => {
         (async () => {
             try {
-                const { data } = await api.get("/library/folders", { params: { companyId } });
-                setFile(data.folders || data);
+                const { data } = await api.get("/files/", { params: { companyId } });
+                setFile(data.files);
             } catch (err) {
                 toastError(err);
             }
@@ -515,18 +515,17 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                                     <Grid container spacing={2}>
                                         <Grid item xs={12}>
                                             <FormControl variant="outlined" margin="dense" fullWidth>
-                                                <InputLabel>Pasta de Arquivos</InputLabel>
+                                                <InputLabel>Arquivos</InputLabel>
                                                 <Field
                                                     as={Select}
                                                     label="Arquivos"
                                                     name="fileListId"
                                                     value={values.fileListId || ""}
                                                 >
-                                                    <MenuItem value="">Nenhuma</MenuItem>
-                          <MenuItem value="all">📁 Tudo (Todas as Pastas)</MenuItem>
+                                                    <MenuItem value="">Nenhuma Arquivos</MenuItem>
                                                     {file.map(f => (
-                            <MenuItem key={f.id} value={f.id}>
-                              📁 {f.name}
+                                                        <MenuItem key={f.id} value={f.id}>
+                                                            {f.name}
                                                         </MenuItem>
                                                     ))}
                                                 </Field>
@@ -1212,8 +1211,8 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                                                                                                     className={classes.textField1}
                                                                                                 >
                                                                                                     {file.map(f => (
-                            <MenuItem key={f.id} value={f.id}>
-                              📁 {f.name}
+                                                                                                        <MenuItem key={f.id} value={f.id}>
+                                                                                                            {f.name}
                                                                                                         </MenuItem>
                                                                                                     ))}
                                                                                                 </Field>

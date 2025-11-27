@@ -1,0 +1,93 @@
+diff --git a/frontend/src/components/QueueModal/index.js b/frontend/src/components/QueueModal/index.js
+index 1234567..abcdefg 100644
+--- a/frontend/src/components/QueueModal/index.js
++++ b/frontend/src/components/QueueModal/index.js
+@@ -51,6 +51,7 @@ import useQueues from "../../hooks/useQueues";
+ import UserStatusIcon from "../UserModal/statusIcon";
+ import usePlans from "../../hooks/usePlans";
+ import ColorBoxModal from "../ColorBoxModal";
++import useRAGCollections from "../../hooks/useRAGCollections";
+ // import { ColorBox } from "material-ui-color";
+ 
+ 
+@@ -170,6 +171,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
+   const [allQueues, setAllQueues] = useState([]);
+   const [userOptions, setUserOptions] = useState([]);
+   const isMounted = useRef(true);
++  const { collections: ragCollections, loading: ragLoading } = useRAGCollections();
+ 
+   const initialStateSchedule = [
+     { weekday: i18n.t("Segunda-feira"), weekdayEn: "monday", startTimeA: "00:00", endTimeA: "12:00", startTimeB: "12:01", endTimeB: "23:59" },
+@@ -810,23 +812,41 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
+                   </Grid>
+ 
+                   <Grid item xs={12}>
+-                    <Field
+-                      as={TextField}
+-                      label={
+-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+-                          Coleção RAG
+-                          <Tooltip title={
+-                            <div>
+-                              <strong>Sistema de busca inteligente de arquivos.</strong><br />
+-                              O sistema analisa mensagens do cliente e sugere arquivos relevantes automaticamente.<br />
+-                              <strong>Como funciona:</strong><br />
+-                              • Cliente escreve "preciso do manual"<br />
+-                              • Sistema busca arquivos com palavra "manual" nos metadados<br />
+-                              • Sugere arquivos mais relevantes baseado no score<br />
+-                              <strong>Futuro:</strong> Integração com IA para busca semântica avançada
+-                            </div>
+-                          } arrow>
+-                            <HelpOutlineIcon fontSize="small" color="action" style={{ cursor: 'help' }} />
+-                          </Tooltip>
+-                        </div>
+-                      }
+-                      name="ragCollection"
+-                      variant="outlined"
+-                      margin="dense"
+-                      fullWidth
+-                      placeholder="Ex: catalogo_produtos, manuais_tecnicos, formularios"
+-                      helperText="✅ Funcional: Sistema inteligente de sugestão de arquivos baseado em palavras-chave"
+-                    />
++                    <FormControl variant="outlined" margin="dense" fullWidth>
++                      <InputLabel>
++                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
++                          Coleção RAG
++                          <Tooltip title="Base de conhecimento que a IA usará para responder perguntas. Selecione uma coleção ou deixe vazio para desativar o bot inteligente." arrow>
++                            <HelpOutlineIcon fontSize="small" color="action" style={{ cursor: 'help' }} />
++                          </Tooltip>
++                        </div>
++                      </InputLabel>
++                      <Field
++                        as={Select}
++                        label="Coleção RAG"
++                        name="ragCollection"
++                        value={values.ragCollection || ""}
++                        disabled={ragLoading}
++                      >
++                        <MenuItem value="">
++                          <em>Nenhuma (Bot desativado)</em>
++                        </MenuItem>
++                        {ragCollections.map((coll) => (
++                          <MenuItem key={coll.id} value={coll.name}>
++                            {coll.label}
++                          </MenuItem>
++                        ))}
++                      </Field>
++                    </FormControl>
++                    
++                    {ragLoading && (
++                      <Typography variant="caption" color="textSecondary" style={{ display: 'block', marginTop: 4 }}>
++                        Carregando coleções disponíveis...
++                      </Typography>
++                    )}
++                    
++                    {values.ragCollection && (
++                      <Box mt={1} p={1.5} bgcolor="#f5f5f5" borderRadius={1}>
++                        <Typography variant="caption" color="textSecondary">
++                          ✅ Bot ativado com coleção: <strong>{values.ragCollection}</strong>
++                        </Typography>
++                      </Box>
++                    )}
+                   </Grid>
+                 </Grid>

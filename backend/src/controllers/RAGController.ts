@@ -117,7 +117,7 @@ export const indexFile = async (req: Request, res: Response) => {
     const isText = mediaType.startsWith('text/') || [".txt", ".md", ".csv", ".json"].includes(ext);
     const isPDF = ext === '.pdf' || mediaType === 'application/pdf';
     const isImage = mediaType.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif'].includes(ext);
-    
+
     if (!isText && !isPDF && !isImage) {
       return res.status(415).json({ error: `Tipo de arquivo não suportado para indexação: ${mediaType || ext}` });
     }
@@ -140,11 +140,11 @@ export const indexFile = async (req: Request, res: Response) => {
 
     } catch (error: any) {
       console.error(`[RAG] Failed to index file ${relPath}:`, error.message);
-      
+
       // Fallback para método legado (apenas texto)
       if (isText) {
         console.log(`[RAG] Trying legacy text processing for ${relPath}`);
-        
+
         let textContent = '';
         try {
           const buf = await fs.promises.readFile(absPath);
@@ -173,10 +173,10 @@ export const indexFile = async (req: Request, res: Response) => {
           chunkSize,
           overlap
         });
-        
+
         return res.status(200).json(legacyResult);
       }
-      
+
       throw error;
     }
   } catch (error: any) {
@@ -202,7 +202,7 @@ export const autoIndexConversations = async (req: Request, res: Response) => {
     console.log(`[RAG] Starting auto-index for company ${companyId}`);
 
     let result;
-    
+
     if (days) {
       // Indexa conversas dos últimos N dias
       result = await AutoIndexService.indexRecentConversations(companyId, days, {
@@ -231,7 +231,7 @@ export const autoIndexConversations = async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error("[RAG] Auto-index failed:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: error?.message || 'Erro na auto-indexação de conversas',
       success: false
     });
@@ -244,9 +244,9 @@ export const autoIndexConversations = async (req: Request, res: Response) => {
 export const getIndexableStats = async (req: Request, res: Response) => {
   try {
     const { companyId } = req.user;
-    
+
     const stats = await AutoIndexService.getIndexableStats(companyId);
-    
+
     return res.status(200).json({
       success: true,
       stats
@@ -254,7 +254,7 @@ export const getIndexableStats = async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error("[RAG] Failed to get indexable stats:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: error?.message || 'Erro ao obter estatísticas',
       success: false
     });
@@ -296,7 +296,7 @@ export const autoIndexByDateRange = async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error("[RAG] Auto-index by date range failed:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: error?.message || 'Erro na indexação por período',
       success: false
     });
@@ -307,7 +307,7 @@ export const autoIndexByDateRange = async (req: Request, res: Response) => {
 export const listSources = async (req: Request, res: Response) => {
   try {
     const { companyId } = req.user;
-    
+
     // Buscar arquivos do FileManager indexados
     const fileManagerFiles = await FilesOptions.findAll({
       attributes: ['id', 'name', 'path', 'mediaType', 'createdAt'],
@@ -320,7 +320,7 @@ export const listSources = async (req: Request, res: Response) => {
       limit: 50,
       order: [['createdAt', 'DESC']]
     });
-    
+
     // Links externos indexados (SQL bruto para robustez)
     const extRows: any[] = await sequelize.query(
       `SELECT id, title, metadata, size, "updatedAt", source, "companyId" FROM "KnowledgeDocuments"
@@ -332,8 +332,8 @@ export const listSources = async (req: Request, res: Response) => {
 
     const externalLinks = extRows.map(r => {
       let meta: any = {};
-      try { meta = r.metadata ? JSON.parse(r.metadata) : {}; } catch {}
-      
+      try { meta = r.metadata ? JSON.parse(r.metadata) : {}; } catch { }
+
       return {
         id: r.id,
         url: meta.url || undefined,
@@ -368,11 +368,11 @@ export const indexUrl = async (req: Request, res: Response) => {
   try {
     const { companyId } = req.user;
     const { url, title } = req.body;
-    
+
     if (!url) {
       return res.status(400).json({ error: "URL é obrigatória" });
     }
-    
+
     // Função para fazer fetch com suporte a redirects
     const fetchWithRedirects = async (targetUrl: string, maxRedirects = 5): Promise<{ body: string; finalUrl: string; hostname: string; }> => {
       if (maxRedirects <= 0) {
@@ -381,9 +381,9 @@ export const indexUrl = async (req: Request, res: Response) => {
 
       const https = require('https');
       const http = require('http');
-      
+
       const client = targetUrl.startsWith('https:') ? https : http;
-      
+
       return new Promise((resolve, reject) => {
         const options = {
           headers: {
@@ -391,7 +391,7 @@ export const indexUrl = async (req: Request, res: Response) => {
           },
           timeout: 10000
         };
-        
+
         const req = client.get(targetUrl, options, (res) => {
           // Seguir redirects 301/302
           if (res.statusCode === 301 || res.statusCode === 302) {
@@ -404,12 +404,12 @@ export const indexUrl = async (req: Request, res: Response) => {
               return fetchWithRedirects(resolved, maxRedirects - 1).then(resolve).catch(reject);
             }
           }
-          
+
           if (res.statusCode !== 200) {
             reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
             return;
           }
-          
+
           let data = '';
           res.on('data', chunk => data += chunk);
           res.on('end', () => {
@@ -421,7 +421,7 @@ export const indexUrl = async (req: Request, res: Response) => {
             }
           });
         });
-        
+
         req.on('error', reject);
         req.on('timeout', () => {
           req.destroy();
@@ -429,9 +429,9 @@ export const indexUrl = async (req: Request, res: Response) => {
         });
       });
     };
-    
+
     const response = await fetchWithRedirects(url);
-    
+
     // Extrair título e meta description
     const html = String(response.body);
     const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
@@ -448,11 +448,11 @@ export const indexUrl = async (req: Request, res: Response) => {
       .trim();
 
     const textContent = [extractedTitle, extractedDesc, bodyText].filter(Boolean).join('\n\n');
-    
+
     if (textContent.length < 30) {
       return res.status(400).json({ error: "Conteúdo da página muito pequeno ou inacessível" });
     }
-    
+
     // Indexar no RAG
     try {
       const indexResult = await indexTextDocument({
@@ -464,16 +464,16 @@ export const indexUrl = async (req: Request, res: Response) => {
         mimeType: 'text/html',
         metadata: { url: response.finalUrl || url, title: extractedTitle, description: extractedDesc, contentLength: textContent.length, hostname: response.hostname }
       });
-      
+
       console.log('[RAG] URL indexada com sucesso:', response.finalUrl || url, 'documentId:', indexResult.documentId);
-      
+
     } catch (indexError) {
       console.error('[RAG] Erro ao indexar texto:', indexError);
       throw new Error('Erro ao indexar conteúdo da URL: ' + indexError.message);
     }
-    
-    return res.json({ 
-      success: true, 
+
+    return res.json({
+      success: true,
       message: "URL indexada com sucesso",
       url: response.finalUrl || url,
       title: title || response.finalUrl || url,
@@ -490,11 +490,11 @@ export const removeExternalLink = async (req: Request, res: Response) => {
   try {
     const { companyId } = req.user;
     const { url } = req.body;
-    
+
     if (!url) {
       return res.status(400).json({ error: "URL é obrigatória" });
     }
-    
+
     // Encontrar documentos e deletar chunks antes (corrigido para PostgreSQL)
     const docs: any[] = await sequelize.query(
       `SELECT id FROM "KnowledgeDocuments" WHERE "companyId" = :companyId AND "source" = 'external' AND metadata::jsonb->>'url' = :url`,
@@ -510,7 +510,7 @@ export const removeExternalLink = async (req: Request, res: Response) => {
         replacements: { companyId, docId }, type: QueryTypes.DELETE
       });
     }
-    
+
     return res.json({ success: true, message: "Link externo removido com sucesso" });
   } catch (error) {
     console.error("Erro ao remover link externo:", error);
@@ -626,7 +626,7 @@ export const indexSitemap = async (req: Request, res: Response) => {
               if (!sameHostOnly || new URL(final).hostname === host) urls.push(final);
               if (urls.length >= maxUrls) break;
             }
-          } catch {}
+          } catch { }
         }
         if (urls.length >= maxUrls) break;
       }
@@ -659,11 +659,101 @@ export const indexSitemap = async (req: Request, res: Response) => {
   }
 };
 
-export default { 
-  indexText, 
-  search, 
-  listDocuments, 
-  removeDocument, 
+/**
+ * Listar coleções RAG disponíveis (baseado em ragCollection das filas)
+ */
+export const listCollections = async (req: Request, res: Response) => {
+  try {
+    const { companyId } = req.user;
+
+    // Buscar filas com ragCollection preenchido
+    const Queue = require("../models/Queue").default;
+    const queues = await Queue.findAll({
+      where: { companyId },
+      attributes: ["id", "name", "ragCollection"],
+      raw: true
+    });
+
+    // Extrair coleções únicas (não vazias)
+    const collectionsSet = new Set<string>();
+    queues.forEach((q: any) => {
+      if (q.ragCollection && q.ragCollection.trim()) {
+        collectionsSet.add(q.ragCollection.trim());
+      }
+    });
+
+    const collections = Array.from(collectionsSet).map((name, index) => ({
+      id: `collection_${index + 1}`,
+      name,
+      label: name
+        .split('_')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' '),
+      documentCount: 0, // Poderia contar docs com tag collection:name
+      description: `Coleção RAG: ${name}`
+    }));
+
+    // Adicionar coleções pré-definidas comuns
+    const defaultCollections = [
+      {
+        id: "base_conhecimento_global",
+        name: "base_conhecimento_global",
+        label: "📘 Base de Conhecimento Global",
+        documentCount: 0,
+        description: "Base de conhecimento principal com informações gerais"
+      },
+      {
+        id: "catalogo_produtos",
+        name: "catalogo_produtos",
+        label: "🛒 Catálogo de Produtos",
+        documentCount: 0,
+        description: "Informações sobre produtos e serviços"
+      },
+      {
+        id: "manuais_tecnicos",
+        name: "manuais_tecnicos",
+        label: "📖 Manuais Técnicos",
+        documentCount: 0,
+        description: "Documentação técnica e tutoriais"
+      },
+      {
+        id: "faq_geral",
+        name: "faq_geral",
+        label: "❓ FAQ Geral",
+        documentCount: 0,
+        description: "Perguntas frequentes"
+      },
+      {
+        id: "formularios",
+        name: "formularios",
+        label: "📋 Formulários",
+        documentCount: 0,
+        description: "Templates e formulários"
+      }
+    ];
+
+    // Merge coleções existentes com padrão (sem duplicar)
+    const existingNames = new Set(collections.map(c => c.name));
+    const allCollections = [
+      ...collections,
+      ...defaultCollections.filter(dc => !existingNames.has(dc.name))
+    ];
+
+    return res.json({
+      collections: allCollections,
+      total: allCollections.length
+    });
+  } catch (error: any) {
+    console.error("[RAG] Erro ao listar coleções:", error);
+    return res.status(500).json({ error: error?.message || "Erro ao listar coleções RAG" });
+  }
+};
+
+export default {
+  indexText,
+  search,
+  listDocuments,
+  removeDocument,
   indexFile,
   autoIndexConversations,
   getIndexableStats,
@@ -673,5 +763,6 @@ export default {
   removeExternalLink,
   indexSitemap,
   reindexDocument,
-  reindexAll
+  reindexAll,
+  listCollections
 };
