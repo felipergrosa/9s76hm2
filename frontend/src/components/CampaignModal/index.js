@@ -54,6 +54,7 @@ import useQueues from "../../hooks/useQueues";
 import ChatAssistantPanel from "../ChatAssistantPanel";
 import WhatsAppPreview from "./WhatsAppPreview";
 import { Sparkles } from "lucide-react";
+import TemplateVariableMapper from "../TemplateVariableMapper";  // NOVO
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -145,6 +146,7 @@ const CampaignModal = ({
     allowedWhatsappIds: [],
     metaTemplateName: null,
     metaTemplateLanguage: null,
+    metaTemplateVariables: {},  // NOVO: mapeamento de variáveis
   };
 
   // Validação de mídia permitida
@@ -204,7 +206,7 @@ const CampaignModal = ({
   const renderTagsToolbar = (values, setFieldValue, targetField) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 8px' }}>
       <Button size="small" variant="outlined" onClick={(e) => { setTagsTargetField(targetField); handleOpenTags(e); }}>#Tags</Button>
-      
+
       <Tooltip title="Como usar as tags?">
         <IconButton size="small" onClick={handleOpenInfo} aria-label="como usar as tags">
           <InfoOutlinedIcon fontSize="small" />
@@ -266,6 +268,7 @@ const CampaignModal = ({
   const [availableTemplates, setAvailableTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [metaTemplateVariables, setMetaTemplateVariables] = useState({});  // NOVO
 
   useEffect(() => {
     if (!campaignId && defaultWhatsappId) {
@@ -514,13 +517,13 @@ const CampaignModal = ({
         setAvailableTemplates([]);
         return;
       }
-      
+
       const whatsapp = whatsapps.find(w => w.id === whatsappId);
       if (whatsapp?.channelType !== "official") {
         setAvailableTemplates([]);
         return;
       }
-      
+
       setLoadingTemplates(true);
       try {
         const { data } = await api.get(`/whatsapp/${whatsappId}/templates`);
@@ -532,7 +535,7 @@ const CampaignModal = ({
         setLoadingTemplates(false);
       }
     };
-    
+
     loadTemplates();
   }, [whatsappId, whatsapps]);
 
@@ -563,7 +566,7 @@ const CampaignModal = ({
         ]);
 
         setContactLists(contactListsRes.data || []);
-        
+
         const mappedWhatsapps = (whatsappsRes.data || []).map((whatsapp) => ({
           ...whatsapp,
           selected: false,
@@ -591,11 +594,24 @@ const CampaignModal = ({
           if (data?.queue) setSelectedQueue(data.queue.id);
           if (data?.whatsappId) setWhatsappId(data.whatsappId);
           if (data?.dispatchStrategy) setDispatchStrategy(data.dispatchStrategy);
-          
+
+          // NOVO: Carregar metaTemplateVariables
+          if (data?.metaTemplateVariables) {
+            try {
+              const variables = typeof data.metaTemplateVariables === 'string'
+                ? JSON.parse(data.metaTemplateVariables)
+                : data.metaTemplateVariables;
+              setMetaTemplateVariables(variables || {});
+            } catch (e) {
+              console.error('[CampaignModal] Erro ao parsear metaTemplateVariables:', e);
+              setMetaTemplateVariables({});
+            }
+          }
+
           if (data?.allowedWhatsappIds) {
             try {
-              const parsed = typeof data.allowedWhatsappIds === 'string' 
-                ? JSON.parse(data.allowedWhatsappIds) 
+              const parsed = typeof data.allowedWhatsappIds === 'string'
+                ? JSON.parse(data.allowedWhatsappIds)
                 : data.allowedWhatsappIds;
               if (Array.isArray(parsed)) setAllowedWhatsappIds(parsed);
             } catch (e) {
@@ -636,7 +652,7 @@ const CampaignModal = ({
       try {
         const { data } = await api.get(`/files/list`, { params: { searchParam: filesSearch } });
         if (active) setFileLists(Array.isArray(data) ? data : []);
-      } catch (_) {}
+      } catch (_) { }
     })();
     return () => { active = false; };
   }, [fileLibraryOpen, filesSearch]);
@@ -646,7 +662,7 @@ const CampaignModal = ({
     const scheduledAt = moment(campaign.scheduledAt);
     const moreThenAnHour =
       !Number.isNaN(scheduledAt.diff(now)) && scheduledAt.diff(now, "hour") > 1;
-    
+
     // Permite edição se:
     // 1. Campanha está INATIVA (nunca enviada)
     // 2. Campanha está PROGRAMADA com mais de 1 hora para iniciar
@@ -679,7 +695,8 @@ const CampaignModal = ({
         userId: selectedUser?.id || null,
         queueId: selectedQueue || null,
         dispatchStrategy,
-        allowedWhatsappIds
+        allowedWhatsappIds,
+        metaTemplateVariables  // NOVO: incluir mapeamento de variáveis
       };
 
       Object.entries(values).forEach(([key, value]) => {
@@ -865,1049 +882,1070 @@ const CampaignModal = ({
             </div>
           </DialogContent>
         ) : (
-        <Formik
-          initialValues={campaign}
-          enableReinitialize={true}
-          validationSchema={CampaignSchema}
-          onSubmit={(values, actions) => {
-            setTimeout(() => {
-              handleSaveCampaign(values);
-              actions.setSubmitting(false);
-            }, 400);
-          }}
-        >
-          {({ values, errors, touched, isSubmitting, setFieldValue }) => {
-            setFieldValueRef.current = setFieldValue;
-            formValuesRef.current = values;
-            const assistantQueueId = selectedQueue || values.queueId || (Array.isArray(selectedUser?.queues) ? selectedUser.queues[0]?.id : null);
-            const assistantWhatsappId = whatsappId || values.whatsappId || values.whatsappIds || null;
-            assistantQueueIdRef.current = assistantQueueId || null;
-            assistantWhatsappIdRef.current = assistantWhatsappId || null;
+          <Formik
+            initialValues={campaign}
+            enableReinitialize={true}
+            validationSchema={CampaignSchema}
+            onSubmit={(values, actions) => {
+              setTimeout(() => {
+                handleSaveCampaign(values);
+                actions.setSubmitting(false);
+              }, 400);
+            }}
+          >
+            {({ values, errors, touched, isSubmitting, setFieldValue }) => {
+              setFieldValueRef.current = setFieldValue;
+              formValuesRef.current = values;
+              const assistantQueueId = selectedQueue || values.queueId || (Array.isArray(selectedUser?.queues) ? selectedUser.queues[0]?.id : null);
+              const assistantWhatsappId = whatsappId || values.whatsappId || values.whatsappIds || null;
+              assistantQueueIdRef.current = assistantQueueId || null;
+              assistantWhatsappIdRef.current = assistantWhatsappId || null;
 
-            return (
-              <Form>
-                <DialogContent dividers style={{ padding: 0, display: "flex" }}>
-                  {/* Coluna esquerda - Formulário */}
-                  <Box flex={1} style={{ overflowY: "auto", padding: "20px 24px" }}>
-                  <Grid spacing={2} container>
-                  {/* Popover de #Tags */}
-                  <Popover
-                    open={openTags}
-                    anchorEl={tagsAnchorEl}
-                    onClose={handleCloseTags}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                  >
-                    <div style={{ padding: 12, maxWidth: 380 }}>
-                      <TextField
-                        value={tagsSearch}
-                        onChange={(e) => setTagsSearch(e.target.value)}
-                        placeholder="Buscar #tags..."
-                        variant="outlined"
-                        size="small"
-                        fullWidth
-                        style={{ marginBottom: 8 }}
-                      />
-                      <div style={{ maxHeight: 260, overflowY: 'auto' }}>
-                        {Object.keys(groupedVars).map(cat => {
-                          const items = groupedVars[cat].filter(v =>
-                            (v.label || '').toLowerCase().includes((tagsSearch || '').toLowerCase()) ||
-                            (v.desc || '').toLowerCase().includes((tagsSearch || '').toLowerCase())
-                          );
-                          if (items.length === 0) return null;
-                          return (
-                            <div key={cat} style={{ marginBottom: 8 }}>
-                              <Typography variant="subtitle2" style={{ opacity: 0.8, marginBottom: 4 }}>{cat}</Typography>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                {items.map(item => (
-                                  <Chip
-                                    key={item.key}
-                                    label={`#${item.label}`}
-                                    onClick={() => {
-                                      if (tagsTargetField) {
-                                        insertTagIntoField(tagsTargetField, setFieldValue, values)(item.label);
-                                      }
-                                      handleCloseTags();
-                                    }}
-                                    variant="default"
-                                    clickable
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {/* Dica */}
-                        <Typography variant="caption" style={{ display: 'block', marginTop: 8, opacity: 0.8 }}>
-                          As tags serão inseridas no campo selecionado (mensagem ou prompt da aba atual) no formato {`{tag}`}. Ex.: {`{nome}`}, {`{empresa}`}
-                        </Typography>
-                      </div>
-                    </div>
-                  </Popover>
-                  {/* Popover de instruções (i) */}
-                  <Popover
-                    open={openInfo}
-                    anchorEl={infoAnchorEl}
-                    onClose={handleCloseInfo}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                  >
-                    <div style={{ padding: 14, maxWidth: 520 }}>
-                      <Typography variant="subtitle1" style={{ marginBottom: 8 }}>Como usar as tags</Typography>
-                      <Typography variant="body2" paragraph>
-                        Escreva as variáveis no texto entre chaves. Ex.: {`{nome}`}, {`{primeiro-nome}`}, {`{data}`}, {`{saudacao}`}.
-                      </Typography>
-                      <Typography variant="subtitle2">Tags nativas</Typography>
-                      <ul style={{ marginTop: 4, marginBottom: 8, paddingLeft: 18 }}>
-                        <li>{`{nome}`} — Nome completo do contato</li>
-                        <li>{`{primeiro-nome}`} — Primeiro nome do contato</li>
-                        <li>{`{email}`} — Email do contato</li>
-                        <li>{`{numero}`} — Número do contato</li>
-                        <li>{`{data}`} — Data atual (DD/MM/AAAA)</li>
-                        <li>{`{hora}`} — Hora atual (HH:MM:SS)</li>
-                        <li>{`{data-hora}`} — Data e hora atuais</li>
-                        <li>{`{periodo-dia}`} — manhã, tarde ou noite</li>
-                        <li>{`{saudacao}`} — Bom dia, Boa tarde, Boa noite</li>
-                      </ul>
-                      <Typography variant="subtitle2">Campos do cadastro</Typography>
-                      <Typography variant="body2" paragraph>
-                        Você pode usar <strong>qualquer campo do cadastro do contato</strong> como tag. Ex.: {`{fantasyName}`} ou {`{fantasy-name}`}, {`{cpfCnpj}`} ou {`{cpf-cnpj}`}, {`{city}`}.
-                        O nome da tag pode ser o <em>nome exato do campo</em> ou sua versão <em>kebab-case</em> (com hífens).
-                      </Typography>
-                      <Typography variant="subtitle2">Variáveis personalizadas</Typography>
-                      <Typography variant="body2">
-                        Também é possível definir variáveis nas configurações da campanha. Use-as como {`{minha-variavel}`}. 
-                      </Typography>
-                    </div>
-                  </Popover>
-                  <Grid xs={12} md={4} item>
-                    <Field
-                      as={TextField}
-                      label={i18n.t("campaigns.dialog.form.name")}
-                      name="name"
-                      error={touched.name && Boolean(errors.name)}
-                      helperText={touched.name && errors.name}
-                      variant="outlined"
-                      margin="dense"
-                      fullWidth
-                      className={classes.textField}
-                      disabled={!campaignEditable}
-                    />
-                  </Grid>
-                  <Grid xs={12} md={4} item>
-                    <FormControl
-                      variant="outlined"
-                      margin="dense"
-                      fullWidth
-                      className={classes.formControl}
-                    >
-                      <InputLabel id="confirmation-selection-label">
-                        {i18n.t("campaigns.dialog.form.confirmation")}
-                      </InputLabel>
-                      <Field
-                        as={Select}
-                        label={i18n.t("campaigns.dialog.form.confirmation")}
-                        placeholder={i18n.t(
-                          "campaigns.dialog.form.confirmation"
-                        )}
-                        labelId="confirmation-selection-label"
-                        id="confirmation"
-                        name="confirmation"
-                        error={
-                          touched.confirmation && Boolean(errors.confirmation)
-                        }
-                        disabled={!campaignEditable}
-                      >
-                        <MenuItem value={false}>Desabilitada</MenuItem>
-                        <MenuItem value={true}>Habilitada</MenuItem>
-                      </Field>
-                    </FormControl>
-                  </Grid>
-                  <Grid xs={12} md={4} item>
-                    <FormControl
-                      variant="outlined"
-                      margin="dense"
-                      fullWidth
-                      className={classes.formControl}
-                    >
-                      <InputLabel id="contactList-selection-label">
-                        {i18n.t("campaigns.dialog.form.contactList")}
-                      </InputLabel>
-                      <Field
-                        as={Select}
-                        label={i18n.t("campaigns.dialog.form.contactList")}
-                        placeholder={i18n.t(
-                          "campaigns.dialog.form.contactList"
-                        )}
-                        labelId="contactList-selection-label"
-                        id="contactListId"
-                        name="contactListId"
-                        error={
-                          touched.contactListId && Boolean(errors.contactListId)
-                        }
-                        disabled={!campaignEditable}
-                      >
-                        <MenuItem value="">Nenhuma</MenuItem>
-                        {contactLists &&
-                          contactLists.map((contactList) => (
-                            <MenuItem
-                              key={contactList.id}
-                              value={contactList.id}
-                            >
-                              {contactList.name}
-                            </MenuItem>
-                          ))}
-                      </Field>
-                    </FormControl>
-                  </Grid>
-                  <Grid xs={12} md={4} item>
-                    <FormControl
-                      variant="outlined"
-                      margin="dense"
-                      fullWidth
-                      className={classes.formControl}
-                    >
-                      <InputLabel id="tagList-selection-label">
-                        {i18n.t("campaigns.dialog.form.tagList")}
-                      </InputLabel>
-                      <Field
-                        as={Select}
-                        label={i18n.t("campaigns.dialog.form.tagList")}
-                        placeholder={i18n.t("campaigns.dialog.form.tagList")}
-                        labelId="tagList-selection-label"
-                        id="tagListId"
-                        name="tagListId"
-                        error={touched.tagListId && Boolean(errors.tagListId)}
-                        disabled={!campaignEditable}
-                      >
-                        {/* <MenuItem value="">Nenhuma</MenuItem> */}
-                        {Array.isArray(tagLists) &&
-                          tagLists.map((tagList) => (
-                            <MenuItem key={tagList.id} value={tagList.id}>
-                              {tagList.name}
-                            </MenuItem>
-                          ))}
-                      </Field>
-                    </FormControl>
-                  </Grid>
-
-                  <Grid xs={12} md={4} item>
-                    <FormControl
-                      variant="outlined"
-                      margin="dense"
-                      fullWidth
-                      className={classes.formControl}
-                    >
-                      <InputLabel id="whatsapp-selection-label">
-                        {i18n.t("campaigns.dialog.form.whatsapp")}
-                      </InputLabel>
-                      <Field
-                        as={Select}
-                        // multiple
-                        label={i18n.t("campaigns.dialog.form.whatsapp")}
-                        placeholder={i18n.t("campaigns.dialog.form.whatsapp")}
-                        labelId="whatsapp-selection-label"
-                        id="whatsappIds"
-                        name="whatsappIds"
-                        required
-                        error={touched.whatsappId && Boolean(errors.whatsappId)}
-                        disabled={!campaignEditable}
-                        value={whatsappId}
-                        onChange={(event) => {
-                          console.log(event.target.value)
-                          setWhatsappId(event.target.value)
-                        }}
-                        // renderValue={(selected) => (
-                        //   <div>
-                        //     {selected.map((value) => (
-                        //       <Chip key={value} label={whatsapps.find((whatsapp) => whatsapp.id === value).name} />
-                        //     ))}
-                        //   </div>
-                        // )}
-                      >
-                        {whatsapps &&
-                          whatsapps.map((whatsapp) => (
-                            <MenuItem key={whatsapp.id} value={whatsapp.id}>
-                              {whatsapp.name}
-                            </MenuItem>
-                          ))}
-                      </Field>
-                    </FormControl>
-                  </Grid>
-
-                  <Grid xs={12} md={4} item>
-                    <FormControl
-                      variant="outlined"
-                      margin="dense"
-                      fullWidth
-                      className={classes.formControl}
-                    >
-                      <InputLabel id="dispatch-strategy-label">
-                        Estratégia de Envio
-                      </InputLabel>
-                      <Select
-                        labelId="dispatch-strategy-label"
-                        id="dispatch-strategy"
-                        value={dispatchMode}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setDispatchMode(value);
-                          
-                          if (value === "all") {
-                            setAllowedWhatsappIds(whatsapps.map(w => w.id));
-                            setDispatchStrategy("round_robin");
-                          } else if (value === "baileys") {
-                            const ids = whatsapps.filter(w => w.channelType !== "official").map(w => w.id);
-                            setAllowedWhatsappIds(ids);
-                            setDispatchStrategy("round_robin");
-                          } else if (value === "official") {
-                            const ids = whatsapps.filter(w => w.channelType === "official").map(w => w.id);
-                            setAllowedWhatsappIds(ids);
-                            setDispatchStrategy("round_robin");
-                          } else if (value === "single") {
-                            setAllowedWhatsappIds([]);
-                            setDispatchStrategy("single");
-                          } else if (value === "custom") {
-                            setDispatchStrategy("round_robin");
-                          }
-                        }}
-                        label="Estratégia de Envio"
-                        disabled={!campaignEditable}
-                      >
-                        <MenuItem value="single">
-                          <Box>
-                            <Typography variant="body2">📱 Única conexão</Typography>
-                            <Typography variant="caption" color="textSecondary">
-                              Usa apenas a conexão principal
-                            </Typography>
-                          </Box>
-                        </MenuItem>
-                        
-                        <MenuItem value="custom">
-                          <Box>
-                            <Typography variant="body2">🎯 Rodízio personalizado</Typography>
-                            <Typography variant="caption" color="textSecondary">
-                              Você escolhe quais conexões usar
-                            </Typography>
-                          </Box>
-                        </MenuItem>
-                        
-                        <MenuItem value="all">
-                          <Box>
-                            <Typography variant="body2">🔄 Todas as conexões</Typography>
-                            <Typography variant="caption" color="textSecondary">
-                              Usa todas as {whatsapps.length} conexões disponíveis
-                            </Typography>
-                          </Box>
-                        </MenuItem>
-                        
-                        <MenuItem value="baileys">
-                          <Box>
-                            <Typography variant="body2">📱 Apenas Baileys (Grátis)</Typography>
-                            <Typography variant="caption" color="textSecondary">
-                              {whatsapps.filter(w => w.channelType !== "official").length} conexões disponíveis
-                            </Typography>
-                          </Box>
-                        </MenuItem>
-                        
-                        <MenuItem value="official">
-                          <Box>
-                            <Typography variant="body2">✅ Apenas API Oficial (R$ 0,50/msg)</Typography>
-                            <Typography variant="caption" color="textSecondary">
-                              {whatsapps.filter(w => w.channelType === "official").length} conexões disponíveis
-                            </Typography>
-                          </Box>
-                        </MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-
-                  {dispatchMode === "custom" && (
-                    <Grid xs={12} md={12} item>
-                      <Autocomplete
-                        multiple
-                        options={whatsapps}
-                        getOptionLabel={(option) => {
-                          const type = option.channelType === "official" ? "API" : "Baileys";
-                          const icon = option.channelType === "official" ? "✅" : "📱";
-                          return `${icon} ${option.name} (${type})`;
-                        }}
-                        value={
-                          Array.isArray(allowedWhatsappIds)
-                            ? whatsapps.filter(w => allowedWhatsappIds.includes(w.id))
-                            : []
-                        }
-                        onChange={(event, newValue) => {
-                          const ids = newValue.map(w => w.id);
-                          setAllowedWhatsappIds(ids);
-                        }}
-                        renderTags={(value, getTagProps) =>
-                          value.map((option, index) => (
-                            <Chip
+              return (
+                <Form>
+                  <DialogContent dividers style={{ padding: 0, display: "flex" }}>
+                    {/* Coluna esquerda - Formulário */}
+                    <Box flex={1} style={{ overflowY: "auto", padding: "20px 24px" }}>
+                      <Grid spacing={2} container>
+                        {/* Popover de #Tags */}
+                        <Popover
+                          open={openTags}
+                          anchorEl={tagsAnchorEl}
+                          onClose={handleCloseTags}
+                          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                          transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                        >
+                          <div style={{ padding: 12, maxWidth: 380 }}>
+                            <TextField
+                              value={tagsSearch}
+                              onChange={(e) => setTagsSearch(e.target.value)}
+                              placeholder="Buscar #tags..."
                               variant="outlined"
-                              color={option.channelType === "official" ? "primary" : "default"}
-                              label={option.name}
-                              {...getTagProps({ index })}
+                              size="small"
+                              fullWidth
+                              style={{ marginBottom: 8 }}
                             />
-                          ))
-                        }
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
+                            <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+                              {Object.keys(groupedVars).map(cat => {
+                                const items = groupedVars[cat].filter(v =>
+                                  (v.label || '').toLowerCase().includes((tagsSearch || '').toLowerCase()) ||
+                                  (v.desc || '').toLowerCase().includes((tagsSearch || '').toLowerCase())
+                                );
+                                if (items.length === 0) return null;
+                                return (
+                                  <div key={cat} style={{ marginBottom: 8 }}>
+                                    <Typography variant="subtitle2" style={{ opacity: 0.8, marginBottom: 4 }}>{cat}</Typography>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                      {items.map(item => (
+                                        <Chip
+                                          key={item.key}
+                                          label={`#${item.label}`}
+                                          onClick={() => {
+                                            if (tagsTargetField) {
+                                              insertTagIntoField(tagsTargetField, setFieldValue, values)(item.label);
+                                            }
+                                            handleCloseTags();
+                                          }}
+                                          variant="default"
+                                          clickable
+                                        />
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {/* Dica */}
+                              <Typography variant="caption" style={{ display: 'block', marginTop: 8, opacity: 0.8 }}>
+                                As tags serão inseridas no campo selecionado (mensagem ou prompt da aba atual) no formato {`{tag}`}. Ex.: {`{nome}`}, {`{empresa}`}
+                              </Typography>
+                            </div>
+                          </div>
+                        </Popover>
+                        {/* Popover de instruções (i) */}
+                        <Popover
+                          open={openInfo}
+                          anchorEl={infoAnchorEl}
+                          onClose={handleCloseInfo}
+                          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                          transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                        >
+                          <div style={{ padding: 14, maxWidth: 520 }}>
+                            <Typography variant="subtitle1" style={{ marginBottom: 8 }}>Como usar as tags</Typography>
+                            <Typography variant="body2" paragraph>
+                              Escreva as variáveis no texto entre chaves. Ex.: {`{nome}`}, {`{primeiro-nome}`}, {`{data}`}, {`{saudacao}`}.
+                            </Typography>
+                            <Typography variant="subtitle2">Tags nativas</Typography>
+                            <ul style={{ marginTop: 4, marginBottom: 8, paddingLeft: 18 }}>
+                              <li>{`{nome}`} — Nome completo do contato</li>
+                              <li>{`{primeiro-nome}`} — Primeiro nome do contato</li>
+                              <li>{`{email}`} — Email do contato</li>
+                              <li>{`{numero}`} — Número do contato</li>
+                              <li>{`{data}`} — Data atual (DD/MM/AAAA)</li>
+                              <li>{`{hora}`} — Hora atual (HH:MM:SS)</li>
+                              <li>{`{data-hora}`} — Data e hora atuais</li>
+                              <li>{`{periodo-dia}`} — manhã, tarde ou noite</li>
+                              <li>{`{saudacao}`} — Bom dia, Boa tarde, Boa noite</li>
+                            </ul>
+                            <Typography variant="subtitle2">Campos do cadastro</Typography>
+                            <Typography variant="body2" paragraph>
+                              Você pode usar <strong>qualquer campo do cadastro do contato</strong> como tag. Ex.: {`{fantasyName}`} ou {`{fantasy-name}`}, {`{cpfCnpj}`} ou {`{cpf-cnpj}`}, {`{city}`}.
+                              O nome da tag pode ser o <em>nome exato do campo</em> ou sua versão <em>kebab-case</em> (com hífens).
+                            </Typography>
+                            <Typography variant="subtitle2">Variáveis personalizadas</Typography>
+                            <Typography variant="body2">
+                              Também é possível definir variáveis nas configurações da campanha. Use-as como {`{minha-variavel}`}.
+                            </Typography>
+                          </div>
+                        </Popover>
+                        <Grid xs={12} md={4} item>
+                          <Field
+                            as={TextField}
+                            label={i18n.t("campaigns.dialog.form.name")}
+                            name="name"
+                            error={touched.name && Boolean(errors.name)}
+                            helperText={touched.name && errors.name}
                             variant="outlined"
                             margin="dense"
-                            label="Escolha as conexões"
-                            placeholder="Ex: Selecione A, C, D..."
-                            helperText={`${allowedWhatsappIds.length} selecionadas`}
+                            fullWidth
+                            className={classes.textField}
+                            disabled={!campaignEditable}
                           />
-                        )}
-                        disableCloseOnSelect
-                        disabled={!campaignEditable}
-                      />
-                    </Grid>
-                  )}
-
-                  {allowedWhatsappIds.length > 0 && dispatchMode !== "single" && (
-                    <Grid xs={12} md={12} item>
-                      <Paper style={{ padding: 16, background: "#f5f5f5" }}>
-                        <Typography variant="subtitle2" gutterBottom>📊 Resumo da Estratégia</Typography>
-                        <Divider style={{ marginBottom: 12 }} />
-                        {(() => {
-                          const selected = whatsapps.filter(w => allowedWhatsappIds.includes(w.id));
-                          const baileys = selected.filter(w => w.channelType !== "official");
-                          const official = selected.filter(w => w.channelType === "official");
-                          return (
-                            <>
-                              <Typography variant="body2"><strong>Total:</strong> {selected.length} conexões</Typography>
-                              <Typography variant="body2"><strong>📱 Baileys:</strong> {baileys.length}</Typography>
-                              <Typography variant="body2"><strong>✅ API Oficial:</strong> {official.length}</Typography>
-                              <Typography variant="body2" style={{ marginTop: 8 }}><strong>Ordem do rodízio:</strong></Typography>
-                              <Box display="flex" gap={0.5} flexWrap="wrap" mt={1}>
-                                {selected.map((w, idx) => (
-                                  <Chip
-                                    key={w.id}
-                                    size="small"
-                                    label={`${idx + 1}. ${w.name}`}
-                                    color={w.channelType === "official" ? "primary" : "default"}
-                                  />
-                                ))}
-                              </Box>
-                              {baileys.length > 0 && official.length > 0 && (
-                                <Alert severity="warning" style={{ marginTop: 12 }}>
-                                  ⚠️ Você está misturando Baileys e API Oficial: velocidades diferentes, custos variáveis.
-                                </Alert>
+                        </Grid>
+                        <Grid xs={12} md={4} item>
+                          <FormControl
+                            variant="outlined"
+                            margin="dense"
+                            fullWidth
+                            className={classes.formControl}
+                          >
+                            <InputLabel id="confirmation-selection-label">
+                              {i18n.t("campaigns.dialog.form.confirmation")}
+                            </InputLabel>
+                            <Field
+                              as={Select}
+                              label={i18n.t("campaigns.dialog.form.confirmation")}
+                              placeholder={i18n.t(
+                                "campaigns.dialog.form.confirmation"
                               )}
-                            </>
-                          );
-                        })()}
-                      </Paper>
-                    </Grid>
-                  )}
-
-                  <Grid xs={12} md={4} item>
-                    <Field
-                      as={TextField}
-                      label={i18n.t("campaigns.dialog.form.scheduledAt")}
-                      name="scheduledAt"
-                      error={touched.scheduledAt && Boolean(errors.scheduledAt)}
-                      helperText={touched.scheduledAt && errors.scheduledAt}
-                      variant="outlined"
-                      margin="dense"
-                      type="datetime-local"
-                      InputLabelProps={{
-                        shrink: true,
-                      }}
-                      fullWidth
-                      className={classes.textField}
-                      disabled={!campaignEditable}
-                    />
-                  </Grid>
-                  <Grid xs={12} md={4} item>
-                    <FormControl
-                      variant="outlined"
-                      margin="dense"
-                      fullWidth
-                      className={classes.formControl}
-                    >
-                      <InputLabel id="openTicket-selection-label">
-                        {i18n.t("campaigns.dialog.form.openTicket")}
-                      </InputLabel>
-                      <Field
-                        as={Select}
-                        label={i18n.t("campaigns.dialog.form.openTicket")}
-                        placeholder={i18n.t(
-                          "campaigns.dialog.form.openTicket"
-                        )}
-                        labelId="openTicket-selection-label"
-                        id="openTicket"
-                        name="openTicket"
-                        error={
-                          touched.openTicket && Boolean(errors.openTicket)
-                        }
-                        disabled={!campaignEditable}
-                      >
-                        <MenuItem value={"enabled"}>{i18n.t("campaigns.dialog.form.enabledOpenTicket")}</MenuItem>
-                        <MenuItem value={"disabled"}>{i18n.t("campaigns.dialog.form.disabledOpenTicket")}</MenuItem>
-                      </Field>
-                    </FormControl>
-                  </Grid>
-                  {/* SELECIONAR USUARIO */}
-                  <Grid xs={12} md={4} item>
-                    <Autocomplete
-                      style={{ marginTop: '8px' }}
-                      variant="outlined"
-                      margin="dense"
-                      className={classes.formControl}
-                      getOptionLabel={(option) => `${option.name}`}
-                      value={selectedUser}
-                      size="small"
-                      openOnFocus
-                      onOpen={ensureUsersLoaded}
-                      onChange={(e, newValue) => {
-                        setSelectedUser(newValue);
-                        if (newValue != null && Array.isArray(newValue.queues)) {
-                          if (newValue.queues.length === 1) {
-                            setSelectedQueue(newValue.queues[0].id);
-                          }
-                          setQueues(newValue.queues);
-
-                        } else {
-                          setQueues(allQueues);
-                          setSelectedQueue("");
-                        }
-                      }}
-                      options={options}
-                      filterOptions={filterOptions}
-                      freeSolo={false}
-                      fullWidth
-                      autoHighlight
-                      disabled={!campaignEditable || values.openTicket === 'disabled'}
-                      noOptionsText={i18n.t("transferTicketModal.noOptions")}
-                      loading={loading}
-                      renderOption={option => (<span> <UserStatusIcon user={option} /> {option.name}</span>)}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label={i18n.t("transferTicketModal.fieldLabel")}
-                          variant="outlined"
-                          InputProps={{
-                            ...params.InputProps,
-                            endAdornment: (
-                              <React.Fragment>
-                                {loading ? (
-                                  <CircularProgress color="inherit" size={20} />
-                                ) : null}
-                                {params.InputProps.endAdornment}
-                              </React.Fragment>
-                            ),
-                          }}
-                        />
-                      )}
-                    />
-                  </Grid>
-                  <Grid xs={12} md={4} item>
-                    <FormControl
-                      variant="outlined"
-                      margin="dense"
-                      fullWidth
-                      className={classes.formControl}
-                    >
-                      <InputLabel>
-                        {i18n.t("transferTicketModal.fieldQueueLabel")}
-                      </InputLabel>
-                      <Select
-                        value={selectedQueue}
-                        onChange={(e) => setSelectedQueue(e.target.value)}
-                        label={i18n.t("transferTicketModal.fieldQueuePlaceholder")}
-                        required={!isNil(selectedUser)}
-                        disabled={!campaignEditable || values.openTicket === 'disabled'}
-                      >
-                        {queues.map((queue) => (
-                          <MenuItem key={queue.id} value={queue.id}>
-                            {queue.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-
-                  <Grid xs={12} md={4} item>
-                    <FormControl
-                      variant="outlined"
-                      margin="dense"
-                      fullWidth
-                      className={classes.formControl}
-                    >
-                      <InputLabel id="statusTicket-selection-label">
-                        {i18n.t("campaigns.dialog.form.statusTicket")}
-                      </InputLabel>
-                      <Field
-                        as={Select}
-                        label={i18n.t("campaigns.dialog.form.statusTicket")}
-                        placeholder={i18n.t(
-                          "campaigns.dialog.form.statusTicket"
-                        )}
-                        labelId="statusTicket-selection-label"
-                        id="statusTicket"
-                        name="statusTicket"
-                        error={
-                          touched.statusTicket && Boolean(errors.statusTicket)
-                        }
-                        disabled={!campaignEditable || values.openTicket === 'disabled'}
-                      >
-                        <MenuItem value={"closed"}>{i18n.t("campaigns.dialog.form.closedTicketStatus")}</MenuItem>
-                        <MenuItem value={"pending"}>{i18n.t("campaigns.dialog.form.pendingTicketStatus")}</MenuItem>
-                        <MenuItem value={"open"}>{i18n.t("campaigns.dialog.form.openTicketStatus")}</MenuItem>
-                      </Field>
-                    </FormControl>
-                  </Grid>
-
-                  {/* Seletor de Templates Meta (API Oficial) */}
-                  {(() => {
-                    const selectedWhatsapp = whatsapps.find(w => w.id === whatsappId);
-                    return selectedWhatsapp?.channelType === "official" ? (
-                      <Grid xs={12} item>
-                        <Alert severity="info" icon={<InfoOutlinedIcon />} style={{ marginBottom: 16 }}>
-                          <Typography variant="subtitle2" gutterBottom>
-                            <strong>✅ API Oficial detectada</strong>
-                          </Typography>
-                          <Typography variant="body2">
-                            Templates devem ser aprovados no Facebook Business Manager antes do uso em campanhas de marketing.
-                          </Typography>
-                        </Alert>
-                        
-                        <FormControl fullWidth margin="dense" variant="outlined">
-                          <InputLabel>Template Aprovado (Opcional)</InputLabel>
-                          <Select
-                            value={selectedTemplate?.id || ""}
-                            onChange={(e) => {
-                              const template = availableTemplates.find(t => t.id === e.target.value);
-                              setSelectedTemplate(template);
-                              
-                              // Preencher primeira mensagem com corpo do template
-                              if (template?.components && setFieldValueRef.current) {
-                                const bodyComponent = template.components.find(c => c.type === "BODY");
-                                if (bodyComponent?.text) {
-                                  setFieldValueRef.current("message1", bodyComponent.text);
-                                }
+                              labelId="confirmation-selection-label"
+                              id="confirmation"
+                              name="confirmation"
+                              error={
+                                touched.confirmation && Boolean(errors.confirmation)
                               }
+                              disabled={!campaignEditable}
+                            >
+                              <MenuItem value={false}>Desabilitada</MenuItem>
+                              <MenuItem value={true}>Habilitada</MenuItem>
+                            </Field>
+                          </FormControl>
+                        </Grid>
+                        <Grid xs={12} md={4} item>
+                          <FormControl
+                            variant="outlined"
+                            margin="dense"
+                            fullWidth
+                            className={classes.formControl}
+                          >
+                            <InputLabel id="contactList-selection-label">
+                              {i18n.t("campaigns.dialog.form.contactList")}
+                            </InputLabel>
+                            <Field
+                              as={Select}
+                              label={i18n.t("campaigns.dialog.form.contactList")}
+                              placeholder={i18n.t(
+                                "campaigns.dialog.form.contactList"
+                              )}
+                              labelId="contactList-selection-label"
+                              id="contactListId"
+                              name="contactListId"
+                              error={
+                                touched.contactListId && Boolean(errors.contactListId)
+                              }
+                              disabled={!campaignEditable}
+                            >
+                              <MenuItem value="">Nenhuma</MenuItem>
+                              {contactLists &&
+                                contactLists.map((contactList) => (
+                                  <MenuItem
+                                    key={contactList.id}
+                                    value={contactList.id}
+                                  >
+                                    {contactList.name}
+                                  </MenuItem>
+                                ))}
+                            </Field>
+                          </FormControl>
+                        </Grid>
+                        <Grid xs={12} md={4} item>
+                          <FormControl
+                            variant="outlined"
+                            margin="dense"
+                            fullWidth
+                            className={classes.formControl}
+                          >
+                            <InputLabel id="tagList-selection-label">
+                              {i18n.t("campaigns.dialog.form.tagList")}
+                            </InputLabel>
+                            <Field
+                              as={Select}
+                              label={i18n.t("campaigns.dialog.form.tagList")}
+                              placeholder={i18n.t("campaigns.dialog.form.tagList")}
+                              labelId="tagList-selection-label"
+                              id="tagListId"
+                              name="tagListId"
+                              error={touched.tagListId && Boolean(errors.tagListId)}
+                              disabled={!campaignEditable}
+                            >
+                              {/* <MenuItem value="">Nenhuma</MenuItem> */}
+                              {Array.isArray(tagLists) &&
+                                tagLists.map((tagList) => (
+                                  <MenuItem key={tagList.id} value={tagList.id}>
+                                    {tagList.name}
+                                  </MenuItem>
+                                ))}
+                            </Field>
+                          </FormControl>
+                        </Grid>
 
-                              // Amarrar nome e idioma do template aos campos do formulário
-                              if (setFieldValueRef.current) {
-                                if (template) {
-                                  setFieldValueRef.current("metaTemplateName", template.name || null);
-                                  setFieldValueRef.current("metaTemplateLanguage", template.language || null);
-                                } else {
-                                  // Caso selecione "Não usar template"
-                                  setFieldValueRef.current("metaTemplateName", null);
-                                  setFieldValueRef.current("metaTemplateLanguage", null);
+                        <Grid xs={12} md={4} item>
+                          <FormControl
+                            variant="outlined"
+                            margin="dense"
+                            fullWidth
+                            className={classes.formControl}
+                          >
+                            <InputLabel id="whatsapp-selection-label">
+                              {i18n.t("campaigns.dialog.form.whatsapp")}
+                            </InputLabel>
+                            <Field
+                              as={Select}
+                              // multiple
+                              label={i18n.t("campaigns.dialog.form.whatsapp")}
+                              placeholder={i18n.t("campaigns.dialog.form.whatsapp")}
+                              labelId="whatsapp-selection-label"
+                              id="whatsappIds"
+                              name="whatsappIds"
+                              required
+                              error={touched.whatsappId && Boolean(errors.whatsappId)}
+                              disabled={!campaignEditable}
+                              value={whatsappId}
+                              onChange={(event) => {
+                                console.log(event.target.value)
+                                setWhatsappId(event.target.value)
+                              }}
+                            // renderValue={(selected) => (
+                            //   <div>
+                            //     {selected.map((value) => (
+                            //       <Chip key={value} label={whatsapps.find((whatsapp) => whatsapp.id === value).name} />
+                            //     ))}
+                            //   </div>
+                            // )}
+                            >
+                              {whatsapps &&
+                                whatsapps.map((whatsapp) => (
+                                  <MenuItem key={whatsapp.id} value={whatsapp.id}>
+                                    {whatsapp.name}
+                                  </MenuItem>
+                                ))}
+                            </Field>
+                          </FormControl>
+                        </Grid>
+
+                        <Grid xs={12} md={4} item>
+                          <FormControl
+                            variant="outlined"
+                            margin="dense"
+                            fullWidth
+                            className={classes.formControl}
+                          >
+                            <InputLabel id="dispatch-strategy-label">
+                              Estratégia de Envio
+                            </InputLabel>
+                            <Select
+                              labelId="dispatch-strategy-label"
+                              id="dispatch-strategy"
+                              value={dispatchMode}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setDispatchMode(value);
+
+                                if (value === "all") {
+                                  setAllowedWhatsappIds(whatsapps.map(w => w.id));
+                                  setDispatchStrategy("round_robin");
+                                } else if (value === "baileys") {
+                                  const ids = whatsapps.filter(w => w.channelType !== "official").map(w => w.id);
+                                  setAllowedWhatsappIds(ids);
+                                  setDispatchStrategy("round_robin");
+                                } else if (value === "official") {
+                                  const ids = whatsapps.filter(w => w.channelType === "official").map(w => w.id);
+                                  setAllowedWhatsappIds(ids);
+                                  setDispatchStrategy("round_robin");
+                                } else if (value === "single") {
+                                  setAllowedWhatsappIds([]);
+                                  setDispatchStrategy("single");
+                                } else if (value === "custom") {
+                                  setDispatchStrategy("round_robin");
                                 }
+                              }}
+                              label="Estratégia de Envio"
+                              disabled={!campaignEditable}
+                            >
+                              <MenuItem value="single">
+                                <Box>
+                                  <Typography variant="body2">📱 Única conexão</Typography>
+                                  <Typography variant="caption" color="textSecondary">
+                                    Usa apenas a conexão principal
+                                  </Typography>
+                                </Box>
+                              </MenuItem>
+
+                              <MenuItem value="custom">
+                                <Box>
+                                  <Typography variant="body2">🎯 Rodízio personalizado</Typography>
+                                  <Typography variant="caption" color="textSecondary">
+                                    Você escolhe quais conexões usar
+                                  </Typography>
+                                </Box>
+                              </MenuItem>
+
+                              <MenuItem value="all">
+                                <Box>
+                                  <Typography variant="body2">🔄 Todas as conexões</Typography>
+                                  <Typography variant="caption" color="textSecondary">
+                                    Usa todas as {whatsapps.length} conexões disponíveis
+                                  </Typography>
+                                </Box>
+                              </MenuItem>
+
+                              <MenuItem value="baileys">
+                                <Box>
+                                  <Typography variant="body2">📱 Apenas Baileys (Grátis)</Typography>
+                                  <Typography variant="caption" color="textSecondary">
+                                    {whatsapps.filter(w => w.channelType !== "official").length} conexões disponíveis
+                                  </Typography>
+                                </Box>
+                              </MenuItem>
+
+                              <MenuItem value="official">
+                                <Box>
+                                  <Typography variant="body2">✅ Apenas API Oficial (R$ 0,50/msg)</Typography>
+                                  <Typography variant="caption" color="textSecondary">
+                                    {whatsapps.filter(w => w.channelType === "official").length} conexões disponíveis
+                                  </Typography>
+                                </Box>
+                              </MenuItem>
+                            </Select>
+                          </FormControl>
+                        </Grid>
+
+                        {dispatchMode === "custom" && (
+                          <Grid xs={12} md={12} item>
+                            <Autocomplete
+                              multiple
+                              options={whatsapps}
+                              getOptionLabel={(option) => {
+                                const type = option.channelType === "official" ? "API" : "Baileys";
+                                const icon = option.channelType === "official" ? "✅" : "📱";
+                                return `${icon} ${option.name} (${type})`;
+                              }}
+                              value={
+                                Array.isArray(allowedWhatsappIds)
+                                  ? whatsapps.filter(w => allowedWhatsappIds.includes(w.id))
+                                  : []
+                              }
+                              onChange={(event, newValue) => {
+                                const ids = newValue.map(w => w.id);
+                                setAllowedWhatsappIds(ids);
+                              }}
+                              renderTags={(value, getTagProps) =>
+                                value.map((option, index) => (
+                                  <Chip
+                                    variant="outlined"
+                                    color={option.channelType === "official" ? "primary" : "default"}
+                                    label={option.name}
+                                    {...getTagProps({ index })}
+                                  />
+                                ))
+                              }
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  variant="outlined"
+                                  margin="dense"
+                                  label="Escolha as conexões"
+                                  placeholder="Ex: Selecione A, C, D..."
+                                  helperText={`${allowedWhatsappIds.length} selecionadas`}
+                                />
+                              )}
+                              disableCloseOnSelect
+                              disabled={!campaignEditable}
+                            />
+                          </Grid>
+                        )}
+
+                        {allowedWhatsappIds.length > 0 && dispatchMode !== "single" && (
+                          <Grid xs={12} md={12} item>
+                            <Paper style={{ padding: 16, background: "#f5f5f5" }}>
+                              <Typography variant="subtitle2" gutterBottom>📊 Resumo da Estratégia</Typography>
+                              <Divider style={{ marginBottom: 12 }} />
+                              {(() => {
+                                const selected = whatsapps.filter(w => allowedWhatsappIds.includes(w.id));
+                                const baileys = selected.filter(w => w.channelType !== "official");
+                                const official = selected.filter(w => w.channelType === "official");
+                                return (
+                                  <>
+                                    <Typography variant="body2"><strong>Total:</strong> {selected.length} conexões</Typography>
+                                    <Typography variant="body2"><strong>📱 Baileys:</strong> {baileys.length}</Typography>
+                                    <Typography variant="body2"><strong>✅ API Oficial:</strong> {official.length}</Typography>
+                                    <Typography variant="body2" style={{ marginTop: 8 }}><strong>Ordem do rodízio:</strong></Typography>
+                                    <Box display="flex" gap={0.5} flexWrap="wrap" mt={1}>
+                                      {selected.map((w, idx) => (
+                                        <Chip
+                                          key={w.id}
+                                          size="small"
+                                          label={`${idx + 1}. ${w.name}`}
+                                          color={w.channelType === "official" ? "primary" : "default"}
+                                        />
+                                      ))}
+                                    </Box>
+                                    {baileys.length > 0 && official.length > 0 && (
+                                      <Alert severity="warning" style={{ marginTop: 12 }}>
+                                        ⚠️ Você está misturando Baileys e API Oficial: velocidades diferentes, custos variáveis.
+                                      </Alert>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </Paper>
+                          </Grid>
+                        )}
+
+                        <Grid xs={12} md={4} item>
+                          <Field
+                            as={TextField}
+                            label={i18n.t("campaigns.dialog.form.scheduledAt")}
+                            name="scheduledAt"
+                            error={touched.scheduledAt && Boolean(errors.scheduledAt)}
+                            helperText={touched.scheduledAt && errors.scheduledAt}
+                            variant="outlined"
+                            margin="dense"
+                            type="datetime-local"
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
+                            fullWidth
+                            className={classes.textField}
+                            disabled={!campaignEditable}
+                          />
+                        </Grid>
+                        <Grid xs={12} md={4} item>
+                          <FormControl
+                            variant="outlined"
+                            margin="dense"
+                            fullWidth
+                            className={classes.formControl}
+                          >
+                            <InputLabel id="openTicket-selection-label">
+                              {i18n.t("campaigns.dialog.form.openTicket")}
+                            </InputLabel>
+                            <Field
+                              as={Select}
+                              label={i18n.t("campaigns.dialog.form.openTicket")}
+                              placeholder={i18n.t(
+                                "campaigns.dialog.form.openTicket"
+                              )}
+                              labelId="openTicket-selection-label"
+                              id="openTicket"
+                              name="openTicket"
+                              error={
+                                touched.openTicket && Boolean(errors.openTicket)
+                              }
+                              disabled={!campaignEditable}
+                            >
+                              <MenuItem value={"enabled"}>{i18n.t("campaigns.dialog.form.enabledOpenTicket")}</MenuItem>
+                              <MenuItem value={"disabled"}>{i18n.t("campaigns.dialog.form.disabledOpenTicket")}</MenuItem>
+                            </Field>
+                          </FormControl>
+                        </Grid>
+                        {/* SELECIONAR USUARIO */}
+                        <Grid xs={12} md={4} item>
+                          <Autocomplete
+                            style={{ marginTop: '8px' }}
+                            variant="outlined"
+                            margin="dense"
+                            className={classes.formControl}
+                            getOptionLabel={(option) => `${option.name}`}
+                            value={selectedUser}
+                            size="small"
+                            openOnFocus
+                            onOpen={ensureUsersLoaded}
+                            onChange={(e, newValue) => {
+                              setSelectedUser(newValue);
+                              if (newValue != null && Array.isArray(newValue.queues)) {
+                                if (newValue.queues.length === 1) {
+                                  setSelectedQueue(newValue.queues[0].id);
+                                }
+                                setQueues(newValue.queues);
+
+                              } else {
+                                setQueues(allQueues);
+                                setSelectedQueue("");
                               }
                             }}
-                            disabled={loadingTemplates || !campaignEditable}
-                            label="Template Aprovado (Opcional)"
-                          >
-                            <MenuItem value="">
-                              <em>Não usar template (mensagem livre)</em>
-                            </MenuItem>
-                            {loadingTemplates ? (
-                              <MenuItem disabled>
-                                <CircularProgress size={20} style={{ marginRight: 8 }} />
-                                Carregando templates...
-                              </MenuItem>
-                            ) : (
-                              availableTemplates.map(template => (
-                                <MenuItem key={template.id} value={template.id}>
-                                  <Box>
-                                    <Typography variant="body2">
-                                      <strong>{template.name}</strong> ({template.language})
-                                    </Typography>
-                                    <Typography variant="caption" color="textSecondary">
-                                      {template.category} • Status: {template.status}
-                                    </Typography>
-                                  </Box>
-                                </MenuItem>
-                              ))
+                            options={options}
+                            filterOptions={filterOptions}
+                            freeSolo={false}
+                            fullWidth
+                            autoHighlight
+                            disabled={!campaignEditable || values.openTicket === 'disabled'}
+                            noOptionsText={i18n.t("transferTicketModal.noOptions")}
+                            loading={loading}
+                            renderOption={option => (<span> <UserStatusIcon user={option} /> {option.name}</span>)}
+                            renderInput={(params) => (
+                              <TextField
+                                {...params}
+                                label={i18n.t("transferTicketModal.fieldLabel")}
+                                variant="outlined"
+                                InputProps={{
+                                  ...params.InputProps,
+                                  endAdornment: (
+                                    <React.Fragment>
+                                      {loading ? (
+                                        <CircularProgress color="inherit" size={20} />
+                                      ) : null}
+                                      {params.InputProps.endAdornment}
+                                    </React.Fragment>
+                                  ),
+                                }}
+                              />
                             )}
-                          </Select>
-                          
-                          {availableTemplates.length > 0 && (
-                            <FormHelperText style={{ color: "#4caf50" }}>
-                              ✅ {availableTemplates.length} template(s) disponível(is)
-                            </FormHelperText>
-                          )}
-                          
-                          {availableTemplates.length === 0 && !loadingTemplates && (
-                            <FormHelperText error>
-                              ⚠️ Nenhum template aprovado encontrado. Crie templates no Facebook Business Manager.
-                            </FormHelperText>
-                          )}
-                        </FormControl>
-                        
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => window.open("https://business.facebook.com/wa/manage/message-templates", "_blank")}
-                          style={{ marginTop: 8 }}
-                        >
-                          📝 Gerenciar Templates no Facebook
-                        </Button>
-                        
-                        {selectedTemplate && (
-                          <Paper style={{ padding: 16, marginTop: 16, background: "#f5f5f5" }}>
-                            <Typography variant="subtitle2" gutterBottom>
-                              📄 Preview do Template Selecionado
-                            </Typography>
-                            <Divider style={{ marginBottom: 12 }} />
-                            {selectedTemplate.components.map((comp, idx) => (
-                              <Box key={idx} mb={1}>
-                                <Chip 
-                                  label={comp.type} 
-                                  size="small" 
-                                  style={{ marginRight: 8, marginBottom: 4 }}
-                                  color={comp.type === "BODY" ? "primary" : "default"}
-                                />
-                                {comp.text && (
-                                  <Typography variant="body2" style={{ fontFamily: "monospace", whiteSpace: "pre-wrap", marginTop: 4 }}>
-                                    {comp.text}
-                                  </Typography>
-                                )}
-                              </Box>
-                            ))}
-                          </Paper>
-                        )}
-                      </Grid>
-                    ) : null;
-                  })()}
+                          />
+                        </Grid>
+                        <Grid xs={12} md={4} item>
+                          <FormControl
+                            variant="outlined"
+                            margin="dense"
+                            fullWidth
+                            className={classes.formControl}
+                          >
+                            <InputLabel>
+                              {i18n.t("transferTicketModal.fieldQueueLabel")}
+                            </InputLabel>
+                            <Select
+                              value={selectedQueue}
+                              onChange={(e) => setSelectedQueue(e.target.value)}
+                              label={i18n.t("transferTicketModal.fieldQueuePlaceholder")}
+                              required={!isNil(selectedUser)}
+                              disabled={!campaignEditable || values.openTicket === 'disabled'}
+                            >
+                              {queues.map((queue) => (
+                                <MenuItem key={queue.id} value={queue.id}>
+                                  {queue.name}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
 
-                  <Grid xs={12} item>
-                    <Tabs
-                      value={messageTab}
-                      indicatorColor="primary"
-                      textColor="primary"
-                      onChange={(e, v) => setMessageTab(v)}
-                      variant="fullWidth"
-                      centered
-                      style={{
-                        background: "#f2f2f2",
-                        border: "1px solid #e6e6e6",
-                        borderRadius: 2,
-                      }}
-                    >
-                      <Tab label="Msg. 1" index={0} />
-                      <Tab label="Msg. 2" index={1} />
-                      <Tab label="Msg. 3" index={2} />
-                      <Tab label="Msg. 4" index={3} />
-                      <Tab label="Msg. 5" index={4} />
-                    </Tabs>
-                    <Box style={{ paddingTop: 20, border: "none" }}>
-                      {messageTab === 0 && (
-                        <>
-                          {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(0))}
-                          {values.confirmation ? (
-                            <Grid spacing={2} container>
-                              <Grid xs={12} md={8} item>
-                                <>{renderMessageField("message1")}</>
-                              </Grid>
-                              <Grid xs={12} md={4} item>
-                                <>
-                                  {renderConfirmationMessageField(
-                                    "confirmationMessage1"
-                                  )}
-                                </>
-                              </Grid>
-                            </Grid>
-                          ) : (
-                            <>{renderMessageField("message1")}</>
-                          )}
-                          {renderTabAttachment(0, values, !campaignEditable)}
-                        </>
-                      )}
-                      {messageTab === 1 && (
-                        <>
-                          {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(1))}
-                          {values.confirmation ? (
-                            <Grid spacing={2} container>
-                              <Grid xs={12} md={8} item>
-                                <>{renderMessageField("message2")}</>
-                              </Grid>
-                              <Grid xs={12} md={4} item>
-                                <>
-                                  {renderConfirmationMessageField(
-                                    "confirmationMessage2"
-                                  )}
-                                </>
-                              </Grid>
-                            </Grid>
-                          ) : (
-                            <>{renderMessageField("message2")}</>
-                          )}
-                          {renderTabAttachment(1, values, !campaignEditable)}
-                        </>
-                      )}
-                      {messageTab === 2 && (
-                        <>
-                          {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(2))}
-                          {values.confirmation ? (
-                            <Grid spacing={2} container>
-                              <Grid xs={12} md={8} item>
-                                <>{renderMessageField("message3")}</>
-                              </Grid>
-                              <Grid xs={12} md={4} item>
-                                <>
-                                  {renderConfirmationMessageField(
-                                    "confirmationMessage3"
-                                  )}
-                                </>
-                              </Grid>
-                            </Grid>
-                          ) : (
-                            <>{renderMessageField("message3")}</>
-                          )}
-                          {renderTabAttachment(2, values, !campaignEditable)}
-                        </>
-                      )}
-                      {messageTab === 3 && (
-                        <>
-                          {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(3))}
-                          {values.confirmation ? (
-                            <Grid spacing={2} container>
-                              <Grid xs={12} md={8} item>
-                                <>{renderMessageField("message4")}</>
-                              </Grid>
-                              <Grid xs={12} md={4} item>
-                                <>
-                                  {renderConfirmationMessageField(
-                                    "confirmationMessage4"
-                                  )}
-                                </>
-                              </Grid>
-                            </Grid>
-                          ) : (
-                            <>{renderMessageField("message4")}</>
-                          )}
-                          {renderTabAttachment(3, values, !campaignEditable)}
-                        </>
-                      )}
-                      {messageTab === 4 && (
-                        <>
-                          {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(4))}
-                          {values.confirmation ? (
-                            <Grid spacing={2} container>
-                              <Grid xs={12} md={8} item>
-                                <>{renderMessageField("message5")}</>
-                              </Grid>
-                              <Grid xs={12} md={4} item>
-                                <>
-                                  {renderConfirmationMessageField(
-                                    "confirmationMessage5"
-                                  )}
-                                </>
-                              </Grid>
-                            </Grid>
-                          ) : (
-                            <>{renderMessageField("message5")}</>
-                          )}
-                          {renderTabAttachment(4, values, !campaignEditable)}
-                        </>
-                      )}
-                      </Box>
-                  </Grid>
-                </Grid>
-                  </Box>
-                  
-                  {/* Coluna direita - Preview */}
-                  <Box 
-                    width={360} 
-                    style={{ 
-                      borderLeft: "1px solid #e0e0e0",
-                      background: "#fafafa",
-                      padding: "20px",
-                      display: "flex",
-                      alignItems: "flex-start",
-                      justifyContent: "center",
-                      position: "sticky",
-                      top: 0,
-                      height: "calc(100vh - 240px)",
-                      overflowY: "auto"
-                    }}
-                  >
-                    <WhatsAppPreview
-                      messages={[
-                        values.message1,
-                        values.message2,
-                        values.message3,
-                        values.message4,
-                        values.message5,
-                      ].filter(Boolean)}
-                      mediaUrls={{
-                        mediaUrl1: values.mediaUrl1,
-                        mediaUrl2: values.mediaUrl2,
-                        mediaUrl3: values.mediaUrl3,
-                        mediaUrl4: values.mediaUrl4,
-                        mediaUrl5: values.mediaUrl5,
-                      }}
-                      contactName="João Silva"
-                      companyName={user?.company?.name || "Empresa"}
-                    />
-                  </Box>
-                  {/* Dialog de Pré-visualização de Mídia */}
-                  <Dialog open={previewOpen} onClose={closePreview} maxWidth="md" fullWidth>
-                    <DialogTitle>{previewName || 'Pré-visualização'}</DialogTitle>
-                    <DialogContent dividers>
-                      {isImage(previewUrl) && (
-                        <img src={previewUrl} alt={previewName || 'preview'} style={{ maxWidth: '100%', borderRadius: 4 }} />
-                      )}
-                      {isVideo(previewUrl) && (
-                        <video src={previewUrl} controls style={{ width: '100%', borderRadius: 4 }} />
-                      )}
-                      {isAudio(previewUrl) && (
-                        <audio src={previewUrl} controls style={{ width: '100%' }} />
-                      )}
-                      {isPdf(previewUrl) && (
-                        <iframe title="pdf" src={previewUrl} style={{ width: '100%', height: '70vh', border: 'none' }} />
-                      )}
-                      {!isImage(previewUrl) && !isVideo(previewUrl) && !isAudio(previewUrl) && !isPdf(previewUrl) && (
-                        <Typography variant="body2">Pré-visualização não disponível para este tipo de arquivo.</Typography>
-                      )}
-                    </DialogContent>
-                    <DialogActions>
-                      <Button onClick={closePreview} color="primary" variant="outlined">Fechar</Button>
-                    </DialogActions>
-                  </Dialog>
-                  {/* Dialog Biblioteca de Arquivos */}
-                  <Dialog open={fileLibraryOpen} onClose={() => setFileLibraryOpen(false)} maxWidth="md" fullWidth scroll="paper">
-                    <DialogTitle>Selecionar arquivo da biblioteca</DialogTitle>
-                    <DialogContent dividers>
-                      <TextField
-                        value={filesSearch}
-                        onChange={(e) => setFilesSearch(e.target.value)}
-                        placeholder="Buscar listas de arquivos..."
-                        variant="outlined"
-                        size="small"
-                        fullWidth
-                        style={{ marginBottom: 8 }}
-                      />
-                      <div>
-                        {(fileLists || []).map(fl => {
-                          const open = !!expandedFileIds[fl.id];
-                          return (
-                            <div key={fl.id} style={{ border: '1px solid #eee', borderRadius: 6, marginBottom: 8 }}>
-                              <div
-                                style={{ padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                                onClick={async () => {
-                                  setExpandedFileIds(prev => ({ ...prev, [fl.id]: !open }));
-                                  if (!open) {
-                                    try {
-                                      const { data } = await api.get(`/files/${fl.id}`);
-                                      setExpandedFileIds(prev => ({ ...prev, [fl.id]: data }));
-                                    } catch (_) {}
+                        {/* NOVO: Mapeamento de variáveis do template */}
+                        {selectedTemplate && whatsappId && (
+                          <Grid item xs={12}>
+                            <Box mt={2} p={2} border={1} borderColor="divider" borderRadius={2}>
+                              <TemplateVariableMapper
+                                whatsappId={whatsappId}
+                                templateName={selectedTemplate.name}
+                                languageCode={selectedTemplate.language}
+                                value={metaTemplateVariables}
+                                onChange={(newValue) => {
+                                  setMetaTemplateVariables(newValue);
+                                  if (setFieldValueRef.current) {
+                                    setFieldValueRef.current("metaTemplateVariables", newValue);
                                   }
                                 }}
-                              >
-                                <strong>{fl.name}</strong>
-                                <span style={{ fontSize: 12, opacity: 0.7 }}>{open ? 'Ocultar' : 'Mostrar'}</span>
-                              </div>
-                              {open && (
-                                <div style={{ padding: 8 }}>
-                                  {((expandedFileIds[fl.id] && expandedFileIds[fl.id].options) || []).map(opt => (
-                                    <div key={opt.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 4px', borderBottom: '1px dashed #eee' }}>
-                                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                        <span style={{ fontSize: 14 }}>{opt.name || opt.path || `Opção ${opt.id}`}</span>
-                                        <span style={{ fontSize: 12, opacity: 0.7 }}>{opt.mediaType || ''}</span>
-                                      </div>
-                                      <Button size="small" variant="outlined" color="primary" onClick={() => handleChooseFromLibrary(opt)}>
-                                        Usar este arquivo
-                                      </Button>
-                                    </div>
-                                  ))}
-                                  {(!expandedFileIds[fl.id] || !expandedFileIds[fl.id].options || expandedFileIds[fl.id].options.length === 0) && (
-                                    <div style={{ padding: 8, fontSize: 12, opacity: 0.7 }}>Sem opções nesta lista.</div>
-                                  )}
-                                </div>
+                                disabled={!campaignEditable}
+                              />
+                            </Box>
+                          </Grid>
+                        )}
+
+                        <Grid xs={12} md={4} item>
+                          <FormControl
+                            variant="outlined"
+                            margin="dense"
+                            fullWidth
+                            className={classes.formControl}
+                          >
+                            <InputLabel id="statusTicket-selection-label">
+                              {i18n.t("campaigns.dialog.form.statusTicket")}
+                            </InputLabel>
+                            <Field
+                              as={Select}
+                              label={i18n.t("campaigns.dialog.form.statusTicket")}
+                              placeholder={i18n.t(
+                                "campaigns.dialog.form.statusTicket"
                               )}
-                            </div>
-                          );
-                        })}
-                        {(!fileLists || fileLists.length === 0) && (
-                          <div style={{ padding: 12, textAlign: 'center', opacity: 0.7 }}>Nenhuma lista encontrada.</div>
+                              labelId="statusTicket-selection-label"
+                              id="statusTicket"
+                              name="statusTicket"
+                              error={
+                                touched.statusTicket && Boolean(errors.statusTicket)
+                              }
+                              disabled={!campaignEditable || values.openTicket === 'disabled'}
+                            >
+                              <MenuItem value={"closed"}>{i18n.t("campaigns.dialog.form.closedTicketStatus")}</MenuItem>
+                              <MenuItem value={"pending"}>{i18n.t("campaigns.dialog.form.pendingTicketStatus")}</MenuItem>
+                              <MenuItem value={"open"}>{i18n.t("campaigns.dialog.form.openTicketStatus")}</MenuItem>
+                            </Field>
+                          </FormControl>
+                        </Grid>
+
+                        {/* Seletor de Templates Meta (API Oficial) */}
+                        {(() => {
+                          const selectedWhatsapp = whatsapps.find(w => w.id === whatsappId);
+                          return selectedWhatsapp?.channelType === "official" ? (
+                            <Grid xs={12} item>
+                              <Alert severity="info" icon={<InfoOutlinedIcon />} style={{ marginBottom: 16 }}>
+                                <Typography variant="subtitle2" gutterBottom>
+                                  <strong>✅ API Oficial detectada</strong>
+                                </Typography>
+                                <Typography variant="body2">
+                                  Templates devem ser aprovados no Facebook Business Manager antes do uso em campanhas de marketing.
+                                </Typography>
+                              </Alert>
+
+                              <FormControl fullWidth margin="dense" variant="outlined">
+                                <InputLabel>Template Aprovado (Opcional)</InputLabel>
+                                <Select
+                                  value={selectedTemplate?.id || ""}
+                                  onChange={(e) => {
+                                    const template = availableTemplates.find(t => t.id === e.target.value);
+                                    setSelectedTemplate(template);
+
+                                    // Preencher primeira mensagem com corpo do template
+                                    if (template?.components && setFieldValueRef.current) {
+                                      const bodyComponent = template.components.find(c => c.type === "BODY");
+                                      if (bodyComponent?.text) {
+                                        setFieldValueRef.current("message1", bodyComponent.text);
+                                      }
+                                    }
+
+                                    // Amarrar nome e idioma do template aos campos do formulário
+                                    if (setFieldValueRef.current) {
+                                      if (template) {
+                                        setFieldValueRef.current("metaTemplateName", template.name || null);
+                                        setFieldValueRef.current("metaTemplateLanguage", template.language || null);
+                                      } else {
+                                        // Caso selecione "Não usar template"
+                                        setFieldValueRef.current("metaTemplateName", null);
+                                        setFieldValueRef.current("metaTemplateLanguage", null);
+                                      }
+                                    }
+                                  }}
+                                  disabled={loadingTemplates || !campaignEditable}
+                                  label="Template Aprovado (Opcional)"
+                                >
+                                  <MenuItem value="">
+                                    <em>Não usar template (mensagem livre)</em>
+                                  </MenuItem>
+                                  {loadingTemplates ? (
+                                    <MenuItem disabled>
+                                      <CircularProgress size={20} style={{ marginRight: 8 }} />
+                                      Carregando templates...
+                                    </MenuItem>
+                                  ) : (
+                                    availableTemplates.map(template => (
+                                      <MenuItem key={template.id} value={template.id}>
+                                        <Box>
+                                          <Typography variant="body2">
+                                            <strong>{template.name}</strong> ({template.language})
+                                          </Typography>
+                                          <Typography variant="caption" color="textSecondary">
+                                            {template.category} • Status: {template.status}
+                                          </Typography>
+                                        </Box>
+                                      </MenuItem>
+                                    ))
+                                  )}
+                                </Select>
+
+                                {availableTemplates.length > 0 && (
+                                  <FormHelperText style={{ color: "#4caf50" }}>
+                                    ✅ {availableTemplates.length} template(s) disponível(is)
+                                  </FormHelperText>
+                                )}
+
+                                {availableTemplates.length === 0 && !loadingTemplates && (
+                                  <FormHelperText error>
+                                    ⚠️ Nenhum template aprovado encontrado. Crie templates no Facebook Business Manager.
+                                  </FormHelperText>
+                                )}
+                              </FormControl>
+
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => window.open("https://business.facebook.com/wa/manage/message-templates", "_blank")}
+                                style={{ marginTop: 8 }}
+                              >
+                                📝 Gerenciar Templates no Facebook
+                              </Button>
+
+                              {selectedTemplate && (
+                                <Paper style={{ padding: 16, marginTop: 16, background: "#f5f5f5" }}>
+                                  <Typography variant="subtitle2" gutterBottom>
+                                    📄 Preview do Template Selecionado
+                                  </Typography>
+                                  <Divider style={{ marginBottom: 12 }} />
+                                  {selectedTemplate.components.map((comp, idx) => (
+                                    <Box key={idx} mb={1}>
+                                      <Chip
+                                        label={comp.type}
+                                        size="small"
+                                        style={{ marginRight: 8, marginBottom: 4 }}
+                                        color={comp.type === "BODY" ? "primary" : "default"}
+                                      />
+                                      {comp.text && (
+                                        <Typography variant="body2" style={{ fontFamily: "monospace", whiteSpace: "pre-wrap", marginTop: 4 }}>
+                                          {comp.text}
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  ))}
+                                </Paper>
+                              )}
+                            </Grid>
+                          ) : null;
+                        })()}
+
+                        <Grid xs={12} item>
+                          <Tabs
+                            value={messageTab}
+                            indicatorColor="primary"
+                            textColor="primary"
+                            onChange={(e, v) => setMessageTab(v)}
+                            variant="fullWidth"
+                            centered
+                            style={{
+                              background: "#f2f2f2",
+                              border: "1px solid #e6e6e6",
+                              borderRadius: 2,
+                            }}
+                          >
+                            <Tab label="Msg. 1" index={0} />
+                            <Tab label="Msg. 2" index={1} />
+                            <Tab label="Msg. 3" index={2} />
+                            <Tab label="Msg. 4" index={3} />
+                            <Tab label="Msg. 5" index={4} />
+                          </Tabs>
+                          <Box style={{ paddingTop: 20, border: "none" }}>
+                            {messageTab === 0 && (
+                              <>
+                                {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(0))}
+                                {values.confirmation ? (
+                                  <Grid spacing={2} container>
+                                    <Grid xs={12} md={8} item>
+                                      <>{renderMessageField("message1")}</>
+                                    </Grid>
+                                    <Grid xs={12} md={4} item>
+                                      <>
+                                        {renderConfirmationMessageField(
+                                          "confirmationMessage1"
+                                        )}
+                                      </>
+                                    </Grid>
+                                  </Grid>
+                                ) : (
+                                  <>{renderMessageField("message1")}</>
+                                )}
+                                {renderTabAttachment(0, values, !campaignEditable)}
+                              </>
+                            )}
+                            {messageTab === 1 && (
+                              <>
+                                {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(1))}
+                                {values.confirmation ? (
+                                  <Grid spacing={2} container>
+                                    <Grid xs={12} md={8} item>
+                                      <>{renderMessageField("message2")}</>
+                                    </Grid>
+                                    <Grid xs={12} md={4} item>
+                                      <>
+                                        {renderConfirmationMessageField(
+                                          "confirmationMessage2"
+                                        )}
+                                      </>
+                                    </Grid>
+                                  </Grid>
+                                ) : (
+                                  <>{renderMessageField("message2")}</>
+                                )}
+                                {renderTabAttachment(1, values, !campaignEditable)}
+                              </>
+                            )}
+                            {messageTab === 2 && (
+                              <>
+                                {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(2))}
+                                {values.confirmation ? (
+                                  <Grid spacing={2} container>
+                                    <Grid xs={12} md={8} item>
+                                      <>{renderMessageField("message3")}</>
+                                    </Grid>
+                                    <Grid xs={12} md={4} item>
+                                      <>
+                                        {renderConfirmationMessageField(
+                                          "confirmationMessage3"
+                                        )}
+                                      </>
+                                    </Grid>
+                                  </Grid>
+                                ) : (
+                                  <>{renderMessageField("message3")}</>
+                                )}
+                                {renderTabAttachment(2, values, !campaignEditable)}
+                              </>
+                            )}
+                            {messageTab === 3 && (
+                              <>
+                                {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(3))}
+                                {values.confirmation ? (
+                                  <Grid spacing={2} container>
+                                    <Grid xs={12} md={8} item>
+                                      <>{renderMessageField("message4")}</>
+                                    </Grid>
+                                    <Grid xs={12} md={4} item>
+                                      <>
+                                        {renderConfirmationMessageField(
+                                          "confirmationMessage4"
+                                        )}
+                                      </>
+                                    </Grid>
+                                  </Grid>
+                                ) : (
+                                  <>{renderMessageField("message4")}</>
+                                )}
+                                {renderTabAttachment(3, values, !campaignEditable)}
+                              </>
+                            )}
+                            {messageTab === 4 && (
+                              <>
+                                {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(4))}
+                                {values.confirmation ? (
+                                  <Grid spacing={2} container>
+                                    <Grid xs={12} md={8} item>
+                                      <>{renderMessageField("message5")}</>
+                                    </Grid>
+                                    <Grid xs={12} md={4} item>
+                                      <>
+                                        {renderConfirmationMessageField(
+                                          "confirmationMessage5"
+                                        )}
+                                      </>
+                                    </Grid>
+                                  </Grid>
+                                ) : (
+                                  <>{renderMessageField("message5")}</>
+                                )}
+                                {renderTabAttachment(4, values, !campaignEditable)}
+                              </>
+                            )}
+                          </Box>
+                        </Grid>
+                      </Grid>
+                    </Box>
+
+                    {/* Coluna direita - Preview */}
+                    <Box
+                      width={360}
+                      style={{
+                        borderLeft: "1px solid #e0e0e0",
+                        background: "#fafafa",
+                        padding: "20px",
+                        display: "flex",
+                        alignItems: "flex-start",
+                        justifyContent: "center",
+                        position: "sticky",
+                        top: 0,
+                        height: "calc(100vh - 240px)",
+                        overflowY: "auto"
+                      }}
+                    >
+                      <WhatsAppPreview
+                        messages={[
+                          values.message1,
+                          values.message2,
+                          values.message3,
+                          values.message4,
+                          values.message5,
+                        ].filter(Boolean)}
+                        mediaUrls={{
+                          mediaUrl1: values.mediaUrl1,
+                          mediaUrl2: values.mediaUrl2,
+                          mediaUrl3: values.mediaUrl3,
+                          mediaUrl4: values.mediaUrl4,
+                          mediaUrl5: values.mediaUrl5,
+                        }}
+                        contactName="João Silva"
+                        companyName={user?.company?.name || "Empresa"}
+                      />
+                    </Box>
+                    {/* Dialog de Pré-visualização de Mídia */}
+                    <Dialog open={previewOpen} onClose={closePreview} maxWidth="md" fullWidth>
+                      <DialogTitle>{previewName || 'Pré-visualização'}</DialogTitle>
+                      <DialogContent dividers>
+                        {isImage(previewUrl) && (
+                          <img src={previewUrl} alt={previewName || 'preview'} style={{ maxWidth: '100%', borderRadius: 4 }} />
+                        )}
+                        {isVideo(previewUrl) && (
+                          <video src={previewUrl} controls style={{ width: '100%', borderRadius: 4 }} />
+                        )}
+                        {isAudio(previewUrl) && (
+                          <audio src={previewUrl} controls style={{ width: '100%' }} />
+                        )}
+                        {isPdf(previewUrl) && (
+                          <iframe title="pdf" src={previewUrl} style={{ width: '100%', height: '70vh', border: 'none' }} />
+                        )}
+                        {!isImage(previewUrl) && !isVideo(previewUrl) && !isAudio(previewUrl) && !isPdf(previewUrl) && (
+                          <Typography variant="body2">Pré-visualização não disponível para este tipo de arquivo.</Typography>
+                        )}
+                      </DialogContent>
+                      <DialogActions>
+                        <Button onClick={closePreview} color="primary" variant="outlined">Fechar</Button>
+                      </DialogActions>
+                    </Dialog>
+                    {/* Dialog Biblioteca de Arquivos */}
+                    <Dialog open={fileLibraryOpen} onClose={() => setFileLibraryOpen(false)} maxWidth="md" fullWidth scroll="paper">
+                      <DialogTitle>Selecionar arquivo da biblioteca</DialogTitle>
+                      <DialogContent dividers>
+                        <TextField
+                          value={filesSearch}
+                          onChange={(e) => setFilesSearch(e.target.value)}
+                          placeholder="Buscar listas de arquivos..."
+                          variant="outlined"
+                          size="small"
+                          fullWidth
+                          style={{ marginBottom: 8 }}
+                        />
+                        <div>
+                          {(fileLists || []).map(fl => {
+                            const open = !!expandedFileIds[fl.id];
+                            return (
+                              <div key={fl.id} style={{ border: '1px solid #eee', borderRadius: 6, marginBottom: 8 }}>
+                                <div
+                                  style={{ padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                                  onClick={async () => {
+                                    setExpandedFileIds(prev => ({ ...prev, [fl.id]: !open }));
+                                    if (!open) {
+                                      try {
+                                        const { data } = await api.get(`/files/${fl.id}`);
+                                        setExpandedFileIds(prev => ({ ...prev, [fl.id]: data }));
+                                      } catch (_) { }
+                                    }
+                                  }}
+                                >
+                                  <strong>{fl.name}</strong>
+                                  <span style={{ fontSize: 12, opacity: 0.7 }}>{open ? 'Ocultar' : 'Mostrar'}</span>
+                                </div>
+                                {open && (
+                                  <div style={{ padding: 8 }}>
+                                    {((expandedFileIds[fl.id] && expandedFileIds[fl.id].options) || []).map(opt => (
+                                      <div key={opt.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 4px', borderBottom: '1px dashed #eee' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                          <span style={{ fontSize: 14 }}>{opt.name || opt.path || `Opção ${opt.id}`}</span>
+                                          <span style={{ fontSize: 12, opacity: 0.7 }}>{opt.mediaType || ''}</span>
+                                        </div>
+                                        <Button size="small" variant="outlined" color="primary" onClick={() => handleChooseFromLibrary(opt)}>
+                                          Usar este arquivo
+                                        </Button>
+                                      </div>
+                                    ))}
+                                    {(!expandedFileIds[fl.id] || !expandedFileIds[fl.id].options || expandedFileIds[fl.id].options.length === 0) && (
+                                      <div style={{ padding: 8, fontSize: 12, opacity: 0.7 }}>Sem opções nesta lista.</div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {(!fileLists || fileLists.length === 0) && (
+                            <div style={{ padding: 12, textAlign: 'center', opacity: 0.7 }}>Nenhuma lista encontrada.</div>
+                          )}
+                        </div>
+                      </DialogContent>
+                      <DialogActions>
+                        <Button onClick={() => setFileLibraryOpen(false)} color="primary" variant="outlined">Fechar</Button>
+                      </DialogActions>
+                    </Dialog>
+
+                  </DialogContent>
+                  <DialogActions>
+                    {/* Botões de controle da campanha */}
+                    {campaignId && (
+                      <div style={{ marginRight: 'auto', display: 'flex', gap: 8 }}>
+                        {(campaign.status === "CANCELADA" || campaign.status === "PROGRAMADA") && (
+                          <Button
+                            color="primary"
+                            onClick={() => restartCampaign()}
+                            variant="outlined"
+                            startIcon={<PlayCircleOutlineIcon />}
+                          >
+                            {campaign.status === "CANCELADA" ? "Retomar" : "Iniciar"}
+                          </Button>
+                        )}
+                        {campaign.status === "EM_ANDAMENTO" && (
+                          <Button
+                            color="secondary"
+                            onClick={() => cancelCampaign()}
+                            variant="outlined"
+                            startIcon={<PauseCircleOutlineIcon />}
+                          >
+                            Pausar
+                          </Button>
                         )}
                       </div>
-                    </DialogContent>
-                    <DialogActions>
-                      <Button onClick={() => setFileLibraryOpen(false)} color="primary" variant="outlined">Fechar</Button>
-                    </DialogActions>
-                  </Dialog>
-
-                </DialogContent>
-                <DialogActions>
-                  {/* Botões de controle da campanha */}
-                  {campaignId && (
-                    <div style={{ marginRight: 'auto', display: 'flex', gap: 8 }}>
-                      {(campaign.status === "CANCELADA" || campaign.status === "PROGRAMADA") && (
-                        <Button
-                          color="primary"
-                          onClick={() => restartCampaign()}
-                          variant="outlined"
-                          startIcon={<PlayCircleOutlineIcon />}
-                        >
-                          {campaign.status === "CANCELADA" ? "Retomar" : "Iniciar"}
-                        </Button>
-                      )}
-                      {campaign.status === "EM_ANDAMENTO" && (
-                        <Button
-                          color="secondary"
-                          onClick={() => cancelCampaign()}
-                          variant="outlined"
-                          startIcon={<PauseCircleOutlineIcon />}
-                        >
-                          Pausar
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                  {!attachment && !campaign.mediaPath && campaignEditable && (
+                    )}
+                    {!attachment && !campaign.mediaPath && campaignEditable && (
+                      <Button
+                        color="primary"
+                        onClick={() => setFileLibraryOpen(true)}
+                        disabled={isSubmitting}
+                        variant="outlined"
+                      >
+                        {i18n.t("campaigns.dialog.buttons.attach")}
+                      </Button>
+                    )}
                     <Button
+                      onClick={handleClose}
                       color="primary"
-                      onClick={() => setFileLibraryOpen(true)}
                       disabled={isSubmitting}
                       variant="outlined"
                     >
-                      {i18n.t("campaigns.dialog.buttons.attach")}
+                      {i18n.t("campaigns.dialog.buttons.close")}
                     </Button>
-                  )}
-                  <Button
-                    onClick={handleClose}
-                    color="primary"
-                    disabled={isSubmitting}
-                    variant="outlined"
-                  >
-                    {i18n.t("campaigns.dialog.buttons.close")}
-                  </Button>
-                  {(campaignEditable || campaign.status === "CANCELADA") && (
-                    <Button
-                      type="submit"
-                      color="primary"
-                      disabled={isSubmitting}
-                      variant="contained"
-                      className={classes.btnWrapper}
-                    >
-                      {campaignId
-                        ? `${i18n.t("campaigns.dialog.buttons.edit")}`
-                        : `${i18n.t("campaigns.dialog.buttons.add")}`}
-                      {isSubmitting && (
-                        <CircularProgress
-                          size={24}
-                          className={classes.buttonProgress}
-                        />
-                      )}
-                    </Button>
-                  )}
-                </DialogActions>
-              </Form>
-            );
-          }}
-        </Formik>
+                    {(campaignEditable || campaign.status === "CANCELADA") && (
+                      <Button
+                        type="submit"
+                        color="primary"
+                        disabled={isSubmitting}
+                        variant="contained"
+                        className={classes.btnWrapper}
+                      >
+                        {campaignId
+                          ? `${i18n.t("campaigns.dialog.buttons.edit")}`
+                          : `${i18n.t("campaigns.dialog.buttons.add")}`}
+                        {isSubmitting && (
+                          <CircularProgress
+                            size={24}
+                            className={classes.buttonProgress}
+                          />
+                        )}
+                      </Button>
+                    )}
+                  </DialogActions>
+                </Form>
+              );
+            }}
+          </Formik>
         )}
 
         {assistantOpen && (

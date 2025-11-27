@@ -169,6 +169,9 @@ class Campaign extends Model<Campaign> {
 
   @Column({ type: DataType.STRING, allowNull: true })
   metaTemplateLanguage: string;
+
+  @Column({ type: DataType.JSON, allowNull: true })
+  metaTemplateVariables: Record<string, any>;  // Mapeamento de variáveis do template
 }
 
 export default Campaign;

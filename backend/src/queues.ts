@@ -1418,7 +1418,8 @@ async function handleDispatchCampaign(job) {
               if (templateDef.parameters.length > 0) {
                 templateComponents = MapTemplateParameters(
                   templateDef.parameters,
-                  contact
+                  contact,
+                  (campaign as any).metaTemplateVariables  // NOVO: passar mapeamento
                 );
                 logger.info(
                   `[DispatchCampaign] Template ${templateName} mapeado com ${templateDef.parameters.length} parâmetros`

@@ -19,6 +19,7 @@ interface SendTemplateToContactParams {
   templateName: string;
   languageCode?: string;
   components?: any[];
+  variablesConfig?: Record<string, any>;  // NOVO: mapeamento de variáveis
 }
 
 interface SendTemplateToContactResult {
@@ -34,7 +35,8 @@ const SendTemplateToContact = async ({
   queueId,
   templateName,
   languageCode = "pt_BR",
-  components
+  components,
+  variablesConfig  // NOVO
 }: SendTemplateToContactParams): Promise<SendTemplateToContactResult> => {
   try {
     logger.info(
@@ -84,7 +86,8 @@ const SendTemplateToContact = async ({
       if (templateDefinition.parameters.length > 0) {
         finalComponents = MapTemplateParameters(
           templateDefinition.parameters,
-          contact
+          contact,
+          variablesConfig  // NOVO: passar mapeamento configurado
         );
         logger.info(
           `[SendTemplateToContact] Auto-mapeamento de parâmetros concluído`

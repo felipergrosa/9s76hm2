@@ -61,6 +61,7 @@ import whatsappWebhookRoutes from "./whatsappWebhookRoutes";
 import libraryFolderRoutes from "./libraryFolderRoutes";
 import libraryFileRoutes from "./libraryFileRoutes";
 import queueRAGSourceRoutes from "./queueRAGSourceRoutes";
+import templateRoutes from "./templateRoutes";  // NOVO
 
 
 const routes = Router();
@@ -128,5 +129,6 @@ routes.use(whatsappWebhookRoutes);
 routes.use(libraryFolderRoutes);
 routes.use(libraryFileRoutes);
 routes.use(queueRAGSourceRoutes);
+routes.use(templateRoutes);  // NOVO
 
 export default routes;
