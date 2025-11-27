@@ -44,6 +44,8 @@ import { delay } from "@whiskeysockets/baileys";
 import Plan from "./models/Plan";
 import GetWhatsAppAdapter from "./helpers/GetWhatsAppAdapter";
 import SendTemplateToContact from "./services/MetaServices/SendTemplateToContact";
+import GetTemplateDefinition from "./services/MetaServices/GetTemplateDefinition";
+import MapTemplateParameters from "./services/MetaServices/MapTemplateParameters";
 
 const connection = process.env.REDIS_URI || "";
 const limiterMax = process.env.REDIS_OPT_LIMITER_MAX || 1;
@@ -187,7 +189,7 @@ async function handleSendScheduledMessage(job) {
     }
 
     if (!whatsapp)
-      whatsapp = await GetDefaultWhatsApp(whatsapp.id,schedule.companyId);
+      whatsapp = await GetDefaultWhatsApp(whatsapp.id, schedule.companyId);
 
 
     // const settings = await CompaniesSettings.findOne({
@@ -620,7 +622,7 @@ function getProcessedMessage(msg: string, variables: any[], contact: any) {
         finalMessage = finalMessage.replace(rx, String(variable.value ?? ""));
       });
     }
-  } catch {}
+  } catch { }
 
   // Aliases pt-BR -> chaves reais do modelo de contato
   try {
@@ -643,7 +645,7 @@ function getProcessedMessage(msg: string, variables: any[], contact: any) {
         }
       });
     }
-  } catch {}
+  } catch { }
 
   try {
     const toKebab = (s: string) => s
@@ -654,7 +656,7 @@ function getProcessedMessage(msg: string, variables: any[], contact: any) {
       Object.keys(contact).forEach((key) => {
         const val = (contact as any)[key];
         if (val === null || val === undefined) return;
-        if (["string","number","boolean"].includes(typeof val)) {
+        if (["string", "number", "boolean"].includes(typeof val)) {
           const value = String(val);
           const rxKey = new RegExp(`\\{${key.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&")}\\}`, "g");
           finalMessage = finalMessage.replace(rxKey, value);
@@ -666,7 +668,7 @@ function getProcessedMessage(msg: string, variables: any[], contact: any) {
         }
       });
     }
-  } catch {}
+  } catch { }
 
   return finalMessage;
 }
@@ -812,11 +814,11 @@ async function getCapBackoffSettings(companyId: number): Promise<CapBackoffSetti
     return { capHourly, capDaily, backoffErrorThreshold, backoffPauseMinutes };
   } catch (e) {
     // Retorna defaults em caso de erro (valores conservadores do .env)
-    return { 
-      capHourly: Number(process.env.CAP_HOURLY) || 30, 
-      capDaily: Number(process.env.CAP_DAILY) || 150, 
-      backoffErrorThreshold: Number(process.env.BACKOFF_ERROR_THRESHOLD) || 3, 
-      backoffPauseMinutes: Number(process.env.BACKOFF_PAUSE_MINUTES) || 15 
+    return {
+      capHourly: Number(process.env.CAP_HOURLY) || 30,
+      capDaily: Number(process.env.CAP_DAILY) || 150,
+      backoffErrorThreshold: Number(process.env.BACKOFF_ERROR_THRESHOLD) || 3,
+      backoffPauseMinutes: Number(process.env.BACKOFF_PAUSE_MINUTES) || 15
     };
   }
 }
@@ -887,7 +889,7 @@ async function getIntervalSettings(companyId: number): Promise<IntervalSettings>
         if (s.key === "messageInterval" && v != null) messageInterval = Number(v);
         if (s.key === "longerIntervalAfter" && v != null) longerIntervalAfter = Number(v);
         if (s.key === "greaterInterval" && v != null) greaterInterval = Number(v);
-      } catch {}
+      } catch { }
     });
 
     return {
@@ -896,10 +898,10 @@ async function getIntervalSettings(companyId: number): Promise<IntervalSettings>
       greaterIntervalMs: Math.max(0, greaterInterval) * 1000,
     };
   } catch {
-    return { 
-      messageIntervalMs: (Number(process.env.MESSAGE_INTERVAL_SEC) || 60) * 1000, 
-      longerIntervalAfter: Number(process.env.LONGER_INTERVAL_AFTER) || 10, 
-      greaterIntervalMs: (Number(process.env.GREATER_INTERVAL_SEC) || 300) * 1000 
+    return {
+      messageIntervalMs: (Number(process.env.MESSAGE_INTERVAL_SEC) || 60) * 1000,
+      longerIntervalAfter: Number(process.env.LONGER_INTERVAL_AFTER) || 10,
+      greaterIntervalMs: (Number(process.env.GREATER_INTERVAL_SEC) || 300) * 1000
     };
   }
 }
@@ -1114,7 +1116,7 @@ async function pickNextWhatsapp(campaign: any): Promise<number> {
         try {
           const parsed = JSON.parse(campaign.allowedWhatsappIds);
           if (Array.isArray(parsed)) allowed = parsed.map((v) => Number(v)).filter((v) => !Number.isNaN(v));
-        } catch {}
+        } catch { }
       } else if (Array.isArray(campaign.allowedWhatsappIds)) {
         allowed = campaign.allowedWhatsappIds.map((v: any) => Number(v)).filter((v: number) => !Number.isNaN(v));
       }
@@ -1160,7 +1162,7 @@ async function handlePrepareContact(job) {
         if (crmContact) {
           enrichedContact = { ...contact, ...(crmContact as any).dataValues };
         }
-      } catch {}
+      } catch { }
 
       const message = getProcessedMessage(
         messages[radomIndex] || "",
@@ -1183,7 +1185,7 @@ async function handlePrepareContact(job) {
           if (crmContact) {
             enrichedContact = { ...contact, ...(crmContact as any).dataValues };
           }
-        } catch {}
+        } catch { }
         const message = getProcessedMessage(
           confirmationMessages[radomIndex] || "",
           variables,
@@ -1305,7 +1307,7 @@ async function handleDispatchCampaign(job) {
     // Checagem de supressão antes do envio
     const suppressed = await isNumberSuppressed(campaignShipping.number, campaign.companyId);
     if (suppressed) {
-      await campaignShipping.update({ 
+      await campaignShipping.update({
         deliveredAt: moment(),
         status: 'suppressed',
         lastError: 'Contato na lista de supressão (DNC/Opt-out)'
@@ -1384,6 +1386,8 @@ async function handleDispatchCampaign(job) {
             }
           });
 
+          // SendTemplateToContact já faz o match automático internamente
+          // Não precisamos montar components aqui
           await SendTemplateToContact({
             whatsappId: selectedWhatsappId,
             contactId: contact.id,
@@ -1392,16 +1396,50 @@ async function handleDispatchCampaign(job) {
             queueId: campaign.queueId || undefined,
             templateName,
             languageCode,
-            components: undefined
+            components: undefined  // SendTemplateToContact fará o match automático
           });
         } else {
           // Envio direto de template sem abrir ticket
+          // Buscar contato do CRM para ter dados completos para mapeamento
+          const contact = await Contact.findOne({
+            where: { number: campaignShipping.number, companyId: campaign.companyId }
+          });
+
+          // Buscar definição e mapear parâmetros
+          let templateComponents = undefined;
+          if (contact) {
+            try {
+              const templateDef = await GetTemplateDefinition(
+                selectedWhatsappId,
+                templateName,
+                languageCode
+              );
+
+              if (templateDef.parameters.length > 0) {
+                templateComponents = MapTemplateParameters(
+                  templateDef.parameters,
+                  contact
+                );
+                logger.info(
+                  `[DispatchCampaign] Template ${templateName} mapeado com ${templateDef.parameters.length} parâmetros`
+                );
+              }
+            } catch (err: any) {
+              logger.warn(`[DispatchCampaign] Erro ao mapear template: ${err.message}`);
+            }
+          } else {
+            logger.warn(
+              `[DispatchCampaign] Contato ${campaignShipping.number} não encontrado no CRM, enviando template sem parâmetros`
+            );
+          }
+
           const adapter = await GetWhatsAppAdapter(whatsapp);
           if (typeof adapter.sendTemplate === "function") {
             await adapter.sendTemplate(
               campaignShipping.number,
               templateName,
-              languageCode
+              languageCode,
+              templateComponents  // Agora com match automático
             );
           } else {
             logger.error("[DispatchCampaign] Adapter oficial não suporta sendTemplate");
@@ -1409,7 +1447,7 @@ async function handleDispatchCampaign(job) {
           }
         }
 
-        await campaignShipping.update({ 
+        await campaignShipping.update({
           deliveredAt: moment(),
           status: 'delivered',
           attempts: (campaignShipping.attempts || 0) + 1
@@ -1543,7 +1581,7 @@ async function handleDispatchCampaign(job) {
           //     });
           // }
         }
-        await campaignShipping.update({ 
+        await campaignShipping.update({
           deliveredAt: moment(),
           status: 'delivered',
           attempts: (campaignShipping.attempts || 0) + 1
@@ -1630,7 +1668,7 @@ async function handleDispatchCampaign(job) {
         }
       }
 
-      await campaignShipping.update({ 
+      await campaignShipping.update({
         deliveredAt: moment(),
         status: 'delivered',
         attempts: (campaignShipping.attempts || 0) + 1
@@ -1654,7 +1692,7 @@ async function handleDispatchCampaign(job) {
     const dayStart = now.clone().startOf("day");
     const hourlyCount = await countDeliveredSince(selectedWhatsappId, hourStart.toISOString());
     const dailyCount = await countDeliveredSince(selectedWhatsappId, dayStart.toISOString());
-    
+
     logger.info(
       `✅ [ANTI-BAN] Mensagem enviada | Campanha=${campaignId} | Contato=${campaignShipping.contact.name} | WhatsApp=${selectedWhatsappId} | Hora: ${hourlyCount}/${caps.capHourly} | Dia: ${dailyCount}/${caps.capDaily}`
     );
@@ -1680,10 +1718,10 @@ async function handleDispatchCampaign(job) {
         if (record) {
           const newAttempts = (record.attempts || 0) + 1;
           const maxAttempts = 5;
-          
+
           // Se excedeu tentativas máximas, marca como falha permanente
           if (newAttempts >= maxAttempts) {
-            await record.update({ 
+            await record.update({
               jobId: null,
               status: 'failed',
               attempts: newAttempts,
@@ -1693,9 +1731,9 @@ async function handleDispatchCampaign(job) {
             logger.error(`[CAMPAIGN FAILED] Campanha=${campaign.id}; Registro=${campaignShippingId}; Tentativas=${newAttempts}; Erro=${err?.message}`);
             return;
           }
-          
+
           // Caso contrário, reagenda
-          await record.update({ 
+          await record.update({
             jobId: String(nextJob.id),
             attempts: newAttempts,
             lastError: err?.message || 'Erro desconhecido',
@@ -2277,34 +2315,34 @@ async function handleInvoiceCreate() {
             { type: QueryTypes.INSERT }
           );
 
-/*           let transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-              user: 'email@gmail.com',
-              pass: 'senha'
-            }
-          });
-
-          const mailOptions = {
-            from: 'heenriquega@gmail.com', // sender address
-            to: `${c.email}`, // receiver (use array of string for a list)
-            subject: 'Fatura gerada - Sistema', // Subject line
-            html: `Olá ${c.name} esté é um email sobre sua fatura!<br>
-<br>
-Vencimento: ${vencimento}<br>
-Valor: ${plan.value}<br>
-Link: ${process.env.FRONTEND_URL}/financeiro<br>
-<br>
-Qualquer duvida estamos a disposição!
-            `// plain text body
-          };
-
-          transporter.sendMail(mailOptions, (err, info) => {
-            if (err)
-              console.log(err)
-            else
-              console.log(info);
-          }); */
+          /*           let transporter = nodemailer.createTransport({
+                      service: 'gmail',
+                      auth: {
+                        user: 'email@gmail.com',
+                        pass: 'senha'
+                      }
+                    });
+          
+                    const mailOptions = {
+                      from: 'heenriquega@gmail.com', // sender address
+                      to: `${c.email}`, // receiver (use array of string for a list)
+                      subject: 'Fatura gerada - Sistema', // Subject line
+                      html: `Olá ${c.name} esté é um email sobre sua fatura!<br>
+          <br>
+          Vencimento: ${vencimento}<br>
+          Valor: ${plan.value}<br>
+          Link: ${process.env.FRONTEND_URL}/financeiro<br>
+          <br>
+          Qualquer duvida estamos a disposição!
+                      `// plain text body
+                    };
+          
+                    transporter.sendMail(mailOptions, (err, info) => {
+                      if (err)
+                        console.log(err)
+                      else
+                        console.log(info);
+                    }); */
 
         }
 

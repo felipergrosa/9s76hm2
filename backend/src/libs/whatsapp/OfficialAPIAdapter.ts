@@ -27,7 +27,7 @@ interface OfficialAPIConfig {
 export class OfficialAPIAdapter implements IWhatsAppAdapter {
   public readonly whatsappId: number;
   public readonly channelType: "official" = "official";
-  
+
   private client: AxiosInstance;
   private phoneNumberId: string;
   private accessToken: string;
@@ -35,7 +35,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
   private apiVersion: string;
   private status: ConnectionStatus = "disconnected";
   private phoneNumber: string | null = null;
-  
+
   // Callbacks de eventos (webhooks processam externamente)
   private messageCallbacks: Array<(message: IWhatsAppMessage) => void> = [];
   private connectionCallbacks: Array<(status: ConnectionStatus) => void> = [];
@@ -77,19 +77,19 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
   async initialize(): Promise<void> {
     try {
       logger.info(`[OfficialAPI] Inicializando whatsappId=${this.whatsappId}`);
-      
+
       // Verificar se credenciais são válidas e buscar dados do número
       const response = await this.client.get(`/${this.phoneNumberId}`);
-      
+
       this.phoneNumber = response.data.display_phone_number;
       const verifiedName = response.data.verified_name;
       const qualityRating = response.data.quality_rating;
-      
+
       this.status = "connected";
-      
+
       logger.info(`[OfficialAPI] Inicializado com sucesso: ${this.phoneNumber}`);
       logger.info(`[OfficialAPI] Nome verificado: ${verifiedName}, Quality: ${qualityRating}`);
-      
+
       // Buscar PIN 2FA do banco para registro automático
       let twoFactorPin: string | null = null;
       try {
@@ -99,7 +99,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
       } catch (fetchError: any) {
         logger.warn(`[OfficialAPI] Falha ao buscar PIN 2FA: ${fetchError.message}`);
       }
-      
+
       // 1. Subscrever WABA ao app (para habilitar webhooks de produção)
       try {
         await this.client.post(`/${this.businessAccountId}/subscribed_apps`);
@@ -113,7 +113,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
           logger.error(`[OfficialAPI] Erro ao subscrever WABA: ${errorMessage}`);
         }
       }
-      
+
       // 2. Registrar número com PIN 2FA (para ativar envio/recebimento)
       if (twoFactorPin && twoFactorPin.length === 6) {
         try {
@@ -129,7 +129,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
       } else {
         logger.warn(`[OfficialAPI] PIN 2FA não configurado ou inválido. Configure um PIN de 6 dígitos para ativar o registro automático.`);
       }
-      
+
       // Atualizar banco de dados com informações corretas
       try {
         const Whatsapp = (await import("../../models/Whatsapp")).default;
@@ -148,16 +148,16 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
       } catch (dbError: any) {
         logger.warn(`[OfficialAPI] Falha ao atualizar banco: ${dbError.message}`);
       }
-      
+
       // Notificar callbacks
       this.emitConnectionUpdate("connected");
-      
+
     } catch (error: any) {
       this.status = "disconnected";
       const message = error.response?.data?.error?.message || error.message;
-      
+
       logger.error(`[OfficialAPI] Erro ao inicializar: ${message}`);
-      
+
       throw new WhatsAppAdapterError(
         `Falha ao inicializar WhatsApp Official API: ${message}`,
         error.response?.data?.error?.code || "INITIALIZATION_ERROR",
@@ -231,7 +231,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
             }))
           }
         };
-        
+
         // Header opcional
         if (listTitle) {
           payload.interactive.header = {
@@ -255,7 +255,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
               caption: caption?.substring(0, 1024)  // Max 1024 chars
             };
             break;
-            
+
           case "video":
             payload.type = "video";
             payload.video = {
@@ -263,7 +263,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
               caption: caption?.substring(0, 1024)
             };
             break;
-            
+
           case "audio":
           case "ptt":
             payload.type = "audio";
@@ -271,7 +271,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
               link: mediaUrl
             };
             break;
-            
+
           case "document":
             payload.type = "document";
             payload.document = {
@@ -279,7 +279,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
               filename: caption || "documento.pdf"
             };
             break;
-            
+
           default:
             throw new WhatsAppAdapterError(
               `Tipo de mídia não suportado: ${mediaType}`,
@@ -311,13 +311,13 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
         caption,
         ack: 1  // Enviado
       };
-      
+
     } catch (error: any) {
       const message = error.response?.data?.error?.message || error.message;
       const code = error.response?.data?.error?.code || "SEND_MESSAGE_ERROR";
-      
+
       logger.error(`[OfficialAPI] Erro ao enviar mensagem: ${message}`);
-      
+
       throw new WhatsAppAdapterError(
         `Falha ao enviar mensagem: ${message}`,
         code,
@@ -363,7 +363,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
       logger.info(`[OfficialAPIAdapter] Mensagem deletada: ${messageId}`);
     } catch (error: any) {
       logger.error(`[OfficialAPIAdapter] Erro ao deletar mensagem: ${error.response?.data || error.message}`);
-      
+
       if (error.response?.status === 400 && error.response?.data?.error?.code === 100) {
         throw new WhatsAppAdapterError(
           "Não é possível deletar mensagens com mais de 24 horas",
@@ -371,7 +371,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
           error
         );
       }
-      
+
       throw new WhatsAppAdapterError(
         "Falha ao deletar mensagem",
         "DELETE_MESSAGE_ERROR",
@@ -400,7 +400,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
       logger.info(`[OfficialAPIAdapter] Mensagem editada: ${messageId}`);
     } catch (error: any) {
       logger.error(`[OfficialAPIAdapter] Erro ao editar mensagem: ${error.response?.data || error.message}`);
-      
+
       if (error.response?.status === 400 && error.response?.data?.error?.code === 131051) {
         throw new WhatsAppAdapterError(
           "Não é possível editar mensagens após 15 minutos",
@@ -408,7 +408,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
           error
         );
       }
-      
+
       throw new WhatsAppAdapterError(
         "Falha ao editar mensagem",
         "EDIT_MESSAGE_ERROR",
@@ -429,24 +429,8 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
   ): Promise<IWhatsAppMessage> {
     try {
       const recipient = to.replace(/\D/g, "");
-      
-      // IMPORTANTE:
-      // O endpoint /message_templates retorna "components" com campos como
-      // type/format/text/example/buttons, mas ESSE formato NÃO é o mesmo
-      // esperado na chamada de envio de template.
-      // Ao enviar, a Graph API espera "components" com "parameters" (type,text,image,...)
-      // e não aceita a chave "format" dentro de template.components[x].
-      // Como ainda não estamos montando parâmetros dinamicamente,
-      // é mais seguro NÃO enviar components aqui e deixar o template usar
-      // o conteúdo padrão aprovado no Business Manager.
 
-      if (components && components.length) {
-        logger.warn(
-          `[OfficialAPI] sendTemplate recebeu components, mas eles serão ignorados por enquanto para evitar erro de formato. Template=${templateName}`
-        );
-      }
-
-      const payload = {
+      const payload: any = {
         messaging_product: "whatsapp",
         recipient_type: "individual",
         to: recipient,
@@ -458,6 +442,22 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
           }
         }
       };
+
+      // Adicionar components se fornecidos E se tiverem conteúdo
+      if (components && components.length > 0) {
+        // Validar que pelo menos um component tem parameters
+        const hasParams = components.some(c => c.parameters?.length > 0);
+        if (hasParams) {
+          payload.template.components = components;
+          logger.info(
+            `[OfficialAPI] Enviando template ${templateName} com ${components.length} component(s) e parâmetros`
+          );
+        } else {
+          logger.debug(
+            `[OfficialAPI] Components fornecidos mas sem parâmetros, enviando template sem components`
+          );
+        }
+      }
 
       const response = await this.client.post(
         `/${this.phoneNumberId}/messages`,
@@ -477,12 +477,12 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
         fromMe: true,
         ack: 1
       };
-      
+
     } catch (error: any) {
       const message = error.response?.data?.error?.message || error.message;
-      
+
       logger.error(`[OfficialAPI] Erro ao enviar template: ${message}`);
-      
+
       throw new WhatsAppAdapterError(
         `Falha ao enviar template: ${message}`,
         error.response?.data?.error?.code || "SEND_TEMPLATE_ERROR",
@@ -501,7 +501,7 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
         status: "read",
         message_id: messageId
       });
-      
+
       logger.debug(`[OfficialAPI] Mensagem marcada como lida: ${messageId}`);
     } catch (error: any) {
       logger.error(`[OfficialAPI] Erro ao marcar como lida: ${error.message}`);

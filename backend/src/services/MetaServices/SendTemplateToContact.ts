@@ -7,6 +7,8 @@ import logger from "../../utils/logger";
 import CreateTicketService from "../TicketServices/CreateTicketService";
 import GetWhatsAppAdapter from "../../helpers/GetWhatsAppAdapter";
 import CreateMessageService from "../MessageServices/CreateMessageService";
+import GetTemplateDefinition, { TemplateDefinition } from "./GetTemplateDefinition";
+import MapTemplateParameters from "./MapTemplateParameters";
 
 interface SendTemplateToContactParams {
   whatsappId: number;
@@ -57,6 +59,39 @@ const SendTemplateToContact = async ({
       throw new AppError("Envio de template não é suportado para grupos", 400);
     }
 
+    // Buscar definição do template para saber quais parâmetros espera
+    let templateDefinition: TemplateDefinition | null = null;
+    try {
+      templateDefinition = await GetTemplateDefinition(
+        whatsappId,
+        templateName,
+        languageCode
+      );
+      logger.info(
+        `[SendTemplateToContact] Template ${templateName} tem ${templateDefinition.parameters.length} parâmetros e ${templateDefinition.buttons.length} botões`
+      );
+    } catch (err: any) {
+      logger.warn(
+        `[SendTemplateToContact] Não foi possível buscar definição do template: ${err.message}`
+      );
+    }
+
+    // Montar components automaticamente se:
+    // 1. components não foi fornecido E
+    // 2. template tem parâmetros esperados
+    let finalComponents = components;
+    if ((!finalComponents || finalComponents.length === 0) && templateDefinition) {
+      if (templateDefinition.parameters.length > 0) {
+        finalComponents = MapTemplateParameters(
+          templateDefinition.parameters,
+          contact
+        );
+        logger.info(
+          `[SendTemplateToContact] Auto-mapeamento de parâmetros concluído`
+        );
+      }
+    }
+
     // Cria ticket (ou lança erro se já existir outro aberto, via CheckContactOpenTickets)
     const ticket = await CreateTicketService({
       contactId: contact.id,
@@ -83,7 +118,7 @@ const SendTemplateToContact = async ({
       contact.number,
       templateName,
       languageCode,
-      components
+      finalComponents
     );
 
     logger.info(
