@@ -9,6 +9,7 @@ import GetWhatsAppAdapter from "../../helpers/GetWhatsAppAdapter";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import GetTemplateDefinition, { TemplateDefinition } from "./GetTemplateDefinition";
 import MapTemplateParameters from "./MapTemplateParameters";
+import { Op } from "sequelize";  // NOVO: para query de ticket existente
 
 interface SendTemplateToContactParams {
   whatsappId: number;
@@ -95,15 +96,35 @@ const SendTemplateToContact = async ({
       }
     }
 
-    // Cria ticket (ou lança erro se já existir outro aberto, via CheckContactOpenTickets)
-    const ticket = await CreateTicketService({
-      contactId: contact.id,
-      status: "open",
-      userId,
-      companyId,
-      queueId,
-      whatsappId: String(whatsappId)
+    // CORREÇÃO ERR_OTHER_OPEN_TICKET: Verificar se já existe ticket aberto
+    // Se existir, REUSAR o ticket (especialmente importante para campanhas)
+    let ticket = await Ticket.findOne({
+      where: {
+        contactId: contact.id,
+        whatsappId,
+        companyId,
+        status: { [Op.or]: ["open", "pending"] }
+      }
     });
+
+    if (ticket) {
+      logger.info(
+        `[SendTemplateToContact] Reusando ticket existente #${ticket.id} para envio de template`
+      );
+    } else {
+      // Criar novo ticket apenas se não existir um aberto
+      ticket = await CreateTicketService({
+        contactId: contact.id,
+        status: "open",
+        userId,
+        companyId,
+        queueId,
+        whatsappId: String(whatsappId)
+      });
+      logger.info(
+        `[SendTemplateToContact] Novo ticket #${ticket.id} criado para envio de template`
+      );
+    }
 
     // Obter adapter oficial
     const adapter = await GetWhatsAppAdapter(whatsapp);

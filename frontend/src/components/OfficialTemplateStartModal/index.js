@@ -20,6 +20,7 @@ import { toast } from "react-toastify";
 
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
+import TemplateVariableMapper from "../TemplateVariableMapper";  // NOVO
 
 const useStyles = makeStyles(theme => ({
   fullWidth: {
@@ -40,6 +41,7 @@ const OfficialTemplateStartModal = ({
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [sending, setSending] = useState(false);
+  const [metaTemplateVariables, setMetaTemplateVariables] = useState(null);  // NOVO
 
   useEffect(() => {
     if (!open || !whatsappId) return;
@@ -78,7 +80,8 @@ const OfficialTemplateStartModal = ({
         queueId: queueId || null,
         templateName: template.name,
         languageCode: template.language || "pt_BR",
-        components: template.components || []
+        // NOVO: enviar mapeamento de variáveis definido pelo usuário
+        variablesConfig: metaTemplateVariables
       };
 
       const { data } = await api.post(
@@ -101,8 +104,12 @@ const OfficialTemplateStartModal = ({
   const handleClose = () => {
     if (sending) return;
     setSelectedTemplateId("");
+    setMetaTemplateVariables(null);  // NOVO: limpar variáveis
     onClose && onClose();
   };
+
+  // NOVO: Template selecionado
+  const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
@@ -169,6 +176,19 @@ const OfficialTemplateStartModal = ({
             </FormHelperText>
           )}
         </FormControl>
+
+        {/* NOVO: Mapeador de variáveis do template */}
+        {selectedTemplate && (
+          <Box mt={2}>
+            <TemplateVariableMapper
+              whatsappId={whatsappId}
+              templateName={selectedTemplate.name}
+              languageCode={selectedTemplate.language || "pt_BR"}
+              value={metaTemplateVariables}
+              onChange={setMetaTemplateVariables}
+            />
+          </Box>
+        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose} disabled={sending} color="secondary">
