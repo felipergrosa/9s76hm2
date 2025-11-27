@@ -27,7 +27,7 @@ interface FileDecision {
 }
 
 class QueueAutoFileService {
-  
+
   /**
    * Avalia se deve enviar arquivos automaticamente
    */
@@ -38,7 +38,7 @@ class QueueAutoFileService {
     messageBody = "",
     trigger
   }: AutoFileRequest): Promise<FileDecision> {
-    
+
     const decision: FileDecision = {
       shouldSend: false,
       files: [],
@@ -46,9 +46,9 @@ class QueueAutoFileService {
       reason: "No action needed"
     };
 
-    // Verificar se a fila tem fileListId e estratégia configurada
-    if (!queue.fileListId || queue.autoSendStrategy === "none") {
-      decision.reason = "Queue has no file list or strategy is 'none'";
+    // Verificar se a fila tem fileListId OU folderId e estratégia configurada
+    if ((!queue.fileListId && !queue.folderId) || queue.autoSendStrategy === "none") {
+      decision.reason = "Queue has no file list/folder or strategy is 'none'";
       return decision;
     }
 
@@ -58,8 +58,8 @@ class QueueAutoFileService {
       return decision;
     }
 
-    // Buscar arquivos ativos da lista
-    const files = await this.getActiveFiles(queue.fileListId, ticket.companyId);
+    // Buscar arquivos ativos da lista ou pasta
+    const files = await this.getActiveFiles(queue.fileListId, queue.folderId, ticket.companyId);
     if (!files.length) {
       decision.reason = "No active files found in the list";
       return decision;
@@ -87,7 +87,7 @@ class QueueAutoFileService {
     // Determinar se precisa de confirmação
     decision.confirmationNeeded = !!queue.confirmationTemplate && trigger !== "manual";
     decision.shouldSend = !decision.confirmationNeeded;
-    decision.reason = decision.confirmationNeeded 
+    decision.reason = decision.confirmationNeeded
       ? "Confirmation required before sending"
       : "Ready to send files";
 
@@ -110,7 +110,7 @@ class QueueAutoFileService {
     files: FilesOptions[];
     skipConfirmation?: boolean;
   }): Promise<void> {
-    
+
     try {
       // Enviar mensagem de confirmação se necessário
       if (queue.confirmationTemplate && !skipConfirmation) {
@@ -120,7 +120,7 @@ class QueueAutoFileService {
           ticket,
           quotedMsg: undefined
         });
-        
+
         // Log da solicitação de confirmação
         await CreateLogTicketService({
           ticketId: ticket.id,
@@ -128,18 +128,18 @@ class QueueAutoFileService {
           userId: ticket.userId,
           queueId: queue.id
         });
-        
+
         return; // Aguardar resposta do cliente
       }
 
       // Enviar arquivos
       const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
-      
+
       for (const file of files) {
         const mediaSrc = {
           path: path.resolve(publicFolder, file.path)
         } as Express.Multer.File;
-        
+
         await SendWhatsAppMedia({
           media: mediaSrc,
           ticket,
@@ -173,9 +173,125 @@ class QueueAutoFileService {
   }
 
   /**
-   * Busca arquivos ativos de uma lista
+   * Busca arquivos ativos de uma lista ou pasta
+   * Prioridade: folderId > fileListId
+   * folderId === -1 busca em TODAS as pastas
    */
-  private static async getActiveFiles(fileListId: number, companyId: number): Promise<FilesOptions[]> {
+  private static async getActiveFiles(
+    fileListId: number,
+    folderId: number,
+    companyId: number
+  ): Promise<FilesOptions[]> {
+
+    // PRIORIDADE 1: Se tem folderId, buscar de pastas
+    if (folderId) {
+      return this.getFilesFromFolder(folderId, companyId);
+    }
+
+    // PRIORIDADE 2: Se tem fileListId, buscar de file lists
+    if (fileListId) {
+      return this.getFilesFromFileList(fileListId, companyId);
+    }
+
+    return [];
+  }
+
+  /**
+   * Busca arquivos de pastas (LibraryFolders)
+   */
+  private static async getFilesFromFolder(
+    folderId: number,
+    companyId: number
+  ): Promise<any[]> {
+
+    const LibraryFolder = require("../../models/LibraryFolder").default;
+    const LibraryFile = require("../../models/LibraryFile").default;
+
+    // Se folderId === -1, buscar em TODAS as pastas
+    if (folderId === -1) {
+      const allFolders = await LibraryFolder.findAll({
+        where: { companyId },
+        include: [{
+          model: LibraryFile,
+          as: "files",
+          required: false
+        }]
+      });
+
+      const allFiles: any[] = [];
+      allFolders.forEach((folder: any) => {
+        if (folder.files) {
+          allFiles.push(...folder.files);
+        }
+      });
+
+      return allFiles;
+    }
+
+    // Buscar arquivos de uma pasta específica
+    const folder = await LibraryFolder.findOne({
+      where: { id: folderId, companyId },
+      include: [{
+        model: LibraryFile,
+        as: "files",
+        required: false
+      }]
+    });
+
+    return folder?.files || [];
+  }
+
+  /**
+   * Busca arquivos de file lists (Files)
+   */
+  private static async getFilesFromFileList(
+    fileListId: number,
+    companyId: number
+  ): Promise<FilesOptions[]> {
+
+    // Se fileListId === -1, buscar em TODAS as file lists
+    if (fileListId === -1) {
+      const allFileLists = await Files.findAll({
+        where: {
+          companyId,
+          isActive: true,
+          [Op.or]: [
+            { validFrom: null },
+            { validFrom: { [Op.lte]: new Date() } }
+          ],
+          [Op.and]: [
+            {
+              [Op.or]: [
+                { validUntil: null },
+                { validUntil: { [Op.gte]: new Date() } }
+              ]
+            }
+          ]
+        },
+        include: [
+          {
+            model: FilesOptions,
+            as: "options",
+            where: {
+              isActive: true
+            },
+            required: false
+          }
+        ]
+      });
+
+      // Combinar todas as options de todas as listas
+      const allOptions: FilesOptions[] = [];
+      allFileLists.forEach(fileList => {
+        if (fileList.options) {
+          allOptions.push(...fileList.options);
+        }
+      });
+
+      return allOptions;
+    }
+
+    // Busca normal para uma file list específica
     const fileList = await Files.findOne({
       where: {
         id: fileListId,
@@ -212,7 +328,7 @@ class QueueAutoFileService {
   /**
    * Verifica limite de arquivos por sessão
    */
-  private static async checkSessionLimit(ticket: Ticket, maxFiles: number): Promise<{allowed: boolean, count: number}> {
+  private static async checkSessionLimit(ticket: Ticket, maxFiles: number): Promise<{ allowed: boolean, count: number }> {
     // Aqui você pode implementar lógica para contar arquivos enviados nas últimas 24h
     // Por simplicidade, vamos assumir que está permitido
     return { allowed: true, count: 0 };
@@ -223,10 +339,10 @@ class QueueAutoFileService {
    */
   private static matchFilesByKeywords(files: FilesOptions[], messageBody: string): FilesOptions[] {
     const normalizedMessage = messageBody.toLowerCase();
-    
+
     return files.filter(file => {
       if (!file.keywords) return false;
-      
+
       const keywords = file.keywords.toLowerCase().split(',').map(k => k.trim());
       return keywords.some(keyword => normalizedMessage.includes(keyword));
     });
@@ -241,17 +357,17 @@ class QueueAutoFileService {
     pendingFiles: FilesOptions[]
   ): Promise<boolean> {
     const normalizedResponse = messageBody.toLowerCase().trim();
-    
+
     // Respostas positivas
     const positiveResponses = ['sim', 'yes', '1', 'ok', 'enviar', 'quero', 'aceito'];
-    const isPositive = positiveResponses.some(response => 
+    const isPositive = positiveResponses.some(response =>
       normalizedResponse.includes(response)
     );
 
     if (isPositive && pendingFiles.length > 0) {
       const queue = await Queue.findByPk(ticket.queueId);
       const contact = await Contact.findByPk(ticket.contactId);
-      
+
       if (queue && contact) {
         await this.sendFiles({
           ticket,

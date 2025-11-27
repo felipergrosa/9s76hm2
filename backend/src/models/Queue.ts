@@ -25,6 +25,7 @@ import WhatsappQueue from "./WhatsappQueue";
 import Chatbot from "./Chatbot";
 import QueueIntegrations from "./QueueIntegrations";
 import Files from "./Files";
+import LibraryFolder from "./LibraryFolder";
 import Prompt from "./Prompt";
 import QueueRAGSource from "./QueueRAGSource";
 
@@ -108,6 +109,13 @@ class Queue extends Model<Queue> {
 
   @BelongsTo(() => Files)
   files: Files;
+
+  @ForeignKey(() => LibraryFolder)
+  @Column
+  folderId: number;
+
+  @BelongsTo(() => LibraryFolder)
+  folder: LibraryFolder;
 
   @Default(false)
   @Column
