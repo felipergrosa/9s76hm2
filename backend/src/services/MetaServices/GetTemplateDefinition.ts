@@ -15,6 +15,9 @@ export interface TemplateDefinition {
     hasButtons: boolean;
     buttons: Array<{ type: string; text: string; }>;
     parameters: TemplateParameter[];
+    body: string;
+    header?: string;
+    footer?: string;
 }
 
 /**
@@ -58,7 +61,16 @@ export const GetTemplateDefinition = async (
         const parameters: TemplateParameter[] = [];
         const buttons: Array<{ type: string; text: string; }> = [];
 
+        let body = "";
+        let header: string | undefined = undefined;
+        let footer: string | undefined = undefined;
+
         template.components.forEach(component => {
+            // Extrair textos
+            if (component.type === "BODY") body = component.text || "";
+            if (component.type === "HEADER") header = component.text;
+            if (component.type === "FOOTER") footer = component.text;
+
             // Extrair botões
             if (component.type === "BUTTONS" && component.buttons) {
                 buttons.push(...component.buttons);
@@ -134,7 +146,10 @@ export const GetTemplateDefinition = async (
             status: template.status,
             hasButtons: buttons.length > 0,
             buttons,
-            parameters
+            parameters,
+            body,
+            header,
+            footer
         };
     } catch (error: any) {
         logger.error(`[GetTemplateDefinition] Erro: ${error.message}`);

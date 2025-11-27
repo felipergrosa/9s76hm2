@@ -130,6 +130,29 @@ const TemplateVariableMapper = ({
                 📋 Variáveis do Template "{template.name}"
             </Typography>
 
+            {/* Pré-visualização da Mensagem */}
+            <Box mb={3} p={2} bgcolor="#e3f2fd" borderRadius={4} border="1px solid #90caf9">
+                <Typography variant="caption" color="primary" style={{ fontWeight: "bold", display: "block", marginBottom: 4 }}>
+                    PRÉ-VISUALIZAÇÃO
+                </Typography>
+
+                {template.header && (
+                    <Typography variant="subtitle2" style={{ fontWeight: "bold", marginBottom: 8 }}>
+                        {template.header}
+                    </Typography>
+                )}
+
+                <Typography variant="body1" style={{ whiteSpace: "pre-wrap" }}>
+                    {template.body}
+                </Typography>
+
+                {template.footer && (
+                    <Typography variant="caption" color="textSecondary" style={{ display: "block", marginTop: 8 }}>
+                        {template.footer}
+                    </Typography>
+                )}
+            </Box>
+
             {template.parameters.map((param) => {
                 const config = (value && value[param.index]) || { type: "crm_field", source: "name" };
 

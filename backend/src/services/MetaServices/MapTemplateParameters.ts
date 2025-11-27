@@ -107,6 +107,8 @@ export const MapTemplateParameters = (
         logger.info(
             `[MapTemplateParameters] Mapeando ${parameters.length} parâmetros para contato ${contact.id} (${contact.name})`
         );
+        console.log("[MapTemplateParameters] VariablesConfig:", JSON.stringify(variablesConfig, null, 2));
+        console.log("[MapTemplateParameters] Parameters:", JSON.stringify(parameters, null, 2));
 
         // Agrupar por componente (body, header, footer)
         const bodyParams = parameters.filter(p => p.component === "BODY");
