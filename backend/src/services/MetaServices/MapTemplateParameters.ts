@@ -137,15 +137,9 @@ export const MapTemplateParameters = (
                     );
                 }
 
-                const paramObject: any = { type: "text", text: value };
-
-                // IMPORTANTE: Incluir param_name APENAS se existir (templates com variáveis nomeadas)
-                if (param.paramName) {
-                    paramObject.param_name = param.paramName;
-                    logger.debug(`[MapTemplateParameters] Param ${param.index} incluindo param_name="${param.paramName}"`);
-                }
-
-                return paramObject;
+                // Meta API NÃO aceita o campo param_name
+                // Parâmetros devem ser enviados em ordem sequencial
+                return { type: "text", text: value };
             });
 
             components.push({
