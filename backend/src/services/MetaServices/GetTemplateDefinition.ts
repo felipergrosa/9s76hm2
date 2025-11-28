@@ -6,6 +6,7 @@ export interface TemplateParameter {
     index: number;
     component: "HEADER" | "BODY" | "FOOTER" | "BUTTON";
     example?: string;
+    paramName?: string;  // Nome da variável quando o template usa variáveis nomeadas (ex: "v1", "v2")
 }
 
 export interface TemplateDefinition {
@@ -112,7 +113,7 @@ export const GetTemplateDefinition = async (
                 // Regex genérico: detecta QUALQUER coisa entre {{}}
                 const paramRegex = /\{\{([^}]+)\}\}/g;
                 let match;
-                const detectedParams = new Map<number, string>();  // index -> nome da variável
+                const detectedParams = new Map<number, string>();  // index ->nome da variável
                 let autoIndex = 1;  // Para variáveis sem número explícito
 
                 while ((match = paramRegex.exec(component.text)) !== null) {
@@ -138,7 +139,15 @@ export const GetTemplateDefinition = async (
                     }
                 }
 
-                // Tentar também buscar do example se existir (fallback)
+                // Extrair param_name do body_text_named_params (se existir)
+                const namedParams = new Map<string, string>();  // varName -> example
+                if ((component.example as any)?.body_text_named_params) {
+                    (component.example as any).body_text_named_params.forEach((namedParam: any) => {
+                        namedParams.set(namedParam.param_name, namedParam.example);
+                    });
+                }
+
+                // Tentar também buscar do example se existir (fallback para templates antigos)
                 let exampleParams: string[] = [];
                 if (component.example) {
                     if (component.type === "BODY" && component.example.body_text) {
@@ -153,13 +162,26 @@ export const GetTemplateDefinition = async (
                 Array.from(detectedParams.keys())
                     .sort((a, b) => a - b)
                     .forEach(paramNum => {
-                        const varName = detectedParams.get(paramNum);
-                        const example = exampleParams[paramNum - 1] || undefined;
+                        const varName = detectedParams.get(paramNum)!;
+
+                        // Tentar pegar exemplo do body_text_named_params (prioridade)
+                        let example = namedParams.get(varName);
+
+                        // Se não encontrar, usar do example.body_text (fallback)
+                        if (!example) {
+                            example = exampleParams[paramNum - 1];
+                        }
+
+                        // Se ainda não tiver, usar o próprio varName como hint
+                        if (!example) {
+                            example = varName;
+                        }
 
                         parameters.push({
                             index: paramNum,
                             component: component.type as "HEADER" | "BODY" | "FOOTER",
-                            example: example || varName  // Usa nome da variável como hint se não tem example
+                            example: example,
+                            paramName: /^\d+$/.test(varName) ? undefined : varName  // Só incluir paramName se NÃO for numérico
                         });
                     });
             }

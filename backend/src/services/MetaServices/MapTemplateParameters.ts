@@ -137,7 +137,15 @@ export const MapTemplateParameters = (
                     );
                 }
 
-                return { type: "text", text: value };
+                const paramObject: any = { type: "text", text: value };
+
+                // IMPORTANTE: Incluir param_name APENAS se existir (templates com variáveis nomeadas)
+                if (param.paramName) {
+                    paramObject.param_name = param.paramName;
+                    logger.debug(`[MapTemplateParameters] Param ${param.index} incluindo param_name="${param.paramName}"`);
+                }
+
+                return paramObject;
             });
 
             components.push({
