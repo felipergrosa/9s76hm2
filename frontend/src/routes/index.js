@@ -18,6 +18,28 @@ import Tags from "../pages/Tags";
 import MessagesAPI from "../pages/MessagesAPI";
 import Helps from "../pages/Helps";
 import AITutorial from "../pages/Helps/AITutorial";
+import BotTutorial from "../pages/Helps/BotTutorial";
+import DashboardTutorial from "../pages/Helps/DashboardTutorial";
+import AtendimentosTutorial from "../pages/Helps/AtendimentosTutorial";
+import RespostasRapidasTutorial from "../pages/Helps/RespostasRapidasTutorial";
+import KanbanTutorial from "../pages/Helps/KanbanTutorial";
+import ContatosTutorial from "../pages/Helps/ContatosTutorial";
+import AgendamentosTutorial from "../pages/Helps/AgendamentosTutorial";
+import TagsTutorial from "../pages/Helps/TagsTutorial";
+import ChatInternoTutorial from "../pages/Helps/ChatInternoTutorial";
+import CampanhasTutorial from "../pages/Helps/CampanhasTutorial";
+import FlowBuilderTutorial from "../pages/Helps/FlowBuilderTutorial";
+import FilaChatbotTutorial from "../pages/Helps/FilaChatbotTutorial";
+import PromptsIATutorial from "../pages/Helps/PromptsIATutorial";
+import UsuariosTutorial from "../pages/Helps/UsuariosTutorial";
+import ConfiguracoesTutorial from "../pages/Helps/ConfiguracoesTutorial";
+import ConexoesWhatsAppTutorial from "../pages/Helps/ConexoesWhatsAppTutorial";
+import IntegracoesTutorial from "../pages/Helps/IntegracoesTutorial";
+import APITutorial from "../pages/Helps/APITutorial";
+import ArquivosChatbotTutorial from "../pages/Helps/ArquivosChatbotTutorial";
+import ListasContatosTutorial from "../pages/Helps/ListasContatosTutorial";
+import RelatoriosTutorial from "../pages/Helps/RelatoriosTutorial";
+import FinanceiroTutorial from "../pages/Helps/FinanceiroTutorial";
 import ContactLists from "../pages/ContactLists";
 import ContactListItems from "../pages/ContactListItems";
 import Companies from "../pages/Companies";
@@ -87,6 +109,28 @@ const Routes = () => {
                 <Route exact path="/contacts/import" component={ContactImportPage} isPrivate />
                 <Route exact path="/helps" component={Helps} isPrivate />
                 <Route exact path="/helps/ai-tutorial" component={AITutorial} isPrivate />
+                <Route exact path="/helps/bot-tutorial" component={BotTutorial} isPrivate />
+                <Route exact path="/helps/dashboard" component={DashboardTutorial} isPrivate />
+                <Route exact path="/helps/atendimentos" component={AtendimentosTutorial} isPrivate />
+                <Route exact path="/helps/respostas-rapidas" component={RespostasRapidasTutorial} isPrivate />
+                <Route exact path="/helps/kanban" component={KanbanTutorial} isPrivate />
+                <Route exact path="/helps/contatos" component={ContatosTutorial} isPrivate />
+                <Route exact path="/helps/agendamentos" component={AgendamentosTutorial} isPrivate />
+                <Route exact path="/helps/tags" component={TagsTutorial} isPrivate />
+                <Route exact path="/helps/chat-interno" component={ChatInternoTutorial} isPrivate />
+                <Route exact path="/helps/campanhas" component={CampanhasTutorial} isPrivate />
+                <Route exact path="/helps/flowbuilder" component={FlowBuilderTutorial} isPrivate />
+                <Route exact path="/helps/fila-chatbot" component={FilaChatbotTutorial} isPrivate />
+                <Route exact path="/helps/prompts-ia" component={PromptsIATutorial} isPrivate />
+                <Route exact path="/helps/usuarios" component={UsuariosTutorial} isPrivate />
+                <Route exact path="/helps/configuracoes" component={ConfiguracoesTutorial} isPrivate />
+                <Route exact path="/helps/conexoes-whatsapp" component={ConexoesWhatsAppTutorial} isPrivate />
+                <Route exact path="/helps/integracoes" component={IntegracoesTutorial} isPrivate />
+                <Route exact path="/helps/api" component={APITutorial} isPrivate />
+                <Route exact path="/helps/arquivos-chatbot" component={ArquivosChatbotTutorial} isPrivate />
+                <Route exact path="/helps/listas-contatos" component={ListasContatosTutorial} isPrivate />
+                <Route exact path="/helps/relatorios" component={RelatoriosTutorial} isPrivate />
+                <Route exact path="/helps/financeiro" component={FinanceiroTutorial} isPrivate />
                 <Route exact path="/users" component={Users} isPrivate />
                 <Route exact path="/messages-api" component={MessagesAPI} isPrivate />
                 <Route exact path="/settings" component={SettingsCustom} isPrivate />

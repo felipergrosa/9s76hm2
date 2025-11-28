@@ -1,9 +1,16 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { makeStyles, Paper, Typography, Modal, IconButton, Button } from "@material-ui/core";
-import { Link } from "react-router-dom";
 import {
-  EmojiObjects as AIIcon,
-  Dashboard,
+  makeStyles,
+  Paper,
+  Typography,
+  Modal,
+  Button,
+  Tooltip,
+  IconButton,
+  Divider,
+  Box,
+} from "@material-ui/core";
+import {
   Assignment,
   QuestionAnswer,
   ViewModule,
@@ -12,154 +19,111 @@ import {
   Label,
   Forum,
   SpeakerPhone,
-  AccountTree,
-  People,
-  Assessment,
-  Code,
-  Folder,
+  Memory as AIIcon,
+  Dashboard,
   Settings,
   PhoneAndroid,
-  List,
+  Extension,
+  Code,
+  Folder,
+  List as ListIcon,
+  Assessment,
   AttachMoney,
-  Announcement,
-  Psychology
+  Notifications,
+  RecordVoiceOver,
 } from "@material-ui/icons";
+
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
 import Title from "../../components/Title";
 import { i18n } from "../../translate/i18n";
 import useHelps from "../../hooks/useHelps";
+import { Link } from "react-router-dom";
 
-const useStyles = makeStyles(theme => ({
+const useStyles = makeStyles((theme) => ({
   root: {
-    display: 'flex',
-    flexDirection: 'column',
-    minHeight: '100vh',
-    width: '100%',
-    alignItems: 'stretch',
-    padding: '16px',
-    background: theme.palette.background.default,
-  },
-  mainPaperContainer: {
-    flex: 1,
-    overflow: 'visible',
-    padding: 0,
-    background: 'transparent',
-    boxSizing: 'border-box',
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
   },
   mainPaper: {
-    width: '100%',
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-    gap: theme.spacing(1.5),
-    padding: 0,
-    margin: 0,
+    flex: 1,
+    padding: theme.spacing(3),
   },
-  helpPaper: {
-    position: 'relative',
-    width: '100%',
-    minHeight: 220,
-    aspectRatio: '1 / 1',
-    padding: theme.spacing(1.25),
-    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-    borderRadius: 12,
-    cursor: 'pointer',
-    display: 'flex',
-    backgroundColor: '#fafafa',
-    border: '1px solid rgba(0,0,0,0.05)',
-    transition: 'all 0.2s ease',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
+  sectionTitle: {
+    marginTop: theme.spacing(3),
+    marginBottom: theme.spacing(2),
+    fontWeight: 600,
+    color: theme.palette.primary.main,
   },
-  cardDescription: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    textAlign: 'center',
-    padding: theme.spacing(2),
-    background: 'rgba(0,0,0,0.6)',
-    color: '#fff',
-    borderRadius: 12,
-    opacity: 0,
-    visibility: 'hidden',
-    transition: 'opacity 0.2s ease',
-    zIndex: 2,
+  videoGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+    gap: theme.spacing(2),
+    marginBottom: theme.spacing(4),
   },
-  helpPaperHover: {
-    '&:hover $cardDescription': {
-      opacity: 1,
-      visibility: 'visible',
-    }
-  },
-  paperHover: {
-    transition: 'transform 0.3s, box-shadow 0.3s',
-    '&:hover': {
-      transform: 'scale(1.03)',
-      boxShadow: `0 0 8px`,
-      color: theme.palette.primary.main,
+  videoCard: {
+    cursor: "pointer",
+    transition: "transform 0.2s, box-shadow 0.2s",
+    "&:hover": {
+      transform: "translateY(-4px)",
+      boxShadow: theme.shadows[4],
     },
   },
   videoThumbnail: {
-    width: '100%',
-    height: 'calc(100% - 56px)',
-    objectFit: 'cover',
-    borderRadius: `${theme.spacing(1)}px ${theme.spacing(1)}px 0 0`,
+    width: "100%",
+    height: "180px",
+    objectFit: "cover",
   },
-  videoTitle: {
-    marginTop: theme.spacing(1),
-    flex: 1,
+  tutorialGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+    gap: theme.spacing(1.5),
   },
-  videoDescription: {
-    maxHeight: '100px',
-    overflow: 'hidden',
+  tutorialButton: {
+    padding: theme.spacing(2),
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing(1),
+    textDecoration: "none",
+    color: "inherit",
+    border: `2px solid ${theme.palette.divider}`,
+    borderRadius: theme.spacing(1),
+    transition: "all 0.2s",
+    cursor: "pointer",
+    backgroundColor: theme.palette.background.paper,
+    "&:hover": {
+      borderColor: theme.palette.primary.main,
+      backgroundColor: theme.palette.action.hover,
+      transform: "translateY(-2px)",
+      boxShadow: theme.shadows[2],
+    },
+  },
+  tutorialIcon: {
+    fontSize: 36,
+  },
+  tutorialLabel: {
+    fontSize: "0.75rem",
+    fontWeight: 500,
+    textAlign: "center",
   },
   videoModal: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   videoModalContent: {
-    outline: 'none',
-    width: '90%',
+    outline: "none",
+    width: "90%",
     maxWidth: 1024,
-    aspectRatio: '16/9',
-    position: 'relative',
-    backgroundColor: 'white',
+    aspectRatio: "16/9",
+    position: "relative",
+    backgroundColor: "white",
     borderRadius: theme.spacing(1),
-    overflow: 'hidden',
-  },
-  aiTutorialCard: {
-    position: 'relative',
-    width: '100%',
-    minHeight: '340px',
-    padding: theme.spacing(2),
-    boxShadow: theme.shadows[3],
-    borderRadius: theme.spacing(1),
-    cursor: 'pointer',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    maxWidth: '340px',
-    backgroundColor: theme.palette.primary.light,
-    color: theme.palette.primary.contrastText,
-  },
-  aiTutorialIcon: {
-    fontSize: '4rem',
-    marginBottom: theme.spacing(2),
-  },
-  aiTutorialButton: {
-    marginTop: theme.spacing(2),
-    backgroundColor: theme.palette.common.white,
-    color: theme.palette.primary.main,
-    '&:hover': {
-      backgroundColor: theme.palette.grey[100],
-    },
+    overflow: "hidden",
   },
 }));
 
@@ -209,7 +173,13 @@ const Helps = () => {
         <div className={classes.videoModalContent}>
           {selectedVideo && (
             <iframe
-              style={{ width: "100%", height: "100%", position: "absolute", top: 0, left: 0 }}
+              style={{
+                width: "100%",
+                height: "100%",
+                position: "absolute",
+                top: 0,
+                left: 0,
+              }}
               src={`https://www.youtube.com/embed/${selectedVideo}`}
               title="YouTube video player"
               frameBorder="0"
@@ -221,165 +191,112 @@ const Helps = () => {
       </Modal>
     );
   };
-              <Typography variant="subtitle1" align="center" style={{fontWeight:600,marginBottom:4}}>Dashboard</Typography>
-              <Typography variant="caption" align="center" className={classes.cardDescription}>Visão geral do sistema e principais indicadores.</Typography>
-              <Button variant="outlined" color="primary" size="small" style={{fontSize:'0.7rem',padding:'4px 12px'}}>Acessar Manual</Button>
-            </div >
-          </Paper >
-          <Paper className={`${classes.helpPaper} ${classes.helpPaperHover}`}>
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'12px'}}>
-              <Assignment style={{fontSize:36,color:'#a5d6a7',marginBottom:8}} />
-              <Typography variant="subtitle1" align="center" style={{fontWeight:600,marginBottom:4}}>Atendimentos</Typography>
-              <Typography variant="caption" align="center" className={classes.cardDescription}>Gestão de tickets, conversas e histórico de atendimento.</Typography>
-              <Button variant="outlined" color="primary" size="small" style={{fontSize:'0.7rem',padding:'4px 12px'}}>Acessar Manual</Button>
-            </div>
-          </Paper>
-          <Paper className={`${classes.helpPaper} ${classes.helpPaperHover}`}>
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'12px'}}>
-              <QuestionAnswer style={{fontSize:36,color:'#ffd54f',marginBottom:8}} />
-              <Typography variant="subtitle1" align="center" style={{fontWeight:600,marginBottom:4}}>Respostas Rápidas</Typography>
-              <Typography variant="caption" align="center" className={classes.cardDescription}>Crie e utilize mensagens prontas para agilizar o atendimento.</Typography>
-              <Button variant="outlined" color="primary" size="small" style={{fontSize:'0.7rem',padding:'4px 12px'}}>Acessar Manual</Button>
-            </div>
-          </Paper>
-          <Paper className={`${classes.helpPaper} ${classes.helpPaperHover}`}>
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'12px'}}>
-              <ViewModule style={{fontSize:36,color:'#ce93d8',marginBottom:8}} />
-              <Typography variant="subtitle1" align="center" style={{fontWeight:600,marginBottom:4}}>Kanban</Typography>
-              <Typography variant="caption" align="center" className={classes.cardDescription}>Organize tickets por etapas e visualize o fluxo de trabalho.</Typography>
-              <Button variant="outlined" color="primary" size="small" style={{fontSize:'0.7rem',padding:'4px 12px'}}>Acessar Manual</Button>
-            </div>
-          </Paper>
-          <Paper className={`${classes.helpPaper} ${classes.helpPaperHover}`}>
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'12px'}}>
-              <Contacts style={{fontSize:36,color:'#ffab91',marginBottom:8}} />
-              <Typography variant="subtitle1" align="center" style={{fontWeight:600,marginBottom:4}}>Contatos</Typography>
-              <Typography variant="caption" align="center" className={classes.cardDescription}>Gerencie sua base de contatos e informações dos clientes.</Typography>
-              <Button variant="outlined" color="primary" size="small" style={{fontSize:'0.7rem',padding:'4px 12px'}}>Acessar Manual</Button>
-            </div>
-          </Paper>
-          <Paper className={`${classes.helpPaper} ${classes.helpPaperHover}`}>
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'12px'}}>
-              <Event style={{fontSize:36,color:'#ffe082',marginBottom:8}} />
-              <Typography variant="subtitle1" align="center" style={{fontWeight:600,marginBottom:4}}>Agendamentos</Typography>
-              <Typography variant="caption" align="center" className={classes.cardDescription}>Agende tarefas e compromissos relacionados aos atendimentos.</Typography>
-              <Button variant="outlined" color="primary" size="small" style={{fontSize:'0.7rem',padding:'4px 12px'}}>Acessar Manual</Button>
-            </div>
-          </Paper>
-          <Paper className={`${classes.helpPaper} ${classes.helpPaperHover}`}>
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'12px'}}>
-              <Label style={{fontSize:36,color:'#b0bec5',marginBottom:8}} />
-              <Typography variant="subtitle1" align="center" style={{fontWeight:600,marginBottom:4}}>Tags</Typography>
-              <Typography variant="caption" align="center" className={classes.cardDescription}>Classifique tickets e contatos com etiquetas personalizadas.</Typography>
-              <Button variant="outlined" color="primary" size="small" style={{fontSize:'0.7rem',padding:'4px 12px'}}>Acessar Manual</Button>
-            </div>
-          </Paper>
-          <Paper className={`${classes.helpPaper} ${classes.helpPaperHover}`}>
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'12px'}}>
-              <Forum style={{fontSize:36,color:'#b39ddb',marginBottom:8}} />
-              <Typography variant="subtitle1" align="center" style={{fontWeight:600,marginBottom:4}}>Chat Interno</Typography>
-              <Typography variant="caption" align="center" className={classes.cardDescription}>Comunique-se com sua equipe dentro do sistema.</Typography>
-              <Button variant="outlined" color="primary" size="small" style={{fontSize:'0.7rem',padding:'4px 12px'}}>Acessar Manual</Button>
-            </div>
-          </Paper>
-          <Paper className={`${classes.helpPaper} ${classes.helpPaperHover}`}>
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'12px'}}>
-              <SpeakerPhone style={{fontSize:36,color:'#ffcc80',marginBottom:8}} />
-              <Typography variant="subtitle1" align="center" style={{fontWeight:600,marginBottom:4}}>Campanhas</Typography>
-              <Typography variant="caption" align="center" className={classes.cardDescription}>Envie mensagens em massa e acompanhe resultados de campanhas.</Typography>
-              <Button variant="outlined" color="primary" size="small" style={{fontSize:'0.7rem',padding:'4px 12px'}}>Acessar Manual</Button>
-            </div>
-          </Paper>
-          <Paper className={classes.helpPaper}>
-            <Typography variant="h6">Flowbuilder</Typography>
-            <Typography variant="body2">Automatize fluxos de atendimento com regras e ações inteligentes.</Typography>
-          </Paper>
-          <Paper className={classes.helpPaper}>
-            <Typography variant="h6">Usuários</Typography>
-            <Typography variant="body2">Gerencie permissões e informações dos usuários do sistema.</Typography>
-          </Paper>
-          <Paper className={classes.helpPaper}>
-            <Typography variant="h6">Relatórios</Typography>
-            <Typography variant="body2">Acompanhe métricas e indicadores de desempenho do atendimento.</Typography>
-          </Paper>
-          <Paper className={classes.helpPaper}>
-            <Typography variant="h6">API</Typography>
-            <Typography variant="body2">Integre o Whaticket com outros sistemas via API.</Typography>
-          </Paper>
-          <Paper className={classes.helpPaper}>
-            <Typography variant="h6">Arquivos & Chatbot</Typography>
-            <Typography variant="body2">Gerencie arquivos enviados e recebidos, e configure chatbots.</Typography>
-          </Paper>
-          <Paper className={classes.helpPaper}>
-            <Typography variant="h6">Integrações</Typography>
-            <Typography variant="body2">Configure integrações com WhatsApp, OpenAI, Gemini e outros serviços.</Typography>
-          </Paper>
-          <Paper className={classes.helpPaper}>
-            <Typography variant="h6">Prompts de IA</Typography>
-            <Typography variant="body2">Crie prompts personalizados para automação com IA.</Typography>
-          </Paper>
-          <Paper className={classes.helpPaper}>
-            <Typography variant="h6">Fila & Chatbot</Typography>
-            <Typography variant="body2">Gerencie filas de atendimento e regras de chatbot.</Typography>
-          </Paper>
-          <Paper className={classes.helpPaper}>
-            <Typography variant="h6">Configurações</Typography>
-            <Typography variant="body2">Personalize parâmetros do sistema e preferências gerais.</Typography>
-          </Paper>
-          <Paper className={classes.helpPaper}>
-            <Typography variant="h6">Conexões WhatsApp</Typography>
-            <Typography variant="body2">Adicione, edite e monitore conexões do WhatsApp.</Typography>
-          </Paper>
-          <Paper className={classes.helpPaper}>
-            <Typography variant="h6">Listas de Contatos</Typography>
-            <Typography variant="body2">Organize e segmente listas para campanhas e automações.</Typography>
-          </Paper>
-          <Paper className={classes.helpPaper}>
-            <Typography variant="h6">Financeiro</Typography>
-            <Typography variant="body2">Gerencie cobranças, pagamentos e relatórios financeiros.</Typography>
-          </Paper>
-          <Paper className={classes.helpPaper}>
-            <Typography variant="h6">Informativos</Typography>
-            <Typography variant="body2">Envie comunicados e mensagens informativas para usuários.</Typography>
-          </Paper>
-          <Paper className={classes.helpPaper}>
-            <Typography variant="h6">Tolk.AI</Typography>
-            <Typography variant="body2">Configure e utilize recursos avançados de IA conversacional.</Typography>
-          </Paper>
 
-{/* Cards de vídeos existentes, se houver */ }
-{
-  (records && records.length > 0) && records.map((record, key) => (
-    <Paper key={key} className={`${classes.helpPaper} ${classes.paperHover}`} onClick={() => openVideoModal(record.video)}>
-      <img
-        src={`https://img.youtube.com/vi/${record.video}/mqdefault.jpg`}
-        alt="Thumbnail"
-        className={classes.videoThumbnail}
-      />
-      <Typography variant="button" className={classes.videoTitle}>
-        {record.title}
-      </Typography>
-      <Typography variant="caption" className={classes.videoDescription}>
-        {record.description}
-      </Typography>
-    </Paper>
-  ))
-}
-        </div >
-      </>
-    );
-  };
+  const tutorials = [
+    { icon: <AIIcon />, label: "Manual de IA", path: "/helps/ai-tutorial", tooltip: "Guia completo de IA e configurações de prompts" },
+    { icon: <AIIcon />, label: "Bot Avançado", path: "/helps/bot-tutorial", tooltip: "Automação avançada com ações e function calling" },
+    { icon: <Dashboard />, label: "Dashboard", path: "/helps/dashboard", tooltip: "Visão geral e principais indicadores do sistema" },
+    { icon: <Assignment />, label: "Atendimentos", path: "/helps/atendimentos", tooltip: "Gestão de tickets e conversas" },
+    { icon: <QuestionAnswer />, label: "Respostas Rápidas", path: "/helps/respostas-rapidas", tooltip: "Mensagens prontas para agilizar atendimento" },
+    { icon: <ViewModule />, label: "Kanban", path: "/helps/kanban", tooltip: "Organize tickets por etapas visuais" },
+    { icon: <Contacts />, label: "Contatos", path: "/helps/contatos", tooltip: "Gerencie sua base de contatos" },
+    { icon: <Event />, label: "Agendamentos", path: "/helps/agendamentos", tooltip: "Agende mensagens e tarefas" },
+    { icon: <Label />, label: "Tags", path: "/helps/tags", tooltip: "Organize e categorize com etiquetas" },
+    { icon: <Forum />, label: "Chat Interno", path: "/helps/chat-interno", tooltip: "Comunicação entre a equipe" },
+    { icon: <SpeakerPhone />, label: "Campanhas", path: "/helps/campanhas", tooltip: "Envio de mensagens em massa" },
+    { icon: <Extension />, label: "FlowBuilder", path: "/helps/flow-builder", tooltip: "Construtor visual de fluxos" },
+    { icon: <Folder />, label: "Arquivos Chatbot", path: "/helps/arquivos-chatbot", tooltip: "Gerencie arquivos do  bot" },
+    { icon: <ListIcon />, label: "Fila Chatbot", path: "/helps/fila-chatbot", tooltip: "Configure filas de atendimento" },
+    { icon: <PhoneAndroid />, label: "Conexões WhatsApp", path: "/helps/conexoes-whatsapp", tooltip: "Conecte contas do WhatsApp" },
+    { icon: <Extension />, label: "Integrações", path: "/helps/integracoes", tooltip: "Integre com sistemas externos" },
+    { icon: <Code />, label: "API", path: "/helps/api", tooltip: "Documentação da API REST" },
+    { icon: <AIIcon />, label: "Prompts de IA", path: "/helps/prompts-ia", tooltip: "Configure prompts personalizados" },
+    { icon: <Settings />, label: "Configurações", path: "/helps/configuracoes", tooltip: "Ajustes gerais do sistema" },
+    { icon: <RecordVoiceOver />, label: "Usuários", path: "/helps/usuarios", tooltip: "Gerencie equipe e permissões" },
+    { icon: <Assessment />, label: "Relatórios", path: "/helps/relatorios", tooltip: "Análises e métricas detalhadas" },
+    { icon: <ListIcon />, label: "Listas de Contatos", path: "/helps/listas-contatos", tooltip: "Listas segmentadas para campanhas" },
+    { icon: <AttachMoney />, label: "Financeiro", path: "/helps/financeiro", tooltip: "Gestão de cobranças e pagamentos" },
+  ];
 
-return (
-  <div className={classes.root}>
-    <MainHeader>
-      <Title>{i18n.t("helps.title")} ({records.length})</Title>
-      <MainHeaderButtonsWrapper></MainHeaderButtonsWrapper>
-    </MainHeader>
-    {renderHelps()}
-    {renderVideoModal()}
-  </div>
-);
+  return (
+    <div className={classes.root}>
+      <MainHeader>
+        <MainHeaderButtonsWrapper />
+      </MainHeader>
+
+      <Paper className={classes.mainPaper}>
+        <Box>
+          <Typography variant="h5" gutterBottom>
+            Bem-vindo à Central de Ajuda! 📚
+          </Typography>
+          <Typography variant="body2" color="textSecondary" paragraph>
+            Explore nossos tutoriais e vídeos para dominar todas as funcionalidades do sistema.
+          </Typography>
+        </Box>
+
+        {/* Seção de Vídeos */}
+        {records && records.length > 0 && (
+          <>
+            <Divider style={{ margin: "24px 0" }} />
+            <Typography variant="h6" className={classes.sectionTitle}>
+              🎥 Tutoriais em Vídeo
+            </Typography>
+            <div className={classes.videoGrid}>
+              {records.map((record, key) => (
+                <Paper
+                  key={key}
+                  className={classes.videoCard}
+                  onClick={() => openVideoModal(record.video)}
+                  elevation={2}
+                >
+                  <img
+                    src={`https://img.youtube.com/vi/${record.video}/mqdefault.jpg`}
+                    alt={record.title}
+                    className={classes.videoThumbnail}
+                  />
+                  <Box p={2}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      {record.title}
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      {record.description}
+                    </Typography>
+                  </Box>
+                </Paper>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Seção de Tutoriais Interativos */}
+        <Divider style={{ margin: "24px 0" }} />
+        <Typography variant="h6" className={classes.sectionTitle}>
+          📖 Tutoriais Interativos
+        </Typography>
+        <div className={classes.tutorialGrid}>
+          {tutorials.map((tutorial, index) => (
+            <Tooltip key={index} title={tutorial.tooltip} arrow placement="top">
+              <Paper
+                component={Link}
+                to={tutorial.path}
+                className={classes.tutorialButton}
+                elevation={0}
+              >
+                <div className={classes.tutorialIcon} style={{ color: "#3f51b5", fontSize: 48 }}>
+                  {tutorial.icon}
+                </div>
+                <Typography className={classes.tutorialLabel}>
+                  {tutorial.label}
+                </Typography>
+              </Paper>
+            </Tooltip>
+          ))}
+        </div>
+      </Paper>
+
+      {renderVideoModal()}
+    </div>
+  );
 };
 
 export default Helps;
