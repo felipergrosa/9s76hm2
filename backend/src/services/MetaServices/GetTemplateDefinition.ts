@@ -61,6 +61,9 @@ export const GetTemplateDefinition = async (
         const parameters: TemplateParameter[] = [];
         const buttons: Array<{ type: string; text: string; }> = [];
 
+        // DEBUG: Ver estrutura completa do template
+        console.log("[GetTemplateDefinition] Template completo:", JSON.stringify(template.components, null, 2));
+
         let body = "";
         let header: string | undefined = undefined;
         let footer: string | undefined = undefined;
