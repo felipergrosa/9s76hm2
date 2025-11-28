@@ -4,7 +4,7 @@ import logger from "../../utils/logger";
 
 export interface TemplateParameter {
     index: number;
-    component: "HEADER" | "BODY" | "FOOTER";
+    component: "HEADER" | "BODY" | "FOOTER" | "BUTTON";
     example?: string;
 }
 
