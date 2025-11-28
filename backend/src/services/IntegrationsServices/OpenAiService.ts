@@ -22,6 +22,8 @@ import Contact from "../../models/Contact";
 import Message from "../../models/Message";
 import TicketTraking from "../../models/TicketTraking";
 import Queue from "../../models/Queue";
+import { BOT_AVAILABLE_FUNCTIONS } from "../IA/BotFunctions";
+import ActionExecutor from "../IA/ActionExecutor";
 
 type Session = WASocket & {
   id?: number;
@@ -222,16 +224,109 @@ const processResponse = async (
   }
 };
 
-// Handles OpenAI request
-const handleOpenAIRequest = async (openai: SessionOpenAi, messagesAI: any[], openAiSettings: IOpenAi): Promise<string> => {
+// Handles OpenAI request with Function Calling support
+const handleOpenAIRequest = async (
+  openai: SessionOpenAi,
+  messagesAI: any[],
+  openAiSettings: IOpenAi,
+  ticket?: Ticket,
+  contact?: Contact,
+  wbot?: Session
+): Promise<string> => {
   try {
-    const chat = await openai.chat.completions.create({
+    const now = Date.now();
+    const functionsEnabled = true; // TODO: Controlar via configuração da empresa
+
+    // Primeira chamada à IA (pode retornar function_call)
+    const chatParams: any = {
       model: openAiSettings.model,
       messages: messagesAI,
       max_tokens: openAiSettings.maxTokens,
       temperature: openAiSettings.temperature,
-    });
-    return chat.choices[0].message?.content || "";
+    };
+
+    // Adicionar functions se habilitado
+    if (functionsEnabled) {
+      chatParams.functions = BOT_AVAILABLE_FUNCTIONS;
+      chatParams.function_call = "auto"; // Deixa IA decidir quando chamar
+    }
+
+    const chat = await openai.chat.completions.create(chatParams);
+    const choice = chat.choices[0];
+
+    // Verificar se IA solicitou executar uma função
+    if (choice.finish_reason === "function_call" && choice.message.function_call) {
+      const functionCall = choice.message.function_call;
+      const functionName = functionCall.name;
+      const functionArgs = JSON.parse(functionCall.arguments || "{}");
+
+      console.log(`[IA][function-call] IA solicitou função: ${functionName}`, {
+        ticketId: ticket?.id,
+        args: functionArgs,
+        latency: Date.now() - now
+      });
+
+      // Executar ação via ActionExecutor
+      let actionResult = "Função não executada (contexto insuficiente)";
+
+      if (ticket && contact && wbot) {
+        try {
+          actionResult = await ActionExecutor.execute({
+            wbot,
+            ticket,
+            contact,
+            functionName,
+            arguments: functionArgs
+          });
+
+          console.log(`[IA][function-call] Ação executada:`, {
+            ticketId: ticket.id,
+            function: functionName,
+            result: actionResult.substring(0, 100)
+          });
+        } catch (execError: any) {
+          console.error(`[IA][function-call] Erro ao executar ação:`, execError);
+          actionResult = `❌ Erro ao executar ação: ${execError.message}`;
+        }
+      }
+
+      // Adicionar a chamada da função e o resultado ao histórico
+      messagesAI.push({
+        role: "assistant",
+        content: null,
+        function_call: {
+          name: functionName,
+          arguments: functionCall.arguments
+        }
+      });
+
+      messagesAI.push({
+        role: "function",
+        name: functionName,
+        content: actionResult
+      });
+
+      // Segunda chamada à IA para gerar resposta final baseada no resultado da ação
+      const finalChat = await openai.chat.completions.create({
+        model: openAiSettings.model,
+        messages: messagesAI,
+        max_tokens: openAiSettings.maxTokens,
+        temperature: openAiSettings.temperature
+      });
+
+      const responseText = finalChat.choices[0].message?.content || "";
+
+      console.log(`[IA][function-call] Resposta final gerada`, {
+        ticketId: ticket?.id,
+        totalLatency: Date.now() - now
+      });
+
+      return responseText;
+    }
+
+    // Resposta normal (sem function call)
+    return choice.message?.content || "";
+
   } catch (error) {
     console.error("OpenAI request error:", error);
     throw error;
@@ -499,7 +594,7 @@ export const handleOpenAi = async (
         // Fallback seguro: mantém implementação anterior por provedor
         if (isOpenAIModel && openai) {
           messagesAI.push({ role: "user", content: bodyMessage! });
-          responseText = await handleOpenAIRequest(openai, messagesAI, openAiSettings);
+          responseText = await handleOpenAIRequest(openai, messagesAI, openAiSettings, ticket, contact, wbot);
         } else if (isGeminiModel && gemini) {
           responseText = await handleGeminiRequest(gemini, messagesAI, openAiSettings, bodyMessage!, promptSystem);
         }

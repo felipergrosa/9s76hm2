@@ -96,20 +96,6 @@ const SendTemplateToContact = async ({
       }
     }
 
-    // IMPORTANTE: Se template tem HEADER mas não tem parâmetros de header,
-    // ainda assim precisa incluir componente header vazio no beginning do array
-    // (Meta API pode exigir isso)
-    if (templateDefinition?.hasHeader && finalComponents) {
-      const hasHeaderComponent = finalComponents.some((c: any) => c.type === "header");
-      if (!hasHeaderComponent) {
-        logger.info(`[SendTemplateToContact] Template tem header fixo - incluindo componente header vazio`);
-        finalComponents = [
-          { type: "header", parameters: [] },
-          ...finalComponents
-        ];
-      }
-    }
-
     console.log("[SendTemplateToContact] finalComponents antes de enviar:", JSON.stringify(finalComponents, null, 2));
 
     // Obter adapter oficial ANTES de criar ticket
