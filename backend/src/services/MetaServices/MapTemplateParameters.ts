@@ -171,6 +171,33 @@ export const MapTemplateParameters = (
             });
         }
 
+        // Mapear parâmetros de BUTTONS (Url Dinâmica)
+        const buttonParams = parameters.filter(p => p.component === "BUTTON");
+        if (buttonParams.length > 0) {
+            const mappedParams = buttonParams.map(param => {
+                let value = "";
+                if (variablesConfig && variablesConfig[String(param.index)]) {
+                    const config = variablesConfig[String(param.index)];
+                    value = resolveVariable(config, contact);
+                } else {
+                    value = autoDetectValue(param, contact);
+                }
+                return { type: "text", text: value };
+            });
+
+            // A API da Meta exige um componente por botão modificado
+            // Se tivermos múltiplos parâmetros para o MESMO botão, eles vão no mesmo parameters array.
+            // Se forem botões diferentes, são componentes diferentes.
+            // Por enquanto, assumindo 1 botão de URL dinâmico (caso mais comum).
+
+            components.push({
+                type: "button",
+                sub_type: "url",
+                index: 0, // Assumindo primeiro botão. Isso pode precisar de ajuste se houver múltiplos botões.
+                parameters: mappedParams
+            });
+        }
+
         logger.info(
             `[MapTemplateParameters] Gerados ${components.length} component(s) com parâmetros`
         );

@@ -74,6 +74,33 @@ export const GetTemplateDefinition = async (
             // Extrair botões
             if (component.type === "BUTTONS" && component.buttons) {
                 buttons.push(...component.buttons);
+
+                // Detectar parâmetros em botões de URL
+                component.buttons.forEach((button: any) => {
+                    if (button.type === "URL" && button.url) {
+                        const paramRegex = /\{\{([^}]+)\}\}/g;
+                        let match;
+                        while ((match = paramRegex.exec(button.url)) !== null) {
+                            const varName = match[1].trim();
+                            // Botões de URL geralmente usam {{1}} apenas no final
+                            // Mas vamos suportar qualquer formato
+                            let paramNum: number;
+                            if (/^\d+$/.test(varName)) {
+                                paramNum = parseInt(varName);
+                            } else {
+                                // Se não for numérico, ignoramos por enquanto ou usamos lógica de autoIndex?
+                                // Meta geralmente usa {{1}} para URL dinâmica
+                                return;
+                            }
+
+                            parameters.push({
+                                index: paramNum,
+                                component: "BUTTON",
+                                example: "https://example.com" // Exemplo genérico
+                            });
+                        }
+                    }
+                });
             }
 
             // NOVA LÓGICA: Extrair parâmetros do TEXTO do template

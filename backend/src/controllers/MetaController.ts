@@ -69,7 +69,10 @@ export const sendTemplateToContact = async (
       queueId: queueId ? Number(queueId) : undefined,
       templateName,
       languageCode,
-      components
+      templateName,
+      languageCode,
+      components,
+      variablesConfig: req.body.variablesConfig
     });
 
     return res.status(200).json({ ticket, message });
