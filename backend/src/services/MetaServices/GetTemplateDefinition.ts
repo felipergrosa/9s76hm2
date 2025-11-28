@@ -14,6 +14,7 @@ export interface TemplateDefinition {
     language: string;
     status: string;
     hasButtons: boolean;
+    hasHeader: boolean;  // Se o template tem componente HEADER (mesmo que fixo sem variáveis)
     buttons: Array<{ type: string; text: string; }>;
     parameters: TemplateParameter[];
     body: string;
@@ -197,6 +198,7 @@ export const GetTemplateDefinition = async (
             language: template.language,
             status: template.status,
             hasButtons: buttons.length > 0,
+            hasHeader: !!header,  // true se template tem header (fixo ou com variáveis)
             buttons,
             parameters,
             body,
