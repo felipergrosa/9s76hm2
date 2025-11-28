@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { makeStyles, Paper, Typography, Modal, IconButton, Button } from "@material-ui/core";
 import { Link } from "react-router-dom";
-import { 
+import {
   EmojiObjects as AIIcon,
   Dashboard,
   Assignment,
@@ -221,32 +221,11 @@ const Helps = () => {
       </Modal>
     );
   };
-
-  const renderHelps = () => {
-    return (
-      <>
-        <div className={`${classes.mainPaper} ${classes.mainPaperContainer}`}>
-          {/* Card Manual de IA padronizado como os demais */}
-          <Paper component={Link} to="/helps/ai-tutorial" className={`${classes.helpPaper} ${classes.helpPaperHover}`}>
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'12px'}}>
-              <AIIcon className={classes.aiTutorialIcon} />
-              <Typography variant="subtitle1" align="center" style={{fontWeight:600,marginBottom:4}}>Manual Completo de IA</Typography>
-              <Typography variant="caption" align="center" className={classes.cardDescription}>
-                Tutorial detalhado sobre como usar a IA Automática e IA no FlowBuilder. Aprenda a configurar prompts, usar arquivos de conhecimento e criar fluxos inteligentes.
-              </Typography>
-              <Button variant="outlined" color="primary" size="small" style={{fontSize:'0.7rem',padding:'4px 12px'}}>Acessar Manual</Button>
-            </div>
-          </Paper>
-
-          {/* Cards de tutoriais das seções principais do sistema */}
-          <Paper className={`${classes.helpPaper} ${classes.helpPaperHover}`}>
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'12px'}}>
-              <Dashboard style={{fontSize:36,color:'#90caf9',marginBottom:8}} />
               <Typography variant="subtitle1" align="center" style={{fontWeight:600,marginBottom:4}}>Dashboard</Typography>
               <Typography variant="caption" align="center" className={classes.cardDescription}>Visão geral do sistema e principais indicadores.</Typography>
               <Button variant="outlined" color="primary" size="small" style={{fontSize:'0.7rem',padding:'4px 12px'}}>Acessar Manual</Button>
-            </div>
-          </Paper>
+            </div >
+          </Paper >
           <Paper className={`${classes.helpPaper} ${classes.helpPaperHover}`}>
             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'12px'}}>
               <Assignment style={{fontSize:36,color:'#a5d6a7',marginBottom:8}} />
@@ -368,37 +347,39 @@ const Helps = () => {
             <Typography variant="body2">Configure e utilize recursos avançados de IA conversacional.</Typography>
           </Paper>
 
-          {/* Cards de vídeos existentes, se houver */}
-          {(records && records.length > 0) && records.map((record, key) => (
-            <Paper key={key} className={`${classes.helpPaper} ${classes.paperHover}`} onClick={() => openVideoModal(record.video)}>
-              <img
-                src={`https://img.youtube.com/vi/${record.video}/mqdefault.jpg`}
-                alt="Thumbnail"
-                className={classes.videoThumbnail}
-              />
-              <Typography variant="button" className={classes.videoTitle}>
-                {record.title}
-              </Typography>
-              <Typography variant="caption" className={classes.videoDescription}>
-                {record.description}
-              </Typography>
-            </Paper>
-          ))}
-        </div>
+{/* Cards de vídeos existentes, se houver */ }
+{
+  (records && records.length > 0) && records.map((record, key) => (
+    <Paper key={key} className={`${classes.helpPaper} ${classes.paperHover}`} onClick={() => openVideoModal(record.video)}>
+      <img
+        src={`https://img.youtube.com/vi/${record.video}/mqdefault.jpg`}
+        alt="Thumbnail"
+        className={classes.videoThumbnail}
+      />
+      <Typography variant="button" className={classes.videoTitle}>
+        {record.title}
+      </Typography>
+      <Typography variant="caption" className={classes.videoDescription}>
+        {record.description}
+      </Typography>
+    </Paper>
+  ))
+}
+        </div >
       </>
     );
   };
 
-  return (
-    <div className={classes.root}>
-      <MainHeader>
-        <Title>{i18n.t("helps.title")} ({records.length})</Title>
-        <MainHeaderButtonsWrapper></MainHeaderButtonsWrapper>
-      </MainHeader>
-      {renderHelps()}
-      {renderVideoModal()}
-    </div>
-  );
+return (
+  <div className={classes.root}>
+    <MainHeader>
+      <Title>{i18n.t("helps.title")} ({records.length})</Title>
+      <MainHeaderButtonsWrapper></MainHeaderButtonsWrapper>
+    </MainHeader>
+    {renderHelps()}
+    {renderVideoModal()}
+  </div>
+);
 };
 
 export default Helps;
