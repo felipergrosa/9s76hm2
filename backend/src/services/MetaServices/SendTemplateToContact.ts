@@ -96,6 +96,8 @@ const SendTemplateToContact = async ({
       }
     }
 
+    console.log("[SendTemplateToContact] finalComponents antes de enviar:", JSON.stringify(finalComponents, null, 2));
+
     // Obter adapter oficial ANTES de criar ticket
     const adapter = await GetWhatsAppAdapter(whatsapp);
     if (adapter.channelType !== "official") {

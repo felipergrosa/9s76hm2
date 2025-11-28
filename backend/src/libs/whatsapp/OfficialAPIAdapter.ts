@@ -460,6 +460,8 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
       }
 
       console.log("[OfficialAPI] Payload final:", JSON.stringify(payload, null, 2));
+      console.log("[OfficialAPI] Components enviados:", JSON.stringify(components, null, 2));
+      console.log("[OfficialAPI] Template name:", templateName, "| Language:", languageCode);
 
       const response = await this.client.post(
         `/${this.phoneNumberId}/messages`,
