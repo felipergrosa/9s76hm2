@@ -95,112 +95,111 @@ const SendTemplateToContact = async ({
         );
       }
     }
-  }
 
     // IMPORTANTE: Se template tem HEADER com mídia (DOCUMENT/IMAGE/VIDEO),
     // PRECISA incluir componente header com link no payload
     if (templateDefinition?.headerFormat &&
-    ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDefinition.headerFormat) &&
-    templateDefinition.headerHandle) {
+      ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDefinition.headerFormat) &&
+      templateDefinition.headerHandle) {
 
-    logger.info(`[SendTemplateToContact] Template tem header ${templateDefinition.headerFormat} - incluindo componente`);
+      logger.info(`[SendTemplateToContact] Template tem header ${templateDefinition.headerFormat} - incluindo componente`);
 
-    const headerComponent: any = {
-      type: "header",
-      parameters: [{
-        type: templateDefinition.headerFormat.toLowerCase(), // "document", "image", "video"
-        [templateDefinition.headerFormat.toLowerCase()]: {
-          link: templateDefinition.headerHandle
-        }
-      }]
-    };
+      const headerComponent: any = {
+        type: "header",
+        parameters: [{
+          type: templateDefinition.headerFormat.toLowerCase(), // "document", "image", "video"
+          [templateDefinition.headerFormat.toLowerCase()]: {
+            link: templateDefinition.headerHandle
+          }
+        }]
+      };
 
-    // Inserir header component NO INÍCIO do array
-    if (finalComponents) {
-      finalComponents = [headerComponent, ...finalComponents];
-    } else {
-      finalComponents = [headerComponent];
+      // Inserir header component NO INÍCIO do array
+      if (finalComponents) {
+        finalComponents = [headerComponent, ...finalComponents];
+      } else {
+        finalComponents = [headerComponent];
+      }
     }
-  }
 
-  console.log("[SendTemplateToContact] finalComponents antes de enviar:", JSON.stringify(finalComponents, null, 2));
+    console.log("[SendTemplateToContact] finalComponents antes de enviar:", JSON.stringify(finalComponents, null, 2));
 
-  // Obter adapter oficial ANTES de criar ticket
-  const adapter = await GetWhatsAppAdapter(whatsapp);
-  if (adapter.channelType !== "official") {
-    throw new AppError("Adapter obtido não é API Oficial", 500);
-  }
-
-  const official: any = adapter as any;
-  if (typeof official.sendTemplate !== "function") {
-    throw new AppError("Adapter oficial não suporta envio de templates", 500);
-  }
-
-  // ENVIAR TEMPLATE PRIMEIRO (antes de criar ticket)
-  // Se falhar, lança exceção e não cria ticket
-  const sent = await official.sendTemplate(
-    contact.number,
-    templateName,
-    languageCode,
-    finalComponents
-  );
-
-  logger.info(
-    `[SendTemplateToContact] Template ${templateName} enviado com sucesso. messageId=${sent.id}`
-  );
-
-  // APENAS APÓS SUCESSO DO ENVIO: Verificar se já existe ticket aberto
-  // Se existir, REUSAR o ticket (especialmente importante para campanhas)
-  let ticket = await Ticket.findOne({
-    where: {
-      contactId: contact.id,
-      whatsappId,
-      companyId,
-      status: { [Op.or]: ["open", "pending"] }
+    // Obter adapter oficial ANTES de criar ticket
+    const adapter = await GetWhatsAppAdapter(whatsapp);
+    if (adapter.channelType !== "official") {
+      throw new AppError("Adapter obtido não é API Oficial", 500);
     }
-  });
 
-  if (ticket) {
-    logger.info(
-      `[SendTemplateToContact] Reusando ticket existente #${ticket.id} para mensagem enviada`
+    const official: any = adapter as any;
+    if (typeof official.sendTemplate !== "function") {
+      throw new AppError("Adapter oficial não suporta envio de templates", 500);
+    }
+
+    // ENVIAR TEMPLATE PRIMEIRO (antes de criar ticket)
+    // Se falhar, lança exceção e não cria ticket
+    const sent = await official.sendTemplate(
+      contact.number,
+      templateName,
+      languageCode,
+      finalComponents
     );
-  } else {
-    // Criar novo ticket apenas se não existir um aberto
-    ticket = await CreateTicketService({
-      contactId: contact.id,
-      status: "open",
-      userId,
-      companyId,
-      queueId,
-      whatsappId: String(whatsappId)
+
+    logger.info(
+      `[SendTemplateToContact] Template ${templateName} enviado com sucesso. messageId=${sent.id}`
+    );
+
+    // APENAS APÓS SUCESSO DO ENVIO: Verificar se já existe ticket aberto
+    // Se existir, REUSAR o ticket (especialmente importante para campanhas)
+    let ticket = await Ticket.findOne({
+      where: {
+        contactId: contact.id,
+        whatsappId,
+        companyId,
+        status: { [Op.or]: ["open", "pending"] }
+      }
     });
-    logger.info(
-      `[SendTemplateToContact] Novo ticket #${ticket.id} criado para mensagem enviada com sucesso`
-    );
+
+    if (ticket) {
+      logger.info(
+        `[SendTemplateToContact] Reusando ticket existente #${ticket.id} para mensagem enviada`
+      );
+    } else {
+      // Criar novo ticket apenas se não existir um aberto
+      ticket = await CreateTicketService({
+        contactId: contact.id,
+        status: "open",
+        userId,
+        companyId,
+        queueId,
+        whatsappId: String(whatsappId)
+      });
+      logger.info(
+        `[SendTemplateToContact] Novo ticket #${ticket.id} criado para mensagem enviada com sucesso`
+      );
+    }
+
+    const message = await CreateMessageService({
+      messageData: {
+        wid: sent.id,
+        ticketId: ticket.id,
+        contactId: contact.id,
+        body: sent.body || `Template: ${templateName}`,
+        fromMe: true,
+        read: true,
+        mediaType: "template",
+        ack: sent.ack ?? 1,
+        remoteJid: ticket.contact?.remoteJid
+      },
+      companyId
+    });
+
+    return { ticket, message };
+  } catch (error: any) {
+    logger.error("[SendTemplateToContact] Erro ao enviar template para contato", {
+      message: error.message
+    });
+    throw error;
   }
-
-  const message = await CreateMessageService({
-    messageData: {
-      wid: sent.id,
-      ticketId: ticket.id,
-      contactId: contact.id,
-      body: sent.body || `Template: ${templateName}`,
-      fromMe: true,
-      read: true,
-      mediaType: "template",
-      ack: sent.ack ?? 1,
-      remoteJid: ticket.contact?.remoteJid
-    },
-    companyId
-  });
-
-  return { ticket, message };
-} catch (error: any) {
-  logger.error("[SendTemplateToContact] Erro ao enviar template para contato", {
-    message: error.message
-  });
-  throw error;
-}
 };
 
 export default SendTemplateToContact;
