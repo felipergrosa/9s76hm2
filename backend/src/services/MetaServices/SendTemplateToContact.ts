@@ -94,7 +94,6 @@ const SendTemplateToContact = async ({
           `[SendTemplateToContact] Auto-mapeamento de parâmetros concluído`
         );
       }
-      }
     }
 
     // Obter adapter oficial ANTES de montar header (preciso do uploadMedia)
@@ -110,21 +109,21 @@ const SendTemplateToContact = async ({
 
     // IMPORTANTE: Se template tem HEADER com mídia (DOCUMENT/IMAGE/VIDEO),
     // fazer upload via Media API e usar media_id ao invés do link direto
-    if (templateDefinition?.headerFormat && 
-        ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDefinition.headerFormat) &&
-        templateDefinition.headerHandle) {
-      
+    if (templateDefinition?.headerFormat &&
+      ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDefinition.headerFormat) &&
+      templateDefinition.headerHandle) {
+
       logger.info(`[SendTemplateToContact] Template tem header ${templateDefinition.headerFormat} - fazendo upload`);
-      
+
       try {
         // Fazer upload da mídia e obter media_id
         const mediaId = await official.uploadMedia(
           templateDefinition.headerHandle,
           templateDefinition.headerFormat.toLowerCase() as "document" | "image" | "video"
         );
-        
+
         logger.info(`[SendTemplateToContact] Upload concluído, media_id: ${mediaId}`);
-        
+
         const headerComponent: any = {
           type: "header",
           parameters: [{
@@ -141,7 +140,7 @@ const SendTemplateToContact = async ({
         } else {
           finalComponents = [headerComponent];
         }
-        
+
       } catch (uploadError: any) {
         logger.error(`[SendTemplateToContact] Erro no upload de mídia: ${uploadError.message}`);
         // Re-throw para que o template não seja enviado com header quebrado
