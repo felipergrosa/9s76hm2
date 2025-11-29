@@ -77,7 +77,7 @@ function autoDetectValue(param: TemplateParameter, contact: any): string {
             case 1:
                 return contact.name || "Cliente";
             case 2:
-                return contact.email || contact.number || "";
+                return contact.number || contact.name || "";
             case 3:
                 return String(contact.id || "");
             default:
