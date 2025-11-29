@@ -94,37 +94,10 @@ const SendTemplateToContact = async ({
           `[SendTemplateToContact] Auto-mapeamento de parâmetros concluído`
         );
       }
-    }
-
-    // IMPORTANTE: Se template tem HEADER com mídia (DOCUMENT/IMAGE/VIDEO),
-    // PRECISA incluir componente header com link no payload
-    if (templateDefinition?.headerFormat &&
-      ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDefinition.headerFormat) &&
-      templateDefinition.headerHandle) {
-
-      logger.info(`[SendTemplateToContact] Template tem header ${templateDefinition.headerFormat} - incluindo componente`);
-
-      const headerComponent: any = {
-        type: "header",
-        parameters: [{
-          type: templateDefinition.headerFormat.toLowerCase(), // "document", "image", "video"
-          [templateDefinition.headerFormat.toLowerCase()]: {
-            link: templateDefinition.headerHandle
-          }
-        }]
-      };
-
-      // Inserir header component NO INÍCIO do array
-      if (finalComponents) {
-        finalComponents = [headerComponent, ...finalComponents];
-      } else {
-        finalComponents = [headerComponent];
       }
     }
 
-    console.log("[SendTemplateToContact] finalComponents antes de enviar:", JSON.stringify(finalComponents, null, 2));
-
-    // Obter adapter oficial ANTES de criar ticket
+    // Obter adapter oficial ANTES de montar header (preciso do uploadMedia)
     const adapter = await GetWhatsAppAdapter(whatsapp);
     if (adapter.channelType !== "official") {
       throw new AppError("Adapter obtido não é API Oficial", 500);
@@ -134,6 +107,49 @@ const SendTemplateToContact = async ({
     if (typeof official.sendTemplate !== "function") {
       throw new AppError("Adapter oficial não suporta envio de templates", 500);
     }
+
+    // IMPORTANTE: Se template tem HEADER com mídia (DOCUMENT/IMAGE/VIDEO),
+    // fazer upload via Media API e usar media_id ao invés do link direto
+    if (templateDefinition?.headerFormat && 
+        ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDefinition.headerFormat) &&
+        templateDefinition.headerHandle) {
+      
+      logger.info(`[SendTemplateToContact] Template tem header ${templateDefinition.headerFormat} - fazendo upload`);
+      
+      try {
+        // Fazer upload da mídia e obter media_id
+        const mediaId = await official.uploadMedia(
+          templateDefinition.headerHandle,
+          templateDefinition.headerFormat.toLowerCase() as "document" | "image" | "video"
+        );
+        
+        logger.info(`[SendTemplateToContact] Upload concluído, media_id: ${mediaId}`);
+        
+        const headerComponent: any = {
+          type: "header",
+          parameters: [{
+            type: templateDefinition.headerFormat.toLowerCase(),
+            [templateDefinition.headerFormat.toLowerCase()]: {
+              id: mediaId  // Usar media_id ao invés de link
+            }
+          }]
+        };
+
+        // Inserir header component NO INÍCIO do array
+        if (finalComponents) {
+          finalComponents = [headerComponent, ...finalComponents];
+        } else {
+          finalComponents = [headerComponent];
+        }
+        
+      } catch (uploadError: any) {
+        logger.error(`[SendTemplateToContact] Erro no upload de mídia: ${uploadError.message}`);
+        // Re-throw para que o template não seja enviado com header quebrado
+        throw uploadError;
+      }
+    }
+
+    console.log("[SendTemplateToContact] finalComponents antes de enviar:", JSON.stringify(finalComponents, null, 2));
 
     // ENVIAR TEMPLATE PRIMEIRO (antes de criar ticket)
     // Se falhar, lança exceção e não cria ticket

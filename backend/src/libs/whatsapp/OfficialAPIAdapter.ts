@@ -496,6 +496,103 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
   }
 
   /**
+   * Faz upload de mídia para Meta e retorna media_id
+   * Usado para templates com headers DOCUMENT/IMAGE/VIDEO
+   */
+  async uploadMedia(mediaUrl: string, mediaType: "document" | "image" | "video"): Promise<string> {
+    try {
+      logger.info(`[OfficialAPI] Fazendo upload de ${mediaType} via Media API`);
+
+      // 1. Baixar o arquivo do link
+      const response = await axios.get(mediaUrl, {
+        responseType: "arraybuffer",
+        timeout: 60000, // 60s para download
+        headers: {
+          "User-Agent": "WhatsApp-Adapter/1.0"
+        }
+      });
+
+      const buffer = Buffer.from(response.data);
+      const contentType = response.headers["content-type"] || this.getContentType(mediaType);
+
+      logger.debug(`[OfficialAPI] Arquivo baixado: ${buffer.length} bytes, tipo: ${contentType}`);
+
+      // 2. Criar FormData para upload
+      const FormData = require("form-data");
+      const form = new FormData();
+
+      // Nome do arquivo baseado no tipo
+      const filename = this.getFilename(mediaType, contentType);
+
+      form.append("messaging_product", "whatsapp");
+      form.append("file", buffer, {
+        filename,
+        contentType
+      });
+
+      // 3. Upload via Media API
+      const uploadUrl = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/media`;
+
+      const uploadResponse = await axios.post(uploadUrl, form, {
+        headers: {
+          ...form.getHeaders(),
+          "Authorization": `Bearer ${this.accessToken}`
+        },
+        timeout: 60000
+      });
+
+      const mediaId = uploadResponse.data.id;
+
+      logger.info(`[OfficialAPI] Upload concluído com sucesso. media_id: ${mediaId}`);
+
+      return mediaId;
+
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.message;
+      logger.error(`[OfficialAPI] Erro ao fazer upload de mídia: ${message}`);
+
+      throw new WhatsAppAdapterError(
+        `Falha ao fazer upload de mídia: ${message}`,
+        error.response?.data?.error?.code || "MEDIA_UPLOAD_ERROR",
+        error
+      );
+    }
+  }
+
+  /**
+   * Retorna Content-Type baseado no tipo de mídia
+   */
+  private getContentType(mediaType: "document" | "image" | "video"): string {
+    switch (mediaType) {
+      case "document":
+        return "application/pdf";
+      case "image":
+        return "image/jpeg";
+      case "video":
+        return "video/mp4";
+      default:
+        return "application/octet-stream";
+    }
+  }
+
+  /**
+   * Gera nome de arquivo baseado no tipo
+   */
+  private getFilename(mediaType: "document" | "image" | "video", contentType: string): string {
+    const timestamp = Date.now();
+
+    if (mediaType === "document") {
+      return contentType.includes("pdf") ? `document_${timestamp}.pdf` : `document_${timestamp}.doc`;
+    } else if (mediaType === "image") {
+      return contentType.includes("png") ? `image_${timestamp}.png` : `image_${timestamp}.jpg`;
+    } else if (mediaType === "video") {
+      return `video_${timestamp}.mp4`;
+    }
+
+    return `file_${timestamp}`;
+  }
+
+  /**
    * Marca mensagem como lida
    */
   async markAsRead(messageId: string): Promise<void> {
