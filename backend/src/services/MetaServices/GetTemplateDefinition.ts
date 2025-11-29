@@ -84,8 +84,9 @@ export const GetTemplateDefinition = async (
 
                 // Se é mídia (DOCUMENT/IMAGE/VIDEO), extrair URL do example
                 if (headerFormat && ["DOCUMENT", "IMAGE", "VIDEO"].includes(headerFormat)) {
-                    if (component.example?.header_handle && component.example.header_handle.length > 0) {
-                        headerHandle = component.example.header_handle[0];
+                    const example = component.example as any;
+                    if (example?.header_handle && example.header_handle.length > 0) {
+                        headerHandle = example.header_handle[0];
                         logger.info(`[GetTemplateDefinition] Header ${headerFormat} detectado: ${headerHandle}`);
                     }
                 }
