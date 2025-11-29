@@ -15,6 +15,8 @@ export interface TemplateDefinition {
     status: string;
     hasButtons: boolean;
     hasHeader: boolean;  // Se o template tem componente HEADER (mesmo que fixo sem variáveis)
+    headerFormat?: "TEXT" | "DOCUMENT" | "IMAGE" | "VIDEO";  // Formato do header
+    headerHandle?: string;  // URL do documento/imagem/vídeo (se headerFormat != TEXT)
     buttons: Array<{ type: string; text: string; }>;
     parameters: TemplateParameter[];
     body: string;
@@ -66,15 +68,30 @@ export const GetTemplateDefinition = async (
         // DEBUG: Ver estrutura completa do template
         console.log("[GetTemplateDefinition] Template completo:", JSON.stringify(template.components, null, 2));
 
+
         let body = "";
         let header: string | undefined = undefined;
         let footer: string | undefined = undefined;
+        let headerFormat: "TEXT" | "DOCUMENT" | "IMAGE" | "VIDEO" | undefined = undefined;
+        let headerHandle: string | undefined = undefined;
 
         template.components.forEach(component => {
             // Extrair textos
             if (component.type === "BODY") body = component.text || "";
-            if (component.type === "HEADER") header = component.text;
+            if (component.type === "HEADER") {
+                header = component.text;
+                headerFormat = component.format as any; // TEXT, DOCUMENT, IMAGE, VIDEO
+
+                // Se é mídia (DOCUMENT/IMAGE/VIDEO), extrair URL do example
+                if (headerFormat && ["DOCUMENT", "IMAGE", "VIDEO"].includes(headerFormat)) {
+                    if (component.example?.header_handle && component.example.header_handle.length > 0) {
+                        headerHandle = component.example.header_handle[0];
+                        logger.info(`[GetTemplateDefinition] Header ${headerFormat} detectado: ${headerHandle}`);
+                    }
+                }
+            }
             if (component.type === "FOOTER") footer = component.text;
+
 
             // Extrair botões
             if (component.type === "BUTTONS" && component.buttons) {
@@ -198,7 +215,9 @@ export const GetTemplateDefinition = async (
             language: template.language,
             status: template.status,
             hasButtons: buttons.length > 0,
-            hasHeader: !!header,  // true se template tem header (fixo ou com variáveis)
+            hasHeader: !!header || !!headerFormat,  // true se template tem header
+            headerFormat,
+            headerHandle,
             buttons,
             parameters,
             body,
