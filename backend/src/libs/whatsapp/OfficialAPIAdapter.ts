@@ -443,14 +443,20 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
         }
       };
 
-      // Adicionar components se fornecidos E se tiverem conteúdo
+      // NOVO: Processar components para detectar headers com mídia que precisam de upload
+      let processedComponents = components;
       if (components && components.length > 0) {
+        processedComponents = await this.processTemplateComponents(components);
+      }
+
+      // Adicionar components se fornecidos E se tiverem conteúdo
+      if (processedComponents && processedComponents.length > 0) {
         // Validar que pelo menos um component tem parameters
-        const hasParams = components.some(c => c.parameters?.length > 0);
+        const hasParams = processedComponents.some(c => c.parameters?.length > 0);
         if (hasParams) {
-          payload.template.components = components;
+          payload.template.components = processedComponents;
           logger.info(
-            `[OfficialAPI] Enviando template ${templateName} com ${components.length} component(s) e parâmetros`
+            `[OfficialAPI] Enviando template ${templateName} com ${processedComponents.length} component(s) e parâmetros`
           );
         } else {
           logger.debug(
@@ -493,6 +499,71 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
         error
       );
     }
+  }
+
+  /**
+   * Processa components de template para detectar e fazer upload de mídia em headers
+   * Converte links de mídia em media_ids automaticamente
+   */
+  private async processTemplateComponents(components: any[]): Promise<any[]> {
+    const processed = [];
+
+    for (const component of components) {
+      // Se não é header ou não tem parameters, passa direto
+      if (component.type !== "header" || !component.parameters || component.parameters.length === 0) {
+        processed.push(component);
+        continue;
+      }
+
+      // Verificar se algum parameter do header tem mídia com link
+      const processedParams = [];
+      for (const param of component.parameters) {
+        // Se parameter tem document/image/video com LINK (não ID), fazer upload
+        const mediaType = param.type as string;
+        if (["document", "image", "video"].includes(mediaType)) {
+          const mediaObj = param[mediaType];
+
+          // Se tem link ao invés de id, fazer upload
+          if (mediaObj?.link && !mediaObj?.id) {
+            logger.info(`[OfficialAPI] Detectado header ${mediaType} com link, fazendo upload...`);
+
+            try {
+              const mediaId = await this.uploadMedia(
+                mediaObj.link,
+                mediaType as "document" | "image" | "video"
+              );
+
+              // Substituir link por id
+              processedParams.push({
+                type: mediaType,
+                [mediaType]: {
+                  id: mediaId
+                }
+              });
+
+              logger.info(`[OfficialAPI] Header ${mediaType} convertido para media_id: ${mediaId}`);
+            } catch (err: any) {
+              logger.error(`[OfficialAPI] Erro ao fazer upload de ${mediaType}: ${err.message}`);
+              // Re-throw para não enviar template com mídia quebrada
+              throw err;
+            }
+          } else {
+            // Já tem ID ou estrutura diferente, passa direto
+            processedParams.push(param);
+          }
+        } else {
+          // Não é mídia, passa direto
+          processedParams.push(param);
+        }
+      }
+
+      processed.push({
+        ...component,
+        parameters: processedParams
+      });
+    }
+
+    return processed;
   }
 
   /**

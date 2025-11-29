@@ -193,15 +193,43 @@ const SendTemplateToContact = async ({
       );
     }
 
+    // Construir corpo da mensagem para salvar no histórico
+    let messageBody = templateDefinition?.body || `Template: ${templateName}`;
+    let mediaUrl: string | undefined = undefined;
+    let mediaType: string | undefined = undefined;
+
+    // Substituir variáveis no corpo da mensagem
+    if (templateDefinition && finalComponents) {
+      // Pegar parâmetros do BODY
+      const bodyComponent = finalComponents.find(c => c.type === "body");
+      if (bodyComponent?.parameters) {
+        bodyComponent.parameters.forEach((param: any, index: number) => {
+          if (param.type === "text") {
+            // Substituir {{1}}, {{2}}, etc. pelos valores reais
+            messageBody = messageBody.replace(new RegExp(`\\{\\{${index + 1}\\}\\}`, 'g'), param.text);
+          }
+        });
+      }
+
+      // Adicionar informação do header se for documento/imagem/vídeo
+      if (templateDefinition.headerFormat && ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDefinition.headerFormat)) {
+        mediaType = templateDefinition.headerFormat.toLowerCase();
+        mediaUrl = templateDefinition.headerHandle; // URL original do arquivo
+
+        logger.info(`[SendTemplateToContact] Salvando ${mediaType} na mensagem: ${mediaUrl}`);
+      }
+    }
+
     const message = await CreateMessageService({
       messageData: {
         wid: sent.id,
         ticketId: ticket.id,
         contactId: contact.id,
-        body: sent.body || `Template: ${templateName}`,
+        body: messageBody,  // Corpo formatado com variáveis substituídas
         fromMe: true,
         read: true,
-        mediaType: "template",
+        mediaType: mediaType || "template",  // "document", "image", "video", ou "template"
+        mediaUrl,  // URL do arquivo se houver
         ack: sent.ack ?? 1,
         remoteJid: ticket.contact?.remoteJid
       },

@@ -1425,6 +1425,31 @@ async function handleDispatchCampaign(job) {
                   `[DispatchCampaign] Template ${templateName} mapeado com ${templateDef.parameters.length} parâmetros`
                 );
               }
+
+              // NOVO: Se template tem header com mídia, adicionar componente header
+              if (templateDef.headerFormat &&
+                ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDef.headerFormat) &&
+                templateDef.headerHandle) {
+
+                logger.info(`[DispatchCampaign] Template tem header ${templateDef.headerFormat}, incluindo no payload`);
+
+                const headerComponent = {
+                  type: "header",
+                  parameters: [{
+                    type: templateDef.headerFormat.toLowerCase(),
+                    [templateDef.headerFormat.toLowerCase()]: {
+                      link: templateDef.headerHandle
+                    }
+                  }]
+                };
+
+                // Inserir header NO INÍCIO do array de components
+                if (templateComponents && Array.isArray(templateComponents)) {
+                  templateComponents = [headerComponent, ...templateComponents];
+                } else {
+                  templateComponents = [headerComponent];
+                }
+              }
             } catch (err: any) {
               logger.warn(`[DispatchCampaign] Erro ao mapear template: ${err.message}`);
             }
