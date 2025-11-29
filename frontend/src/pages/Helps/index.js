@@ -103,7 +103,9 @@ const useStyles = makeStyles((theme) => ({
     },
   },
   tutorialIcon: {
-    fontSize: 36,
+    "& svg": {
+      fontSize: 40,
+    },
   },
   tutorialLabel: {
     fontSize: "0.75rem",
@@ -282,7 +284,7 @@ const Helps = () => {
                 className={classes.tutorialButton}
                 elevation={0}
               >
-                <div className={classes.tutorialIcon} style={{ color: "#3f51b5", fontSize: 48 }}>
+                <div className={classes.tutorialIcon} style={{ color: "#3f51b5" }}>
                   {tutorial.icon}
                 </div>
                 <Typography className={classes.tutorialLabel}>

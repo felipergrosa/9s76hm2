@@ -205,7 +205,7 @@ const AITutorial = () => {
         });
         const val = res?.data?.ragEmbeddingModel;
         if (typeof val === "string" && val) setEmbedModel(val);
-      } catch {}
+      } catch { }
     };
     const loadRagPrefs = async () => {
       try {
@@ -214,20 +214,20 @@ const AITutorial = () => {
         });
         const sv = (se?.data?.ragEnabled || "").toString().toLowerCase();
         setRagEnabled(sv === "enabled");
-      } catch {}
+      } catch { }
       try {
         const sk = await api.get("/companySettingOne/", {
           params: { column: "ragTopK" },
         });
         const kv = Number(sk?.data?.ragTopK);
         if (!isNaN(kv) && kv > 0) setRagTopK(kv);
-      } catch {}
+      } catch { }
     };
     const loadDocuments = async () => {
       try {
         const res = await api.get("/helps/rag/documents");
         setDocuments(res?.data?.documents || []);
-      } catch {}
+      } catch { }
     };
     loadEmbeddingModel();
     loadRagPrefs();
@@ -262,7 +262,7 @@ const AITutorial = () => {
     try {
       const res = await api.get("/rag/documents");
       setDocuments(res?.data?.documents || []);
-    } catch {}
+    } catch { }
   };
 
   const handleIndexText = async () => {
@@ -274,9 +274,9 @@ const AITutorial = () => {
       }
       const tags = ragTags
         ? ragTags
-            .split(",")
-            .map((t) => t.trim())
-            .filter(Boolean)
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean)
         : [];
       await api.post("/helps/rag/index-text", {
         title: ragTitle,
@@ -301,9 +301,9 @@ const AITutorial = () => {
     try {
       const tags = searchTags
         ? searchTags
-            .split(",")
-            .map((t) => t.trim())
-            .filter(Boolean)
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean)
         : [];
       const res = await api.get("/helps/rag/search", {
         params: { q: searchQ, k: searchK, tags: tags.join(",") },
