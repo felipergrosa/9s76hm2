@@ -157,6 +157,15 @@ const resolveRAGConfigForTicket = async (
     if (!isNaN(k2)) ragTopK = Math.min(20, Math.max(1, k2));
   } catch { }
 
+  console.log("[IA][RAG][Config] Resolved:", {
+    companyId: ticket.companyId,
+    queueId: ticket.queueId,
+    ragEnabled,
+    ragTopK,
+    tags,
+    tagsMode
+  });
+
   return { enabled: ragEnabled, k: ragTopK, tags, tagsMode };
 };
 
@@ -253,6 +262,12 @@ const handleOpenAIRequest = async (
 
     const chat = await openai.chat.completions.create(chatParams);
     const choice = chat.choices[0];
+
+    console.log("[IA][OpenAI] Response:", {
+      finish_reason: choice.finish_reason,
+      content: choice.message?.content?.substring(0, 100),
+      function_call: choice.message?.function_call
+    });
 
     // Verificar se IA solicitou executar uma função
     if (choice.finish_reason === "function_call" && choice.message.function_call) {
@@ -517,7 +532,6 @@ export const handleOpenAi = async (
   - Use o nome ${clientName} nas respostas para que o cliente se sinta mais próximo e acolhido, sem exagerar nem repetir o nome em todas as frases.
   - Certifique-se de que a resposta tenha até ${openAiSettings.maxTokens} tokens e termine de forma completa, sem cortes.
   - Evite repetir sempre a mesma saudação em todas as mensagens. Depois da primeira interação, foque em responder diretamente ao que o cliente pediu na última mensagem.
-  - Se for preciso transferir para outro setor, comece a resposta com 'Ação: Transferir para o setor de atendimento'.
   ${crmBlock}
   Prompt Específico:
   ${openAiSettings.prompt}
@@ -533,6 +547,13 @@ export const handleOpenAi = async (
         tags: ragCfg.tags,
         tagsMode: ragCfg.tagsMode
       });
+
+      console.log("[IA][RAG][Search] Result:", {
+        query: bodyMessage,
+        hitsCount: Array.isArray(hits) ? hits.length : 0,
+        tags: ragCfg.tags
+      });
+
       if (Array.isArray(hits) && hits.length) {
         const context = hits.map((h, i) => `Fonte ${i + 1}:\n${h.content}`).join("\n\n");
         promptSystem = `${promptSystem}\nUse, se relevante, as fontes a seguir (não invente fatos):\n${context}`;
