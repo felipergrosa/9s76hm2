@@ -64,8 +64,78 @@ import QueueRAGSource from "../models/QueueRAGSource";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
+import logger from "../utils/logger";
 
-const sequelize = new Sequelize(dbConfig);
+// ========== CONFIGURAÇÃO OTIMIZADA COM CONNECTION POOL E RETRY ========== //
+const sequelize = new Sequelize(dbConfig.database, dbConfig.username, dbConfig.password, {
+  host: dbConfig.host,
+  dialect: dbConfig.dialect,
+  timezone: dbConfig.timezone || "-03:00",
+  logging: dbConfig.logging !== undefined ? dbConfig.logging : false,
+
+  // Connection Pool Otimizado
+  pool: {
+    max: parseInt(process.env.DB_POOL_MAX || "20"),        // Máximo de conexões
+    min: parseInt(process.env.DB_POOL_MIN || "5"),         // Mínimo de conexões ativas
+    acquire: parseInt(process.env.DB_POOL_ACQUIRE || "60000"),  // 60s timeout
+    idle: parseInt(process.env.DB_POOL_IDLE || "10000"),   // 10s antes de liberar
+    evict: parseInt(process.env.DB_POOL_EVICT || "1000")   // Verificar a cada 1s
+  },
+
+  // Retry automático em caso de erro de conexão
+  retry: {
+    max: 3,
+    match: [
+      /SequelizeConnectionError/,
+      /SequelizeConnectionRefusedError/,
+      /SequelizeHostNotFoundError/,
+      /SequelizeHostNotReachableError/,
+      /SequelizeInvalidConnectionError/,
+      /SequelizeConnectionTimedOutError/,
+      /Connection terminated unexpectedly/  // Seu erro específico!
+    ]
+  },
+
+  // Keep-alive e timeouts
+  dialectOptions: {
+    connectTimeout: parseInt(process.env.DB_CONNECT_TIMEOUT || "10000"),
+    statement_timeout: parseInt(process.env.DB_STATEMENT_TIMEOUT || "30000"),
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
+    ...(dbConfig.dialectOptions || {})
+  }
+});
+
+// Reconexão automática em caso de falha
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
+
+sequelize.authenticate()
+  .then(() => {
+    logger.info("✅ Database connected successfully");
+    reconnectAttempts = 0;
+  })
+  .catch(err => {
+    logger.error("❌ Database connection error:", err);
+
+    if (reconnectAttempts < maxReconnectAttempts) {
+      reconnectAttempts++;
+      const delay = Math.min(5000 * reconnectAttempts, 30000); // Max 30s
+
+      logger.info(`🔄 Attempting to reconnect to database (${reconnectAttempts}/${maxReconnectAttempts}) in ${delay / 1000}s...`);
+
+      setTimeout(() => {
+        sequelize.authenticate()
+          .then(() => {
+            logger.info("✅ Database reconnected successfully");
+            reconnectAttempts = 0;
+          })
+          .catch(e => {
+            logger.error(`❌ Reconnection attempt ${reconnectAttempts} failed:`, e);
+          });
+      }, delay);
+    }
+  });
 
 const models = [
   Company,
