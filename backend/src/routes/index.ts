@@ -66,6 +66,15 @@ import templateRoutes from "./templateRoutes";  // NOVO
 
 const routes = Router();
 
+// Healthcheck endpoint for Docker Swarm
+routes.get("/health", (req, res) => {
+    res.status(200).json({
+        status: "ok",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
+});
+
 routes.use(userRoutes);
 routes.use("/auth", authRoutes);
 routes.use("/api/messages", apiRoutes);
