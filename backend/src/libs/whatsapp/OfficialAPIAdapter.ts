@@ -351,6 +351,87 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
   }
 
   /**
+   * Envia documento (PDF, Excel, etc) a partir de um Buffer
+   * Usado principalmente pelo ProcessOfficialBot para respostas da IA
+   */
+  async sendDocumentMessage(
+    to: string,
+    fileBuffer: Buffer,
+    fileName: string,
+    mimeType: string
+  ): Promise<IWhatsAppMessage> {
+    try {
+      logger.info(`[OfficialAPI] Enviando documento via Media API: ${fileName}`);
+
+      const FormData = require("form-data");
+      const form = new FormData();
+
+      form.append("messaging_product", "whatsapp");
+      form.append("file", fileBuffer, {
+        filename: fileName,
+        contentType: mimeType
+      });
+
+      const uploadUrl = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/media`;
+
+      const uploadResponse = await axios.post(uploadUrl, form, {
+        headers: {
+          ...form.getHeaders(),
+          "Authorization": `Bearer ${this.accessToken}`
+        },
+        timeout: 60000
+      });
+
+      const mediaId = uploadResponse.data.id;
+
+      logger.info(`[OfficialAPI] Upload de documento concluído. media_id=${mediaId}`);
+
+      const recipient = to.replace(/\D/g, "");
+
+      const payload = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: recipient,
+        type: "document",
+        document: {
+          id: mediaId,
+          filename: fileName
+        }
+      };
+
+      const response = await this.client.post(
+        `/${this.phoneNumberId}/messages`,
+        payload
+      );
+
+      const messageId = response.data.messages[0].id;
+
+      logger.info(`[OfficialAPI] Documento enviado com sucesso: ${messageId}`);
+
+      return {
+        id: messageId,
+        from: this.phoneNumber!,
+        to: recipient,
+        body: fileName,
+        timestamp: Date.now(),
+        fromMe: true,
+        mediaType: "document",
+        ack: 1
+      };
+
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.message;
+      logger.error(`[OfficialAPI] Erro ao enviar documento: ${message}`);
+
+      throw new WhatsAppAdapterError(
+        `Falha ao enviar documento: ${message}`,
+        error.response?.data?.error?.code || "SEND_DOCUMENT_ERROR",
+        error
+      );
+    }
+  }
+
+  /**
    * Deleta mensagem (suporte limitado - até 24h)
    * API Oficial só permite deletar mensagens próprias até 24h após envio
    */

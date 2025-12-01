@@ -95,11 +95,7 @@ const PromptSchema = Yup.object().shape({
     .min(1, "Mínimo 1 mensagem")
     .max(50, "Máximo 50 mensagens")
     .required("Informe o número máximo de mensagens"),
-  voice: Yup.string().when("model", {
-    is: "gpt-3.5-turbo-1106",
-    then: Yup.string().required("Informe o modo para Voz"),
-    otherwise: Yup.string().notRequired(),
-  }),
+  voice: Yup.string().notRequired(),
   voiceKey: Yup.string().notRequired(),
   voiceRegion: Yup.string().notRequired(),
   temperature: Yup.number()
@@ -248,7 +244,7 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
         });
 
         setUseGlobalConfig(inferredUseGlobal);
-        
+
         // Buscar dados completos da integração se existir integrationId
         if (data.integrationId) {
           try {
@@ -269,7 +265,7 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
                   presencePenalty: parsed.presencePenalty ?? integration.presencePenalty,
                   creativity: parsed.creativityLevel ?? integration.creativity,
                 };
-              } catch (_) {}
+              } catch (_) { }
             }
             setSelectedIntegration(integration);
           } catch (err) {
@@ -279,7 +275,7 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
         } else {
           setSelectedIntegration(null);
         }
-        
+
         // Restaurar anexos selecionados, se houver
         try {
           if (data.attachments) {
@@ -316,7 +312,7 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
       try {
         const { data } = await api.get(`/files/list`, { params: { searchParam: filesSearch } });
         if (active) setFileLists(Array.isArray(data) ? data : []);
-      } catch (_) {}
+      } catch (_) { }
     })();
     return () => { active = false; };
   }, [filesSearch]);
@@ -324,15 +320,15 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
   useEffect(() => {
     if (open && !promptId && templateData) {
       console.log('Template detectado no useEffect:', templateData);
-      
+
       // Aplicar dados básicos do template
       const templatePromptData = {
         ...initialState,
         name: templateData.name || "",
         prompt: templateData.prompt || "",
         // Aplicar voz sugerida se disponível
-        voice: templateData.suggestedVoices && templateData.suggestedVoices.length > 0 
-          ? templateData.suggestedVoices[0] 
+        voice: templateData.suggestedVoices && templateData.suggestedVoices.length > 0
+          ? templateData.suggestedVoices[0]
           : "texto",
         // Configurações padrão baseadas no template
         maxMessages: 10,
@@ -342,20 +338,20 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
         temperature: templateData.temperature || 0.9,
         maxTokens: templateData.maxTokens || 300,
       };
-      
+
       setPrompt(templatePromptData);
       setSelectedOptions([]);
-      
+
       // Limpar integração selecionada para permitir nova seleção
       setSelectedIntegration(null);
-      
+
       console.log('Template aplicado:', {
         name: templatePromptData.name,
         voice: templatePromptData.voice,
         suggestedVoices: templateData.suggestedVoices,
         integrationType: templateData.integrationType
       });
-      
+
       // Mostrar toast com informações do template aplicado
       if (templateData.suggestedVoices && templateData.suggestedVoices.length > 0) {
         const voiceName = templateData.suggestedVoices[0].replace('pt-BR-', '').replace('Neural', '');
@@ -381,7 +377,9 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
         ...values,
         // IMPORTANTE: Tratar configurações globais vs específicas
         integrationId: globalFlag ? null : values.integrationId,
-        voice: (selectedIntegration?.model === "gpt-3.5-turbo-1106") ? values.voice : "texto",
+        voice: values.voice || "texto",
+        voiceKey: values.voiceKey || "",
+        voiceRegion: values.voiceRegion || "",
         attachments: JSON.stringify(selectedOptions || []),
         // Usar dados da integração específica OU valores do template/form para configurações globais
         apiKey: globalFlag ? "" : (selectedIntegration?.apiKey || ""),
@@ -390,7 +388,7 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
         temperature: globalFlag ? values.temperature : (Number(selectedIntegration?.temperature) || values.temperature || 0.9),
         useGlobalConfig: globalFlag,
       };
-      
+
       if (promptId) {
         await api.put(`/prompt/${promptId}`, promptData);
       } else {
@@ -427,11 +425,11 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
 
   return (
     <div className={classes.root}>
-      <Dialog 
-        open={open} 
-        onClose={handleClose} 
-        maxWidth="md" 
-        scroll="paper" 
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        maxWidth="md"
+        scroll="paper"
         fullWidth
         PaperProps={{
           style: {
@@ -447,8 +445,8 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
               <Tooltip
                 title={(
                   <span>
-                    Crie prompts para uso com modelos de IA no WhatsApp e campanhas.<br/>
-                    • A API Key é usada somente no servidor e será criptografada se a criptografia estiver habilitada.<br/>
+                    Crie prompts para uso com modelos de IA no WhatsApp e campanhas.<br />
+                    • A API Key é usada somente no servidor e será criptografada se a criptografia estiver habilitada.<br />
                     • Use variáveis no texto, por exemplo: {"{nome}"} {"{empresa}"}.
                   </span>
                 )}
@@ -492,12 +490,12 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
                   setEnhancementsOpen(false);
                 }}
               />
-              <DialogContent 
-                dividers 
-                style={{ 
-                  overflowY: 'auto', 
+              <DialogContent
+                dividers
+                style={{
+                  overflowY: 'auto',
                   overflowX: 'hidden',
-                  maxHeight: 'calc(90vh - 140px)' 
+                  maxHeight: 'calc(90vh - 140px)'
                 }}
               >
                 <Typography variant="body2" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -560,11 +558,11 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
                         margin="dense"
                       />
                     ) : (
-                      <div style={{ 
-                        padding: 12, 
-                        backgroundColor: '#f0f8ff', 
-                        borderRadius: 4, 
-                        border: '1px solid #2196f3' 
+                      <div style={{
+                        padding: 12,
+                        backgroundColor: '#f0f8ff',
+                        borderRadius: 4,
+                        border: '1px solid #2196f3'
                       }}>
                         <Typography variant="body2" style={{ color: '#1976d2' }}>
                           🌐 Usando configurações globais de IA
@@ -579,13 +577,13 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
 
                 {/* Informações do template aplicado */}
                 {templateData && (
-                  <div style={{ 
-                    marginTop: 16, 
-                    marginBottom: 16, 
-                    padding: 12, 
-                    backgroundColor: '#e3f2fd', 
-                    borderRadius: 8, 
-                    border: '1px solid #2196f3' 
+                  <div style={{
+                    marginTop: 16,
+                    marginBottom: 16,
+                    padding: 12,
+                    backgroundColor: '#e3f2fd',
+                    borderRadius: 8,
+                    border: '1px solid #2196f3'
                   }}>
                     <Typography variant="subtitle2" style={{ color: '#1976d2', marginBottom: 8 }}>
                       📋 Template Aplicado: {templateData.name}
@@ -627,22 +625,22 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
                         </Typography>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                           {templateData.variables.slice(0, 6).map((variable) => (
-                            <Chip 
-                              key={variable} 
-                              size="small" 
-                              label={`{${variable}}`} 
-                              style={{ 
-                                backgroundColor: '#2196f3', 
-                                color: 'white', 
+                            <Chip
+                              key={variable}
+                              size="small"
+                              label={`{${variable}}`}
+                              style={{
+                                backgroundColor: '#2196f3',
+                                color: 'white',
                                 fontSize: '0.7rem',
                                 height: 20
-                              }} 
+                              }}
                             />
                           ))}
                           {templateData.variables.length > 6 && (
-                            <Chip 
-                              size="small" 
-                              label={`+${templateData.variables.length - 6}`} 
+                            <Chip
+                              size="small"
+                              label={`+${templateData.variables.length - 6}`}
                               variant="outlined"
                               style={{ height: 20, fontSize: '0.7rem' }}
                             />
@@ -664,13 +662,13 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
                     {useGlobalConfig ? '🌐 Configuração Global de IA' : '🎯 Configuração Específica de IA'}
                   </Typography>
                   <Typography variant="body2" style={{ marginBottom: 8, color: '#888', fontSize: '0.875rem' }}>
-                    {useGlobalConfig 
+                    {useGlobalConfig
                       ? 'Este prompt utilizará as configurações globais de IA definidas no menu Configurações. Ideal para padronização em toda a empresa.'
                       : 'Este prompt tem configurações específicas de IA. Permite personalização total para casos de uso únicos.'
                     }
                   </Typography>
                 </div>
-                
+
                 <div style={{ marginTop: 12 }}>
                   <Typography variant="subtitle2" style={{ marginBottom: 4, color: '#666' }}>RAG Global Integrado</Typography>
                   <Typography variant="body2" style={{ marginBottom: 8, color: '#888', fontSize: '0.875rem' }}>
@@ -751,7 +749,7 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
                     />
                   )}
                 />
-                
+
                 <Divider style={{ margin: '24px 0 16px 0' }} />
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -779,27 +777,27 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
                     <div style={{ padding: 12, maxWidth: 560 }}>
                       <Typography variant="subtitle2" style={{ marginBottom: 8 }}>Como configurar áudio para texto (STT) e texto para áudio (TTS)</Typography>
                       <Typography variant="body2" gutterBottom>
-                        • STT (Transcrição): configure a chave no backend em <b>Setting.apiTranscription</b> usando um provedor suportado (OpenAI Whisper ou Google Gemini).<br/>
+                        • STT (Transcrição): configure a chave no backend em <b>Setting.apiTranscription</b> usando um provedor suportado (OpenAI Whisper ou Google Gemini).<br />
                         • TTS (Síntese de Voz): preencha abaixo <b>voice</b> (uma voz Azure válida), <b>voiceKey</b> e <b>voiceRegion</b>.
                       </Typography>
                       <Typography variant="body2" gutterBottom>
-                        <b>Passos rápidos</b><br/>
-                        1) Escolha o provedor de STT e gere a API Key:<br/>
-                        — OpenAI: <Link href="https://platform.openai.com" target="_blank" rel="noopener">https://platform.openai.com</Link><br/>
-                        — Google Gemini: <Link href="https://ai.google.dev/" target="_blank" rel="noopener">https://ai.google.dev/</Link><br/>
+                        <b>Passos rápidos</b><br />
+                        1) Escolha o provedor de STT e gere a API Key:<br />
+                        — OpenAI: <Link href="https://platform.openai.com" target="_blank" rel="noopener">https://platform.openai.com</Link><br />
+                        — Google Gemini: <Link href="https://ai.google.dev/" target="_blank" rel="noopener">https://ai.google.dev/</Link><br />
                         Salve a chave em <b>Setting.apiTranscription</b> no sistema.
                       </Typography>
                       <Typography variant="body2" gutterBottom>
-                        2) Para TTS (Microsoft Azure Speech):<br/>
-                        — Crie um recurso <i>Speech</i> no Azure Portal.<br/>
-                        — Copie <b>Key</b> e <b>Region</b> (ex.: brazilsouth, eastus).<br/>
-                        — Selecione uma voz, por exemplo: <code>pt-BR-AntonioNeural</code> ou <code>pt-BR-FranciscaNeural</code>.<br/>
+                        2) Para TTS (Microsoft Azure Speech):<br />
+                        — Crie um recurso <i>Speech</i> no Azure Portal.<br />
+                        — Copie <b>Key</b> e <b>Region</b> (ex.: brazilsouth, eastus).<br />
+                        — Selecione uma voz, por exemplo: <code>pt-BR-AntonioNeural</code> ou <code>pt-BR-FranciscaNeural</code>.<br />
                         Docs: <Link href="https://learn.microsoft.com/azure/ai-services/speech-service/" target="_blank" rel="noopener">Azure Speech Service</Link>
                       </Typography>
                       <Typography variant="body2" gutterBottom>
-                        3) Funcionamento:<br/>
-                        — Ao receber um áudio, o sistema usa a chave de STT para transcrever.<br/>
-                        — A IA responde usando o <b>model</b> definido neste Prompt.<br/>
+                        3) Funcionamento:<br />
+                        — Ao receber um áudio, o sistema usa a chave de STT para transcrever.<br />
+                        — A IA responde usando o <b>model</b> definido neste Prompt.<br />
                         — Se <b>voice</b> = "texto", envia resposta em texto; caso contrário, gera áudio via Azure TTS e envia o MP3.
                       </Typography>
                       <Typography variant="body2" color="textSecondary">
@@ -808,17 +806,16 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
                     </div>
                   </Popover>
                 </ClickAwayListener>
-                
-                {/* Voz e Temperatura na mesma linha */}
+
                 <div className={classes.multFieldLine}>
                   <FormControl
                     fullWidth
                     margin="dense"
                     variant="outlined"
-                    disabled={selectedIntegration?.model !== "gpt-3.5-turbo-1106"}
+                    disabled={false}
                     error={touched.voice && Boolean(errors.voice)}
                   >
-                    <InputLabel>{i18n.t("promptModal.form.voice")}</InputLabel>
+                    <InputLabel>{i18n.t("promptModal.form.voice")} (DEBUG: LIBERADO)</InputLabel>
                     <Field
                       as={Select}
                       label={i18n.t("promptModal.form.voice")}
@@ -862,7 +859,7 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
                     }}
                   />
                 </div>
-                
+
                 {/* VoiceKey e VoiceRegion */}
                 <div className={classes.multFieldLine}>
                   <Field
@@ -874,7 +871,6 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
                     variant="outlined"
                     margin="dense"
                     fullWidth
-                    disabled={selectedIntegration?.model !== "gpt-3.5-turbo-1106"}
                   />
                   <Field
                     as={TextField}
@@ -885,7 +881,6 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
                     variant="outlined"
                     margin="dense"
                     fullWidth
-                    disabled={selectedIntegration?.model !== "gpt-3.5-turbo-1106"}
                   />
                 </div>
               </DialogContent>
@@ -914,8 +909,8 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
             </Form>
           )}
         </Formik>
-      </Dialog>
-    </div>
+      </Dialog >
+    </div >
   );
 };
 

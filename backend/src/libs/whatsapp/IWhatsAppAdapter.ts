@@ -86,6 +86,12 @@ export interface IWhatsAppAdapter {
   sendMessage(options: ISendMessageOptions): Promise<IWhatsAppMessage>;
   sendTextMessage(to: string, body: string): Promise<IWhatsAppMessage>;
   sendMediaMessage(to: string, mediaUrl: string, mediaType: string, caption?: string): Promise<IWhatsAppMessage>;
+  sendDocumentMessage?(
+    to: string,
+    fileBuffer: Buffer,
+    fileName: string,
+    mimeType: string
+  ): Promise<IWhatsAppMessage>;
   sendTemplate?(
     to: string,
     templateName: string,

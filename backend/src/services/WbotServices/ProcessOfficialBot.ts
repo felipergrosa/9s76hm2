@@ -31,7 +31,7 @@ export async function processOfficialBot({
   whatsapp,
   companyId
 }: ProcessOfficialBotParams): Promise<void> {
-  
+
   try {
     logger.info(`[ProcessOfficialBot] Iniciando processamento para ticket ${ticket.id}`);
 
@@ -82,7 +82,7 @@ export async function processOfficialBot({
     // Chamar IA (handleOpenAi)
     // NOTA: handleOpenAi foi feito para Baileys (proto.IWebMessageInfo e wbot: Session)
     // Precisamos adaptar para API Oficial ou criar versão específica
-    
+
     // Por enquanto, vamos criar uma mensagem mock no formato Baileys para usar handleOpenAi
     const mockBaileysMessage = {
       key: {
@@ -102,48 +102,80 @@ export async function processOfficialBot({
       channelType: "official",
       isOfficial: true,
       sendMessage: async (jid: string, content: any) => {
-        logger.info(`[ProcessOfficialBot] Enviando resposta do bot para ${jid}`);
-        
+        logger.info(`[ProcessOfficialBot] Enviando resposta do bot para ${jid}`, { contentType: Object.keys(content) });
+
         try {
           // Usar adapter correto (Official ou Baileys)
           const { GetTicketAdapter } = await import("../../helpers/GetWhatsAppAdapter");
           const adapter = await GetTicketAdapter(ticket);
-          
+
           // Extrair número do JID (remove @s.whatsapp.net)
           const to = jid.split("@")[0];
-          const body = content.text || "";
-          
-          // Enviar mensagem via adapter
-          const sentMessage = await adapter.sendTextMessage(to, body);
-          
-          logger.info(`[ProcessOfficialBot] Mensagem enviada com sucesso: ${sentMessage.id}`);
-          
+
+          let sentMessage: any;
+          let messageBody = "";
+          let mediaType = "conversation";
+
+          // Verificar tipo de conteúdo
+          if (content.document) {
+            // ENVIAR DOCUMENTO (PDF, Excel, etc)
+            logger.info(`[ProcessOfficialBot] Enviando documento: ${content.fileName}`);
+
+            const fs = await import("fs");
+            const fileBuffer = content.document instanceof Buffer
+              ? content.document
+              : fs.readFileSync(content.document);
+
+            sentMessage = await adapter.sendDocumentMessage(
+              to,
+              fileBuffer,
+              content.fileName || "documento.pdf",
+              content.mimetype || "application/pdf"
+            );
+
+            messageBody = content.fileName || "documento.pdf";
+            mediaType = "document";
+
+            logger.info(`[ProcessOfficialBot] Documento enviado: ${sentMessage.id}`);
+
+          } else if (content.text) {
+            // ENVIAR TEXTO
+            messageBody = content.text;
+            sentMessage = await adapter.sendTextMessage(to, messageBody);
+            mediaType = "conversation";
+
+            logger.info(`[ProcessOfficialBot] Texto enviado: ${sentMessage.id}`);
+          } else {
+            logger.warn(`[ProcessOfficialBot] Tipo de conteúdo desconhecido:`, Object.keys(content));
+            return;
+          }
+
           // Salvar mensagem no banco (apenas para API Oficial)
-          if (adapter.channelType === "official") {
+          if (adapter.channelType === "official" && sentMessage) {
             const CreateMessageService = (await import("../MessageServices/CreateMessageService")).default;
             await CreateMessageService({
               messageData: {
                 wid: sentMessage.id,
                 ticketId: ticket.id,
                 contactId: ticket.contactId,
-                body: body,
+                body: messageBody,
                 fromMe: true,
                 read: true,
                 ack: 1,
-                mediaType: "conversation"
+                mediaType
               },
               companyId
             });
-            
+
             logger.info(`[ProcessOfficialBot] Mensagem do bot salva no banco: ${sentMessage.id}`);
           }
-          
+
           // Atualizar última mensagem do ticket
           await ticket.update({
-            lastMessage: body,
+            lastMessage: messageBody,
             imported: null
           });
-          
+
         } catch (error: any) {
           logger.error(`[ProcessOfficialBot] Erro ao enviar mensagem: ${error.message}`);
           throw error;
