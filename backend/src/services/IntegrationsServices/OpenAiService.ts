@@ -157,7 +157,7 @@ const resolveRAGConfigForTicket = async (
     if (!isNaN(k2)) ragTopK = Math.min(20, Math.max(1, k2));
   } catch { }
 
-  console.log("[IA][RAG][Config] Resolved:", {
+  console.log("[IA][RAG][Config] Resolvido:", {
     companyId: ticket.companyId,
     queueId: ticket.queueId,
     ragEnabled,
