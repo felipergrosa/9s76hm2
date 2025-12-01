@@ -5,6 +5,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+
   TextField,
   Typography,
   Paper,
@@ -54,17 +55,63 @@ const FlowBuilderSchema = Yup.object().shape({
   temperature: Yup.number().min(0, "Mínimo 0").max(1, "Máximo 1").notRequired(),
 });
 
+const mustacheVars = [
+  // Contato
+  { key: "firstName", label: "firstName", desc: "Primeiro nome do contato", category: "Contato", alias: "#primeiro-nome" },
+  { key: "name", label: "name", desc: "Nome completo do contato", category: "Contato", alias: "#nome" },
+  { key: "email", label: "email", desc: "Email do contato", category: "Contato", alias: "#email" },
+  { key: "cpfCnpj", label: "cpfCnpj", desc: "CPF/CNPJ do contato", category: "Contato", alias: "#cnpj-cpf" },
+  { key: "representativeCode", label: "representativeCode", desc: "Código do representante", category: "Contato", alias: "#codigo-representante" },
+  { key: "city", label: "city", desc: "Cidade", category: "Contato", alias: "#cidade" },
+  { key: "situation", label: "situation", desc: "Situação do cliente", category: "Contato", alias: "#situacao" },
+  { key: "fantasyName", label: "fantasyName", desc: "Nome fantasia", category: "Contato", alias: "#fantasia" },
+  { key: "foundationDate", label: "foundationDate", desc: "Data de fundação (DD-MM-YYYY)", category: "Contato", alias: "#data-fundacao" },
+  { key: "creditLimit", label: "creditLimit", desc: "Limite de crédito", category: "Contato", alias: "#limite-credito" },
+  { key: "segment", label: "segment", desc: "Segmento de mercado", category: "Contato", alias: "#segmento" },
+
+  // Atendimento
+  { key: "ticket_id", label: "ticket_id", desc: "ID do ticket", category: "Atendimento", alias: "#ticket" },
+  { key: "userName", label: "userName", desc: "Nome do atendente", category: "Atendimento", alias: "#atendente" },
+  { key: "queue", label: "queue", desc: "Nome da fila", category: "Atendimento", alias: "#fila" },
+  { key: "connection", label: "connection", desc: "Nome da conexão/WhatsApp", category: "Atendimento", alias: "#conexao" },
+  { key: "protocol", label: "protocol", desc: "Protocolo único da conversa", category: "Atendimento", alias: "#protocolo" },
+
+  // Data/Hora
+  { key: "date", label: "date", desc: "Data atual (DD-MM-YYYY)", category: "Data/Hora", alias: "#data" },
+  { key: "hour", label: "hour", desc: "Hora atual (HH:MM:SS)", category: "Data/Hora", alias: "#hora" },
+  { key: "data_hora", label: "data_hora", desc: "Data e hora juntas (ex.: 01-01-2025 às 10:30:00)", category: "Data/Hora", alias: "#data-hora" },
+
+  // Saudação
+  { key: "ms", label: "ms", desc: "Saudação contextual (Bom dia/Boa tarde/Boa noite/Boa madrugada)", category: "Saudação/Contexto", alias: "#saudacao" },
+  { key: "saudacao", label: "saudacao", desc: "Alias de ms (saudação contextual)", category: "Saudação/Contexto", alias: "#saudacao" },
+  { key: "periodo_dia", label: "periodo_dia", desc: "Período do dia: manhã, tarde, noite ou madrugada", category: "Saudação/Contexto", alias: "#periodo-dia" },
+
+  // Empresa
+  { key: "name_company", label: "name_company", desc: "Nome da empresa", category: "Empresa", alias: "#empresa" },
+];
+
+const groupedVars = mustacheVars.reduce((acc, v) => {
+  const cat = v.category || "Outros";
+  acc[cat] = acc[cat] || [];
+  acc[cat].push(v);
+  return acc;
+}, {});
+
 const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
   const [selectedIntegration, setSelectedIntegration] = useState(null);
   const [useGlobalConfig, setUseGlobalConfig] = useState(false);
   const [fileLists, setFileLists] = useState([]);
   const [filesSearch, setFilesSearch] = useState("");
   const [expandedFileIds, setExpandedFileIds] = useState({});
-  const [selectedOptions, setSelectedOptions] = useState([]); // [{fileListId, optionId, name, path, mediaType}]
-  const promptInputRef = useRef(null);
+  const [selectedOptions, setSelectedOptions] = useState([]);
   const [tagsAnchorEl, setTagsAnchorEl] = useState(null);
   const [tagsSearch, setTagsSearch] = useState("");
   const [voiceTipsAnchorEl, setVoiceTipsAnchorEl] = useState(null);
+  const promptInputRef = useRef(null);
+
+  // New states for folders
+  const [folders, setFolders] = useState([]);
+  const [selectedFolderIds, setSelectedFolderIds] = useState([]);
 
   const initialValues = {
     name: data?.data?.typebotIntegration?.name || "",
@@ -83,48 +130,6 @@ const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
   const openVoiceTips = Boolean(voiceTipsAnchorEl);
   const handleOpenVoiceTips = (event) => setVoiceTipsAnchorEl(event.currentTarget);
   const handleCloseVoiceTips = () => setVoiceTipsAnchorEl(null);
-
-  const mustacheVars = [
-    // Contato
-    { key: "firstName", label: "firstName", desc: "Primeiro nome do contato", category: "Contato", alias: "#primeiro-nome" },
-    { key: "name", label: "name", desc: "Nome completo do contato", category: "Contato", alias: "#nome" },
-    { key: "email", label: "email", desc: "Email do contato", category: "Contato", alias: "#email" },
-    { key: "cpfCnpj", label: "cpfCnpj", desc: "CPF/CNPJ do contato", category: "Contato", alias: "#cnpj-cpf" },
-    { key: "representativeCode", label: "representativeCode", desc: "Código do representante", category: "Contato", alias: "#codigo-representante" },
-    { key: "city", label: "city", desc: "Cidade", category: "Contato", alias: "#cidade" },
-    { key: "situation", label: "situation", desc: "Situação do cliente", category: "Contato", alias: "#situacao" },
-    { key: "fantasyName", label: "fantasyName", desc: "Nome fantasia", category: "Contato", alias: "#fantasia" },
-    { key: "foundationDate", label: "foundationDate", desc: "Data de fundação (DD-MM-YYYY)", category: "Contato", alias: "#data-fundacao" },
-    { key: "creditLimit", label: "creditLimit", desc: "Limite de crédito", category: "Contato", alias: "#limite-credito" },
-    { key: "segment", label: "segment", desc: "Segmento de mercado", category: "Contato", alias: "#segmento" },
-
-    // Atendimento
-    { key: "ticket_id", label: "ticket_id", desc: "ID do ticket", category: "Atendimento", alias: "#ticket" },
-    { key: "userName", label: "userName", desc: "Nome do atendente", category: "Atendimento", alias: "#atendente" },
-    { key: "queue", label: "queue", desc: "Nome da fila", category: "Atendimento", alias: "#fila" },
-    { key: "connection", label: "connection", desc: "Nome da conexão/WhatsApp", category: "Atendimento", alias: "#conexao" },
-    { key: "protocol", label: "protocol", desc: "Protocolo único da conversa", category: "Atendimento", alias: "#protocolo" },
-
-    // Data/Hora
-    { key: "date", label: "date", desc: "Data atual (DD-MM-YYYY)", category: "Data/Hora", alias: "#data" },
-    { key: "hour", label: "hour", desc: "Hora atual (HH:MM:SS)", category: "Data/Hora", alias: "#hora" },
-    { key: "data_hora", label: "data_hora", desc: "Data e hora juntas (ex.: 01-01-2025 às 10:30:00)", category: "Data/Hora", alias: "#data-hora" },
-
-    // Saudação
-    { key: "ms", label: "ms", desc: "Saudação contextual (Bom dia/Boa tarde/Boa noite/Boa madrugada)", category: "Saudação/Contexto", alias: "#saudacao" },
-    { key: "saudacao", label: "saudacao", desc: "Alias de ms (saudação contextual)", category: "Saudação/Contexto", alias: "#saudacao" },
-    { key: "periodo_dia", label: "periodo_dia", desc: "Período do dia: manhã, tarde, noite ou madrugada", category: "Saudação/Contexto", alias: "#periodo-dia" },
-
-    // Empresa
-    { key: "name_company", label: "name_company", desc: "Nome da empresa", category: "Empresa", alias: "#empresa" },
-  ];
-
-  const groupedVars = mustacheVars.reduce((acc, v) => {
-    const cat = v.category || "Outros";
-    acc[cat] = acc[cat] || [];
-    acc[cat].push(v);
-    return acc;
-  }, {});
 
   const openTags = Boolean(tagsAnchorEl);
   const handleOpenTags = (event) => setTagsAnchorEl(event.currentTarget);
@@ -151,7 +156,6 @@ const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
     }
   };
 
-
   const handleClose = () => {
     close(null);
   };
@@ -171,7 +175,7 @@ const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
         voice: values.voice || "texto",
         voiceKey: values.voiceKey || "",
         voiceRegion: values.voiceRegion || "",
-        attachments: JSON.stringify(selectedOptions || []),
+        attachments: JSON.stringify(selectedFolderIds || []),
         useGlobalConfig: globalFlag,
       };
 
@@ -205,18 +209,40 @@ const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
     return () => { active = false; };
   }, [filesSearch]);
 
+  // Carregar pastas do File Manager
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await api.get("/library/folders");
+        setFolders(data);
+      } catch (err) {
+        console.error("Erro ao buscar pastas:", err);
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     if (open === "edit" && data?.data?.typebotIntegration?.attachments) {
       try {
         const parsed = typeof data.data.typebotIntegration.attachments === 'string'
           ? JSON.parse(data.data.typebotIntegration.attachments)
           : data.data.typebotIntegration.attachments;
-        if (Array.isArray(parsed)) setSelectedOptions(parsed);
+
+        // Se for array de IDs (novo formato), seta selectedFolderIds
+        if (Array.isArray(parsed) && (parsed.length === 0 || typeof parsed[0] === 'number' || typeof parsed[0] === 'string')) {
+          // Verifica se é formato antigo (objetos) ou novo (IDs)
+          if (parsed.length > 0 && typeof parsed[0] === 'object') {
+            // Formato antigo (FileLists), ignora ou migra se necessário
+            setSelectedOptions(parsed);
+          } else {
+            setSelectedFolderIds(parsed.map(id => Number(id)));
+          }
+        }
       } catch (_) {
-        setSelectedOptions([]);
+        setSelectedFolderIds([]);
       }
     } else if (open === "create") {
-      setSelectedOptions([]);
+      setSelectedFolderIds([]);
     }
   }, [open, data]);
 
@@ -302,33 +328,66 @@ const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
                 </div>
               </div>
 
-              {!useGlobalConfig ? (
-                <AIIntegrationSelector
-                  value={values.integrationId}
-                  onChange={(integrationId, integration) => {
-                    setFieldValue('integrationId', integrationId);
-                    setSelectedIntegration(integration);
-                    setFieldValue('model', integration?.model || "");
+              {
+                !useGlobalConfig ? (
+                  <AIIntegrationSelector
+                    value={values.integrationId}
+                    onChange={(integrationId, integration) => {
+                      setFieldValue('integrationId', integrationId);
+                      setSelectedIntegration(integration);
+                      setFieldValue('model', integration?.model || "");
+                    }}
+                    error={touched.integrationId && Boolean(errors.integrationId)}
+                    helperText={touched.integrationId ? errors.integrationId : "Selecione uma integração OpenAI/Gemini configurada"}
+                  />
+                ) : (
+                  <div style={{
+                    padding: 12,
+                    backgroundColor: '#f0f8ff',
+                    borderRadius: 4,
+                    border: '1px solid #2196f3',
+                    marginBottom: 12
+                  }}>
+                    <Typography variant="body2" style={{ color: '#1976d2' }}>
+                      🌐 Usando configurações globais de IA
+                    </Typography>
+                    <Typography variant="caption" style={{ color: '#666' }}>
+                      As configurações definidas em "Configurações → IA" serão utilizadas
+                    </Typography>
+                  </div>
+                )
+              }
+
+              <FormControl fullWidth margin="dense" variant="outlined">
+                <InputLabel id="folder-select-label">Pastas de Arquivos</InputLabel>
+                <Select
+                  labelId="folder-select-label"
+                  multiple
+                  value={selectedFolderIds}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    // Se selecionar "Todas", limpa ou define lógica específica. Aqui assumindo seleção normal.
+                    setSelectedFolderIds(typeof val === 'string' ? val.split(',') : val);
                   }}
-                  error={touched.integrationId && Boolean(errors.integrationId)}
-                  helperText={touched.integrationId ? errors.integrationId : "Selecione uma integração OpenAI/Gemini configurada"}
-                />
-              ) : (
-                <div style={{
-                  padding: 12,
-                  backgroundColor: '#f0f8ff',
-                  borderRadius: 4,
-                  border: '1px solid #2196f3',
-                  marginBottom: 12
-                }}>
-                  <Typography variant="body2" style={{ color: '#1976d2' }}>
-                    🌐 Usando configurações globais de IA
-                  </Typography>
-                  <Typography variant="caption" style={{ color: '#666' }}>
-                    As configurações definidas em "Configurações → IA" serão utilizadas
-                  </Typography>
-                </div>
-              )}
+                  renderValue={(selected) => (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {selected.map((value) => {
+                        const folder = folders.find(f => f.id === value);
+                        return (
+                          <Chip key={value} label={folder ? folder.name : value} size="small" />
+                        );
+                      })}
+                    </div>
+                  )}
+                  label="Pastas de Arquivos"
+                >
+                  {folders.map((folder) => (
+                    <MenuItem key={folder.id} value={folder.id}>
+                      {folder.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
               <Field
                 name="queueId"
@@ -338,98 +397,6 @@ const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
                     onChange={value => form.setFieldValue("queueId", value)}
                   />
                 )}
-              />
-
-              {selectedIntegration && (
-                <Paper variant="outlined" style={{ padding: 12, marginTop: 12, backgroundColor: '#f5f5f5' }}>
-                  <Typography variant="subtitle2" style={{ marginBottom: 8 }}>Integração Selecionada</Typography>
-                  <Typography variant="body2">
-                    <strong>{selectedIntegration.name}</strong> • {selectedIntegration.model} • Temp: {selectedIntegration.temperature} • Tokens: {selectedIntegration.maxTokens}
-                  </Typography>
-                </Paper>
-              )}
-
-              <div style={{ marginTop: 12 }}>
-                <Typography variant="subtitle2" style={{ marginBottom: 4 }}>Anexos do Prompt (biblioteca de arquivos)</Typography>
-                <TextField
-                  value={filesSearch}
-                  onChange={e => setFilesSearch(e.target.value)}
-                  placeholder="Buscar listas de arquivos..."
-                  variant="outlined"
-                  size="small"
-                  fullWidth
-                  style={{ marginBottom: 8 }}
-                />
-                <Paper variant="outlined" style={{ maxHeight: 220, overflow: 'auto' }}>
-                  <List dense>
-                    {fileLists.map(fl => {
-                      const isOpen = !!expandedFileIds[fl.id] && Array.isArray(expandedFileIds[fl.id]?.options);
-                      return (
-                        <div key={fl.id}>
-                          <ListItem button onClick={async () => {
-                            const openNow = !!expandedFileIds[fl.id];
-                            if (!openNow || !Array.isArray(expandedFileIds[fl.id]?.options)) {
-                              try {
-                                const { data } = await api.get(`/files/${fl.id}`);
-                                setExpandedFileIds(prev => ({ ...prev, [fl.id]: data }));
-                              } catch (_) { }
-                            } else {
-                              setExpandedFileIds(prev => ({ ...prev, [fl.id]: {} }));
-                            }
-                          }}>
-                            <ListItemText primary={fl.name} secondary={fl.message} />
-                            {isOpen ? <ExpandLess /> : <ExpandMore />}
-                          </ListItem>
-                          <Collapse in={isOpen} timeout="auto" unmountOnExit>
-                            <List dense component="div" disablePadding>
-                              {(expandedFileIds[fl.id]?.options || []).map(opt => {
-                                const checked = selectedOptions.some(s => s.fileListId === fl.id && s.optionId === opt.id);
-                                return (
-                                  <ListItem key={opt.id} style={{ paddingLeft: 28 }}>
-                                    <FormControlLabel
-                                      control={
-                                        <Checkbox
-                                          color="primary"
-                                          checked={checked}
-                                          onChange={(e) => {
-                                            setSelectedOptions(prev => {
-                                              if (e.target.checked) {
-                                                return [...prev, { fileListId: fl.id, optionId: opt.id, name: opt.name, path: opt.path, mediaType: opt.mediaType }];
-                                              }
-                                              return prev.filter(s => !(s.fileListId === fl.id && s.optionId === opt.id));
-                                            });
-                                          }}
-                                        />
-                                      }
-                                      label={opt.name || opt.path || `Opção ${opt.id}`}
-                                    />
-                                  </ListItem>
-                                );
-                              })}
-                            </List>
-                          </Collapse>
-                        </div>
-                      );
-                    })}
-                  </List>
-                </Paper>
-                {!!selectedOptions.length && (
-                  <Typography variant="caption" style={{ display: 'block', marginTop: 4 }}>
-                    Selecionados: {selectedOptions.length}
-                  </Typography>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Typography variant="caption" style={{ opacity: 0.8 }}>Prompt</Typography>
-                <Link component="button" type="button" onClick={handleOpenTags} onMouseEnter={handleOpenTags} style={{ fontSize: 12 }}>
-                  #Tags
-                </Link>
-              </div>
-              <Field
-                as={TextField}
-                label="Prompt"
-                name="prompt"
                 placeholder="Descreva como a IA deve responder..."
                 error={touched.prompt && Boolean(errors.prompt)}
                 helperText={touched.prompt ? errors.prompt : "Instruções para a IA sobre como processar a mensagem"}
@@ -622,7 +589,7 @@ const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
                   inputProps={{ min: 1, max: 50 }}
                 />
               </div>
-            </DialogContent>
+            </DialogContent >
             <DialogActions>
               <Button onClick={handleClose} color="secondary" disabled={isSubmitting}>
                 Cancelar
@@ -631,10 +598,10 @@ const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
                 {isSubmitting ? <CircularProgress size={20} /> : (open === "edit" ? "Atualizar" : "Adicionar")}
               </Button>
             </DialogActions>
-          </Form>
+          </Form >
         )}
-      </Formik>
-    </Dialog>
+      </Formik >
+    </Dialog >
   );
 };
 
