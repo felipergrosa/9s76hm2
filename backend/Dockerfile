@@ -60,10 +60,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
-# Dependências de runtime necessárias (FFmpeg para processamento/conversão de mídia)
+# Dependências de runtime necessárias (FFmpeg para processamento/conversão de mídia e Chromium para puppeteer)
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
        ffmpeg \
+       chromium \
   && rm -rf /var/lib/apt/lists/*
 
 # Build info injection
@@ -86,9 +87,6 @@ COPY --from=build /app/.build-date ./.build-date
 COPY --from=build /app/scripts ./scripts
 COPY --from=build /app/.sequelizerc ./.sequelizerc
 RUN mkdir -p ./private
-
-RUN apt-get update \
-  && apt-get install -y chromium
 
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
