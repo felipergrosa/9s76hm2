@@ -59,6 +59,7 @@ import {
 import PromptEnhancements from "../PromptEnhancements";
 import { showAIErrorToast } from "../../utils/aiErrorHandler";
 import AIConfigValidator from "../AIConfigValidator";
+import AIModelSelector from "../AIModelSelector";
 const useStyles = makeStyles((theme) => ({
   root: {
     padding: theme.spacing(3),
@@ -98,7 +99,7 @@ const useStyles = makeStyles((theme) => ({
     color: theme.palette.primary.main,
   },
   infoCard: {
-    backgroundColor: '#e3f2fd', 
+    backgroundColor: '#e3f2fd',
     border: '1px solid #2196f3'
   },
 }));
@@ -127,14 +128,14 @@ export default function AISettings() {
   const [testing, setTesting] = useState({});
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
   const [selectedProviderForTemplate, setSelectedProviderForTemplate] = useState(null);
-  
+
   // Estados das configurações
   const [providers, setProviders] = useState({
-    openai: { 
-      enabled: false, 
-      apiKey: "", 
-      model: "gpt-3.5-turbo-1106", 
-      temperature: 0.9, 
+    openai: {
+      enabled: false,
+      apiKey: "",
+      model: "gpt-3.5-turbo-1106",
+      temperature: 0.9,
       maxTokens: 300,
       creativity: "Alta",
       tone: "Profissional",
@@ -145,11 +146,11 @@ export default function AISettings() {
       brandVoice: "",
       allowedVariables: "{nome} {cidade}"
     },
-    gemini: { 
-      enabled: false, 
-      apiKey: "", 
-      model: "gemini-pro", 
-      temperature: 0.7, 
+    gemini: {
+      enabled: false,
+      apiKey: "",
+      model: "gemini-pro",
+      temperature: 0.7,
       maxTokens: 1000,
       creativity: "Média",
       tone: "Profissional",
@@ -197,7 +198,7 @@ export default function AISettings() {
   // Modelos disponíveis por provedor
   const [providerModels, setProviderModels] = useState({ openai: [], gemini: [], deepseek: [], grok: [] });
   const [modelsLoading, setModelsLoading] = useState({});
-  
+
   const [ragSettings, setRagSettings] = useState({
     enabled: true,
     autoIndex: false,
@@ -206,7 +207,7 @@ export default function AISettings() {
     embeddingModel: "text-embedding-ada-002",
     topK: 5
   });
-  
+
   const [presets, setPresets] = useState([
     // Preset padrão do Assistente de Chat Inteligente
     {
@@ -275,7 +276,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
   });
   const [editingPreset, setEditingPreset] = useState(null);
   const [editingPresetIndex, setEditingPresetIndex] = useState(-1);
-  
+
   const [stats, setStats] = useState({
     totalRequests: 0,
     successRate: 0,
@@ -410,7 +411,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
     try {
       const response = await api.get("/preset");
       console.log('[AISettings] Presets carregados:', response.data);
-      
+
       // Converter presets do backend para formato do frontend
       const loadedPresets = response.data.map(preset => {
         const jsonContent = JSON.parse(preset.jsonContent);
@@ -430,31 +431,31 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
           allowedVariables: jsonContent.allowedVariables || ""
         };
 
-  const fetchProviderModels = async (provider) => {
-    try {
-      setModelsLoading(prev => ({ ...prev, [provider]: true }));
-      const cfg = providers[provider] || {};
-      const params = new URLSearchParams();
-      params.set('provider', provider);
-      // backend aceita apiKey/baseURL via query antes de salvar integração
-      if (cfg.apiKey) params.set('apiKey', cfg.apiKey);
-      if (cfg.baseURL) params.set('baseURL', cfg.baseURL);
-      const { data } = await api.get(`/ai/models?${params.toString()}`);
-      const models = Array.isArray(data?.models) ? data.models : [];
-      setProviderModels(prev => ({ ...prev, [provider]: models }));
-      if (models.length && !models.includes(cfg.model)) {
-        handleProviderChange(provider, 'model', models[0]);
-      }
-      toast.success(`Modelos carregados de ${provider.toUpperCase()}: ${models.length}`);
-    } catch (error) {
-      console.warn(`Falha ao carregar modelos de ${provider}:`, error);
-      toast.error(`Não foi possível carregar modelos de ${provider.toUpperCase()}`);
-    } finally {
-      setModelsLoading(prev => ({ ...prev, [provider]: false }));
-    }
-  };
+        const fetchProviderModels = async (provider) => {
+          try {
+            setModelsLoading(prev => ({ ...prev, [provider]: true }));
+            const cfg = providers[provider] || {};
+            const params = new URLSearchParams();
+            params.set('provider', provider);
+            // backend aceita apiKey/baseURL via query antes de salvar integração
+            if (cfg.apiKey) params.set('apiKey', cfg.apiKey);
+            if (cfg.baseURL) params.set('baseURL', cfg.baseURL);
+            const { data } = await api.get(`/ai/models?${params.toString()}`);
+            const models = Array.isArray(data?.models) ? data.models : [];
+            setProviderModels(prev => ({ ...prev, [provider]: models }));
+            if (models.length && !models.includes(cfg.model)) {
+              handleProviderChange(provider, 'model', models[0]);
+            }
+            toast.success(`Modelos carregados de ${provider.toUpperCase()}: ${models.length}`);
+          } catch (error) {
+            console.warn(`Falha ao carregar modelos de ${provider}:`, error);
+            toast.error(`Não foi possível carregar modelos de ${provider.toUpperCase()}`);
+          } finally {
+            setModelsLoading(prev => ({ ...prev, [provider]: false }));
+          }
+        };
       });
-      
+
       setPresets(loadedPresets);
     } catch (error) {
       console.error("Erro ao carregar presets:", error);
@@ -464,7 +465,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
   const loadSettings = async () => {
     try {
       setLoading(true);
-      
+
       // Carrega configurações dos provedores
       try {
         const { data: integrations } = await api.get("/queueIntegration");
@@ -475,7 +476,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
         const grokConfig = integrations.queueIntegrations?.find(i => i.type === "grok");
         console.log("OpenAI config:", openaiConfig);
         console.log("Gemini config:", geminiConfig);
-      
+
         if (openaiConfig) {
           console.log('[AISettings] OpenAI config encontrada:', openaiConfig);
           let config = {};
@@ -487,7 +488,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
               console.warn("Erro ao parsear jsonContent do OpenAI:", e);
             }
           }
-          
+
           setProviders(prev => ({
             ...prev,
             openai: {
@@ -507,7 +508,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
             }
           }));
         }
-        
+
         if (geminiConfig) {
           let config = {};
           if (geminiConfig.jsonContent) {
@@ -517,7 +518,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
               console.warn("Erro ao parsear jsonContent do Gemini:", e);
             }
           }
-          
+
           setProviders(prev => ({
             ...prev,
             gemini: {
@@ -589,7 +590,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
             }
           }));
         }
-        
+
         // Carregar configurações RAG
         const knowledgeConfig = integrations.queueIntegrations?.find(i => i.type === "knowledge");
         if (knowledgeConfig && knowledgeConfig.jsonContent) {
@@ -606,15 +607,15 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
       } catch (error) {
         console.warn("Erro ao carregar configurações de provedores:", error);
       }
-      
+
       // Carrega estatísticas
       try {
         const { data: statsData } = await api.get("/ai/orchestrator/stats");
-        
+
         // Carrega estatísticas de prompts
         const { data: promptStats } = await api.get("/prompts/stats");
         console.log("Estatísticas de prompts carregadas:", promptStats);
-        
+
         setStats({
           ...statsData,
           prompts: promptStats
@@ -642,51 +643,51 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
           "{nome}", "{primeiro-nome}", "{sobrenome}", "{email}", "{telefone}", "{whatsapp}",
           "{cidade}", "{estado}", "{cep}", "{endereco}", "{bairro}", "{numero}",
           "{codigo-representante}", "{situacao}", "{fantasia}", "{razao-social}",
-          "{cnpj}", "{cpf}", "{inscricao-estadual}", "{data-fundacao}", 
+          "{cnpj}", "{cpf}", "{inscricao-estadual}", "{data-fundacao}",
           "{limite-credito}", "{segmento}", "{categoria}", "{observacoes}",
-          
+
           // Tags de atendimento e tickets
-          "{ticket}", "{numero-ticket}", "{protocolo}", "{atendente}", "{fila}", 
+          "{ticket}", "{numero-ticket}", "{protocolo}", "{atendente}", "{fila}",
           "{conexao}", "{status-ticket}", "{prioridade}", "{departamento}",
           "{canal}", "{origem}", "{assunto}", "{descricao}",
-          
+
           // Tags de produtos e vendas
           "{produto}", "{produto-interesse}", "{categoria-produto}", "{preco}",
           "{desconto}", "{desconto-disponivel}", "{promocao}", "{cupom}",
           "{valor-pedido}", "{quantidade}", "{estoque}", "{codigo-produto}",
-          
+
           // Tags financeiras
           "{valor-divida}", "{dias-atraso}", "{data-vencimento}", "{valor-pago}",
           "{forma-pagamento}", "{parcelas}", "{juros}", "{multa}", "{desconto-pagamento}",
-          
+
           // Tags de histórico e relacionamento
           "{historico-compras}", "{ultima-compra}", "{data-ultimo-contato}",
           "{tempo-cliente}", "{nps-score}", "{feedback}", "{reclamacoes}",
           "{elogios}", "{sugestoes}", "{nivel-satisfacao}",
-          
+
           // Tags de data/hora
           "{data}", "{hora}", "{data-hora}", "{dia-semana}", "{mes}", "{ano}",
           "{data-nascimento}", "{idade}", "{data-cadastro}",
-          
+
           // Tags de empresa e negócios
           "{empresa}", "{cargo}", "{setor}", "{tamanho-empresa}", "{faturamento}",
           "{numero-funcionarios}", "{site}", "{linkedin}", "{ramo-atividade}",
-          
+
           // Tags de localização e logística
           "{regiao}", "{zona}", "{ponto-referencia}", "{cep-entrega}",
           "{prazo-entrega}", "{transportadora}", "{codigo-rastreamento}",
-          
+
           // Tags de campanhas e marketing
           "{campanha}", "{origem-lead}", "{midia}", "{palavra-chave}",
           "{landing-page}", "{utm-source}", "{utm-medium}", "{utm-campaign}",
-          
+
           // Tags de agendamento
           "{data-agendamento}", "{horario-agendamento}", "{servico}",
           "{profissional}", "{duracao}", "{local}", "{modalidade}",
-          
+
           // Tags personalizadas dos campos de contato
           ...contactFields.map(field => `{${field.name}}`),
-          
+
           // Tags de contexto e saudação
           "{saudacao-contexto}", "{tratamento}", "{cumprimento}",
           "{despedida}", "{assinatura}", "{empresa-remetente}"
@@ -714,7 +715,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
       } catch (error) {
         console.warn("Erro ao carregar fontes RAG:", error);
       }
-      
+
     } catch (error) {
       console.error("Erro ao carregar configurações:", error);
       toast.error("Erro ao carregar configurações de IA");
@@ -740,18 +741,18 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
   const testProvider = async (provider) => {
     try {
       setTesting(prev => ({ ...prev, [provider]: true }));
-      
+
       const { data } = await api.post("/ai/orchestrator/test-providers", {
         providers: [provider]
       });
-      
+
       const result = data.results[provider];
       if (result.success) {
         toast.success(`${provider.toUpperCase()} conectado com sucesso!`);
       } else {
         toast.error(`Erro no ${provider.toUpperCase()}: ${result.error}`);
       }
-      
+
     } catch (error) {
       toast.error(`Falha ao testar ${provider.toUpperCase()}`);
     } finally {
@@ -790,7 +791,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
 
   const handleSelectTemplate = (template) => {
     if (!selectedProviderForTemplate) return;
-    
+
     // Aplicar TODAS as configurações do template ao provedor selecionado
     const updatedConfig = {
       ...providers[selectedProviderForTemplate],
@@ -847,26 +848,26 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
   const saveSettings = async () => {
     try {
       setSaving(true);
-      
+
       // Salvar configurações dos provedores
       for (const [providerName, config] of Object.entries(providers)) {
         if (config.enabled) {
           // Mapear criatividade para parâmetros técnicos
           const creativityMap = {
             'Baixa': 'low',
-            'Média': 'medium', 
+            'Média': 'medium',
             'Alta': 'high'
           };
-          
+
           const creativityLevel = creativityMap[config.creativity] || 'medium';
-          
+
           // Preparar variáveis permitidas
           const permittedVariables = (config.allowedVariables || '')
             .split(/\s+/)
             .map(s => s.trim())
             .filter(Boolean)
             .filter(s => s.startsWith('{') && s.endsWith('}'));
-          
+
           // Configuração completa no formato da integração antiga
           const jsonContent = {
             apiKey: config.apiKey,
@@ -888,7 +889,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
               language: config.language
             }
           };
-          
+
           const payload = {
             type: providerName,
             name: `${providerName.toUpperCase()} Global`,
@@ -896,14 +897,14 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
             language: "pt-BR",
             jsonContent: JSON.stringify(jsonContent)
           };
-          
+
           try {
             // Verificar se já existe uma integração deste tipo
             const { data: existingIntegrations } = await api.get("/queueIntegration");
             const existingIntegration = existingIntegrations.queueIntegrations?.find(
               integration => integration.type === providerName
             );
-            
+
             if (existingIntegration) {
               // Atualizar integração existente
               console.log(`Atualizando ${providerName}:`, payload);
@@ -920,7 +921,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
           }
         }
       }
-      
+
       // Salvar configurações RAG
       try {
         const ragPayload = {
@@ -938,13 +939,13 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
             overlap: ragSettings.overlap || 200
           })
         };
-        
+
         // Verificar se já existe uma integração knowledge
         const { data: existingIntegrations } = await api.get("/queueIntegration");
         const existingKnowledge = existingIntegrations.queueIntegrations?.find(
           integration => integration.type === 'knowledge'
         );
-        
+
         if (existingKnowledge) {
           await api.put(`/queueIntegration/${existingKnowledge.id}`, ragPayload);
         } else {
@@ -953,7 +954,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
       } catch (error) {
         console.warn("Erro ao salvar configurações RAG:", error);
       }
-      
+
       toast.success("Configurações salvas com sucesso!");
     } catch (error) {
       console.error("Erro ao salvar configurações:", error);
@@ -979,7 +980,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
       toast.error("Nome e prompt do sistema são obrigatórios");
       return;
     }
-    
+
     const presetData = {
       systemPrompt: newPreset.systemPrompt,
       temperature: newPreset.temperature,
@@ -992,7 +993,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
       brandVoice: newPreset.brandVoice,
       allowedVariables: newPreset.allowedVariables
     };
-    
+
     try {
       // Salva preset no backend
       const payload = {
@@ -1000,21 +1001,21 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
         name: newPreset.name,
         jsonContent: JSON.stringify(presetData)
       };
-      
+
       console.log('[AISettings] Enviando preset:', payload);
       console.log('[AISettings] JSON Content:', JSON.stringify(presetData, null, 2));
-      
+
       const response = await api.post("/preset", payload);
-      
+
       console.log('[AISettings] Resposta do servidor:', response.data);
       console.log('[AISettings] Status da resposta:', response.status);
-      
+
       // Verificar se é atualização ou criação baseado no módulo
       const existingIndex = presets.findIndex(p => p.module === newPreset.module);
-      
+
       if (existingIndex >= 0) {
         // Atualizar preset existente do módulo
-        setPresets(prev => prev.map((p, index) => 
+        setPresets(prev => prev.map((p, index) =>
           index === existingIndex ? { ...newPreset, id: response.data.id } : p
         ));
         toast.success(`Preset do módulo "${newPreset.module}" atualizado com sucesso!`);
@@ -1023,7 +1024,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
         setPresets(prev => [...prev, { ...newPreset, id: response.data.id }]);
         toast.success(`Preset do módulo "${newPreset.module}" criado com sucesso!`);
       }
-      
+
       // Limpa formulário
       setNewPreset({
         name: "",
@@ -1113,15 +1114,15 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
       toast.error("URL é obrigatória");
       return;
     }
-    
+
     try {
       const response = await api.post("/helps/rag/index-url", {
         url: newExternalLink,
         title: `Site externo: ${newExternalLink}`
       });
-      
+
       console.log('[RAG] indexUrl response:', response.data);
-      
+
       // Aguardar um pouco e recarregar fontes (aumentei para 2s)
       setTimeout(async () => {
         try {
@@ -1132,7 +1133,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
             conversations: ragData.conversations || 0,
             externalLinks: ragData.externalLinks || []
           });
-          
+
           // Se ainda estiver vazio, tentar novamente após mais 2s
           if (ragData.externalLinks.length === 0) {
             console.log('[RAG] Links externos ainda vazios, tentando novamente...');
@@ -1145,7 +1146,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                   conversations: ragData2.conversations || 0,
                   externalLinks: ragData2.externalLinks || []
                 });
-              } catch {}
+              } catch { }
             }, 2000);
           }
         } catch (err) {
@@ -1153,15 +1154,15 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
           // fallback: adiciona item localmente
           setRagSources(prev => ({
             ...prev,
-            externalLinks: [...prev.externalLinks, { 
-              url: response.data?.url || newExternalLink, 
+            externalLinks: [...prev.externalLinks, {
+              url: response.data?.url || newExternalLink,
               title: response.data?.title || `Site externo: ${newExternalLink}`,
               contentLength: response.data?.contentLength || 0
             }]
           }));
         }
       }, 2000);
-      
+
       setNewExternalLink("");
       toast.success("Link externo adicionado à base de conhecimento!");
     } catch (error) {
@@ -1192,7 +1193,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
           externalLinks: prev.externalLinks.filter(link => link.url !== url)
         }));
       }
-      
+
       toast.success("Link externo removido!");
     } catch (error) {
       toast.error("Erro ao remover link externo");
@@ -1213,7 +1214,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
         <BrainIcon style={{ marginRight: 8, verticalAlign: "middle" }} />
         Configurações de Inteligência Artificial
       </Typography>
-      
+
       <Paper>
         <Tabs
           value={tabValue}
@@ -1243,7 +1244,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                         </Typography>
                         <Chip
                           label={isValid ? "Ativo" : (config.enabled ? "Configuração Incompleta" : "Inativo")}
-                          style={{ 
+                          style={{
                             backgroundColor: isValid ? '#4caf50' : (config.enabled ? '#ff9800' : '#f44336'),
                             color: 'white',
                             fontWeight: 'bold'
@@ -1251,282 +1252,265 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                           size="small"
                         />
                       </Box>
-                    
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={config.enabled}
-                          onChange={(e) => handleProviderChange(providerName, 'enabled', e.target.checked)}
-                        />
-                      }
-                      label="Habilitado"
-                    />
-                    
-                    {config.enabled && (
-                      <>
-                        <TextField
-                          fullWidth
-                          label="API Key"
-                          type="password"
-                          value={config.apiKey}
-                          onChange={(e) => handleProviderChange(providerName, 'apiKey', e.target.value)}
-                          margin="normal"
-                        />
-                        
-                        {
-                          (providerModels[providerName] && providerModels[providerName].length > 0) ? (
-                            <FormControl fullWidth margin="normal" variant="outlined">
-                              <InputLabel>Modelo</InputLabel>
-                              <Select
-                                label="Modelo"
-                                value={config.model || ''}
-                                onChange={(e) => handleProviderChange(providerName, 'model', e.target.value)}
-                              >
-                                {providerModels[providerName].map((m) => (
-                                  <MenuItem key={m} value={m}>{m}</MenuItem>
-                                ))}
-                              </Select>
-                            </FormControl>
-                          ) : (
-                            <TextField
-                              fullWidth
-                              label="Modelo"
-                              value={config.model}
-                              onChange={(e) => handleProviderChange(providerName, 'model', e.target.value)}
-                              margin="normal"
-                            />
-                          )
-                        }
 
-                        {/* Base URL somente leitura para DeepSeek e Grok */}
-                        {(providerName === 'deepseek' || providerName === 'grok') && (
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={config.enabled}
+                            onChange={(e) => handleProviderChange(providerName, 'enabled', e.target.checked)}
+                          />
+                        }
+                        label="Habilitado"
+                      />
+
+                      {config.enabled && (
+                        <>
                           <TextField
                             fullWidth
-                            label="Base URL"
-                            value={config.baseURL}
-                            onChange={(e) => handleProviderChange(providerName, 'baseURL', e.target.value)}
+                            label="API Key"
+                            type="password"
+                            value={config.apiKey}
+                            onChange={(e) => handleProviderChange(providerName, 'apiKey', e.target.value)}
                             margin="normal"
-                            InputProps={{ readOnly: true }}
-                            helperText="Somente leitura (pré-definido para o provedor)"
                           />
-                        )}
-                        
-                        <Grid container spacing={2}>
-                          <Grid item xs={6}>
+
+                          <AIModelSelector
+                            provider={providerName}
+                            apiKey={config.apiKey}
+                            value={config.model}
+                            onChange={(e) => handleProviderChange(providerName, 'model', e.target.value)}
+                            label="Modelo"
+                          />
+
+                          {/* Base URL somente leitura para DeepSeek e Grok */}
+                          {(providerName === 'deepseek' || providerName === 'grok') && (
                             <TextField
                               fullWidth
-                              label="Temperatura"
-                              type="number"
-                              inputProps={{ min: 0, max: 2, step: 0.1 }}
-                              value={config.temperature}
-                              onChange={(e) => handleProviderChange(providerName, 'temperature', parseFloat(e.target.value))}
+                              label="Base URL"
+                              value={config.baseURL}
+                              onChange={(e) => handleProviderChange(providerName, 'baseURL', e.target.value)}
                               margin="normal"
+                              InputProps={{ readOnly: true }}
+                              helperText="Somente leitura (pré-definido para o provedor)"
                             />
-                          </Grid>
-                          <Grid item xs={6}>
-                            <TextField
-                              fullWidth
-                              label="Max Tokens"
-                              type="number"
-                              value={config.maxTokens}
-                              onChange={(e) => handleProviderChange(providerName, 'maxTokens', parseInt(e.target.value))}
-                              margin="normal"
-                            />
-                          </Grid>
-                          <Grid item xs={6}>
-                            <FormControl fullWidth margin="normal">
-                              <InputLabel>Criatividade</InputLabel>
-                              <Select
-                                value={config.creativity}
-                                onChange={(e) => handleProviderChange(providerName, 'creativity', e.target.value)}
-                              >
-                                <MenuItem value="Baixa">Baixa</MenuItem>
-                                <MenuItem value="Média">Média</MenuItem>
-                                <MenuItem value="Alta">Alta</MenuItem>
-                              </Select>
-                            </FormControl>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <FormControl fullWidth margin="normal">
-                              <InputLabel>Tom</InputLabel>
-                              <Select
-                                value={config.tone}
-                                onChange={(e) => handleProviderChange(providerName, 'tone', e.target.value)}
-                              >
-                                <MenuItem value="Profissional">Profissional</MenuItem>
-                                <MenuItem value="Casual">Casual</MenuItem>
-                                <MenuItem value="Amigável">Amigável</MenuItem>
-                                <MenuItem value="Formal">Formal</MenuItem>
-                              </Select>
-                            </FormControl>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <FormControl fullWidth margin="normal">
-                              <InputLabel>Emojis</InputLabel>
-                              <Select
-                                value={config.emotions}
-                                onChange={(e) => handleProviderChange(providerName, 'emotions', e.target.value)}
-                              >
-                                <MenuItem value="Sem emojis">Sem emojis</MenuItem>
-                                <MenuItem value="Baixo">Baixo</MenuItem>
-                                <MenuItem value="Médio">Médio</MenuItem>
-                                <MenuItem value="Alto">Alto</MenuItem>
-                              </Select>
-                            </FormControl>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <FormControl fullWidth margin="normal">
-                              <InputLabel>Hashtags</InputLabel>
-                              <Select
-                                value={config.hashtags}
-                                onChange={(e) => handleProviderChange(providerName, 'hashtags', e.target.value)}
-                              >
-                                <MenuItem value="Sem hashtags">Sem hashtags</MenuItem>
-                                <MenuItem value="Poucas">Poucas</MenuItem>
-                                <MenuItem value="Moderadas">Moderadas</MenuItem>
-                                <MenuItem value="Muitas">Muitas</MenuItem>
-                              </Select>
-                            </FormControl>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <FormControl fullWidth margin="normal">
-                              <InputLabel>Comprimento</InputLabel>
-                              <Select
-                                value={config.length}
-                                onChange={(e) => handleProviderChange(providerName, 'length', e.target.value)}
-                              >
-                                <MenuItem value="Curto">Curto</MenuItem>
-                                <MenuItem value="Médio">Médio</MenuItem>
-                                <MenuItem value="Longo">Longo</MenuItem>
-                              </Select>
-                            </FormControl>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <FormControl fullWidth margin="normal">
-                              <InputLabel>Idioma</InputLabel>
-                              <Select
-                                value={config.language}
-                                onChange={(e) => handleProviderChange(providerName, 'language', e.target.value)}
-                              >
-                                <MenuItem value="Português (Brasil)">Português (Brasil)</MenuItem>
-                                <MenuItem value="Inglês">Inglês</MenuItem>
-                                <MenuItem value="Espanhol">Espanhol</MenuItem>
-                              </Select>
-                            </FormControl>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <TextField
-                              fullWidth
-                              multiline
-                              rows={3}
-                              label="Voz da Marca (Brand Voice)"
-                              value={config.brandVoice}
-                              onChange={(e) => handleProviderChange(providerName, 'brandVoice', e.target.value)}
-                              margin="normal"
-                              placeholder="Descreva a personalidade/diretrizes da sua comunicação..."
-                            />
-                          </Grid>
-                          <Grid item xs={12}>
-                            <TextField
-                              fullWidth
-                              label="Variáveis Permitidas"
-                              value={config.allowedVariables}
-                              onChange={(e) => handleProviderChange(providerName, 'allowedVariables', e.target.value)}
-                              margin="normal"
-                              placeholder="Ex: {nome} {cidade} {empresa}"
-                              helperText="Use chaves para definir variáveis. Clique nas tags abaixo para adicionar."
-                            />
-                            <Box mt={1} mb={2}>
-                              <Typography variant="caption" color="textSecondary" style={{ marginBottom: 8, display: 'block' }}>
-                                Tags disponíveis (clique para adicionar):
-                              </Typography>
-                              <Box display="flex" flexWrap="wrap" gap={1}>
-                                {availableTags.slice(0, 25).map((tag) => (
-                                  <Chip
-                                    key={tag}
-                                    label={tag}
-                                    size="small"
-                                    clickable
-                                    onClick={() => {
-                                      const current = config.allowedVariables || "";
-                                      const newValue = current ? `${current} ${tag}` : tag;
-                                      handleProviderChange(providerName, 'allowedVariables', newValue);
-                                    }}
-                                    style={{ 
-                                      fontSize: '11px', 
-                                      height: '24px',
-                                      backgroundColor: '#f5f5f5',
-                                      '&:hover': { backgroundColor: '#e0e0e0' }
-                                    }}
-                                  />
-                                ))}
-                                {availableTags.length > 25 && (
-                                  <Chip
-                                    label={`+${availableTags.length - 25} mais`}
-                                    size="small"
-                                    style={{ fontSize: '11px', height: '24px', opacity: 0.7 }}
-                                  />
-                                )}
+                          )}
+
+                          <Grid container spacing={2}>
+                            <Grid item xs={6}>
+                              <TextField
+                                fullWidth
+                                label="Temperatura"
+                                type="number"
+                                inputProps={{ min: 0, max: 2, step: 0.1 }}
+                                value={config.temperature}
+                                onChange={(e) => handleProviderChange(providerName, 'temperature', parseFloat(e.target.value))}
+                                margin="normal"
+                              />
+                            </Grid>
+                            <Grid item xs={6}>
+                              <TextField
+                                fullWidth
+                                label="Max Tokens"
+                                type="number"
+                                value={config.maxTokens}
+                                onChange={(e) => handleProviderChange(providerName, 'maxTokens', parseInt(e.target.value))}
+                                margin="normal"
+                              />
+                            </Grid>
+                            <Grid item xs={6}>
+                              <FormControl fullWidth margin="normal">
+                                <InputLabel>Criatividade</InputLabel>
+                                <Select
+                                  value={config.creativity}
+                                  onChange={(e) => handleProviderChange(providerName, 'creativity', e.target.value)}
+                                >
+                                  <MenuItem value="Baixa">Baixa</MenuItem>
+                                  <MenuItem value="Média">Média</MenuItem>
+                                  <MenuItem value="Alta">Alta</MenuItem>
+                                </Select>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={6}>
+                              <FormControl fullWidth margin="normal">
+                                <InputLabel>Tom</InputLabel>
+                                <Select
+                                  value={config.tone}
+                                  onChange={(e) => handleProviderChange(providerName, 'tone', e.target.value)}
+                                >
+                                  <MenuItem value="Profissional">Profissional</MenuItem>
+                                  <MenuItem value="Casual">Casual</MenuItem>
+                                  <MenuItem value="Amigável">Amigável</MenuItem>
+                                  <MenuItem value="Formal">Formal</MenuItem>
+                                </Select>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={6}>
+                              <FormControl fullWidth margin="normal">
+                                <InputLabel>Emojis</InputLabel>
+                                <Select
+                                  value={config.emotions}
+                                  onChange={(e) => handleProviderChange(providerName, 'emotions', e.target.value)}
+                                >
+                                  <MenuItem value="Sem emojis">Sem emojis</MenuItem>
+                                  <MenuItem value="Baixo">Baixo</MenuItem>
+                                  <MenuItem value="Médio">Médio</MenuItem>
+                                  <MenuItem value="Alto">Alto</MenuItem>
+                                </Select>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={6}>
+                              <FormControl fullWidth margin="normal">
+                                <InputLabel>Hashtags</InputLabel>
+                                <Select
+                                  value={config.hashtags}
+                                  onChange={(e) => handleProviderChange(providerName, 'hashtags', e.target.value)}
+                                >
+                                  <MenuItem value="Sem hashtags">Sem hashtags</MenuItem>
+                                  <MenuItem value="Poucas">Poucas</MenuItem>
+                                  <MenuItem value="Moderadas">Moderadas</MenuItem>
+                                  <MenuItem value="Muitas">Muitas</MenuItem>
+                                </Select>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={6}>
+                              <FormControl fullWidth margin="normal">
+                                <InputLabel>Comprimento</InputLabel>
+                                <Select
+                                  value={config.length}
+                                  onChange={(e) => handleProviderChange(providerName, 'length', e.target.value)}
+                                >
+                                  <MenuItem value="Curto">Curto</MenuItem>
+                                  <MenuItem value="Médio">Médio</MenuItem>
+                                  <MenuItem value="Longo">Longo</MenuItem>
+                                </Select>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={6}>
+                              <FormControl fullWidth margin="normal">
+                                <InputLabel>Idioma</InputLabel>
+                                <Select
+                                  value={config.language}
+                                  onChange={(e) => handleProviderChange(providerName, 'language', e.target.value)}
+                                >
+                                  <MenuItem value="Português (Brasil)">Português (Brasil)</MenuItem>
+                                  <MenuItem value="Inglês">Inglês</MenuItem>
+                                  <MenuItem value="Espanhol">Espanhol</MenuItem>
+                                </Select>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={12}>
+                              <TextField
+                                fullWidth
+                                multiline
+                                rows={3}
+                                label="Voz da Marca (Brand Voice)"
+                                value={config.brandVoice}
+                                onChange={(e) => handleProviderChange(providerName, 'brandVoice', e.target.value)}
+                                margin="normal"
+                                placeholder="Descreva a personalidade/diretrizes da sua comunicação..."
+                              />
+                            </Grid>
+                            <Grid item xs={12}>
+                              <TextField
+                                fullWidth
+                                label="Variáveis Permitidas"
+                                value={config.allowedVariables}
+                                onChange={(e) => handleProviderChange(providerName, 'allowedVariables', e.target.value)}
+                                margin="normal"
+                                placeholder="Ex: {nome} {cidade} {empresa}"
+                                helperText="Use chaves para definir variáveis. Clique nas tags abaixo para adicionar."
+                              />
+                              <Box mt={1} mb={2}>
+                                <Typography variant="caption" color="textSecondary" style={{ marginBottom: 8, display: 'block' }}>
+                                  Tags disponíveis (clique para adicionar):
+                                </Typography>
+                                <Box display="flex" flexWrap="wrap" gap={1}>
+                                  {availableTags.slice(0, 25).map((tag) => (
+                                    <Chip
+                                      key={tag}
+                                      label={tag}
+                                      size="small"
+                                      clickable
+                                      onClick={() => {
+                                        const current = config.allowedVariables || "";
+                                        const newValue = current ? `${current} ${tag}` : tag;
+                                        handleProviderChange(providerName, 'allowedVariables', newValue);
+                                      }}
+                                      style={{
+                                        fontSize: '11px',
+                                        height: '24px',
+                                        backgroundColor: '#f5f5f5',
+                                        '&:hover': { backgroundColor: '#e0e0e0' }
+                                      }}
+                                    />
+                                  ))}
+                                  {availableTags.length > 25 && (
+                                    <Chip
+                                      label={`+${availableTags.length - 25} mais`}
+                                      size="small"
+                                      style={{ fontSize: '11px', height: '24px', opacity: 0.7 }}
+                                    />
+                                  )}
+                                </Box>
                               </Box>
-                            </Box>
+                            </Grid>
                           </Grid>
-                        </Grid>
-                        
-                        <Box display="flex" gap={1} mt={1}>
-                          <Button
-                            variant="outlined"
-                            color="primary"
-                            startIcon={testing[providerName] ? <CircularProgress size={16} /> : <InfoIcon />}
-                            onClick={() => testProvider(providerName)}
-                            disabled={testing[providerName] || !config.apiKey}
-                            className={classes.testButton}
-                          >
-                            Testar Conexão
-                          </Button>
-                          {(providerName === 'openai' || providerName === 'gemini' || providerName === 'deepseek' || providerName === 'grok') && (
+
+                          <Box display="flex" gap={1} mt={1}>
                             <Button
                               variant="outlined"
                               color="primary"
-                              startIcon={modelsLoading[providerName] ? <CircularProgress size={16} /> : <RefreshIcon />}
-                              onClick={() => fetchProviderModels(providerName)}
-                              disabled={modelsLoading[providerName] || !config.apiKey}
+                              startIcon={testing[providerName] ? <CircularProgress size={16} /> : <InfoIcon />}
+                              onClick={() => testProvider(providerName)}
+                              disabled={testing[providerName] || !config.apiKey}
                               className={classes.testButton}
                             >
-                              Carregar Modelos
+                              Testar Conexão
                             </Button>
-                          )}
-                          
-                          <Button
-                            variant="outlined"
-                            color="secondary"
-                            startIcon={<DescriptionIcon />}
-                            onClick={() => handleOpenTemplates(providerName)}
-                            className={classes.testButton}
-                          >
-                            📋 Templates
-                          </Button>
-                        </Box>
-                        
-                        {/* Badge de modelos carregados */}
-                        {providerModels[providerName] && providerModels[providerName].length > 0 && (
-                          <Box mt={1}>
-                            <Chip
-                              label={`Modelos: ${providerModels[providerName].length}`}
-                              size="small"
-                              color="primary"
+                            {(providerName === 'openai' || providerName === 'gemini' || providerName === 'deepseek' || providerName === 'grok') && (
+                              <Button
+                                variant="outlined"
+                                color="primary"
+                                startIcon={modelsLoading[providerName] ? <CircularProgress size={16} /> : <RefreshIcon />}
+                                onClick={() => fetchProviderModels(providerName)}
+                                disabled={modelsLoading[providerName] || !config.apiKey}
+                                className={classes.testButton}
+                              >
+                                Carregar Modelos
+                              </Button>
+                            )}
+
+                            <Button
                               variant="outlined"
-                            />
+                              color="secondary"
+                              startIcon={<DescriptionIcon />}
+                              onClick={() => handleOpenTemplates(providerName)}
+                              className={classes.testButton}
+                            >
+                              📋 Templates
+                            </Button>
                           </Box>
-                        )}
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              </Grid>
-            );
+
+                          {/* Badge de modelos carregados */}
+                          {providerModels[providerName] && providerModels[providerName].length > 0 && (
+                            <Box mt={1}>
+                              <Chip
+                                label={`Modelos: ${providerModels[providerName].length}`}
+                                size="small"
+                                color="primary"
+                                variant="outlined"
+                              />
+                            </Box>
+                          )}
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              );
             })}
           </Grid>
-          
+
           <Box mt={3} display="flex" justifyContent="flex-end" alignItems="center">
             <Button
               variant="contained"
@@ -1548,7 +1532,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                 <BrainIcon />
                 Configurações RAG
               </Typography>
-              
+
               <FormControlLabel
                 control={
                   <Switch
@@ -1558,7 +1542,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                 }
                 label="RAG Habilitado"
               />
-              
+
               <FormControlLabel
                 control={
                   <Switch
@@ -1568,7 +1552,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                 }
                 label="Auto-indexação de Conversas"
               />
-              
+
               <Grid container spacing={2} style={{ marginTop: 16 }}>
                 <Grid item xs={6}>
                   <TextField
@@ -1608,7 +1592,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
               </Grid>
             </CardContent>
           </Card>
-          
+
           <Card className={classes.card}>
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
@@ -1624,7 +1608,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                   Atualizar Fontes
                 </Button>
               </Box>
-              
+
               <Grid container spacing={2}>
                 <Grid item xs={12} md={4}>
                   <Card style={{ backgroundColor: '#f8f9fa', border: '1px solid #dee2e6' }}>
@@ -1651,7 +1635,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                     </CardContent>
                   </Card>
                 </Grid>
-                
+
                 <Grid item xs={12} md={4}>
                   <Card style={{ backgroundColor: '#f8f9fa', border: '1px solid #dee2e6' }}>
                     <CardContent style={{ padding: '12px' }}>
@@ -1670,7 +1654,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                     </CardContent>
                   </Card>
                 </Grid>
-                
+
                 <Grid item xs={12} md={4}>
                   <Card style={{ backgroundColor: '#f8f9fa', border: '1px solid #dee2e6' }}>
                     <CardContent style={{ padding: '12px' }}>
@@ -1698,7 +1682,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
               <Typography variant="h6" className={classes.sectionTitle}>
                 🌐 Adicionar Link Externo
               </Typography>
-              
+
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} md={8}>
                   <TextField
@@ -1722,7 +1706,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                   </Button>
                 </Grid>
               </Grid>
-              
+
               {ragSources.externalLinks.length > 0 && (
                 <Box mt={2}>
                   <Typography variant="subtitle2" gutterBottom>
@@ -1738,8 +1722,8 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                           secondaryTypographyProps={{ variant: 'caption' }}
                         />
                         <ListItemSecondaryAction>
-                          <IconButton 
-                            edge="end" 
+                          <IconButton
+                            edge="end"
                             size="small"
                             onClick={() => removeExternalLink(link.url)}
                           >
@@ -1753,7 +1737,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
               )}
             </CardContent>
           </Card>
-          
+
           <Card className={classes.infoCard}>
             <CardContent>
               <Typography variant="h6" style={{ color: '#1976d2', marginBottom: 8 }}>
@@ -1808,7 +1792,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                   📋 Templates
                 </Button>
               </Box>
-              
+
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
                   <TextField
@@ -1861,7 +1845,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                     onChange={(e) => setNewPreset(prev => ({ ...prev, maxTokens: parseInt(e.target.value) }))}
                   />
                 </Grid>
-                
+
                 {/* Campos adicionais de personalidade */}
                 <Grid item xs={6}>
                   <FormControl fullWidth>
@@ -1954,8 +1938,8 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                             const newValue = current ? `${current} ${tag}` : tag;
                             setNewPreset(prev => ({ ...prev, allowedVariables: newValue }));
                           }}
-                          style={{ 
-                            fontSize: '11px', 
+                          style={{
+                            fontSize: '11px',
                             height: '24px',
                             backgroundColor: '#f5f5f5',
                             '&:hover': { backgroundColor: '#e0e0e0' }
@@ -1973,14 +1957,14 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                   </Box>
                 </Grid>
               </Grid>
-              
+
               <Box mt={2}>
                 {editingPreset && (
                   <Typography variant="caption" color="primary" gutterBottom style={{ display: 'block', marginBottom: 8 }}>
                     ✏️ <strong>Modo Edição:</strong> Você está editando um preset existente. As alterações sobrescreverão o preset atual.
                   </Typography>
                 )}
-                
+
                 <Box display="flex" gap={1} mt={1}>
                   <Button
                     variant="outlined"
@@ -2010,11 +1994,11 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
               </Box>
             </CardContent>
           </Card>
-          
+
           <Typography variant="h6" gutterBottom>
             Presets Salvos
           </Typography>
-          
+
           <List>
             {presets.map((preset) => (
               <ListItem key={preset.id} style={{ border: '1px solid #ddd', borderRadius: 8, marginBottom: 8 }}>
@@ -2030,8 +2014,8 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                   }
                 />
                 <ListItemSecondaryAction>
-                  <IconButton 
-                    edge="end" 
+                  <IconButton
+                    edge="end"
                     onClick={() => editPreset(preset)}
                     style={{ marginRight: 8 }}
                   >
@@ -2044,7 +2028,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
               </ListItem>
             ))}
           </List>
-          
+
           {presets.length === 0 && (
             <Card className={classes.infoCard}>
               <CardContent>
@@ -2312,18 +2296,18 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={6}>
                       <Typography variant="body2" style={{ marginBottom: 8 }}>
-                        ✅ <strong>AIOrchestrator:</strong> Fallback automático ativo<br/>
-                        ✅ <strong>RAG Expandido:</strong> PDFs + Imagens + Conversas<br/>
-                        ✅ <strong>FileManager:</strong> Integrado ao cérebro IA<br/>
+                        ✅ <strong>AIOrchestrator:</strong> Fallback automático ativo<br />
+                        ✅ <strong>RAG Expandido:</strong> PDFs + Imagens + Conversas<br />
+                        ✅ <strong>FileManager:</strong> Integrado ao cérebro IA<br />
                         ✅ <strong>Auto-indexação:</strong> Conversas históricas
                       </Typography>
                     </Grid>
                     <Grid item xs={12} md={6}>
                       <Typography variant="body2">
-                        🔄 <strong>Processadores ativos:</strong><br/>
-                        • PDF com OCR fallback<br/>
-                        • Imagens com Tesseract OCR<br/>
-                        • Conversas com detecção de temas<br/>
+                        🔄 <strong>Processadores ativos:</strong><br />
+                        • PDF com OCR fallback<br />
+                        • Imagens com Tesseract OCR<br />
+                        • Conversas com detecção de temas<br />
                         • Chunking inteligente
                       </Typography>
                     </Grid>
@@ -2425,7 +2409,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                     )}
                     {ragTopDocuments.map((d) => (
                       <ListItem key={d.documentId} dense>
-                        <ListItemText primary={d.title} secondary={`Usos: ${formatNumber(d.hits)} • Último: ${formatDate(d.lastUsedAt)}`}/>
+                        <ListItemText primary={d.title} secondary={`Usos: ${formatNumber(d.hits)} • Último: ${formatDate(d.lastUsedAt)}`} />
                       </ListItem>
                     ))}
                   </List>
@@ -2443,24 +2427,24 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                       <AreaChart data={dailyUsage} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                         <defs>
                           <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#1976d2" stopOpacity={0.8}/>
-                            <stop offset="95%" stopColor="#1976d2" stopOpacity={0}/>
+                            <stop offset="5%" stopColor="#1976d2" stopOpacity={0.8} />
+                            <stop offset="95%" stopColor="#1976d2" stopOpacity={0} />
                           </linearGradient>
                           <linearGradient id="colorCost" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#9c27b0" stopOpacity={0.8}/>
-                            <stop offset="95%" stopColor="#9c27b0" stopOpacity={0}/>
+                            <stop offset="5%" stopColor="#9c27b0" stopOpacity={0.8} />
+                            <stop offset="95%" stopColor="#9c27b0" stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey={(entry) => formatDate(entry.date)} tick={{ fontSize: 12 }} />
-                        <YAxis yAxisId="left" orientation="left" tick={{ fontSize: 12 }} stroke="#1976d2"/>
-                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} stroke="#9c27b0" domain={[0, 'auto']}/>
+                        <YAxis yAxisId="left" orientation="left" tick={{ fontSize: 12 }} stroke="#1976d2" />
+                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} stroke="#9c27b0" domain={[0, 'auto']} />
                         <RechartsTooltip formatter={(value, name) => {
                           if (name === "costUsd") return [formatCurrency(value), "Custo (USD)"];
                           if (name === "requests") return [formatNumber(value), "Requisições"];
                           return value;
                         }}
-                        labelFormatter={(label) => `Dia ${label}`}
+                          labelFormatter={(label) => `Dia ${label}`}
                         />
                         <Legend />
                         <Area

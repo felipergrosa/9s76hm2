@@ -24,6 +24,7 @@ import TicketTraking from "../../models/TicketTraking";
 import Queue from "../../models/Queue";
 import { BOT_AVAILABLE_FUNCTIONS } from "../IA/BotFunctions";
 import ActionExecutor from "../IA/ActionExecutor";
+import ResolveAIAgentForTicketService from "../AIAgentServices/ResolveAIAgentForTicketService";
 
 type Session = WASocket & {
   id?: number;
@@ -167,6 +168,157 @@ const resolveRAGConfigForTicket = async (
   });
 
   return { enabled: ragEnabled, k: ragTopK, tags, tagsMode };
+};
+
+/**
+ * Merge AI settings - uses agent config when filled, fallback to global when empty
+ * This implements "Option 2" - inheritance with flexibility
+ */
+const mergeAISettings = (
+  agentConfig: any,
+  globalSettings: IOpenAi
+): {
+  provider: string;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  creativity?: string;
+  toneStyle?: string;
+  emojiUsage?: string;
+  language?: string;
+  brandVoice?: string;
+  voiceName?: string;
+} => {
+  const agent = agentConfig?.agent;
+
+  // Core AI settings
+  const provider = agent?.aiProvider || "openai"; // Default to OpenAI if not specified
+  const model = agent?.aiModel || globalSettings.model;
+  const temperature = agent?.temperature ?? globalSettings.temperature;
+  const maxTokens = agent?.maxTokens ?? globalSettings.maxTokens;
+
+  // Style settings (usa do agente se preenchido, senão global)
+  const creativity = agent?.creativity || undefined;
+  const toneStyle = agent?.toneStyle || undefined;
+  const emojiUsage = agent?.emojiUsage || undefined;
+  const language = agent?.language || "pt-BR";
+  const brandVoice = agent?.brandVoice || undefined;
+
+  // Voice settings
+  const voiceName = agent?.voiceName || globalSettings.voice;
+
+  console.log(`[AI][Config Merge] Agent: ${agent?.name || "N/A"}`);
+  console.log(`[AI][Config Merge] Provider: ${provider} (${agent?.aiProvider ? "agent" : "default"})`);
+  console.log(`[AI][Config Merge] Model: ${model} (${agent?.aiModel ? "agent" : "global"})`);
+  console.log(`[AI][Config Merge] Temperature: ${temperature} (${agent?.temperature ? "agent" : "global"})`);
+  console.log(`[AI][Config Merge] Max Tokens: ${maxTokens} (${agent?.maxTokens ? "agent" : "global"})`);
+
+  return {
+    provider,
+    model,
+    temperature,
+    maxTokens,
+    creativity,
+    toneStyle,
+    emojiUsage,
+    language,
+    brandVoice,
+    voiceName
+  };
+};
+
+/**
+ * Resolve system prompt for ticket - uses AI Agent if configured, otherwise fallback to legacy prompt
+ */
+const resolveSystemPromptForTicket = async (
+  ticket: Ticket,
+  contact: Contact,
+  openAiSettings: IOpenAi
+): Promise<{ prompt: string; usingAgent: boolean; agentName?: string }> => {
+  try {
+    // PRIORITY 1: Try to use AI Agent configuration
+    const agentConfig = await ResolveAIAgentForTicketService({ ticket });
+
+    if (agentConfig && agentConfig.systemPrompt) {
+      console.log(`[AI] Using AI Agent "${agentConfig.agent.name}" for ticket ${ticket.id}`);
+      console.log(`[AI] Current stage: "${agentConfig.currentStage.name}" (Order: ${agentConfig.currentStage.order})`);
+
+      // Build enhanced prompt with CRM context
+      const clientName = sanitizeName(contact.name || "Amigo(a)");
+      const fantasyName = (contact as any)?.fantasyName || "";
+      const contactPerson = (contact as any)?.contactName || "";
+      const city = (contact as any)?.city || "";
+      const region = (contact as any)?.region || "";
+      const segment = (contact as any)?.segment || "";
+      const situation = (contact as any)?.situation || "";
+
+      const crmContextLines: string[] = [];
+      if (fantasyName) crmContextLines.push(`- Empresa do cliente: ${fantasyName}`);
+      if (contactPerson) crmContextLines.push(`- Pessoa de contato: ${contactPerson}`);
+      if (city || region) crmContextLines.push(`- Localização: ${city || ""}${city && region ? " - " : ""}${region || ""}`.trim());
+      if (segment) crmContextLines.push(`- Segmento: ${segment}`);
+      if (situation) crmContextLines.push(`- Situação no CRM: ${situation}`);
+
+      const crmBlock = crmContextLines.length
+        ? `\nDados conhecidos do cliente (CRM, quando disponíveis):\n${crmContextLines.join("\n")}\n`
+        : "";
+
+      const agentPrompt = `Instruções do Sistema:
+  - Use o nome ${clientName} nas respostas para que o cliente se sinta mais próximo e acolhido, sem exagerar nem repetir o nome em todas as frases.
+  - Tom de comunicação: ${agentConfig.tone || "Profissional"}
+  - Etapa do atendimento: ${agentConfig.currentStage.name} - ${agentConfig.currentStage.objective || ""}
+  ${crmBlock}
+  Prompt Específico do Agente:
+  ${agentConfig.systemPrompt}
+  
+  Siga essas instruções com cuidado para garantir um atendimento claro, personalizado e amigável em todas as respostas.`;
+
+      return {
+        prompt: agentPrompt,
+        usingAgent: true,
+        agentName: agentConfig.agent.name
+      };
+    }
+  } catch (error) {
+    console.error("[AI] Error resolving AI agent, falling back to legacy prompt:", error);
+  }
+
+  // PRIORITY 2: Fallback to legacy prompt system
+  console.log(`[AI] No active agent found for ticket ${ticket.id}, using legacy prompt`);
+
+  const clientName = sanitizeName(contact.name || "Amigo(a)");
+  const fantasyName = (contact as any)?.fantasyName || "";
+  const contactPerson = (contact as any)?.contactName || "";
+  const city = (contact as any)?.city || "";
+  const region = (contact as any)?.region || "";
+  const segment = (contact as any)?.segment || "";
+  const situation = (contact as any)?.situation || "";
+
+  const crmContextLines: string[] = [];
+  if (fantasyName) crmContextLines.push(`- Empresa do cliente: ${fantasyName}`);
+  if (contactPerson) crmContextLines.push(`- Pessoa de contato: ${contactPerson}`);
+  if (city || region) crmContextLines.push(`- Localização: ${city || ""}${city && region ? " - " : ""}${region || ""}`.trim());
+  if (segment) crmContextLines.push(`- Segmento: ${segment}`);
+  if (situation) crmContextLines.push(`- Situação no CRM: ${situation}`);
+
+  const crmBlock = crmContextLines.length
+    ? `\nDados conhecidos do cliente (CRM, quando disponíveis):\n${crmContextLines.join("\n")}\n`
+    : "";
+
+  const legacyPrompt = `Instruções do Sistema:
+  - Use o nome ${clientName} nas respostas para que o cliente se sinta mais próximo e acolhido, sem exagerar nem repetir o nome em todas as frases.
+  - Certifique-se de que a resposta tenha até ${openAiSettings.maxTokens} tokens e termine de forma completa, sem cortes.
+  - Evite repetir sempre a mesma saudação em todas as mensagens. Depois da primeira interação, foque em responder diretamente ao que o cliente pediu na última mensagem.
+  ${crmBlock}
+  Prompt Específico:
+  ${openAiSettings.prompt}
+  
+  Siga essas instruções com cuidado para garantir um atendimento claro, personalizado e amigável em todas as respostas.`;
+
+  return {
+    prompt: legacyPrompt,
+    usingAgent: false
+  };
 };
 
 // Processes the AI response (text or audio)
@@ -441,6 +593,36 @@ export const handleOpenAi = async (
     // silencioso: manter openAiSettings como veio
   }
 
+  // INTEGRATE: Merge AI Settings from Agent or use Global
+  try {
+    const agentConfig = await ResolveAIAgentForTicketService({ ticket });
+    
+    if (agentConfig && agentConfig.agent) {
+      console.log(`[AI][Merge] Applying AI Agent settings: "${agentConfig.agent.name}"`);
+      
+      // Merge settings: agent overrides global when filled
+      const mergedSettings = mergeAISettings(agentConfig, openAiSettings);
+      
+      // Apply merged settings back to openAiSettings
+      openAiSettings = {
+        ...openAiSettings,
+        model: mergedSettings.model,
+        temperature: mergedSettings.temperature,
+        maxTokens: mergedSettings.maxTokens,
+        voice: mergedSettings.voiceName || openAiSettings.voice
+      } as IOpenAi;
+      
+      console.log(`[AI][Merge] Final Model: ${openAiSettings.model}`);
+      console.log(`[AI][Merge] Final Temp: ${openAiSettings.temperature}`);
+      console.log(`[AI][Merge] Final Max Tokens: ${openAiSettings.maxTokens}`);
+    } else {
+      console.log(`[AI][Merge] No AI Agent found, using global settings`);
+    }
+  } catch (err) {
+    console.error(`[AI][Merge] Error merging settings:`, err);
+    // Continue with original openAiSettings if merge fails
+  }
+
   const isOpenAIModel = ["gpt-3.5-turbo-1106", "gpt-4o", "gpt-4o-mini"].includes(openAiSettings.model) || openAiSettings.model?.toLowerCase().startsWith("gpt");
   const isGeminiModel = ["gemini-2.0-pro", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"].includes(openAiSettings.model) || openAiSettings.model?.toLowerCase().includes("gemini");
 
@@ -508,35 +690,9 @@ export const handleOpenAi = async (
     }))
   });
 
-  // Format system prompt
-  const clientName = sanitizeName(contact.name || "Amigo(a)");
-  const fantasyName = (contact as any)?.fantasyName || "";
-  const contactPerson = (contact as any)?.contactName || "";
-  const city = (contact as any)?.city || "";
-  const region = (contact as any)?.region || "";
-  const segment = (contact as any)?.segment || "";
-  const situation = (contact as any)?.situation || "";
+  // Resolve system prompt (uses AI Agent if configured, otherwise legacy prompt)
+  let promptSystem = (await resolveSystemPromptForTicket(ticket, contact, openAiSettings)).prompt;
 
-  const crmContextLines: string[] = [];
-  if (fantasyName) crmContextLines.push(`- Empresa do cliente: ${fantasyName}`);
-  if (contactPerson) crmContextLines.push(`- Pessoa de contato: ${contactPerson}`);
-  if (city || region) crmContextLines.push(`- Localização: ${city || ""}${city && region ? " - " : ""}${region || ""}`.trim());
-  if (segment) crmContextLines.push(`- Segmento: ${segment}`);
-  if (situation) crmContextLines.push(`- Situação no CRM: ${situation}`);
-
-  const crmBlock = crmContextLines.length
-    ? `\nDados conhecidos do cliente (CRM, quando disponíveis):\n${crmContextLines.join("\n")}\n`
-    : "";
-
-  let promptSystem = `Instruções do Sistema:
-  - Use o nome ${clientName} nas respostas para que o cliente se sinta mais próximo e acolhido, sem exagerar nem repetir o nome em todas as frases.
-  - Certifique-se de que a resposta tenha até ${openAiSettings.maxTokens} tokens e termine de forma completa, sem cortes.
-  - Evite repetir sempre a mesma saudação em todas as mensagens. Depois da primeira interação, foque em responder diretamente ao que o cliente pediu na última mensagem.
-  ${crmBlock}
-  Prompt Específico:
-  ${openAiSettings.prompt}
-  
-  Siga essas instruções com cuidado para garantir um atendimento claro, personalizado e amigável em todas as respostas.`;
   try {
     const ragCfg = await resolveRAGConfigForTicket(ticket);
     if (ragCfg.enabled && bodyMessage) {
@@ -597,12 +753,35 @@ export const handleOpenAi = async (
       const provider = isGeminiModel ? "gemini" : "openai";
       const t0 = Date.now();
 
-      // Tenta via IAClientFactory (unificado)
-      try {
-        const client = IAClientFactory(provider as any, openAiSettings.apiKey);
-        const history = messagesAI
-          .filter(m => m.role !== "system")
-          .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
+      // Usar IAClientFactory com suporte a Function Calling
+      const client = IAClientFactory(provider as any, openAiSettings.apiKey);
+
+      const history = messagesAI
+        .filter(m => m.role !== "system")
+        .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
+
+      // Usar chatWithFunctions se disponível, senão fallback para chatWithHistory
+      if (client.chatWithFunctions) {
+        responseText = await client.chatWithFunctions({
+          model: openAiSettings.model,
+          system: promptSystem,
+          history,
+          user: bodyMessage!,
+          temperature: openAiSettings.temperature,
+          max_tokens: openAiSettings.maxTokens,
+          functions: BOT_AVAILABLE_FUNCTIONS,
+          onFunctionCall: async (functionName, args) => {
+            return await ActionExecutor.execute({
+              wbot,
+              ticket,
+              contact,
+              functionName,
+              arguments: args
+            });
+          }
+        });
+      } else {
+        // Fallback para chatWithHistory se provider não suporta functions
         responseText = await client.chatWithHistory({
           model: openAiSettings.model,
           system: promptSystem,
@@ -611,15 +790,8 @@ export const handleOpenAi = async (
           temperature: openAiSettings.temperature,
           max_tokens: openAiSettings.maxTokens,
         });
-      } catch (e) {
-        // Fallback seguro: mantém implementação anterior por provedor
-        if (isOpenAIModel && openai) {
-          messagesAI.push({ role: "user", content: bodyMessage! });
-          responseText = await handleOpenAIRequest(openai, messagesAI, openAiSettings, ticket, contact, wbot);
-        } else if (isGeminiModel && gemini) {
-          responseText = await handleGeminiRequest(gemini, messagesAI, openAiSettings, bodyMessage!, promptSystem);
-        }
       }
+
 
       if (!responseText) {
         console.error("No response from AI provider");

@@ -13,32 +13,24 @@ import DialogActions from "@material-ui/core/DialogActions";
 import DialogContent from "@material-ui/core/DialogContent";
 import DialogTitle from "@material-ui/core/DialogTitle";
 import CircularProgress from "@material-ui/core/CircularProgress";
-import { 
-  MenuItem, 
-  FormControl, 
-  InputLabel, 
-  Select, 
-  Tooltip, 
-  Typography, 
-  Paper, 
-  Popover, 
-  ClickAwayListener, 
-  Link, 
-  Chip, 
-  Checkbox, 
-  FormControlLabel, 
-  List, 
-  ListItem, 
-  ListItemText, 
-  Collapse 
+import {
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Select,
+  Typography,
+  Paper,
+  Popover,
+  ClickAwayListener,
+  Chip,
+  Checkbox,
+  FormControlLabel,
+  InputAdornment,
+  IconButton
 } from "@material-ui/core";
-import ExpandLess from "@material-ui/icons/ExpandLess";
-import ExpandMore from "@material-ui/icons/ExpandMore";
-import InfoOutlinedIcon from "@material-ui/icons/InfoOutlined";
 import { Visibility, VisibilityOff } from "@material-ui/icons";
-import { InputAdornment, IconButton } from "@material-ui/core";
 import QueueSelectSingle from "../QueueSelectSingle";
-import { i18n } from "../../translate/i18n";
+import AIModelSelector from "../AIModelSelector";
 
 const useStyles = makeStyles(theme => ({
   root: {
@@ -72,16 +64,6 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
-// Modelos suportados centralizados
-const allowedModels = [
-  "gpt-3.5-turbo-1106",
-  "gpt-4o",
-  "gemini-1.5-flash",
-  "gemini-1.5-pro",
-  "gemini-2.0-flash",
-  "gemini-2.0-pro",
-];
-
 const OpenAISchema = Yup.object().shape({
   name: Yup.string()
     .min(5, "Muito curto!")
@@ -91,15 +73,14 @@ const OpenAISchema = Yup.object().shape({
     .min(50, "Muito curto!")
     .required("Descreva o treinamento para Inteligência Artificial"),
   model: Yup.string()
-    .oneOf(allowedModels, "Modelo inválido")
     .required("Informe o modelo"),
   maxTokens: Yup.number()
     .min(10, "Mínimo 10 tokens")
-    .max(4096, "Máximo 4096 tokens")
+    .max(1000000, "Máximo 1.000.000 tokens")
     .required("Informe o número máximo de tokens"),
   temperature: Yup.number()
     .min(0, "Mínimo 0")
-    .max(1, "Máximo 1")
+    .max(2, "Máximo 2")
     .required("Informe a temperatura"),
   apiKey: Yup.string().required("Informe a API Key"),
   queueId: Yup.number().when('$isStandalone', {
@@ -112,7 +93,7 @@ const OpenAISchema = Yup.object().shape({
     .max(50, "Máximo 50 mensagens")
     .required("Informe o número máximo de mensagens"),
   voice: Yup.string().when("model", {
-    is: "gpt-3.5-turbo-1106",
+    is: (val) => val && val.includes("gpt"),
     then: Yup.string().required("Informe o modo para Voz"),
     otherwise: Yup.string().notRequired(),
   }),
@@ -120,18 +101,18 @@ const OpenAISchema = Yup.object().shape({
   voiceRegion: Yup.string().notRequired(),
 });
 
-const OpenAIModal = ({ 
-  open, 
-  onClose, 
-  onSave, 
-  integrationId, 
+const OpenAIModal = ({
+  open,
+  onClose,
+  onSave,
+  integrationId,
   initialData = {},
   isStandalone = true, // true para /prompts, false para flowbuilder
   title = "Configuração OpenAI/Gemini"
 }) => {
   const classes = useStyles();
   const [showApiKey, setShowApiKey] = useState(false);
-  const [encryptionEnabled, setEncryptionEnabled] = useState(true);
+  const [selectedProvider, setSelectedProvider] = useState("openai");
 
   const handleToggleApiKey = () => {
     setShowApiKey(!showApiKey);
@@ -161,11 +142,6 @@ const OpenAIModal = ({
   const promptInputRef = useRef(null);
   const [tagsAnchorEl, setTagsAnchorEl] = useState(null);
   const [tagsSearch, setTagsSearch] = useState("");
-  const [filesSearch, setFilesSearch] = useState("");
-  const [fileLists, setFileLists] = useState([]);
-  const [expandedFileIds, setExpandedFileIds] = useState({});
-  const [selectedOptions, setSelectedOptions] = useState([]);
-  // RAG: seleção de arquivo para indexação
   const [ragFiles, setRagFiles] = useState([]);
   const [ragFilesLoading, setRagFilesLoading] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState("");
@@ -176,11 +152,6 @@ const OpenAIModal = ({
   const [ragChunkSize, setRagChunkSize] = useState(1200);
   const [ragOverlap, setRagOverlap] = useState(200);
   const [ragIndexMsg, setRagIndexMsg] = useState("");
-  const [voiceTipsAnchorEl, setVoiceTipsAnchorEl] = useState(null);
-
-  const openVoiceTips = Boolean(voiceTipsAnchorEl);
-  const handleOpenVoiceTips = (event) => setVoiceTipsAnchorEl(event.currentTarget);
-  const handleCloseVoiceTips = () => setVoiceTipsAnchorEl(null);
 
   // Variáveis mustache para prompts
   const mustacheVars = [
@@ -254,13 +225,19 @@ const OpenAIModal = ({
       if (open && integrationId) {
         // Carregar dados da integração existente
         setIntegration({ ...initialState, ...initialData });
+        // Determinar provider baseado no modelo
+        if (initialData.model && initialData.model.includes("gemini")) {
+          setSelectedProvider("gemini");
+        } else {
+          setSelectedProvider("openai");
+        }
       } else if (open) {
         // Carregar configurações padrão da integração centralizada
         const defaultSettings = await OpenAIService.getDefaultSettings();
         setIntegration({ ...initialState, ...defaultSettings });
       }
     };
-    
+
     loadData();
   }, [open, integrationId, initialData]);
 
@@ -327,8 +304,8 @@ const OpenAIModal = ({
     try {
       const integrationData = {
         ...values,
-        voice: values.model === "gpt-3.5-turbo-1106" ? values.voice : "texto",
-        type: "openai", // Identificador do tipo de integração
+        voice: values.model.includes("gpt") ? values.voice : "texto",
+        type: "openai", // Identificador do tipo de integração (mantido como openai para compatibilidade)
         // RAG
         ragEnabled: !!values.ragEnabled,
         ragTopK: Number(values.ragTopK || 4),
@@ -337,10 +314,10 @@ const OpenAIModal = ({
       };
 
       await onSave(integrationData);
-      toast.success("Integração OpenAI salva com sucesso!");
+      toast.success("Integração salva com sucesso!");
       handleClose();
     } catch (err) {
-      toast.error("Erro ao salvar integração OpenAI");
+      toast.error("Erro ao salvar integração");
     }
   };
 
@@ -542,8 +519,8 @@ const OpenAIModal = ({
                                   {category}
                                 </Typography>
                                 {vars
-                                  .filter(v => 
-                                    !tagsSearch || 
+                                  .filter(v =>
+                                    !tagsSearch ||
                                     v.label.toLowerCase().includes(tagsSearch.toLowerCase()) ||
                                     v.desc.toLowerCase().includes(tagsSearch.toLowerCase())
                                   )
@@ -572,41 +549,44 @@ const OpenAIModal = ({
 
                 <div className={classes.multFieldLine}>
                   <FormControl
-                    fullWidth
-                    margin="dense"
                     variant="outlined"
-                    error={touched.model && Boolean(errors.model)}
+                    margin="dense"
+                    className={classes.formControl}
+                    style={{ minWidth: 150 }}
                   >
-                    <InputLabel>Modelo</InputLabel>
-                    <Field
-                      as={Select}
-                      label="Modelo"
-                      name="model"
+                    <InputLabel>Provedor</InputLabel>
+                    <Select
+                      value={selectedProvider}
                       onChange={(e) => {
-                        setFieldValue("model", e.target.value);
-                        if (e.target.value !== "gpt-3.5-turbo-1106") {
-                          setFieldValue("voice", "texto");
-                        }
+                        setSelectedProvider(e.target.value);
+                        setFieldValue("model", ""); // Limpar modelo ao trocar provedor
                       }}
+                      label="Provedor"
                     >
-                      {allowedModels.map((model) => (
-                        <MenuItem key={model} value={model}>
-                          {model === "gpt-3.5-turbo-1106" && "GPT 3.5 Turbo"}
-                          {model === "gpt-4o" && "GPT 4o"}
-                          {model === "gemini-1.5-flash" && "Gemini 1.5 Flash"}
-                          {model === "gemini-1.5-pro" && "Gemini 1.5 Pro"}
-                          {model === "gemini-2.0-flash" && "Gemini 2.0 Flash"}
-                          {model === "gemini-2.0-pro" && "Gemini 2.0 Pro"}
-                        </MenuItem>
-                      ))}
-                    </Field>
+                      <MenuItem value="openai">OpenAI</MenuItem>
+                      <MenuItem value="gemini">Google Gemini</MenuItem>
+                    </Select>
                   </FormControl>
+
+                  <AIModelSelector
+                    provider={selectedProvider}
+                    apiKey={values.apiKey}
+                    value={values.model}
+                    onChange={(e) => {
+                      setFieldValue("model", e.target.value);
+                      if (e.target.value && !e.target.value.includes("gpt")) {
+                        setFieldValue("voice", "texto");
+                      }
+                    }}
+                    error={touched.model && Boolean(errors.model)}
+                    helperText={touched.model && errors.model}
+                  />
 
                   <FormControl
                     fullWidth
                     margin="dense"
                     variant="outlined"
-                    disabled={values.model !== "gpt-3.5-turbo-1106"}
+                    disabled={!values.model || !values.model.includes("gpt")}
                   >
                     <InputLabel>Voz</InputLabel>
                     <Field
@@ -648,7 +628,7 @@ const OpenAIModal = ({
                   />
                   <Field
                     as={TextField}
-                    label="Temperatura (0-1)"
+                    label="Temperatura (0-2)"
                     name="temperature"
                     type="number"
                     step="0.1"
@@ -671,7 +651,7 @@ const OpenAIModal = ({
                   />
                 </div>
 
-                {values.model === "gpt-3.5-turbo-1106" && values.voice !== "texto" && (
+                {values.model && values.model.includes("gpt") && values.voice !== "texto" && (
                   <div className={classes.multFieldLine}>
                     <Field
                       as={TextField}

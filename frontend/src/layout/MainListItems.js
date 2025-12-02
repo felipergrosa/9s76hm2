@@ -61,7 +61,7 @@ import toastError from "../errors/toastError";
 import usePlans from "../hooks/usePlans";
 import useVersion from "../hooks/useVersion";
 import { i18n } from "../translate/i18n";
-import { Campaign, ShapeLine, Webhook } from "@mui/icons-material";
+import { Campaign, ShapeLine, Webhook, SmartToy } from "@mui/icons-material";
 
 const useStyles = makeStyles((theme) => ({
   listItem: {
@@ -232,7 +232,9 @@ const MainListItems = ({ collapsed, drawerClose }) => {
   const [versionInfo, setVersionInfo] = useState({ frontend: "", backend: "", commit: "", commitShort: "", buildDate: "" });
   const [managementHover, setManagementHover] = useState(false);
   const [campaignHover, setCampaignHover] = useState(false);
-  const [flowHover, setFlowHover] = useState(false)
+  const [flowHover, setFlowHover] = useState(false);
+  const [openIASubmenu, setOpenIASubmenu] = useState(false);
+  const [iaHover, setIaHover] = useState(false);
   const { list } = useHelps();
   const [hasHelps, setHasHelps] = useState(false);
 
@@ -253,9 +255,15 @@ const MainListItems = ({ collapsed, drawerClose }) => {
     location.pathname.startsWith("/contact-lists") ||
     location.pathname.startsWith("/campaigns-config");
 
-  const isFlowbuilderRouteActive = 
+  const isFlowbuilderRouteActive =
     location.pathname.startsWith("/phrase-lists") ||
     location.pathname.startsWith("/flowbuilders");
+
+  const isIARouteActive =
+    location.pathname === "/ai-agents" ||
+    location.pathname === "/prompts" ||
+    location.pathname === "/ai-settings" ||
+    location.pathname === "/files";
 
   useEffect(() => {
     if (location.pathname.startsWith("/tickets")) {
@@ -276,7 +284,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
       const backendVersion = data?.backend?.version || "N/A";
       // backendLabel não será usado na UI (exibiremos apenas a versão pura do backend)
       const commit = data?.backend?.commit || "N/A";
-      const commitShort = data?.backend?.commitShort || (commit && commit.length >= 6 ? commit.substring(0,6) : commit);
+      const commitShort = data?.backend?.commitShort || (commit && commit.length >= 6 ? commit.substring(0, 6) : commit);
       const buildDateRaw = data?.backend?.buildDate || "N/A";
       let buildDate = buildDateRaw;
       try {
@@ -302,7 +310,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
     async function fetchData() {
       const companyId = user.companyId;
       const planConfigs = await getPlanCompany(undefined, companyId);
-      
+
       setShowCampaigns(planConfigs.plan.useCampaigns);
       setShowKanban(planConfigs.plan.useKanban);
       setShowOpenAi(planConfigs.plan.useOpenAi);
@@ -400,22 +408,22 @@ const MainListItems = ({ collapsed, drawerClose }) => {
       {/* BLOCO LEGADO - Apenas itens diretos (Dashboard antigo e Tempo Real) */}
       {((user.profile === "admin" || user.profile === "super") ||
         (user.profile === "user" && user.showDashboard === "enabled")) && (
-        <ListItemLink
-          to="/"
-          primary="Dashboard"
-          icon={<DashboardOutlinedIcon />}
-          tooltip={collapsed}
-        />
-      )}
+          <ListItemLink
+            to="/"
+            primary="Dashboard"
+            icon={<DashboardOutlinedIcon />}
+            tooltip={collapsed}
+          />
+        )}
       {((user.profile === "admin" || user.profile === "super") ||
         (user.profile === "user" && user.allowRealTime === "enabled")) && (
-        <ListItemLink
-          to="/moments"
-          primary={i18n.t("mainDrawer.listItems.chatsTempoReal")}
-          icon={<GridOn />}
-          tooltip={collapsed}
-        />
-      )}
+          <ListItemLink
+            to="/moments"
+            primary={i18n.t("mainDrawer.listItems.chatsTempoReal")}
+            icon={<GridOn />}
+            tooltip={collapsed}
+          />
+        )}
 
       {/* MENU PRINCIPAL */}
       {hasPermission("tickets.view") && (
@@ -490,136 +498,136 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         primary={i18n.t("ToDoList")}
         icon={<EventAvailableIcon />}
       /> */}
-      
-        {hasPermission("helps.view") && (
-          <ListItemLink
-            to="/helps"
-            primary={i18n.t("mainDrawer.listItems.helps")}
-            icon={<HelpOutlineIcon />}
-            tooltip={collapsed}
-          />
-        )}
-      
+
+      {hasPermission("helps.view") && (
+        <ListItemLink
+          to="/helps"
+          primary={i18n.t("mainDrawer.listItems.helps")}
+          icon={<HelpOutlineIcon />}
+          tooltip={collapsed}
+        />
+      )}
+
       {/* SEÇÃO ADMINISTRAÇÃO */}
       <Divider />
       <ListSubheader inset>{i18n.t("mainDrawer.listItems.administration")}</ListSubheader>
-      
+
       {/* CAMPANHAS */}
       {showCampaigns && hasPermission("campaigns.view") && (
-                  <>
-                    <Tooltip title={collapsed ? i18n.t("mainDrawer.listItems.campaigns") : ""} placement="right">
-                      <ListItem
-                        dense
-                        button
-                        onClick={() => setOpenCampaignSubmenu((prev) => !prev)}
-                        onMouseEnter={() => setCampaignHover(true)}
-                        onMouseLeave={() => setCampaignHover(false)}
-                      >
-                        <ListItemIcon>
-                          <Avatar
-                            className={`${classes.iconHoverActive} ${isCampaignRouteActive || campaignHover ? "active" : ""
-                              }`}
-                          >
-                            <EventAvailableIcon />
-                          </Avatar>
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={
-                            <Typography className={classes.listItemText}>
-                              {i18n.t("mainDrawer.listItems.campaigns")}
-                            </Typography>
-                          }
-                        />
-                        {openCampaignSubmenu ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                      </ListItem>
-                    </Tooltip>
-                    <Collapse
-                      in={openCampaignSubmenu}
-                      timeout="auto"
-                      unmountOnExit
-                      style={{
-                        backgroundColor: theme.mode === "light" ? "rgba(120,120,120,0.1)" : "rgba(120,120,120,0.5)",
-                      }}
-                    >
-                      <List dense component="div" disablePadding>
-                        <ListItemLink
-                          to="/campaigns"
-                          primary={i18n.t("campaigns.subMenus.list")}
-                          icon={<ListIcon />}
-                          tooltip={collapsed}
-                        />
-                        <ListItemLink
-                          to="/contact-lists"
-                          primary={i18n.t("campaigns.subMenus.listContacts")}
-                          icon={<PeopleIcon />}
-                          tooltip={collapsed}
-                        />
-                        <ListItemLink
-                          to="/campaigns-config"
-                          primary={i18n.t("campaigns.subMenus.settings")}
-                          icon={<SettingsOutlinedIcon />}
-                          tooltip={collapsed}
-                        />
-                      </List>
-                    </Collapse>
-                  </>
+        <>
+          <Tooltip title={collapsed ? i18n.t("mainDrawer.listItems.campaigns") : ""} placement="right">
+            <ListItem
+              dense
+              button
+              onClick={() => setOpenCampaignSubmenu((prev) => !prev)}
+              onMouseEnter={() => setCampaignHover(true)}
+              onMouseLeave={() => setCampaignHover(false)}
+            >
+              <ListItemIcon>
+                <Avatar
+                  className={`${classes.iconHoverActive} ${isCampaignRouteActive || campaignHover ? "active" : ""
+                    }`}
+                >
+                  <EventAvailableIcon />
+                </Avatar>
+              </ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography className={classes.listItemText}>
+                    {i18n.t("mainDrawer.listItems.campaigns")}
+                  </Typography>
+                }
+              />
+              {openCampaignSubmenu ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            </ListItem>
+          </Tooltip>
+          <Collapse
+            in={openCampaignSubmenu}
+            timeout="auto"
+            unmountOnExit
+            style={{
+              backgroundColor: theme.mode === "light" ? "rgba(120,120,120,0.1)" : "rgba(120,120,120,0.5)",
+            }}
+          >
+            <List dense component="div" disablePadding>
+              <ListItemLink
+                to="/campaigns"
+                primary={i18n.t("campaigns.subMenus.list")}
+                icon={<ListIcon />}
+                tooltip={collapsed}
+              />
+              <ListItemLink
+                to="/contact-lists"
+                primary={i18n.t("campaigns.subMenus.listContacts")}
+                icon={<PeopleIcon />}
+                tooltip={collapsed}
+              />
+              <ListItemLink
+                to="/campaigns-config"
+                primary={i18n.t("campaigns.subMenus.settings")}
+                icon={<SettingsOutlinedIcon />}
+                tooltip={collapsed}
+              />
+            </List>
+          </Collapse>
+        </>
       )}
 
       {/* FLOWBUILDER */}
       {hasPermission("flowbuilder.view") && (
-                <>
-                  <Tooltip title={collapsed ? i18n.t("mainDrawer.listItems.flowbuilder") : ""} placement="right">
-                    <ListItem
-                      dense
-                      button
-                      onClick={() => setOpenFlowSubmenu((prev) => !prev)}
-                      onMouseEnter={() => setFlowHover(true)}
-                      onMouseLeave={() => setFlowHover(false)}
-                    >
-                      <ListItemIcon>
-                        <Avatar
-                          className={`${classes.iconHoverActive} ${isFlowbuilderRouteActive || flowHover ? "active" : ""
-                            }`}
-                        >
-                          <Webhook />
-                        </Avatar>
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={
-                          <Typography className={classes.listItemText}>
-                            {i18n.t("mainDrawer.listItems.flowbuilder")}
-                          </Typography>
-                        }
-                      />
-                      {openFlowSubmenu ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                    </ListItem>
-                  </Tooltip>
+        <>
+          <Tooltip title={collapsed ? i18n.t("mainDrawer.listItems.flowbuilder") : ""} placement="right">
+            <ListItem
+              dense
+              button
+              onClick={() => setOpenFlowSubmenu((prev) => !prev)}
+              onMouseEnter={() => setFlowHover(true)}
+              onMouseLeave={() => setFlowHover(false)}
+            >
+              <ListItemIcon>
+                <Avatar
+                  className={`${classes.iconHoverActive} ${isFlowbuilderRouteActive || flowHover ? "active" : ""
+                    }`}
+                >
+                  <Webhook />
+                </Avatar>
+              </ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography className={classes.listItemText}>
+                    {i18n.t("mainDrawer.listItems.flowbuilder")}
+                  </Typography>
+                }
+              />
+              {openFlowSubmenu ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            </ListItem>
+          </Tooltip>
 
-                  <Collapse
-                    in={openFlowSubmenu}
-                    timeout="auto"
-                    unmountOnExit
-                    style={{
-                      backgroundColor: theme.mode === "light" ? "rgba(120,120,120,0.1)" : "rgba(120,120,120,0.5)",
-                    }}
-                  >
-                    <List dense component="div" disablePadding>
-                      <ListItemLink
-                        to="/phrase-lists"
-                        primary={i18n.t("flowbuilder.subMenus.campaign")}
-                        icon={<EventAvailableIcon />}
-                        tooltip={collapsed}
-                      />
+          <Collapse
+            in={openFlowSubmenu}
+            timeout="auto"
+            unmountOnExit
+            style={{
+              backgroundColor: theme.mode === "light" ? "rgba(120,120,120,0.1)" : "rgba(120,120,120,0.5)",
+            }}
+          >
+            <List dense component="div" disablePadding>
+              <ListItemLink
+                to="/phrase-lists"
+                primary={i18n.t("flowbuilder.subMenus.campaign")}
+                icon={<EventAvailableIcon />}
+                tooltip={collapsed}
+              />
 
-                      <ListItemLink
-                        to="/flowbuilders"
-                        primary={i18n.t("flowbuilder.subMenus.conversation")}
-                        icon={<ShapeLine />}
-                        tooltip={collapsed}
-                      />
-                    </List>
-                  </Collapse>
-                </>
+              <ListItemLink
+                to="/flowbuilders"
+                primary={i18n.t("flowbuilder.subMenus.conversation")}
+                icon={<ShapeLine />}
+                tooltip={collapsed}
+              />
+            </List>
+          </Collapse>
+        </>
       )}
 
       {/* ANÚNCIOS */}
@@ -662,16 +670,6 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {/* PROMPTS IA */}
-      {showOpenAi && hasPermission("prompts.view") && (
-        <ListItemLink
-          to="/prompts"
-          primary={i18n.t("mainDrawer.listItems.prompts")}
-          icon={<AllInclusive />}
-          tooltip={collapsed}
-        />
-      )}
-
       {/* INTEGRAÇÕES */}
       {showIntegrations && hasPermission("integrations.view") && (
         <ListItemLink
@@ -685,14 +683,14 @@ const MainListItems = ({ collapsed, drawerClose }) => {
       {/* CONEXÕES (Sistema Legado) */}
       {((user.profile === "admin" || user.profile === "super") ||
         (user.profile === "user" && user.allowConnections === "enabled")) && (
-        <ListItemLink
-          to="/connections"
-          primary={i18n.t("mainDrawer.listItems.connections")}
-          icon={<SyncAltIcon />}
-          showBadge={connectionWarning}
-          tooltip={collapsed}
-        />
-      )}
+          <ListItemLink
+            to="/connections"
+            primary={i18n.t("mainDrawer.listItems.connections")}
+            icon={<SyncAltIcon />}
+            showBadge={connectionWarning}
+            tooltip={collapsed}
+          />
+        )}
 
       {/* TODAS AS CONEXÕES (Super) */}
       {user.super && (
@@ -700,16 +698,6 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/allConnections"
           primary={i18n.t("mainDrawer.listItems.allConnections")}
           icon={<PhonelinkSetup />}
-          tooltip={collapsed}
-        />
-      )}
-
-      {/* ARQUIVOS */}
-      {hasPermission("files.view") && (
-        <ListItemLink
-          to="/files"
-          primary={i18n.t("mainDrawer.listItems.files")}
-          icon={<AttachFile />}
           tooltip={collapsed}
         />
       )}
@@ -734,14 +722,78 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {/* CONFIGURAÇÕES IA */}
-      {hasPermission("ai-settings.view") && (
-        <ListItemLink
-          to="/ai-settings"
-          primary="Configurações IA"
-          icon={<Memory />}
-          tooltip={collapsed}
-        />
+      {/* INTELIGÊNCIA ARTIFICIAL */}
+      {showOpenAi && (
+        <>
+          <Tooltip title={collapsed ? "Inteligência Artificial" : ""} placement="right">
+            <ListItem
+              dense
+              button
+              onClick={() => setOpenIASubmenu((prev) => !prev)}
+              onMouseEnter={() => setIaHover(true)}
+              onMouseLeave={() => setIaHover(false)}
+            >
+              <ListItemIcon>
+                <Avatar
+                  className={`${classes.iconHoverActive} ${isIARouteActive || iaHover ? "active" : ""
+                    }`}
+                >
+                  <SmartToy />
+                </Avatar>
+              </ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography className={classes.listItemText}>
+                    Inteligência Artificial
+                  </Typography>
+                }
+              />
+              {openIASubmenu ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            </ListItem>
+          </Tooltip>
+
+          <Collapse
+            in={openIASubmenu}
+            timeout="auto"
+            unmountOnExit
+            style={{
+              backgroundColor: theme.mode === "light" ? "rgba(120,120,120,0.1)" : "rgba(120,120,120,0.5)",
+            }}
+          >
+            <List dense component="div" disablePadding>
+              <ListItemLink
+                to="/ai-agents"
+                primary="⭐ Agentes de IA"
+                icon={<SmartToy />}
+                tooltip={collapsed}
+              />
+              {hasPermission("prompts.view") && (
+                <ListItemLink
+                  to="/prompts"
+                  primary="Prompts (Legado)"
+                  icon={<AllInclusive />}
+                  tooltip={collapsed}
+                />
+              )}
+              {hasPermission("ai-settings.view") && (
+                <ListItemLink
+                  to="/ai-settings"
+                  primary="Configurações IA"
+                  icon={<Memory />}
+                  tooltip={collapsed}
+                />
+              )}
+              {hasPermission("files.view") && (
+                <ListItemLink
+                  to="/files"
+                  primary="Base de Conhecimento"
+                  icon={<AttachFile />}
+                  tooltip={collapsed}
+                />
+              )}
+            </List>
+          </Collapse>
+        </>
       )}
 
       {/* EMPRESAS (Super) */}

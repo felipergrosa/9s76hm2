@@ -61,6 +61,8 @@ import TagRule from "../models/TagRule";
 import LibraryFolder from "../models/LibraryFolder";
 import LibraryFile from "../models/LibraryFile";
 import QueueRAGSource from "../models/QueueRAGSource";
+import AIAgent from "../models/AIAgent";
+import FunnelStage from "../models/FunnelStage";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -199,7 +201,9 @@ const models = [
   TagRule,
   LibraryFolder,
   LibraryFile,
-  QueueRAGSource
+  QueueRAGSource,
+  AIAgent,
+  FunnelStage
 ];
 
 sequelize.addModels(models);

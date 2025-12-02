@@ -72,6 +72,7 @@ import TagsKanban from "../pages/TagsKanban";
 import ForgotPassword from "../pages/ForgetPassWord";
 import ResetPassword from "../pages/ResetPassword";
 import AISettings from "../components/AISettings";
+import AIAgents from "../pages/AIAgents";
 
 
 const Routes = () => {
@@ -164,6 +165,7 @@ const Routes = () => {
                 <Route exact path="/prompts" component={Prompts} isPrivate />
                 <Route exact path="/allConnections" component={AllConnections} isPrivate />
                 <Route exact path="/ai-settings" component={AISettings} isPrivate />
+                <Route exact path="/ai-agents" component={AIAgents} isPrivate />
                 {showCampaigns && (
                   <>
                     <Route exact path="/contact-lists" component={ContactLists} isPrivate />

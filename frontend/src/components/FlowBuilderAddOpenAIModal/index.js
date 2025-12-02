@@ -32,6 +32,7 @@ import ExpandMore from "@material-ui/icons/ExpandMore";
 import { Formik, Form, Field } from "formik";
 import * as Yup from "yup";
 import AIIntegrationSelector from "../AIIntegrationSelector";
+import AIModelSelector from "../AIModelSelector";
 import QueueSelectSingle from "../QueueSelectSingle";
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
@@ -330,16 +331,29 @@ const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
 
               {
                 !useGlobalConfig ? (
-                  <AIIntegrationSelector
-                    value={values.integrationId}
-                    onChange={(integrationId, integration) => {
-                      setFieldValue('integrationId', integrationId);
-                      setSelectedIntegration(integration);
-                      setFieldValue('model', integration?.model || "");
-                    }}
-                    error={touched.integrationId && Boolean(errors.integrationId)}
-                    helperText={touched.integrationId ? errors.integrationId : "Selecione uma integração OpenAI/Gemini configurada"}
-                  />
+                  <>
+                    <AIIntegrationSelector
+                      value={values.integrationId}
+                      onChange={(integrationId, integration) => {
+                        setFieldValue('integrationId', integrationId);
+                        setSelectedIntegration(integration);
+                        setFieldValue('model', integration?.model || "");
+                      }}
+                      error={touched.integrationId && Boolean(errors.integrationId)}
+                      helperText={touched.integrationId ? errors.integrationId : "Selecione uma integração OpenAI/Gemini configurada"}
+                    />
+                    {selectedIntegration && (
+                      <AIModelSelector
+                        provider={selectedIntegration.type}
+                        integrationId={selectedIntegration.id}
+                        apiKey={selectedIntegration.apiKey}
+                        value={values.model}
+                        onChange={(e) => setFieldValue("model", e.target.value)}
+                        error={touched.model && Boolean(errors.model)}
+                        helperText={touched.model && errors.model}
+                      />
+                    )}
+                  </>
                 ) : (
                   <div style={{
                     padding: 12,

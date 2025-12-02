@@ -41,6 +41,7 @@ import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import HelpOutlineIcon from "@material-ui/icons/HelpOutline";
 import ExpandMoreIcon from "@material-ui/icons/ExpandMore";
+import AIModelSelector from "../AIModelSelector";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -281,12 +282,12 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
             } else if (data?.type === 'knowledge' && data?.jsonContent) {
               const parsed = JSON.parse(data.jsonContent);
               next.ragEnabled = typeof parsed?.ragEnabled === 'boolean' ? parsed.ragEnabled
-                : (typeof parsed?.ragEnabled === 'string' ? ['enabled','true','on','1'].includes(parsed.ragEnabled.toLowerCase()) : prevState.ragEnabled);
+                : (typeof parsed?.ragEnabled === 'string' ? ['enabled', 'true', 'on', '1'].includes(parsed.ragEnabled.toLowerCase()) : prevState.ragEnabled);
               next.ragTopK = parsed?.ragTopK ?? prevState.ragTopK;
               next.ragEmbeddingModel = parsed?.ragEmbeddingModel || prevState.ragEmbeddingModel;
               next.ragEmbeddingDims = parsed?.ragEmbeddingDims ?? (String(next.ragEmbeddingModel).includes('small') ? 1536 : prevState.ragEmbeddingDims);
             }
-          } catch (_) {}
+          } catch (_) { }
           return next;
         });
       } catch (err) {
@@ -526,7 +527,7 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
             }, 400);
           }}
         >
-          {({ touched, errors, isSubmitting, values }) => (
+          {({ touched, errors, isSubmitting, values, setFieldValue }) => (
             <Form>
               <Paper square className={classes.mainPaper} elevation={1}>
                 <DialogContent dividers>
@@ -578,9 +579,9 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
                             <div style={{ padding: 12, maxWidth: 420 }}>
                               <Typography variant="subtitle2" gutterBottom>Dialogflow - Dicas</Typography>
                               <Typography variant="body2" color="textSecondary" component="div">
-                                • Projeto: informe o ID do projeto (projectId).<br/>
-                                • Chave JSON: cole o conteúdo do arquivo JSON da conta de serviço.<br/>
-                                • Idioma: selecione o código de idioma, ex.: pt-BR, en, es.<br/>
+                                • Projeto: informe o ID do projeto (projectId).<br />
+                                • Chave JSON: cole o conteúdo do arquivo JSON da conta de serviço.<br />
+                                • Idioma: selecione o código de idioma, ex.: pt-BR, en, es.<br />
                                 • Use o botão Testar para validar a sessão.
                               </Typography>
                             </div>
@@ -823,9 +824,9 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
                             <div style={{ padding: 12, maxWidth: 420 }}>
                               <Typography variant="subtitle2" gutterBottom>OpenAI - Dicas</Typography>
                               <Typography variant="body2" color="textSecondary" component="div">
-                                • API Key: cole a chave começando com <code>sk-</code>. Ao salvar, mostramos apenas o prefixo por segurança.<br/>
-                                • Modelo: escolha o equilíbrio entre custo e qualidade (ex.: <strong>GPT 4o</strong> = melhor qualidade).<br/>
-                                • Criatividade: controla automaticamente temperatura/topP/penalty.<br/>
+                                • API Key: cole a chave começando com <code>sk-</code>. Ao salvar, mostramos apenas o prefixo por segurança.<br />
+                                • Modelo: escolha o equilíbrio entre custo e qualidade (ex.: <strong>GPT 4o</strong> = melhor qualidade).<br />
+                                • Criatividade: controla automaticamente temperatura/topP/penalty.<br />
                                 • Máx. Tokens: limite de tamanho da resposta.
                               </Typography>
                             </div>
@@ -865,30 +866,16 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
                         </Grid>
                         {/* Preferências de aprimoramento */}
                         <Grid item xs={12} md={4} xl={4} >
-                          <FormControl
-                            fullWidth
-                            margin="dense"
-                            variant="outlined"
+                          <AIModelSelector
+                            provider={values.type}
+                            integrationId={integrationId}
+                            apiKey={values.apiKey && values.apiKey.endsWith("********") ? null : values.apiKey}
+                            value={values.model}
+                            onChange={(e) => setFieldValue("model", e.target.value)}
                             error={touched.model && Boolean(errors.model)}
-                          >
-                            <InputLabel>Modelo Padrão</InputLabel>
-                            <Field
-                              as={Select}
-                              label="Modelo Padrão"
-                              name="model"
-                            >
-                              {(modelOptions && modelOptions.length > 0) ? (
-                                modelOptions.map((m) => (
-                                  <MenuItem key={m} value={m}>{m}</MenuItem>
-                                ))
-                              ) : (
-                                [
-                                  <MenuItem key="gpt-3.5-turbo-1106" value="gpt-3.5-turbo-1106">GPT 3.5 Turbo</MenuItem>,
-                                  <MenuItem key="gpt-4o" value="gpt-4o">GPT 4o</MenuItem>
-                                ]
-                              )}
-                            </Field>
-                          </FormControl>
+                            helperText={touched.model && errors.model}
+                            label="Modelo Padrão"
+                          />
                         </Grid>
                         <Grid item xs={12} md={4}>
                           <FormControl fullWidth margin="dense" variant="outlined">
@@ -920,7 +907,7 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
                             disabled={!values.advancedOverride}
                           />
                         </Grid>
-                        
+
                         <Grid item xs={12} md={4} xl={4} >
                           <Field
                             as={TextField}
@@ -1087,8 +1074,8 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
                             <div style={{ padding: 12, maxWidth: 420 }}>
                               <Typography variant="subtitle2" gutterBottom>Gemini - Dicas</Typography>
                               <Typography variant="body2" color="textSecondary" component="div">
-                                • API Key do Google Gemini (começa com AIza).<br/>
-                                • Modelo: escolha Flash (rápido) ou Pro (qualidade).<br/>
+                                • API Key do Google Gemini (começa com AIza).<br />
+                                • Modelo: escolha Flash (rápido) ou Pro (qualidade).<br />
                                 • Criatividade: controla automaticamente temperatura e estilo.
                               </Typography>
                             </div>
@@ -1177,7 +1164,7 @@ const QueueIntegration = ({ open, onClose, integrationId }) => {
                             disabled={!values.advancedOverride}
                           />
                         </Grid>
-                        
+
                         <Grid item xs={12} md={4} xl={4} >
                           <Field
                             as={TextField}

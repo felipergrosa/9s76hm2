@@ -50,6 +50,7 @@ import aiRoutes from "./aiRoutes";
 import maintenanceRoutes from "./maintenanceRoutes";
 import ragRoutes from "./ragRoutes";
 import presetRoutes from "./presetRoutes";
+import aiAgentRoutes from "./aiAgentRoutes";
 import ContactFieldsController from "../controllers/ContactFieldsController";
 import labelsRoutes from "./labelsRoutes";
 import wbotLabelsRoutes from "./wbotLabelsRoutes";
@@ -61,7 +62,8 @@ import whatsappWebhookRoutes from "./whatsappWebhookRoutes";
 import libraryFolderRoutes from "./libraryFolderRoutes";
 import libraryFileRoutes from "./libraryFileRoutes";
 import queueRAGSourceRoutes from "./queueRAGSourceRoutes";
-import templateRoutes from "./templateRoutes";  // NOVO
+import templateRoutes from "./templateRoutes";
+import aiModelRoutes from "./aiModelRoutes";
 
 
 const routes = Router();
@@ -127,6 +129,7 @@ routes.use(aiRoutes);
 routes.use(maintenanceRoutes);
 routes.use(ragRoutes);
 routes.use(presetRoutes);
+routes.use(aiAgentRoutes);
 routes.get("/contacts/fields", isAuth, ContactFieldsController.getContactFields);
 routes.use("/labels", labelsRoutes);
 routes.use(wbotLabelsRoutes);
@@ -138,6 +141,7 @@ routes.use(whatsappWebhookRoutes);
 routes.use(libraryFolderRoutes);
 routes.use(libraryFileRoutes);
 routes.use(queueRAGSourceRoutes);
-routes.use(templateRoutes);  // NOVO
+routes.use(templateRoutes);
+routes.use(aiModelRoutes);
 
 export default routes;

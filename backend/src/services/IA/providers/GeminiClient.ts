@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import fs from "fs";
 import path from "path";
-import { ChatRequest, IAClient, ChatWithHistoryRequest, TranscribeRequest } from "../IAClient";
+import { ChatRequest, IAClient, ChatWithHistoryRequest, TranscribeRequest, FunctionCallRequest } from "../IAClient";
 
 export default class GeminiClient implements IAClient {
   private client: GoogleGenerativeAI;
@@ -92,5 +92,70 @@ export default class GeminiClient implements IAClient {
     });
 
     return (transcriptionRequest.response?.text?.() || "").trim();
+  }
+
+  async chatWithFunctions(req: FunctionCallRequest): Promise<string> {
+    // Gemini usa um formato ligeiramente diferente para funções
+    const functionDeclarations = req.functions?.map((fn: any) => ({
+      name: fn.name,
+      description: fn.description,
+      parameters: fn.parameters
+    })) || [];
+
+    const model = this.client.getGenerativeModel({
+      model: req.model,
+      systemInstruction: req.system || undefined,
+      tools: functionDeclarations.length > 0 ? [{ functionDeclarations }] : undefined
+    });
+
+    const history = (req.history || []).map(m => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }]
+    }));
+
+    const chat = model.startChat({
+      history,
+      generationConfig: {
+        temperature: req.temperature,
+        topP: req.top_p,
+        maxOutputTokens: req.max_tokens,
+      }
+    });
+
+    const result = await chat.sendMessage(req.user);
+    const response = result.response;
+
+    // Verificar se há function call
+    const functionCalls = response.functionCalls?.();
+    if (functionCalls && functionCalls.length > 0) {
+      const functionCall = functionCalls[0];
+      const functionName = functionCall.name;
+      const functionArgs = functionCall.args || {};
+
+      console.log(`[GeminiClient] Function call requested: ${functionName}`, functionArgs);
+
+      // Executar função via callback
+      let actionResult = "Função não executada (callback não fornecido)";
+      if (req.onFunctionCall) {
+        try {
+          actionResult = await req.onFunctionCall(functionName, functionArgs);
+        } catch (error: any) {
+          actionResult = `Erro ao executar função: ${error.message}`;
+        }
+      }
+
+      // Enviar resultado da função de volta para o Gemini
+      const finalResult = await chat.sendMessage([{
+        functionResponse: {
+          name: functionName,
+          response: { result: actionResult }
+        }
+      }]);
+
+      return (finalResult.response?.text?.() || "").trim();
+    }
+
+    // Resposta normal (sem function call)
+    return (response.text?.() || "").trim();
   }
 }

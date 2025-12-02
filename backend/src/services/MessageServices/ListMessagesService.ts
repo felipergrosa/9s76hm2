@@ -51,6 +51,10 @@ const ListMessagesService = async ({
     }
   });
 
+  if (!ticket) {
+    throw new AppError("ERR_NO_TICKET_FOUND", 404);
+  }
+
   const ticketsFilter: any[] | null = [];
 
   const isAllHistoricEnabled = await isQueueIdHistoryBlocked({ userRequest: user.id });
@@ -159,7 +163,7 @@ const ListMessagesService = async ({
     distinct: true,
     offset,
     subQuery: false,
-    order: [["createdAt", "DESC"]] 
+    order: [["createdAt", "DESC"]]
   });
 
   const hasMore = count > offset + messages.length;

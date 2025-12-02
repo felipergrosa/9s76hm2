@@ -35,6 +35,7 @@ import {
 } from "@material-ui/core";
 import QueueSelectSingle from "../QueueSelectSingle";
 import AIIntegrationSelector from "../AIIntegrationSelector";
+import AIModelSelector from "../AIModelSelector";
 import PromptEnhancements from "../PromptEnhancements";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
@@ -102,6 +103,7 @@ const PromptSchema = Yup.object().shape({
     .min(0, "Mínimo 0")
     .max(2, "Máximo 2")
     .notRequired(),
+  model: Yup.string().notRequired(),
   maxTokens: Yup.number()
     .min(1, "Mínimo 1 token")
     .max(4000, "Máximo 4000 tokens")
@@ -126,6 +128,7 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
     voiceRegion: "",
     temperature: 0.9,
     maxTokens: 300,
+    model: "",
     useGlobalConfig: false,
   };
 
@@ -383,7 +386,7 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
         attachments: JSON.stringify(selectedOptions || []),
         // Usar dados da integração específica OU valores do template/form para configurações globais
         apiKey: globalFlag ? "" : (selectedIntegration?.apiKey || ""),
-        model: globalFlag ? "" : (selectedIntegration?.model || "gpt-3.5-turbo-1106"),
+        model: globalFlag ? "" : (values.model || selectedIntegration?.model || "gpt-3.5-turbo-1106"),
         maxTokens: globalFlag ? values.maxTokens : (Number(selectedIntegration?.maxTokens) || values.maxTokens || 300),
         temperature: globalFlag ? values.temperature : (Number(selectedIntegration?.temperature) || values.temperature || 0.9),
         useGlobalConfig: globalFlag,
@@ -547,16 +550,30 @@ const PromptModal = ({ open, onClose, promptId, templateData }) => {
                       </div>
                     </div>
                     {!useGlobalConfig ? (
-                      <AIIntegrationSelector
-                        value={values.integrationId}
-                        onChange={(integrationId, integration) => {
-                          setFieldValue('integrationId', integrationId);
-                          setSelectedIntegration(integration);
-                        }}
-                        error={touched.integrationId && Boolean(errors.integrationId)}
-                        helperText={touched.integrationId ? errors.integrationId : "Selecione uma integração IA"}
-                        margin="dense"
-                      />
+                      <>
+                        <AIIntegrationSelector
+                          value={values.integrationId}
+                          onChange={(integrationId, integration) => {
+                            setFieldValue('integrationId', integrationId);
+                            setSelectedIntegration(integration);
+                            setFieldValue('model', integration?.model || "");
+                          }}
+                          error={touched.integrationId && Boolean(errors.integrationId)}
+                          helperText={touched.integrationId ? errors.integrationId : "Selecione uma integração IA"}
+                          margin="dense"
+                        />
+                        {selectedIntegration && (
+                          <AIModelSelector
+                            provider={selectedIntegration.type}
+                            integrationId={selectedIntegration.id}
+                            apiKey={selectedIntegration.apiKey}
+                            value={values.model}
+                            onChange={(e) => setFieldValue("model", e.target.value)}
+                            error={touched.model && Boolean(errors.model)}
+                            helperText={touched.model && errors.model}
+                          />
+                        )}
+                      </>
                     ) : (
                       <div style={{
                         padding: 12,
