@@ -165,16 +165,30 @@ export class ActionExecutor {
                 return `❌ Arquivo do catálogo não encontrado no servidor`;
             }
 
-            // Enviar arquivo usando wbot diretamente
-            const number = `${ctx.contact.number}@${ctx.ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
+            // Enviar arquivo (suporta Baileys e API Oficial)
+            const fileBuffer = fs.readFileSync(filePath);
+            const fileName = catalogoFile.name || "Catalogo.pdf";
+            const mimeType = "application/pdf";
 
-            await ctx.wbot.sendMessage(number, {
-                document: fs.readFileSync(filePath),
-                fileName: catalogoFile.name || "Catalogo.pdf",
-                mimetype: "application/pdf"
-            });
+            // Detectar se é API Oficial
+            const isOfficial = (ctx.wbot as any)?.channelType === "official" || (ctx.wbot as any)?.isOfficial;
 
-            logger.info(`[ActionExecutor] Catálogo enviado`, { ticketId: ctx.ticket.id });
+            if (isOfficial) {
+                // API Oficial: usar sendDocumentMessage
+                const recipient = `${ctx.contact.number}`;
+                await (ctx.wbot as any).sendDocumentMessage(recipient, fileBuffer, fileName, mimeType);
+                logger.info(`[ActionExecutor] Catálogo enviado via API Oficial`, { ticketId: ctx.ticket.id });
+            } else {
+                // Baileys: usar sendMessage
+                const number = `${ctx.contact.number}@${ctx.ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
+                await ctx.wbot.sendMessage(number, {
+                    document: fileBuffer,
+                    fileName,
+                    mimetype: mimeType
+                });
+                logger.info(`[ActionExecutor] Catálogo enviado via Baileys`, { ticketId: ctx.ticket.id });
+            }
+
             return `✅ Catálogo ${tipo} enviado!`;
 
         } catch (error: any) {
@@ -244,13 +258,29 @@ export class ActionExecutor {
                 return `❌ Arquivo da tabela não encontrado no servidor`;
             }
 
-            const number = `${ctx.contact.number}@${ctx.ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
+            // Enviar arquivo (suporta Baileys e API Oficial)
+            const fileBuffer = fs.readFileSync(filePath);
+            const fileName = tabelaFile.name || "Tabela_Precos.pdf";
+            const mimeType = "application/pdf";
 
-            await ctx.wbot.sendMessage(number, {
-                document: fs.readFileSync(filePath),
-                fileName: tabelaFile.name || "Tabela_Precos.pdf",
-                mimetype: "application/pdf"
-            });
+            // Detectar se é API Oficial
+            const isOfficial = (ctx.wbot as any)?.channelType === "official" || (ctx.wbot as any)?.isOfficial;
+
+            if (isOfficial) {
+                // API Oficial: usar sendDocumentMessage
+                const recipient = `${ctx.contact.number}`;
+                await (ctx.wbot as any).sendDocumentMessage(recipient, fileBuffer, fileName, mimeType);
+                logger.info(`[ActionExecutor] Tabela enviada via API Oficial`, { ticketId: ctx.ticket.id });
+            } else {
+                // Baileys: usar sendMessage
+                const number = `${ctx.contact.number}@${ctx.ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
+                await ctx.wbot.sendMessage(number, {
+                    document: fileBuffer,
+                    fileName,
+                    mimetype: mimeType
+                });
+                logger.info(`[ActionExecutor] Tabela enviada via Baileys`, { ticketId: ctx.ticket.id });
+            }
 
             logger.info(`[ActionExecutor] Tabela enviada`, { ticketId: ctx.ticket.id });
             return "✅ Tabela de preços enviada!";

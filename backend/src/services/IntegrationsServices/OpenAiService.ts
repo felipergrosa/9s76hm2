@@ -271,7 +271,8 @@ const resolveSystemPromptForTicket = async (
   Prompt Específico do Agente:
   ${agentConfig.systemPrompt}
   
-  Siga essas instruções com cuidado para garantir um atendimento claro, personalizado e amigável em todas as respostas.`;
+  Siga essas instruções com cuidado para garantir um atendimento claro, personalizado e amigável em todas as respostas.
+  ${agentConfig.sentimentAnalysisEnabled ? "\n  - Análise de Sentimento: ATIVADA. Identifique o estado emocional do cliente e ajuste o tom para maximizar a satisfação." : ""}`;
 
       return {
         prompt: agentPrompt,
@@ -346,7 +347,7 @@ const processResponse = async (
   // Send response based on preferred format (text or voice)
   if (openAiSettings.voice === "texto") {
     const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-      text: `\u200e ${response}`,
+      text: `\u200e${response}`,
     });
     if (!isOfficial) {
       await verifyMessage(sentMessage as any, ticket, contact);
