@@ -828,6 +828,35 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
                                                             error={touched.funnelStages?.[index]?.systemPrompt && Boolean(errors.funnelStages?.[index]?.systemPrompt)}
                                                         />
                                                     </Grid>
+
+                                                    <Grid item xs={12}>
+                                                        <FormControl fullWidth>
+                                                            <InputLabel>Funções Habilitadas</InputLabel>
+                                                            <Select
+                                                                multiple
+                                                                name={`funnelStages[${index}].enabledFunctions`}
+                                                                value={stage.enabledFunctions || []}
+                                                                onChange={handleChange}
+                                                                renderValue={(selected) => (
+                                                                    <Box display="flex" flexWrap="wrap" gap={0.5}>
+                                                                        {selected.map((value) => (
+                                                                            <Chip key={value} label={value} size="small" />
+                                                                        ))}
+                                                                    </Box>
+                                                                )}
+                                                            >
+                                                                <MenuItem value="enviar_catalogo">📄 Enviar Catálogo</MenuItem>
+                                                                <MenuItem value="listar_catalogos">📋 Listar Catálogos</MenuItem>
+                                                                <MenuItem value="enviar_tabela_precos">💰 Enviar Tabela de Preços</MenuItem>
+                                                                <MenuItem value="buscar_produto_detalhado">🔍 Buscar Produto Detalhado</MenuItem>
+                                                                <MenuItem value="transferir_para_vendedor_responsavel">👤 Transferir para Vendedor Responsável</MenuItem>
+                                                                <MenuItem value="transferir_para_atendente">🙋 Transferir para Atendente</MenuItem>
+                                                            </Select>
+                                                            <Typography variant="caption" color="textSecondary" style={{ marginTop: 4 }}>
+                                                                Deixe vazio para permitir todas as funções. Selecione funções específicas para restringir o que a IA pode fazer nesta etapa.
+                                                            </Typography>
+                                                        </FormControl>
+                                                    </Grid>
                                                 </Grid>
                                             </Box>
                                         ))}
