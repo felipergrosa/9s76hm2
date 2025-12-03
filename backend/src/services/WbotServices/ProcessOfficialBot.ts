@@ -52,6 +52,27 @@ export async function processOfficialBot({
       return;
     }
 
+    // 🛡️ VERIFICAÇÕES DE SEGURANÇA (Legacy Validations)
+
+    // 1. Verificar status do ticket - CRÍTICO!
+    // Só processar IA se ticket estiver em modo bot
+    if (ticket.status !== "bot") {
+      logger.info(`[ProcessOfficialBot] Ticket ${ticket.id} não está em modo bot (status=${ticket.status}) - pulando IA`);
+      return;
+    }
+
+    // 2. Não processar mensagens próprias (fromMe)
+    if (message.fromMe) {
+      logger.info(`[ProcessOfficialBot] Mensagem fromMe - ignorando`);
+      return;
+    }
+
+    // 3. Não processar grupos (política padrão - pode ser ajustado)
+    if (ticket.isGroup) {
+      logger.info(`[ProcessOfficialBot] Ticket ${ticket.id} é grupo - não processa IA`);
+      return;
+    }
+
     // Verificar se fila tem prompt (sistema legado - BAIXA PRIORIDADE)
     const prompts = queue.prompt;
     let prompt = null;

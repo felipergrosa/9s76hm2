@@ -546,7 +546,8 @@ export const handleOpenAi = async (
   const bodyMessage = getBodyMessage(msg);
   if (!bodyMessage && !msg.message?.audioMessage) return;
 
-  if (!openAiSettings) return;
+  // REMOVIDO: if (!openAiSettings) return;
+  // Agora permite undefined - AI Agent será resolvido mesmo sem openAiSettings
 
   if (msg.messageStubType) return;
 
@@ -596,13 +597,13 @@ export const handleOpenAi = async (
   // INTEGRATE: Merge AI Settings from Agent or use Global
   try {
     const agentConfig = await ResolveAIAgentForTicketService({ ticket });
-    
+
     if (agentConfig && agentConfig.agent) {
       console.log(`[AI][Merge] Applying AI Agent settings: "${agentConfig.agent.name}"`);
-      
+
       // Merge settings: agent overrides global when filled
       const mergedSettings = mergeAISettings(agentConfig, openAiSettings);
-      
+
       // Apply merged settings back to openAiSettings
       openAiSettings = {
         ...openAiSettings,
@@ -611,7 +612,7 @@ export const handleOpenAi = async (
         maxTokens: mergedSettings.maxTokens,
         voice: mergedSettings.voiceName || openAiSettings.voice
       } as IOpenAi;
-      
+
       console.log(`[AI][Merge] Final Model: ${openAiSettings.model}`);
       console.log(`[AI][Merge] Final Temp: ${openAiSettings.temperature}`);
       console.log(`[AI][Merge] Final Max Tokens: ${openAiSettings.maxTokens}`);
