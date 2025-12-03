@@ -762,6 +762,28 @@ export const handleOpenAi = async (
         .filter(m => m.role !== "system")
         .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
 
+      // Filtrar funções baseado no agentConfig.enabledFunctions
+      let availableFunctions = BOT_AVAILABLE_FUNCTIONS;
+      
+      try {
+        const agentConfig = await ResolveAIAgentForTicketService({ ticket });
+        
+        // Se enabledFunctions estiver definido E não for vazio, filtrar
+        // Caso contrário, todas as funções ficam disponíveis
+        if (agentConfig && agentConfig.enabledFunctions && Array.isArray(agentConfig.enabledFunctions) && agentConfig.enabledFunctions.length > 0) {
+          availableFunctions = BOT_AVAILABLE_FUNCTIONS.filter(fn => 
+            agentConfig.enabledFunctions.includes(fn.name)
+          );
+          console.log(`[AI][Functions] Filtrando funções habilitadas: ${agentConfig.enabledFunctions.join(", ")}`);
+          console.log(`[AI][Functions] ${availableFunctions.length} de ${BOT_AVAILABLE_FUNCTIONS.length} funções disponíveis`);
+        } else {
+          console.log(`[AI][Functions] Sem filtro de funções - TODAS disponíveis (${BOT_AVAILABLE_FUNCTIONS.length})`);
+        }
+      } catch (err) {
+        console.error(`[AI][Functions] Erro ao filtrar funções:`, err);
+        // Continua com todas as funções em caso de erro
+      }
+
       // Usar chatWithFunctions se disponível, senão fallback para chatWithHistory
       if (client.chatWithFunctions) {
         responseText = await client.chatWithFunctions({
@@ -771,7 +793,7 @@ export const handleOpenAi = async (
           user: bodyMessage!,
           temperature: openAiSettings.temperature,
           max_tokens: openAiSettings.maxTokens,
-          functions: BOT_AVAILABLE_FUNCTIONS,
+          functions: availableFunctions,
           onFunctionCall: async (functionName, args) => {
             return await ActionExecutor.execute({
               wbot,
