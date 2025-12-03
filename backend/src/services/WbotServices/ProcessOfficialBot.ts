@@ -52,18 +52,21 @@ export async function processOfficialBot({
       return;
     }
 
-    // Verificar se fila tem prompt
+    // Verificar se fila tem prompt (sistema legado - BAIXA PRIORIDADE)
     const prompts = queue.prompt;
-    if (!prompts || prompts.length === 0) {
-      logger.info(`[ProcessOfficialBot] Fila ${queue.name} não tem prompt configurado`);
-      return;
+    let prompt = null;
+
+    if (prompts && prompts.length > 0) {
+      prompt = prompts[0];
+      logger.info(`[ProcessOfficialBot] Prompt legado encontrado: "${prompt.name}" (ID: ${prompt.id})`);
+    } else {
+      logger.info(`[ProcessOfficialBot] Sem prompt legado - AI Agent terá prioridade total`);
     }
 
-    const prompt = prompts[0];
-    logger.info(`[ProcessOfficialBot] Usando prompt "${prompt.name}" (ID: ${prompt.id})`);
-
-    // Montar configurações de IA a partir do Prompt
-    const aiConfig = {
+    // IMPORTANTE: Se NÃO houver Prompt, passar undefined para openAiSettings
+    // Isso força o handleOpenAi a usar APENAS o AI Agent (PRIORITY 1)
+    // Se houver Prompt, usar como fallback
+    const aiConfig = prompt ? {
       name: prompt.name,
       prompt: prompt.prompt,
       voice: prompt.voice || "",
@@ -75,9 +78,13 @@ export async function processOfficialBot({
       queueId: prompt.queueId,
       maxMessages: Number(prompt.maxMessages) || 10,
       model: prompt.model || "gpt-3.5-turbo-1106"
-    };
+    } : undefined; // undefined = AI Agent tem PRIORIDADE TOTAL
 
-    logger.info(`[ProcessOfficialBot] Config IA: modelo=${aiConfig.model}, maxTokens=${aiConfig.maxTokens}, temp=${aiConfig.temperature}`);
+    if (aiConfig) {
+      logger.info(`[ProcessOfficialBot] Config Prompt (fallback): modelo=${aiConfig.model}`);
+    } else {
+      logger.info(`[ProcessOfficialBot] Sem Prompt - AI Agent terá 100% prioridade`);
+    }
 
     // Chamar IA (handleOpenAi)
     // NOTA: handleOpenAi foi feito para Baileys (proto.IWebMessageInfo e wbot: Session)
