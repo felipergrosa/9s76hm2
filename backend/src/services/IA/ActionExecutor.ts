@@ -20,6 +20,7 @@ import Queue from "../../models/Queue";
 import { Op } from "sequelize";
 import logger from "../../utils/logger";
 import fs from "fs";
+import path from "path";
 
 interface ActionContext {
     wbot: any;
@@ -43,6 +44,8 @@ export class ActionExecutor {
             switch (functionName) {
                 case "enviar_catalogo":
                     return await this.enviarCatalogo(context);
+                case "listar_catalogos":
+                    return await this.listarCatalogos(context);
                 case "enviar_tabela_precos":
                     return await this.enviarTabelaPrecos(context);
                 case "buscar_produto_detalhado":
@@ -61,17 +64,58 @@ export class ActionExecutor {
         }
     }
 
+    private static async listarCatalogos(ctx: ActionContext): Promise<string> {
+        let files: any[] = [];
+
+        // 1. LibraryFolder
+        if (ctx.ticket.queue?.folderId) {
+            const libraryFiles = await LibraryFile.findAll({
+                where: {
+                    folderId: ctx.ticket.queue.folderId
+                }
+            });
+            // Filtra arquivos que tenham tag 'catalogo'
+            files = libraryFiles.filter(f =>
+                f.tags && Array.isArray(f.tags) && f.tags.some((t: string) => t.toLowerCase().includes("catalogo"))
+            );
+        }
+
+        // 2. Fallback FilesOptions
+        if (files.length === 0 && ctx.ticket.queue?.fileListId) {
+            files = await FilesOptions.findAll({
+                where: {
+                    fileId: ctx.ticket.queue.fileListId,
+                    isActive: true,
+                    keywords: { [Op.iLike]: `%catalogo%` }
+                }
+            });
+        }
+
+        if (files.length === 0) {
+            return "Nenhum catálogo encontrado disponível para envio.";
+        }
+
+        const lista = files.map(f => `- ${f.title || f.name}`).join("\n");
+        return `Os seguintes catálogos estão disponíveis:\n${lista}\n\nPergunte ao cliente qual ele deseja receber.`;
+    }
+
     private static async enviarCatalogo(ctx: ActionContext): Promise<string> {
         const tipo = ctx.arguments.tipo || "completo";
 
         try {
             let catalogoFile: FilesOptions | null = null;
 
+            // Tags de busca
+            const searchTags = ["catalogo"];
+            if (tipo && tipo !== "completo") {
+                searchTags.push(tipo.toLowerCase());
+            }
+
             // Tentar buscar primeiro no sistema NOVO (LibraryFolder)
             if (ctx.ticket.queue?.folderId) {
                 catalogoFile = await this.findFileInLibraryFolder(
                     ctx.ticket.queue.folderId,
-                    ["catalogo", "catalogos", "catalog"]
+                    searchTags
                 );
 
                 if (catalogoFile) {
@@ -84,11 +128,12 @@ export class ActionExecutor {
 
             // Fallback para sistema LEGADO (fileListId)
             if (!catalogoFile && ctx.ticket.queue?.fileListId) {
+                const keywords = tipo !== "completo" ? `%${tipo}%` : `%catalogo%`;
                 const fileOptions = await FilesOptions.findAll({
                     where: {
                         fileId: ctx.ticket.queue.fileListId,
                         isActive: true,
-                        keywords: { [Op.iLike]: `%catalogo%` }
+                        keywords: { [Op.iLike]: keywords }
                     },
                     limit: 1
                 });
@@ -112,8 +157,11 @@ export class ActionExecutor {
             }
 
             // Verificar se arquivo existe
-            if (!fs.existsSync(catalogoFile.path)) {
-                logger.error(`[ActionExecutor] Arquivo não existe: ${catalogoFile.path}`);
+            const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
+            const filePath = path.resolve(publicFolder, catalogoFile.path);
+
+            if (!fs.existsSync(filePath)) {
+                logger.error(`[ActionExecutor] Arquivo não existe: ${filePath}`);
                 return `❌ Arquivo do catálogo não encontrado no servidor`;
             }
 
@@ -121,7 +169,7 @@ export class ActionExecutor {
             const number = `${ctx.contact.number}@${ctx.ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
 
             await ctx.wbot.sendMessage(number, {
-                document: fs.readFileSync(catalogoFile.path),
+                document: fs.readFileSync(filePath),
                 fileName: catalogoFile.name || "Catalogo.pdf",
                 mimetype: "application/pdf"
             });
@@ -187,15 +235,19 @@ export class ActionExecutor {
                 return `❌ Tabela de preços não configurada`;
             }
 
-            if (!fs.existsSync(tabelaFile.path)) {
-                logger.error(`[ActionExecutor] Arquivo não exists: ${tabelaFile.path}`);
+            // Verificar se arquivo existe
+            const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
+            const filePath = path.resolve(publicFolder, tabelaFile.path);
+
+            if (!fs.existsSync(filePath)) {
+                logger.error(`[ActionExecutor] Arquivo não existe: ${filePath}`);
                 return `❌ Arquivo da tabela não encontrado no servidor`;
             }
 
             const number = `${ctx.contact.number}@${ctx.ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
 
             await ctx.wbot.sendMessage(number, {
-                document: fs.readFileSync(tabelaFile.path),
+                document: fs.readFileSync(filePath),
                 fileName: tabelaFile.name || "Tabela_Precos.pdf",
                 mimetype: "application/pdf"
             });
@@ -361,7 +413,7 @@ export class ActionExecutor {
                 whereClause.folderId = folderId;
             }
 
-            // Buscar LibraryFiles que tenham pelo menos uma das tags
+            // Buscar LibraryFiles
             const libraryFiles = await LibraryFile.findAll({
                 where: whereClause,
                 include: [
@@ -375,23 +427,41 @@ export class ActionExecutor {
                 limit: 50 // Limitar para performance
             });
 
-            // Filtrar por tags manualmente (já que tags é um getter)
-            for (const libraryFile of libraryFiles) {
-                const fileTags = libraryFile.tags || [];
-                const hasMatchingTag = fileTags.some(tag =>
-                    searchTags.some(searchTag =>
-                        tag.toLowerCase().includes(searchTag.toLowerCase())
+            // Filtrar por tags manualmente
+            // Prioriza arquivos que tenham MAIS tags correspondentes
+            const matchedFiles = libraryFiles.map(libraryFile => {
+                const fileTags = (libraryFile.tags || []) as string[];
+
+                // Conta quantas tags de busca foram encontradas nas tags do arquivo
+                const matches = searchTags.filter(searchTag =>
+                    fileTags.some(fileTag =>
+                        fileTag.toLowerCase().includes(searchTag.toLowerCase())
                     )
                 );
 
-                if (hasMatchingTag && libraryFile.fileOption) {
-                    logger.info(`[ActionExecutor] Arquivo encontrado via LibraryFolder`, {
-                        libraryFileId: libraryFile.id,
-                        fileOptionId: libraryFile.fileOption.id,
-                        tags: fileTags
-                    });
-                    return libraryFile.fileOption;
-                }
+                return {
+                    libraryFile,
+                    matchCount: matches.length,
+                    hasAll: matches.length === searchTags.length
+                };
+            })
+                .filter(item => item.matchCount > 0)
+                .sort((a, b) => {
+                    // Prioridade 1: Tem todas as tags
+                    if (a.hasAll && !b.hasAll) return -1;
+                    if (!a.hasAll && b.hasAll) return 1;
+                    // Prioridade 2: Maior número de matches
+                    return b.matchCount - a.matchCount;
+                });
+
+            if (matchedFiles.length > 0) {
+                const bestMatch = matchedFiles[0];
+                logger.info(`[ActionExecutor] Arquivo encontrado via LibraryFolder`, {
+                    libraryFileId: bestMatch.libraryFile.id,
+                    matchCount: bestMatch.matchCount,
+                    hasAll: bestMatch.hasAll
+                });
+                return bestMatch.libraryFile.fileOption;
             }
 
             return null;

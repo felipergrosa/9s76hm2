@@ -21,15 +21,22 @@ export interface BotFunction {
  */
 export const BOT_AVAILABLE_FUNCTIONS: BotFunction[] = [
     {
+        name: "listar_catalogos",
+        description: "Lista todos os catálogos disponíveis para envio. Use quando o cliente perguntar quais catálogos existem ou quando houver ambiguidade sobre qual catálogo enviar.",
+        parameters: {
+            type: "object",
+            properties: {}
+        }
+    },
+    {
         name: "enviar_catalogo",
-        description: "Envia o catálogo completo de produtos para o cliente. Use quando o cliente pedir para ver produtos, catálogo, mostruário ou o que está disponível.",
+        description: "Envia um catálogo específico para o cliente. Se o cliente não especificou, use listar_catalogos primeiro.",
         parameters: {
             type: "object",
             properties: {
                 tipo: {
                     type: "string",
-                    enum: ["completo", "promocoes", "lancamentos"],
-                    description: "Tipo de catálogo a enviar. Use 'completo' por padrão."
+                    description: "Nome ou tipo do catálogo desejado (ex: 'completo', 'lampadas', 'lustres'). Se não especificado, tenta enviar o completo."
                 }
             },
             required: ["tipo"]
