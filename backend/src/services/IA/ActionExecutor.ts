@@ -10,6 +10,8 @@ import { search as ragSearch } from "../RAG/RAGSearchService";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
 import CreateLogTicketService from "../TicketServices/CreateLogTicketService";
 import FilesOptions from "../../models/FilesOptions";
+import LibraryFile from "../../models/LibraryFile";
+import LibraryFolder from "../../models/LibraryFolder";
 import Contact from "../../models/Contact";
 import Tag from "../../models/Tag";
 import User from "../../models/User";
@@ -65,7 +67,23 @@ export class ActionExecutor {
         try {
             let catalogoFile: FilesOptions | null = null;
 
-            if (ctx.ticket.queue?.fileListId) {
+            // Tentar buscar primeiro no sistema NOVO (LibraryFolder)
+            if (ctx.ticket.queue?.folderId) {
+                catalogoFile = await this.findFileInLibraryFolder(
+                    ctx.ticket.queue.folderId,
+                    ["catalogo", "catalogos", "catalog"]
+                );
+
+                if (catalogoFile) {
+                    logger.info(`[ActionExecutor] Catálogo encontrado em LibraryFolder`, {
+                        folderId: ctx.ticket.queue.folderId,
+                        fileId: catalogoFile.id
+                    });
+                }
+            }
+
+            // Fallback para sistema LEGADO (fileListId)
+            if (!catalogoFile && ctx.ticket.queue?.fileListId) {
                 const fileOptions = await FilesOptions.findAll({
                     where: {
                         fileId: ctx.ticket.queue.fileListId,
@@ -75,10 +93,21 @@ export class ActionExecutor {
                     limit: 1
                 });
                 catalogoFile = fileOptions[0] || null;
+
+                if (catalogoFile) {
+                    logger.info(`[ActionExecutor] Catálogo encontrado em Files (legado)`, {
+                        fileListId: ctx.ticket.queue.fileListId,
+                        fileId: catalogoFile.id
+                    });
+                }
             }
 
             if (!catalogoFile) {
-                logger.warn(`[ActionExecutor] Catálogo não encontrado`, { queueId: ctx.ticket.queueId });
+                logger.warn(`[ActionExecutor] Catálogo não encontrado em nenhum sistema`, {
+                    queueId: ctx.ticket.queueId,
+                    hasFolderId: !!ctx.ticket.queue?.folderId,
+                    hasFileListId: !!ctx.ticket.queue?.fileListId
+                });
                 return `❌ Catálogo não configurado nesta fila`;
             }
 
@@ -110,7 +139,23 @@ export class ActionExecutor {
         try {
             let tabelaFile: FilesOptions | null = null;
 
-            if (ctx.ticket.queue?.fileListId) {
+            // Tentar buscar primeiro no sistema NOVO (LibraryFolder)
+            if (ctx.ticket.queue?.folderId) {
+                tabelaFile = await this.findFileInLibraryFolder(
+                    ctx.ticket.queue.folderId,
+                    ["tabela", "precos", "preco", "preço", "price", "pricing"]
+                );
+
+                if (tabelaFile) {
+                    logger.info(`[ActionExecutor] Tabela encontrada em LibraryFolder`, {
+                        folderId: ctx.ticket.queue.folderId,
+                        fileId: tabelaFile.id
+                    });
+                }
+            }
+
+            // Fallback para sistema LEGADO (fileListId)
+            if (!tabelaFile && ctx.ticket.queue?.fileListId) {
                 const fileOptions = await FilesOptions.findAll({
                     where: {
                         fileId: ctx.ticket.queue.fileListId,
@@ -124,10 +169,21 @@ export class ActionExecutor {
                     limit: 1
                 });
                 tabelaFile = fileOptions[0] || null;
+
+                if (tabelaFile) {
+                    logger.info(`[ActionExecutor] Tabela encontrada em Files (legado)`, {
+                        fileListId: ctx.ticket.queue.fileListId,
+                        fileId: tabelaFile.id
+                    });
+                }
             }
 
             if (!tabelaFile) {
-                logger.warn(`[ActionExecutor] Tabela não encontrada`, { queueId: ctx.ticket.queueId });
+                logger.warn(`[ActionExecutor] Tabela não encontrada em nenhum sistema`, {
+                    queueId: ctx.ticket.queueId,
+                    hasFolderId: !!ctx.ticket.queue?.folderId,
+                    hasFileListId: !!ctx.ticket.queue?.fileListId
+                });
                 return `❌ Tabela de preços não configurada`;
             }
 
@@ -284,6 +340,64 @@ export class ActionExecutor {
         } catch (error: any) {
             logger.error("[ActionExecutor] Erro ao transferir:", error);
             return `❌ Erro ao transferir: ${error.message}`;
+        }
+    }
+
+    /**
+     * Busca arquivos no sistema moderno (LibraryFolder)
+     * @param folderId ID da pasta ou -1 para buscar em todas
+     * @param searchTags Tags para procurar
+     * @returns FileOption encontrado ou null
+     */
+    private static async findFileInLibraryFolder(
+        folderId: number,
+        searchTags: string[]
+    ): Promise<FilesOptions | null> {
+        try {
+            // Se folderId === -1, buscar em TODAS as pastas
+            const whereClause: any = {};
+
+            if (folderId !== -1) {
+                whereClause.folderId = folderId;
+            }
+
+            // Buscar LibraryFiles que tenham pelo menos uma das tags
+            const libraryFiles = await LibraryFile.findAll({
+                where: whereClause,
+                include: [
+                    {
+                        model: FilesOptions,
+                        as: "fileOption",
+                        where: { isActive: true },
+                        required: true
+                    }
+                ],
+                limit: 50 // Limitar para performance
+            });
+
+            // Filtrar por tags manualmente (já que tags é um getter)
+            for (const libraryFile of libraryFiles) {
+                const fileTags = libraryFile.tags || [];
+                const hasMatchingTag = fileTags.some(tag =>
+                    searchTags.some(searchTag =>
+                        tag.toLowerCase().includes(searchTag.toLowerCase())
+                    )
+                );
+
+                if (hasMatchingTag && libraryFile.fileOption) {
+                    logger.info(`[ActionExecutor] Arquivo encontrado via LibraryFolder`, {
+                        libraryFileId: libraryFile.id,
+                        fileOptionId: libraryFile.fileOption.id,
+                        tags: fileTags
+                    });
+                    return libraryFile.fileOption;
+                }
+            }
+
+            return null;
+        } catch (error: any) {
+            logger.error(`[ActionExecutor] Erro ao buscar em LibraryFolder:`, error);
+            return null;
         }
     }
 }
