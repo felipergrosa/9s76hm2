@@ -52,6 +52,10 @@ export async function processOfficialBot({
       return;
     }
 
+    // CRÍTICO: Atribuir a queue completa ao ticket para que o ActionExecutor
+    // tenha acesso a folderId e fileListId
+    ticket.queue = queue;
+
     // 🛡️ VERIFICAÇÕES DE SEGURANÇA (Legacy Validations)
 
     // 1. Verificar status do ticket - CRÍTICO!
