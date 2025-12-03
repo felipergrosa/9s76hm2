@@ -47,11 +47,43 @@ const PROMPT_TEMPLATES = [
 const AgentSchema = Yup.object().shape({
     name: Yup.string().min(2, "Nome muito curto").required("Nome é obrigatório"),
     profile: Yup.string().required("Perfil é obrigatório"),
+    queueIds: Yup.array(),
+    voiceEnabled: Yup.boolean(),
+    imageRecognitionEnabled: Yup.boolean(),
+    sentimentAnalysisEnabled: Yup.boolean(),
+    autoSegmentationEnabled: Yup.boolean(),
+    status: Yup.string(),
+    // AI Model fields - nullable
+    aiProvider: Yup.string().nullable(),
+    aiModel: Yup.string().nullable(),
+    temperature: Yup.number().nullable(),
+    maxTokens: Yup.number().nullable(),
+    // Advanced Settings - nullable
+    creativity: Yup.string().nullable(),
+    toneStyle: Yup.string().nullable(),
+    emojiUsage: Yup.string().nullable(),
+    hashtagUsage: Yup.string().nullable(),
+    responseLength: Yup.string().nullable(),
+    language: Yup.string().nullable(),
+    brandVoice: Yup.string().nullable(),
+    allowedVariables: Yup.string().nullable(),
+    // Voice/TTS Settings - nullable
+    voiceType: Yup.string().nullable(),
+    voiceApiKey: Yup.string().nullable(),
+    voiceRegion: Yup.string().nullable(),
+    voiceTemperature: Yup.number().nullable(),
+    voiceName: Yup.string().nullable(),
+    // Funnel stages
     funnelStages: Yup.array().of(
         Yup.object().shape({
             name: Yup.string().required("Nome da etapa é obrigatório"),
             tone: Yup.string().required("Tom é obrigatório"),
-            systemPrompt: Yup.string().required("Prompt é obrigatório")
+            systemPrompt: Yup.string().required("Prompt é obrigatório"),
+            order: Yup.number(),
+            objective: Yup.string().nullable(),
+            enabledFunctions: Yup.array(),
+            autoAdvanceCondition: Yup.string().nullable(),
+            sentimentThreshold: Yup.number().nullable()
         })
     )
 });
@@ -652,199 +684,199 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
                                         </AccordionDetails>
                                     </Accordion>
                                 </Grid>
-                    </Grid>
+                            </Grid>
 
                             {/* Recursos */}
-                <SectionTitle
-                    icon="⚙️"
-                    title="Recursos"
-                    tooltip="Habilite recursos avançados: Voz (áudios), Reconhecimento de Imagem (visão), Análise de Sentimento (detecta emoções) e Segmentação Automática (classifica clientes em perfis). Cada recurso adiciona capacidades específicas ao agente."
-                />
+                            <SectionTitle
+                                icon="⚙️"
+                                title="Recursos"
+                                tooltip="Habilite recursos avançados: Voz (áudios), Reconhecimento de Imagem (visão), Análise de Sentimento (detecta emoções) e Segmentação Automática (classifica clientes em perfis). Cada recurso adiciona capacidades específicas ao agente."
+                            />
 
-                <Grid container spacing={1}>
-                    <Grid item xs={12} sm={6}>
-                        <FormControlLabel
-                            control={
-                                <Switch
-                                    checked={values.voiceEnabled}
-                                    onChange={(e) => setFieldValue("voiceEnabled", e.target.checked)}
-                                />
-                            }
-                            label="🎤 Habilitar Voz"
-                        />
-                    </Grid>
+                            <Grid container spacing={1}>
+                                <Grid item xs={12} sm={6}>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                checked={values.voiceEnabled}
+                                                onChange={(e) => setFieldValue("voiceEnabled", e.target.checked)}
+                                            />
+                                        }
+                                        label="🎤 Habilitar Voz"
+                                    />
+                                </Grid>
 
-                    <Grid item xs={12} sm={6}>
-                        <FormControlLabel
-                            control={
-                                <Switch
-                                    checked={values.imageRecognitionEnabled}
-                                    onChange={(e) => setFieldValue("imageRecognitionEnabled", e.target.checked)}
-                                />
-                            }
-                            label="🖼️ Reconhecimento de Imagem"
-                        />
-                    </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                checked={values.imageRecognitionEnabled}
+                                                onChange={(e) => setFieldValue("imageRecognitionEnabled", e.target.checked)}
+                                            />
+                                        }
+                                        label="🖼️ Reconhecimento de Imagem"
+                                    />
+                                </Grid>
 
-                    <Grid item xs={12} sm={6}>
-                        <FormControlLabel
-                            control={
-                                <Switch
-                                    checked={values.sentimentAnalysisEnabled}
-                                    onChange={(e) => setFieldValue("sentimentAnalysisEnabled", e.target.checked)}
-                                />
-                            }
-                            label="😊 Análise de Sentimento"
-                        />
-                    </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                checked={values.sentimentAnalysisEnabled}
+                                                onChange={(e) => setFieldValue("sentimentAnalysisEnabled", e.target.checked)}
+                                            />
+                                        }
+                                        label="😊 Análise de Sentimento"
+                                    />
+                                </Grid>
 
-                    <Grid item xs={12} sm={6}>
-                        <FormControlLabel
-                            control={
-                                <Switch
-                                    checked={values.autoSegmentationEnabled}
-                                    onChange={(e) => setFieldValue("autoSegmentationEnabled", e.target.checked)}
-                                />
-                            }
-                            label="🎯 Segmentação Automática"
-                        />
-                    </Grid>
-                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                checked={values.autoSegmentationEnabled}
+                                                onChange={(e) => setFieldValue("autoSegmentationEnabled", e.target.checked)}
+                                            />
+                                        }
+                                        label="🎯 Segmentação Automática"
+                                    />
+                                </Grid>
+                            </Grid>
 
-                <Box mt={3} mb={2}>
-                    <Divider />
-                </Box>
+                            <Box mt={3} mb={2}>
+                                <Divider />
+                            </Box>
 
-                {/* Funil de Vendas */}
-                <Box display="flex" alignItems="center" mb={2}>
-                    <Typography variant="h6">
-                        📊 Funil de Vendas ({values.funnelStages?.length || 0} etapas)
-                    </Typography>
-                    <Tooltip
-                        title="Crie uma jornada com múltiplas etapas (Qualificação, Apresentação, Negociação, Fechamento). Cada etapa tem seu próprio prompt, tom e objetivo. O cliente avança automaticamente quando condições são atendidas."
-                        arrow
-                        placement="right"
-                    >
-                        <IconButton size="small" style={{ marginLeft: 8 }}>
-                            <HelpIcon fontSize="small" color="action" />
-                        </IconButton>
-                    </Tooltip>
-                </Box>
+                            {/* Funil de Vendas */}
+                            <Box display="flex" alignItems="center" mb={2}>
+                                <Typography variant="h6">
+                                    📊 Funil de Vendas ({values.funnelStages?.length || 0} etapas)
+                                </Typography>
+                                <Tooltip
+                                    title="Crie uma jornada com múltiplas etapas (Qualificação, Apresentação, Negociação, Fechamento). Cada etapa tem seu próprio prompt, tom e objetivo. O cliente avança automaticamente quando condições são atendidas."
+                                    arrow
+                                    placement="right"
+                                >
+                                    <IconButton size="small" style={{ marginLeft: 8 }}>
+                                        <HelpIcon fontSize="small" color="action" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
 
-                <FieldArray name="funnelStages">
-                    {({ push, remove }) => (
-                        <>
-                            {values.funnelStages?.map((stage, index) => (
-                                <Box key={index} mb={3} p={2} border={1} borderColor="grey.300" borderRadius={4}>
-                                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                                        <Typography variant="subtitle1">
-                                            <strong>Etapa {stage.order}: {stage.name}</strong>
-                                        </Typography>
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => remove(index)}
-                                            disabled={values.funnelStages.length === 1}
+                            <FieldArray name="funnelStages">
+                                {({ push, remove }) => (
+                                    <>
+                                        {values.funnelStages?.map((stage, index) => (
+                                            <Box key={index} mb={3} p={2} border={1} borderColor="grey.300" borderRadius={4}>
+                                                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                                                    <Typography variant="subtitle1">
+                                                        <strong>Etapa {stage.order}: {stage.name}</strong>
+                                                    </Typography>
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => remove(index)}
+                                                        disabled={values.funnelStages.length === 1}
+                                                    >
+                                                        <DeleteIcon />
+                                                    </IconButton>
+                                                </Box>
+
+                                                <Grid container spacing={2}>
+                                                    <Grid item xs={12} sm={6}>
+                                                        <TextField
+                                                            fullWidth
+                                                            label="Nome da Etapa"
+                                                            name={`funnelStages[${index}].name`}
+                                                            value={stage.name}
+                                                            onChange={handleChange}
+                                                            error={touched.funnelStages?.[index]?.name && Boolean(errors.funnelStages?.[index]?.name)}
+                                                        />
+                                                    </Grid>
+
+                                                    <Grid item xs={12} sm={6}>
+                                                        <TextField
+                                                            fullWidth
+                                                            label="Tom"
+                                                            name={`funnelStages[${index}].tone`}
+                                                            value={stage.tone}
+                                                            onChange={handleChange}
+                                                            placeholder="Ex: Consultivo, Persuasivo"
+                                                        />
+                                                    </Grid>
+
+                                                    <Grid item xs={12}>
+                                                        <TextField
+                                                            fullWidth
+                                                            label="Objetivo"
+                                                            name={`funnelStages[${index}].objective`}
+                                                            value={stage.objective}
+                                                            onChange={handleChange}
+                                                            multiline
+                                                            rows={2}
+                                                        />
+                                                    </Grid>
+
+                                                    <Grid item xs={12}>
+                                                        <TextField
+                                                            fullWidth
+                                                            label="Prompt do Sistema"
+                                                            name={`funnelStages[${index}].systemPrompt`}
+                                                            value={stage.systemPrompt}
+                                                            onChange={handleChange}
+                                                            multiline
+                                                            rows={3}
+                                                            error={touched.funnelStages?.[index]?.systemPrompt && Boolean(errors.funnelStages?.[index]?.systemPrompt)}
+                                                        />
+                                                    </Grid>
+                                                </Grid>
+                                            </Box>
+                                        ))}
+
+                                        <Button
+                                            fullWidth
+                                            variant="outlined"
+                                            startIcon={<AddIcon />}
+                                            onClick={() =>
+                                                push({
+                                                    order: values.funnelStages.length + 1,
+                                                    name: `Etapa ${values.funnelStages.length + 1}`,
+                                                    tone: "",
+                                                    objective: "",
+                                                    systemPrompt: "",
+                                                    enabledFunctions: []
+                                                })
+                                            }
                                         >
-                                            <DeleteIcon />
-                                        </IconButton>
-                                    </Box>
+                                            Adicionar Etapa ao Funil
+                                        </Button>
+                                    </>
+                                )}
+                            </FieldArray>
 
-                                    <Grid container spacing={2}>
-                                        <Grid item xs={12} sm={6}>
-                                            <TextField
-                                                fullWidth
-                                                label="Nome da Etapa"
-                                                name={`funnelStages[${index}].name`}
-                                                value={stage.name}
-                                                onChange={handleChange}
-                                                error={touched.funnelStages?.[index]?.name && Boolean(errors.funnelStages?.[index]?.name)}
-                                            />
-                                        </Grid>
+                            <Box mt={3}>
+                                <FormControl fullWidth>
+                                    <InputLabel>Status</InputLabel>
+                                    <Select
+                                        name="status"
+                                        value={values.status}
+                                        onChange={handleChange}
+                                    >
+                                        <MenuItem value="active">Ativo</MenuItem>
+                                        <MenuItem value="inactive">Inativo</MenuItem>
+                                    </Select>
+                                </FormControl>
+                            </Box>
+                        </DialogContent>
 
-                                        <Grid item xs={12} sm={6}>
-                                            <TextField
-                                                fullWidth
-                                                label="Tom"
-                                                name={`funnelStages[${index}].tone`}
-                                                value={stage.tone}
-                                                onChange={handleChange}
-                                                placeholder="Ex: Consultivo, Persuasivo"
-                                            />
-                                        </Grid>
-
-                                        <Grid item xs={12}>
-                                            <TextField
-                                                fullWidth
-                                                label="Objetivo"
-                                                name={`funnelStages[${index}].objective`}
-                                                value={stage.objective}
-                                                onChange={handleChange}
-                                                multiline
-                                                rows={2}
-                                            />
-                                        </Grid>
-
-                                        <Grid item xs={12}>
-                                            <TextField
-                                                fullWidth
-                                                label="Prompt do Sistema"
-                                                name={`funnelStages[${index}].systemPrompt`}
-                                                value={stage.systemPrompt}
-                                                onChange={handleChange}
-                                                multiline
-                                                rows={3}
-                                                error={touched.funnelStages?.[index]?.systemPrompt && Boolean(errors.funnelStages?.[index]?.systemPrompt)}
-                                            />
-                                        </Grid>
-                                    </Grid>
-                                </Box>
-                            ))}
-
-                            <Button
-                                fullWidth
-                                variant="outlined"
-                                startIcon={<AddIcon />}
-                                onClick={() =>
-                                    push({
-                                        order: values.funnelStages.length + 1,
-                                        name: `Etapa ${values.funnelStages.length + 1}`,
-                                        tone: "",
-                                        objective: "",
-                                        systemPrompt: "",
-                                        enabledFunctions: []
-                                    })
-                                }
-                            >
-                                Adicionar Etapa ao Funil
+                        <DialogActions>
+                            <Button onClick={handleClose}>Cancelar</Button>
+                            <Button type="submit" variant="contained" color="primary">
+                                Salvar
                             </Button>
-                        </>
-                    )}
-                </FieldArray>
-
-                <Box mt={3}>
-                    <FormControl fullWidth>
-                        <InputLabel>Status</InputLabel>
-                        <Select
-                            name="status"
-                            value={values.status}
-                            onChange={handleChange}
-                        >
-                            <MenuItem value="active">Ativo</MenuItem>
-                            <MenuItem value="inactive">Inativo</MenuItem>
-                        </Select>
-                    </FormControl>
-                </Box>
-            </DialogContent>
-
-            <DialogActions>
-                <Button onClick={handleClose}>Cancelar</Button>
-                <Button type="submit" variant="contained" color="primary">
-                    Salvar
-                </Button>
-            </DialogActions>
-        </Form>
-    )
-}
+                        </DialogActions>
+                    </Form>
+                )
+                }
             </Formik >
         </Dialog >
     );
