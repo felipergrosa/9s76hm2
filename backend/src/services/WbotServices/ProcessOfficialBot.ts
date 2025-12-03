@@ -171,8 +171,8 @@ export async function processOfficialBot({
             logger.info(`[ProcessOfficialBot] Documento enviado: ${sentMessage.id}`);
 
           } else if (content.text) {
-            // ENVIAR TEXTO
-            messageBody = content.text;
+            // ENVIAR TEXTO - Remover espaços extras
+            messageBody = content.text.trim();
             sentMessage = await adapter.sendTextMessage(to, messageBody);
             mediaType = "conversation";
 

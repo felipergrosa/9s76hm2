@@ -264,6 +264,7 @@ const resolveSystemPromptForTicket = async (
         : "";
 
       const agentPrompt = `Instruções do Sistema:
+  - Seu nome é ${agentConfig.agent.name}. Se perguntarem quem você é ou qual seu nome, responda: "Meu nome é ${agentConfig.agent.name}".
   - Use o nome ${clientName} nas respostas para que o cliente se sinta mais próximo e acolhido, sem exagerar nem repetir o nome em todas as frases.
   - Tom de comunicação: ${agentConfig.tone || "Profissional"}
   - Etapa do atendimento: ${agentConfig.currentStage.name} - ${agentConfig.currentStage.objective || ""}
@@ -764,14 +765,14 @@ export const handleOpenAi = async (
 
       // Filtrar funções baseado no agentConfig.enabledFunctions
       let availableFunctions = BOT_AVAILABLE_FUNCTIONS;
-      
+
       try {
         const agentConfig = await ResolveAIAgentForTicketService({ ticket });
-        
+
         // Se enabledFunctions estiver definido E não for vazio, filtrar
         // Caso contrário, todas as funções ficam disponíveis
         if (agentConfig && agentConfig.enabledFunctions && Array.isArray(agentConfig.enabledFunctions) && agentConfig.enabledFunctions.length > 0) {
-          availableFunctions = BOT_AVAILABLE_FUNCTIONS.filter(fn => 
+          availableFunctions = BOT_AVAILABLE_FUNCTIONS.filter(fn =>
             agentConfig.enabledFunctions.includes(fn.name)
           );
           console.log(`[AI][Functions] Filtrando funções habilitadas: ${agentConfig.enabledFunctions.join(", ")}`);
