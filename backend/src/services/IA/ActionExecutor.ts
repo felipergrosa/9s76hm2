@@ -67,6 +67,13 @@ export class ActionExecutor {
     private static async listarCatalogos(ctx: ActionContext): Promise<string> {
         let files: any[] = [];
 
+        logger.info(`[ActionExecutor] listarCatalogos iniciado`, {
+            ticketId: ctx.ticket.id,
+            queueId: ctx.ticket.queueId,
+            folderId: ctx.ticket.queue?.folderId,
+            fileListId: ctx.ticket.queue?.fileListId
+        });
+
         // 1. LibraryFolder
         if (ctx.ticket.queue?.folderId) {
             const libraryFiles = await LibraryFile.findAll({
@@ -74,10 +81,13 @@ export class ActionExecutor {
                     folderId: ctx.ticket.queue.folderId
                 }
             });
+            logger.info(`[ActionExecutor] LibraryFiles encontrados: ${libraryFiles.length}`);
+
             // Filtra arquivos que tenham tag 'catalogo'
             files = libraryFiles.filter(f =>
                 f.tags && Array.isArray(f.tags) && f.tags.some((t: string) => t.toLowerCase().includes("catalogo"))
             );
+            logger.info(`[ActionExecutor] LibraryFiles com tag 'catalogo': ${files.length}`);
         }
 
         // 2. Fallback FilesOptions
@@ -89,13 +99,16 @@ export class ActionExecutor {
                     keywords: { [Op.iLike]: `%catalogo%` }
                 }
             });
+            logger.info(`[ActionExecutor] FilesOptions encontrados: ${files.length}`);
         }
 
         if (files.length === 0) {
+            logger.warn(`[ActionExecutor] Nenhum catálogo encontrado!`);
             return "Nenhum catálogo encontrado disponível para envio.";
         }
 
         const lista = files.map(f => `- ${f.title || f.name}`).join("\n");
+        logger.info(`[ActionExecutor] Catálogos encontrados e formatados:`, { lista });
         return `Os seguintes catálogos estão disponíveis:\n${lista}\n\nPergunte ao cliente qual ele deseja receber.`;
     }
 
