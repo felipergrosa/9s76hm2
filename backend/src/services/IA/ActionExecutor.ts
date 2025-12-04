@@ -76,11 +76,34 @@ export class ActionExecutor {
 
         // 1. LibraryFolder
         if (ctx.ticket.queue?.folderId) {
-            const libraryFiles = await LibraryFile.findAll({
-                where: {
-                    folderId: ctx.ticket.queue.folderId
-                }
-            });
+            let libraryFiles: any[] = [];
+
+            if (ctx.ticket.queue.folderId === -1) {
+                // folderId = -1 significa "todas as pastas da empresa"
+                logger.info(`[ActionExecutor] Buscando em TODAS as pastas da empresa ${ctx.ticket.companyId}`);
+                
+                const allFolders = await LibraryFolder.findAll({
+                    where: { companyId: ctx.ticket.companyId }
+                });
+                
+                const folderIds = allFolders.map(f => f.id);
+                logger.info(`[ActionExecutor] Pastas encontradas: ${folderIds.join(", ")}`);  
+                
+                libraryFiles = await LibraryFile.findAll({
+                    where: {
+                        folderId: { [Op.in]: folderIds }
+                    }
+                });
+            } else {
+                // Busca em pasta específica
+                logger.info(`[ActionExecutor] Buscando na pasta ${ctx.ticket.queue.folderId}`);
+                libraryFiles = await LibraryFile.findAll({
+                    where: {
+                        folderId: ctx.ticket.queue.folderId
+                    }
+                });
+            }
+            
             logger.info(`[ActionExecutor] LibraryFiles encontrados: ${libraryFiles.length}`);
 
             // Filtra arquivos que tenham tag 'catalogo'
@@ -128,7 +151,8 @@ export class ActionExecutor {
             if (ctx.ticket.queue?.folderId) {
                 catalogoFile = await this.findFileInLibraryFolder(
                     ctx.ticket.queue.folderId,
-                    searchTags
+                    searchTags,
+                    ctx.ticket.companyId
                 );
 
                 if (catalogoFile) {
@@ -218,7 +242,8 @@ export class ActionExecutor {
             if (ctx.ticket.queue?.folderId) {
                 tabelaFile = await this.findFileInLibraryFolder(
                     ctx.ticket.queue.folderId,
-                    ["tabela", "precos", "preco", "preço", "price", "pricing"]
+                    ["tabela", "precos", "preco", "preço", "price", "pricing"],
+                    ctx.ticket.companyId
                 );
 
                 if (tabelaFile) {
@@ -446,19 +471,34 @@ export class ActionExecutor {
      */
     private static async findFileInLibraryFolder(
         folderId: number,
-        searchTags: string[]
+        searchTags: string[],
+        companyId?: number
     ): Promise<FilesOptions | null> {
         try {
-            // Se folderId === -1, buscar em TODAS as pastas
-            const whereClause: any = {};
+            // Se folderId === -1, buscar em TODAS as pastas da empresa
+            let folderIds: number[] = [];
 
-            if (folderId !== -1) {
-                whereClause.folderId = folderId;
+            if (folderId === -1 && companyId) {
+                logger.info(`[ActionExecutor] folderId=-1, buscando em todas as pastas da empresa ${companyId}`);
+                const allFolders = await LibraryFolder.findAll({
+                    where: { companyId }
+                });
+                folderIds = allFolders.map(f => f.id);
+                logger.info(`[ActionExecutor] Pastas da empresa: ${folderIds.join(", ")}`);
+            } else if (folderId !== -1) {
+                folderIds = [folderId];
+            }
+
+            if (folderIds.length === 0) {
+                logger.warn(`[ActionExecutor] Nenhuma pasta para buscar`);
+                return null;
             }
 
             // Buscar LibraryFiles
             const libraryFiles = await LibraryFile.findAll({
-                where: whereClause,
+                where: {
+                    folderId: { [Op.in]: folderIds }
+                },
                 include: [
                     {
                         model: FilesOptions,
