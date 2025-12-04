@@ -6,6 +6,7 @@ import * as TagController from "../controllers/TagController";
 const tagRoutes = express.Router();
 
 tagRoutes.get("/tags/list", isAuth, TagController.list);
+tagRoutes.get("/tags/autocomplete", isAuth, TagController.autocomplete);
 tagRoutes.get("/tags", isAuth, TagController.index);
 tagRoutes.get("/tags/:tagId", isAuth, TagController.show);
 tagRoutes.get("/tag/kanban", isAuth, TagController.kanban);

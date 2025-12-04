@@ -72,15 +72,30 @@ const IndexLibraryFileService = async ({
 
         console.log(`[LibraryRAG] Indexing file ${file.title} with ${tags.length} tags`);
 
+        // Calcular o caminho relativo para envio (a partir de /public)
+        const sourceRelPath = relPath.startsWith("company") 
+            ? relPath 
+            : `company${companyId}/files/${(file.fileOption as any).fileId || (file.fileOption as any).file?.id}/${relPath}`;
+
         // Indexar usando o serviço existente
+        // source agora contém o caminho relativo do arquivo para envio
         const result = await indexFileAuto({
             companyId,
             title: file.title,
             filePath,
-            tags,
-            source: `library:${fileId}`,
+            tags: [
+                ...tags,
+                `libraryFileId:${fileId}`,
+                `fileOptionId:${file.fileOptionId}`
+            ],
+            source: sourceRelPath, // Caminho relativo para envio
             chunkSize: 1000,
-            overlap: 200
+            overlap: 200,
+            metadata: {
+                libraryFileId: fileId,
+                fileOptionId: file.fileOptionId,
+                folderId: file.folderId
+            }
         });
 
         // Marcar como indexado e vincular ao documento

@@ -6,27 +6,14 @@ import {
     DialogActions,
     Button,
     TextField,
-    Chip,
-    Box,
-    Typography
+    Box
 } from '@material-ui/core';
+import TagAutocomplete from '../../../components/TagAutocomplete';
 
 const CreateFolderModal = ({ open, onClose, onSubmit, parentFolder }) => {
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [tags, setTags] = useState([]);
-    const [tagInput, setTagInput] = useState('');
-
-    const handleAddTag = () => {
-        if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-            setTags([...tags, tagInput.trim()]);
-            setTagInput('');
-        }
-    };
-
-    const handleDeleteTag = (tagToDelete) => {
-        setTags(tags.filter(tag => tag !== tagToDelete));
-    };
 
     const handleSubmit = () => {
         if (name.trim()) {
@@ -44,7 +31,6 @@ const CreateFolderModal = ({ open, onClose, onSubmit, parentFolder }) => {
         setName('');
         setDescription('');
         setTags([]);
-        setTagInput('');
         onClose();
     };
 
@@ -73,31 +59,12 @@ const CreateFolderModal = ({ open, onClose, onSubmit, parentFolder }) => {
                 />
 
                 <Box mt={2}>
-                    <Typography variant="body2" gutterBottom>
-                        Tags
-                    </Typography>
-                    <Box display="flex" gap={1} mb={1}>
-                        <TextField
-                            size="small"
-                            placeholder="Adicionar tag"
-                            value={tagInput}
-                            onChange={(e) => setTagInput(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && handleAddTag()}
-                        />
-                        <Button onClick={handleAddTag} variant="outlined" size="small">
-                            Adicionar
-                        </Button>
-                    </Box>
-                    <Box display="flex" flexWrap="wrap" gap={1}>
-                        {tags.map((tag) => (
-                            <Chip
-                                key={tag}
-                                label={tag}
-                                onDelete={() => handleDeleteTag(tag)}
-                                size="small"
-                            />
-                        ))}
-                    </Box>
+                    <TagAutocomplete
+                        value={tags}
+                        onChange={setTags}
+                        label="Tags padrão (herdadas pelos arquivos)"
+                        placeholder="Digite para buscar ou criar tag..."
+                    />
                 </Box>
             </DialogContent>
             <DialogActions>

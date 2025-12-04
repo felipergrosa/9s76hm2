@@ -65,6 +65,38 @@ export const BOT_AVAILABLE_FUNCTIONS: BotFunction[] = [
         }
     },
     {
+        name: "buscar_e_enviar_arquivo",
+        description: "OBRIGATÓRIO: Busca um arquivo na base de conhecimento (RAG) e ENVIA ao cliente. Use quando o cliente pedir qualquer documento, arquivo, PDF, imagem, manual, ficha técnica, etc. Esta função busca semanticamente e envia o arquivo original. SEMPRE use esta função quando cliente pedir para 'enviar', 'mandar', 'ver' algum documento.",
+        parameters: {
+            type: "object",
+            properties: {
+                termo_busca: {
+                    type: "string",
+                    description: "Termo de busca para encontrar o arquivo (ex: 'manual do produto X', 'ficha técnica luminária', 'catálogo completo')"
+                },
+                tipo_arquivo: {
+                    type: "string",
+                    description: "Tipo de arquivo desejado (opcional): 'pdf', 'imagem', 'documento', 'qualquer'",
+                    enum: ["pdf", "imagem", "documento", "qualquer"]
+                }
+            },
+            required: ["termo_busca"]
+        }
+    },
+    {
+        name: "listar_arquivos_disponiveis",
+        description: "Lista todos os arquivos disponíveis na base de conhecimento que podem ser enviados ao cliente. Use quando o cliente perguntar 'o que vocês têm?', 'quais arquivos?', 'quais documentos disponíveis?'",
+        parameters: {
+            type: "object",
+            properties: {
+                categoria: {
+                    type: "string",
+                    description: "Categoria opcional para filtrar (ex: 'catalogo', 'manual', 'ficha_tecnica')"
+                }
+            }
+        }
+    },
+    {
         name: "transferir_para_vendedor_responsavel",
         description: "Transfere a conversa automaticamente para o vendedor RESPONSÁVEL pelo cliente, baseado nas tags pessoais compartilhadas (ex: #BRUNA, #FELIPE). Use quando: 1) Cliente pedir para falar com vendedor específico, 2) Cliente já tem vendedor atribuído (tags pessoais), 3) Situação requer vendedor que conhece histórico do cliente.",
         parameters: {

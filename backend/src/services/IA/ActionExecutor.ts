@@ -50,6 +50,10 @@ export class ActionExecutor {
                     return await this.enviarTabelaPrecos(context);
                 case "buscar_produto_detalhado":
                     return await this.buscarProdutoDetalhado(context);
+                case "buscar_e_enviar_arquivo":
+                    return await this.buscarEEnviarArquivo(context);
+                case "listar_arquivos_disponiveis":
+                    return await this.listarArquivosDisponiveis(context);
                 case "transferir_para_vendedor_responsavel":
                     return await this.transferirParaVendedor(context);
                 case "transferir_para_atendente":
@@ -552,6 +556,347 @@ export class ActionExecutor {
             logger.error(`[ActionExecutor] Erro ao buscar em LibraryFolder:`, error);
             return null;
         }
+    }
+
+    /**
+     * Busca arquivo no RAG e envia ao cliente
+     * Esta é a função principal para integração RAG + envio de arquivos
+     */
+    private static async buscarEEnviarArquivo(ctx: ActionContext): Promise<string> {
+        const termoBusca = ctx.arguments.termo_busca;
+        const tipoArquivo = ctx.arguments.tipo_arquivo || "qualquer";
+
+        logger.info(`[ActionExecutor] buscarEEnviarArquivo iniciado`, {
+            ticketId: ctx.ticket.id,
+            termoBusca,
+            tipoArquivo
+        });
+
+        try {
+            // 1. Buscar no RAG com informações do arquivo
+            const hits = await ragSearch({
+                companyId: ctx.ticket.companyId,
+                query: termoBusca,
+                k: 5,
+                tags: ctx.ticket.queue?.ragCollection
+                    ? [`collection:${ctx.ticket.queue.ragCollection}`]
+                    : []
+            });
+
+            logger.info(`[ActionExecutor] RAG retornou ${hits.length} resultados`, {
+                ticketId: ctx.ticket.id,
+                hits: hits.map(h => ({
+                    title: h.title,
+                    source: h.source,
+                    mimeType: h.mimeType,
+                    libraryFileId: h.libraryFileId,
+                    fileOptionId: h.fileOptionId,
+                    distance: h.distance
+                }))
+            });
+
+            if (hits.length === 0) {
+                return `❌ Não encontrei nenhum arquivo relacionado a "${termoBusca}" na base de conhecimento.`;
+            }
+
+            // 2. Filtrar por tipo de arquivo se especificado
+            let filteredHits = hits;
+            if (tipoArquivo !== "qualquer") {
+                const mimeTypeMap: Record<string, string[]> = {
+                    "pdf": ["application/pdf"],
+                    "imagem": ["image/jpeg", "image/png", "image/gif", "image/webp"],
+                    "documento": ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+                };
+                const allowedMimes = mimeTypeMap[tipoArquivo] || [];
+                if (allowedMimes.length > 0) {
+                    filteredHits = hits.filter(h => h.mimeType && allowedMimes.some(m => h.mimeType!.includes(m)));
+                }
+            }
+
+            // 3. Encontrar o melhor resultado com arquivo enviável
+            let fileToSend: FilesOptions | null = null;
+            let selectedHit: any = null;
+
+            for (const hit of filteredHits) {
+                // Tentar via fileOptionId direto (mais eficiente)
+                if (hit.fileOptionId) {
+                    const fileOption = await FilesOptions.findByPk(hit.fileOptionId);
+                    if (fileOption && fileOption.isActive && fileOption.path) {
+                        fileToSend = fileOption;
+                        selectedHit = hit;
+                        logger.info(`[ActionExecutor] Arquivo encontrado via fileOptionId`, {
+                            fileOptionId: hit.fileOptionId,
+                            path: fileOption.path
+                        });
+                        break;
+                    }
+                }
+
+                // Tentar via libraryFileId
+                if (hit.libraryFileId) {
+                    const libraryFile = await LibraryFile.findByPk(hit.libraryFileId, {
+                        include: [{
+                            model: FilesOptions,
+                            as: "fileOption",
+                            where: { isActive: true },
+                            required: false
+                        }]
+                    });
+                    if (libraryFile?.fileOption && libraryFile.fileOption.path) {
+                        fileToSend = libraryFile.fileOption;
+                        selectedHit = hit;
+                        logger.info(`[ActionExecutor] Arquivo encontrado via libraryFileId`, {
+                            libraryFileId: hit.libraryFileId,
+                            path: libraryFile.fileOption.path
+                        });
+                        break;
+                    }
+                }
+
+                // Tentar via source (caminho do arquivo original)
+                if (hit.source) {
+                    const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
+                    const sourcePath = path.resolve(publicFolder, hit.source);
+                    
+                    if (fs.existsSync(sourcePath)) {
+                        // Criar um FilesOptions virtual para envio
+                        fileToSend = {
+                            path: hit.source,
+                            name: hit.title || path.basename(hit.source),
+                            mediaType: hit.mimeType || "application/octet-stream"
+                        } as FilesOptions;
+                        selectedHit = hit;
+                        logger.info(`[ActionExecutor] Arquivo encontrado via source`, {
+                            source: hit.source,
+                            sourcePath
+                        });
+                        break;
+                    }
+                }
+            }
+
+            if (!fileToSend) {
+                // Se não encontrou arquivo enviável, retornar informação textual
+                const bestHit = filteredHits[0] || hits[0];
+                logger.warn(`[ActionExecutor] Nenhum arquivo enviável encontrado`, {
+                    ticketId: ctx.ticket.id,
+                    bestHitTitle: bestHit.title,
+                    bestHitSource: bestHit.source
+                });
+                
+                return `📄 Encontrei informações sobre "${termoBusca}":\n\n**${bestHit.title}**\n${bestHit.content.substring(0, 500)}...\n\n⚠️ O arquivo original não está disponível para envio direto. Posso ajudar de outra forma?`;
+            }
+
+            // 4. Enviar o arquivo
+            const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
+            const filePath = path.resolve(publicFolder, fileToSend.path);
+
+            if (!fs.existsSync(filePath)) {
+                logger.error(`[ActionExecutor] Arquivo não existe no disco: ${filePath}`);
+                return `❌ O arquivo "${selectedHit.title}" foi encontrado na base de conhecimento, mas não está disponível no servidor.`;
+            }
+
+            const fileBuffer = fs.readFileSync(filePath);
+            const fileName = fileToSend.name || selectedHit.title || "arquivo";
+            const mimeType = fileToSend.mediaType || selectedHit.mimeType || "application/octet-stream";
+
+            // Detectar se é API Oficial
+            const isOfficial = (ctx.wbot as any)?.channelType === "official" || (ctx.wbot as any)?.isOfficial;
+            const number = `${ctx.contact.number}@${ctx.ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
+
+            // Determinar tipo de envio baseado no mimeType
+            if (mimeType.startsWith("image/")) {
+                if (isOfficial) {
+                    await (ctx.wbot as any).sendImageMessage(ctx.contact.number, fileBuffer, fileName);
+                } else {
+                    await ctx.wbot.sendMessage(number, {
+                        image: fileBuffer,
+                        caption: `📎 ${fileName}`
+                    });
+                }
+            } else if (mimeType.startsWith("video/")) {
+                if (isOfficial) {
+                    await (ctx.wbot as any).sendVideoMessage(ctx.contact.number, fileBuffer, fileName);
+                } else {
+                    await ctx.wbot.sendMessage(number, {
+                        video: fileBuffer,
+                        caption: `📎 ${fileName}`
+                    });
+                }
+            } else {
+                // Documento (PDF, etc)
+                if (isOfficial) {
+                    await (ctx.wbot as any).sendDocumentMessage(ctx.contact.number, fileBuffer, fileName, mimeType);
+                } else {
+                    await ctx.wbot.sendMessage(number, {
+                        document: fileBuffer,
+                        fileName,
+                        mimetype: mimeType
+                    });
+                }
+            }
+
+            logger.info(`[ActionExecutor] Arquivo enviado com sucesso`, {
+                ticketId: ctx.ticket.id,
+                fileName,
+                mimeType,
+                fileSize: fileBuffer.length
+            });
+
+            return `✅ Arquivo "${fileName}" enviado com sucesso!`;
+
+        } catch (error: any) {
+            logger.error("[ActionExecutor] Erro ao buscar e enviar arquivo:", error);
+            return `❌ Erro ao buscar/enviar arquivo: ${error.message}`;
+        }
+    }
+
+    /**
+     * Lista todos os arquivos disponíveis na base de conhecimento
+     */
+    private static async listarArquivosDisponiveis(ctx: ActionContext): Promise<string> {
+        const categoria = ctx.arguments.categoria;
+
+        logger.info(`[ActionExecutor] listarArquivosDisponiveis iniciado`, {
+            ticketId: ctx.ticket.id,
+            categoria
+        });
+
+        try {
+            // 1. Buscar arquivos via LibraryFolder vinculados à fila
+            let arquivos: { nome: string; tipo: string; descricao?: string }[] = [];
+
+            // Via QueueRAGSource (pastas vinculadas à fila)
+            if (ctx.ticket.queue?.id) {
+                const QueueRAGSource = (await import("../../models/QueueRAGSource")).default;
+                const sources = await QueueRAGSource.findAll({
+                    where: { queueId: ctx.ticket.queue.id },
+                    include: [{
+                        model: LibraryFolder,
+                        as: "folder",
+                        include: [{
+                            model: LibraryFile,
+                            as: "files",
+                            include: [{
+                                model: FilesOptions,
+                                as: "fileOption",
+                                where: { isActive: true },
+                                required: true
+                            }]
+                        }]
+                    }]
+                });
+
+                for (const source of sources) {
+                    const folder = (source as any).folder;
+                    if (folder?.files) {
+                        for (const file of folder.files) {
+                            if (file.fileOption) {
+                                const tags = file.tags || [];
+                                // Filtrar por categoria se especificada
+                                if (categoria && !tags.some((t: string) => t.toLowerCase().includes(categoria.toLowerCase()))) {
+                                    continue;
+                                }
+                                arquivos.push({
+                                    nome: file.title || file.fileOption.name,
+                                    tipo: this.getMimeTypeLabel(file.fileOption.mediaType),
+                                    descricao: file.fileOption.description || undefined
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Via folderId direto (sistema legado)
+            if (arquivos.length === 0 && ctx.ticket.queue?.folderId) {
+                const folderId = ctx.ticket.queue.folderId;
+                let folderIds: number[] = [];
+
+                if (folderId === -1) {
+                    const allFolders = await LibraryFolder.findAll({
+                        where: { companyId: ctx.ticket.companyId }
+                    });
+                    folderIds = allFolders.map(f => f.id);
+                } else {
+                    folderIds = [folderId];
+                }
+
+                const libraryFiles = await LibraryFile.findAll({
+                    where: { folderId: { [Op.in]: folderIds } },
+                    include: [{
+                        model: FilesOptions,
+                        as: "fileOption",
+                        where: { isActive: true },
+                        required: true
+                    }]
+                });
+
+                for (const file of libraryFiles) {
+                    const tags = file.tags || [];
+                    if (categoria && !tags.some((t: string) => t.toLowerCase().includes(categoria.toLowerCase()))) {
+                        continue;
+                    }
+                    arquivos.push({
+                        nome: file.title || file.fileOption?.name || "Arquivo",
+                        tipo: this.getMimeTypeLabel(file.fileOption?.mediaType),
+                        descricao: file.fileOption?.description || undefined
+                    });
+                }
+            }
+
+            // Via fileListId (sistema mais antigo)
+            if (arquivos.length === 0 && ctx.ticket.queue?.fileListId) {
+                const fileOptions = await FilesOptions.findAll({
+                    where: {
+                        fileId: ctx.ticket.queue.fileListId,
+                        isActive: true
+                    }
+                });
+
+                for (const file of fileOptions) {
+                    if (categoria && file.keywords && !file.keywords.toLowerCase().includes(categoria.toLowerCase())) {
+                        continue;
+                    }
+                    arquivos.push({
+                        nome: file.name,
+                        tipo: this.getMimeTypeLabel(file.mediaType),
+                        descricao: file.description || undefined
+                    });
+                }
+            }
+
+            if (arquivos.length === 0) {
+                return `📂 Não encontrei arquivos disponíveis${categoria ? ` na categoria "${categoria}"` : ""}.`;
+            }
+
+            // Formatar lista
+            const lista = arquivos.map(a => {
+                let item = `• **${a.nome}** (${a.tipo})`;
+                if (a.descricao) item += `\n  _${a.descricao}_`;
+                return item;
+            }).join("\n");
+
+            return `📂 **Arquivos disponíveis${categoria ? ` (${categoria})` : ""}:**\n\n${lista}\n\nQual arquivo você gostaria de receber?`;
+
+        } catch (error: any) {
+            logger.error("[ActionExecutor] Erro ao listar arquivos:", error);
+            return `❌ Erro ao listar arquivos: ${error.message}`;
+        }
+    }
+
+    /**
+     * Converte mimeType para label amigável
+     */
+    private static getMimeTypeLabel(mimeType?: string): string {
+        if (!mimeType) return "Arquivo";
+        if (mimeType.includes("pdf")) return "PDF";
+        if (mimeType.includes("image")) return "Imagem";
+        if (mimeType.includes("video")) return "Vídeo";
+        if (mimeType.includes("audio")) return "Áudio";
+        if (mimeType.includes("word") || mimeType.includes("document")) return "Documento";
+        if (mimeType.includes("excel") || mimeType.includes("spreadsheet")) return "Planilha";
+        return "Arquivo";
     }
 }
 

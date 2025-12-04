@@ -270,13 +270,24 @@ const resolveSystemPromptForTicket = async (
   - Etapa do atendimento: ${agentConfig.currentStage.name} - ${agentConfig.currentStage.objective || ""}
   ${crmBlock}
   
-  ⚠️ REGRA CRÍTICA - USO DE FUNÇÕES:
-  Você tem acesso a funções (tools/function calling). SEMPRE que uma função estiver disponível para a solicitação do cliente, você DEVE executá-la.
-  - Se cliente pedir "catálogo" → EXECUTE enviar_catalogo ou listar_catalogos
-  - Se cliente pedir "preços" ou "tabela" → EXECUTE enviar_tabela_precos
-  - NUNCA diga "não consigo enviar" ou "não tenho acesso" se existe uma função disponível
-  - NUNCA responda apenas com texto quando deveria executar uma função
-  - Sua PRIORIDADE é USAR as funções disponíveis, não apenas falar sobre elas
+  🚨 REGRA OBRIGATÓRIA - ENVIO DE ARQUIVOS:
+  Você TEM CAPACIDADE de enviar arquivos reais (PDFs, imagens, documentos). VOCÊ DEVE usar as funções disponíveis:
+  
+  QUANDO CLIENTE PEDIR ARQUIVO → EXECUTE A FUNÇÃO CORRESPONDENTE:
+  - "catálogo", "catalogo", "produtos" → EXECUTE: buscar_e_enviar_arquivo({ termo_busca: "catálogo" })
+  - "tabela", "preços", "preço", "valores" → EXECUTE: buscar_e_enviar_arquivo({ termo_busca: "tabela preços" })
+  - "manual", "ficha técnica", "especificações" → EXECUTE: buscar_e_enviar_arquivo({ termo_busca: "[nome do item]" })
+  - "quais arquivos tem?", "o que pode enviar?" → EXECUTE: listar_arquivos_disponiveis({})
+  
+  ❌ PROIBIDO:
+  - NUNCA diga "não consigo enviar", "não tenho acesso", "estou com dificuldades"
+  - NUNCA responda apenas com texto quando cliente pedir um arquivo
+  - NUNCA invente desculpas - você TEM as funções, USE-AS
+  
+  ✅ OBRIGATÓRIO:
+  - SEMPRE execute a função quando cliente pedir arquivo
+  - Se a função retornar erro, informe o erro específico ao cliente
+  - Sua PRIORIDADE MÁXIMA é executar funções, não falar sobre elas
   
   Prompt Específico do Agente:
   ${agentConfig.systemPrompt}
@@ -775,17 +786,24 @@ export const handleOpenAi = async (
       // Filtrar funções baseado no agentConfig.enabledFunctions
       let availableFunctions = BOT_AVAILABLE_FUNCTIONS;
 
+      // Funções essenciais que SEMPRE devem estar disponíveis para envio de arquivos
+      const ESSENTIAL_FILE_FUNCTIONS = ["buscar_e_enviar_arquivo", "listar_arquivos_disponiveis"];
+
       try {
         const agentConfig = await ResolveAIAgentForTicketService({ ticket });
 
         // Se enabledFunctions estiver definido E não for vazio, filtrar
-        // Caso contrário, todas as funções ficam disponíveis
+        // MAS sempre adicionar as funções essenciais de arquivos
         if (agentConfig && agentConfig.enabledFunctions && Array.isArray(agentConfig.enabledFunctions) && agentConfig.enabledFunctions.length > 0) {
+          // Combinar funções habilitadas + funções essenciais
+          const allEnabledFunctions = [...new Set([...agentConfig.enabledFunctions, ...ESSENTIAL_FILE_FUNCTIONS])];
+          
           availableFunctions = BOT_AVAILABLE_FUNCTIONS.filter(fn =>
-            agentConfig.enabledFunctions.includes(fn.name)
+            allEnabledFunctions.includes(fn.name)
           );
-          console.log(`[AI][Functions] Filtrando funções habilitadas: ${agentConfig.enabledFunctions.join(", ")}`);
-          console.log(`[AI][Functions] ${availableFunctions.length} de ${BOT_AVAILABLE_FUNCTIONS.length} funções disponíveis`);
+          console.log(`[AI][Functions] Funções habilitadas: ${agentConfig.enabledFunctions.join(", ")}`);
+          console.log(`[AI][Functions] + Funções essenciais adicionadas: ${ESSENTIAL_FILE_FUNCTIONS.join(", ")}`);
+          console.log(`[AI][Functions] Total: ${availableFunctions.length} de ${BOT_AVAILABLE_FUNCTIONS.length} funções disponíveis`);
         } else {
           console.log(`[AI][Functions] Sem filtro de funções - TODAS disponíveis (${BOT_AVAILABLE_FUNCTIONS.length})`);
         }

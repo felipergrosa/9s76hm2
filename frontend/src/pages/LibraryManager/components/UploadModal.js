@@ -38,8 +38,11 @@ const UploadModal = ({ open, onClose, currentFolder, onUploadComplete, user }) =
     useEffect(() => {
         const fetchTags = async () => {
             try {
-                const { data } = await api.get('/library/tags');
-                setTagOptions(data || []);
+                const { data } = await api.get('/tags/autocomplete', {
+                    params: { limit: 100 }
+                });
+                // Converter para formato esperado pelo Autocomplete
+                setTagOptions((data || []).map(t => ({ name: t.tag, count: t.count })));
             } catch (err) {
                 toastError(err);
             }

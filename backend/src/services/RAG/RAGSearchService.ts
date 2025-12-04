@@ -16,6 +16,10 @@ export interface SearchResultItem {
   title: string;
   content: string;
   distance: number; // cosine distance (menor é melhor)
+  source?: string; // caminho do arquivo original
+  mimeType?: string; // tipo do arquivo
+  libraryFileId?: number; // ID do LibraryFile vinculado (se houver)
+  fileOptionId?: number; // ID do FilesOptions vinculado (se houver)
 }
 
 export const search = async (params: SearchParams): Promise<SearchResultItem[]> => {
@@ -54,9 +58,12 @@ export const search = async (params: SearchParams): Promise<SearchResultItem[]> 
 
   const [rows] = await sequelize.query(
     `SELECT c."id" as "chunkId", c."documentId", d."title", c."content",
+            d."source", d."mimeType",
+            lf."id" as "libraryFileId", lf."fileOptionId",
             (c."embedding" <=> :qvec::vector) as distance
        FROM "KnowledgeChunks" c
        JOIN "KnowledgeDocuments" d ON d."id" = c."documentId"
+       LEFT JOIN "LibraryFiles" lf ON lf."knowledgeDocumentId" = d."id"
       ${whereSql}
    ORDER BY distance ASC
       LIMIT :k`,
@@ -68,6 +75,10 @@ export const search = async (params: SearchParams): Promise<SearchResultItem[]> 
     documentId: r.documentId,
     title: r.title,
     content: r.content,
-    distance: Number(r.distance)
+    distance: Number(r.distance),
+    source: r.source || undefined,
+    mimeType: r.mimeType || undefined,
+    libraryFileId: r.libraryFileId || undefined,
+    fileOptionId: r.fileOptionId || undefined
   }));
 };

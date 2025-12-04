@@ -13,6 +13,7 @@ import SyncTagService from "../services/TagServices/SyncTagsService";
 import Tag from "../models/Tag";
 import KanbanListService from "../services/TagServices/KanbanListService";
 import ContactTag from "../models/ContactTag";
+import ListAllTagsService from "../services/TagServices/ListAllTagsService";
 
 type IndexQuery = {
   searchParam?: string;
@@ -271,4 +272,24 @@ export const removeContactTag = async (
     });
 
   return res.status(200).json({ message: "Tag deleted" });
+};
+
+/**
+ * Autocomplete de tags para arquivos e pastas
+ * Retorna tags já usadas na empresa para sugestão
+ */
+export const autocomplete = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId } = req.user;
+  const { search, limit } = req.query;
+
+  const tags = await ListAllTagsService({
+    companyId,
+    search: search as string,
+    limit: limit ? Number(limit) : 50
+  });
+
+  return res.json(tags);
 };

@@ -215,6 +215,7 @@ export const indexFileAuto = async (params: {
   source?: string;
   chunkSize?: number;
   overlap?: number;
+  metadata?: Record<string, any>;
 }): Promise<IndexResult> => {
   const { filePath } = params;
   const ext = path.extname(filePath).toLowerCase();
