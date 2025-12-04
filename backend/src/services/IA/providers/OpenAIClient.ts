@@ -78,7 +78,7 @@ export default class OpenAIClient implements IAClient {
     // Adicionar mensagem do usuário
     messages.push({ role: "user", content: req.user });
 
-    // Primeira chamada com functions
+    // Primeira chamada com tools (formato novo da OpenAI)
     const chatParams: any = {
       model: req.model,
       messages,
@@ -88,22 +88,27 @@ export default class OpenAIClient implements IAClient {
       max_tokens: req.max_tokens ?? 400,
     };
 
-    // Adicionar functions se fornecidas
+    // Converter functions para tools (formato novo da OpenAI)
     if (req.functions && req.functions.length > 0) {
-      chatParams.functions = req.functions;
-      chatParams.function_call = "auto";
+      chatParams.tools = req.functions.map(fn => ({
+        type: "function",
+        function: fn
+      }));
+      chatParams.tool_choice = "auto";
     }
+
+    console.log(`[OpenAIClient] Chamando com ${chatParams.tools?.length || 0} tools disponíveis`);
 
     const chat = await this.client.chat.completions.create(chatParams);
     const choice = chat.choices[0];
 
-    // Verificar se IA solicitou executar uma função
-    if (choice.finish_reason === "function_call" && choice.message.function_call) {
-      const functionCall = choice.message.function_call;
-      const functionName = functionCall.name;
-      const functionArgs = JSON.parse(functionCall.arguments || "{}");
+    // Verificar se IA solicitou executar uma tool (formato novo)
+    if (choice.finish_reason === "tool_calls" && choice.message.tool_calls && choice.message.tool_calls.length > 0) {
+      const toolCall = choice.message.tool_calls[0];
+      const functionName = toolCall.function.name;
+      const functionArgs = JSON.parse(toolCall.function.arguments || "{}");
 
-      console.log(`[OpenAIClient] Function call requested: ${functionName}`, functionArgs);
+      console.log(`[OpenAIClient] Tool call requested: ${functionName}`, functionArgs);
 
       // Executar função via callback
       let actionResult = "Função não executada (callback não fornecido)";
@@ -111,23 +116,30 @@ export default class OpenAIClient implements IAClient {
         try {
           actionResult = await req.onFunctionCall(functionName, functionArgs);
         } catch (error: any) {
+          console.error(`[OpenAIClient] Erro ao executar ${functionName}:`, error);
           actionResult = `Erro ao executar função: ${error.message}`;
         }
       }
 
-      // Adicionar chamada e resultado ao histórico
+      console.log(`[OpenAIClient] Tool result: ${actionResult.substring(0, 200)}...`);
+
+      // Adicionar chamada e resultado ao histórico (formato novo)
       messages.push({
         role: "assistant",
         content: null,
-        function_call: {
-          name: functionName,
-          arguments: functionCall.arguments
-        }
+        tool_calls: [{
+          id: toolCall.id,
+          type: "function",
+          function: {
+            name: functionName,
+            arguments: toolCall.function.arguments
+          }
+        }]
       } as any);
 
       messages.push({
-        role: "function",
-        name: functionName,
+        role: "tool",
+        tool_call_id: toolCall.id,
         content: actionResult
       } as any);
 
@@ -142,7 +154,47 @@ export default class OpenAIClient implements IAClient {
       return finalChat.choices[0].message?.content?.trim() || "";
     }
 
-    // Resposta normal (sem function call)
+    // Fallback: verificar formato antigo (function_call) para compatibilidade
+    if (choice.finish_reason === "function_call" && choice.message.function_call) {
+      const functionCall = choice.message.function_call;
+      const functionName = functionCall.name;
+      const functionArgs = JSON.parse(functionCall.arguments || "{}");
+
+      console.log(`[OpenAIClient] Function call (legacy) requested: ${functionName}`, functionArgs);
+
+      let actionResult = "Função não executada";
+      if (req.onFunctionCall) {
+        try {
+          actionResult = await req.onFunctionCall(functionName, functionArgs);
+        } catch (error: any) {
+          actionResult = `Erro: ${error.message}`;
+        }
+      }
+
+      messages.push({
+        role: "assistant",
+        content: null,
+        function_call: { name: functionName, arguments: functionCall.arguments }
+      } as any);
+
+      messages.push({
+        role: "function",
+        name: functionName,
+        content: actionResult
+      } as any);
+
+      const finalChat = await this.client.chat.completions.create({
+        model: req.model,
+        messages,
+        temperature: req.temperature ?? 0.7,
+        max_tokens: req.max_tokens ?? 400
+      });
+
+      return finalChat.choices[0].message?.content?.trim() || "";
+    }
+
+    // Resposta normal (sem function/tool call)
+    console.log(`[OpenAIClient] Resposta normal (sem tool call). finish_reason: ${choice.finish_reason}`);
     return choice.message?.content?.trim() || "";
   }
 }

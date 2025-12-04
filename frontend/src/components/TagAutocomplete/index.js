@@ -27,13 +27,14 @@ const useStyles = makeStyles((theme) => ({
     gap: theme.spacing(0.5)
   },
   suggestionsContainer: {
-    position: 'fixed', // Fica acima de TODO o modal
-    zIndex: 1600, // Acima do dialog (1300) e tooltip (1500)
+    position: 'fixed',
+    zIndex: 9999, // Máximo - acima de TUDO
     maxHeight: 180,
     overflow: 'auto',
-    boxShadow: theme.shadows[6],
-    backgroundColor: theme.palette.background.paper,
-    borderRadius: 4
+    boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+    backgroundColor: '#fff',
+    borderRadius: 4,
+    border: '1px solid #ddd'
   },
   suggestionItem: {
     cursor: 'pointer',
