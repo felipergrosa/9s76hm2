@@ -212,6 +212,59 @@ export async function processOfficialBot({
           logger.error(`[ProcessOfficialBot] Erro ao enviar mensagem: ${error.message}`);
           throw error;
         }
+      },
+      // ADICIONAR MÉTODO sendDocumentMessage para ActionExecutor
+      sendDocumentMessage: async (recipient: string, fileBuffer: Buffer, fileName: string, mimeType: string) => {
+        logger.info(`[ProcessOfficialBot] sendDocumentMessage chamado diretamente:`, { recipient, fileName, mimeType });
+
+        try {
+          const { GetTicketAdapter } = await import("../../helpers/GetWhatsAppAdapter");
+          const adapter = await GetTicketAdapter(ticket);
+
+          // Remover @s.whatsapp.net se presente
+          const to = recipient.replace("@s.whatsapp.net", "").replace(/\D/g, "");
+
+          const sentMessage = await adapter.sendDocumentMessage(
+            to,
+            fileBuffer,
+            fileName,
+            mimeType
+          );
+
+          logger.info(`[ProcessOfficialBot] Documento enviado via sendDocumentMessage: ${sentMessage.id}`);
+
+          // Salvar mensagem no banco
+          if (adapter.channelType === "official" && sentMessage) {
+            const CreateMessageService = (await import("../MessageServices/CreateMessageService")).default;
+            await CreateMessageService({
+              messageData: {
+                wid: sentMessage.id,
+                ticketId: ticket.id,
+                contactId: ticket.contactId,
+                body: fileName,
+                fromMe: true,
+                read: true,
+                ack: 1,
+                mediaType: "document"
+              },
+              companyId
+            });
+
+            logger.info(`[ProcessOfficialBot] Documento salvo no banco: ${sentMessage.id}`);
+          }
+
+          // Atualizar última mensagem do ticket
+          await ticket.update({
+            lastMessage: fileName,
+            imported: null
+          });
+
+          return sentMessage;
+
+        } catch (error: any) {
+          logger.error(`[ProcessOfficialBot] Erro ao enviar documento: ${error.message}`);
+          throw error;
+        }
       }
     } as any;
 
