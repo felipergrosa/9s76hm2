@@ -171,8 +171,11 @@ export async function processOfficialBot({
             logger.info(`[ProcessOfficialBot] Documento enviado: ${sentMessage.id}`);
 
           } else if (content.text) {
-            // ENVIAR TEXTO - Remover espaços extras
-            messageBody = content.text.trim();
+            // ENVIAR TEXTO - Remover espaços extras e caracteres especiais
+            messageBody = content.text
+              .replace(/\u200e/g, '') // Remove LEFT-TO-RIGHT MARK
+              .replace(/\u200f/g, '') // Remove RIGHT-TO-LEFT MARK  
+              .trim();
             sentMessage = await adapter.sendTextMessage(to, messageBody);
             mediaType = "conversation";
 

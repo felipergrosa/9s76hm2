@@ -1,6 +1,12 @@
 /**
- * Módulo de abstração WhatsApp
- * Suporta Baileys (não oficial) e WhatsApp Business API (oficial)
+ * Módulo de abstração para canais de mensageria
+ * 
+ * Suporta:
+ * - WhatsApp Baileys (não oficial)
+ * - WhatsApp Business API (oficial)
+ * - Facebook Messenger
+ * - Instagram Direct
+ * - WebChat (widget embeddable)
  * 
  * @example
  * ```typescript
@@ -12,7 +18,7 @@
  * // Inicializar
  * await adapter.initialize();
  * 
- * // Enviar mensagem
+ * // Enviar mensagem (funciona para qualquer canal!)
  * const message = await adapter.sendTextMessage('5511999999999', 'Olá!');
  * ```
  */
@@ -28,9 +34,16 @@ export {
   WhatsAppAdapterError
 } from "./IWhatsAppAdapter";
 
-// Adapters
+// Adapters - WhatsApp
 export { BaileysAdapter } from "./BaileysAdapter";
 export { OfficialAPIAdapter } from "./OfficialAPIAdapter";
+
+// Adapters - Meta (Facebook/Instagram)
+export { FacebookAdapter } from "./FacebookAdapter";
+export { InstagramAdapter } from "./InstagramAdapter";
+
+// Adapters - WebChat
+export { WebChatAdapter } from "./WebChatAdapter";
 
 // Factory
 export { WhatsAppFactory } from "./WhatsAppFactory";

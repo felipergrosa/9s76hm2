@@ -45,6 +45,14 @@ interface WhatsappData {
   queueIdImportMessages?: number;
   flowIdNotPhrase?: number;
   flowIdWelcome?: number;
+  // Campos Meta (Facebook/Instagram)
+  metaAppId?: string;
+  metaAppSecret?: string;
+  metaAccessToken?: string;
+  metaPageId?: string;
+  metaPageAccessToken?: string;
+  metaWebhookVerifyToken?: string;
+  instagramAccountId?: string;
 }
 
 interface Request {
@@ -107,7 +115,15 @@ const UpdateWhatsAppService = async ({
     collectiveVacationStart,
     queueIdImportMessages,
     flowIdNotPhrase,
-    flowIdWelcome
+    flowIdWelcome,
+    // Campos Meta (Facebook/Instagram)
+    metaAppId,
+    metaAppSecret,
+    metaAccessToken,
+    metaPageId,
+    metaPageAccessToken,
+    metaWebhookVerifyToken,
+    instagramAccountId
   } = whatsappData;
 
   try {
@@ -175,7 +191,15 @@ const UpdateWhatsAppService = async ({
     collectiveVacationStart,
     queueIdImportMessages,
     flowIdNotPhrase,
-    flowIdWelcome
+    flowIdWelcome,
+    // Campos Meta (Facebook/Instagram)
+    metaAppId,
+    metaAppSecret,
+    metaAccessToken,
+    metaPageId,
+    metaPageAccessToken,
+    metaWebhookVerifyToken,
+    instagramAccountId
   });
 
   if (!requestQR) {

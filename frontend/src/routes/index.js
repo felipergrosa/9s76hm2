@@ -40,6 +40,9 @@ import ArquivosChatbotTutorial from "../pages/Helps/ArquivosChatbotTutorial";
 import ListasContatosTutorial from "../pages/Helps/ListasContatosTutorial";
 import RelatoriosTutorial from "../pages/Helps/RelatoriosTutorial";
 import FinanceiroTutorial from "../pages/Helps/FinanceiroTutorial";
+import FacebookTutorial from "../pages/Helps/FacebookTutorial";
+import InstagramTutorial from "../pages/Helps/InstagramTutorial";
+import WebChatTutorial from "../pages/Helps/WebChatTutorial";
 import ContactLists from "../pages/ContactLists";
 import ContactListItems from "../pages/ContactListItems";
 import Companies from "../pages/Companies";
@@ -132,6 +135,9 @@ const Routes = () => {
                 <Route exact path="/helps/listas-contatos" component={ListasContatosTutorial} isPrivate />
                 <Route exact path="/helps/relatorios" component={RelatoriosTutorial} isPrivate />
                 <Route exact path="/helps/financeiro" component={FinanceiroTutorial} isPrivate />
+                <Route exact path="/helps/facebook" component={FacebookTutorial} isPrivate />
+                <Route exact path="/helps/instagram" component={InstagramTutorial} isPrivate />
+                <Route exact path="/helps/webchat" component={WebChatTutorial} isPrivate />
                 <Route exact path="/users" component={Users} isPrivate />
                 <Route exact path="/messages-api" component={MessagesAPI} isPrivate />
                 <Route exact path="/settings" component={SettingsCustom} isPrivate />

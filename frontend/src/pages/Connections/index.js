@@ -38,6 +38,7 @@ import {
   Instagram,
   WhatsApp,
   MoreVert,
+  Chat as WebChatIcon,
 } from "@material-ui/icons";
 
 import FacebookLogin from "react-facebook-login/dist/facebook-login-render-props";
@@ -137,23 +138,29 @@ const CustomToolTip = ({ title, content, children }) => {
   );
 };
 
-const IconChannel = (channel) => {
-  switch (channel) {
-    case "facebook":
-      return <Facebook style={{ color: "#3b5998" }} />;
-    case "instagram":
-      return <Instagram style={{ color: "#e1306c" }} />;
-    case "whatsapp":
-      return <WhatsApp style={{ color: "#25d366" }} />;
-    default:
-      return "error";
+const IconChannel = (channel, channelType) => {
+  // Garante compatibilidade com conexões antigas onde apenas channelType foi salvo
+  if (channel === "facebook" || channelType === "facebook") {
+    return <Facebook style={{ color: "#3b5998" }} />;
   }
+
+  if (channel === "instagram" || channelType === "instagram") {
+    return <Instagram style={{ color: "#e1306c" }} />;
+  }
+
+  if (channel === "webchat" || channelType === "webchat") {
+    return <WebChatIcon style={{ color: "#6B46C1" }} />;
+  }
+
+  // Padrão: WhatsApp (Baileys ou Oficial)
+  return <WhatsApp style={{ color: "#25d366" }} />;
 };
 
 const Connections = () => {
   const classes = useStyles();
 
   const { whatsApps, loading } = useContext(WhatsAppsContext);
+
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
   const [statusImport, setStatusImport] = useState([]);
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -259,7 +266,7 @@ const Connections = () => {
   };
 
   const handleOpenWhatsAppModal = () => {
-    setSelectedWhatsApp(null);
+    // Apenas abre o modal; quem chama é responsável por ajustar selectedWhatsApp
     setWhatsAppModalOpen(true);
   };
 
@@ -563,6 +570,7 @@ const Connections = () => {
         open={whatsAppModalOpen}
         onClose={handleCloseWhatsAppModal}
         whatsAppId={!qrModalOpen && selectedWhatsApp?.id}
+        initialChannelType={selectedWhatsApp?.channelType}
       />
       <Menu
         anchorEl={metaMenuAnchorEl}
@@ -671,11 +679,23 @@ const Connections = () => {
                           >
                             {i18n.t("connections.newConnection")}
                           </Button>
-                          <Menu {...bindMenu(popupState)}>
+                          <Menu 
+                              {...bindMenu(popupState)}
+                              anchorOrigin={{
+                                vertical: 'bottom',
+                                horizontal: 'right',
+                              }}
+                              transformOrigin={{
+                                vertical: 'top',
+                                horizontal: 'right',
+                              }}
+                              getContentAnchorEl={null}
+                            >
                             {/* WHATSAPP */}
                             <MenuItem
                               disabled={planConfig?.plan?.useWhatsapp ? false : true}
                               onClick={() => {
+                                setSelectedWhatsApp(null);
                                 handleOpenWhatsAppModal();
                                 popupState.close();
                               }}
@@ -690,57 +710,58 @@ const Connections = () => {
                               WhatsApp
                             </MenuItem>
                             {/* FACEBOOK */}
-                            <FacebookLogin
-                              appId={process.env.REACT_APP_FACEBOOK_APP_ID}
-                              autoLoad={false}
-                              fields="name,email,picture"
-                              version="9.0"
-                              scope={process.env.REACT_APP_REQUIRE_BUSINESS_MANAGEMENT?.toUpperCase() === "TRUE" ?
-                                "public_profile,pages_messaging,pages_show_list,pages_manage_metadata,pages_read_engagement,business_management"
-                                : "public_profile,pages_messaging,pages_show_list,pages_manage_metadata,pages_read_engagement"}
-                              callback={responseFacebook}
-                              render={(renderProps) => (
-                                <MenuItem
-                                  disabled={planConfig?.plan?.useFacebook ? false : true}
-                                  onClick={renderProps.onClick}
-                                >
-                                  <Facebook
-                                    fontSize="small"
-                                    style={{
-                                      marginRight: "10px",
-                                      color: "#3b5998",
-                                    }}
-                                  />
-                                  Facebook
-                                </MenuItem>
-                              )}
-                            />
+                            <MenuItem
+                              disabled={planConfig?.plan?.useFacebook ? false : true}
+                              onClick={() => {
+                                setSelectedWhatsApp({ channel: "facebook", channelType: "facebook" });
+                                handleOpenWhatsAppModal();
+                                popupState.close();
+                              }}
+                            >
+                              <Facebook
+                                fontSize="small"
+                                style={{
+                                  marginRight: "10px",
+                                  color: "#3b5998",
+                                }}
+                              />
+                              Facebook
+                            </MenuItem>
                             {/* INSTAGRAM */}
-                            <FacebookLogin
-                              appId={process.env.REACT_APP_FACEBOOK_APP_ID}
-                              autoLoad={false}
-                              fields="name,email,picture"
-                              version="9.0"
-                              scope={process.env.REACT_APP_REQUIRE_BUSINESS_MANAGEMENT?.toUpperCase() === "TRUE" ?
-                                "public_profile,instagram_basic,instagram_manage_messages,pages_messaging,pages_show_list,pages_manage_metadata,pages_read_engagement,business_management"
-                                : "public_profile,instagram_basic,instagram_manage_messages,pages_messaging,pages_show_list,pages_manage_metadata,pages_read_engagement"}
-                              callback={responseInstagram}
-                              render={(renderProps) => (
-                                <MenuItem
-                                  disabled={planConfig?.plan?.useInstagram ? false : true}
-                                  onClick={renderProps.onClick}
-                                >
-                                  <Instagram
-                                    fontSize="small"
-                                    style={{
-                                      marginRight: "10px",
-                                      color: "#e1306c",
-                                    }}
-                                  />
-                                  Instagram
-                                </MenuItem>
-                              )}
-                            />
+                            <MenuItem
+                              disabled={planConfig?.plan?.useInstagram ? false : true}
+                              onClick={() => {
+                                setSelectedWhatsApp({ channel: "instagram", channelType: "instagram" });
+                                handleOpenWhatsAppModal();
+                                popupState.close();
+                              }}
+                            >
+                              <Instagram
+                                fontSize="small"
+                                style={{
+                                  marginRight: "10px",
+                                  color: "#e1306c",
+                                }}
+                              />
+                              Instagram
+                            </MenuItem>
+                            {/* WEBCHAT */}
+                            <MenuItem
+                              onClick={() => {
+                                setSelectedWhatsApp({ channel: "webchat", channelType: "webchat" });
+                                handleOpenWhatsAppModal();
+                                popupState.close();
+                              }}
+                            >
+                              <WebChatIcon
+                                fontSize="small"
+                                style={{
+                                  marginRight: "10px",
+                                  color: "#6B46C1",
+                                }}
+                              />
+                              WebChat
+                            </MenuItem>
                           </Menu>
                         </>
                       )}
@@ -818,7 +839,7 @@ const Connections = () => {
                     {whatsApps?.length > 0 &&
                       whatsApps.map((whatsApp) => (
                         <TableRow key={whatsApp.id}>
-                          <TableCell align="center">{IconChannel(whatsApp.channel)}</TableCell>
+                          <TableCell align="center">{IconChannel(whatsApp.channel, whatsApp.channelType)}</TableCell>
                           <TableCell align="center">
                             <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
                               <span>{whatsApp.name}</span>

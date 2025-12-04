@@ -55,6 +55,14 @@ interface Request {
   wabaAccessToken?: string;
   wabaBusinessAccountId?: string;
   wabaWebhookVerifyToken?: string;
+  // Campos Meta (Facebook/Instagram)
+  metaAppId?: string;
+  metaAppSecret?: string;
+  metaAccessToken?: string;
+  metaPageId?: string;
+  metaPageAccessToken?: string;
+  metaWebhookVerifyToken?: string;
+  instagramAccountId?: string;
 }
 
 interface Response {
@@ -111,6 +119,14 @@ const CreateWhatsAppService = async ({
   wabaAccessToken,
   wabaBusinessAccountId,
   wabaWebhookVerifyToken,
+  // Campos Meta (Facebook/Instagram)
+  metaAppId,
+  metaAppSecret,
+  metaAccessToken,
+  metaPageId,
+  metaPageAccessToken,
+  metaWebhookVerifyToken,
+  instagramAccountId,
 }: Request): Promise<Response> => {
   const company = await Company.findOne({
     where: {
@@ -250,7 +266,15 @@ const CreateWhatsAppService = async ({
       wabaPhoneNumberId,
       wabaAccessToken,
       wabaBusinessAccountId,
-      wabaWebhookVerifyToken
+      wabaWebhookVerifyToken,
+      // Campos Meta (Facebook/Instagram)
+      metaAppId,
+      metaAppSecret,
+      metaAccessToken,
+      metaPageId,
+      metaPageAccessToken,
+      metaWebhookVerifyToken,
+      instagramAccountId
     },
     { include: ["queues"] }
   );

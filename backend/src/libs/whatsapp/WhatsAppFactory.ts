@@ -2,12 +2,15 @@ import Whatsapp from "../../models/Whatsapp";
 import { IWhatsAppAdapter } from "./IWhatsAppAdapter";
 import { BaileysAdapter } from "./BaileysAdapter";
 import { OfficialAPIAdapter } from "./OfficialAPIAdapter";
+import { FacebookAdapter } from "./FacebookAdapter";
+import { InstagramAdapter } from "./InstagramAdapter";
+import { WebChatAdapter } from "./WebChatAdapter";
 import AppError from "../../errors/AppError";
 import logger from "../../utils/logger";
 
 /**
- * Factory para criar adapters de WhatsApp
- * Decide qual adapter usar baseado no channelType
+ * Factory para criar adapters de mensageria
+ * Suporta: WhatsApp (Baileys/Official), Facebook, Instagram, WebChat
  */
 export class WhatsAppFactory {
   // Cache de adapters ativos (evita recriar)
@@ -18,7 +21,7 @@ export class WhatsAppFactory {
    */
   static async createAdapter(whatsapp: Whatsapp): Promise<IWhatsAppAdapter> {
     const whatsappId = whatsapp.id;
-    const channelType = whatsapp.channelType || "baileys";
+    const channelType = whatsapp.channelType || whatsapp.channel || "baileys";
 
     // Verificar se já existe adapter ativo
     const existingAdapter = this.adapters.get(whatsappId);
@@ -59,9 +62,53 @@ export class WhatsAppFactory {
         });
         break;
 
+      case "facebook":
+        logger.info(`[WhatsAppFactory] Criando FacebookAdapter para whatsappId=${whatsappId}`);
+        
+        if (!whatsapp.facebookPageUserId || !whatsapp.facebookUserToken) {
+          throw new AppError(
+            "Credenciais Facebook não configuradas. Configure pageId e accessToken.",
+            400
+          );
+        }
+
+        adapter = new FacebookAdapter(whatsappId, {
+          pageId: whatsapp.facebookPageUserId,
+          pageAccessToken: whatsapp.facebookUserToken
+        }) as any;
+        break;
+
+      case "instagram":
+        logger.info(`[WhatsAppFactory] Criando InstagramAdapter para whatsappId=${whatsappId}`);
+        
+        // Instagram usa facebookPageUserId como instagramAccountId (vinculado via Graph API)
+        if (!whatsapp.facebookPageUserId || !whatsapp.facebookUserToken) {
+          throw new AppError(
+            "Credenciais Instagram não configuradas. Configure a página do Facebook vinculada.",
+            400
+          );
+        }
+
+        adapter = new InstagramAdapter(whatsappId, {
+          instagramAccountId: whatsapp.facebookPageUserId, // Instagram Business Account vinculado
+          pageAccessToken: whatsapp.facebookUserToken,
+          pageId: whatsapp.facebookPageUserId
+        }) as any;
+        break;
+
+      case "webchat":
+        logger.info(`[WhatsAppFactory] Criando WebChatAdapter para whatsappId=${whatsappId}`);
+        
+        adapter = new WebChatAdapter(whatsappId, {
+          widgetId: whatsapp.name || `widget_${whatsappId}`,
+          companyId: whatsapp.companyId,
+          greeting: whatsapp.greetingMessage || "Olá! Como posso ajudar?"
+        }) as any;
+        break;
+
       default:
         throw new AppError(
-          `Tipo de canal não suportado: ${channelType}. Use "baileys" ou "official".`,
+          `Tipo de canal não suportado: ${channelType}. Use "baileys", "official", "facebook", "instagram" ou "webchat".`,
           400
         );
     }

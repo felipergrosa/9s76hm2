@@ -125,6 +125,28 @@ class Whatsapp extends Model<Whatsapp> {
   @Column(DataType.TEXT)
   tokenMeta: string;
 
+  // Campos para configuração do Meta (Facebook/Instagram)
+  @Column(DataType.TEXT)
+  metaAppId: string;
+
+  @Column(DataType.TEXT)
+  metaAppSecret: string;
+
+  @Column(DataType.TEXT)
+  metaAccessToken: string;
+
+  @Column(DataType.TEXT)
+  metaPageId: string;
+
+  @Column(DataType.TEXT)
+  metaPageAccessToken: string;
+
+  @Column(DataType.TEXT)
+  metaWebhookVerifyToken: string;
+
+  @Column(DataType.TEXT)
+  instagramAccountId: string;
+
   @Column(DataType.TEXT)
   channel: string;
 

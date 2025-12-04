@@ -31,6 +31,9 @@ import {
   AttachMoney,
   Notifications,
   RecordVoiceOver,
+  Facebook,
+  Instagram,
+  Chat as WebChatIcon,
 } from "@material-ui/icons";
 
 import MainContainer from "../../components/MainContainer";
@@ -206,10 +209,13 @@ const Helps = () => {
     { icon: <Label />, label: "Tags", path: "/helps/tags", tooltip: "Organize e categorize com etiquetas" },
     { icon: <Forum />, label: "Chat Interno", path: "/helps/chat-interno", tooltip: "Comunicação entre a equipe" },
     { icon: <SpeakerPhone />, label: "Campanhas", path: "/helps/campanhas", tooltip: "Envio de mensagens em massa" },
-    { icon: <Extension />, label: "FlowBuilder", path: "/helps/flow-builder", tooltip: "Construtor visual de fluxos" },
+    { icon: <Extension />, label: "FlowBuilder", path: "/helps/flowbuilder", tooltip: "Construtor visual de fluxos" },
     { icon: <Folder />, label: "Arquivos Chatbot", path: "/helps/arquivos-chatbot", tooltip: "Gerencie arquivos do  bot" },
     { icon: <ListIcon />, label: "Fila Chatbot", path: "/helps/fila-chatbot", tooltip: "Configure filas de atendimento" },
     { icon: <PhoneAndroid />, label: "Conexões WhatsApp", path: "/helps/conexoes-whatsapp", tooltip: "Conecte contas do WhatsApp" },
+    { icon: <Facebook style={{ color: "#3b5998" }} />, label: "Facebook Messenger", path: "/helps/facebook", tooltip: "Conecte páginas do Facebook" },
+    { icon: <Instagram style={{ color: "#e1306c" }} />, label: "Instagram Direct", path: "/helps/instagram", tooltip: "Conecte contas do Instagram" },
+    { icon: <WebChatIcon style={{ color: "#6B46C1" }} />, label: "WebChat", path: "/helps/webchat", tooltip: "Widget de chat para seu site" },
     { icon: <Extension />, label: "Integrações", path: "/helps/integracoes", tooltip: "Integre com sistemas externos" },
     { icon: <Code />, label: "API", path: "/helps/api", tooltip: "Documentação da API REST" },
     { icon: <AIIcon />, label: "Prompts de IA", path: "/helps/prompts-ia", tooltip: "Configure prompts personalizados" },

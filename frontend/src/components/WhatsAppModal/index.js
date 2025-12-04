@@ -37,13 +37,14 @@ import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
 import QueueSelect from "../QueueSelect";
 import TabPanel from "../TabPanel";
-import { Autorenew, FileCopy, WhatsApp, CheckCircle } from "@material-ui/icons";
+import { Autorenew, FileCopy, WhatsApp, CheckCircle, Facebook, Instagram, Chat as WebChatIcon } from "@material-ui/icons";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import SchedulesForm from "../SchedulesForm";
 import usePlans from "../../hooks/usePlans";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import OfficialAPIFields from "./OfficialAPIFields";
 import OfficialAPIGuide from "./OfficialAPIGuide";
+import MetaAPIFields from "./MetaAPIFields";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -104,7 +105,7 @@ const SessionSchema = Yup.object().shape({
     .max(50, "Parâmetros acima do esperado!")
     .required("Required"),
   channelType: Yup.string()
-    .oneOf(["baileys", "official"], "Tipo de canal inválido")
+    .oneOf(["baileys", "official", "facebook", "instagram", "webchat"], "Tipo de canal inválido")
     .required("Selecione o tipo de canal"),
   // Validações condicionais para API Oficial
   wabaPhoneNumberId: Yup.string().when("channelType", {
@@ -124,7 +125,7 @@ const SessionSchema = Yup.object().shape({
   })
 });
 
-const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
+const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
   const classes = useStyles();
   const [autoToken, setAutoToken] = useState("");
 
@@ -166,12 +167,20 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
     collectiveVacationStart: "",
     collectiveVacationMessage: "",
     queueIdImportMessages: null,
-    channelType: "baileys",
+    channelType: initialChannelType || "baileys",
     wabaPhoneNumberId: "",
     wabaAccessToken: "",
     wabaBusinessAccountId: "",
     wabaWebhookVerifyToken: "",
-    wabaTwoFactorPin: ""
+    wabaTwoFactorPin: "",
+    // Campos Meta (Facebook/Instagram)
+    metaAppId: "",
+    metaAppSecret: "",
+    metaAccessToken: "",
+    metaPageId: "",
+    metaPageAccessToken: "",
+    metaWebhookVerifyToken: "",
+    instagramAccountId: ""
   };
   const [whatsApp, setWhatsApp] = useState(initialState);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
@@ -225,6 +234,14 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
     }
   }, [whatsAppId, whatsApp.token]);
 
+  useEffect(() => {
+    if (open && !whatsAppId && initialChannelType) {
+      setWhatsApp(prev => ({ ...prev, channelType: initialChannelType }));
+    } else if (open && !whatsAppId && !initialChannelType) {
+      // Reset para baileys quando não há tipo específico
+      setWhatsApp(prev => ({ ...prev, channelType: "baileys" }));
+    }
+  }, [open, initialChannelType, whatsAppId]);
 
   useEffect(() => {
     async function fetchData() {
@@ -399,8 +416,19 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
       return;
     }
 
+    // Determinar o channel baseado no channelType
+    const getChannelFromType = (channelType) => {
+      switch (channelType) {
+        case "facebook": return "facebook";
+        case "instagram": return "instagram";
+        case "webchat": return "webchat";
+        default: return "whatsapp"; // baileys e official são whatsapp
+      }
+    };
+
     const whatsappData = {
       ...values,
+      channel: getChannelFromType(values.channelType),
       flowIdWelcome: flowIdWelcome ? flowIdWelcome : null,
       flowIdNotPhrase: flowIdNotPhrase ? flowIdNotPhrase : null,
       integrationId: selectedIntegration ? selectedIntegration : null,
@@ -632,7 +660,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                           >
                             <MenuItem value="baileys">
                               <Box display="flex" alignItems="center" gap={1}>
-                                <WhatsApp />
+                                <WhatsApp style={{ color: "#25D366" }} />
                                 <span>Baileys (Não Oficial - Grátis)</span>
                               </Box>
                             </MenuItem>
@@ -640,6 +668,24 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                               <Box display="flex" alignItems="center" gap={1}>
                                 <CheckCircle color="primary" />
                                 <span>WhatsApp Business API Oficial</span>
+                              </Box>
+                            </MenuItem>
+                            <MenuItem value="facebook">
+                              <Box display="flex" alignItems="center" gap={1}>
+                                <Facebook style={{ color: "#3b5998" }} />
+                                <span>Facebook Messenger</span>
+                              </Box>
+                            </MenuItem>
+                            <MenuItem value="instagram">
+                              <Box display="flex" alignItems="center" gap={1}>
+                                <Instagram style={{ color: "#e1306c" }} />
+                                <span>Instagram Direct</span>
+                              </Box>
+                            </MenuItem>
+                            <MenuItem value="webchat">
+                              <Box display="flex" alignItems="center" gap={1}>
+                                <WebChatIcon style={{ color: "#6B46C1" }} />
+                                <span>WebChat (Widget para Site)</span>
                               </Box>
                             </MenuItem>
                           </Field>
@@ -732,8 +778,21 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                       </>
                     )}
 
+                    {/* CAMPOS DO META - Mostrar para Facebook e Instagram */}
+                    {(values.channelType === "facebook" || values.channelType === "instagram") && (
+                      <>
+                        <Divider style={{ margin: "20px 0" }} />
+                        <MetaAPIFields
+                          values={values}
+                          errors={errors}
+                          touched={touched}
+                          channelType={values.channelType}
+                        />
+                      </>
+                    )}
+
                     {/* IMPORTAÇÃO DE MENSAGENS E TOKEN - apenas para Baileys */}
-                    {values.channelType !== "official" && (
+                    {values.channelType === "baileys" && (
                       <>
                         <Divider style={{ margin: "20px 0" }} />
 

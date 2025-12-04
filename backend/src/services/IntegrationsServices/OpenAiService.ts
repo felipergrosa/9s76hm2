@@ -368,12 +368,24 @@ const processResponse = async (
   // Send response based on preferred format (text or voice)
   if (openAiSettings.voice === "texto") {
     const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-      text: `\u200e${response}`,
+      text: response,
     });
     if (!isOfficial) {
       await verifyMessage(sentMessage as any, ticket, contact);
     }
   } else {
+    // Validar se as credenciais de TTS estão configuradas
+    if (!openAiSettings.voiceKey || !openAiSettings.voiceRegion) {
+      console.warn(`[TTS] Credenciais Azure Speech não configuradas (voiceKey ou voiceRegion vazias) - enviando texto`);
+      const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+        text: response,
+      });
+      if (!isOfficial) {
+        await verifyMessage(sentMessage as any, ticket, contact);
+      }
+      return;
+    }
+
     const fileNameWithOutExtension = `${ticket.id}_${Date.now()}`;
     try {
       await convertTextToSpeechAndSaveToFile(
@@ -398,7 +410,7 @@ const processResponse = async (
       console.error(`Erro para responder com audio: ${error}`);
       // Fallback to text response
       const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-        text: `\u200e ${response}`,
+        text: response,
       });
       if (!isOfficial) {
         await verifyMessage(sentMessage as any, ticket, contact);
