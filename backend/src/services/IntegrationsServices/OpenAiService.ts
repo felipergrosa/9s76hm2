@@ -269,6 +269,15 @@ const resolveSystemPromptForTicket = async (
   - Tom de comunicação: ${agentConfig.tone || "Profissional"}
   - Etapa do atendimento: ${agentConfig.currentStage.name} - ${agentConfig.currentStage.objective || ""}
   ${crmBlock}
+  
+  ⚠️ REGRA CRÍTICA - USO DE FUNÇÕES:
+  Você tem acesso a funções (tools/function calling). SEMPRE que uma função estiver disponível para a solicitação do cliente, você DEVE executá-la.
+  - Se cliente pedir "catálogo" → EXECUTE enviar_catalogo ou listar_catalogos
+  - Se cliente pedir "preços" ou "tabela" → EXECUTE enviar_tabela_precos
+  - NUNCA diga "não consigo enviar" ou "não tenho acesso" se existe uma função disponível
+  - NUNCA responda apenas com texto quando deveria executar uma função
+  - Sua PRIORIDADE é USAR as funções disponíveis, não apenas falar sobre elas
+  
   Prompt Específico do Agente:
   ${agentConfig.systemPrompt}
   

@@ -22,7 +22,7 @@ export interface BotFunction {
 export const BOT_AVAILABLE_FUNCTIONS: BotFunction[] = [
     {
         name: "listar_catalogos",
-        description: "Lista todos os catálogos disponíveis para envio. Use quando o cliente perguntar quais catálogos existem ou quando houver ambiguidade sobre qual catálogo enviar.",
+        description: "SEMPRE use esta função quando o cliente mencionar 'catálogo' pela primeira vez ou se houver dúvida sobre qual catálogo enviar. Esta função lista todos os catálogos disponíveis.",
         parameters: {
             type: "object",
             properties: {}
@@ -30,21 +30,21 @@ export const BOT_AVAILABLE_FUNCTIONS: BotFunction[] = [
     },
     {
         name: "enviar_catalogo",
-        description: "Envia um catálogo específico para o cliente. Se o cliente não especificou, use listar_catalogos primeiro.",
+        description: "OBRIGATÓRIO: Use esta função para ENVIAR o arquivo PDF do catálogo quando o cliente pedir 'catálogo', 'produtos' ou 'o que vocês vendem'. NUNCA diga que não consegue enviar - USE esta função.",
         parameters: {
             type: "object",
             properties: {
                 tipo: {
                     type: "string",
-                    description: "Nome ou tipo do catálogo desejado (ex: 'completo', 'lampadas', 'lustres'). Se não especificado, tenta enviar o completo."
+                    description: "Nome ou tipo do catálogo (ex: 'completo', 'premium', 'lite'). Padrão: 'completo'"
                 }
             },
-            required: ["tipo"]
+            required: []
         }
     },
     {
         name: "enviar_tabela_precos",
-        description: "Envia a tabela de preços atualizada. Use quando o cliente perguntar sobre valores, preços, orçamento ou quanto custa.",
+        description: "OBRIGATÓRIO: Use esta função para ENVIAR a tabela de preços em PDF quando o cliente perguntar sobre 'preços', 'valores', 'quanto custa' ou 'tabela'. NUNCA diga que não consegue - USE esta função.",
         parameters: {
             type: "object",
             properties: {}
