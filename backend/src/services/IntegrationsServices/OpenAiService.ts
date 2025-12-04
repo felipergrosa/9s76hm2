@@ -87,10 +87,16 @@ const prepareMessagesAI = (pastMessages: Message[], isGeminiModel: boolean, prom
   // Map past messages to AI message format
   for (const message of pastMessages) {
     if (message.mediaType === "conversation" || message.mediaType === "extendedTextMessage") {
+      // Limpar caracteres especiais indesejados (LEFT-TO-RIGHT MARK, etc.)
+      const cleanBody = message.body
+        .replace(/\u200e/g, '') // Remove LEFT-TO-RIGHT MARK
+        .replace(/\u200f/g, '') // Remove RIGHT-TO-LEFT MARK
+        .trim();
+      
       if (message.fromMe) {
-        messagesAI.push({ role: "assistant", content: message.body });
+        messagesAI.push({ role: "assistant", content: cleanBody });
       } else {
-        messagesAI.push({ role: "user", content: message.body });
+        messagesAI.push({ role: "user", content: cleanBody });
       }
     }
   }

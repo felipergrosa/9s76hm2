@@ -13,6 +13,26 @@ interface Request {
     sentimentAnalysisEnabled?: boolean;
     autoSegmentationEnabled?: boolean;
     status?: "active" | "inactive";
+    // AI Model Override
+    aiProvider?: "openai" | "gemini";
+    aiModel?: string;
+    temperature?: number;
+    maxTokens?: number;
+    // Advanced Settings
+    creativity?: string;
+    toneStyle?: string;
+    emojiUsage?: string;
+    hashtagUsage?: string;
+    responseLength?: string;
+    language?: string;
+    brandVoice?: string;
+    allowedVariables?: string;
+    // Voice/TTS Settings
+    voiceType?: "text" | "generated" | "enabled";
+    voiceApiKey?: string;
+    voiceRegion?: string;
+    voiceTemperature?: number;
+    voiceName?: string;
     funnelStages?: Array<{
         id?: number;
         order: number;
@@ -37,6 +57,23 @@ const UpdateAIAgentService = async ({
     sentimentAnalysisEnabled,
     autoSegmentationEnabled,
     status,
+    aiProvider,
+    aiModel,
+    temperature,
+    maxTokens,
+    creativity,
+    toneStyle,
+    emojiUsage,
+    hashtagUsage,
+    responseLength,
+    language,
+    brandVoice,
+    allowedVariables,
+    voiceType,
+    voiceApiKey,
+    voiceRegion,
+    voiceTemperature,
+    voiceName,
     funnelStages
 }: Request): Promise<AIAgent> => {
     const agent = await AIAgent.findOne({
@@ -65,7 +102,27 @@ const UpdateAIAgentService = async ({
             autoSegmentationEnabled !== undefined
                 ? autoSegmentationEnabled
                 : agent.autoSegmentationEnabled,
-        status: status || agent.status
+        status: status || agent.status,
+        // AI Model Override
+        aiProvider: aiProvider !== undefined ? aiProvider : agent.aiProvider,
+        aiModel: aiModel !== undefined ? aiModel : agent.aiModel,
+        temperature: temperature !== undefined ? temperature : agent.temperature,
+        maxTokens: maxTokens !== undefined ? maxTokens : agent.maxTokens,
+        // Advanced Settings
+        creativity: creativity !== undefined ? creativity : agent.creativity,
+        toneStyle: toneStyle !== undefined ? toneStyle : agent.toneStyle,
+        emojiUsage: emojiUsage !== undefined ? emojiUsage : agent.emojiUsage,
+        hashtagUsage: hashtagUsage !== undefined ? hashtagUsage : agent.hashtagUsage,
+        responseLength: responseLength !== undefined ? responseLength : agent.responseLength,
+        language: language !== undefined ? language : agent.language,
+        brandVoice: brandVoice !== undefined ? brandVoice : agent.brandVoice,
+        allowedVariables: allowedVariables !== undefined ? allowedVariables : agent.allowedVariables,
+        // Voice/TTS Settings
+        voiceType: voiceType !== undefined ? voiceType : agent.voiceType,
+        voiceApiKey: voiceApiKey !== undefined ? voiceApiKey : agent.voiceApiKey,
+        voiceRegion: voiceRegion !== undefined ? voiceRegion : agent.voiceRegion,
+        voiceTemperature: voiceTemperature !== undefined ? voiceTemperature : agent.voiceTemperature,
+        voiceName: voiceName !== undefined ? voiceName : agent.voiceName
     });
 
     // Atualizar funnel stages se fornecidas
