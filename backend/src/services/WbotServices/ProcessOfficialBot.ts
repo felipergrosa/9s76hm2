@@ -1,4 +1,5 @@
 import logger from "../../utils/logger";
+import path from "path";
 import * as Sentry from "@sentry/node";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
@@ -149,6 +150,8 @@ export async function processOfficialBot({
           let mediaType = "conversation";
 
           // Verificar tipo de conteúdo
+          let mediaUrl: string | null = null;
+
           if (content.document) {
             // ENVIAR DOCUMENTO (PDF, Excel, etc)
             logger.info(`[ProcessOfficialBot] Enviando documento: ${content.fileName}`);
@@ -167,6 +170,22 @@ export async function processOfficialBot({
 
             messageBody = content.fileName || "documento.pdf";
             mediaType = "document";
+            // Construir mediaUrl público se o arquivo vier de um caminho no /public
+            if (typeof content.document === "string") {
+              const normalized = path.normalize(content.document);
+              const parts = normalized.split(`public${path.sep}`);
+              if (parts.length > 1) {
+                const backendUrl = process.env.BACKEND_URL || "http://localhost:8080";
+                const proxyPort = process.env.PROXY_PORT ? `:${process.env.PROXY_PORT}` : "";
+                const publicPath = parts[1].replace(/\\/g, "/");
+                mediaUrl = `${backendUrl}${proxyPort}/public/${publicPath}`;
+              }
+            }
+
+            // Caso já venha um mediaUrl no conteúdo, priorizar
+            if (!mediaUrl && content.mediaUrl) {
+              mediaUrl = content.mediaUrl;
+            }
 
             logger.info(`[ProcessOfficialBot] Documento enviado: ${sentMessage.id}`);
 
@@ -197,7 +216,8 @@ export async function processOfficialBot({
                 fromMe: true,
                 read: true,
                 ack: 1,
-                mediaType
+                mediaType,
+                mediaUrl: mediaUrl || undefined
               },
               companyId
             });

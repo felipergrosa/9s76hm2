@@ -1141,9 +1141,7 @@ const MessagesList = ({
       let [image, sourceUrl, title, body] = message.body.split('|');
       let messageUser = "Olá! Tenho interesse e queria mais informações, por favor.";
       return <AdMetaPreview image={image} sourceUrl={sourceUrl} title={title} body={body} messageUser={messageUser} />;
-    }
-
-    if (message.mediaType === "image") {
+    } else if (message.mediaType === "image") {
       return <ModalImageCors imageUrl={message.mediaUrl} />;
     } else if (message.mediaType === "audio") {
       return (
@@ -1159,7 +1157,7 @@ const MessagesList = ({
           />
         </div>
       );
-    } else if (message.mediaType === "application" && /\.pdf($|\?)/i.test(message.mediaUrl)) {
+    } else if ((message.mediaType === "application" || message.mediaType === "document") && /\.pdf($|\?)/i.test(message.mediaUrl)) {
       return (
         <div className={classes.fileFrame} onClick={(e) => { e.preventDefault(); setPdfDialog({ open: true, url: message.mediaUrl }); }} style={{ cursor: 'pointer' }}>
           <div>
@@ -1176,7 +1174,7 @@ const MessagesList = ({
           </div>
         </div>
       );
-    } else {
+    } else if (message.mediaType === "application" || message.mediaType === "document") {
       return (
         <>
           <div className={classes.fileFrame}>
@@ -1196,6 +1194,8 @@ const MessagesList = ({
           <Divider />
         </>
       );
+    } else {
+      return null;
     }
   };
 
