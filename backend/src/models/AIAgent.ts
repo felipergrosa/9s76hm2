@@ -107,6 +107,19 @@ class AIAgent extends Model<AIAgent> {
     @Column(DataType.ENUM("openai", "gemini", "disabled"))
     sttProvider: "openai" | "gemini" | "disabled";
 
+    // Inactivity Timeout - tempo em minutos para finalizar conversa inativa
+    // null ou 0 = desabilitado
+    @Column({ type: DataType.INTEGER, defaultValue: 0 })
+    inactivityTimeoutMinutes: number;
+
+    // Ação ao timeout: "close" = fecha ticket, "transfer" = transfere para fila
+    @Column(DataType.ENUM("close", "transfer"))
+    inactivityAction: "close" | "transfer";
+
+    // Mensagem enviada antes de fechar/transferir por inatividade
+    @Column(DataType.TEXT)
+    inactivityMessage: string;
+
     @BelongsTo(() => Company)
     company: Company;
 

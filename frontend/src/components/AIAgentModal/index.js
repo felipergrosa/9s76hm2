@@ -76,6 +76,10 @@ const AgentSchema = Yup.object().shape({
     voiceName: Yup.string().nullable(),
     // STT Settings
     sttProvider: Yup.string().nullable(),
+    // Inactivity Timeout Settings
+    inactivityTimeoutMinutes: Yup.number().nullable().min(0, "Deve ser 0 ou maior"),
+    inactivityAction: Yup.string().nullable(),
+    inactivityMessage: Yup.string().nullable(),
     // Funnel stages
     funnelStages: Yup.array().of(
         Yup.object().shape({
@@ -143,6 +147,10 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
         voiceName: "",
         // STT Settings
         sttProvider: "disabled",
+        // Inactivity Timeout Settings
+        inactivityTimeoutMinutes: 0,
+        inactivityAction: "close",
+        inactivityMessage: "Não recebi sua resposta. Vou encerrar nosso atendimento por enquanto. Se precisar de algo, é só me chamar novamente! 👋",
         funnelStages: [
             {
                 order: 1,
@@ -762,6 +770,59 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
                                             />
                                         }
                                         label="🎯 Segmentação Automática"
+                                    />
+                                </Grid>
+                            </Grid>
+
+                            <Box mt={3} mb={2}>
+                                <Divider />
+                            </Box>
+
+                            {/* Timeout de Inatividade */}
+                            <SectionTitle
+                                icon="⏰"
+                                title="Timeout de Inatividade"
+                                tooltip="Configure o tempo máximo de espera por resposta do cliente. Após esse tempo, o agente pode enviar uma mensagem e fechar o atendimento ou transferir para a fila."
+                            />
+
+                            <Grid container spacing={2}>
+                                <Grid item xs={12} sm={4}>
+                                    <Field
+                                        as={TextField}
+                                        name="inactivityTimeoutMinutes"
+                                        label="Tempo (minutos)"
+                                        type="number"
+                                        fullWidth
+                                        variant="outlined"
+                                        size="small"
+                                        helperText="0 = desabilitado"
+                                        InputProps={{ inputProps: { min: 0 } }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={4}>
+                                    <FormControl fullWidth variant="outlined" size="small">
+                                        <InputLabel>Ação ao Timeout</InputLabel>
+                                        <Field
+                                            as={Select}
+                                            name="inactivityAction"
+                                            label="Ação ao Timeout"
+                                        >
+                                            <MenuItem value="close">🔒 Fechar Atendimento</MenuItem>
+                                            <MenuItem value="transfer">🔄 Transferir para Fila</MenuItem>
+                                        </Field>
+                                    </FormControl>
+                                </Grid>
+                                <Grid item xs={12}>
+                                    <Field
+                                        as={TextField}
+                                        name="inactivityMessage"
+                                        label="Mensagem de Encerramento"
+                                        fullWidth
+                                        multiline
+                                        rows={2}
+                                        variant="outlined"
+                                        size="small"
+                                        helperText="Mensagem enviada ao cliente antes de fechar/transferir"
                                     />
                                 </Grid>
                             </Grid>

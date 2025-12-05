@@ -29,6 +29,7 @@ import { StartAllWhatsAppsSessions } from "./services/WbotServices/StartAllWhats
 import Company from "./models/Company";
 import BullQueue from './libs/queue';
 import { initSavedFilterCron } from "./jobs/SavedFilterCronManager";
+import startInactivityTimeoutJob from "./jobs/VerifyInactivityTimeoutJob";
 
 import { startQueueProcess } from "./queues";
 import tagRulesCron from "./cron/tagRulesCron";
@@ -224,6 +225,9 @@ initSavedFilterCron();
 // Inicializa os crons de aplicação automática de tag rules
 tagRulesCron(); // Executa diariamente às 2h (processamento completo)
 tagRulesRecentContactsCron(); // Executa a cada 5 minutos (apenas contatos recentes)
+
+// Inicializa job de verificação de inatividade de tickets
+startInactivityTimeoutJob(); // Verifica a cada 1 minuto
 
 initIO(server);
 gracefulShutdown(server);
