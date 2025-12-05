@@ -635,6 +635,8 @@ export const handleOpenAi = async (
   }
 
   // INTEGRATE: Merge AI Settings from Agent or use Global
+  let resolvedProvider: "openai" | "gemini" = "openai"; // Default
+  
   try {
     const agentConfig = await ResolveAIAgentForTicketService({ ticket });
 
@@ -643,6 +645,9 @@ export const handleOpenAi = async (
 
       // Merge settings: agent overrides global when filled
       const mergedSettings = mergeAISettings(agentConfig, openAiSettings);
+
+      // IMPORTANTE: Usar o provider do agente, não inferir pelo nome do modelo
+      resolvedProvider = mergedSettings.provider as "openai" | "gemini";
 
       // Apply merged settings back to openAiSettings
       openAiSettings = {
@@ -653,19 +658,25 @@ export const handleOpenAi = async (
         voice: mergedSettings.voiceName || openAiSettings.voice
       } as IOpenAi;
 
+      console.log(`[AI][Merge] Final Provider: ${resolvedProvider}`);
       console.log(`[AI][Merge] Final Model: ${openAiSettings.model}`);
       console.log(`[AI][Merge] Final Temp: ${openAiSettings.temperature}`);
       console.log(`[AI][Merge] Final Max Tokens: ${openAiSettings.maxTokens}`);
     } else {
       console.log(`[AI][Merge] No AI Agent found, using global settings`);
+      // Fallback: inferir pelo nome do modelo se não houver agente
+      if (openAiSettings.model?.toLowerCase().includes("gemini")) {
+        resolvedProvider = "gemini";
+      }
     }
   } catch (err) {
     console.error(`[AI][Merge] Error merging settings:`, err);
     // Continue with original openAiSettings if merge fails
   }
 
-  const isOpenAIModel = ["gpt-3.5-turbo-1106", "gpt-4o", "gpt-4o-mini"].includes(openAiSettings.model) || openAiSettings.model?.toLowerCase().startsWith("gpt");
-  const isGeminiModel = ["gemini-2.0-pro", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"].includes(openAiSettings.model) || openAiSettings.model?.toLowerCase().includes("gemini");
+  // Usar o provider resolvido (do agente ou inferido)
+  const isOpenAIModel = resolvedProvider === "openai";
+  const isGeminiModel = resolvedProvider === "gemini";
 
   let openai: SessionOpenAi | null = null;
   let gemini: SessionGemini | null = null;
@@ -791,7 +802,8 @@ export const handleOpenAi = async (
 
     try {
       let responseText: string | null = null;
-      const provider = isGeminiModel ? "gemini" : "openai";
+      // Usar o provider já resolvido (do agente ou inferido)
+      const provider = resolvedProvider;
       const t0 = Date.now();
 
       // Usar IAClientFactory com suporte a Function Calling
@@ -909,7 +921,8 @@ export const handleOpenAi = async (
       }
 
       let transcription: string | null = null;
-      const provider = isGeminiModel ? "gemini" : "openai";
+      // Usar o provider já resolvido (do agente ou inferido)
+      const provider = resolvedProvider;
 
       if (isOpenAIModel) {
         // Tenta via IAClientFactory (OpenAI Whisper)
