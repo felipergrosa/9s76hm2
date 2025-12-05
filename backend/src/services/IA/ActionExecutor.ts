@@ -227,50 +227,98 @@ export class ActionExecutor {
     }
 
     private static async enviarCatalogo(ctx: ActionContext): Promise<string> {
-        const tipo = ctx.arguments.tipo || "completo";
+        const tipo = ctx.arguments.tipo || "";
 
         try {
             let catalogoFile: FilesOptions | null = null;
 
-            // Tags de busca
-            const searchTags = ["catalogo"];
-            if (tipo && tipo !== "completo") {
-                searchTags.push(tipo.toLowerCase());
-            }
+            logger.info(`[ActionExecutor] enviarCatalogo iniciado`, {
+                ticketId: ctx.ticket.id,
+                tipo
+            });
 
             // Tentar buscar primeiro no sistema NOVO (LibraryFolder)
             if (ctx.ticket.queue?.folderId) {
-                catalogoFile = await this.findFileInLibraryFolder(
+                // Buscar TODOS os catálogos primeiro
+                const baseTags = ["catalogo", "catalogue", "catalog"];
+                const allCatalogs = await this.findAllFilesInLibraryFolder(
                     ctx.ticket.queue.folderId,
-                    searchTags,
+                    baseTags,
                     ctx.ticket.companyId
                 );
 
+                logger.info(`[ActionExecutor] Catálogos encontrados: ${allCatalogs.length}`, {
+                    catalogos: allCatalogs.map(f => f.name)
+                });
+
+                if (allCatalogs.length > 0) {
+                    if (tipo) {
+                        // Se tipo especificado, buscar pelo nome do arquivo
+                        const tipoLower = tipo.toLowerCase();
+                        catalogoFile = allCatalogs.find(f => 
+                            f.name?.toLowerCase().includes(tipoLower) ||
+                            f.title?.toLowerCase().includes(tipoLower)
+                        ) || null;
+                        
+                        logger.info(`[ActionExecutor] Busca por tipo "${tipo}": ${catalogoFile ? 'encontrado' : 'não encontrado'}`, {
+                            fileName: catalogoFile?.name
+                        });
+                    }
+                    
+                    // Se não encontrou pelo tipo ou tipo não especificado, pegar o primeiro
+                    if (!catalogoFile) {
+                        catalogoFile = allCatalogs[0];
+                    }
+                }
+
                 if (catalogoFile) {
-                    logger.info(`[ActionExecutor] Catálogo encontrado em LibraryFolder`, {
+                    logger.info(`[ActionExecutor] Catálogo selecionado em LibraryFolder`, {
                         folderId: ctx.ticket.queue.folderId,
-                        fileId: catalogoFile.id
+                        fileId: catalogoFile.id,
+                        fileName: catalogoFile.name
                     });
                 }
             }
 
             // Fallback para sistema LEGADO (fileListId)
             if (!catalogoFile && ctx.ticket.queue?.fileListId) {
-                const keywords = tipo !== "completo" ? `%${tipo}%` : `%catalogo%`;
+                const whereConditions: any = {
+                    fileId: ctx.ticket.queue.fileListId,
+                    isActive: true,
+                    keywords: { [Op.iLike]: "%catalogo%" }
+                };
+                
+                // Se tipo especificado, filtrar pelo nome também
+                if (tipo) {
+                    whereConditions.name = { [Op.iLike]: `%${tipo}%` };
+                }
+                
                 const fileOptions = await FilesOptions.findAll({
-                    where: {
-                        fileId: ctx.ticket.queue.fileListId,
-                        isActive: true,
-                        keywords: { [Op.iLike]: keywords }
-                    },
-                    limit: 1
+                    where: whereConditions,
+                    limit: 10
                 });
-                catalogoFile = fileOptions[0] || null;
+                
+                // Se tipo especificado mas não encontrou com filtro de nome, buscar sem filtro
+                if (tipo && fileOptions.length === 0) {
+                    delete whereConditions.name;
+                    const allFiles = await FilesOptions.findAll({
+                        where: whereConditions,
+                        limit: 10
+                    });
+                    // Tentar encontrar pelo nome
+                    const tipoLower = tipo.toLowerCase();
+                    catalogoFile = allFiles.find(f => 
+                        f.name?.toLowerCase().includes(tipoLower)
+                    ) || allFiles[0] || null;
+                } else {
+                    catalogoFile = fileOptions[0] || null;
+                }
 
                 if (catalogoFile) {
                     logger.info(`[ActionExecutor] Catálogo encontrado em Files (legado)`, {
                         fileListId: ctx.ticket.queue.fileListId,
-                        fileId: catalogoFile.id
+                        fileId: catalogoFile.id,
+                        fileName: catalogoFile.name
                     });
                 }
             }
@@ -278,10 +326,13 @@ export class ActionExecutor {
             if (!catalogoFile) {
                 logger.warn(`[ActionExecutor] Catálogo não encontrado em nenhum sistema`, {
                     queueId: ctx.ticket.queueId,
+                    tipo,
                     hasFolderId: !!ctx.ticket.queue?.folderId,
                     hasFileListId: !!ctx.ticket.queue?.fileListId
                 });
-                return `❌ Catálogo não configurado nesta fila`;
+                return tipo 
+                    ? `❌ Catálogo "${tipo}" não encontrado. Use listar_catalogos para ver as opções disponíveis.`
+                    : `❌ Catálogo não configurado nesta fila`;
             }
 
             // Verificar se arquivo existe
@@ -332,28 +383,47 @@ export class ActionExecutor {
         try {
             let tabelaFile: FilesOptions | null = null;
 
-            // Tags base para buscar tabelas
-            const baseTags = ["tabela", "precos", "preco", "preço", "price", "pricing"];
-            
-            // Se tipo foi especificado, adicionar à busca
-            const searchTags = tipo ? [...baseTags, tipo.toLowerCase()] : baseTags;
-
             logger.info(`[ActionExecutor] enviarTabelaPrecos iniciado`, {
                 ticketId: ctx.ticket.id,
-                tipo,
-                searchTags
+                tipo
             });
 
             // Tentar buscar primeiro no sistema NOVO (LibraryFolder)
             if (ctx.ticket.queue?.folderId) {
-                tabelaFile = await this.findFileInLibraryFolder(
+                // Buscar TODAS as tabelas de preço primeiro
+                const baseTags = ["tabela", "precos", "preco", "preço", "price", "pricing"];
+                const allTables = await this.findAllFilesInLibraryFolder(
                     ctx.ticket.queue.folderId,
-                    searchTags,
+                    baseTags,
                     ctx.ticket.companyId
                 );
 
+                logger.info(`[ActionExecutor] Tabelas encontradas: ${allTables.length}`, {
+                    tabelas: allTables.map(f => f.name)
+                });
+
+                if (allTables.length > 0) {
+                    if (tipo) {
+                        // Se tipo especificado, buscar pelo nome do arquivo
+                        const tipoLower = tipo.toLowerCase();
+                        tabelaFile = allTables.find(f => 
+                            f.name?.toLowerCase().includes(tipoLower) ||
+                            f.title?.toLowerCase().includes(tipoLower)
+                        ) || null;
+                        
+                        logger.info(`[ActionExecutor] Busca por tipo "${tipo}": ${tabelaFile ? 'encontrado' : 'não encontrado'}`, {
+                            fileName: tabelaFile?.name
+                        });
+                    }
+                    
+                    // Se não encontrou pelo tipo ou tipo não especificado, pegar a primeira
+                    if (!tabelaFile) {
+                        tabelaFile = allTables[0];
+                    }
+                }
+
                 if (tabelaFile) {
-                    logger.info(`[ActionExecutor] Tabela encontrada em LibraryFolder`, {
+                    logger.info(`[ActionExecutor] Tabela selecionada em LibraryFolder`, {
                         folderId: ctx.ticket.queue.folderId,
                         fileId: tabelaFile.id,
                         fileName: tabelaFile.name
@@ -363,31 +433,47 @@ export class ActionExecutor {
 
             // Fallback para sistema LEGADO (fileListId)
             if (!tabelaFile && ctx.ticket.queue?.fileListId) {
-                const whereConditions: any[] = [
-                    { keywords: { [Op.iLike]: "%tabela%" } },
-                    { keywords: { [Op.iLike]: "%precos%" } },
-                    { keywords: { [Op.iLike]: "%preco%" } }
-                ];
+                const whereConditions: any = {
+                    fileId: ctx.ticket.queue.fileListId,
+                    isActive: true,
+                    [Op.or]: [
+                        { keywords: { [Op.iLike]: "%tabela%" } },
+                        { keywords: { [Op.iLike]: "%precos%" } },
+                        { keywords: { [Op.iLike]: "%preco%" } }
+                    ]
+                };
                 
-                // Se tipo especificado, adicionar filtro
+                // Se tipo especificado, filtrar pelo nome também
                 if (tipo) {
-                    whereConditions.push({ keywords: { [Op.iLike]: `%${tipo}%` } });
+                    whereConditions.name = { [Op.iLike]: `%${tipo}%` };
                 }
                 
                 const fileOptions = await FilesOptions.findAll({
-                    where: {
-                        fileId: ctx.ticket.queue.fileListId,
-                        isActive: true,
-                        [Op.or]: whereConditions
-                    },
-                    limit: 1
+                    where: whereConditions,
+                    limit: 10
                 });
-                tabelaFile = fileOptions[0] || null;
+                
+                // Se tipo especificado mas não encontrou com filtro de nome, buscar sem filtro
+                if (tipo && fileOptions.length === 0) {
+                    delete whereConditions.name;
+                    const allFiles = await FilesOptions.findAll({
+                        where: whereConditions,
+                        limit: 10
+                    });
+                    // Tentar encontrar pelo nome
+                    const tipoLower = tipo.toLowerCase();
+                    tabelaFile = allFiles.find(f => 
+                        f.name?.toLowerCase().includes(tipoLower)
+                    ) || allFiles[0] || null;
+                } else {
+                    tabelaFile = fileOptions[0] || null;
+                }
 
                 if (tabelaFile) {
                     logger.info(`[ActionExecutor] Tabela encontrada em Files (legado)`, {
                         fileListId: ctx.ticket.queue.fileListId,
-                        fileId: tabelaFile.id
+                        fileId: tabelaFile.id,
+                        fileName: tabelaFile.name
                     });
                 }
             }
@@ -668,6 +754,71 @@ export class ActionExecutor {
         } catch (error: any) {
             logger.error(`[ActionExecutor] Erro ao buscar em LibraryFolder:`, error);
             return null;
+        }
+    }
+
+    /**
+     * Busca TODOS os arquivos que correspondem às tags no sistema moderno (LibraryFolder)
+     * @param folderId ID da pasta ou -1 para buscar em todas
+     * @param searchTags Tags para procurar
+     * @returns Array de FileOptions encontrados
+     */
+    private static async findAllFilesInLibraryFolder(
+        folderId: number,
+        searchTags: string[],
+        companyId?: number
+    ): Promise<FilesOptions[]> {
+        try {
+            // Se folderId === -1, buscar em TODAS as pastas da empresa
+            let folderIds: number[] = [];
+
+            if (folderId === -1 && companyId) {
+                const allFolders = await LibraryFolder.findAll({
+                    where: { companyId }
+                });
+                folderIds = allFolders.map(f => f.id);
+            } else if (folderId !== -1) {
+                folderIds = [folderId];
+            }
+
+            if (folderIds.length === 0) {
+                return [];
+            }
+
+            // Buscar LibraryFiles
+            const libraryFiles = await LibraryFile.findAll({
+                where: {
+                    folderId: { [Op.in]: folderIds }
+                },
+                include: [
+                    {
+                        model: FilesOptions,
+                        as: "fileOption",
+                        where: { isActive: true },
+                        required: true
+                    }
+                ],
+                limit: 50
+            });
+
+            // Filtrar por tags manualmente
+            const matchedFiles = libraryFiles
+                .filter(libraryFile => {
+                    const fileTags = (libraryFile.tags || []) as string[];
+                    // Verifica se pelo menos uma tag de busca corresponde
+                    return searchTags.some(searchTag =>
+                        fileTags.some(fileTag =>
+                            fileTag.toLowerCase().includes(searchTag.toLowerCase())
+                        )
+                    );
+                })
+                .map(libraryFile => libraryFile.fileOption)
+                .filter((f): f is FilesOptions => f !== null && f !== undefined);
+
+            return matchedFiles;
+        } catch (error: any) {
+            logger.error(`[ActionExecutor] Erro ao buscar todos em LibraryFolder:`, error);
+            return [];
         }
     }
 
