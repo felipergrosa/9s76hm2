@@ -92,6 +92,23 @@ export interface IWhatsAppAdapter {
     fileName: string,
     mimeType: string
   ): Promise<IWhatsAppMessage>;
+  sendImageMessage?(
+    to: string,
+    fileBuffer: Buffer,
+    fileName: string,
+    caption?: string
+  ): Promise<IWhatsAppMessage>;
+  sendVideoMessage?(
+    to: string,
+    fileBuffer: Buffer,
+    fileName: string,
+    caption?: string
+  ): Promise<IWhatsAppMessage>;
+  sendAudioMessage?(
+    to: string,
+    fileBuffer: Buffer,
+    fileName: string
+  ): Promise<IWhatsAppMessage>;
   sendTemplate?(
     to: string,
     templateName: string,

@@ -117,15 +117,56 @@ export async function processOfficialBot({
     // Precisamos adaptar para API Oficial ou criar versão específica
 
     // Por enquanto, vamos criar uma mensagem mock no formato Baileys para usar handleOpenAi
+    // Detectar tipo de mídia e construir mensagem apropriada
+    let mockMessageContent: any = {};
+    
+    if (message.mediaType === "audio" && message.mediaUrl) {
+      // Áudio: passar como audioMessage para que handleOpenAi processe transcrição
+      logger.info(`[ProcessOfficialBot] Mensagem de áudio detectada: ${message.mediaUrl}`);
+      mockMessageContent = {
+        audioMessage: {
+          url: message.mediaUrl,
+          mimetype: "audio/ogg",
+          // Marcar que já foi baixado (mediaUrl é o caminho local)
+          _localPath: message.mediaUrl
+        }
+      };
+    } else if (message.mediaType === "image" && message.mediaUrl) {
+      mockMessageContent = {
+        imageMessage: {
+          url: message.mediaUrl,
+          caption: message.body || ""
+        }
+      };
+    } else if (message.mediaType === "video" && message.mediaUrl) {
+      mockMessageContent = {
+        videoMessage: {
+          url: message.mediaUrl,
+          caption: message.body || ""
+        }
+      };
+    } else if (message.mediaType === "document" && message.mediaUrl) {
+      mockMessageContent = {
+        documentMessage: {
+          url: message.mediaUrl,
+          fileName: message.body || "documento",
+          caption: message.body || ""
+        }
+      };
+    } else {
+      // Texto normal
+      mockMessageContent = {
+        conversation: message.body
+      };
+    }
+    
     const mockBaileysMessage = {
       key: {
         remoteJid: `${contact.number}@s.whatsapp.net`,
         fromMe: false,
         id: message.wid
       },
-      message: {
-        conversation: message.body
-      },
+      message: mockMessageContent,
       messageTimestamp: Math.floor(new Date().getTime() / 1000)
     };
 
@@ -170,15 +211,28 @@ export async function processOfficialBot({
 
             messageBody = content.fileName || "documento.pdf";
             mediaType = "document";
-            // Construir mediaUrl público se o arquivo vier de um caminho no /public
+            
+            // Construir mediaUrl RELATIVO (formato: contact123/arquivo.pdf)
+            // O getter do modelo Message já adiciona company{id}/ automaticamente
             if (typeof content.document === "string") {
               const normalized = path.normalize(content.document);
-              const parts = normalized.split(`public${path.sep}`);
-              if (parts.length > 1) {
-                const backendUrl = process.env.BACKEND_URL || "http://localhost:8080";
-                const proxyPort = process.env.PROXY_PORT ? `:${process.env.PROXY_PORT}` : "";
-                const publicPath = parts[1].replace(/\\/g, "/");
-                mediaUrl = `${backendUrl}${proxyPort}/public/${publicPath}`;
+              // Extrair caminho relativo após /public/company{id}/
+              // Ex: /public/company1/contact123/arquivo.pdf → contact123/arquivo.pdf
+              const publicMatch = normalized.match(/public[\/\\]company\d+[\/\\](.+)$/i);
+              if (publicMatch && publicMatch[1]) {
+                // Caminho relativo SEM company: contact123/arquivo.pdf
+                mediaUrl = publicMatch[1].replace(/\\/g, "/");
+                logger.info(`[ProcessOfficialBot] mediaUrl relativo (sem company): ${mediaUrl}`);
+              } else {
+                // Fallback: tentar extrair após /public/ e remover company manualmente
+                const fallbackMatch = normalized.match(/public[\/\\](.+)$/i);
+                if (fallbackMatch && fallbackMatch[1]) {
+                  let relativePath = fallbackMatch[1].replace(/\\/g, "/");
+                  // Remover company{id}/ se presente
+                  relativePath = relativePath.replace(/^company\d+\//i, "");
+                  mediaUrl = relativePath;
+                  logger.info(`[ProcessOfficialBot] mediaUrl relativo (fallback): ${mediaUrl}`);
+                }
               }
             }
 
@@ -187,7 +241,7 @@ export async function processOfficialBot({
               mediaUrl = content.mediaUrl;
             }
 
-            logger.info(`[ProcessOfficialBot] Documento enviado: ${sentMessage.id}`);
+            logger.info(`[ProcessOfficialBot] Documento enviado: ${sentMessage.id}, mediaUrl: ${mediaUrl || 'N/A'}`);
 
           } else if (content.text) {
             // ENVIAR TEXTO - Remover espaços extras e caracteres especiais
@@ -237,8 +291,9 @@ export async function processOfficialBot({
         }
       },
       // ADICIONAR MÉTODO sendDocumentMessage para ActionExecutor
-      sendDocumentMessage: async (recipient: string, fileBuffer: Buffer, fileName: string, mimeType: string) => {
-        logger.info(`[ProcessOfficialBot] sendDocumentMessage chamado diretamente:`, { recipient, fileName, mimeType });
+      // Aceita filePath opcional como 5º parâmetro para construir mediaUrl
+      sendDocumentMessage: async (recipient: string, fileBuffer: Buffer, fileName: string, mimeType: string, filePath?: string) => {
+        logger.info(`[ProcessOfficialBot] sendDocumentMessage chamado diretamente:`, { recipient, fileName, mimeType, filePath: filePath || 'N/A' });
 
         try {
           const { GetTicketAdapter } = await import("../../helpers/GetWhatsAppAdapter");
@@ -256,6 +311,29 @@ export async function processOfficialBot({
 
           logger.info(`[ProcessOfficialBot] Documento enviado via sendDocumentMessage: ${sentMessage.id}`);
 
+          // Construir mediaUrl relativo se filePath foi fornecido
+          // Formato esperado: contact123/arquivo.pdf (SEM company{id}/)
+          // O getter do modelo Message já adiciona company{id}/ automaticamente
+          let mediaUrl: string | undefined;
+          if (filePath) {
+            const normalized = path.normalize(filePath);
+            // Extrair caminho relativo após /public/company{id}/
+            const publicMatch = normalized.match(/public[\/\\]company\d+[\/\\](.+)$/i);
+            if (publicMatch && publicMatch[1]) {
+              mediaUrl = publicMatch[1].replace(/\\/g, "/");
+              logger.info(`[ProcessOfficialBot] mediaUrl construído (sem company): ${mediaUrl}`);
+            } else {
+              // Fallback: tentar extrair após /public/ e remover company manualmente
+              const fallbackMatch = normalized.match(/public[\/\\](.+)$/i);
+              if (fallbackMatch && fallbackMatch[1]) {
+                let relativePath = fallbackMatch[1].replace(/\\/g, "/");
+                relativePath = relativePath.replace(/^company\d+\//i, "");
+                mediaUrl = relativePath;
+                logger.info(`[ProcessOfficialBot] mediaUrl construído (fallback): ${mediaUrl}`);
+              }
+            }
+          }
+
           // Salvar mensagem no banco
           if (adapter.channelType === "official" && sentMessage) {
             const CreateMessageService = (await import("../MessageServices/CreateMessageService")).default;
@@ -268,12 +346,13 @@ export async function processOfficialBot({
                 fromMe: true,
                 read: true,
                 ack: 1,
-                mediaType: "document"
+                mediaType: "document",
+                mediaUrl: mediaUrl || undefined
               },
               companyId
             });
 
-            logger.info(`[ProcessOfficialBot] Documento salvo no banco: ${sentMessage.id}`);
+            logger.info(`[ProcessOfficialBot] Documento salvo no banco: ${sentMessage.id}, mediaUrl: ${mediaUrl || 'N/A'}`);
           }
 
           // Atualizar última mensagem do ticket
@@ -286,6 +365,180 @@ export async function processOfficialBot({
 
         } catch (error: any) {
           logger.error(`[ProcessOfficialBot] Erro ao enviar documento: ${error.message}`);
+          throw error;
+        }
+      },
+      
+      // MÉTODO sendImageMessage para ActionExecutor
+      sendImageMessage: async (recipient: string, fileBuffer: Buffer, fileName: string, filePath?: string) => {
+        logger.info(`[ProcessOfficialBot] sendImageMessage chamado:`, { recipient, fileName, filePath: filePath || 'N/A' });
+
+        try {
+          const { GetTicketAdapter } = await import("../../helpers/GetWhatsAppAdapter");
+          const adapter = await GetTicketAdapter(ticket);
+          const to = recipient.replace("@s.whatsapp.net", "").replace(/\D/g, "");
+
+          // Enviar imagem via adapter (usando método específico para Buffer)
+          const sentMessage = await adapter.sendImageMessage(to, fileBuffer, fileName);
+
+          logger.info(`[ProcessOfficialBot] Imagem enviada: ${sentMessage?.id || 'N/A'}`);
+
+          // Construir mediaUrl relativo
+          let mediaUrl: string | undefined;
+          if (filePath) {
+            const normalized = path.normalize(filePath);
+            const publicMatch = normalized.match(/public[\/\\]company\d+[\/\\](.+)$/i);
+            if (publicMatch && publicMatch[1]) {
+              mediaUrl = publicMatch[1].replace(/\\/g, "/");
+            } else {
+              const fallbackMatch = normalized.match(/public[\/\\](.+)$/i);
+              if (fallbackMatch && fallbackMatch[1]) {
+                mediaUrl = fallbackMatch[1].replace(/\\/g, "/").replace(/^company\d+\//i, "");
+              }
+            }
+          }
+
+          // Salvar mensagem no banco
+          if (adapter.channelType === "official" && sentMessage) {
+            const CreateMessageService = (await import("../MessageServices/CreateMessageService")).default;
+            await CreateMessageService({
+              messageData: {
+                wid: sentMessage.id,
+                ticketId: ticket.id,
+                contactId: ticket.contactId,
+                body: fileName,
+                fromMe: true,
+                read: true,
+                ack: 1,
+                mediaType: "image",
+                mediaUrl: mediaUrl || undefined
+              },
+              companyId
+            });
+            logger.info(`[ProcessOfficialBot] Imagem salva no banco: ${sentMessage.id}, mediaUrl: ${mediaUrl || 'N/A'}`);
+          }
+
+          await ticket.update({ lastMessage: `📷 ${fileName}`, imported: null });
+          return sentMessage;
+
+        } catch (error: any) {
+          logger.error(`[ProcessOfficialBot] Erro ao enviar imagem: ${error.message}`);
+          throw error;
+        }
+      },
+
+      // MÉTODO sendVideoMessage para ActionExecutor
+      sendVideoMessage: async (recipient: string, fileBuffer: Buffer, fileName: string, filePath?: string) => {
+        logger.info(`[ProcessOfficialBot] sendVideoMessage chamado:`, { recipient, fileName, filePath: filePath || 'N/A' });
+
+        try {
+          const { GetTicketAdapter } = await import("../../helpers/GetWhatsAppAdapter");
+          const adapter = await GetTicketAdapter(ticket);
+          const to = recipient.replace("@s.whatsapp.net", "").replace(/\D/g, "");
+
+          // Enviar vídeo via adapter (usando método específico para Buffer)
+          const sentMessage = await adapter.sendVideoMessage(to, fileBuffer, fileName);
+
+          logger.info(`[ProcessOfficialBot] Vídeo enviado: ${sentMessage?.id || 'N/A'}`);
+
+          // Construir mediaUrl relativo
+          let mediaUrl: string | undefined;
+          if (filePath) {
+            const normalized = path.normalize(filePath);
+            const publicMatch = normalized.match(/public[\/\\]company\d+[\/\\](.+)$/i);
+            if (publicMatch && publicMatch[1]) {
+              mediaUrl = publicMatch[1].replace(/\\/g, "/");
+            } else {
+              const fallbackMatch = normalized.match(/public[\/\\](.+)$/i);
+              if (fallbackMatch && fallbackMatch[1]) {
+                mediaUrl = fallbackMatch[1].replace(/\\/g, "/").replace(/^company\d+\//i, "");
+              }
+            }
+          }
+
+          // Salvar mensagem no banco
+          if (adapter.channelType === "official" && sentMessage) {
+            const CreateMessageService = (await import("../MessageServices/CreateMessageService")).default;
+            await CreateMessageService({
+              messageData: {
+                wid: sentMessage.id,
+                ticketId: ticket.id,
+                contactId: ticket.contactId,
+                body: fileName,
+                fromMe: true,
+                read: true,
+                ack: 1,
+                mediaType: "video",
+                mediaUrl: mediaUrl || undefined
+              },
+              companyId
+            });
+            logger.info(`[ProcessOfficialBot] Vídeo salvo no banco: ${sentMessage.id}, mediaUrl: ${mediaUrl || 'N/A'}`);
+          }
+
+          await ticket.update({ lastMessage: `🎬 ${fileName}`, imported: null });
+          return sentMessage;
+
+        } catch (error: any) {
+          logger.error(`[ProcessOfficialBot] Erro ao enviar vídeo: ${error.message}`);
+          throw error;
+        }
+      },
+
+      // MÉTODO sendAudioMessage para ActionExecutor
+      sendAudioMessage: async (recipient: string, fileBuffer: Buffer, fileName: string, filePath?: string) => {
+        logger.info(`[ProcessOfficialBot] sendAudioMessage chamado:`, { recipient, fileName, filePath: filePath || 'N/A' });
+
+        try {
+          const { GetTicketAdapter } = await import("../../helpers/GetWhatsAppAdapter");
+          const adapter = await GetTicketAdapter(ticket);
+          const to = recipient.replace("@s.whatsapp.net", "").replace(/\D/g, "");
+
+          // Enviar áudio via adapter (usando método específico para Buffer)
+          const sentMessage = await adapter.sendAudioMessage(to, fileBuffer, fileName);
+
+          logger.info(`[ProcessOfficialBot] Áudio enviado: ${sentMessage?.id || 'N/A'}`);
+
+          // Construir mediaUrl relativo
+          let mediaUrl: string | undefined;
+          if (filePath) {
+            const normalized = path.normalize(filePath);
+            const publicMatch = normalized.match(/public[\/\\]company\d+[\/\\](.+)$/i);
+            if (publicMatch && publicMatch[1]) {
+              mediaUrl = publicMatch[1].replace(/\\/g, "/");
+            } else {
+              const fallbackMatch = normalized.match(/public[\/\\](.+)$/i);
+              if (fallbackMatch && fallbackMatch[1]) {
+                mediaUrl = fallbackMatch[1].replace(/\\/g, "/").replace(/^company\d+\//i, "");
+              }
+            }
+          }
+
+          // Salvar mensagem no banco
+          if (adapter.channelType === "official" && sentMessage) {
+            const CreateMessageService = (await import("../MessageServices/CreateMessageService")).default;
+            await CreateMessageService({
+              messageData: {
+                wid: sentMessage.id,
+                ticketId: ticket.id,
+                contactId: ticket.contactId,
+                body: fileName,
+                fromMe: true,
+                read: true,
+                ack: 1,
+                mediaType: "audio",
+                mediaUrl: mediaUrl || undefined
+              },
+              companyId
+            });
+            logger.info(`[ProcessOfficialBot] Áudio salvo no banco: ${sentMessage.id}, mediaUrl: ${mediaUrl || 'N/A'}`);
+          }
+
+          await ticket.update({ lastMessage: `🎵 ${fileName}`, imported: null });
+          return sentMessage;
+
+        } catch (error: any) {
+          logger.error(`[ProcessOfficialBot] Erro ao enviar áudio: ${error.message}`);
           throw error;
         }
       }

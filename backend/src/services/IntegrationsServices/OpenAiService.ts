@@ -908,15 +908,32 @@ export const handleOpenAi = async (
     const messagesAI = prepareMessagesAI(messages, isGeminiModel, promptSystem);
 
     try {
-      const mediaUrl = mediaSent.mediaUrl!.split("/").pop();
-      const audioFilePath = `${publicFolder}/${mediaUrl}`;
+      // Construir caminho do arquivo de áudio
+      // mediaSent.mediaUrl pode ser:
+      // - Baileys: "filename.ogg" (só o nome)
+      // - API Oficial: "contact1676/filename.ogg" (com subpasta)
+      let audioFilePath: string;
+      
+      if (mediaSent.mediaUrl?.includes("/")) {
+        // API Oficial: mediaUrl já tem o caminho relativo completo
+        audioFilePath = `${publicFolder}/${mediaSent.mediaUrl}`;
+      } else {
+        // Baileys: só o nome do arquivo
+        const mediaUrl = mediaSent.mediaUrl!.split("/").pop();
+        audioFilePath = `${publicFolder}/${mediaUrl}`;
+      }
+
+      console.log(`[STT] Tentando processar áudio: ${audioFilePath}`);
 
       if (!fs.existsSync(audioFilePath)) {
-        console.error(`Arquivo de áudio não encontrado: ${audioFilePath}`);
+        console.error(`[STT] Arquivo de áudio não encontrado: ${audioFilePath}`);
         const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-          text: "Desculpe, não foi possível processar seu áudio. Por favor, tente novamente.",
+          text: "Desculpe, não consegui processar seu áudio. Poderia enviar sua mensagem por texto?",
         });
-        await verifyMessage(sentMessage!, ticket, contact);
+        const isOfficial = (wbot as any)?.channelType === "official" || (wbot as any)?.isOfficial;
+        if (!isOfficial) {
+          await verifyMessage(sentMessage!, ticket, contact);
+        }
         return;
       }
 
@@ -957,7 +974,10 @@ export const handleOpenAi = async (
           const sentTranscriptMessage = await wbot.sendMessage(msg.key.remoteJid!, {
             text: `🎤 *Sua mensagem de voz:* ${transcription}`,
           });
-          await verifyMessage(sentTranscriptMessage!, ticket, contact);
+          const isOfficialForTranscript = (wbot as any)?.channelType === "official" || (wbot as any)?.isOfficial;
+          if (!isOfficialForTranscript) {
+            await verifyMessage(sentTranscriptMessage!, ticket, contact);
+          }
 
           messagesAI.push({ role: "user", content: transcription });
 
@@ -1080,7 +1100,10 @@ export const handleOpenAi = async (
           const sentTranscriptMessage = await wbot.sendMessage(msg.key.remoteJid!, {
             text: `🎤 *Sua mensagem de voz:* ${transcription}`,
           });
-          await verifyMessage(sentTranscriptMessage!, ticket, contact);
+          const isOfficialForGemini = (wbot as any)?.channelType === "official" || (wbot as any)?.isOfficial;
+          if (!isOfficialForGemini) {
+            await verifyMessage(sentTranscriptMessage!, ticket, contact);
+          }
 
           messagesAI.push({ role: "user", content: transcription });
 
@@ -1117,19 +1140,24 @@ export const handleOpenAi = async (
       }
 
       if (!transcription) {
-        console.warn("Transcrição vazia recebida");
+        console.warn("[STT] Transcrição vazia recebida");
         const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-          text: "Desculpe, não consegui entender o áudio. Por favor, tente novamente ou envie uma mensagem de texto.",
+          text: "Desculpe, não consegui entender seu áudio. Poderia enviar sua mensagem por texto?",
         });
-        await verifyMessage(sentMessage!, ticket, contact);
+        const isOfficial = (wbot as any)?.channelType === "official" || (wbot as any)?.isOfficial;
+        if (!isOfficial) {
+          await verifyMessage(sentMessage!, ticket, contact);
+        }
       }
     } catch (error: any) {
-      console.error("Erro no processamento de áudio:", error);
-      const errorMessage = error?.response?.error?.message || error.message || "Erro desconhecido";
+      console.error("[STT] Erro no processamento de áudio:", error);
       const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-        text: `Desculpe, houve um erro ao processar sua mensagem de áudio: ${errorMessage}`,
+        text: "Desculpe, não consegui processar seu áudio. Poderia enviar sua mensagem por texto?",
       });
-      await verifyMessage(sentMessage!, ticket, contact);
+      const isOfficial = (wbot as any)?.channelType === "official" || (wbot as any)?.isOfficial;
+      if (!isOfficial) {
+        await verifyMessage(sentMessage!, ticket, contact);
+      }
     }
   }
 };

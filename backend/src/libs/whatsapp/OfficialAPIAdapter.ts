@@ -432,6 +432,274 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
   }
 
   /**
+   * Envia imagem a partir de um Buffer
+   */
+  async sendImageMessage(
+    to: string,
+    fileBuffer: Buffer,
+    fileName: string,
+    caption?: string
+  ): Promise<IWhatsAppMessage> {
+    try {
+      logger.info(`[OfficialAPI] Enviando imagem via Media API: ${fileName}`);
+
+      const FormData = require("form-data");
+      const form = new FormData();
+
+      // Detectar mimetype pela extensão
+      const ext = fileName.split('.').pop()?.toLowerCase() || 'jpg';
+      const mimeTypes: Record<string, string> = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp'
+      };
+      const mimeType = mimeTypes[ext] || 'image/jpeg';
+
+      form.append("messaging_product", "whatsapp");
+      form.append("file", fileBuffer, {
+        filename: fileName,
+        contentType: mimeType
+      });
+
+      const uploadUrl = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/media`;
+
+      const uploadResponse = await axios.post(uploadUrl, form, {
+        headers: {
+          ...form.getHeaders(),
+          "Authorization": `Bearer ${this.accessToken}`
+        },
+        timeout: 60000
+      });
+
+      const mediaId = uploadResponse.data.id;
+      logger.info(`[OfficialAPI] Upload de imagem concluído. media_id=${mediaId}`);
+
+      const recipient = to.replace(/\D/g, "");
+
+      const payload: any = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: recipient,
+        type: "image",
+        image: {
+          id: mediaId
+        }
+      };
+
+      if (caption) {
+        payload.image.caption = caption;
+      }
+
+      const response = await this.client.post(
+        `/${this.phoneNumberId}/messages`,
+        payload
+      );
+
+      const messageId = response.data.messages[0].id;
+      logger.info(`[OfficialAPI] Imagem enviada com sucesso: ${messageId}`);
+
+      return {
+        id: messageId,
+        from: this.phoneNumber!,
+        to: recipient,
+        body: caption || fileName,
+        timestamp: Date.now(),
+        fromMe: true,
+        mediaType: "image",
+        ack: 1
+      };
+
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.message;
+      logger.error(`[OfficialAPI] Erro ao enviar imagem: ${message}`);
+      throw new WhatsAppAdapterError(
+        `Falha ao enviar imagem: ${message}`,
+        error.response?.data?.error?.code || "SEND_IMAGE_ERROR",
+        error
+      );
+    }
+  }
+
+  /**
+   * Envia vídeo a partir de um Buffer
+   */
+  async sendVideoMessage(
+    to: string,
+    fileBuffer: Buffer,
+    fileName: string,
+    caption?: string
+  ): Promise<IWhatsAppMessage> {
+    try {
+      logger.info(`[OfficialAPI] Enviando vídeo via Media API: ${fileName}`);
+
+      const FormData = require("form-data");
+      const form = new FormData();
+
+      // Detectar mimetype pela extensão
+      const ext = fileName.split('.').pop()?.toLowerCase() || 'mp4';
+      const mimeTypes: Record<string, string> = {
+        'mp4': 'video/mp4',
+        'avi': 'video/avi',
+        'mov': 'video/quicktime',
+        'mkv': 'video/x-matroska',
+        '3gp': 'video/3gpp'
+      };
+      const mimeType = mimeTypes[ext] || 'video/mp4';
+
+      form.append("messaging_product", "whatsapp");
+      form.append("file", fileBuffer, {
+        filename: fileName,
+        contentType: mimeType
+      });
+
+      const uploadUrl = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/media`;
+
+      const uploadResponse = await axios.post(uploadUrl, form, {
+        headers: {
+          ...form.getHeaders(),
+          "Authorization": `Bearer ${this.accessToken}`
+        },
+        timeout: 120000 // Vídeos podem ser maiores
+      });
+
+      const mediaId = uploadResponse.data.id;
+      logger.info(`[OfficialAPI] Upload de vídeo concluído. media_id=${mediaId}`);
+
+      const recipient = to.replace(/\D/g, "");
+
+      const payload: any = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: recipient,
+        type: "video",
+        video: {
+          id: mediaId
+        }
+      };
+
+      if (caption) {
+        payload.video.caption = caption;
+      }
+
+      const response = await this.client.post(
+        `/${this.phoneNumberId}/messages`,
+        payload
+      );
+
+      const messageId = response.data.messages[0].id;
+      logger.info(`[OfficialAPI] Vídeo enviado com sucesso: ${messageId}`);
+
+      return {
+        id: messageId,
+        from: this.phoneNumber!,
+        to: recipient,
+        body: caption || fileName,
+        timestamp: Date.now(),
+        fromMe: true,
+        mediaType: "video",
+        ack: 1
+      };
+
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.message;
+      logger.error(`[OfficialAPI] Erro ao enviar vídeo: ${message}`);
+      throw new WhatsAppAdapterError(
+        `Falha ao enviar vídeo: ${message}`,
+        error.response?.data?.error?.code || "SEND_VIDEO_ERROR",
+        error
+      );
+    }
+  }
+
+  /**
+   * Envia áudio a partir de um Buffer
+   */
+  async sendAudioMessage(
+    to: string,
+    fileBuffer: Buffer,
+    fileName: string
+  ): Promise<IWhatsAppMessage> {
+    try {
+      logger.info(`[OfficialAPI] Enviando áudio via Media API: ${fileName}`);
+
+      const FormData = require("form-data");
+      const form = new FormData();
+
+      // Detectar mimetype pela extensão
+      const ext = fileName.split('.').pop()?.toLowerCase() || 'mp3';
+      const mimeTypes: Record<string, string> = {
+        'mp3': 'audio/mpeg',
+        'ogg': 'audio/ogg',
+        'wav': 'audio/wav',
+        'm4a': 'audio/mp4',
+        'aac': 'audio/aac'
+      };
+      const mimeType = mimeTypes[ext] || 'audio/mpeg';
+
+      form.append("messaging_product", "whatsapp");
+      form.append("file", fileBuffer, {
+        filename: fileName,
+        contentType: mimeType
+      });
+
+      const uploadUrl = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/media`;
+
+      const uploadResponse = await axios.post(uploadUrl, form, {
+        headers: {
+          ...form.getHeaders(),
+          "Authorization": `Bearer ${this.accessToken}`
+        },
+        timeout: 60000
+      });
+
+      const mediaId = uploadResponse.data.id;
+      logger.info(`[OfficialAPI] Upload de áudio concluído. media_id=${mediaId}`);
+
+      const recipient = to.replace(/\D/g, "");
+
+      const payload = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: recipient,
+        type: "audio",
+        audio: {
+          id: mediaId
+        }
+      };
+
+      const response = await this.client.post(
+        `/${this.phoneNumberId}/messages`,
+        payload
+      );
+
+      const messageId = response.data.messages[0].id;
+      logger.info(`[OfficialAPI] Áudio enviado com sucesso: ${messageId}`);
+
+      return {
+        id: messageId,
+        from: this.phoneNumber!,
+        to: recipient,
+        body: fileName,
+        timestamp: Date.now(),
+        fromMe: true,
+        mediaType: "audio",
+        ack: 1
+      };
+
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.message;
+      logger.error(`[OfficialAPI] Erro ao enviar áudio: ${message}`);
+      throw new WhatsAppAdapterError(
+        `Falha ao enviar áudio: ${message}`,
+        error.response?.data?.error?.code || "SEND_AUDIO_ERROR",
+        error
+      );
+    }
+  }
+
+  /**
    * Deleta mensagem (suporte limitado - até 24h)
    * API Oficial só permite deletar mensagens próprias até 24h após envio
    */

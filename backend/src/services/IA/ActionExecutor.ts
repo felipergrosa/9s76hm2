@@ -215,10 +215,10 @@ export class ActionExecutor {
             const isOfficial = (ctx.wbot as any)?.channelType === "official" || (ctx.wbot as any)?.isOfficial;
 
             if (isOfficial) {
-                // API Oficial: usar sendDocumentMessage
+                // API Oficial: usar sendDocumentMessage (com filePath para mediaUrl)
                 const recipient = `${ctx.contact.number}`;
-                await (ctx.wbot as any).sendDocumentMessage(recipient, fileBuffer, fileName, mimeType);
-                logger.info(`[ActionExecutor] Catálogo enviado via API Oficial`, { ticketId: ctx.ticket.id });
+                await (ctx.wbot as any).sendDocumentMessage(recipient, fileBuffer, fileName, mimeType, filePath);
+                logger.info(`[ActionExecutor] Catálogo enviado via API Oficial`, { ticketId: ctx.ticket.id, filePath });
             } else {
                 // Baileys: usar sendMessage
                 const number = `${ctx.contact.number}@${ctx.ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
@@ -309,10 +309,10 @@ export class ActionExecutor {
             const isOfficial = (ctx.wbot as any)?.channelType === "official" || (ctx.wbot as any)?.isOfficial;
 
             if (isOfficial) {
-                // API Oficial: usar sendDocumentMessage
+                // API Oficial: usar sendDocumentMessage (com filePath para mediaUrl)
                 const recipient = `${ctx.contact.number}`;
-                await (ctx.wbot as any).sendDocumentMessage(recipient, fileBuffer, fileName, mimeType);
-                logger.info(`[ActionExecutor] Tabela enviada via API Oficial`, { ticketId: ctx.ticket.id });
+                await (ctx.wbot as any).sendDocumentMessage(recipient, fileBuffer, fileName, mimeType, filePath);
+                logger.info(`[ActionExecutor] Tabela enviada via API Oficial`, { ticketId: ctx.ticket.id, filePath });
             } else {
                 // Baileys: usar sendMessage
                 const number = `${ctx.contact.number}@${ctx.ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
@@ -707,7 +707,8 @@ export class ActionExecutor {
             // Determinar tipo de envio baseado no mimeType
             if (mimeType.startsWith("image/")) {
                 if (isOfficial) {
-                    await (ctx.wbot as any).sendImageMessage(ctx.contact.number, fileBuffer, fileName);
+                    // Passar filePath para construir mediaUrl corretamente
+                    await (ctx.wbot as any).sendImageMessage(ctx.contact.number, fileBuffer, fileName, filePath);
                 } else {
                     await ctx.wbot.sendMessage(number, {
                         image: fileBuffer,
@@ -716,17 +717,28 @@ export class ActionExecutor {
                 }
             } else if (mimeType.startsWith("video/")) {
                 if (isOfficial) {
-                    await (ctx.wbot as any).sendVideoMessage(ctx.contact.number, fileBuffer, fileName);
+                    // Passar filePath para construir mediaUrl corretamente
+                    await (ctx.wbot as any).sendVideoMessage(ctx.contact.number, fileBuffer, fileName, filePath);
                 } else {
                     await ctx.wbot.sendMessage(number, {
                         video: fileBuffer,
                         caption: `📎 ${fileName}`
                     });
                 }
-            } else {
-                // Documento (PDF, etc)
+            } else if (mimeType.startsWith("audio/")) {
                 if (isOfficial) {
-                    await (ctx.wbot as any).sendDocumentMessage(ctx.contact.number, fileBuffer, fileName, mimeType);
+                    // Passar filePath para construir mediaUrl corretamente
+                    await (ctx.wbot as any).sendAudioMessage(ctx.contact.number, fileBuffer, fileName, filePath);
+                } else {
+                    await ctx.wbot.sendMessage(number, {
+                        audio: fileBuffer,
+                        mimetype: mimeType
+                    });
+                }
+            } else {
+                // Documento (PDF, Excel, etc)
+                if (isOfficial) {
+                    await (ctx.wbot as any).sendDocumentMessage(ctx.contact.number, fileBuffer, fileName, mimeType, filePath);
                 } else {
                     await ctx.wbot.sendMessage(number, {
                         document: fileBuffer,
@@ -740,7 +752,8 @@ export class ActionExecutor {
                 ticketId: ctx.ticket.id,
                 fileName,
                 mimeType,
-                fileSize: fileBuffer.length
+                fileSize: fileBuffer.length,
+                filePath
             });
 
             return `✅ Arquivo "${fileName}" enviado com sucesso!`;
