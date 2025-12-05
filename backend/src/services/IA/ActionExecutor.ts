@@ -50,6 +50,10 @@ export class ActionExecutor {
                     return await this.enviarTabelaPrecos(context);
                 case "listar_tabelas_precos":
                     return await this.listarTabelasPrecos(context);
+                case "listar_informativos":
+                    return await this.listarInformativos(context);
+                case "enviar_informativo":
+                    return await this.enviarInformativo(context);
                 case "buscar_produto_detalhado":
                     return await this.buscarProdutoDetalhado(context);
                 case "buscar_e_enviar_arquivo":
@@ -226,6 +230,211 @@ export class ActionExecutor {
         return `Temos as seguintes tabelas de preços disponíveis:\n\n${lista}\n\nQual delas você gostaria de receber?`;
     }
 
+    private static async listarInformativos(ctx: ActionContext): Promise<string> {
+        let files: any[] = [];
+
+        logger.info(`[ActionExecutor] listarInformativos iniciado`, {
+            ticketId: ctx.ticket.id,
+            queueId: ctx.ticket.queueId,
+            folderId: ctx.ticket.queue?.folderId,
+            fileListId: ctx.ticket.queue?.fileListId
+        });
+
+        // Tags para buscar informativos
+        const searchTags = ["informativo", "informativos", "negociacao", "politica", "cst", "cif", "fob"];
+
+        // Tentar buscar no sistema NOVO (LibraryFolder)
+        if (ctx.ticket.queue?.folderId) {
+            files = await this.findAllFilesInLibraryFolder(
+                ctx.ticket.queue.folderId,
+                searchTags,
+                ctx.ticket.companyId
+            );
+
+            logger.info(`[ActionExecutor] Informativos em LibraryFolder:`, { count: files.length });
+        }
+
+        // Fallback para sistema LEGADO (fileListId)
+        if (files.length === 0 && ctx.ticket.queue?.fileListId) {
+            const fileOptions = await FilesOptions.findAll({
+                where: {
+                    fileId: ctx.ticket.queue.fileListId,
+                    isActive: true,
+                    [Op.or]: [
+                        { keywords: { [Op.iLike]: "%informativo%" } },
+                        { keywords: { [Op.iLike]: "%negociacao%" } },
+                        { keywords: { [Op.iLike]: "%politica%" } },
+                        { keywords: { [Op.iLike]: "%cst%" } },
+                        { keywords: { [Op.iLike]: "%cif%" } }
+                    ]
+                }
+            });
+            files = fileOptions;
+            logger.info(`[ActionExecutor] Informativos em Files (legado):`, { count: files.length });
+        }
+
+        if (files.length === 0) {
+            logger.warn(`[ActionExecutor] Nenhum informativo encontrado!`);
+            return "Não encontrei informativos disponíveis no momento. Posso te ajudar de outra forma?";
+        }
+
+        // Formatar lista de informativos
+        const lista = files.map(f => `• ${f.title || f.name}`).join("\n");
+        logger.info(`[ActionExecutor] Informativos encontrados:`, { count: files.length, lista });
+
+        return `Temos os seguintes informativos disponíveis:\n\n${lista}\n\nQual deles você gostaria de receber?`;
+    }
+
+    private static async enviarInformativo(ctx: ActionContext): Promise<string> {
+        const tipo = ctx.arguments.tipo || "";
+
+        try {
+            let informativoFile: FilesOptions | null = null;
+
+            logger.info(`[ActionExecutor] enviarInformativo iniciado`, {
+                ticketId: ctx.ticket.id,
+                tipo
+            });
+
+            // Tags para buscar informativos
+            const baseTags = ["informativo", "informativos", "negociacao", "politica", "cst", "cif", "fob"];
+
+            // Tentar buscar no sistema NOVO (LibraryFolder)
+            if (ctx.ticket.queue?.folderId) {
+                const allInformativos = await this.findAllFilesInLibraryFolder(
+                    ctx.ticket.queue.folderId,
+                    baseTags,
+                    ctx.ticket.companyId
+                );
+
+                logger.info(`[ActionExecutor] Informativos encontrados: ${allInformativos.length}`, {
+                    informativos: allInformativos.map(f => f.name)
+                });
+
+                if (allInformativos.length > 0) {
+                    if (tipo) {
+                        // Se tipo especificado, buscar pelo nome do arquivo
+                        const tipoLower = tipo.toLowerCase();
+                        informativoFile = allInformativos.find(f => 
+                            f.name?.toLowerCase().includes(tipoLower)
+                        ) || null;
+                        
+                        logger.info(`[ActionExecutor] Busca por tipo "${tipo}": ${informativoFile ? 'encontrado' : 'não encontrado'}`, {
+                            fileName: informativoFile?.name
+                        });
+                    }
+                    
+                    // Se não encontrou pelo tipo ou tipo não especificado, pegar o primeiro
+                    if (!informativoFile) {
+                        informativoFile = allInformativos[0];
+                    }
+                }
+
+                if (informativoFile) {
+                    logger.info(`[ActionExecutor] Informativo selecionado em LibraryFolder`, {
+                        folderId: ctx.ticket.queue.folderId,
+                        fileId: informativoFile.id,
+                        fileName: informativoFile.name
+                    });
+                }
+            }
+
+            // Fallback para sistema LEGADO (fileListId)
+            if (!informativoFile && ctx.ticket.queue?.fileListId) {
+                const whereConditions: any = {
+                    fileId: ctx.ticket.queue.fileListId,
+                    isActive: true,
+                    [Op.or]: [
+                        { keywords: { [Op.iLike]: "%informativo%" } },
+                        { keywords: { [Op.iLike]: "%negociacao%" } },
+                        { keywords: { [Op.iLike]: "%cst%" } }
+                    ]
+                };
+                
+                if (tipo) {
+                    whereConditions.name = { [Op.iLike]: `%${tipo}%` };
+                }
+                
+                const fileOptions = await FilesOptions.findAll({
+                    where: whereConditions,
+                    limit: 10
+                });
+                
+                if (tipo && fileOptions.length === 0) {
+                    delete whereConditions.name;
+                    const allFiles = await FilesOptions.findAll({
+                        where: whereConditions,
+                        limit: 10
+                    });
+                    const tipoLower = tipo.toLowerCase();
+                    informativoFile = allFiles.find(f => 
+                        f.name?.toLowerCase().includes(tipoLower)
+                    ) || allFiles[0] || null;
+                } else {
+                    informativoFile = fileOptions[0] || null;
+                }
+
+                if (informativoFile) {
+                    logger.info(`[ActionExecutor] Informativo encontrado em Files (legado)`, {
+                        fileListId: ctx.ticket.queue.fileListId,
+                        fileId: informativoFile.id,
+                        fileName: informativoFile.name
+                    });
+                }
+            }
+
+            if (!informativoFile) {
+                logger.warn(`[ActionExecutor] Informativo não encontrado`, {
+                    queueId: ctx.ticket.queueId,
+                    tipo
+                });
+                return tipo 
+                    ? `❌ Informativo "${tipo}" não encontrado. Use listar_informativos para ver as opções disponíveis.`
+                    : `❌ Informativo não configurado nesta fila`;
+            }
+
+            // Verificar se arquivo existe
+            const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
+            const filePath = path.resolve(publicFolder, informativoFile.path);
+
+            if (!fs.existsSync(filePath)) {
+                logger.error(`[ActionExecutor] Arquivo não existe: ${filePath}`);
+                return `❌ Arquivo do informativo não encontrado no servidor`;
+            }
+
+            // Enviar arquivo
+            const fileBuffer = fs.readFileSync(filePath);
+            const fileName = informativoFile.name || "Informativo.pdf";
+            const mimeType = "application/pdf";
+
+            const isOfficial = (ctx.wbot as any)?.channelType === "official" || (ctx.wbot as any)?.isOfficial;
+
+            if (isOfficial) {
+                const adapter = ctx.wbot as any;
+                await adapter.sendDocumentMessage(
+                    ctx.contact.number + "@s.whatsapp.net",
+                    fileBuffer,
+                    fileName,
+                    mimeType,
+                    filePath
+                );
+            } else {
+                await ctx.wbot.sendMessage(ctx.contact.number + "@s.whatsapp.net", {
+                    document: fileBuffer,
+                    mimetype: mimeType,
+                    fileName: fileName
+                });
+            }
+
+            logger.info(`[ActionExecutor] Informativo enviado`, { ticketId: ctx.ticket.id, fileName });
+            return `✅ Informativo "${fileName}" enviado com sucesso!`;
+
+        } catch (error: any) {
+            logger.error("[ActionExecutor] Erro ao enviar informativo:", error);
+            return `❌ Erro ao enviar informativo: ${error.message}`;
+        }
+    }
+
     private static async enviarCatalogo(ctx: ActionContext): Promise<string> {
         const tipo = ctx.arguments.tipo || "";
 
@@ -256,8 +465,7 @@ export class ActionExecutor {
                         // Se tipo especificado, buscar pelo nome do arquivo
                         const tipoLower = tipo.toLowerCase();
                         catalogoFile = allCatalogs.find(f => 
-                            f.name?.toLowerCase().includes(tipoLower) ||
-                            f.title?.toLowerCase().includes(tipoLower)
+                            f.name?.toLowerCase().includes(tipoLower)
                         ) || null;
                         
                         logger.info(`[ActionExecutor] Busca por tipo "${tipo}": ${catalogoFile ? 'encontrado' : 'não encontrado'}`, {
@@ -407,8 +615,7 @@ export class ActionExecutor {
                         // Se tipo especificado, buscar pelo nome do arquivo
                         const tipoLower = tipo.toLowerCase();
                         tabelaFile = allTables.find(f => 
-                            f.name?.toLowerCase().includes(tipoLower) ||
-                            f.title?.toLowerCase().includes(tipoLower)
+                            f.name?.toLowerCase().includes(tipoLower)
                         ) || null;
                         
                         logger.info(`[ActionExecutor] Busca por tipo "${tipo}": ${tabelaFile ? 'encontrado' : 'não encontrado'}`, {

@@ -65,6 +65,28 @@ export const BOT_AVAILABLE_FUNCTIONS: BotFunction[] = [
         }
     },
     {
+        name: "listar_informativos",
+        description: "SEMPRE use esta função PRIMEIRO quando o cliente perguntar 'quais informativos vocês têm?', 'tem informativo?', 'políticas de frete?', 'informativo de negociação?' ou qualquer pergunta sobre QUAIS informativos estão disponíveis. Esta função lista todos os informativos (políticas, negociações, CST, CIF, FOB, etc) para o cliente escolher.",
+        parameters: {
+            type: "object",
+            properties: {}
+        }
+    },
+    {
+        name: "enviar_informativo",
+        description: "Use esta função para ENVIAR um informativo específico em PDF. Use quando o cliente já souber qual informativo quer (ex: 'informativo SP', 'CST CIF', 'negociação norte') ou após listar os informativos disponíveis.",
+        parameters: {
+            type: "object",
+            properties: {
+                tipo: {
+                    type: "string",
+                    description: "Nome ou tipo do informativo (ex: 'SP', 'norte-nordeste', 'CST CIF', 'FOB'). Se não especificado, envia o primeiro encontrado."
+                }
+            },
+            required: []
+        }
+    },
+    {
         name: "buscar_produto_detalhado",
         description: "Busca informações detalhadas de um produto específico no RAG e retorna ficha técnica, especificações e detalhes. Use quando cliente mencionar um produto específico.",
         parameters: {

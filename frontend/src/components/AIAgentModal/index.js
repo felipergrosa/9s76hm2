@@ -871,6 +871,9 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
                                                                 <MenuItem value="enviar_catalogo">📄 Enviar Catálogo</MenuItem>
                                                                 <MenuItem value="listar_catalogos">📋 Listar Catálogos</MenuItem>
                                                                 <MenuItem value="enviar_tabela_precos">💰 Enviar Tabela de Preços</MenuItem>
+                                                                <MenuItem value="listar_tabelas_precos">📋 Listar Tabelas de Preços</MenuItem>
+                                                                <MenuItem value="enviar_informativo">📑 Enviar Informativo</MenuItem>
+                                                                <MenuItem value="listar_informativos">📋 Listar Informativos</MenuItem>
                                                                 <MenuItem value="buscar_produto_detalhado">🔍 Buscar Produto Detalhado</MenuItem>
                                                                 <MenuItem value="transferir_para_vendedor_responsavel">👤 Transferir para Vendedor Responsável</MenuItem>
                                                                 <MenuItem value="transferir_para_atendente">🙋 Transferir para Atendente</MenuItem>
