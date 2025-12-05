@@ -1125,9 +1125,6 @@ export default function Options(props) {
             </FormHelperText>
           </FormControl>
         </Grid>
-
-        
-              
       </Grid>
     </>
   );

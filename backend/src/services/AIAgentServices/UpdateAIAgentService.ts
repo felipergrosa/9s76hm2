@@ -33,6 +33,8 @@ interface Request {
     voiceRegion?: string;
     voiceTemperature?: number;
     voiceName?: string;
+    // STT Settings
+    sttProvider?: "openai" | "gemini" | "disabled";
     funnelStages?: Array<{
         id?: number;
         order: number;
@@ -74,6 +76,7 @@ const UpdateAIAgentService = async ({
     voiceRegion,
     voiceTemperature,
     voiceName,
+    sttProvider,
     funnelStages
 }: Request): Promise<AIAgent> => {
     const agent = await AIAgent.findOne({
@@ -122,7 +125,9 @@ const UpdateAIAgentService = async ({
         voiceApiKey: voiceApiKey !== undefined ? voiceApiKey : agent.voiceApiKey,
         voiceRegion: voiceRegion !== undefined ? voiceRegion : agent.voiceRegion,
         voiceTemperature: voiceTemperature !== undefined ? voiceTemperature : agent.voiceTemperature,
-        voiceName: voiceName !== undefined ? voiceName : agent.voiceName
+        voiceName: voiceName !== undefined ? voiceName : agent.voiceName,
+        // STT Settings
+        sttProvider: sttProvider !== undefined ? sttProvider : agent.sttProvider
     });
 
     // Atualizar funnel stages se fornecidas

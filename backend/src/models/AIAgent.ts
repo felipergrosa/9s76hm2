@@ -103,6 +103,10 @@ class AIAgent extends Model<AIAgent> {
     @Column
     voiceName: string;
 
+    // STT (Speech-to-Text) Settings
+    @Column(DataType.ENUM("openai", "gemini", "disabled"))
+    sttProvider: "openai" | "gemini" | "disabled";
+
     @BelongsTo(() => Company)
     company: Company;
 

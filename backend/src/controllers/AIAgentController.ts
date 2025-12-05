@@ -33,6 +33,7 @@ const createSchema = Yup.object().shape({
     voiceRegion: Yup.string().nullable(),
     voiceTemperature: Yup.number().nullable().min(0).max(1),
     voiceName: Yup.string().nullable(),
+    sttProvider: Yup.string().nullable().oneOf(["openai", "gemini", "disabled", null]),
     funnelStages: Yup.array().of(funnelStageSchema)
 });
 
@@ -63,6 +64,7 @@ const updateSchema = Yup.object().shape({
     voiceRegion: Yup.string().nullable(),
     voiceTemperature: Yup.number().nullable().min(0).max(1),
     voiceName: Yup.string().nullable(),
+    sttProvider: Yup.string().nullable().oneOf(["openai", "gemini", "disabled", null]),
     funnelStages: Yup.array().of(funnelStageSchema)
 });
 

@@ -13,6 +13,7 @@ import {
     MenuItem,
     FormControl,
     InputLabel,
+    FormHelperText,
     Grid,
     Typography,
     Box,
@@ -73,6 +74,8 @@ const AgentSchema = Yup.object().shape({
     voiceRegion: Yup.string().nullable(),
     voiceTemperature: Yup.number().nullable(),
     voiceName: Yup.string().nullable(),
+    // STT Settings
+    sttProvider: Yup.string().nullable(),
     // Funnel stages
     funnelStages: Yup.array().of(
         Yup.object().shape({
@@ -138,6 +141,8 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
         voiceRegion: "",
         voiceTemperature: 0.7,
         voiceName: "",
+        // STT Settings
+        sttProvider: "disabled",
         funnelStages: [
             {
                 order: 1,
@@ -525,15 +530,33 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
                             />
 
                             <Grid container spacing={2}>
-                                {/* Tipo de Voz */}
+                                {/* Provedor de STT (Transcrição) */}
                                 <Grid item xs={12} sm={6}>
                                     <FormControl fullWidth>
-                                        <InputLabel>Tipo de Voz</InputLabel>
+                                        <InputLabel>Provedor STT (Transcrição de Áudio)</InputLabel>
+                                        <Select name="sttProvider" value={values.sttProvider} onChange={handleChange}>
+                                            <MenuItem value="disabled">Desabilitado</MenuItem>
+                                            <MenuItem value="openai">OpenAI Whisper</MenuItem>
+                                            <MenuItem value="gemini">Google Gemini</MenuItem>
+                                        </Select>
+                                        <FormHelperText>
+                                            Usa a chave configurada em Provedores de IA
+                                        </FormHelperText>
+                                    </FormControl>
+                                </Grid>
+
+                                {/* Tipo de Voz (TTS - Resposta em Áudio) */}
+                                <Grid item xs={12} sm={6}>
+                                    <FormControl fullWidth>
+                                        <InputLabel>Tipo de Voz (TTS - Resposta)</InputLabel>
                                         <Select name="voiceType" value={values.voiceType} onChange={handleChange}>
                                             <MenuItem value="text">Texto (DEBUG - liberado)</MenuItem>
                                             <MenuItem value="generated">Voz Gerada (TTS)</MenuItem>
                                             <MenuItem value="enabled">Voz Habilitada (Azure)</MenuItem>
                                         </Select>
+                                        <FormHelperText>
+                                            Responder em áudio requer Azure Speech
+                                        </FormHelperText>
                                     </FormControl>
                                 </Grid>
 
