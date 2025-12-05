@@ -790,16 +790,6 @@ export const handleOpenAi = async (
   if (msg.message?.conversation || msg.message?.extendedTextMessage?.text) {
     const messagesAI = prepareMessagesAI(messages, isGeminiModel, promptSystem);
 
-    // Debug: log do histórico preparado para IA
-    console.log("[IA][DEBUG] Histórico preparado para IA:", {
-      ticketId: ticket.id,
-      totalInHistory: messagesAI.length,
-      history: messagesAI.map(m => ({
-        role: m.role,
-        content: m.content?.substring(0, 50)
-      }))
-    });
-
     try {
       let responseText: string | null = null;
       // Usar o provider já resolvido (do agente ou inferido)

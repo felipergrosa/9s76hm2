@@ -22,7 +22,7 @@ export interface BotFunction {
 export const BOT_AVAILABLE_FUNCTIONS: BotFunction[] = [
     {
         name: "listar_catalogos",
-        description: "SEMPRE use esta função quando o cliente mencionar 'catálogo' pela primeira vez ou se houver dúvida sobre qual catálogo enviar. Esta função lista todos os catálogos disponíveis.",
+        description: "SEMPRE use esta função PRIMEIRO quando o cliente perguntar 'quais catálogos vocês têm?', 'que catálogos existem?', 'quais produtos vocês vendem?' ou qualquer pergunta sobre QUAIS catálogos estão disponíveis. Esta função lista todos os catálogos para o cliente escolher.",
         parameters: {
             type: "object",
             properties: {}
@@ -30,24 +30,38 @@ export const BOT_AVAILABLE_FUNCTIONS: BotFunction[] = [
     },
     {
         name: "enviar_catalogo",
-        description: "OBRIGATÓRIO: Use esta função para ENVIAR o arquivo PDF do catálogo quando o cliente pedir 'catálogo', 'produtos' ou 'o que vocês vendem'. NUNCA diga que não consegue enviar - USE esta função.",
+        description: "Use esta função para ENVIAR um catálogo específico em PDF. Use quando o cliente já souber qual catálogo quer (ex: 'catálogo completo', 'catálogo de pendentes') ou após listar os catálogos disponíveis.",
         parameters: {
             type: "object",
             properties: {
                 tipo: {
                     type: "string",
-                    description: "Nome ou tipo do catálogo (ex: 'completo', 'premium', 'lite'). Padrão: 'completo'"
+                    description: "Nome ou tipo do catálogo (ex: 'completo', 'pendentes', 'trilhos', 'abajures'). Se não especificado, envia o primeiro encontrado."
                 }
             },
             required: []
         }
     },
     {
-        name: "enviar_tabela_precos",
-        description: "OBRIGATÓRIO: Use esta função para ENVIAR a tabela de preços em PDF quando o cliente perguntar sobre 'preços', 'valores', 'quanto custa' ou 'tabela'. NUNCA diga que não consegue - USE esta função.",
+        name: "listar_tabelas_precos",
+        description: "SEMPRE use esta função PRIMEIRO quando o cliente perguntar 'quais tabelas vocês têm?', 'quais tabelas de preço?', 'que tabelas existem?' ou qualquer pergunta sobre QUAIS tabelas estão disponíveis. Esta função lista todas as tabelas de preços para o cliente escolher.",
         parameters: {
             type: "object",
             properties: {}
+        }
+    },
+    {
+        name: "enviar_tabela_precos",
+        description: "Use esta função para ENVIAR uma tabela de preços específica em PDF. Use quando o cliente já souber qual tabela quer (ex: 'tabela lite', 'tabela premium') ou após listar as tabelas disponíveis.",
+        parameters: {
+            type: "object",
+            properties: {
+                tipo: {
+                    type: "string",
+                    description: "Nome ou tipo da tabela (ex: 'lite', 'premium', 'completa'). Se não especificado, envia a primeira encontrada."
+                }
+            },
+            required: []
         }
     },
     {

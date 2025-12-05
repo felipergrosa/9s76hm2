@@ -48,6 +48,8 @@ export class ActionExecutor {
                     return await this.listarCatalogos(context);
                 case "enviar_tabela_precos":
                     return await this.enviarTabelaPrecos(context);
+                case "listar_tabelas_precos":
+                    return await this.listarTabelasPrecos(context);
                 case "buscar_produto_detalhado":
                     return await this.buscarProdutoDetalhado(context);
                 case "buscar_e_enviar_arquivo":
@@ -131,12 +133,97 @@ export class ActionExecutor {
 
         if (files.length === 0) {
             logger.warn(`[ActionExecutor] Nenhum catálogo encontrado!`);
-            return "Nenhum catálogo encontrado disponível para envio.";
+            return "Não encontrei catálogos disponíveis no momento. Posso te ajudar de outra forma?";
         }
 
-        const lista = files.map(f => `- ${f.title || f.name}`).join("\n");
-        logger.info(`[ActionExecutor] Catálogos encontrados e formatados:`, { lista });
-        return `Os seguintes catálogos estão disponíveis:\n${lista}\n\nPergunte ao cliente qual ele deseja receber.`;
+        // Formatar lista de catálogos
+        const lista = files.map(f => `• ${f.title || f.name}`).join("\n");
+        logger.info(`[ActionExecutor] Catálogos encontrados:`, { count: files.length, lista });
+        
+        return `Temos os seguintes catálogos disponíveis:\n\n${lista}\n\nQual deles você gostaria de receber?`;
+    }
+
+    /**
+     * Lista as tabelas de preços disponíveis para o cliente escolher
+     */
+    private static async listarTabelasPrecos(ctx: ActionContext): Promise<string> {
+        let files: any[] = [];
+
+        logger.info(`[ActionExecutor] listarTabelasPrecos iniciado`, {
+            ticketId: ctx.ticket.id,
+            queueId: ctx.ticket.queueId,
+            folderId: ctx.ticket.queue?.folderId,
+            fileListId: ctx.ticket.queue?.fileListId
+        });
+
+        // Tags para buscar tabelas de preços
+        const tabelaTags = ["tabela", "precos", "preco", "preço", "price", "pricing", "valores"];
+
+        // 1. LibraryFolder
+        if (ctx.ticket.queue?.folderId) {
+            let libraryFiles: any[] = [];
+
+            if (ctx.ticket.queue.folderId === -1) {
+                // folderId = -1 significa "todas as pastas da empresa"
+                logger.info(`[ActionExecutor] Buscando tabelas em TODAS as pastas da empresa ${ctx.ticket.companyId}`);
+                
+                const allFolders = await LibraryFolder.findAll({
+                    where: { companyId: ctx.ticket.companyId }
+                });
+                
+                const folderIds = allFolders.map(f => f.id);
+                logger.info(`[ActionExecutor] Pastas encontradas: ${folderIds.join(", ")}`);  
+                
+                libraryFiles = await LibraryFile.findAll({
+                    where: {
+                        folderId: { [Op.in]: folderIds }
+                    }
+                });
+            } else {
+                // Busca em pasta específica
+                logger.info(`[ActionExecutor] Buscando tabelas na pasta ${ctx.ticket.queue.folderId}`);
+                libraryFiles = await LibraryFile.findAll({
+                    where: {
+                        folderId: ctx.ticket.queue.folderId
+                    }
+                });
+            }
+            
+            logger.info(`[ActionExecutor] LibraryFiles encontrados: ${libraryFiles.length}`);
+
+            // Filtra arquivos que tenham tags relacionadas a tabela de preços
+            files = libraryFiles.filter(f =>
+                f.tags && Array.isArray(f.tags) && f.tags.some((t: string) => 
+                    tabelaTags.some(tag => t.toLowerCase().includes(tag))
+                )
+            );
+            logger.info(`[ActionExecutor] LibraryFiles com tags de tabela: ${files.length}`);
+        }
+
+        // 2. Fallback FilesOptions
+        if (files.length === 0 && ctx.ticket.queue?.fileListId) {
+            files = await FilesOptions.findAll({
+                where: {
+                    fileId: ctx.ticket.queue.fileListId,
+                    isActive: true,
+                    [Op.or]: tabelaTags.map(tag => ({
+                        keywords: { [Op.iLike]: `%${tag}%` }
+                    }))
+                }
+            });
+            logger.info(`[ActionExecutor] FilesOptions (tabelas) encontrados: ${files.length}`);
+        }
+
+        if (files.length === 0) {
+            logger.warn(`[ActionExecutor] Nenhuma tabela de preços encontrada!`);
+            return "Não encontrei tabelas de preços disponíveis no momento. Posso te ajudar de outra forma?";
+        }
+
+        // Formatar lista de tabelas
+        const lista = files.map(f => `• ${f.title || f.name}`).join("\n");
+        logger.info(`[ActionExecutor] Tabelas de preços encontradas:`, { count: files.length, lista });
+        
+        return `Temos as seguintes tabelas de preços disponíveis:\n\n${lista}\n\nQual delas você gostaria de receber?`;
     }
 
     private static async enviarCatalogo(ctx: ActionContext): Promise<string> {
@@ -230,7 +317,8 @@ export class ActionExecutor {
                 logger.info(`[ActionExecutor] Catálogo enviado via Baileys`, { ticketId: ctx.ticket.id });
             }
 
-            return `✅ Catálogo ${tipo} enviado!`;
+            logger.info(`[ActionExecutor] Catálogo enviado`, { ticketId: ctx.ticket.id, fileName });
+            return `✅ Catálogo "${fileName}" enviado com sucesso!`;
 
         } catch (error: any) {
             logger.error("[ActionExecutor] Erro ao enviar catálogo:", error);
@@ -239,36 +327,58 @@ export class ActionExecutor {
     }
 
     private static async enviarTabelaPrecos(ctx: ActionContext): Promise<string> {
+        const tipo = ctx.arguments.tipo || "";
+        
         try {
             let tabelaFile: FilesOptions | null = null;
+
+            // Tags base para buscar tabelas
+            const baseTags = ["tabela", "precos", "preco", "preço", "price", "pricing"];
+            
+            // Se tipo foi especificado, adicionar à busca
+            const searchTags = tipo ? [...baseTags, tipo.toLowerCase()] : baseTags;
+
+            logger.info(`[ActionExecutor] enviarTabelaPrecos iniciado`, {
+                ticketId: ctx.ticket.id,
+                tipo,
+                searchTags
+            });
 
             // Tentar buscar primeiro no sistema NOVO (LibraryFolder)
             if (ctx.ticket.queue?.folderId) {
                 tabelaFile = await this.findFileInLibraryFolder(
                     ctx.ticket.queue.folderId,
-                    ["tabela", "precos", "preco", "preço", "price", "pricing"],
+                    searchTags,
                     ctx.ticket.companyId
                 );
 
                 if (tabelaFile) {
                     logger.info(`[ActionExecutor] Tabela encontrada em LibraryFolder`, {
                         folderId: ctx.ticket.queue.folderId,
-                        fileId: tabelaFile.id
+                        fileId: tabelaFile.id,
+                        fileName: tabelaFile.name
                     });
                 }
             }
 
             // Fallback para sistema LEGADO (fileListId)
             if (!tabelaFile && ctx.ticket.queue?.fileListId) {
+                const whereConditions: any[] = [
+                    { keywords: { [Op.iLike]: "%tabela%" } },
+                    { keywords: { [Op.iLike]: "%precos%" } },
+                    { keywords: { [Op.iLike]: "%preco%" } }
+                ];
+                
+                // Se tipo especificado, adicionar filtro
+                if (tipo) {
+                    whereConditions.push({ keywords: { [Op.iLike]: `%${tipo}%` } });
+                }
+                
                 const fileOptions = await FilesOptions.findAll({
                     where: {
                         fileId: ctx.ticket.queue.fileListId,
                         isActive: true,
-                        [Op.or]: [
-                            { keywords: { [Op.iLike]: "%tabela%" } },
-                            { keywords: { [Op.iLike]: "%precos%" } },
-                            { keywords: { [Op.iLike]: "%preco%" } }
-                        ]
+                        [Op.or]: whereConditions
                     },
                     limit: 1
                 });
@@ -285,10 +395,13 @@ export class ActionExecutor {
             if (!tabelaFile) {
                 logger.warn(`[ActionExecutor] Tabela não encontrada em nenhum sistema`, {
                     queueId: ctx.ticket.queueId,
+                    tipo,
                     hasFolderId: !!ctx.ticket.queue?.folderId,
                     hasFileListId: !!ctx.ticket.queue?.fileListId
                 });
-                return `❌ Tabela de preços não configurada`;
+                return tipo 
+                    ? `❌ Tabela de preços "${tipo}" não encontrada. Use listar_tabelas_precos para ver as opções disponíveis.`
+                    : `❌ Tabela de preços não configurada`;
             }
 
             // Verificar se arquivo existe
@@ -324,8 +437,8 @@ export class ActionExecutor {
                 logger.info(`[ActionExecutor] Tabela enviada via Baileys`, { ticketId: ctx.ticket.id });
             }
 
-            logger.info(`[ActionExecutor] Tabela enviada`, { ticketId: ctx.ticket.id });
-            return "✅ Tabela de preços enviada!";
+            logger.info(`[ActionExecutor] Tabela enviada`, { ticketId: ctx.ticket.id, fileName });
+            return `✅ Tabela de preços "${fileName}" enviada com sucesso!`;
 
         } catch (error: any) {
             logger.error("[ActionExecutor] Erro ao enviar tabela:", error);
