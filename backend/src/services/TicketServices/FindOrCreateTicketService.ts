@@ -139,9 +139,28 @@ const FindOrCreateTicketService = async (
 
         const hasChatbot = firstQueue?.chatbots && firstQueue.chatbots.length > 0;
         const hasPrompt = firstQueue?.prompt && firstQueue.prompt.length > 0;
-        const hasBotInDefaultQueue = hasChatbot || hasPrompt;
+        let hasAIAgentPending = false;
+        if (firstQueue) {
+          try {
+            const AIAgent = (await import("../../models/AIAgent")).default;
+            const aiAgent = await AIAgent.findOne({
+              where: {
+                companyId,
+                status: "active"
+              }
+            });
+            if (aiAgent && Array.isArray(aiAgent.queueIds) && aiAgent.queueIds.includes(firstQueue.id)) {
+              hasAIAgentPending = true;
+              logger.info(`[FindOrCreateTicket] AIAgent "${aiAgent.name}" encontrado para fila ${firstQueue.id} (ticket pending)`);
+            }
+          } catch (err) {
+            logger.warn(`[FindOrCreateTicket] Erro ao verificar AIAgent (pending): ${err}`);
+          }
+        }
 
-        if (hasBotInDefaultQueue) {
+        const hasBotInDefaultQueuePending = hasChatbot || hasPrompt || hasAIAgentPending;
+
+        if (hasBotInDefaultQueuePending) {
           // Atualizar ticket para bot se agora tem fila com bot configurado
           await ticket.update({
             status: "bot",
@@ -254,10 +273,32 @@ const FindOrCreateTicketService = async (
       });
     }
 
-    // Verificar se conexão tem fila padrão com chatbot OU prompt (IA/RAG)
+    // Verificar se conexão tem fila padrão com chatbot OU prompt (IA/RAG) OU AIAgent
     const hasChatbot = firstQueue?.chatbots && firstQueue.chatbots.length > 0;
     const hasPrompt = firstQueue?.prompt && firstQueue.prompt.length > 0;
-    const hasBotInDefaultQueue = hasChatbot || hasPrompt;
+    
+    // Verificar se existe AIAgent ativo vinculado a esta fila
+    let hasAIAgent = false;
+    if (firstQueue) {
+      try {
+        const AIAgent = (await import("../../models/AIAgent")).default;
+        const aiAgent = await AIAgent.findOne({
+          where: {
+            companyId,
+            status: "active"
+          }
+        });
+        // AIAgent armazena queueIds como array JSON
+        if (aiAgent && Array.isArray(aiAgent.queueIds) && aiAgent.queueIds.includes(firstQueue.id)) {
+          hasAIAgent = true;
+          logger.info(`[FindOrCreateTicket] AIAgent "${aiAgent.name}" encontrado para fila ${firstQueue.id}`);
+        }
+      } catch (err) {
+        logger.warn(`[FindOrCreateTicket] Erro ao verificar AIAgent: ${err}`);
+      }
+    }
+    
+    const hasBotInDefaultQueue = hasChatbot || hasPrompt || hasAIAgent;
     
     // Determinar status inicial:
     // - Se é LGPD: "lgpd"

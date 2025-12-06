@@ -858,14 +858,57 @@ export class ActionExecutor {
         const motivo = ctx.arguments.motivo || "solicitação do cliente";
 
         try {
-            logger.info(`[ActionExecutor] Transferindo para fila (pending)`, {
+            // 1. Buscar atendente da carteira do contato
+            const ContactWallet = (await import("../../models/ContactWallet")).default;
+            const User = (await import("../../models/User")).default;
+            
+            const wallet = await ContactWallet.findOne({
+                where: {
+                    contactId: ctx.contact.id,
+                    companyId: ctx.ticket.companyId
+                },
+                include: [{
+                    model: User,
+                    as: "wallet",
+                    attributes: ["id", "name", "email"]
+                }]
+            });
+
+            if (wallet && wallet.wallet) {
+                // Encontrou atendente da carteira - transferir direto para ele
+                const atendente = wallet.wallet;
+                
+                logger.info(`[ActionExecutor] Transferindo para atendente da carteira: ${atendente.name}`, {
+                    ticketId: ctx.ticket.id,
+                    userId: atendente.id,
+                    motivo
+                });
+
+                // Atualizar ticket com userId do atendente e status open
+                const UpdateTicketService = (await import("../TicketServices/UpdateTicketService")).default;
+                await UpdateTicketService({
+                    ticketData: {
+                        status: "open",
+                        userId: atendente.id,
+                        isBot: false
+                    },
+                    ticketId: ctx.ticket.id,
+                    companyId: ctx.ticket.companyId
+                });
+
+                return `✅ Transferindo para ${atendente.name} (seu atendente)`;
+            }
+
+            // 2. Não encontrou carteira - colocar na fila para qualquer atendente
+            logger.info(`[ActionExecutor] Sem carteira definida, transferindo para fila (pending)`, {
                 ticketId: ctx.ticket.id,
+                contactId: ctx.contact.id,
                 motivo
             });
 
             await transferQueue(ctx.ticket.queueId, ctx.ticket, ctx.contact);
 
-            return `✅ Transferindo para atendente humano`;
+            return `✅ Transferindo para atendente humano disponível`;
 
         } catch (error: any) {
             logger.error("[ActionExecutor] Erro ao transferir:", error);
