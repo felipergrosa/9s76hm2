@@ -159,5 +159,110 @@ export const BOT_AVAILABLE_FUNCTIONS: BotFunction[] = [
             },
             required: ["motivo"]
         }
+    },
+    {
+        name: "atualizar_contato",
+        description: "Atualiza os dados cadastrais do contato/cliente. Use quando o cliente informar dados como CNPJ, Razão Social, Nome Fantasia, Email, Cidade ou Segmento. IMPORTANTE: Sempre que o cliente fornecer esses dados, use esta função para salvar no cadastro.",
+        parameters: {
+            type: "object",
+            properties: {
+                cnpj: {
+                    type: "string",
+                    description: "CNPJ da empresa (apenas números ou formatado)"
+                },
+                razaoSocial: {
+                    type: "string",
+                    description: "Razão Social da empresa"
+                },
+                nomeFantasia: {
+                    type: "string",
+                    description: "Nome Fantasia da empresa"
+                },
+                email: {
+                    type: "string",
+                    description: "Email de contato"
+                },
+                cidade: {
+                    type: "string",
+                    description: "Cidade do cliente"
+                },
+                segmento: {
+                    type: "string",
+                    description: "Segmento de atuação (ex: loja de iluminação, arquiteto, construtora)"
+                }
+            },
+            required: []
+        }
+    },
+    {
+        name: "verificar_cadastro_completo",
+        description: "Verifica se o contato possui cadastro completo (CNPJ, Email, Razão Social). Use ANTES de enviar tabelas de preços ou materiais restritos para verificar se o cliente está qualificado.",
+        parameters: {
+            type: "object",
+            properties: {}
+        }
+    },
+    // ========== FUNÇÕES SDR ==========
+    {
+        name: "calcular_score_lead",
+        description: "Calcula o score atual do lead baseado nas informações coletadas e interações. Use para verificar se o lead está pronto para ser transferido para o closer.",
+        parameters: {
+            type: "object",
+            properties: {}
+        }
+    },
+    {
+        name: "registrar_resposta_qualificacao",
+        description: "Registra a resposta do cliente a uma pergunta de qualificação (BANT/SPIN/GPCT). Use sempre que o cliente responder uma pergunta de qualificação.",
+        parameters: {
+            type: "object",
+            properties: {
+                tipo_pergunta: {
+                    type: "string",
+                    description: "Tipo da pergunta: budget, authority, need, timeline, situation, problem, implication, goals, plans, challenges",
+                    enum: ["budget", "authority", "need", "timeline", "situation", "problem", "implication", "goals", "plans", "challenges", "custom"]
+                },
+                resposta: {
+                    type: "string",
+                    description: "Resumo da resposta do cliente"
+                },
+                positiva: {
+                    type: "boolean",
+                    description: "Se a resposta indica interesse/qualificação positiva"
+                }
+            },
+            required: ["tipo_pergunta", "resposta"]
+        }
+    },
+    {
+        name: "enviar_link_agendamento",
+        description: "Envia o link de agendamento de reunião para o cliente. Use quando o lead estiver qualificado e pronto para falar com um especialista.",
+        parameters: {
+            type: "object",
+            properties: {
+                motivo: {
+                    type: "string",
+                    description: "Motivo/contexto do agendamento"
+                }
+            }
+        }
+    },
+    {
+        name: "transferir_para_closer",
+        description: "Transfere o lead qualificado para um closer/vendedor. Use quando o score atingir o mínimo ou quando o cliente solicitar orçamento formal.",
+        parameters: {
+            type: "object",
+            properties: {
+                motivo: {
+                    type: "string",
+                    description: "Motivo da transferência"
+                },
+                resumo_qualificacao: {
+                    type: "string",
+                    description: "Resumo das informações coletadas durante a qualificação"
+                }
+            },
+            required: ["motivo"]
+        }
     }
 ];

@@ -351,6 +351,14 @@ async function processIncomingMessage(
     logger.info(`[WebhookProcessor] Ticket ${ticket.id} é bot (status: ${ticket.status}, queue: ${ticket.queueId}), processando IA/Prompt...`);
     
     try {
+      // Verificar debounce para evitar mensagens duplicadas
+      const { canProcessBotMessage } = await import("../../helpers/BotDebounce");
+      
+      if (!canProcessBotMessage(ticket.id, messageId)) {
+        logger.info(`[WebhookProcessor] Mensagem ${messageId} ignorada por debounce (ticket ${ticket.id})`);
+        return;
+      }
+      
       // Importar dinamicamente para evitar circular dependencies
       const { processOfficialBot } = await import("./ProcessOfficialBot");
       await processOfficialBot({

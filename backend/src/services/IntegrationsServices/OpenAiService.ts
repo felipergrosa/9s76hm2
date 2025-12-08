@@ -257,6 +257,8 @@ const resolveSystemPromptForTicket = async (
       const region = (contact as any)?.region || "";
       const segment = (contact as any)?.segment || "";
       const situation = (contact as any)?.situation || "";
+      const cnpj = (contact as any)?.cnpj || "";
+      const email = (contact as any)?.email || "";
 
       const crmContextLines: string[] = [];
       if (fantasyName) crmContextLines.push(`- Empresa do cliente: ${fantasyName}`);
@@ -264,10 +266,142 @@ const resolveSystemPromptForTicket = async (
       if (city || region) crmContextLines.push(`- Localização: ${city || ""}${city && region ? " - " : ""}${region || ""}`.trim());
       if (segment) crmContextLines.push(`- Segmento: ${segment}`);
       if (situation) crmContextLines.push(`- Situação no CRM: ${situation}`);
+      if (cnpj) crmContextLines.push(`- CNPJ: ${cnpj}`);
+      if (email) crmContextLines.push(`- Email: ${email}`);
 
       const crmBlock = crmContextLines.length
         ? `\nDados conhecidos do cliente (CRM, quando disponíveis):\n${crmContextLines.join("\n")}\n`
         : "";
+
+      // ========== VERIFICAR HORÁRIO DE FUNCIONAMENTO ==========
+      let businessHoursBlock = "";
+      const agent = agentConfig.agent as any;
+      if (agent.businessHours && Object.keys(agent.businessHours).length > 0) {
+        const now = new Date();
+        const dayNames = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
+        const currentDay = dayNames[now.getDay()];
+        const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        
+        const todayHours = agent.businessHours[currentDay];
+        let isWithinHours = false;
+        
+        if (todayHours && todayHours.start && todayHours.end) {
+          isWithinHours = currentTime >= todayHours.start && currentTime <= todayHours.end;
+        }
+
+        // Verificar se tem atendentes online
+        const User = (await import("../../models/User")).default;
+        const onlineUsers = await User.count({
+          where: {
+            companyId: ticket.companyId,
+            online: true
+          }
+        });
+
+        if (!isWithinHours) {
+          businessHoursBlock = `
+⏰ HORÁRIO DE FUNCIONAMENTO:
+- Estamos FORA do horário de atendimento.
+- Horário de hoje (${currentDay}): ${todayHours ? `${todayHours.start} às ${todayHours.end}` : "Fechado"}
+- Hora atual: ${currentTime}
+- ${agent.outOfHoursMessage || "Retornaremos no próximo horário comercial."}
+- Informe ao cliente que a mensagem foi recebida e será respondida no próximo horário de atendimento.
+`;
+        } else {
+          businessHoursBlock = `
+⏰ HORÁRIO DE FUNCIONAMENTO:
+- Estamos DENTRO do horário de atendimento (${todayHours.start} às ${todayHours.end}).
+- Atendentes online: ${onlineUsers}
+${onlineUsers === 0 ? "- ⚠️ Nenhum atendente humano online no momento. Você é o único atendimento disponível." : ""}
+`;
+        }
+      }
+
+      // ========== VERIFICAR QUALIFICAÇÃO DE LEAD ==========
+      let leadQualificationBlock = "";
+      if (agent.requireLeadQualification) {
+        const requiredFields = agent.requiredLeadFields || ["cnpj", "email"];
+        const fieldMapping: any = agent.leadFieldMapping || { "cnpj": "cnpj", "email": "email", "razaoSocial": "name" };
+        
+        const missingFields: string[] = [];
+        for (const field of requiredFields) {
+          const contactField = fieldMapping[field] || field;
+          const value = (contact as any)[contactField];
+          if (!value || value.toString().trim() === "") {
+            missingFields.push(field);
+          }
+        }
+
+        if (missingFields.length > 0) {
+          leadQualificationBlock = `
+📋 QUALIFICAÇÃO DE LEAD - OBRIGATÓRIO:
+- Este cliente NÃO possui cadastro completo.
+- Campos faltantes: ${missingFields.join(", ")}
+- ANTES de enviar tabelas de preços, catálogos ou materiais restritos, você DEVE:
+  1. Solicitar os dados faltantes ao cliente
+  2. Usar a função "atualizar_contato" para salvar os dados informados
+  3. Só então enviar os materiais solicitados
+- Mensagem sugerida: "${agent.leadQualificationMessage || 'Para enviar nossa tabela de preços, preciso de algumas informações.'}"
+`;
+        } else {
+          leadQualificationBlock = `
+📋 QUALIFICAÇÃO DE LEAD:
+- ✅ Cliente possui cadastro completo. Pode enviar materiais normalmente.
+`;
+        }
+      }
+
+      // ========== BLOCO SDR ==========
+      let sdrBlock = "";
+      if (agent.sdrEnabled) {
+        const icp: any = agent.sdrICP || {};
+        const methodology = agent.sdrMethodology || "BANT";
+        const questions: any[] = agent.sdrQualificationQuestions || [];
+        const minScore = agent.sdrMinScoreToTransfer || 70;
+
+        sdrBlock = `
+🎯 MODO SDR ATIVADO - Você é um Sales Development Representative
+
+PERFIL DO CLIENTE IDEAL (ICP):
+${icp.segments?.length > 0 ? `- Segmentos-alvo: ${icp.segments.join(", ")}` : ""}
+${icp.sizes?.length > 0 ? `- Porte: ${icp.sizes.join(", ")}` : ""}
+${icp.regions?.length > 0 ? `- Regiões: ${icp.regions.join(", ")}` : ""}
+${icp.criteria ? `- Critérios: ${icp.criteria}` : ""}
+
+METODOLOGIA DE QUALIFICAÇÃO: ${methodology}
+${methodology === "BANT" ? "- Budget (Orçamento), Authority (Autoridade), Need (Necessidade), Timeline (Prazo)" : ""}
+${methodology === "SPIN" ? "- Situation (Situação), Problem (Problema), Implication (Implicação), Need-payoff (Necessidade)" : ""}
+${methodology === "GPCT" ? "- Goals (Objetivos), Plans (Planos), Challenges (Desafios), Timeline (Prazo)" : ""}
+
+PERGUNTAS DE QUALIFICAÇÃO:
+${questions.map((q: any, i: number) => `${i + 1}. ${q.question} (${q.type}, ${q.points}pts)`).join("\n")}
+
+SUAS RESPONSABILIDADES COMO SDR:
+1. PROSPECTAR: Identificar se o cliente se encaixa no ICP
+2. QUALIFICAR: Fazer as perguntas de qualificação naturalmente na conversa
+3. REGISTRAR: Use "registrar_resposta_qualificacao" para cada resposta importante
+4. PONTUAR: Use "calcular_score_lead" para verificar o score atual
+5. TRANSFERIR: Quando score >= ${minScore} ou cliente pedir orçamento, use "transferir_para_closer"
+
+GATILHOS DE TRANSFERÊNCIA:
+- Score atingir ${minScore} pontos
+- Cliente pedir orçamento formal
+- Cliente mencionar prazo urgente
+- Cliente pedir para falar com vendedor/especialista
+
+${agent.sdrSchedulingEnabled ? `
+AGENDAMENTO:
+- Você pode agendar reuniões usando "enviar_link_agendamento"
+- Link: ${agent.sdrCalendarLink || "Não configurado"}
+` : ""}
+
+IMPORTANTE:
+- Seja consultivo, não vendedor
+- Faça perguntas abertas para entender as necessidades
+- Registre TODAS as respostas relevantes
+- Não force a venda, qualifique primeiro
+`;
+      }
 
       const agentPrompt = `Instruções do Sistema:
   - Seu nome é ${agentConfig.agent.name}. Se perguntarem quem você é ou qual seu nome, responda: "Meu nome é ${agentConfig.agent.name}".
@@ -275,6 +409,7 @@ const resolveSystemPromptForTicket = async (
   - Tom de comunicação: ${agentConfig.tone || "Profissional"}
   - Etapa do atendimento: ${agentConfig.currentStage.name} - ${agentConfig.currentStage.objective || ""}
   ${crmBlock}
+  ${sdrBlock}
   
   🚨 REGRA OBRIGATÓRIA - ENVIO DE ARQUIVOS:
   Você TEM CAPACIDADE de enviar arquivos reais (PDFs, imagens, documentos). VOCÊ DEVE usar as funções disponíveis:
@@ -294,6 +429,9 @@ const resolveSystemPromptForTicket = async (
   - SEMPRE execute a função quando cliente pedir arquivo
   - Se a função retornar erro, informe o erro específico ao cliente
   - Sua PRIORIDADE MÁXIMA é executar funções, não falar sobre elas
+  
+  ${businessHoursBlock}
+  ${leadQualificationBlock}
   
   Prompt Específico do Agente:
   ${agentConfig.systemPrompt}

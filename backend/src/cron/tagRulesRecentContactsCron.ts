@@ -7,7 +7,7 @@ import ApplyTagRulesService from '../services/TagServices/ApplyTagRulesService';
 // Executa a cada 5 minutos para processar contatos criados/atualizados recentemente
 const tagRulesRecentContactsCron = () => {
   cron.schedule('*/5 * * * *', async () => {
-    console.log('[TagRules Recent] Verificando contatos recentes...');
+    //console.log('[TagRules Recent] Verificando contatos recentes...');
     
     try {
       // Busca todas as companies ativas
@@ -37,7 +37,7 @@ const tagRulesRecentContactsCron = () => {
             continue;
           }
 
-          console.log(`[TagRules Recent] Company ${company.id}: ${recentContacts.length} contatos recentes encontrados`);
+          // console.log(`[TagRules Recent] Company ${company.id}: ${recentContacts.length} contatos recentes encontrados`);
 
           // Aplica regras para cada contato recente
           let totalProcessed = 0;
@@ -53,19 +53,19 @@ const tagRulesRecentContactsCron = () => {
             }
           }
 
-          console.log(`[TagRules Recent] Company ${company.id}: ${totalProcessed} contatos processados`);
+         // console.log(`[TagRules Recent] Company ${company.id}: ${totalProcessed} contatos processados`);
         } catch (err) {
           console.error(`[TagRules Recent] Erro ao processar company ${company.id}:`, err);
         }
       }
 
-      console.log('[TagRules Recent] Verificação concluída!');
+     // console.log('[TagRules Recent] Verificação concluída!');
     } catch (err) {
       console.error('[TagRules Recent] Erro geral:', err);
     }
   });
 
-  console.log('[TagRules Recent] Agendamento configurado: a cada 5 minutos para contatos recentes');
+  // console.log('[TagRules Recent] Agendamento configurado: a cada 5 minutos para contatos recentes');
 };
 
 export default tagRulesRecentContactsCron;

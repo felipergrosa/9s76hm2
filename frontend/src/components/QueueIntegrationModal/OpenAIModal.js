@@ -480,7 +480,7 @@ const OpenAIModal = ({
                     margin="dense"
                     fullWidth
                     multiline
-                    rows={8}
+                    rows={15}
                     inputRef={promptInputRef}
                     placeholder="Descreva como a IA deve se comportar e responder..."
                   />

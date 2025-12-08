@@ -1820,7 +1820,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                   <TextField
                     fullWidth
                     multiline
-                    rows={4}
+                    rows={15}
                     label="Prompt do Sistema"
                     value={newPreset.systemPrompt}
                     onChange={(e) => setNewPreset(prev => ({ ...prev, systemPrompt: e.target.value }))}

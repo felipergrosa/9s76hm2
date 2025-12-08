@@ -25,7 +25,10 @@ import {
     Divider,
     Accordion,
     AccordionSummary,
-    AccordionDetails
+    AccordionDetails,
+    Tabs,
+    Tab,
+    Slider
 } from "@material-ui/core";
 import {
     HelpOutline as HelpIcon,
@@ -115,6 +118,7 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
     const [loading, setLoading] = useState(false);
     const [selectedTemplate, setSelectedTemplate] = useState("");
     const [useGlobalAISettings, setUseGlobalAISettings] = useState(true);
+    const [activeTab, setActiveTab] = useState(0);
 
     const initialValues = {
         name: "",
@@ -151,6 +155,61 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
         inactivityTimeoutMinutes: 0,
         inactivityAction: "close",
         inactivityMessage: "Não recebi sua resposta. Vou encerrar nosso atendimento por enquanto. Se precisar de algo, é só me chamar novamente! 👋",
+        // Business Hours Settings
+        businessHours: {
+            seg: { start: "08:00", end: "18:00" },
+            ter: { start: "08:00", end: "18:00" },
+            qua: { start: "08:00", end: "18:00" },
+            qui: { start: "08:00", end: "18:00" },
+            sex: { start: "08:00", end: "18:00" },
+            sab: { start: "", end: "" },
+            dom: { start: "", end: "" }
+        },
+        outOfHoursMessage: "Olá! No momento estamos fora do horário de atendimento. Retornaremos no próximo dia útil.",
+        // Lead Qualification Settings
+        requireLeadQualification: false,
+        requiredLeadFields: ["cnpj", "email"],
+        leadFieldMapping: {
+            cnpj: "cnpj",
+            razaoSocial: "name",
+            email: "email",
+            nomeFantasia: "fantasyName",
+            cidade: "city",
+            segmento: "segment"
+        },
+        qualifiedLeadTag: "lead_qualificado",
+        leadQualificationMessage: "Para enviar nossa tabela de preços, preciso de algumas informações. Qual o CNPJ da sua empresa?",
+        // SDR Settings
+        sdrEnabled: false,
+        sdrICP: {
+            segments: [],
+            sizes: [],
+            regions: [],
+            criteria: ""
+        },
+        sdrMethodology: "BANT",
+        sdrQualificationQuestions: [
+            { question: "Qual o volume de compras mensal da sua empresa?", type: "budget", points: 15 },
+            { question: "Quem é responsável pelas decisões de compra?", type: "authority", points: 15 },
+            { question: "Qual problema você está buscando resolver?", type: "need", points: 20 },
+            { question: "Para quando você precisa dessa solução?", type: "timeline", points: 15 }
+        ],
+        sdrScoringRules: {
+            icpMatch: 20,
+            hasCnpj: 15,
+            hasEmail: 10,
+            askedPrice: 25,
+            mentionedUrgency: 20,
+            requestedHuman: 30,
+            answeredQuestion: 10
+        },
+        sdrMinScoreToTransfer: 70,
+        sdrTransferTriggers: ["pediu_orcamento", "score_minimo"],
+        sdrSchedulingEnabled: false,
+        sdrCalendarLink: "",
+        sdrSchedulingMessage: "Que tal agendarmos uma conversa com nosso especialista? Ele pode te ajudar a encontrar a melhor solução para sua necessidade.",
+        sdrHandoffMessage: "Vou transferir você para um de nossos especialistas que poderá te ajudar com mais detalhes. Um momento!",
+        sdrHotLeadTag: "lead_quente",
         funnelStages: [
             {
                 order: 1,
@@ -264,6 +323,23 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
                 {({ values, errors, touched, handleChange, setFieldValue }) => (
                     <Form>
                         <DialogContent dividers>
+                            {/* Tabs de Navegação */}
+                            <Tabs
+                                value={activeTab}
+                                onChange={(e, newValue) => setActiveTab(newValue)}
+                                indicatorColor="primary"
+                                textColor="primary"
+                                variant="fullWidth"
+                                style={{ marginBottom: 16 }}
+                            >
+                                <Tab label="⚙️ Configurações" />
+                                <Tab label="📊 Funil de Vendas" />
+                                <Tab label="🎯 SDR" />
+                            </Tabs>
+
+                            {/* TAB 0: Configurações Gerais */}
+                            {activeTab === 0 && (
+                            <>
                             {/* Informações Básicas */}
                             <Typography variant="h6" gutterBottom>
                                 Informações Básicas
@@ -831,6 +907,142 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
                                 <Divider />
                             </Box>
 
+                            {/* Horário de Funcionamento */}
+                            <SectionTitle
+                                icon="🕐"
+                                title="Horário de Funcionamento"
+                                tooltip="Configure o horário de atendimento. Fora do horário, o agente informará ao cliente e pode ajustar seu comportamento."
+                            />
+
+                            <Grid container spacing={2}>
+                                <Grid item xs={12}>
+                                    <Typography variant="body2" color="textSecondary" gutterBottom>
+                                        Configure o horário de início e fim para cada dia. Deixe vazio para dias sem atendimento.
+                                    </Typography>
+                                </Grid>
+                                {["seg", "ter", "qua", "qui", "sex", "sab", "dom"].map((day) => (
+                                    <Grid item xs={12} sm={6} md={4} key={day}>
+                                        <Box display="flex" alignItems="center" gap={1}>
+                                            <Typography variant="body2" style={{ width: 40, fontWeight: 500 }}>
+                                                {day.toUpperCase()}
+                                            </Typography>
+                                            <Field
+                                                as={TextField}
+                                                name={`businessHours.${day}.start`}
+                                                type="time"
+                                                size="small"
+                                                variant="outlined"
+                                                style={{ width: 100 }}
+                                                InputLabelProps={{ shrink: true }}
+                                            />
+                                            <Typography variant="body2">às</Typography>
+                                            <Field
+                                                as={TextField}
+                                                name={`businessHours.${day}.end`}
+                                                type="time"
+                                                size="small"
+                                                variant="outlined"
+                                                style={{ width: 100 }}
+                                                InputLabelProps={{ shrink: true }}
+                                            />
+                                        </Box>
+                                    </Grid>
+                                ))}
+                                <Grid item xs={12}>
+                                    <Field
+                                        as={TextField}
+                                        name="outOfHoursMessage"
+                                        label="Mensagem Fora do Horário"
+                                        fullWidth
+                                        multiline
+                                        rows={2}
+                                        variant="outlined"
+                                        size="small"
+                                        helperText="Mensagem que o agente usará quando estiver fora do horário de atendimento"
+                                    />
+                                </Grid>
+                            </Grid>
+
+                            <Box mt={3} mb={2}>
+                                <Divider />
+                            </Box>
+
+                            {/* Qualificação de Lead */}
+                            <SectionTitle
+                                icon="📋"
+                                title="Qualificação de Lead"
+                                tooltip="Exija dados cadastrais (CNPJ, Email, etc.) antes de enviar tabelas de preços e materiais restritos."
+                            />
+
+                            <Grid container spacing={2}>
+                                <Grid item xs={12}>
+                                    <FormControlLabel
+                                        control={
+                                            <Field
+                                                as={Switch}
+                                                name="requireLeadQualification"
+                                                color="primary"
+                                                checked={values.requireLeadQualification}
+                                            />
+                                        }
+                                        label="Exigir cadastro completo antes de enviar materiais"
+                                    />
+                                </Grid>
+
+                                {values.requireLeadQualification && (
+                                    <>
+                                        <Grid item xs={12} sm={6}>
+                                            <FormControl fullWidth variant="outlined" size="small">
+                                                <InputLabel>Campos Obrigatórios</InputLabel>
+                                                <Field
+                                                    as={Select}
+                                                    name="requiredLeadFields"
+                                                    label="Campos Obrigatórios"
+                                                    multiple
+                                                    renderValue={(selected) => selected.join(", ")}
+                                                >
+                                                    <MenuItem value="cnpj">CNPJ</MenuItem>
+                                                    <MenuItem value="email">Email</MenuItem>
+                                                    <MenuItem value="razaoSocial">Razão Social</MenuItem>
+                                                    <MenuItem value="nomeFantasia">Nome Fantasia</MenuItem>
+                                                    <MenuItem value="cidade">Cidade</MenuItem>
+                                                    <MenuItem value="segmento">Segmento</MenuItem>
+                                                </Field>
+                                            </FormControl>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <Field
+                                                as={TextField}
+                                                name="qualifiedLeadTag"
+                                                label="Tag ao Qualificar"
+                                                fullWidth
+                                                variant="outlined"
+                                                size="small"
+                                                helperText="Tag adicionada ao contato quando qualificado"
+                                            />
+                                        </Grid>
+                                        <Grid item xs={12}>
+                                            <Field
+                                                as={TextField}
+                                                name="leadQualificationMessage"
+                                                label="Mensagem de Solicitação de Dados"
+                                                fullWidth
+                                                multiline
+                                                rows={2}
+                                                variant="outlined"
+                                                size="small"
+                                                helperText="Mensagem que o agente usará para solicitar os dados do cliente"
+                                            />
+                                        </Grid>
+                                    </>
+                                )}
+                            </Grid>
+                            </>
+                            )}
+
+                            {/* TAB 1: Funil de Vendas */}
+                            {activeTab === 1 && (
+                            <>
                             {/* Funil de Vendas */}
                             <Box display="flex" alignItems="center" mb={2}>
                                 <Typography variant="h6">
@@ -908,7 +1120,7 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
                                                             value={stage.systemPrompt}
                                                             onChange={handleChange}
                                                             multiline
-                                                            rows={3}
+                                                            rows={15}
                                                             error={touched.funnelStages?.[index]?.systemPrompt && Boolean(errors.funnelStages?.[index]?.systemPrompt)}
                                                         />
                                                     </Grid>
@@ -968,7 +1180,419 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
                                     </>
                                 )}
                             </FieldArray>
+                            </>
+                            )}
 
+                            {/* TAB 2: SDR */}
+                            {activeTab === 2 && (
+                            <>
+                            <Box display="flex" alignItems="center" mb={2}>
+                                <Typography variant="h6">
+                                    🎯 SDR - Sales Development Representative
+                                </Typography>
+                                <Tooltip
+                                    title="Configure o agente como SDR para prospectar, qualificar e nutrir leads. O SDR identifica oportunidades quentes e transfere para o time de vendas (Closers)."
+                                    arrow
+                                    placement="right"
+                                >
+                                    <IconButton size="small" style={{ marginLeft: 8 }}>
+                                        <HelpIcon fontSize="small" color="action" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
+
+                            <Grid container spacing={2}>
+                                <Grid item xs={12}>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                name="sdrEnabled"
+                                                color="primary"
+                                                checked={values.sdrEnabled}
+                                                onChange={handleChange}
+                                            />
+                                        }
+                                        label="Habilitar modo SDR"
+                                    />
+                                </Grid>
+
+                                {values.sdrEnabled && (
+                                <>
+                                {/* ICP - Perfil do Cliente Ideal */}
+                                <Grid item xs={12}>
+                                    <Box mt={2} mb={1}>
+                                        <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
+                                            📌 Perfil do Cliente Ideal (ICP)
+                                        </Typography>
+                                    </Box>
+                                </Grid>
+
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Segmentos-alvo"
+                                        placeholder="Ex: loja iluminação, arquiteto, construtora"
+                                        value={values.sdrICP?.segments?.join(", ") || ""}
+                                        onChange={(e) => {
+                                            const segments = e.target.value.split(",").map(s => s.trim()).filter(s => s);
+                                            setFieldValue("sdrICP", { ...values.sdrICP, segments });
+                                        }}
+                                        helperText="Separe por vírgula"
+                                        variant="outlined"
+                                        size="small"
+                                    />
+                                </Grid>
+
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Regiões"
+                                        placeholder="Ex: SP, RJ, MG"
+                                        value={values.sdrICP?.regions?.join(", ") || ""}
+                                        onChange={(e) => {
+                                            const regions = e.target.value.split(",").map(s => s.trim()).filter(s => s);
+                                            setFieldValue("sdrICP", { ...values.sdrICP, regions });
+                                        }}
+                                        helperText="Separe por vírgula"
+                                        variant="outlined"
+                                        size="small"
+                                    />
+                                </Grid>
+
+                                <Grid item xs={12} sm={6}>
+                                    <FormControl fullWidth variant="outlined" size="small">
+                                        <InputLabel>Porte das Empresas</InputLabel>
+                                        <Select
+                                            multiple
+                                            value={values.sdrICP?.sizes || []}
+                                            onChange={(e) => setFieldValue("sdrICP", { ...values.sdrICP, sizes: e.target.value })}
+                                            label="Porte das Empresas"
+                                            renderValue={(selected) => selected.join(", ")}
+                                        >
+                                            <MenuItem value="micro">Micro</MenuItem>
+                                            <MenuItem value="pequeno">Pequeno</MenuItem>
+                                            <MenuItem value="medio">Médio</MenuItem>
+                                            <MenuItem value="grande">Grande</MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+
+                                <Grid item xs={12} sm={6}>
+                                    <FormControl fullWidth variant="outlined" size="small">
+                                        <InputLabel>Metodologia</InputLabel>
+                                        <Select
+                                            name="sdrMethodology"
+                                            value={values.sdrMethodology}
+                                            onChange={handleChange}
+                                            label="Metodologia"
+                                        >
+                                            <MenuItem value="BANT">BANT (Budget, Authority, Need, Timeline)</MenuItem>
+                                            <MenuItem value="SPIN">SPIN (Situation, Problem, Implication, Need)</MenuItem>
+                                            <MenuItem value="GPCT">GPCT (Goals, Plans, Challenges, Timeline)</MenuItem>
+                                            <MenuItem value="custom">Personalizada</MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+
+                                <Grid item xs={12}>
+                                    <TextField
+                                        fullWidth
+                                        label="Critérios Adicionais de Qualificação"
+                                        name="sdrICP.criteria"
+                                        value={values.sdrICP?.criteria || ""}
+                                        onChange={(e) => setFieldValue("sdrICP", { ...values.sdrICP, criteria: e.target.value })}
+                                        multiline
+                                        rows={2}
+                                        variant="outlined"
+                                        size="small"
+                                        placeholder="Ex: Empresas com faturamento acima de R$50k/mês, que já trabalham com iluminação..."
+                                    />
+                                </Grid>
+
+                                {/* Perguntas de Qualificação */}
+                                <Grid item xs={12}>
+                                    <Box mt={2} mb={1}>
+                                        <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
+                                            📋 Perguntas de Qualificação
+                                        </Typography>
+                                        <Typography variant="body2" color="textSecondary">
+                                            Perguntas que o SDR fará para qualificar o lead
+                                        </Typography>
+                                    </Box>
+                                </Grid>
+
+                                {values.sdrQualificationQuestions?.map((q, index) => (
+                                    <Grid item xs={12} key={index}>
+                                        <Box display="flex" alignItems="center" gap={1}>
+                                            <TextField
+                                                fullWidth
+                                                label={`Pergunta ${index + 1} (${q.type})`}
+                                                value={q.question}
+                                                onChange={(e) => {
+                                                    const updated = [...values.sdrQualificationQuestions];
+                                                    updated[index] = { ...updated[index], question: e.target.value };
+                                                    setFieldValue("sdrQualificationQuestions", updated);
+                                                }}
+                                                variant="outlined"
+                                                size="small"
+                                            />
+                                            <TextField
+                                                label="Pts"
+                                                type="number"
+                                                value={q.points}
+                                                onChange={(e) => {
+                                                    const updated = [...values.sdrQualificationQuestions];
+                                                    updated[index] = { ...updated[index], points: parseInt(e.target.value) || 0 };
+                                                    setFieldValue("sdrQualificationQuestions", updated);
+                                                }}
+                                                variant="outlined"
+                                                size="small"
+                                                style={{ width: 80 }}
+                                            />
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => {
+                                                    const updated = values.sdrQualificationQuestions.filter((_, i) => i !== index);
+                                                    setFieldValue("sdrQualificationQuestions", updated);
+                                                }}
+                                            >
+                                                <DeleteIcon fontSize="small" />
+                                            </IconButton>
+                                        </Box>
+                                    </Grid>
+                                ))}
+
+                                <Grid item xs={12}>
+                                    <Button
+                                        size="small"
+                                        startIcon={<AddIcon />}
+                                        onClick={() => {
+                                            const updated = [...(values.sdrQualificationQuestions || []), {
+                                                question: "",
+                                                type: "custom",
+                                                points: 10
+                                            }];
+                                            setFieldValue("sdrQualificationQuestions", updated);
+                                        }}
+                                    >
+                                        Adicionar Pergunta
+                                    </Button>
+                                </Grid>
+
+                                {/* Scoring */}
+                                <Grid item xs={12}>
+                                    <Box mt={2} mb={1}>
+                                        <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
+                                            📊 Scoring de Lead
+                                        </Typography>
+                                        <Typography variant="body2" color="textSecondary">
+                                            Pontuação automática baseada em ações do cliente
+                                        </Typography>
+                                    </Box>
+                                </Grid>
+
+                                <Grid item xs={12} sm={4}>
+                                    <TextField
+                                        fullWidth
+                                        label="Match com ICP"
+                                        type="number"
+                                        value={values.sdrScoringRules?.icpMatch || 0}
+                                        onChange={(e) => setFieldValue("sdrScoringRules", { ...values.sdrScoringRules, icpMatch: parseInt(e.target.value) || 0 })}
+                                        variant="outlined"
+                                        size="small"
+                                        helperText="pts"
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={4}>
+                                    <TextField
+                                        fullWidth
+                                        label="Tem CNPJ"
+                                        type="number"
+                                        value={values.sdrScoringRules?.hasCnpj || 0}
+                                        onChange={(e) => setFieldValue("sdrScoringRules", { ...values.sdrScoringRules, hasCnpj: parseInt(e.target.value) || 0 })}
+                                        variant="outlined"
+                                        size="small"
+                                        helperText="pts"
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={4}>
+                                    <TextField
+                                        fullWidth
+                                        label="Tem Email"
+                                        type="number"
+                                        value={values.sdrScoringRules?.hasEmail || 0}
+                                        onChange={(e) => setFieldValue("sdrScoringRules", { ...values.sdrScoringRules, hasEmail: parseInt(e.target.value) || 0 })}
+                                        variant="outlined"
+                                        size="small"
+                                        helperText="pts"
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={4}>
+                                    <TextField
+                                        fullWidth
+                                        label="Pediu Preço"
+                                        type="number"
+                                        value={values.sdrScoringRules?.askedPrice || 0}
+                                        onChange={(e) => setFieldValue("sdrScoringRules", { ...values.sdrScoringRules, askedPrice: parseInt(e.target.value) || 0 })}
+                                        variant="outlined"
+                                        size="small"
+                                        helperText="pts"
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={4}>
+                                    <TextField
+                                        fullWidth
+                                        label="Mencionou Urgência"
+                                        type="number"
+                                        value={values.sdrScoringRules?.mentionedUrgency || 0}
+                                        onChange={(e) => setFieldValue("sdrScoringRules", { ...values.sdrScoringRules, mentionedUrgency: parseInt(e.target.value) || 0 })}
+                                        variant="outlined"
+                                        size="small"
+                                        helperText="pts"
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={4}>
+                                    <TextField
+                                        fullWidth
+                                        label="Pediu Atendente"
+                                        type="number"
+                                        value={values.sdrScoringRules?.requestedHuman || 0}
+                                        onChange={(e) => setFieldValue("sdrScoringRules", { ...values.sdrScoringRules, requestedHuman: parseInt(e.target.value) || 0 })}
+                                        variant="outlined"
+                                        size="small"
+                                        helperText="pts"
+                                    />
+                                </Grid>
+
+                                {/* Transferência */}
+                                <Grid item xs={12}>
+                                    <Box mt={2} mb={1}>
+                                        <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
+                                            🔥 Gatilhos de Transferência para Closer
+                                        </Typography>
+                                    </Box>
+                                </Grid>
+
+                                <Grid item xs={12} sm={6}>
+                                    <Typography variant="body2" gutterBottom>
+                                        Score mínimo para transferir: <strong>{values.sdrMinScoreToTransfer} pts</strong>
+                                    </Typography>
+                                    <Slider
+                                        value={values.sdrMinScoreToTransfer}
+                                        onChange={(e, newValue) => setFieldValue("sdrMinScoreToTransfer", newValue)}
+                                        min={0}
+                                        max={150}
+                                        step={5}
+                                        valueLabelDisplay="auto"
+                                    />
+                                </Grid>
+
+                                <Grid item xs={12} sm={6}>
+                                    <FormControl fullWidth variant="outlined" size="small">
+                                        <InputLabel>Gatilhos Automáticos</InputLabel>
+                                        <Select
+                                            multiple
+                                            value={values.sdrTransferTriggers || []}
+                                            onChange={(e) => setFieldValue("sdrTransferTriggers", e.target.value)}
+                                            label="Gatilhos Automáticos"
+                                            renderValue={(selected) => selected.join(", ")}
+                                        >
+                                            <MenuItem value="pediu_orcamento">Pediu orçamento formal</MenuItem>
+                                            <MenuItem value="prazo_urgente">Mencionou prazo urgente</MenuItem>
+                                            <MenuItem value="score_minimo">Score atingiu mínimo</MenuItem>
+                                            <MenuItem value="pediu_reuniao">Pediu reunião/demonstração</MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Tag Lead Quente"
+                                        name="sdrHotLeadTag"
+                                        value={values.sdrHotLeadTag}
+                                        onChange={handleChange}
+                                        variant="outlined"
+                                        size="small"
+                                        helperText="Tag adicionada quando score atinge mínimo"
+                                    />
+                                </Grid>
+
+                                <Grid item xs={12}>
+                                    <TextField
+                                        fullWidth
+                                        label="Mensagem de Handoff"
+                                        name="sdrHandoffMessage"
+                                        value={values.sdrHandoffMessage}
+                                        onChange={handleChange}
+                                        multiline
+                                        rows={2}
+                                        variant="outlined"
+                                        size="small"
+                                        helperText="Mensagem enviada ao transferir para o closer"
+                                    />
+                                </Grid>
+
+                                {/* Agendamento */}
+                                <Grid item xs={12}>
+                                    <Box mt={2} mb={1}>
+                                        <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
+                                            📅 Agendamento de Reuniões
+                                        </Typography>
+                                    </Box>
+                                </Grid>
+
+                                <Grid item xs={12}>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                name="sdrSchedulingEnabled"
+                                                color="primary"
+                                                checked={values.sdrSchedulingEnabled}
+                                                onChange={handleChange}
+                                            />
+                                        }
+                                        label="Habilitar agendamento de reuniões"
+                                    />
+                                </Grid>
+
+                                {values.sdrSchedulingEnabled && (
+                                <>
+                                    <Grid item xs={12}>
+                                        <TextField
+                                            fullWidth
+                                            label="Link do Calendário"
+                                            name="sdrCalendarLink"
+                                            value={values.sdrCalendarLink}
+                                            onChange={handleChange}
+                                            variant="outlined"
+                                            size="small"
+                                            placeholder="https://calendly.com/sua-empresa/reuniao"
+                                            helperText="Calendly, Google Calendar, etc."
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                        <TextField
+                                            fullWidth
+                                            label="Mensagem de Convite"
+                                            name="sdrSchedulingMessage"
+                                            value={values.sdrSchedulingMessage}
+                                            onChange={handleChange}
+                                            multiline
+                                            rows={2}
+                                            variant="outlined"
+                                            size="small"
+                                        />
+                                    </Grid>
+                                </>
+                                )}
+                                </>
+                                )}
+                            </Grid>
+                            </>
+                            )}
+
+                            {/* Status - sempre visível */}
                             <Box mt={3}>
                                 <FormControl fullWidth>
                                     <InputLabel>Status</InputLabel>

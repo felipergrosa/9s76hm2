@@ -64,6 +64,19 @@ export class ActionExecutor {
                     return await this.transferirParaVendedor(context);
                 case "transferir_para_atendente":
                     return await this.transferirParaAtendente(context);
+                case "atualizar_contato":
+                    return await this.atualizarContato(context);
+                case "verificar_cadastro_completo":
+                    return await this.verificarCadastroCompleto(context);
+                // Funções SDR
+                case "calcular_score_lead":
+                    return await this.calcularScoreLead(context);
+                case "registrar_resposta_qualificacao":
+                    return await this.registrarRespostaQualificacao(context);
+                case "enviar_link_agendamento":
+                    return await this.enviarLinkAgendamento(context);
+                case "transferir_para_closer":
+                    return await this.transferirParaCloser(context);
                 default:
                     logger.warn(`[ActionExecutor] Função desconhecida: ${functionName}`);
                     return `❌ Função ${functionName} não implementada`;
@@ -912,6 +925,465 @@ export class ActionExecutor {
 
         } catch (error: any) {
             logger.error("[ActionExecutor] Erro ao transferir:", error);
+            return `❌ Erro ao transferir: ${error.message}`;
+        }
+    }
+
+    /**
+     * Atualiza dados cadastrais do contato
+     */
+    private static async atualizarContato(ctx: ActionContext): Promise<string> {
+        const { cnpj, razaoSocial, nomeFantasia, email, cidade, segmento } = ctx.arguments;
+
+        try {
+            logger.info(`[ActionExecutor] Atualizando contato ${ctx.contact.id}`, {
+                cnpj, razaoSocial, nomeFantasia, email, cidade, segmento
+            });
+
+            const Contact = (await import("../../models/Contact")).default;
+            const Tag = (await import("../../models/Tag")).default;
+            const ContactTag = (await import("../../models/ContactTag")).default;
+
+            // Buscar contato atual
+            const contact = await Contact.findByPk(ctx.contact.id);
+            if (!contact) {
+                return `❌ Contato não encontrado`;
+            }
+
+            // Preparar dados para atualização
+            const updateData: any = {};
+            
+            if (cnpj) {
+                // Limpar CNPJ (remover pontos, barras, traços)
+                updateData.cnpj = cnpj.replace(/[^\d]/g, '');
+            }
+            if (razaoSocial) {
+                updateData.name = razaoSocial;
+            }
+            if (nomeFantasia) {
+                updateData.fantasyName = nomeFantasia;
+            }
+            if (email) {
+                updateData.email = email.toLowerCase().trim();
+            }
+            if (cidade) {
+                updateData.city = cidade;
+            }
+            if (segmento) {
+                updateData.segment = segmento;
+            }
+
+            // Atualizar contato
+            await contact.update(updateData);
+
+            // Buscar configuração do agente para tag
+            const AIAgent = (await import("../../models/AIAgent")).default;
+            const agentConfig = await AIAgent.findOne({
+                where: {
+                    companyId: ctx.ticket.companyId,
+                    status: "active"
+                }
+            });
+
+            // Adicionar tag de lead qualificado se configurado
+            if (agentConfig?.qualifiedLeadTag) {
+                // Buscar ou criar tag
+                let tag = await Tag.findOne({
+                    where: {
+                        name: agentConfig.qualifiedLeadTag,
+                        companyId: ctx.ticket.companyId
+                    }
+                });
+
+                if (!tag) {
+                    tag = await Tag.create({
+                        name: agentConfig.qualifiedLeadTag,
+                        color: "#4CAF50", // Verde
+                        companyId: ctx.ticket.companyId
+                    });
+                }
+
+                // Verificar se já tem a tag
+                const existingTag = await ContactTag.findOne({
+                    where: {
+                        contactId: ctx.contact.id,
+                        tagId: tag.id
+                    }
+                });
+
+                if (!existingTag) {
+                    await ContactTag.create({
+                        contactId: ctx.contact.id,
+                        tagId: tag.id,
+                        companyId: ctx.ticket.companyId
+                    });
+                    logger.info(`[ActionExecutor] Tag "${agentConfig.qualifiedLeadTag}" adicionada ao contato ${ctx.contact.id}`);
+                }
+            }
+
+            const camposAtualizados = Object.keys(updateData).join(", ");
+            logger.info(`[ActionExecutor] Contato ${ctx.contact.id} atualizado: ${camposAtualizados}`);
+
+            return `✅ Dados atualizados com sucesso: ${camposAtualizados}`;
+
+        } catch (error: any) {
+            logger.error("[ActionExecutor] Erro ao atualizar contato:", error);
+            return `❌ Erro ao atualizar dados: ${error.message}`;
+        }
+    }
+
+    /**
+     * Verifica se o contato possui cadastro completo para receber materiais
+     */
+    private static async verificarCadastroCompleto(ctx: ActionContext): Promise<string> {
+        try {
+            logger.info(`[ActionExecutor] Verificando cadastro do contato ${ctx.contact.id}`);
+
+            const Contact = (await import("../../models/Contact")).default;
+            const AIAgent = (await import("../../models/AIAgent")).default;
+
+            // Buscar contato com dados atualizados
+            const contact = await Contact.findByPk(ctx.contact.id);
+            if (!contact) {
+                return `❌ Contato não encontrado`;
+            }
+
+            // Buscar configuração do agente
+            const agentConfig = await AIAgent.findOne({
+                where: {
+                    companyId: ctx.ticket.companyId,
+                    status: "active"
+                }
+            });
+
+            // Se não exige qualificação, retornar OK
+            if (!agentConfig?.requireLeadQualification) {
+                return `✅ CADASTRO_COMPLETO: Qualificação não é obrigatória`;
+            }
+
+            // Verificar campos obrigatórios
+            const requiredFields = agentConfig.requiredLeadFields || ["cnpj", "email"];
+            const fieldMapping: any = agentConfig.leadFieldMapping || {
+                "cnpj": "cnpj",
+                "razaoSocial": "name",
+                "email": "email"
+            };
+
+            const missingFields: string[] = [];
+            const presentFields: string[] = [];
+
+            for (const field of requiredFields) {
+                const contactField = fieldMapping[field] || field;
+                const value = (contact as any)[contactField];
+                
+                if (!value || value.toString().trim() === "") {
+                    missingFields.push(field);
+                } else {
+                    presentFields.push(field);
+                }
+            }
+
+            if (missingFields.length === 0) {
+                logger.info(`[ActionExecutor] Contato ${ctx.contact.id} possui cadastro completo`);
+                return `✅ CADASTRO_COMPLETO: Cliente qualificado. Campos preenchidos: ${presentFields.join(", ")}`;
+            } else {
+                logger.info(`[ActionExecutor] Contato ${ctx.contact.id} faltam campos: ${missingFields.join(", ")}`);
+                return `❌ CADASTRO_INCOMPLETO: Faltam os seguintes dados: ${missingFields.join(", ")}. Solicite essas informações ao cliente antes de enviar materiais.`;
+            }
+
+        } catch (error: any) {
+            logger.error("[ActionExecutor] Erro ao verificar cadastro:", error);
+            return `❌ Erro ao verificar cadastro: ${error.message}`;
+        }
+    }
+
+    // ========== FUNÇÕES SDR ==========
+
+    /**
+     * Calcula o score do lead baseado nas regras configuradas
+     */
+    private static async calcularScoreLead(ctx: ActionContext): Promise<string> {
+        try {
+            logger.info(`[ActionExecutor] Calculando score do lead ${ctx.contact.id}`);
+
+            const Contact = (await import("../../models/Contact")).default;
+            const AIAgent = (await import("../../models/AIAgent")).default;
+
+            const contact = await Contact.findByPk(ctx.contact.id);
+            if (!contact) {
+                return `❌ Contato não encontrado`;
+            }
+
+            // Buscar configuração do agente
+            const agentConfig = await AIAgent.findOne({
+                where: {
+                    companyId: ctx.ticket.companyId,
+                    status: "active"
+                }
+            });
+
+            if (!agentConfig?.sdrEnabled) {
+                return `ℹ️ Modo SDR não está habilitado`;
+            }
+
+            const scoringRules: any = agentConfig.sdrScoringRules || {};
+            const icp: any = agentConfig.sdrICP || {};
+            let score = 0;
+            const scoreDetails: string[] = [];
+
+            // Verificar CNPJ
+            if ((contact as any).cnpj) {
+                score += scoringRules.hasCnpj || 15;
+                scoreDetails.push(`CNPJ: +${scoringRules.hasCnpj || 15}`);
+            }
+
+            // Verificar Email
+            if ((contact as any).email) {
+                score += scoringRules.hasEmail || 10;
+                scoreDetails.push(`Email: +${scoringRules.hasEmail || 10}`);
+            }
+
+            // Verificar match com ICP (segmento)
+            const contactSegment = ((contact as any).segment || "").toLowerCase();
+            const icpSegments = (icp.segments || []).map((s: string) => s.toLowerCase());
+            if (contactSegment && icpSegments.some((s: string) => contactSegment.includes(s))) {
+                score += scoringRules.icpMatch || 20;
+                scoreDetails.push(`Match ICP: +${scoringRules.icpMatch || 20}`);
+            }
+
+            // Verificar região
+            const contactCity = ((contact as any).city || "").toLowerCase();
+            const contactRegion = ((contact as any).region || "").toLowerCase();
+            const icpRegions = (icp.regions || []).map((r: string) => r.toLowerCase());
+            if (icpRegions.some((r: string) => contactCity.includes(r) || contactRegion.includes(r))) {
+                score += 10;
+                scoreDetails.push(`Região ICP: +10`);
+            }
+
+            // Verificar respostas de qualificação salvas no contato
+            const qualificationData = (contact as any).extraInfo?.sdrQualification || {};
+            const answeredQuestions = Object.keys(qualificationData).length;
+            if (answeredQuestions > 0) {
+                const questionPoints = answeredQuestions * (scoringRules.answeredQuestion || 10);
+                score += questionPoints;
+                scoreDetails.push(`${answeredQuestions} perguntas respondidas: +${questionPoints}`);
+            }
+
+            const minScore = agentConfig.sdrMinScoreToTransfer || 70;
+            const isQualified = score >= minScore;
+
+            // Adicionar tag de lead quente se qualificado
+            if (isQualified && agentConfig.sdrHotLeadTag) {
+                const Tag = (await import("../../models/Tag")).default;
+                const ContactTag = (await import("../../models/ContactTag")).default;
+
+                let tag = await Tag.findOne({
+                    where: {
+                        name: agentConfig.sdrHotLeadTag,
+                        companyId: ctx.ticket.companyId
+                    }
+                });
+
+                if (!tag) {
+                    tag = await Tag.create({
+                        name: agentConfig.sdrHotLeadTag,
+                        color: "#FF5722",
+                        companyId: ctx.ticket.companyId
+                    });
+                }
+
+                const existingTag = await ContactTag.findOne({
+                    where: { contactId: ctx.contact.id, tagId: tag.id }
+                });
+
+                if (!existingTag) {
+                    await ContactTag.create({
+                        contactId: ctx.contact.id,
+                        tagId: tag.id,
+                        companyId: ctx.ticket.companyId
+                    });
+                }
+            }
+
+            logger.info(`[ActionExecutor] Score do lead ${ctx.contact.id}: ${score}/${minScore}`);
+
+            return `📊 SCORE DO LEAD: ${score} pontos
+${scoreDetails.length > 0 ? `\nDetalhes:\n${scoreDetails.join("\n")}` : ""}
+\nScore mínimo para transferência: ${minScore} pontos
+\n${isQualified ? "🔥 LEAD QUALIFICADO! Pronto para transferir para closer." : `⏳ Faltam ${minScore - score} pontos para qualificação.`}`;
+
+        } catch (error: any) {
+            logger.error("[ActionExecutor] Erro ao calcular score:", error);
+            return `❌ Erro ao calcular score: ${error.message}`;
+        }
+    }
+
+    /**
+     * Registra resposta de qualificação do lead
+     */
+    private static async registrarRespostaQualificacao(ctx: ActionContext): Promise<string> {
+        const { tipo_pergunta, resposta, positiva } = ctx.arguments;
+
+        try {
+            logger.info(`[ActionExecutor] Registrando resposta de qualificação`, {
+                contactId: ctx.contact.id,
+                tipo: tipo_pergunta,
+                positiva
+            });
+
+            const Contact = (await import("../../models/Contact")).default;
+            const contact = await Contact.findByPk(ctx.contact.id);
+            
+            if (!contact) {
+                return `❌ Contato não encontrado`;
+            }
+
+            // Atualizar extraInfo com dados de qualificação
+            const extraInfo = (contact as any).extraInfo || {};
+            extraInfo.sdrQualification = extraInfo.sdrQualification || {};
+            extraInfo.sdrQualification[tipo_pergunta] = {
+                resposta,
+                positiva: positiva !== false,
+                timestamp: new Date().toISOString()
+            };
+
+            await contact.update({ extraInfo });
+
+            logger.info(`[ActionExecutor] Resposta de qualificação registrada para ${ctx.contact.id}`);
+
+            return `✅ Resposta registrada: ${tipo_pergunta} = "${resposta}" (${positiva !== false ? "positiva" : "negativa"})`;
+
+        } catch (error: any) {
+            logger.error("[ActionExecutor] Erro ao registrar resposta:", error);
+            return `❌ Erro ao registrar resposta: ${error.message}`;
+        }
+    }
+
+    /**
+     * Envia link de agendamento para o cliente
+     */
+    private static async enviarLinkAgendamento(ctx: ActionContext): Promise<string> {
+        const { motivo } = ctx.arguments;
+
+        try {
+            logger.info(`[ActionExecutor] Enviando link de agendamento`, {
+                contactId: ctx.contact.id,
+                motivo
+            });
+
+            const AIAgent = (await import("../../models/AIAgent")).default;
+            const agentConfig = await AIAgent.findOne({
+                where: {
+                    companyId: ctx.ticket.companyId,
+                    status: "active"
+                }
+            });
+
+            if (!agentConfig?.sdrSchedulingEnabled || !agentConfig.sdrCalendarLink) {
+                return `❌ Agendamento não está configurado. Configure o link do calendário nas configurações do agente.`;
+            }
+
+            const schedulingMessage = agentConfig.sdrSchedulingMessage || 
+                "Que tal agendarmos uma conversa com nosso especialista?";
+
+            logger.info(`[ActionExecutor] Link de agendamento: ${agentConfig.sdrCalendarLink}`);
+
+            return `📅 ENVIAR_AGENDAMENTO:
+${schedulingMessage}
+
+🔗 Link para agendar: ${agentConfig.sdrCalendarLink}`;
+
+        } catch (error: any) {
+            logger.error("[ActionExecutor] Erro ao enviar link de agendamento:", error);
+            return `❌ Erro ao enviar link: ${error.message}`;
+        }
+    }
+
+    /**
+     * Transfere lead qualificado para closer
+     */
+    private static async transferirParaCloser(ctx: ActionContext): Promise<string> {
+        const { motivo, resumo_qualificacao } = ctx.arguments;
+
+        try {
+            logger.info(`[ActionExecutor] Transferindo para closer`, {
+                ticketId: ctx.ticket.id,
+                contactId: ctx.contact.id,
+                motivo
+            });
+
+            const AIAgent = (await import("../../models/AIAgent")).default;
+            const agentConfig = await AIAgent.findOne({
+                where: {
+                    companyId: ctx.ticket.companyId,
+                    status: "active"
+                }
+            });
+
+            const handoffMessage = agentConfig?.sdrHandoffMessage || 
+                "Vou transferir você para um de nossos especialistas!";
+
+            // Salvar resumo da qualificação no ticket
+            if (resumo_qualificacao) {
+                const Ticket = (await import("../../models/Ticket")).default;
+                const ticket = await Ticket.findByPk(ctx.ticket.id);
+                if (ticket) {
+                    const currentInfo = (ticket as any).extraInfo || {};
+                    currentInfo.sdrQualificationSummary = resumo_qualificacao;
+                    currentInfo.sdrTransferReason = motivo;
+                    currentInfo.sdrTransferTimestamp = new Date().toISOString();
+                    await ticket.update({ extraInfo: currentInfo });
+                }
+            }
+
+            // Usar a lógica existente de transferência
+            const ContactWallet = (await import("../../models/ContactWallet")).default;
+            const User = (await import("../../models/User")).default;
+            
+            const wallet = await ContactWallet.findOne({
+                where: {
+                    contactId: ctx.contact.id,
+                    companyId: ctx.ticket.companyId
+                },
+                include: [{
+                    model: User,
+                    as: "wallet",
+                    attributes: ["id", "name", "email"]
+                }]
+            });
+
+            if (wallet && wallet.wallet) {
+                const atendente = wallet.wallet;
+                
+                const UpdateTicketService = (await import("../TicketServices/UpdateTicketService")).default;
+                await UpdateTicketService({
+                    ticketData: {
+                        status: "open",
+                        userId: atendente.id,
+                        isBot: false
+                    },
+                    ticketId: ctx.ticket.id,
+                    companyId: ctx.ticket.companyId
+                });
+
+                return `🔥 LEAD QUALIFICADO TRANSFERIDO!
+${handoffMessage}
+
+📋 Resumo: ${resumo_qualificacao || motivo}
+👤 Closer: ${atendente.name}`;
+            }
+
+            // Fallback: transferir para fila
+            await transferQueue(ctx.ticket.queueId, ctx.ticket, ctx.contact);
+
+            return `🔥 LEAD QUALIFICADO TRANSFERIDO!
+${handoffMessage}
+
+📋 Resumo: ${resumo_qualificacao || motivo}
+👤 Aguardando próximo closer disponível`;
+
+        } catch (error: any) {
+            logger.error("[ActionExecutor] Erro ao transferir para closer:", error);
             return `❌ Erro ao transferir: ${error.message}`;
         }
     }
