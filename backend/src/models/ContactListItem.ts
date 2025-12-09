@@ -10,11 +10,13 @@ import {
   Default,
   ForeignKey,
   BelongsTo,
-  HasOne
+  HasOne,
+  BeforeSave
 } from "sequelize-typescript";
 import Company from "./Company";
 import ContactList from "./ContactList";
 import Contact from "./Contact";
+import { safeNormalizePhoneNumber } from "../utils/phone";
 
 @Table({ tableName: "ContactListItems" })
 class ContactListItem extends Model<ContactListItem> {
@@ -30,6 +32,9 @@ class ContactListItem extends Model<ContactListItem> {
   @AllowNull(false)
   @Column
   number: string;
+
+  @Column
+  canonicalNumber: string;
 
   @AllowNull(false)
   @Default("")
@@ -65,8 +70,34 @@ class ContactListItem extends Model<ContactListItem> {
   @Column
   isGroup: boolean;
 
-  @BelongsTo(() => Contact, { foreignKey: "number", targetKey: "number" })
+  @BelongsTo(() => Contact, { foreignKey: "canonicalNumber", targetKey: "canonicalNumber" })
   contact: Contact;
+
+  /**
+   * Hook BeforeSave para normalizar o número e preencher canonicalNumber
+   */
+  @BeforeSave
+  static applyCanonicalNumber(item: ContactListItem) {
+    if (item.isGroup) {
+      item.canonicalNumber = null as any;
+      return;
+    }
+
+    const shouldNormalize = item.changed("number") || !item.canonicalNumber;
+
+    if (!shouldNormalize) {
+      return;
+    }
+
+    const { canonical } = safeNormalizePhoneNumber(item.number);
+
+    if (canonical) {
+      item.canonicalNumber = canonical;
+    } else {
+      // Se não conseguir normalizar, usa o número original sem caracteres especiais
+      item.canonicalNumber = (item.number || "").replace(/\D/g, "");
+    }
+  }
 }
 
 export default ContactListItem;

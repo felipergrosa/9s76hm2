@@ -17,6 +17,8 @@ import ContactListItem from "../models/ContactListItem";
 
 import AppError from "../errors/AppError";
 import { ImportContacts } from "../services/ContactListService/ImportContacts";
+import { validateWhatsappContactsQueue } from "../queues";
+import logger from "../utils/logger";
 
 type IndexQuery = {
   searchParam: string;
@@ -226,4 +228,113 @@ export const clearItems = async (
   );
 
   return res.status(200).json({ message: "Contact list items cleared" });
+};
+
+/**
+ * Dispara validação de números WhatsApp para uma lista de contatos
+ * Usa API oficial da Meta se disponível, senão Baileys
+ */
+export const validateNumbers = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+  const { companyId } = req.user;
+  const { useOfficialApi, batchSize = 50 } = req.body;
+
+  try {
+    // Verificar se a lista existe
+    const contactList = await ContactList.findOne({
+      where: { id: Number(id), companyId: Number(companyId) }
+    });
+
+    if (!contactList) {
+      throw new AppError("Lista de contatos não encontrada", 404);
+    }
+
+    // Contar contatos pendentes de validação
+    const pendingCount = await ContactListItem.count({
+      where: {
+        contactListId: Number(id),
+        companyId: Number(companyId),
+        isWhatsappValid: null
+      }
+    });
+
+    if (pendingCount === 0) {
+      return res.status(200).json({
+        message: "Nenhum contato pendente de validação",
+        pendingCount: 0
+      });
+    }
+
+    logger.info(`[ValidateNumbers] Iniciando validação de ${pendingCount} contatos da lista ${id}`);
+
+    // Adicionar job na fila de validação
+    await validateWhatsappContactsQueue.add(
+      "validateWhatsappContacts",
+      {
+        contactListId: Number(id),
+        companyId: Number(companyId),
+        batchSize: Number(batchSize),
+        useOfficialApi
+      },
+      {
+        removeOnComplete: 10,
+        removeOnFail: 5
+      }
+    );
+
+    return res.status(200).json({
+      message: `Validação iniciada para ${pendingCount} contatos`,
+      pendingCount,
+      batchSize
+    });
+
+  } catch (error: any) {
+    logger.error(`[ValidateNumbers] Erro: ${error.message}`);
+    throw new AppError(error.message || "Erro ao iniciar validação", 500);
+  }
+};
+
+/**
+ * Retorna estatísticas de validação de uma lista
+ */
+export const validationStats = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+  const { companyId } = req.user;
+
+  try {
+    const [total, valid, invalid, pending] = await Promise.all([
+      ContactListItem.count({
+        where: { contactListId: Number(id), companyId: Number(companyId) }
+      }),
+      ContactListItem.count({
+        where: { contactListId: Number(id), companyId: Number(companyId), isWhatsappValid: true }
+      }),
+      ContactListItem.count({
+        where: { contactListId: Number(id), companyId: Number(companyId), isWhatsappValid: false }
+      }),
+      ContactListItem.count({
+        where: { contactListId: Number(id), companyId: Number(companyId), isWhatsappValid: null }
+      })
+    ]);
+
+    return res.status(200).json({
+      total,
+      valid,
+      invalid,
+      pending,
+      validPercentage: total > 0 ? Math.round((valid / total) * 100) : 0,
+      invalidPercentage: total > 0 ? Math.round((invalid / total) * 100) : 0,
+      pendingPercentage: total > 0 ? Math.round((pending / total) * 100) : 0
+    });
+
+  } catch (error: any) {
+    logger.error(`[ValidationStats] Erro: ${error.message}`);
+    throw new AppError(error.message || "Erro ao buscar estatísticas", 500);
+  }
 };

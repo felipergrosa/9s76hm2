@@ -25,14 +25,35 @@ import {
   TextField,
   Tooltip,
   InputAdornment,
-  FormHelperText
+  FormHelperText,
+  Tabs,
+  Tab
 } from "@material-ui/core";
 import InfoOutlinedIcon from "@material-ui/icons/InfoOutlined";
+import WhatsAppIcon from "@material-ui/icons/WhatsApp";
+import BusinessIcon from "@material-ui/icons/Business";
+import SettingsIcon from "@material-ui/icons/Settings";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import usePermissions from "../../hooks/usePermissions";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
+
+// Componente TabPanel para renderizar conteúdo das abas
+function TabPanel(props) {
+  const { children, value, index, ...other } = props;
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`campaign-config-tabpanel-${index}`}
+      aria-labelledby={`campaign-config-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box p={2}>{children}</Box>}
+    </div>
+  );
+}
 
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
@@ -55,10 +76,31 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     marginBottom: 12,
   },
-
+  tabs: {
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    marginBottom: theme.spacing(2),
+  },
+  tabIcon: {
+    marginRight: theme.spacing(1),
+    fontSize: 20,
+  },
+  sectionTitle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: theme.spacing(2),
+    marginTop: theme.spacing(2),
+  },
+  officialApiInfo: {
+    backgroundColor: theme.palette.type === 'dark' ? '#1e3a2f' : '#e8f5e9',
+    padding: theme.spacing(2),
+    borderRadius: theme.spacing(1),
+    marginBottom: theme.spacing(2),
+  },
 }));
 
 const initialSettings = {
+  // Configurações WhatsApp Não Oficial (Baileys)
   messageInterval: 20,
   longerIntervalAfter: 20,
   greaterInterval: 60,
@@ -71,7 +113,14 @@ const initialSettings = {
   capDaily: 2000,
   backoffErrorThreshold: 5,
   backoffPauseMinutes: 10,
-  suppressionTagNames: []
+  suppressionTagNames: [],
+  // Configurações WhatsApp API Oficial (Meta)
+  officialApiEnabled: true,
+  officialApiMessageInterval: 5,
+  officialApiCapHourly: 1000,
+  officialApiCapDaily: 10000,
+  officialApiRetryOnError: true,
+  officialApiMaxRetries: 3,
 };
 
 const CampaignsConfig = () => {
@@ -93,6 +142,13 @@ const CampaignsConfig = () => {
   const [endHour, setEndHour] = useState("19:00");
   // Campo editável (string) para as tags de supressão, separado por vírgula
   const [suppressionTagNamesStr, setSuppressionTagNamesStr] = useState("");
+  
+  // Estado para controlar a aba ativa
+  const [activeTab, setActiveTab] = useState(0);
+  
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+  };
 
   const { getPlanCompany } = usePlans();
 
@@ -258,60 +314,43 @@ const CampaignsConfig = () => {
             </MainHeader>
 
             <Paper className={classes.mainPaper} variant="outlined">
+              {/* Tabs para separar configurações por tipo de conexão */}
+              <Tabs
+                value={activeTab}
+                onChange={handleTabChange}
+                className={classes.tabs}
+                indicatorColor="primary"
+                textColor="primary"
+                variant="fullWidth"
+              >
+                <Tab 
+                  icon={<WhatsAppIcon className={classes.tabIcon} />}
+                  label="WhatsApp Não Oficial (Baileys)"
+                  id="campaign-config-tab-0"
+                />
+                <Tab 
+                  icon={<BusinessIcon className={classes.tabIcon} />}
+                  label="WhatsApp API Oficial (Meta)"
+                  id="campaign-config-tab-1"
+                />
+                <Tab 
+                  icon={<SettingsIcon className={classes.tabIcon} />}
+                  label="Configurações Gerais"
+                  id="campaign-config-tab-2"
+                />
+              </Tabs>
 
-              {/* <Typography component={"h1"}>Período de Disparo das Campanhas &nbsp;</Typography>
-        <Paper className={classes.paper}>
-          <TextField
-            id="buttonText"
-            label="Começar o envio que hora?"
-            margin="dense"
-            variant="outlined"
-            fullWidth
-            value={startHour}
-            onChange={(e) => setStartHour(e.target.value)}
-            style={{ marginRight: "10px" }}
-          />
-
-          <TextField
-            id="buttonText"
-            label="Terminar o envio que hora?"
-            margin="dense"
-            variant="outlined"
-            fullWidth
-            value={endHour}
-            onChange={(e) => setEndHour(e.target.value)}
-            style={{ marginRight: "10px" }}
-          />
-
-          <FormControlLabel
-            control={<Checkbox checked={sabado} onChange={handleChange} name="sabado" />}
-            label="Sábado"
-          />
-
-          <FormControlLabel
-            control={<Checkbox checked={domingo} onChange={handleChange} name="domingo" />}
-            label="Domigo"
-          />
-
-          <Button
-            variant="contained"
-            color="primary"
-            className={classes.button}
-            onClick={() => {
-              handleSaveTimeMass();
-            }}
-            style={{ marginRight: "10px" }}
-          >
-            Salvar
-          </Button>
-
-        </Paper> */}
-
-              <Box className={classes.tabPanelsContainer}>
-                <Grid spacing={1} container>
-                  {/* Seção de IA global removida: configuração agora por campanha no modal de criação */}
+              {/* TAB 0: WhatsApp Não Oficial (Baileys) */}
+              <TabPanel value={activeTab} index={0}>
+                <Box className={classes.officialApiInfo} style={{ backgroundColor: '#fff3e0' }}>
+                  <Typography variant="body2">
+                    <strong>⚠️ Atenção:</strong> Estas configurações são para conexões via Baileys (API não oficial). 
+                    É importante configurar intervalos e limites adequados para evitar bloqueios do WhatsApp.
+                  </Typography>
+                </Box>
+                <Grid spacing={2} container>
                   <Grid xs={12} item>
-                    <Typography component={"h1"} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Typography component={"h2"} className={classes.sectionTitle}>
                       Intervalos
                       <Tooltip title="Defina pausas entre envios para reduzir risco de bloqueio e melhorar taxa de entrega" placement="right">
                         <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
@@ -574,9 +613,153 @@ const CampaignsConfig = () => {
                       helperText="Tempo de pausa após acionar o backoff; aumente se persistirem erros"
                     />
                   </Grid>
-                  {/* Lista de Supressão */}
+                  
+                  <Grid xs={12} className={classes.textRight} item style={{ marginTop: 16 }}>
+                    <Button
+                      onClick={saveSettings}
+                      color="primary"
+                      variant="contained"
+                    >
+                      {i18n.t("campaigns.settings.save")}
+                    </Button>
+                  </Grid>
+                </Grid>
+              </TabPanel>
+
+              {/* TAB 1: WhatsApp API Oficial (Meta) */}
+              <TabPanel value={activeTab} index={1}>
+                <Box className={classes.officialApiInfo}>
+                  <Typography variant="body2">
+                    <strong>✅ API Oficial da Meta:</strong> Estas configurações são para conexões via WhatsApp Business API oficial. 
+                    A Meta gerencia automaticamente os rate limits, então as configurações aqui são mais flexíveis.
+                  </Typography>
+                </Box>
+                <Grid spacing={2} container>
                   <Grid xs={12} item>
-                    <Typography component={"h1"} style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                    <Typography component={"h2"} className={classes.sectionTitle}>
+                      Configurações de Envio
+                      <Tooltip title="Configurações específicas para campanhas via API oficial" placement="right">
+                        <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
+                      </Tooltip>
+                    </Typography>
+                  </Grid>
+                  
+                  <Grid xs={12} md={4} item>
+                    <FormControl variant="outlined" fullWidth>
+                      <InputLabel id="officialApiMessageInterval-label">
+                        Intervalo entre mensagens
+                      </InputLabel>
+                      <Select
+                        name="officialApiMessageInterval"
+                        id="officialApiMessageInterval"
+                        labelId="officialApiMessageInterval-label"
+                        label="Intervalo entre mensagens"
+                        value={settings.officialApiMessageInterval || 5}
+                        onChange={(e) => handleOnChangeSettings(e)}
+                      >
+                        <MenuItem value={0}>Sem intervalo</MenuItem>
+                        <MenuItem value={1}>1 segundo</MenuItem>
+                        <MenuItem value={2}>2 segundos</MenuItem>
+                        <MenuItem value={3}>3 segundos</MenuItem>
+                        <MenuItem value={5}>5 segundos</MenuItem>
+                        <MenuItem value={10}>10 segundos</MenuItem>
+                      </Select>
+                      <FormHelperText>
+                        A API oficial permite intervalos menores sem risco de bloqueio
+                      </FormHelperText>
+                    </FormControl>
+                  </Grid>
+
+                  <Grid xs={12} md={4} item>
+                    <TextField
+                      label="Limite por hora"
+                      variant="outlined"
+                      name="officialApiCapHourly"
+                      type="number"
+                      value={settings.officialApiCapHourly || 1000}
+                      onChange={handleOnChangeSettings}
+                      fullWidth
+                      inputProps={{ min: 100 }}
+                      helperText="Limite de mensagens por hora (depende do tier da conta)"
+                    />
+                  </Grid>
+
+                  <Grid xs={12} md={4} item>
+                    <TextField
+                      label="Limite por dia"
+                      variant="outlined"
+                      name="officialApiCapDaily"
+                      type="number"
+                      value={settings.officialApiCapDaily || 10000}
+                      onChange={handleOnChangeSettings}
+                      fullWidth
+                      inputProps={{ min: 500 }}
+                      helperText="Limite diário (depende do tier: 1K, 10K, 100K ou ilimitado)"
+                    />
+                  </Grid>
+
+                  <Grid xs={12} item>
+                    <Typography component={"h2"} className={classes.sectionTitle} style={{ marginTop: 16 }}>
+                      Tratamento de Erros
+                    </Typography>
+                  </Grid>
+
+                  <Grid xs={12} md={4} item>
+                    <FormControl variant="outlined" fullWidth>
+                      <InputLabel id="officialApiRetryOnError-label">
+                        Retentar em caso de erro
+                      </InputLabel>
+                      <Select
+                        name="officialApiRetryOnError"
+                        id="officialApiRetryOnError"
+                        labelId="officialApiRetryOnError-label"
+                        label="Retentar em caso de erro"
+                        value={settings.officialApiRetryOnError ? "true" : "false"}
+                        onChange={(e) => setSettings(prev => ({ 
+                          ...prev, 
+                          officialApiRetryOnError: e.target.value === "true" 
+                        }))}
+                      >
+                        <MenuItem value="true">Sim</MenuItem>
+                        <MenuItem value="false">Não</MenuItem>
+                      </Select>
+                      <FormHelperText>
+                        Retentar automaticamente mensagens que falharam
+                      </FormHelperText>
+                    </FormControl>
+                  </Grid>
+
+                  <Grid xs={12} md={4} item>
+                    <TextField
+                      label="Máximo de retentativas"
+                      variant="outlined"
+                      name="officialApiMaxRetries"
+                      type="number"
+                      value={settings.officialApiMaxRetries || 3}
+                      onChange={handleOnChangeSettings}
+                      fullWidth
+                      inputProps={{ min: 1, max: 10 }}
+                      helperText="Número máximo de tentativas por mensagem"
+                    />
+                  </Grid>
+
+                  <Grid xs={12} className={classes.textRight} item style={{ marginTop: 16 }}>
+                    <Button
+                      onClick={saveSettings}
+                      color="primary"
+                      variant="contained"
+                    >
+                      {i18n.t("campaigns.settings.save")}
+                    </Button>
+                  </Grid>
+                </Grid>
+              </TabPanel>
+
+              {/* TAB 2: Configurações Gerais */}
+              <TabPanel value={activeTab} index={2}>
+                <Grid spacing={2} container>
+                  <Grid xs={12} item>
+                    <Typography component={"h2"} className={classes.sectionTitle}>
                       Supressão (não enviar para contatos com estas tags)
                       <Tooltip
                         title={
@@ -607,17 +790,27 @@ const CampaignsConfig = () => {
                           </InputAdornment>
                         )
                       }}
-                      helperText="Separe por vírgulas; usamos correspondência exata das tags do contato"
+                      helperText="Separe por vírgulas; usamos correspondência exata das tags do contato. Aplica-se a todas as conexões."
                     />
                   </Grid>
-                  <Grid xs={12} className={classes.textRight} item>
-                    {/* <Button
-                onClick={() => setShowVariablesForm(!showVariablesForm)}
-                color="primary"
-                style={{ marginRight: 10 }}
-              >
-                {i18n.t("campaigns.settings.addVar")}
-              </Button> */}
+
+                  <Grid xs={12} item>
+                    <Typography component={"h2"} className={classes.sectionTitle} style={{ marginTop: 16 }}>
+                      Outras Configurações
+                      <Tooltip title="Configurações que se aplicam a todas as conexões" placement="right">
+                        <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.7 }} />
+                      </Tooltip>
+                    </Typography>
+                  </Grid>
+
+                  <Grid xs={12} item>
+                    <Typography variant="body2" color="textSecondary">
+                      Configurações adicionais para outros tipos de conexão serão adicionadas aqui no futuro 
+                      (ex: Telegram, Instagram, etc).
+                    </Typography>
+                  </Grid>
+
+                  <Grid xs={12} className={classes.textRight} item style={{ marginTop: 16 }}>
                     <Button
                       onClick={saveSettings}
                       color="primary"
@@ -626,82 +819,8 @@ const CampaignsConfig = () => {
                       {i18n.t("campaigns.settings.save")}
                     </Button>
                   </Grid>
-                  {/* {showVariablesForm && (
-              <>
-                <Grid xs={12} md={6} item>
-                  <TextField
-                    label={i18n.t("campaigns.settings.shortcut")}
-                    variant="outlined"
-                    value={variable.key}
-                    name="key"
-                    onChange={handleOnChangeVariable}
-                    fullWidth
-                  />
                 </Grid>
-                <Grid xs={12} md={6} item>
-                  <TextField
-                    label={i18n.t("campaigns.settings.content")}
-                    variant="outlined"
-                    value={variable.value}
-                    name="value"
-                    onChange={handleOnChangeVariable}
-                    fullWidth
-                  />
-                </Grid>
-                <Grid xs={12} className={classes.textRight} item>
-                  <Button
-                    onClick={() => setShowVariablesForm(!showVariablesForm)}
-                    color="primary"
-                    style={{ marginRight: 10 }}
-                  >
-                    {i18n.t("campaigns.settings.close")}
-                  </Button>
-                  <Button
-                    onClick={addVariable}
-                    color="primary"
-                    variant="contained"
-                  >
-                    {i18n.t("campaigns.settings.add")}
-                  </Button>
-                </Grid>
-              </>
-            )}
-            {settings.variables.length > 0 && (
-              <Grid xs={12} className={classes.textRight} item>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell style={{ width: "1%" }}></TableCell>
-                      <TableCell>{i18n.t("campaigns.settings.shortcut")}
-                      </TableCell>
-                      <TableCell>{i18n.t("campaigns.settings.content")}</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {Array.isArray(settings.variables) &&
-                      settings.variables.map((v, k) => (
-                        <TableRow key={k}>
-                          <TableCell>
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                setSelectedKey(v.key);
-                                setConfirmationOpen(true);
-                              }}
-                            >
-                              <DeleteOutlineIcon />
-                            </IconButton>
-                          </TableCell>
-                          <TableCell>{"{" + v.key + "}"}</TableCell>
-                          <TableCell>{v.value}</TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </Grid>
-            )} */}
-                </Grid>
-              </Box>
+              </TabPanel>
             </Paper>
           </>
         ) : <ForbiddenPage /> }

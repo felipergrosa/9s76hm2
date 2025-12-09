@@ -4,7 +4,7 @@ import { has } from "lodash";
 import ContactListItem from "../../models/ContactListItem";
 import CheckContactNumber from "../WbotServices/CheckNumber";
 import logger from "../../utils/logger";
-// import CheckContactNumber from "../WbotServices/CheckNumber";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 export async function ImportContacts(
   contactListId: number,
@@ -42,15 +42,20 @@ export async function ImportContacts(
       email = row["email"] || row["e-mail"] || row["Email"] || row["E-mail"];
     }
 
-    return { name, number, email, contactListId, companyId };
+    // Normalizar número para garantir associação correta com Contact
+    const { canonical } = safeNormalizePhoneNumber(number);
+    const canonicalNumber = canonical || number.replace(/\D/g, "");
+    
+    return { name, number, email, canonicalNumber, contactListId, companyId };
   });
 
   const contactList: ContactListItem[] = [];
 
   for (const contact of contacts) {
+    // Usar canonicalNumber para busca para evitar duplicatas com formatos diferentes
     const [newContact, created] = await ContactListItem.findOrCreate({
       where: {
-        number: `${contact.number}`,
+        canonicalNumber: contact.canonicalNumber,
         contactListId: contact.contactListId,
         companyId: contact.companyId
       },

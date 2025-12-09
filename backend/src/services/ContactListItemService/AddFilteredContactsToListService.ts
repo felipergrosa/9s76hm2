@@ -4,6 +4,7 @@ import ContactListItem from "../../models/ContactListItem";
 import logger from "../../utils/logger";
 import CheckContactNumber from "../WbotServices/CheckNumber";
 import sequelize from "../../database";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 interface FilterParams {
   channel?: string[];
@@ -602,11 +603,16 @@ const AddFilteredContactsToListService = async ({
             }
           }
 
+          // Normalizar número para garantir associação correta com Contact
+          const { canonical } = safeNormalizePhoneNumber(cand.number);
+          const canonicalNumber = canonical || cand.number.replace(/\D/g, "");
+          
           payload.push({
             contactListId,
             companyId,
             name: cand.name,
             number: cand.number,
+            canonicalNumber,
             email: cand.email,
             isGroup: cand.isGroup || false,
             isWhatsappValid: (cand as any).isWhatsappValid
@@ -623,15 +629,22 @@ const AddFilteredContactsToListService = async ({
       }
     } else {
       for (let i = 0; i < candidates.length; i += chunkSize) {
-        const slice = candidates.slice(i, i + chunkSize).map(c => ({
-          contactListId,
-          companyId,
-          name: c.name,
-          number: c.number,
-          email: c.email,
-          isGroup: c.isGroup || false,
-          isWhatsappValid: null
-        }));
+        const slice = candidates.slice(i, i + chunkSize).map(c => {
+          // Normalizar número para garantir associação correta com Contact
+          const { canonical } = safeNormalizePhoneNumber(c.number);
+          const canonicalNumber = canonical || c.number.replace(/\D/g, "");
+          
+          return {
+            contactListId,
+            companyId,
+            name: c.name,
+            number: c.number,
+            canonicalNumber,
+            email: c.email,
+            isGroup: c.isGroup || false,
+            isWhatsappValid: null
+          };
+        });
         await ContactListItem.bulkCreate(slice as any[], { returning: false, validate: false, individualHooks: false, ignoreDuplicates: true });
       }
     }

@@ -23,4 +23,17 @@ routes.delete(
   ContactListController.clearItems
 );
 
+// Rotas de validação de números WhatsApp
+routes.post(
+  "/contact-lists/:id/validate",
+  isAuth,
+  ContactListController.validateNumbers
+);
+
+routes.get(
+  "/contact-lists/:id/validation-stats",
+  isAuth,
+  ContactListController.validationStats
+);
+
 export default routes;
