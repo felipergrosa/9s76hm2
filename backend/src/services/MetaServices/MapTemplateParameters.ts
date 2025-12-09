@@ -15,8 +15,34 @@ function resolveVariable(config: VariableConfig, contact: any): string {
     try {
         switch (config.type) {
             case "crm_field":
-                // Campos do CRM: name, email, number, id
-                return String(contact[config.source] || "");
+                // Campos do CRM com tratamento especial para tipos específicos
+                const value = contact[config.source];
+                
+                if (value === null || value === undefined) {
+                    return "";
+                }
+                
+                // Campos de data - formatar adequadamente
+                if (["foundationDate", "dtUltCompra"].includes(config.source)) {
+                    if (value instanceof Date) {
+                        return moment(value).format("DD/MM/YYYY");
+                    } else if (typeof value === "string" && value) {
+                        return moment(value).format("DD/MM/YYYY");
+                    }
+                    return "";
+                }
+                
+                // Campos numéricos/monetários - formatar com 2 casas decimais
+                if (["vlUltCompra", "creditLimit"].includes(config.source)) {
+                    const num = parseFloat(value);
+                    if (!isNaN(num)) {
+                        return num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    }
+                    return String(value);
+                }
+                
+                logger.info(`[resolveVariable] CRM field "${config.source}" = "${String(value)}"`);
+                return String(value);
 
             case "special":
                 // Campos especiais do sistema
@@ -63,26 +89,31 @@ function getSaudacao(): string {
 function autoDetectValue(param: TemplateParameter, contact: any): string {
     const exampleLower = (param.example || "").toLowerCase();
 
+    // Detectar por palavras-chave no exemplo
     if (exampleLower.includes("nome") || exampleLower.includes("name")) {
         return contact.name || "Cliente";
     } else if (exampleLower.includes("email") || exampleLower.includes("e-mail")) {
         return contact.email || "";
-    } else if (exampleLower.includes("telefone") || exampleLower.includes("phone") || exampleLower.includes("celular")) {
+    } else if (exampleLower.includes("telefone") || exampleLower.includes("phone") || exampleLower.includes("celular") || exampleLower.includes("whatsapp")) {
         return contact.number || "";
-    } else if (exampleLower.includes("codigo") || exampleLower.includes("código") || exampleLower.includes("code")) {
+    } else if (exampleLower.includes("codigo") || exampleLower.includes("código") || exampleLower.includes("code") || exampleLower.includes("id")) {
         return String(contact.id || "");
+    } else if (exampleLower.includes("data") || exampleLower.includes("date")) {
+        return moment().format("DD/MM/YYYY");
+    } else if (exampleLower.includes("hora") || exampleLower.includes("time")) {
+        return moment().format("HH:mm");
+    } else if (exampleLower.includes("empresa") || exampleLower.includes("company")) {
+        return contact.bzEmpresa || contact.fantasyName || "";
+    } else if (exampleLower.includes("cidade") || exampleLower.includes("city")) {
+        return contact.city || "";
     } else {
-        // Fallback por ordem
-        switch (param.index) {
-            case 1:
-                return contact.name || "Cliente";
-            case 2:
-                return contact.number || contact.name || "";
-            case 3:
-                return String(contact.id || "");
-            default:
-                return "";
-        }
+        // Fallback conservador: usar nome para todos os índices
+        // NÃO usar número de telefone como fallback (pode causar confusão)
+        logger.warn(
+            `[autoDetectValue] Parâmetro ${param.index} sem mapeamento configurado. ` +
+            `Exemplo: "${param.example}". Usando nome do contato como fallback.`
+        );
+        return contact.name || "Cliente";
     }
 }
 

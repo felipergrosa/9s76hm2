@@ -59,6 +59,7 @@ type StoreData = {
   mediaName5?: string | null;
   metaTemplateName?: string | null;
   metaTemplateLanguage?: string | null;
+  metaTemplateVariables?: Record<string, any> | null;  // Mapeamento de variáveis do template
 };
 
 type FindParams = {

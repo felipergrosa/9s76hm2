@@ -1416,10 +1416,22 @@ async function handleDispatchCampaign(job) {
               );
 
               if (templateDef.parameters.length > 0) {
+                // Parsear metaTemplateVariables se vier como string
+                let variablesConfig = (campaign as any).metaTemplateVariables;
+                if (typeof variablesConfig === 'string') {
+                  try {
+                    variablesConfig = JSON.parse(variablesConfig);
+                  } catch (e) {
+                    logger.warn(`[DispatchCampaign] Erro ao parsear metaTemplateVariables: ${e}`);
+                    variablesConfig = undefined;
+                  }
+                }
+                logger.info(`[DispatchCampaign] metaTemplateVariables: ${JSON.stringify(variablesConfig)}`);
+
                 templateComponents = MapTemplateParameters(
                   templateDef.parameters,
                   contact,
-                  (campaign as any).metaTemplateVariables  // NOVO: passar mapeamento
+                  variablesConfig
                 );
                 logger.info(
                   `[DispatchCampaign] Template ${templateName} mapeado com ${templateDef.parameters.length} parâmetros`

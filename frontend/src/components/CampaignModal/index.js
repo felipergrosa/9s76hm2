@@ -539,6 +539,20 @@ const CampaignModal = ({
     loadTemplates();
   }, [whatsappId, whatsapps]);
 
+  // Restaurar selectedTemplate quando templates são carregados e campanha tem template salvo
+  useEffect(() => {
+    if (availableTemplates.length > 0 && campaign.metaTemplateName && !selectedTemplate) {
+      const savedTemplate = availableTemplates.find(
+        t => t.name === campaign.metaTemplateName && 
+             (t.language === campaign.metaTemplateLanguage || !campaign.metaTemplateLanguage)
+      );
+      if (savedTemplate) {
+        console.log('[CampaignModal] Restaurando template salvo:', savedTemplate.name);
+        setSelectedTemplate(savedTemplate);
+      }
+    }
+  }, [availableTemplates, campaign.metaTemplateName, campaign.metaTemplateLanguage, selectedTemplate]);
+
   // Carrega todos os usuários sob demanda (ao abrir o campo)
   const ensureUsersLoaded = async () => {
     if (options && options.length > 0) return;
@@ -689,6 +703,7 @@ const CampaignModal = ({
 
   const handleSaveCampaign = async (values) => {
     try {
+      console.log('[CampaignModal] Salvando campanha com metaTemplateVariables:', metaTemplateVariables);
       const dataValues = {
         ...values,  // Merge the existing values object
         whatsappId: whatsappId,
@@ -698,6 +713,7 @@ const CampaignModal = ({
         allowedWhatsappIds,
         metaTemplateVariables  // NOVO: incluir mapeamento de variáveis
       };
+      console.log('[CampaignModal] dataValues completo:', JSON.stringify(dataValues, null, 2));
 
       Object.entries(values).forEach(([key, value]) => {
         if (key === "scheduledAt" && value !== "" && value !== null) {
