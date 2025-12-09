@@ -726,8 +726,10 @@ const CampaignModal = ({
         metaTemplateVariables  // IMPORTANTE: deve vir por último para ter prioridade
       };
       console.log('[CampaignModal] dataValues completo:', JSON.stringify(dataValues, null, 2));
+      console.log('[CampaignModal] metaTemplateVariables FINAL que será enviado:', JSON.stringify(dataValues.metaTemplateVariables));
 
       if (campaignId) {
+        console.log('[CampaignModal] Atualizando campanha existente:', campaignId);
         await api.put(`/campaigns/${campaignId}`, dataValues);
 
         if (attachment != null) {

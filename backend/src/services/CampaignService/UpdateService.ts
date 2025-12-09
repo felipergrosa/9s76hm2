@@ -49,6 +49,9 @@ interface Data {
 const UpdateService = async (data: Data): Promise<Campaign> => {
   const { id } = data;
 
+  // DEBUG: Log para verificar se metaTemplateVariables está chegando
+  console.log('[UpdateService] metaTemplateVariables recebido:', JSON.stringify(data.metaTemplateVariables));
+
   const record = await Campaign.findByPk(id);
 
   if (!record) {

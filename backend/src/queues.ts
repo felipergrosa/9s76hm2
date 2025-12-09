@@ -415,7 +415,7 @@ async function handleVerifyCampaigns(job) {
 
 
 async function getCampaign(id) {
-  return await Campaign.findOne({
+  const campaign = await Campaign.findOne({
     where: { id },
     include: [
       {
@@ -443,6 +443,13 @@ async function getCampaign(id) {
       // }
     ]
   });
+  
+  // DEBUG: Log para verificar se metaTemplateVariables está sendo carregado
+  if (campaign) {
+    console.log(`[getCampaign] Campaign ${id} metaTemplateVariables:`, JSON.stringify((campaign as any).metaTemplateVariables));
+  }
+  
+  return campaign;
 }
 
 async function getContact(id) {
