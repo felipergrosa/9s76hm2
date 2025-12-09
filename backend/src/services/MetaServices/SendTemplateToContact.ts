@@ -21,6 +21,7 @@ interface SendTemplateToContactParams {
   languageCode?: string;
   components?: any[];
   variablesConfig?: Record<string, any>;  // NOVO: mapeamento de variáveis
+  statusTicket?: string;  // Status do ticket: "open", "pending", "closed"
 }
 
 interface SendTemplateToContactResult {
@@ -37,7 +38,8 @@ const SendTemplateToContact = async ({
   templateName,
   languageCode = "pt_BR",
   components,
-  variablesConfig  // NOVO
+  variablesConfig,  // NOVO
+  statusTicket = "open"  // Status padrão: open, mas pode ser "pending" ou "closed"
 }: SendTemplateToContactParams): Promise<SendTemplateToContactResult> => {
   try {
     logger.info(
@@ -187,16 +189,18 @@ const SendTemplateToContact = async ({
       );
     } else {
       // Criar novo ticket apenas se não existir um aberto
+      // Usar o statusTicket da campanha (pode ser "open", "pending" ou "closed")
+      const finalStatus = statusTicket === "closed" ? "open" : statusTicket; // Se closed, cria como open e fecha depois
       ticket = await CreateTicketService({
         contactId: contact.id,
-        status: "open",
+        status: finalStatus,
         userId,
         companyId,
         queueId,
         whatsappId: String(whatsappId)
       });
       logger.info(
-        `[SendTemplateToContact] Novo ticket #${ticket.id} criado para mensagem enviada com sucesso`
+        `[SendTemplateToContact] Novo ticket #${ticket.id} criado com status="${finalStatus}" para mensagem enviada com sucesso`
       );
     }
 

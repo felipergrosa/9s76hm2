@@ -96,6 +96,121 @@ interface IntervalSettings {
   greaterIntervalMs: number;      // duração da pausa maior
 }
 
+/**
+ * Determina o usuário correto para atribuir o ticket baseado nas tags do contato
+ * Lógica de tags hierárquicas:
+ * - # (1x) = Tag Pessoal (obrigatória) - Ex: #NOME-USUARIO
+ * - ## (2x) = Grupo (complementar) - Ex: ##CLIENTES
+ * - ### (3x) = Região (complementar) - Ex: ###REGIAO-NORTE
+ * - Sem # = Transacional (não afeta permissões)
+ * 
+ * Se o contato tem a tag pessoal de um usuário, atribui a ele.
+ * Se não tem nenhuma tag pessoal, retorna null (ticket fica sem usuário específico).
+ * 
+ * ADMIN: Usuários com profile="admin" veem todos os tickets independente das tags.
+ * Se houver um admin na lista e nenhum match de tag, o ticket vai para o admin.
+ */
+async function getUserIdByContactTags(
+  contactId: number,
+  userIds: number[],
+  companyId: number
+): Promise<number | null> {
+  if (!userIds || userIds.length === 0) {
+    return null;
+  }
+
+  // Se só tem um usuário, retorna ele diretamente
+  if (userIds.length === 1) {
+    return userIds[0];
+  }
+
+  try {
+    // Buscar usuários com suas tags e profile
+    const users = await User.findAll({
+      where: {
+        id: { [Op.in]: userIds },
+        companyId
+      },
+      include: [{
+        model: Tag,
+        as: "tags",
+        attributes: ["id", "name"],
+        through: { attributes: [] }
+      }],
+      attributes: ["id", "name", "profile"]
+    });
+
+    // Separar admins dos usuários normais
+    const adminUsers = users.filter((u: any) => u.profile === "admin");
+    const normalUsers = users.filter((u: any) => u.profile !== "admin");
+
+    // Buscar tags do contato (apenas tags pessoais que começam com #)
+    const contactTags = await Tag.findAll({
+      include: [{
+        model: Contact,
+        as: "contacts",
+        where: { id: contactId },
+        attributes: []
+      }],
+      where: {
+        companyId,
+        name: { [Op.like]: '#%' }  // Apenas tags que começam com #
+      },
+      attributes: ["id", "name"]
+    });
+
+    // Se contato não tem tags pessoais
+    if (contactTags.length === 0) {
+      // Se tem admin na lista, atribui ao primeiro admin
+      if (adminUsers.length > 0) {
+        logger.info(`[getUserIdByContactTags] Contato ${contactId} sem tags, atribuindo ao admin ${adminUsers[0].name} (${adminUsers[0].id})`);
+        return adminUsers[0].id;
+      }
+      // Senão, ticket fica sem usuário específico (visível a todos)
+      logger.info(`[getUserIdByContactTags] Contato ${contactId} sem tags pessoais, ticket ficará sem usuário específico`);
+      return null;
+    }
+
+    // Primeiro, tentar match com usuários normais (não-admin)
+    for (const user of normalUsers) {
+      const userTags = (user as any).tags || [];
+      
+      // Buscar tags pessoais do usuário (começam com # mas não com ##)
+      const userPersonalTags = userTags.filter((t: any) => 
+        t.name.startsWith('#') && !t.name.startsWith('##')
+      );
+
+      // Verificar se alguma tag pessoal do contato corresponde à tag pessoal do usuário
+      for (const contactTag of contactTags) {
+        // Tag pessoal do contato (começa com # mas não com ##)
+        if (contactTag.name.startsWith('#') && !contactTag.name.startsWith('##')) {
+          for (const userTag of userPersonalTags) {
+            if (contactTag.name.toLowerCase() === userTag.name.toLowerCase()) {
+              logger.info(`[getUserIdByContactTags] Contato ${contactId} tem tag "${contactTag.name}" do usuário ${user.name} (${user.id})`);
+              return user.id;
+            }
+          }
+        }
+      }
+    }
+
+    // Se não encontrou match com usuários normais, verificar se tem admin
+    if (adminUsers.length > 0) {
+      // Admin vê todos - atribui ao primeiro admin da lista
+      logger.info(`[getUserIdByContactTags] Contato ${contactId} sem match de tag, atribuindo ao admin ${adminUsers[0].name} (${adminUsers[0].id})`);
+      return adminUsers[0].id;
+    }
+
+    // Nenhum usuário corresponde às tags do contato e não tem admin
+    logger.info(`[getUserIdByContactTags] Contato ${contactId} tem tags mas nenhuma corresponde aos usuários selecionados`);
+    return null;
+
+  } catch (error: any) {
+    logger.error(`[getUserIdByContactTags] Erro ao buscar tags: ${error.message}`);
+    return userIds[0]; // Fallback: primeiro usuário da lista
+  }
+}
+
 export const userMonitor = new BullQueue("UserMonitor", connection);
 export const scheduleMonitor = new BullQueue("ScheduleMonitor", connection);
 export const sendScheduledMessages = new BullQueue("SendSacheduledMessages", connection);
@@ -1432,15 +1547,40 @@ async function handleDispatchCampaign(job) {
             }
           }
 
+          // Determinar usuário baseado nas tags do contato (se múltiplos usuários configurados)
+          let targetUserId = campaign.userId || 0;
+          if ((campaign as any).userIds) {
+            try {
+              const userIdsArray = typeof (campaign as any).userIds === 'string' 
+                ? JSON.parse((campaign as any).userIds) 
+                : (campaign as any).userIds;
+              
+              if (Array.isArray(userIdsArray) && userIdsArray.length > 0) {
+                const matchedUserId = await getUserIdByContactTags(contact.id, userIdsArray, campaign.companyId);
+                if (matchedUserId) {
+                  targetUserId = matchedUserId;
+                  logger.info(`[DispatchCampaign] Usuário ${targetUserId} selecionado por tag para contato ${contact.id}`);
+                } else {
+                  // Sem match de tag - usar primeiro usuário ou deixar sem usuário
+                  targetUserId = userIdsArray[0] || campaign.userId || 0;
+                  logger.info(`[DispatchCampaign] Sem match de tag, usando usuário padrão ${targetUserId}`);
+                }
+              }
+            } catch (e) {
+              logger.warn(`[DispatchCampaign] Erro ao processar userIds: ${e}`);
+            }
+          }
+
           await SendTemplateToContact({
             whatsappId: selectedWhatsappId,
             contactId: contact.id,
             companyId: campaign.companyId,
-            userId: campaign.userId || 0,
+            userId: targetUserId,
             queueId: campaign.queueId || undefined,
             templateName,
             languageCode,
-            components: templateComponents  // Passar os components mapeados
+            components: templateComponents,  // Passar os components mapeados
+            statusTicket: campaign.statusTicket || "pending"  // Usar status da campanha
           });
         } else {
           // Envio direto de template sem abrir ticket
@@ -1558,6 +1698,30 @@ async function handleDispatchCampaign(job) {
       })
       // já temos whatsapp selecionado
 
+      // Determinar usuário baseado nas tags do contato (se múltiplos usuários configurados)
+      let targetUserId = campaign.userId || null;
+      if ((campaign as any).userIds) {
+        try {
+          const userIdsArray = typeof (campaign as any).userIds === 'string' 
+            ? JSON.parse((campaign as any).userIds) 
+            : (campaign as any).userIds;
+          
+          if (Array.isArray(userIdsArray) && userIdsArray.length > 0) {
+            const matchedUserId = await getUserIdByContactTags(contact.id, userIdsArray, campaign.companyId);
+            if (matchedUserId) {
+              targetUserId = matchedUserId;
+              logger.info(`[DispatchCampaign][Baileys] Usuário ${targetUserId} selecionado por tag para contato ${contact.id}`);
+            } else {
+              // Sem match de tag - ticket fica sem usuário específico (visível a todos)
+              targetUserId = null;
+              logger.info(`[DispatchCampaign][Baileys] Sem match de tag, ticket ficará sem usuário específico`);
+            }
+          }
+        } catch (e) {
+          logger.warn(`[DispatchCampaign][Baileys] Erro ao processar userIds: ${e}`);
+        }
+      }
+
       let ticket = await Ticket.findOne({
         where: {
           contactId: contact.id,
@@ -1573,7 +1737,7 @@ async function handleDispatchCampaign(job) {
           contactId: contact.id,
           whatsappId: whatsapp.id,
           queueId: campaign?.queueId,
-          userId: campaign?.userId,
+          userId: targetUserId,
           status: campaign?.statusTicket
         })
 

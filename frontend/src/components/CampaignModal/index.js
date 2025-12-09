@@ -288,7 +288,7 @@ const CampaignModal = ({
   const [queues, setQueues] = useState([]);
   const [allQueues, setAllQueues] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedUsers, setSelectedUsers] = useState([]);  // Agora é array para múltiplos usuários
   const [selectedQueue, setSelectedQueue] = useState("");
   const { findAll: findAllQueues } = useQueues();
 
@@ -604,7 +604,24 @@ const CampaignModal = ({
           const { data } = await api.get(`/campaigns/${campaignId}`);
           console.log('[CampaignModal] Dados recebidos da API:', data);
 
-          if (data?.user) setSelectedUser(data.user);
+          // Carregar usuários selecionados (múltiplos ou único para compatibilidade)
+          if (data?.userIds) {
+            try {
+              const userIdsArray = typeof data.userIds === 'string' 
+                ? JSON.parse(data.userIds) 
+                : data.userIds;
+              if (Array.isArray(userIdsArray) && userIdsArray.length > 0) {
+                // Buscar dados completos dos usuários
+                const usersData = options.filter(u => userIdsArray.includes(u.id));
+                setSelectedUsers(usersData);
+              }
+            } catch (e) {
+              console.error('[CampaignModal] Erro ao parsear userIds:', e);
+            }
+          } else if (data?.user) {
+            // Compatibilidade: se só tem user (antigo), converter para array
+            setSelectedUsers([data.user]);
+          }
           if (data?.queue) setSelectedQueue(data.queue.id);
           if (data?.whatsappId) setWhatsappId(data.whatsappId);
           if (data?.dispatchStrategy) setDispatchStrategy(data.dispatchStrategy);
@@ -716,10 +733,18 @@ const CampaignModal = ({
       });
 
       // Depois monta o dataValues com os campos extras (que têm prioridade)
+      // Se múltiplos usuários selecionados, envia userIds (array JSON)
+      // Se apenas um usuário, envia userId (compatibilidade)
+      const userIds = selectedUsers.length > 0 
+        ? JSON.stringify(selectedUsers.map(u => u.id)) 
+        : null;
+      const userId = selectedUsers.length === 1 ? selectedUsers[0].id : null;
+
       const dataValues = {
         ...processedValues,  // Valores do Formik processados
         whatsappId: whatsappId,
-        userId: selectedUser?.id || null,
+        userId,  // Compatibilidade com campanhas antigas
+        userIds,  // Novo: array de IDs para distribuição por tags
         queueId: selectedQueue || null,
         dispatchStrategy,
         allowedWhatsappIds,
@@ -918,7 +943,7 @@ const CampaignModal = ({
             {({ values, errors, touched, isSubmitting, setFieldValue }) => {
               setFieldValueRef.current = setFieldValue;
               formValuesRef.current = values;
-              const assistantQueueId = selectedQueue || values.queueId || (Array.isArray(selectedUser?.queues) ? selectedUser.queues[0]?.id : null);
+              const assistantQueueId = selectedQueue || values.queueId || (selectedUsers.length === 1 && Array.isArray(selectedUsers[0]?.queues) ? selectedUsers[0].queues[0]?.id : null);
               const assistantWhatsappId = whatsappId || values.whatsappId || values.whatsappIds || null;
               assistantQueueIdRef.current = assistantQueueId || null;
               assistantWhatsappIdRef.current = assistantWhatsappId || null;
@@ -1390,29 +1415,35 @@ const CampaignModal = ({
                             </Field>
                           </FormControl>
                         </Grid>
-                        {/* SELECIONAR USUARIO */}
+                        {/* SELECIONAR USUARIOS (múltiplos) */}
                         <Grid xs={12} md={4} item>
                           <Autocomplete
+                            multiple
                             style={{ marginTop: '8px' }}
                             variant="outlined"
                             margin="dense"
                             className={classes.formControl}
                             getOptionLabel={(option) => `${option.name}`}
-                            value={selectedUser}
+                            value={selectedUsers}
                             size="small"
                             openOnFocus
                             onOpen={ensureUsersLoaded}
                             onChange={(e, newValue) => {
-                              setSelectedUser(newValue);
-                              if (newValue != null && Array.isArray(newValue.queues)) {
-                                if (newValue.queues.length === 1) {
-                                  setSelectedQueue(newValue.queues[0].id);
+                              setSelectedUsers(newValue || []);
+                              // Se só um usuário selecionado, usar suas filas
+                              if (newValue && newValue.length === 1 && Array.isArray(newValue[0].queues)) {
+                                if (newValue[0].queues.length === 1) {
+                                  setSelectedQueue(newValue[0].queues[0].id);
                                 }
-                                setQueues(newValue.queues);
-
+                                setQueues(newValue[0].queues);
                               } else {
+                                // Múltiplos usuários ou nenhum: mostrar todas as filas
                                 setQueues(allQueues);
-                                setSelectedQueue("");
+                                if (newValue && newValue.length > 1) {
+                                  // Manter fila selecionada se já houver
+                                } else {
+                                  setSelectedQueue("");
+                                }
                               }
                             }}
                             options={options}
@@ -1423,12 +1454,33 @@ const CampaignModal = ({
                             disabled={!campaignEditable || values.openTicket === 'disabled'}
                             noOptionsText={i18n.t("transferTicketModal.noOptions")}
                             loading={loading}
-                            renderOption={option => (<span> <UserStatusIcon user={option} /> {option.name}</span>)}
+                            renderOption={(option, { selected }) => (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <UserStatusIcon user={option} />
+                                {option.name}
+                                {option.tags && option.tags.length > 0 && (
+                                  <span style={{ fontSize: '0.75rem', color: '#666', marginLeft: 4 }}>
+                                    ({option.tags.filter(t => t.name.startsWith('#') && !t.name.startsWith('##')).map(t => t.name).join(', ')})
+                                  </span>
+                                )}
+                              </span>
+                            )}
+                            renderTags={(value, getTagProps) =>
+                              value.map((option, index) => (
+                                <Chip
+                                  key={option.id}
+                                  label={option.name}
+                                  size="small"
+                                  {...getTagProps({ index })}
+                                />
+                              ))
+                            }
                             renderInput={(params) => (
                               <TextField
                                 {...params}
-                                label={i18n.t("transferTicketModal.fieldLabel")}
+                                label="Usuários (distribuição por tags)"
                                 variant="outlined"
+                                helperText={selectedUsers.length > 1 ? "Tickets serão distribuídos por tags dos contatos" : ""}
                                 InputProps={{
                                   ...params.InputProps,
                                   endAdornment: (
@@ -1458,7 +1510,7 @@ const CampaignModal = ({
                               value={selectedQueue}
                               onChange={(e) => setSelectedQueue(e.target.value)}
                               label={i18n.t("transferTicketModal.fieldQueuePlaceholder")}
-                              required={!isNil(selectedUser)}
+                              required={selectedUsers.length > 0}
                               disabled={!campaignEditable || values.openTicket === 'disabled'}
                             >
                               {queues.map((queue) => (

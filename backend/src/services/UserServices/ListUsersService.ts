@@ -4,6 +4,7 @@ import Company from "../../models/Company";
 import User from "../../models/User";
 import Plan from "../../models/Plan";
 import Ticket from "../../models/Ticket";
+import Tag from "../../models/Tag";
 
 interface Request {
   searchParam?: string;
@@ -54,7 +55,8 @@ const ListUsersService = async ({
       "startWork",
       "endWork",
       "profileImage",
-      "permissions"
+      "permissions",
+      "allowedContactTags"
     ],
     limit,
     offset,
@@ -89,9 +91,29 @@ const ListUsersService = async ({
   });
 
   const hasMore = count > offset + users.length;
-  console.log(hasMore, count)
+
+  // Buscar tags completas para cada usuário baseado em allowedContactTags
+  const usersWithTags = await Promise.all(
+    users.map(async (user) => {
+      const userData = user.toJSON() as any;
+      if (userData.allowedContactTags && userData.allowedContactTags.length > 0) {
+        const tags = await Tag.findAll({
+          where: {
+            id: { [Op.in]: userData.allowedContactTags },
+            companyId
+          },
+          attributes: ["id", "name", "color"]
+        });
+        userData.tags = tags;
+      } else {
+        userData.tags = [];
+      }
+      return userData;
+    })
+  );
+
   return {
-    users,
+    users: usersWithTags as any,
     count,
     hasMore
   };
