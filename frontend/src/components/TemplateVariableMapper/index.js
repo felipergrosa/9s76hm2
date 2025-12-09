@@ -55,6 +55,29 @@ const TemplateVariableMapper = ({
         }
     };
 
+    // Inicializa configuração padrão para todas as variáveis do template
+    // Mesmo que o usuário não mexa manualmente no campo, garantimos que
+    // metaTemplateVariables tenha uma entrada para cada índice ({{1}}, {{2}}, ...).
+    useEffect(() => {
+        if (!template || !template.parameters || template.parameters.length === 0) return;
+
+        const currentValue = value || {};
+        let changed = false;
+        const newValue = { ...currentValue };
+
+        template.parameters.forEach((param) => {
+            if (!newValue[param.index]) {
+                newValue[param.index] = { type: "crm_field", source: "name" };
+                changed = true;
+            }
+        });
+
+        if (changed) {
+            console.log("[TemplateVariableMapper] Inicializando configuração padrão:", newValue);
+            onChange(newValue);
+        }
+    }, [template, value, onChange]);
+
     const handleTypeChange = (paramIndex, type) => {
         const currentValue = value || {};
         const newValue = {

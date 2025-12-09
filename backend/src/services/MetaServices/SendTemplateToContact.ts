@@ -83,6 +83,11 @@ const SendTemplateToContact = async ({
     // 1. components não foi fornecido E
     // 2. template tem parâmetros esperados
     let finalComponents = components;
+    
+    // DEBUG: Log para verificar o que está chegando
+    console.log("[SendTemplateToContact] components recebido:", JSON.stringify(components));
+    console.log("[SendTemplateToContact] variablesConfig recebido:", JSON.stringify(variablesConfig));
+    
     if ((!finalComponents || finalComponents.length === 0) && templateDefinition) {
       if (templateDefinition.parameters.length > 0) {
         finalComponents = MapTemplateParameters(
@@ -94,6 +99,8 @@ const SendTemplateToContact = async ({
           `[SendTemplateToContact] Auto-mapeamento de parâmetros concluído`
         );
       }
+    } else if (finalComponents && finalComponents.length > 0) {
+      logger.info(`[SendTemplateToContact] Usando components pré-mapeados (${finalComponents.length} componentes)`);
     }
 
     // Obter adapter oficial ANTES de montar header (preciso do uploadMedia)

@@ -1393,8 +1393,40 @@ async function handleDispatchCampaign(job) {
             }
           });
 
-          // SendTemplateToContact já faz o match automático internamente
-          // Não precisamos montar components aqui
+          // Parsear metaTemplateVariables se vier como string
+          let variablesConfig = (campaign as any).metaTemplateVariables;
+          if (typeof variablesConfig === 'string') {
+            try {
+              variablesConfig = JSON.parse(variablesConfig);
+            } catch (e) {
+              logger.warn(`[DispatchCampaign] Erro ao parsear metaTemplateVariables: ${e}`);
+              variablesConfig = undefined;
+            }
+          }
+          logger.info(`[DispatchCampaign] openTicket=enabled, metaTemplateVariables: ${JSON.stringify(variablesConfig)}`);
+
+          // Mapear parâmetros do template se houver configuração
+          let templateComponents = undefined;
+          if (variablesConfig && Object.keys(variablesConfig).length > 0) {
+            try {
+              const templateDef = await GetTemplateDefinition(
+                selectedWhatsappId,
+                templateName,
+                languageCode
+              );
+              if (templateDef.parameters.length > 0) {
+                templateComponents = MapTemplateParameters(
+                  templateDef.parameters,
+                  contact,
+                  variablesConfig
+                );
+                logger.info(`[DispatchCampaign] Template mapeado com ${templateDef.parameters.length} parâmetros usando variablesConfig`);
+              }
+            } catch (e) {
+              logger.warn(`[DispatchCampaign] Erro ao mapear template: ${e}`);
+            }
+          }
+
           await SendTemplateToContact({
             whatsappId: selectedWhatsappId,
             contactId: contact.id,
@@ -1403,7 +1435,7 @@ async function handleDispatchCampaign(job) {
             queueId: campaign.queueId || undefined,
             templateName,
             languageCode,
-            components: undefined  // SendTemplateToContact fará o match automático
+            components: templateComponents  // Passar os components mapeados
           });
         } else {
           // Envio direto de template sem abrir ticket
