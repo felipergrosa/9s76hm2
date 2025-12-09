@@ -190,7 +190,7 @@ async function processIncomingMessage(
   const ticket = await FindOrCreateTicketService(
     contact,
     whatsapp,
-    0, // unreadMessages
+    1, // unreadMessages - incrementa 1 para cada mensagem recebida
     companyId,
     null, // queueId
     null, // userId
@@ -202,8 +202,13 @@ async function processIncomingMessage(
     false, // isTransfered
     false // isCampaign
   );
+
+  // Incrementar contador de mensagens não lidas
+  await ticket.update({
+    unreadMessages: (ticket.unreadMessages || 0) + 1
+  });
   
-  logger.info(`[WebhookProcessor] Ticket ${ticket.id} criado/encontrado: status=${ticket.status}, queueId=${ticket.queueId}, isBot=${ticket.isBot}`);
+  logger.info(`[WebhookProcessor] Ticket ${ticket.id} criado/encontrado: status=${ticket.status}, queueId=${ticket.queueId}, isBot=${ticket.isBot}, unreadMessages=${ticket.unreadMessages}`);
 
   // Extrair corpo da mensagem
   let body = "";

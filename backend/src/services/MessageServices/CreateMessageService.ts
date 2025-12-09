@@ -25,6 +25,7 @@ export interface MessageData {
   ticketImported?: any;
   isForwarded?: boolean;
   remoteJid?: string | null;
+  isCampaign?: boolean; // Se true, não emite para a sala da conversa (background)
 }
 interface Request {
   messageData: MessageData;
@@ -94,7 +95,9 @@ const CreateMessageService = async ({
 
   const io = getIO();
 
-  if (!messageData?.ticketImported) {
+  // Se é campanha, não emite para a sala da conversa (evita aparecer na tela do atendente)
+  // A mensagem ainda será visível na lista de tickets e ao abrir o ticket
+  if (!messageData?.ticketImported && !messageData?.isCampaign) {
     await emitToCompanyRoom(
       companyId,
       message.ticket.uuid,

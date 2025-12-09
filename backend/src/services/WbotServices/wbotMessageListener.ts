@@ -932,7 +932,8 @@ export const verifyMediaMessage = async (
   ticketTraking: TicketTraking,
   isForwarded: boolean = false,
   isPrivate: boolean = false,
-  wbot: Session
+  wbot: Session,
+  isCampaign: boolean = false  // Se true, não emite para a sala da conversa (background)
 ): Promise<Message> => {
   const io = getIO();
   const quotedMsg = await verifyQuotedMessage(msg);
@@ -1110,7 +1111,8 @@ export const verifyMediaMessage = async (
       ).toISOString(),
       ticketImported: ticket.imported,
       isForwarded,
-      isPrivate
+      isPrivate,
+      isCampaign  // Passa para CreateMessageService para evitar emit na conversa
     };
 
     await ticket.update({
@@ -1188,7 +1190,8 @@ export const verifyMessage = async (
   contact: Contact,
   ticketTraking?: TicketTraking,
   isPrivate?: boolean,
-  isForwarded: boolean = false
+  isForwarded: boolean = false,
+  isCampaign: boolean = false  // Se true, não emite para a sala da conversa (background)
 ) => {
   // console.log("Mensagem recebida:", JSON.stringify(msg, null, 2));
   const io = getIO();
@@ -1217,7 +1220,8 @@ export const verifyMessage = async (
       Math.floor(getTimestampMessage(msg.messageTimestamp) * 1000)
     ).toISOString(),
     ticketImported: ticket.imported,
-    isForwarded
+    isForwarded,
+    isCampaign  // Passa para CreateMessageService para evitar emit na conversa
   };
 
   await ticket.update({

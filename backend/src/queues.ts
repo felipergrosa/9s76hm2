@@ -1332,11 +1332,22 @@ async function handlePrepareContact(job) {
       defaults: campaignShipping
     });
 
-    if (
-      !created &&
-      record.deliveredAt === null &&
-      record.confirmationRequestedAt === null
-    ) {
+    if (!created) {
+      // Se já foi entregue ou tem status final, não reagendar
+      if (
+        record.deliveredAt !== null ||
+        record.status === "delivered" ||
+        record.status === "failed" ||
+        record.status === "suppressed"
+      ) {
+        logger.info(
+          `[PrepareContact] Registro já finalizado (status=${record.status}, deliveredAt=${record.deliveredAt}). Campanha=${campaign.id}; Registro=${record.id}`
+        );
+        await verifyAndFinalizeCampaign(campaign);
+        return;
+      }
+
+      // Atualiza dados se ainda não finalizado
       record.set(campaignShipping);
       await record.save();
     }
@@ -1350,7 +1361,8 @@ async function handlePrepareContact(job) {
 
     if (
       record.deliveredAt === null &&
-      record.confirmationRequestedAt === null
+      record.confirmationRequestedAt === null &&
+      !["delivered", "failed", "suppressed"].includes(record.status)
     ) {
       // Seleciona a conexão por contato se a estratégia da campanha for round_robin
       let selectedWhatsappId = campaign.whatsappId;
@@ -1445,11 +1457,20 @@ async function handleDispatchCampaign(job) {
     }
 
     // Cap, Backoff e Pacing por conexão (whatsappId)
+    // API Oficial: pacing muito mais rápido (2-5s) vs Baileys (60s)
     const caps = await getCapBackoffSettings(campaign.companyId);
     const intervals = await getIntervalSettings(campaign.companyId);
+    
+    // Para API Oficial, usar intervalos muito menores (2-5 segundos)
+    const officialIntervals: IntervalSettings = isOfficial ? {
+      messageIntervalMs: 2000,  // 2 segundos entre mensagens
+      longerIntervalAfter: 50,  // Pausa longa após 50 mensagens
+      greaterIntervalMs: 10000  // Pausa de 10 segundos
+    } : intervals;
+    
     const capDelayMs = await getCapDeferDelayMs(selectedWhatsappId, caps);
     const backoffDelayMs = getBackoffDeferDelayMs(selectedWhatsappId);
-    const pacingDelayMs = getPacingDeferDelayMs(selectedWhatsappId, intervals);
+    const pacingDelayMs = getPacingDeferDelayMs(selectedWhatsappId, officialIntervals);
     const deferMs = Math.max(capDelayMs, backoffDelayMs, pacingDelayMs);
     if (deferMs > 0) {
       const nextJob = await campaignQueue.add(
@@ -1722,26 +1743,34 @@ async function handleDispatchCampaign(job) {
         }
       }
 
-      let ticket = await Ticket.findOne({
-        where: {
-          contactId: contact.id,
-          companyId: campaign.companyId,
-          whatsappId: whatsapp.id,
-          status: ["open", "pending"]
-        }
-      })
+      // Determinar status do ticket baseado na campanha
+      const targetStatus = campaign.statusTicket || "pending";
+      
+      // Buscar ou criar ticket
+      let ticket = await FindOrCreateTicketService(
+        contact,
+        whatsapp,  // Objeto Whatsapp, não ID
+        0, // unreadMessages
+        campaign.companyId,
+        campaign.queueId,
+        targetUserId,
+        null, // groupContact
+        "whatsapp", // channel
+        false, // isImported
+        false, // isForward
+        null, // settings
+        false, // isTransfered
+        true // isCampaign
+      );
 
-      if (!ticket)
-        ticket = await Ticket.create({
-          companyId: campaign.companyId,
-          contactId: contact.id,
-          whatsappId: whatsapp.id,
-          queueId: campaign?.queueId,
-          userId: targetUserId,
-          status: campaign?.statusTicket
-        })
-
-      ticket = await ShowTicketService(ticket.id, campaign.companyId);
+      // Se a campanha pede status "pending" e o ticket não está pendente, atualizar
+      if (targetStatus === "pending" && ticket.status !== "pending") {
+        await ticket.update({
+          status: "pending",
+          userId: targetUserId ?? ticket.userId
+        });
+        ticket = await ShowTicketService(ticket.id, campaign.companyId);
+      }
 
       if (whatsapp.status === "CONNECTED") {
         if (campaign.confirmation && campaignShipping.confirmation === null) {
@@ -1749,7 +1778,7 @@ async function handleDispatchCampaign(job) {
             text: `\u200c ${campaignShipping.confirmationMessage}`
           });
 
-          await verifyMessage(confirmationMessage, ticket, contact, null, true, false);
+          await verifyMessage(confirmationMessage, ticket, contact, null, true, false, true); // isCampaign=true
 
           await campaignShipping.update({ confirmationRequestedAt: moment() });
         } else {
@@ -1790,7 +1819,7 @@ async function handleDispatchCampaign(job) {
               text: `\u200c ${campaignShipping.message}`
             });
 
-            await verifyMessage(sentMessage, ticket, contact, null, true, false);
+            await verifyMessage(sentMessage, ticket, contact, null, true, false, true); // isCampaign=true
           }
 
           if (hasPerMessageMedia || campaign.mediaPath) {
@@ -1806,11 +1835,11 @@ async function handleDispatchCampaign(job) {
                   text: `\u200c ${campaignShipping.message}`
                 });
 
-                await verifyMessage(audioMessage, ticket, contact, null, true, false);
+                await verifyMessage(audioMessage, ticket, contact, null, true, false, true); // isCampaign=true
               }
               const sentMessage = await wbot.sendMessage(chatId, { ...options });
 
-              await verifyMediaMessage(sentMessage, ticket, ticket.contact, null, false, true, wbot);
+              await verifyMediaMessage(sentMessage, ticket, ticket.contact, null, false, true, wbot, true); // isCampaign=true
             }
           }
           // if (campaign?.statusTicket === 'closed') {

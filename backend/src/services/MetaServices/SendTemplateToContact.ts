@@ -187,6 +187,16 @@ const SendTemplateToContact = async ({
       logger.info(
         `[SendTemplateToContact] Reusando ticket existente #${ticket.id} para mensagem enviada`
       );
+      // Se a campanha pede status "pending" e o ticket não está pendente, atualizar
+      if (statusTicket === "pending" && ticket.status !== "pending") {
+        await ticket.update({
+          status: "pending",
+          userId: userId ?? ticket.userId
+        });
+        logger.info(
+          `[SendTemplateToContact] Ticket #${ticket.id} atualizado para status="pending"`
+        );
+      }
     } else {
       // Criar novo ticket apenas se não existir um aberto
       // Usar o statusTicket da campanha (pode ser "open", "pending" ou "closed")
@@ -242,7 +252,8 @@ const SendTemplateToContact = async ({
         mediaType: mediaType || "template",  // "document", "image", "video", ou "template"
         mediaUrl,  // URL do arquivo se houver
         ack: sent.ack ?? 1,
-        remoteJid: ticket.contact?.remoteJid
+        remoteJid: ticket.contact?.remoteJid,
+        isCampaign: true  // Evita emitir para a sala da conversa (background)
       },
       companyId
     });
