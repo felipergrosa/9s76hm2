@@ -19,14 +19,16 @@ export async function emitToCompanyRoom(
   companyId: number,
   room: string,
   event: string,
-  payload: any
+  payload: any,
+  skipFallback: boolean = false // Se true, nunca faz broadcast fallback
 ): Promise<void> {
   const io = getIO();
   const ns = io.of(`/workspace-${companyId}`);
 
   const explicit = process.env.SOCKET_FALLBACK_NS_BROADCAST;
   const isProd = process.env.NODE_ENV === "production";
-  const fallbackEnabled = explicit === "true" || (explicit !== "false" && !isProd);
+  // Desabilita fallback se skipFallback=true ou se estamos em produção
+  const fallbackEnabled = !skipFallback && (explicit === "true" || (explicit !== "false" && !isProd));
   const debug = process.env.SOCKET_DEBUG === "true";
 
   try {
@@ -34,7 +36,7 @@ export async function emitToCompanyRoom(
     if (debug) {
       const ids = sockets.map(s => s.id).join(",");
       logger.info(
-        `[SOCKET EMIT] event=${event} ns=/workspace-${companyId} room=${room} count=${sockets.length} ids=${ids}`
+        `[SOCKET EMIT] event=${event} ns=/workspace-${companyId} room=${room} count=${sockets.length} ids=${ids} skipFallback=${skipFallback}`
       );
     }
 

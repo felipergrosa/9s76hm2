@@ -56,6 +56,34 @@ interface WebhookChange {
         mime_type: string;
         id: string;
       };
+      sticker?: {
+        mime_type: string;
+        sha256: string;
+        id: string;
+        animated?: boolean;
+      };
+      location?: {
+        latitude: number;
+        longitude: number;
+        name?: string;
+        address?: string;
+      };
+      contacts?: Array<{
+        name: {
+          formatted_name: string;
+          first_name?: string;
+          last_name?: string;
+        };
+        phones?: Array<{
+          phone: string;
+          type?: string;
+          wa_id?: string;
+        }>;
+      }>;
+      reaction?: {
+        message_id: string;
+        emoji: string;
+      };
       button?: {
         text: string;
         payload: string;
@@ -316,6 +344,64 @@ async function processIncomingMessage(
       } else if (message.interactive?.list_reply) {
         body = message.interactive.list_reply.title;
       }
+      break;
+
+    case "sticker":
+      body = "sticker";
+      mediaType = "sticker";
+      
+      if (message.sticker?.id) {
+        try {
+          mediaUrl = await DownloadOfficialMediaService({
+            mediaId: message.sticker.id,
+            whatsapp,
+            companyId,
+            contactId: contact.id,
+            mediaType: "sticker"
+          });
+          logger.info(`[WebhookProcessor] Sticker baixado: ${mediaUrl}`);
+        } catch (error: any) {
+          logger.error(`[WebhookProcessor] Erro ao baixar sticker: ${error.message}`);
+          mediaUrl = undefined;
+        }
+      }
+      break;
+
+    case "location":
+      // Formato compatível com LocationPreview do frontend
+      const lat = message.location?.latitude || 0;
+      const lng = message.location?.longitude || 0;
+      const locationName = message.location?.name || "";
+      const locationAddress = message.location?.address || "";
+      const description = locationName ? `${locationName}\\n${locationAddress}` : `${lat}, ${lng}`;
+      
+      // Formato: base64_image | maps_link | description
+      const mapsLink = `https://maps.google.com/maps?q=${lat}%2C${lng}&z=17&hl=pt-BR`;
+      body = `data:image/png;base64, | ${mapsLink} | ${description}`;
+      mediaType = "locationMessage";
+      logger.info(`[WebhookProcessor] Localização recebida: ${lat}, ${lng}`);
+      break;
+
+    case "contacts":
+      // Formato vCard compatível com VcardPreview do frontend
+      if (message.contacts && message.contacts.length > 0) {
+        const vCards: string[] = [];
+        for (const c of message.contacts) {
+          const name = c.name?.formatted_name || "Contato";
+          const phones = c.phones?.map(p => p.phone).join(", ") || "";
+          // Formato vCard simplificado
+          vCards.push(`BEGIN:VCARD\nVERSION:3.0\nFN:${name}\nTEL:${phones}\nEND:VCARD`);
+        }
+        body = vCards.join("\n");
+        mediaType = "contactMessage";
+        logger.info(`[WebhookProcessor] Contato(s) recebido(s): ${message.contacts.length}`);
+      }
+      break;
+
+    case "reaction":
+      body = message.reaction?.emoji || "👍";
+      mediaType = "reactionMessage";
+      logger.info(`[WebhookProcessor] Reação recebida: ${body}`);
       break;
 
     default:

@@ -1087,6 +1087,19 @@ export const verifyMediaMessage = async (
     }
 
     const body = getBodyMessage(msg);
+    
+    // Determinar mediaType corretamente (sticker, gif, etc)
+    const msgType = getTypeMessage(msg);
+    let finalMediaType = media.mimetype.split("/")[0];
+    
+    // Stickers são webp - marcar como "sticker" para renderização especial
+    if (msgType === "stickerMessage" || media.mimetype === "image/webp") {
+      finalMediaType = "sticker";
+    }
+    // GIFs animados
+    if (media.mimetype === "image/gif") {
+      finalMediaType = "gif";
+    }
 
     const messageData = {
       wid: msg.key.id,
@@ -1096,7 +1109,7 @@ export const verifyMediaMessage = async (
       fromMe: msg.key.fromMe,
       read: msg.key.fromMe,
       mediaUrl: `contact${contact.id}/${media.filename}`, // Incluir contactId no caminho
-      mediaType: media.mimetype.split("/")[0],
+      mediaType: finalMediaType,
       quotedMsgId: quotedMsg?.id,
       ack:
         Number(

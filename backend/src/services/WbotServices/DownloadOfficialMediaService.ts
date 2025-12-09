@@ -10,7 +10,7 @@ interface DownloadMediaOptions {
   whatsapp: Whatsapp;
   companyId: number;
   contactId: number;
-  mediaType: "image" | "video" | "audio" | "document";
+  mediaType: "image" | "video" | "audio" | "document" | "sticker";
 }
 
 /**

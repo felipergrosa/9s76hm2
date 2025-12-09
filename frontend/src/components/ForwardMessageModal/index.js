@@ -31,6 +31,8 @@ const ForwardMessageModal = ({ messages, onClose, modalOpen }) => {
 	const [sending, setSending] = useState(false);
 	const [messageSending, setMessageSending] = useState('');
 	const [signMessage, setSignMessage] = useState(true);
+	const [externalNumber, setExternalNumber] = useState("");
+	const [useExternalNumber, setUseExternalNumber] = useState(false);
 
     useEffect(() => {
 		if (!modalOpen || searchParam.length < 3) {
@@ -82,6 +84,33 @@ const ForwardMessageModal = ({ messages, onClose, modalOpen }) => {
 		history.push('/tickets');
     }
 
+	// Encaminhar para número externo (que pode não estar no CRM)
+	const handleForwardToExternal = async() => {
+		if (!externalNumber || externalNumber.length < 10) {
+			toastError({ message: "Digite um número válido (ex: 5511999999999)" });
+			return;
+		}
+
+		const responseList = [];
+		for (const message of messages) {
+			setSending(true);
+			try {
+				setMessageSending(message.id);
+				const response = await api.post('/message/forward-external', {
+					messageId: message.id, 
+					number: externalNumber
+				});
+				responseList.push(response);
+				await sleep(900);
+			} catch (error) {
+				toastError(error);
+			}		
+		}
+		setSending(false);
+
+		history.push('/tickets');
+    }
+
     const handleSelectOption = (e, newValue) => {
 		if (newValue?.number) {
 			setSelectedContact(newValue);
@@ -96,6 +125,8 @@ const ForwardMessageModal = ({ messages, onClose, modalOpen }) => {
 		setSearchParam("");
 		setSelectedContact(null);
 		setSending(false);
+		setExternalNumber("");
+		setUseExternalNumber(false);
 	};
 
     const handleCloseContactModal = () => {
@@ -146,45 +177,77 @@ const ForwardMessageModal = ({ messages, onClose, modalOpen }) => {
 					Encaminhar mensagem
 				</DialogTitle>
 				<DialogContent dividers>
-					<Autocomplete
-						options={optionsContacts}
-						loading={loading}
-						style={{ width: 300 }}
-						clearOnBlur
-						autoHighlight
-						freeSolo
-						clearOnEscape
-						getOptionLabel={renderOptionLabel}
-						renderOption={renderOption}
-						filterOptions={createAddContactOption}
-						onChange={(e, newValue) => handleSelectOption(e, newValue)}
-						renderInput={params => (
-							<TextField
-								{...params}
-								label={i18n.t("newTicketModal.fieldLabel")}
-								variant="outlined"
-								autoFocus
-								onChange={e => setSearchParam(e.target.value)}
-								onKeyPress={e => {
-									if (loading || !selectedContact) return;
-									else if (e.key === "Enter") {
-										// handleSaveTicket(selectedContact.id);
-									}
+					{/* Toggle para escolher entre contato existente ou número externo */}
+					<FormControlLabel
+						style={{ marginBottom: 16 }}
+						label="Enviar para número externo"
+						control={
+							<Switch
+								checked={useExternalNumber}
+								onChange={(e) => {
+									setUseExternalNumber(e.target.checked);
+									setSelectedContact(null);
+									setExternalNumber("");
 								}}
-								InputProps={{
-									...params.InputProps,
-									endAdornment: (
-										<React.Fragment>
-											{loading ? (
-												<CircularProgress color="inherit" size={20} />
-											) : null}
-											{params.InputProps.endAdornment}
-										</React.Fragment>
-									),
-								}}
+								color="primary"
 							/>
-						)}
+						}
 					/>
+
+					{useExternalNumber ? (
+						/* Campo para número externo */
+						<TextField
+							label="Número (com DDD e DDI)"
+							placeholder="5511999999999"
+							variant="outlined"
+							fullWidth
+							value={externalNumber}
+							onChange={(e) => setExternalNumber(e.target.value.replace(/\D/g, ""))}
+							helperText="Digite o número completo com código do país (ex: 5511999999999)"
+							style={{ width: 300 }}
+						/>
+					) : (
+						/* Autocomplete para contatos existentes */
+						<Autocomplete
+							options={optionsContacts}
+							loading={loading}
+							style={{ width: 300 }}
+							clearOnBlur
+							autoHighlight
+							freeSolo
+							clearOnEscape
+							getOptionLabel={renderOptionLabel}
+							renderOption={renderOption}
+							filterOptions={createAddContactOption}
+							onChange={(e, newValue) => handleSelectOption(e, newValue)}
+							renderInput={params => (
+								<TextField
+									{...params}
+									label={i18n.t("newTicketModal.fieldLabel")}
+									variant="outlined"
+									autoFocus
+									onChange={e => setSearchParam(e.target.value)}
+									onKeyPress={e => {
+										if (loading || !selectedContact) return;
+										else if (e.key === "Enter") {
+											// handleSaveTicket(selectedContact.id);
+										}
+									}}
+									InputProps={{
+										...params.InputProps,
+										endAdornment: (
+											<React.Fragment>
+												{loading ? (
+													<CircularProgress color="inherit" size={20} />
+												) : null}
+												{params.InputProps.endAdornment}
+											</React.Fragment>
+										),
+									}}
+								/>
+							)}
+						/>
+					)}
 				</DialogContent>
 				<DialogActions>
 					{sending && (
@@ -214,8 +277,17 @@ const ForwardMessageModal = ({ messages, onClose, modalOpen }) => {
 					<ButtonWithSpinner
 						variant="contained"
 						type="button"
-						disabled={!selectedContact || sending}
-						onClick={() => handleForwardMessage(selectedContact)}
+						disabled={
+							sending || 
+							(useExternalNumber ? externalNumber.length < 10 : !selectedContact)
+						}
+						onClick={() => {
+							if (useExternalNumber) {
+								handleForwardToExternal();
+							} else {
+								handleForwardMessage(selectedContact);
+							}
+						}}
 						color="primary"
 						loading={loading}
 					>

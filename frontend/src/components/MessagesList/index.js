@@ -22,6 +22,7 @@ import {
   Facebook,
   Instagram,
   Reply,
+  RecordVoiceOver,
 } from "@material-ui/icons";
 
 import MarkdownWrapper from "../MarkdownWrapper";
@@ -668,6 +669,52 @@ const MessagesList = ({
 
   const [videoDialog, setVideoDialog] = useState({ open: false, url: null });
   const [pdfDialog, setPdfDialog] = useState({ open: false, url: null });
+  
+  // Estado para transcrições de áudio
+  const [transcriptions, setTranscriptions] = useState({}); // { messageId: { loading, text, error } }
+
+  // Função para transcrever áudio
+  const handleTranscribeAudio = async (message) => {
+    if (!message?.mediaUrl) return;
+    
+    const messageId = message.id;
+    
+    // Se já está carregando ou já tem transcrição, não faz nada
+    if (transcriptions[messageId]?.loading || transcriptions[messageId]?.text) return;
+    
+    // Extrair nome do arquivo da URL
+    const fileName = message.mediaUrl.split('/').pop();
+    if (!fileName) return;
+    
+    setTranscriptions(prev => ({
+      ...prev,
+      [messageId]: { loading: true, text: null, error: null }
+    }));
+    
+    try {
+      const { data } = await api.get(`/messages/transcribeAudio/${encodeURIComponent(fileName)}`);
+      
+      setTranscriptions(prev => ({
+        ...prev,
+        [messageId]: { 
+          loading: false, 
+          text: data?.transcribedText?.transcribedText || data?.transcribedText || "Transcrição não disponível",
+          error: null 
+        }
+      }));
+    } catch (err) {
+      console.error("Erro ao transcrever áudio:", err);
+      setTranscriptions(prev => ({
+        ...prev,
+        [messageId]: { 
+          loading: false, 
+          text: null, 
+          error: err?.response?.data?.error || "Erro ao transcrever" 
+        }
+      }));
+      toastError(err);
+    }
+  };
 
   // Helper para decidir qual contato exibir no avatar do áudio
   const backendUrl = getBackendUrl();
@@ -1141,11 +1188,78 @@ const MessagesList = ({
       let [image, sourceUrl, title, body] = message.body.split('|');
       let messageUser = "Olá! Tenho interesse e queria mais informações, por favor.";
       return <AdMetaPreview image={image} sourceUrl={sourceUrl} title={title} body={body} messageUser={messageUser} />;
+    } else if (message.mediaType === "sticker" || message.mediaType === "gif") {
+      // Stickers e GIFs - exibir como imagem animada com tamanho reduzido
+      return (
+        <img
+          src={message.mediaUrl}
+          alt="sticker"
+          className={classes.stickerMedia}
+          style={{
+            maxWidth: 150,
+            maxHeight: 150,
+            objectFit: "contain",
+            borderRadius: 8,
+            backgroundColor: "transparent"
+          }}
+        />
+      );
+    } else if (message.mediaType === "reactionMessage") {
+      // Reações - exibir emoji grande
+      return (
+        <span style={{ fontSize: 32 }}>
+          {message.body}
+        </span>
+      );
     } else if (message.mediaType === "image") {
       return <ModalImageCors imageUrl={message.mediaUrl} />;
     } else if (message.mediaType === "audio") {
+      const transcription = transcriptions[message.id];
       return (
-        <AudioModal url={message.mediaUrl} contact={getAvatarContactForMessage(message, message?.ticket?.contact)} fromMe={message.fromMe} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <AudioModal url={message.mediaUrl} contact={getAvatarContactForMessage(message, message?.ticket?.contact)} fromMe={message.fromMe} />
+          
+          {/* Botão de transcrição */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+            <Button
+              size="small"
+              variant="text"
+              color="primary"
+              startIcon={transcription?.loading ? <CircularProgress size={14} /> : <RecordVoiceOver fontSize="small" />}
+              onClick={() => handleTranscribeAudio(message)}
+              disabled={transcription?.loading || !!transcription?.text}
+              style={{ fontSize: 11, padding: '2px 8px', minWidth: 'auto' }}
+            >
+              {transcription?.loading ? "Transcrevendo..." : transcription?.text ? "Transcrito" : "Transcrever"}
+            </Button>
+          </div>
+          
+          {/* Exibir transcrição */}
+          {transcription?.text && (
+            <div style={{ 
+              backgroundColor: 'rgba(0,0,0,0.05)', 
+              borderRadius: 4, 
+              padding: '6px 8px', 
+              fontSize: 12,
+              fontStyle: 'italic',
+              maxWidth: 280,
+              wordBreak: 'break-word'
+            }}>
+              📝 {transcription.text}
+            </div>
+          )}
+          
+          {/* Exibir erro */}
+          {transcription?.error && (
+            <div style={{ 
+              color: '#d32f2f', 
+              fontSize: 11,
+              padding: '4px 8px'
+            }}>
+              ⚠️ {transcription.error}
+            </div>
+          )}
+        </div>
       );
     } else if (message.mediaType === "video") {
       return (

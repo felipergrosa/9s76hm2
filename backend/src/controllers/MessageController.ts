@@ -1146,3 +1146,158 @@ export const sendMessageFlow = async (
     throw new AppError("Não foi possível enviar a mensagem, tente novamente em alguns instantes", 500);
   }
 };
+
+/**
+ * Encaminhar mensagem para número externo (que pode não estar no CRM)
+ * Cria contato se não existir e encaminha a mensagem
+ */
+export const forwardToExternalNumber = async (req: Request, res: Response): Promise<Response> => {
+  const { messageId, number, whatsappId } = req.body;
+  const { id: userId, companyId } = req.user;
+  
+  if (!messageId || !number) {
+    return res.status(400).json({ error: "messageId e number são obrigatórios" });
+  }
+
+  try {
+    const requestUser = await User.findByPk(userId);
+    const message = await ShowMessageService(messageId);
+    
+    if (!message) {
+      return res.status(404).json({ error: "Mensagem não encontrada" });
+    }
+
+    // Normalizar número (remover caracteres especiais)
+    const cleanNumber = number.replace(/\D/g, "");
+    
+    // Verificar se número é válido
+    if (cleanNumber.length < 10 || cleanNumber.length > 15) {
+      return res.status(400).json({ error: "Número inválido. Use formato: 5511999999999" });
+    }
+
+    // Buscar ou criar contato
+    const [contact] = await Contact.findOrCreate({
+      where: {
+        number: cleanNumber,
+        companyId
+      },
+      defaults: {
+        name: `+${cleanNumber}`,
+        number: cleanNumber,
+        companyId,
+        email: "",
+        profilePicUrl: ""
+      }
+    });
+
+    // Buscar WhatsApp para envio
+    let whatsapp: Whatsapp;
+    if (whatsappId) {
+      whatsapp = await Whatsapp.findByPk(whatsappId);
+    } else {
+      // Usar o mesmo WhatsApp da mensagem original
+      const originalTicket = await ShowTicketService(message.ticketId, companyId);
+      whatsapp = await Whatsapp.findByPk(originalTicket.whatsappId);
+    }
+
+    if (!whatsapp) {
+      return res.status(404).json({ error: "Conexão WhatsApp não encontrada" });
+    }
+
+    // Buscar settings
+    const settings = await CompaniesSettings.findOne({ where: { companyId } });
+
+    // Criar ou buscar ticket para o contato
+    const mutex = new Mutex();
+    const ticket = await mutex.runExclusive(async () => {
+      return await FindOrCreateTicketService(
+        contact,
+        whatsapp,
+        0,
+        companyId,
+        null, // queueId
+        requestUser!.id,
+        null, // groupContact
+        "whatsapp",
+        null,
+        true, // isForward
+        settings,
+        false,
+        false
+      );
+    });
+
+    // Atualizar ticket para aberto
+    await UpdateTicketService({
+      ticketData: {
+        status: "open",
+        userId: requestUser!.id
+      },
+      ticketId: ticket.id,
+      companyId
+    });
+
+    // Encaminhar mensagem
+    let body = message.body;
+    
+    if (message.mediaType === "conversation" || message.mediaType === "extendedTextMessage") {
+      // Mensagem de texto
+      await SendWhatsAppMessage({ 
+        body, 
+        ticket, 
+        quotedMsg: null, 
+        isForwarded: true 
+      });
+    } else if (message.mediaUrl) {
+      // Mensagem com mídia
+      const publicFolder = path.resolve(__dirname, "..", "..", "public");
+      const fileName = message.mediaUrl.split("/").pop() || "arquivo";
+      const filePath = path.join(publicFolder, `company${companyId}`, message.mediaUrl);
+
+      // Verificar se arquivo existe
+      if (fs.existsSync(filePath)) {
+        const mediaSrc = {
+          fieldname: "medias",
+          originalname: fileName,
+          encoding: "7bit",
+          mimetype: message.mediaType || "application/octet-stream",
+          filename: fileName,
+          path: filePath
+        } as Express.Multer.File;
+
+        await SendWhatsAppMedia({ 
+          media: mediaSrc, 
+          ticket, 
+          body: body !== fileName ? body : "", 
+          isForwarded: true 
+        });
+      } else {
+        // Se arquivo não existe localmente, enviar apenas o texto
+        await SendWhatsAppMessage({ 
+          body: body || "[Mídia não disponível]", 
+          ticket, 
+          quotedMsg: null, 
+          isForwarded: true 
+        });
+      }
+    } else {
+      // Outros tipos (location, contact, etc)
+      await SendWhatsAppMessage({ 
+        body, 
+        ticket, 
+        quotedMsg: null, 
+        isForwarded: true 
+      });
+    }
+
+    return res.status(200).json({ 
+      message: "Mensagem encaminhada com sucesso",
+      ticketId: ticket.id,
+      contactId: contact.id
+    });
+
+  } catch (error: any) {
+    console.error("[forwardToExternalNumber] Erro:", error);
+    return res.status(500).json({ error: error.message || "Erro ao encaminhar mensagem" });
+  }
+};

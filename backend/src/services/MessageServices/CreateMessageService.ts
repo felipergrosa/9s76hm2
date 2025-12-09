@@ -95,8 +95,8 @@ const CreateMessageService = async ({
 
   const io = getIO();
 
-  // Se é campanha, não emite para a sala da conversa (evita aparecer na tela do atendente)
-  // A mensagem ainda será visível na lista de tickets e ao abrir o ticket
+  // Se é campanha, NÃO emite nada (evita aparecer na tela do atendente)
+  // A mensagem será visível apenas ao abrir o ticket específico
   if (!messageData?.ticketImported && !messageData?.isCampaign) {
     await emitToCompanyRoom(
       companyId,
@@ -107,7 +107,8 @@ const CreateMessageService = async ({
         message,
         ticket: message.ticket,
         contact: message.ticket.contact
-      }
+      },
+      true // skipFallback=true para NUNCA fazer broadcast para outros tickets
     );
   }
 

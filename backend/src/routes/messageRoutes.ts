@@ -25,6 +25,7 @@ messageRoutes.post("/messages/call/:ticketId", isAuth, MessageController.sendCAL
 messageRoutes.post("/messages/url/:ticketId", isAuth, MessageController.sendURLMessage);
 messageRoutes.post("/messages/PIX/:ticketId", isAuth, MessageController.sendPIXMessage);
 messageRoutes.post('/message/forward', isAuth, MessageController.forwardMessage)
+messageRoutes.post('/message/forward-external', isAuth, MessageController.forwardToExternalNumber)
 messageRoutes.post('/messages/:messageId/reactions', isAuth, MessageController.addReaction);
 
 export default messageRoutes;
