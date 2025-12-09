@@ -704,24 +704,28 @@ const CampaignModal = ({
   const handleSaveCampaign = async (values) => {
     try {
       console.log('[CampaignModal] Salvando campanha com metaTemplateVariables:', metaTemplateVariables);
+      
+      // Primeiro processa os values do Formik
+      const processedValues = {};
+      Object.entries(values).forEach(([key, value]) => {
+        if (key === "scheduledAt" && value !== "" && value !== null) {
+          processedValues[key] = moment(value).format("YYYY-MM-DD HH:mm:ss");
+        } else {
+          processedValues[key] = value === "" ? null : value;
+        }
+      });
+
+      // Depois monta o dataValues com os campos extras (que têm prioridade)
       const dataValues = {
-        ...values,  // Merge the existing values object
+        ...processedValues,  // Valores do Formik processados
         whatsappId: whatsappId,
         userId: selectedUser?.id || null,
         queueId: selectedQueue || null,
         dispatchStrategy,
         allowedWhatsappIds,
-        metaTemplateVariables  // NOVO: incluir mapeamento de variáveis
+        metaTemplateVariables  // IMPORTANTE: deve vir por último para ter prioridade
       };
       console.log('[CampaignModal] dataValues completo:', JSON.stringify(dataValues, null, 2));
-
-      Object.entries(values).forEach(([key, value]) => {
-        if (key === "scheduledAt" && value !== "" && value !== null) {
-          dataValues[key] = moment(value).format("YYYY-MM-DD HH:mm:ss");
-        } else {
-          dataValues[key] = value === "" ? null : value;
-        }
-      });
 
       if (campaignId) {
         await api.put(`/campaigns/${campaignId}`, dataValues);

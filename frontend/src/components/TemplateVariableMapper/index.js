@@ -64,6 +64,7 @@ const TemplateVariableMapper = ({
                 source: getDefaultSource(type),
             },
         };
+        console.log('[TemplateVariableMapper] handleTypeChange:', paramIndex, type, newValue);
         onChange(newValue);
     };
 
@@ -79,6 +80,7 @@ const TemplateVariableMapper = ({
                 source,
             },
         };
+        console.log('[TemplateVariableMapper] handleSourceChange:', paramIndex, source, newValue);
         onChange(newValue);
     };
 

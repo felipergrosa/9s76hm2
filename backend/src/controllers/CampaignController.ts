@@ -189,6 +189,9 @@ export const update = async (
 ): Promise<Response> => {
   const data = req.body as StoreData;
 
+  // DEBUG: Log para verificar se metaTemplateVariables está chegando
+  console.log('[CampaignController.update] metaTemplateVariables recebido:', JSON.stringify(data.metaTemplateVariables));
+
   const { companyId } = req.user;
 
   const schema = Yup.object().shape({
