@@ -1,11 +1,13 @@
 import { WASocket, WAMessage } from "@whiskeysockets/baileys";
+import axios from "axios";
 import * as Sentry from "@sentry/node";
 import AppError from "../../errors/AppError";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import GetWbotMessage from "../../helpers/GetWbotMessage";
 import Message from "../../models/Message";
-// import OldMessage from "../../models/OldMessage";
 import Ticket from "../../models/Ticket";
+import Whatsapp from "../../models/Whatsapp";
+import logger from "../../utils/logger";
 
 import formatBody from "../../helpers/Mustache";
 
@@ -13,6 +15,42 @@ interface Request {
   messageId: string;
   body: string;
 }
+
+/**
+ * Edita mensagem via API Oficial do WhatsApp
+ * Nota: A API Oficial NÃO suporta edição de mensagens enviadas.
+ * Esta função apenas atualiza o registro local no banco de dados.
+ */
+const editMessageOfficialAPI = async (
+  message: Message,
+  ticket: Ticket,
+  whatsapp: Whatsapp,
+  newBody: string
+): Promise<void> => {
+  // A API Oficial do WhatsApp NÃO suporta edição de mensagens
+  // Apenas atualizamos o registro local
+  logger.warn(`[EditMessage] API Oficial não suporta edição de mensagens. Atualizando apenas localmente.`);
+  
+  // Podemos tentar enviar uma nova mensagem indicando a correção
+  // Mas por enquanto, apenas atualizamos o banco local
+};
+
+/**
+ * Edita mensagem via Baileys (WhatsApp Web)
+ */
+const editMessageBaileys = async (
+  message: Message,
+  ticket: Ticket,
+  newBody: string
+): Promise<void> => {
+  const wbot = await GetTicketWbot(ticket);
+  const msg = JSON.parse(message.dataJson);
+
+  await wbot.sendMessage(message.remoteJid, {
+    text: newBody,
+    edit: msg.key,
+  }, {});
+};
 
 const EditWhatsAppMessage = async ({
   messageId,
@@ -24,7 +62,7 @@ const EditWhatsAppMessage = async ({
       {
         model: Ticket,
         as: "ticket",
-        include: ["contact"]
+        include: ["contact", "whatsapp"]
       }
     ]
   });
@@ -33,31 +71,60 @@ const EditWhatsAppMessage = async ({
     throw new AppError("No message found with this ID.");
   }
 
+  if (!message.fromMe) {
+    throw new AppError("Só é possível editar mensagens enviadas por você.");
+  }
+
   const { ticket } = message;
+  const whatsapp = ticket.whatsapp;
 
-  const wbot = await GetTicketWbot(ticket);
-
-  const msg = JSON.parse(message.dataJson);
+  if (!whatsapp) {
+    throw new AppError("Conexão WhatsApp não encontrada.");
+  }
 
   try {
-    await wbot.sendMessage(message.remoteJid, {
-      text: body,
-      edit: msg.key,
-    }, {});
+    // Verificar se é API Oficial ou Baileys
+    // API Oficial tem wabaPhoneNumberId ou channelType === "official"
+    const isOfficialAPI = whatsapp.channelType === "official" || 
+                          !!whatsapp.wabaPhoneNumberId;
 
+    if (isOfficialAPI) {
+      // API Oficial não suporta edição - apenas atualiza localmente
+      await editMessageOfficialAPI(message, ticket, whatsapp, body);
+      logger.info(`[EditMessage] Mensagem ${messageId} atualizada localmente (API Oficial não suporta edição real)`);
+    } else {
+      // Baileys - edição real via WhatsApp Web
+      await editMessageBaileys(message, ticket, body);
+      logger.info(`[EditMessage] Mensagem ${messageId} editada via Baileys`);
+    }
 
-    // await OldMessage.upsert(oldMessage);
+    // Atualizar registro no banco de dados
     await message.update({ body, isEdited: true });
-
     await ticket.update({ lastMessage: body });
     await ticket.reload();
     
-    return { ticket: message.ticket, message: message };
-  } catch (err) {
-    console.log(err);
-    throw new AppError("ERR_EDITING_WAPP_MSG");
+    // Recarregar mensagem com todas as associações
+    await message.reload({
+      include: [
+        {
+          model: Ticket,
+          as: "ticket",
+          include: ["contact", "whatsapp"]
+        }
+      ]
+    });
+    
+    return { ticket: message.ticket, message };
+  } catch (err: any) {
+    logger.error(`[EditMessage] Erro ao editar mensagem ${messageId}:`, err);
+    
+    // Se for erro de Baileys, pode ser que a mensagem seja muito antiga
+    if (err.message?.includes("not-authorized") || err.message?.includes("item-not-found")) {
+      throw new AppError("Não foi possível editar: mensagem muito antiga ou não encontrada no WhatsApp.");
+    }
+    
+    throw new AppError(err.message || "Erro ao editar mensagem");
   }
-
 };
 
 export default EditWhatsAppMessage;
