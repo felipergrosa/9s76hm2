@@ -16,6 +16,7 @@ import {
 import InfoIcon from "@material-ui/icons/Info";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
+import moment from "moment";
 
 const TemplateVariableMapper = ({
     whatsappId,
@@ -120,6 +121,68 @@ const TemplateVariableMapper = ({
         }
     };
 
+    // Contato de exemplo para pré-visualização
+    const exampleContact = {
+        id: 123,
+        name: "João Silva",
+        number: "5511999999999",
+        email: "cliente@exemplo.com",
+        cpfCnpj: "123.456.789-00",
+        city: "São Paulo",
+        fantasyName: "Empresa Exemplo",
+        bzEmpresa: "Empresa Exemplo",
+    };
+
+    const resolvePreviewVariable = (config) => {
+        if (!config) return "";
+
+        if (config.type === "crm_field") {
+            const v = exampleContact[config.source];
+            return v != null ? String(v) : "";
+        }
+
+        if (config.type === "special") {
+            if (config.source === "saudacao") {
+                const hour = moment().hour();
+                if (hour < 12) return "Bom dia";
+                if (hour < 18) return "Boa tarde";
+                return "Boa noite";
+            }
+            if (config.source === "data_atual") {
+                return moment().format("DD/MM/YYYY");
+            }
+            if (config.source === "hora_atual") {
+                return moment().format("HH:mm");
+            }
+            return "";
+        }
+
+        if (config.type === "fixed") {
+            return config.source || "";
+        }
+
+        return "";
+    };
+
+    const buildPreviewBody = () => {
+        if (!template || !template.body) return "";
+        if (!template.parameters || template.parameters.length === 0) {
+            return template.body;
+        }
+
+        let body = template.body;
+        const currentValue = value || {};
+
+        template.parameters.forEach((param) => {
+            const config = currentValue[param.index] || { type: "crm_field", source: "name" };
+            const resolved = resolvePreviewVariable(config) || param.example || "";
+            const placeholder = new RegExp(`\\{\\{${param.index}\\}\\}`, "g");
+            body = body.replace(placeholder, resolved);
+        });
+
+        return body;
+    };
+
     if (loading) {
         return (
             <Box display="flex" justifyContent="center" p={2}>
@@ -174,7 +237,7 @@ const TemplateVariableMapper = ({
                 )}
 
                 <Typography variant="body1" style={{ whiteSpace: "pre-wrap" }}>
-                    {template.body}
+                    {buildPreviewBody()}
                 </Typography>
 
                 {template.footer && (

@@ -427,7 +427,12 @@ async function getCampaign(id) {
             model: ContactListItem,
             as: "contacts",
             attributes: ["id", "name", "number", "email", "isWhatsappValid", "isGroup"],
-            where: { isWhatsappValid: true }
+            where: {
+              [Op.or]: [
+                { isWhatsappValid: true },   // contatos já validados como válidos
+                { isWhatsappValid: null }    // contatos ainda não validados
+              ]
+            }
           }
         ]
       },
