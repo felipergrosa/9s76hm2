@@ -24,6 +24,7 @@ export const AVAILABLE_PERMISSIONS = {
     "contacts.view",
     "contacts.create",
     "contacts.edit",
+    "contacts.edit-fields",
     "contacts.delete",
     "contacts.import",
     "contacts.export",
@@ -84,7 +85,11 @@ export const AVAILABLE_PERMISSIONS = {
     "prompts.create",
     "prompts.edit",
     "prompts.delete",
-    "integrations.view"
+    "integrations.view",
+    "ai-agents.view",
+    "ai-agents.create",
+    "ai-agents.edit",
+    "ai-agents.delete"
   ],
 
   // ADMINISTRAÇÃO
@@ -317,6 +322,14 @@ export const getPermissionsCatalog = () => {
       }))
     },
     {
+      category: "Ajuda",
+      permissions: AVAILABLE_PERMISSIONS.helps.map(key => ({
+        key,
+        label: formatPermissionLabel(key),
+        description: getPermissionDescription(key)
+      }))
+    },
+    {
       category: "Campanhas",
       permissions: AVAILABLE_PERMISSIONS.campaigns.map(key => ({
         key,
@@ -334,7 +347,26 @@ export const getPermissionsCatalog = () => {
     },
     {
       category: "Módulos",
-      permissions: AVAILABLE_PERMISSIONS.modules.map(key => ({
+      permissions: AVAILABLE_PERMISSIONS.modules.filter(key => 
+        !key.startsWith("ai-agents.") && !key.startsWith("prompts.")
+      ).map(key => ({
+        key,
+        label: formatPermissionLabel(key),
+        description: getPermissionDescription(key)
+      }))
+    },
+    {
+      category: "Inteligência Artificial",
+      permissions: [
+        ...AVAILABLE_PERMISSIONS.modules.filter(key => 
+          key.startsWith("ai-agents.") || key.startsWith("prompts.")
+        ),
+        "ai-settings.view",
+        "ai-settings.edit",
+        "files.view",
+        "files.upload",
+        "files.delete"
+      ].map(key => ({
         key,
         label: formatPermissionLabel(key),
         description: getPermissionDescription(key)
@@ -342,7 +374,9 @@ export const getPermissionsCatalog = () => {
     },
     {
       category: "Administração",
-      permissions: AVAILABLE_PERMISSIONS.admin.map(key => ({
+      permissions: AVAILABLE_PERMISSIONS.admin.filter(key => 
+        !key.startsWith("ai-settings.") && !key.startsWith("files.")
+      ).map(key => ({
         key,
         label: formatPermissionLabel(key),
         description: getPermissionDescription(key)
@@ -369,6 +403,7 @@ const formatPermissionLabel = (key: string): string => {
     "contacts.view": "Ver Contatos",
     "contacts.create": "Criar Contatos",
     "contacts.edit": "Editar Contatos",
+    "contacts.edit-fields": "Editar Campos do Contato",
     "contacts.delete": "Deletar Contatos",
     "contacts.import": "Importar Contatos",
     "contacts.export": "Exportar Contatos",
@@ -385,7 +420,51 @@ const formatPermissionLabel = (key: string): string => {
     "users.edit": "Editar Usuários",
     "users.delete": "Deletar Usuários",
     "connections.view": "Ver Conexões",
-    "connections.edit": "Gerenciar Conexões"
+    "connections.edit": "Gerenciar Conexões",
+    "connections.create": "Criar Conexões",
+    "connections.delete": "Deletar Conexões",
+    "kanban.view": "Ver Kanban",
+    "schedules.view": "Ver Agendamentos",
+    "schedules.create": "Criar Agendamentos",
+    "schedules.edit": "Editar Agendamentos",
+    "schedules.delete": "Deletar Agendamentos",
+    "internal-chat.view": "Ver Chat Interno",
+    "external-api.view": "Ver API Externa",
+    "prompts.view": "Ver Prompts",
+    "prompts.create": "Criar Prompts",
+    "prompts.edit": "Editar Prompts",
+    "prompts.delete": "Deletar Prompts",
+    "integrations.view": "Ver Integrações",
+    "ai-agents.view": "Ver Agentes de IA",
+    "ai-agents.create": "Criar Agentes de IA",
+    "ai-agents.edit": "Editar Agentes de IA",
+    "ai-agents.delete": "Deletar Agentes de IA",
+    "queues.view": "Ver Filas",
+    "queues.create": "Criar Filas",
+    "queues.edit": "Editar Filas",
+    "queues.delete": "Deletar Filas",
+    "files.view": "Ver Base de Conhecimento",
+    "files.upload": "Upload de Arquivos",
+    "files.delete": "Deletar Arquivos",
+    "financeiro.view": "Ver Financeiro",
+    "settings.view": "Ver Configurações",
+    "settings.edit": "Editar Configurações",
+    "ai-settings.view": "Ver Config. IA",
+    "ai-settings.edit": "Editar Config. IA",
+    "contact-lists.view": "Ver Listas de Contatos",
+    "contact-lists.create": "Criar Listas de Contatos",
+    "contact-lists.edit": "Editar Listas de Contatos",
+    "contact-lists.delete": "Deletar Listas de Contatos",
+    "campaigns-config.view": "Ver Config. Campanhas",
+    "flowbuilder.view": "Ver Flowbuilder",
+    "flowbuilder.create": "Criar Flowbuilder",
+    "flowbuilder.edit": "Editar Flowbuilder",
+    "flowbuilder.delete": "Deletar Flowbuilder",
+    "phrase-campaigns.view": "Ver Campanhas de Frases",
+    "phrase-campaigns.create": "Criar Campanhas de Frases",
+    "phrase-campaigns.edit": "Editar Campanhas de Frases",
+    "phrase-campaigns.delete": "Deletar Campanhas de Frases",
+    "helps.view": "Ver Ajuda"
   };
   return labels[key] || key;
 };

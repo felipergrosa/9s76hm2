@@ -75,7 +75,7 @@ const useStyles = makeStyles((theme) => ({
     borderRadius: 4,
   },
   helpBox: {
-    backgroundColor: theme.palette.info.light,
+    backgroundColor: "#eaf1c6af",
     padding: theme.spacing(2),
     marginBottom: theme.spacing(2),
     borderRadius: 4,

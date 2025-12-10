@@ -36,6 +36,7 @@ import BusinessIcon from '@material-ui/icons/Business';
 import AnnouncementIcon from '@material-ui/icons/Announcement';
 import AllInclusiveIcon from '@material-ui/icons/AllInclusive';
 import AccountBalanceIcon from '@material-ui/icons/AccountBalance';
+import HelpOutlineIcon from '@material-ui/icons/HelpOutline';
 import api from '../../services/api';
 import toastError from '../../errors/toastError';
 
@@ -127,7 +128,11 @@ const getCategoryIcon = (categoryName) => {
     'Empresas': <BusinessIcon />,
     'Anúncios': <AnnouncementIcon />,
     'IA / Prompts': <AllInclusiveIcon />,
+    'Inteligência Artificial': <AllInclusiveIcon />,
+    'Módulos': <DeviceHubIcon />,
     'Financeiro': <AccountBalanceIcon />,
+    'Tags': <SettingsIcon />,
+    'Ajuda': <HelpOutlineIcon />,
   };
   
   return iconMap[categoryName] || <SettingsIcon />;

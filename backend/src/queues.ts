@@ -1625,16 +1625,20 @@ async function handleDispatchCampaign(job) {
             }
           }
 
+          // Se status for "pending", não passar userId para que fique em AGUARDANDO
+          const statusTicket = campaign.statusTicket || "pending";
+          const userIdForTemplate = statusTicket === "pending" ? null : targetUserId;
+          
           await SendTemplateToContact({
             whatsappId: selectedWhatsappId,
             contactId: contact.id,
             companyId: campaign.companyId,
-            userId: targetUserId,
+            userId: userIdForTemplate,
             queueId: campaign.queueId || undefined,
             templateName,
             languageCode,
             components: templateComponents,  // Passar os components mapeados
-            statusTicket: campaign.statusTicket || "pending"  // Usar status da campanha
+            statusTicket  // Usar status da campanha
           });
         } else {
           // Envio direto de template sem abrir ticket
@@ -1780,13 +1784,15 @@ async function handleDispatchCampaign(job) {
       const targetStatus = campaign.statusTicket || "pending";
       
       // Buscar ou criar ticket
+      // Se status for "pending", não passar userId para que fique em AGUARDANDO
+      const userIdForTicket = targetStatus === "pending" ? null : targetUserId;
       let ticket = await FindOrCreateTicketService(
         contact,
         whatsapp,  // Objeto Whatsapp, não ID
         0, // unreadMessages
         campaign.companyId,
         campaign.queueId,
-        targetUserId,
+        userIdForTicket,
         null, // groupContact
         "whatsapp", // channel
         false, // isImported
@@ -1796,13 +1802,25 @@ async function handleDispatchCampaign(job) {
         true // isCampaign
       );
 
-      // Se a campanha pede status "pending" e o ticket não está pendente, atualizar
-      if (targetStatus === "pending" && ticket.status !== "pending") {
-        await ticket.update({
-          status: "pending",
-          userId: targetUserId ?? ticket.userId
-        });
-        ticket = await ShowTicketService(ticket.id, campaign.companyId);
+      // Se a campanha pede status "pending", garantir que o ticket fique em aguardando
+      // Para ficar em "AGUARDANDO", o ticket deve ter status "pending" e userId null
+      if (targetStatus === "pending") {
+        if (ticket.status !== "pending" || ticket.userId !== null) {
+          await ticket.update({
+            status: "pending",
+            userId: null  // Sem usuário = fica em AGUARDANDO
+          });
+          ticket = await ShowTicketService(ticket.id, campaign.companyId);
+        }
+      } else if (targetStatus === "open" && targetUserId) {
+        // Se status for "open" e tiver usuário, atribuir ao usuário
+        if (ticket.status !== "open" || ticket.userId !== targetUserId) {
+          await ticket.update({
+            status: "open",
+            userId: targetUserId
+          });
+          ticket = await ShowTicketService(ticket.id, campaign.companyId);
+        }
       }
 
       if (whatsapp.status === "CONNECTED") {
@@ -1875,19 +1893,11 @@ async function handleDispatchCampaign(job) {
               await verifyMediaMessage(sentMessage, ticket, ticket.contact, null, false, true, wbot, true); // isCampaign=true
             }
           }
-          // if (campaign?.statusTicket === 'closed') {
-          //   await ticket.update({
-          //     status: "closed"
-          //   })
-          //   const io = getIO();
-
-          //   io.of(String(ticket.companyId))
-          //     // .to(ticket.id.toString())
-          //     .emit(`company-${ticket.companyId}-ticket`, {
-          //       action: "delete",
-          //       ticketId: ticket.id
-          //     });
-          // }
+          // Fechar ticket se statusTicket for "closed"
+          if (campaign?.statusTicket === 'closed' && ticket.status !== 'closed') {
+            await ticket.update({ status: "closed" });
+            logger.info(`[DispatchCampaign] Ticket #${ticket.id} fechado conforme configuração da campanha`);
+          }
         }
         await campaignShipping.update({
           deliveredAt: moment(),

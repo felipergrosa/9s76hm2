@@ -28,6 +28,7 @@ import toastError from "../../errors/toastError";
 import { TagsContainer } from "../TagsContainer";
 import InputMask from "react-input-mask";
 import { isValidCPF, isValidCNPJ } from "../../utils/validators";
+import usePermissions from "../../hooks/usePermissions";
 // import AsyncSelect from "../AsyncSelect";
 
 const useStyles = makeStyles(theme => ({
@@ -115,6 +116,10 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	const isMounted = useRef(true);
     const [avatarOpen, setAvatarOpen] = useState(false);
     const [pendingTags, setPendingTags] = useState([]);
+    
+    // Verificar permissão para editar campos do contato
+    const { hasPermission } = usePermissions();
+    const canEditFields = hasPermission("contacts.edit-fields");
 
 	const initialState = {
 		name: "",
@@ -333,6 +338,44 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
+										<Field name="cpfCnpj">
+											{({ field, form }) => {
+												const cleanValue = field.value?.replace(/\D/g, '') || '';
+												// Determinar máscara: CPF (11 dígitos) ou CNPJ (14 dígitos)
+												const mask = cleanValue.length > 11 
+													? "99.999.999/9999-99" 
+													: "999.999.999-999";
+												return (
+													<InputMask
+														{...field}
+														mask={mask}
+														maskChar={null}
+														onChange={(e) => {
+															const value = e.target.value;
+															form.setFieldValue('cpfCnpj', value);
+														}}
+													>
+														{(inputProps) => (
+															<TextField
+																{...inputProps}
+																label="CPF/CNPJ"
+																variant="outlined"
+																margin="dense"
+																fullWidth
+																error={touched.cpfCnpj && Boolean(errors.cpfCnpj)}
+																helperText={touched.cpfCnpj && errors.cpfCnpj}
+																placeholder="Digite CPF ou CNPJ"
+																InputLabelProps={{
+																	shrink: true,
+																}}
+															/>
+														)}
+													</InputMask>
+												);
+											}}
+										</Field>
+									</Grid>
+									<Grid item xs={12} md={6}>
 										<Field
 											as={TextField}
 											label="Código do Representante"
@@ -343,7 +386,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 												shrink: true,
 											}}
 											fullWidth
-											disabled
+											disabled={!canEditFields}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -396,7 +439,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											}}
 											variant="outlined"
 											margin="dense"
-											disabled
+											disabled={!canEditFields}
 											fullWidth
 										/>
 									</Grid>
@@ -425,7 +468,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											}}
 											variant="outlined"
 											margin="dense"
-											disabled
+											disabled={!canEditFields}
 											fullWidth
 										/>
 									</Grid>
@@ -440,7 +483,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											}}
 											variant="outlined"
 											margin="dense"
-											disabled
+											disabled={!canEditFields}
 											fullWidth
 										/>
 									</Grid>

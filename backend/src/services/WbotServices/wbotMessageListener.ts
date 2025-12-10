@@ -5243,24 +5243,26 @@ const verifyCampaignMessageAndCloseTicket = async (
       messageRecord !== null
     ) {
       const ticket = await Ticket.findByPk(messageRecord.ticketId);
-      await ticket.update({ status: "closed", amountUsedBotQueues: 0 });
+      if (ticket) {
+        await ticket.update({ status: "closed", amountUsedBotQueues: 0 });
 
-      io.of(`/workspace-${companyId}`)
-        // .to("open")
-        .emit(`company-${companyId}-ticket`, {
-          action: "delete",
-          ticket,
-          ticketId: ticket.id
-        });
+        // Emitir apenas para a sala do ticket específico, não para todo o namespace
+        io.of(`/workspace-${companyId}`)
+          .to(ticket.uuid)
+          .emit(`company-${companyId}-ticket`, {
+            action: "delete",
+            ticket,
+            ticketId: ticket.id
+          });
 
-      io.of(`/workspace-${companyId}`)
-        // .to(ticket.status)
-        // .to(ticket.id.toString())
-        .emit(`company-${companyId}-ticket`, {
-          action: "update",
-          ticket,
-          ticketId: ticket.id
-        });
+        io.of(`/workspace-${companyId}`)
+          .to(ticket.uuid)
+          .emit(`company-${companyId}-ticket`, {
+            action: "update",
+            ticket,
+            ticketId: ticket.id
+          });
+      }
     }
   }
 };

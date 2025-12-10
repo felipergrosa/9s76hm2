@@ -1033,19 +1033,34 @@ const MessagesList = ({
     const onAppMessageMessagesList = (data) => {
       try {
         const evtUuid = data?.message?.ticket?.uuid || data?.ticket?.uuid;
+        const evtTicketId = data?.message?.ticketId || data?.ticket?.id;
         const hasUuid = Boolean(evtUuid);
+        
         console.debug("[MessagesList] appMessage", {
           action: data?.action,
           evtUuid,
+          evtTicketId,
           hasUuid,
           currentRoom: currentRoomIdRef.current,
+          currentTicketId: ticketId,
           msgId: data?.message?.id,
         });
 
-        // Se não houver UUID no evento, ainda assim tratamos, pois o servidor emite para a sala (room) correta
-        const shouldHandle = hasUuid ? (evtUuid === currentRoomIdRef.current) : true;
+        // CRÍTICO: Sempre verificar se a mensagem pertence ao ticket atual
+        // Se não houver UUID, verificar pelo ticketId
+        // Se nenhum dos dois bater, REJEITAR a mensagem
+        let shouldHandle = false;
+        if (hasUuid && evtUuid === currentRoomIdRef.current) {
+          shouldHandle = true;
+        } else if (evtTicketId && String(evtTicketId) === String(ticketId)) {
+          // Comparar como string para evitar problemas de tipo (number vs string)
+          shouldHandle = true;
+        }
 
-        if (!shouldHandle) return;
+        if (!shouldHandle) {
+          console.debug("[MessagesList] Rejeitando mensagem de outro ticket", { evtUuid, evtTicketId, currentRoom: currentRoomIdRef.current, ticketId });
+          return;
+        }
 
         if (data.action === "create") {
           dispatch({ type: "ADD_MESSAGE", payload: data.message });

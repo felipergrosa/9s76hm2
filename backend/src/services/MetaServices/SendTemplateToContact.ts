@@ -15,7 +15,7 @@ interface SendTemplateToContactParams {
   whatsappId: number;
   contactId: number;
   companyId: number;
-  userId: number;
+  userId: number | null;  // null = ticket fica em AGUARDANDO (sem usuário atribuído)
   queueId?: number;
   templateName: string;
   languageCode?: string;
@@ -187,30 +187,45 @@ const SendTemplateToContact = async ({
       logger.info(
         `[SendTemplateToContact] Reusando ticket existente #${ticket.id} para mensagem enviada`
       );
-      // Se a campanha pede status "pending" e o ticket não está pendente, atualizar
-      if (statusTicket === "pending" && ticket.status !== "pending") {
-        await ticket.update({
-          status: "pending",
-          userId: userId ?? ticket.userId
-        });
-        logger.info(
-          `[SendTemplateToContact] Ticket #${ticket.id} atualizado para status="pending"`
-        );
+      // Se a campanha pede status "pending", garantir que fique em AGUARDANDO (sem userId)
+      if (statusTicket === "pending") {
+        if (ticket.status !== "pending" || ticket.userId !== null) {
+          await ticket.update({
+            status: "pending",
+            userId: null  // Sem usuário = fica em AGUARDANDO
+          });
+          logger.info(
+            `[SendTemplateToContact] Ticket #${ticket.id} atualizado para status="pending" (AGUARDANDO)`
+          );
+        }
+      } else if (statusTicket === "open" && userId) {
+        // Se status for "open" e tiver usuário, atribuir ao usuário
+        if (ticket.status !== "open" || ticket.userId !== userId) {
+          await ticket.update({
+            status: "open",
+            userId
+          });
+          logger.info(
+            `[SendTemplateToContact] Ticket #${ticket.id} atualizado para status="open" com userId=${userId}`
+          );
+        }
       }
     } else {
       // Criar novo ticket apenas se não existir um aberto
       // Usar o statusTicket da campanha (pode ser "open", "pending" ou "closed")
       const finalStatus = statusTicket === "closed" ? "open" : statusTicket; // Se closed, cria como open e fecha depois
+      // Para status "pending", não atribuir usuário (fica em AGUARDANDO)
+      const finalUserId = finalStatus === "pending" ? null : userId;
       ticket = await CreateTicketService({
         contactId: contact.id,
         status: finalStatus,
-        userId,
+        userId: finalUserId,
         companyId,
         queueId,
         whatsappId: String(whatsappId)
       });
       logger.info(
-        `[SendTemplateToContact] Novo ticket #${ticket.id} criado com status="${finalStatus}" para mensagem enviada com sucesso`
+        `[SendTemplateToContact] Novo ticket #${ticket.id} criado com status="${finalStatus}" userId=${finalUserId} para mensagem enviada com sucesso`
       );
     }
 
@@ -257,6 +272,12 @@ const SendTemplateToContact = async ({
       },
       companyId
     });
+
+    // Se statusTicket for "closed", fechar o ticket após enviar a mensagem
+    if (statusTicket === "closed" && ticket.status !== "closed") {
+      await ticket.update({ status: "closed" });
+      logger.info(`[SendTemplateToContact] Ticket #${ticket.id} fechado conforme configuração da campanha`);
+    }
 
     return { ticket, message };
   } catch (error: any) {
