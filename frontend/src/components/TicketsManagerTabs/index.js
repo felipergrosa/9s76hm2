@@ -117,32 +117,33 @@ const useStyles = makeStyles((theme) => ({
   },
 
   tabPanelItem: {
-    minWidth: 120,
-    maxWidth: 150,
-    fontSize: 11,
+    minWidth: 70,
+    maxWidth: 90,
+    fontSize: 10,
     marginLeft: 0,
-    padding: "10px 14px !important",
+    marginRight: 0,
+    padding: "4px 4px !important",
     whiteSpace: "nowrap",
-    
+
     [theme.breakpoints.down("lg")]: {
-      fontSize: 10,
-      padding: "8px 12px !important",
-      minWidth: 100,
-      maxWidth: 130,
-    },
-    
-    [theme.breakpoints.down("md")]: {
       fontSize: 9,
-      padding: "6px 10px !important",
-      minWidth: 85,
-      maxWidth: 110,
+      padding: "4px 2px !important",
+      minWidth: 65,
+      maxWidth: 85,
     },
-    
-    [theme.breakpoints.down("sm")]: {
+
+    [theme.breakpoints.down("md")]: {
       fontSize: 8,
-      padding: "5px 8px !important",
-      minWidth: 70,
-      maxWidth: 110,
+      padding: "3px 2px !important",
+      minWidth: 60,
+      maxWidth: 80,
+    },
+
+    [theme.breakpoints.down("sm")]: {
+      fontSize: 7,
+      padding: "3px 2px !important",
+      minWidth: 55,
+      maxWidth: 75,
     },
   },
 
@@ -956,7 +957,7 @@ const TicketsManagerTabs = () => {
           {/* ATENDENDO */}
           <Tab
             label={
-              <Grid container alignItems="center" justifyContent="center">
+              <Grid container direction="column" alignItems="center" justifyContent="center">
                 <Grid item>
                   <Badge
                     overlap="rectangular"
@@ -974,8 +975,8 @@ const TicketsManagerTabs = () => {
                 <Grid item>
                   <Typography
                     style={{
-                      marginLeft: 6,
-                      fontSize: 10,
+                      marginTop: 2,
+                      fontSize: 9,
                       fontWeight: 600,
                     }}
                   >
@@ -992,7 +993,7 @@ const TicketsManagerTabs = () => {
           {/* AGUARDANDO */}
           <Tab
             label={
-              <Grid container alignItems="center" justifyContent="center">
+              <Grid container direction="column" alignItems="center" justifyContent="center">
                 <Grid item>
                   <Badge
                     overlap="rectangular"
@@ -1010,8 +1011,8 @@ const TicketsManagerTabs = () => {
                 <Grid item>
                   <Typography
                     style={{
-                      marginLeft: 6,
-                      fontSize: 10,
+                      marginTop: 2,
+                      fontSize: 9,
                       fontWeight: 600,
                     }}
                   >
@@ -1029,7 +1030,7 @@ const TicketsManagerTabs = () => {
           {user.allowGroup && (
             <Tab
               label={
-                <Grid container alignItems="center" justifyContent="center">
+                <Grid container direction="column" alignItems="center" justifyContent="center">
                   <Grid item>
                     <Badge
                       overlap="rectangular"
@@ -1047,8 +1048,8 @@ const TicketsManagerTabs = () => {
                   <Grid item>
                     <Typography
                       style={{
-                        marginLeft: 6,
-                        fontSize: 10,
+                        marginTop: 2,
+                        fontSize: 9,
                         fontWeight: 600,
                       }}
                     >
@@ -1066,7 +1067,7 @@ const TicketsManagerTabs = () => {
           {/* BOT */}
           <Tab
             label={
-              <Grid container alignItems="center" justifyContent="center">
+              <Grid container direction="column" alignItems="center" justifyContent="center">
                 <Grid item>
                   <Badge
                     overlap="rectangular"
@@ -1084,8 +1085,8 @@ const TicketsManagerTabs = () => {
                 <Grid item>
                   <Typography
                     style={{
-                      marginLeft: 6,
-                      fontSize: 10,
+                      marginTop: 2,
+                      fontSize: 9,
                       fontWeight: 600,
                     }}
                   >
@@ -1102,7 +1103,7 @@ const TicketsManagerTabs = () => {
           {/* CAMPANHA */}
           <Tab
             label={
-              <Grid container alignItems="center" justifyContent="center">
+              <Grid container direction="column" alignItems="center" justifyContent="center">
                 <Grid item>
                   <Badge
                     overlap="rectangular"
@@ -1120,8 +1121,8 @@ const TicketsManagerTabs = () => {
                 <Grid item>
                   <Typography
                     style={{
-                      marginLeft: 6,
-                      fontSize: 10,
+                      marginTop: 2,
+                      fontSize: 9,
                       fontWeight: 600,
                     }}
                   >

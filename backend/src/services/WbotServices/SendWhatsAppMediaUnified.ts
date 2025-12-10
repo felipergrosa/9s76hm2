@@ -103,6 +103,15 @@ const SendWhatsAppMediaUnified = async ({
         throw new AppError(`Arquivo não encontrado: ${publicPath}`, 404);
       }
 
+      // Gerar thumbnail se for PDF
+      if (media.mimetype === "application/pdf") {
+        try {
+          await generatePdfThumbnail(publicPath);
+        } catch (thumbErr: any) {
+          logger.warn(`[SendMediaUnified] Falha ao gerar thumbnail PDF (baileys): ${thumbErr?.message}`);
+        }
+      }
+
       // Ler arquivo
       const fileBuffer = fs.readFileSync(publicPath);
       const base64File = fileBuffer.toString("base64");
@@ -121,10 +130,14 @@ const SendWhatsAppMediaUnified = async ({
       // Construir URL pública do arquivo
       const backendUrl = process.env.BACKEND_URL || "http://localhost:8080";
       
-      // Tentar primeiro com contact{id}/ prefixo (formato novo)
-      let mediaUrl = `${backendUrl}/public/company${ticket.companyId}/contact${contact.id}/${media.filename}`;
-      
-      // Verificar se arquivo existe com contact{id}/
+      // Caminhos físicos possíveis
+      const rootPath = path.join(
+        process.cwd(),
+        "public",
+        `company${ticket.companyId}`,
+        media.filename
+      );
+
       const pathWithContact = path.join(
         process.cwd(),
         "public",
@@ -132,10 +145,24 @@ const SendWhatsAppMediaUnified = async ({
         `contact${contact.id}`,
         media.filename
       );
+
+      const filePath = fs.existsSync(pathWithContact) ? pathWithContact : rootPath;
+
+      // Tentar primeiro com contact{id}/ prefixo (formato novo)
+      let mediaUrl = `${backendUrl}/public/company${ticket.companyId}/contact${contact.id}/${media.filename}`;
       
-      // Se não existir, usar formato antigo (raiz)
+      // Se não existir na pasta contact, usar formato antigo (raiz)
       if (!fs.existsSync(pathWithContact)) {
         mediaUrl = `${backendUrl}/public/company${ticket.companyId}/${media.filename}`;
+      }
+
+      // Gerar thumbnail se for PDF
+      if (media.mimetype === "application/pdf") {
+        try {
+          await generatePdfThumbnail(filePath);
+        } catch (thumbErr: any) {
+          logger.warn(`[SendMediaUnified] Falha ao gerar thumbnail PDF (official): ${thumbErr?.message}`);
+        }
       }
 
       logger.info(`[SendMediaUnified] URL pública da mídia: ${mediaUrl}`);
@@ -218,3 +245,35 @@ const SendWhatsAppMediaUnified = async ({
 };
 
 export default SendWhatsAppMediaUnified;
+
+async function generatePdfThumbnail(filePath: string): Promise<void> {
+  try {
+    // Import dinâmico para evitar problemas de tipagem em tempo de compilação
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const pdf2pic = require("pdf2pic");
+
+    const dir = path.dirname(filePath);
+    const baseName = path.basename(filePath, path.extname(filePath));
+
+    const convert = pdf2pic.fromPath(filePath, {
+      density: 120,
+      saveFilename: `${baseName}-thumb`,
+      savePath: dir,
+      format: "png",
+      width: 600,
+      height: 800
+    });
+
+    // Converte apenas a primeira página
+    await convert(1);
+
+    logger.info(`[SendMediaUnified] Thumbnail PDF gerado para ${filePath}`);
+  } catch (error: any) {
+    if (error?.code === "MODULE_NOT_FOUND") {
+      logger.warn("[SendMediaUnified] pdf2pic não instalado; pulando geração de thumbnail PDF");
+      return;
+    }
+
+    throw error;
+  }
+}

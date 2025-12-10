@@ -92,7 +92,16 @@ export const DownloadOfficialMediaService = async ({
 
     logger.info(`[DownloadOfficialMedia] Mídia salva: ${filename} (${(mediaResponse.data.length / 1024).toFixed(2)} KB)`);
 
-    // 6. Retornar apenas o caminho relativo (contact123/arquivo.jpg)
+    // 6. Gerar thumbnail da primeira página para PDFs
+    try {
+      if (mimeType === "application/pdf") {
+        await generatePdfThumbnail(filePath);
+      }
+    } catch (thumbErr: any) {
+      logger.warn(`[DownloadOfficialMedia] Falha ao gerar thumbnail PDF: ${thumbErr?.message}`);
+    }
+
+    // 7. Retornar apenas o caminho relativo (contact123/arquivo.ext)
     const publicUrl = `contact${contactId}/${filename}`;
     
     return publicUrl;
@@ -172,3 +181,35 @@ function getDefaultExtension(mediaType: string): string {
 }
 
 export default DownloadOfficialMediaService;
+
+async function generatePdfThumbnail(filePath: string): Promise<void> {
+  try {
+    // Import dinâmico para evitar problemas de tipagem em tempo de compilação
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const pdf2pic = require("pdf2pic");
+
+    const dir = path.dirname(filePath);
+    const baseName = path.basename(filePath, path.extname(filePath));
+
+    const convert = pdf2pic.fromPath(filePath, {
+      density: 120,
+      saveFilename: `${baseName}-thumb`,
+      savePath: dir,
+      format: "png",
+      width: 600,
+      height: 800
+    });
+
+    // Converte apenas a primeira página
+    await convert(1);
+
+    logger.info(`[DownloadOfficialMedia] Thumbnail PDF gerado para ${filePath}`);
+  } catch (error: any) {
+    if (error?.code === "MODULE_NOT_FOUND") {
+      logger.warn("[DownloadOfficialMedia] pdf2pic não instalado; pulando geração de thumbnail PDF");
+      return;
+    }
+
+    throw error;
+  }
+}

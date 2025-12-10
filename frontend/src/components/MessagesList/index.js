@@ -1287,9 +1287,24 @@ const MessagesList = ({
         </div>
       );
     } else if ((message.mediaType === "application" || message.mediaType === "document") && /\.pdf($|\?)/i.test(message.mediaUrl)) {
+      const pdfThumbUrl = message.mediaUrl
+        ? message.mediaUrl.replace(/(\.pdf)(\?.*)?$/i, '-thumb.png$2')
+        : null;
+
       return (
-        <div className={classes.fileFrame} onClick={(e) => { e.preventDefault(); setPdfDialog({ open: true, url: message.mediaUrl }); }} style={{ cursor: 'pointer' }}>
+        <div
+          className={classes.fileFrame}
+          onClick={(e) => { e.preventDefault(); setPdfDialog({ open: true, url: message.mediaUrl }); }}
+          style={{ cursor: 'pointer' }}
+        >
           <div>
+            {pdfThumbUrl && (
+              <img
+                src={pdfThumbUrl}
+                alt="PDF preview"
+                style={{ maxWidth: 180, maxHeight: 180, display: 'block', marginBottom: 6, borderRadius: 4 }}
+              />
+            )}
             <div style={{ fontWeight: 700, fontSize: 14 }}>PDF</div>
             <div className={classes.fileName}>{getFileNameFromUrl(message.mediaUrl) || 'arquivo.pdf'}</div>
             <Button
