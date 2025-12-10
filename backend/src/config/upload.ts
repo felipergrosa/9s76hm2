@@ -164,7 +164,7 @@ export default {
   // Limites de upload
   limits: {
     fileSize: 50 * 1024 * 1024, // 50MB
-    files: 1 // Limitar para um arquivo por vez
+    files: 10 // Permitir até 10 arquivos por vez
   },
 
   // Filtro de arquivo com tratamento de erro

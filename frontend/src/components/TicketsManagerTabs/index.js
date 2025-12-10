@@ -25,8 +25,8 @@ import {
   TextRotateUp,
   TextRotationDown,
   Android as BotIcon,
-  Campaign as CampaignIcon,
 } from "@material-ui/icons";
+import CampaignIcon from "@mui/icons-material/Campaign";
 import VisibilityIcon from "@material-ui/icons/Visibility";
 import VisibilityOffIcon from "@material-ui/icons/VisibilityOff";
 import ToggleButton from "@material-ui/lab/ToggleButton";

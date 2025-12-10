@@ -106,7 +106,7 @@ const CreateMessageService = async ({
 
   // Se é campanha, NÃO emite nada (evita aparecer na tela do atendente)
   // A mensagem será visível apenas ao abrir o ticket específico
-  if (!messageData?.ticketImported && !messageData?.isCampaign) {
+  if (!messageData?.ticketImported) {
     console.log(`[CreateMessageService] Emitindo mensagem para sala ${message.ticket.uuid}, companyId=${companyId}, msgId=${message.id}`);
     await emitToCompanyRoom(
       companyId,

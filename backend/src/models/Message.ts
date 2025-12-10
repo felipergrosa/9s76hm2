@@ -50,6 +50,10 @@ class Message extends Model<Message> {
   get mediaUrl(): string | null {
     if (this.getDataValue("mediaUrl")) {
       const fileRel = this.getDataValue("mediaUrl");
+      // Se já for uma URL absoluta (http/https), retorna como está
+      if (/^https?:\/\//i.test(fileRel)) {
+        return fileRel;
+      }
       const be = (process.env.BACKEND_URL || '').trim();
       const fe = (process.env.FRONTEND_URL || '').trim();
       const proxyPort = (process.env.PROXY_PORT || '').trim();
