@@ -400,6 +400,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 												shrink: true,
 											}}
 											fullWidth
+											disabled={!canEditFields}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -413,6 +414,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 												shrink: true,
 											}}
 											fullWidth
+											disabled={!canEditFields}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -426,6 +428,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 												shrink: true,
 											}}
 											fullWidth
+											disabled={!canEditFields}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -453,7 +456,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											}}
 											variant="outlined"
 											margin="dense"
-											//disabled
+											disabled={!canEditFields}
 											placeholder="Insira numeros"
 											fullWidth
 										/>
@@ -488,59 +491,6 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
-										<Field name="vlUltCompra">
-											{({ field, form }) => (
-												<TextField
-													{...field}
-													label="Valor da Última Compra (R$)"
-													variant="outlined"
-													margin="dense"
-													InputLabelProps={{
-														shrink: true,
-													}}
-													placeholder="Ex.: 1.234,56"
-													fullWidth
-													onChange={(e) => {
-														const value = e.target.value;
-														// Remove caracteres não numéricos exceto vírgula e ponto
-														const cleaned = value.replace(/[^\d.,]/g, '');
-														// Converte para número para validação
-														const numValue = parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
-														// Limite: 9.999.999.999,99 (< 10 bilhões)
-														if (!isNaN(numValue) && numValue >= 10000000000) {
-															toast.error("Valor máximo permitido: R$ 9.999.999.999,99");
-															return;
-														}
-														form.setFieldValue('vlUltCompra', cleaned);
-													}}
-												/>
-											)}
-										</Field>
-									</Grid>
-									<Grid item xs={12} md={6}>
-										<FormControl
-											variant="outlined"
-											margin="dense"
-											fullWidth
-										>
-											<InputLabel id="situation-select-label" shrink>Situação</InputLabel>
-											<Field
-												as={Select}
-												labelId="situation-select-label"
-												id="situation-select"
-												name="situation"
-												label="Situação"
-											>
-												<MenuItem value="Ativo">Ativo</MenuItem>
-												<MenuItem value="Baixado">Baixado</MenuItem>
-												<MenuItem value="Ex-Cliente">Ex-Cliente</MenuItem>
-												<MenuItem value="Excluido">Excluído</MenuItem>
-												<MenuItem value="Futuro">Futuro</MenuItem>
-												<MenuItem value="Inativo">Inativo</MenuItem>
-											</Field>
-										</FormControl>
-									</Grid>
-									<Grid item xs={12} md={6}>
 										<Field
 											as={TextField}
 											label="Instagram"
@@ -551,6 +501,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 												shrink: true,
 											}}
 											fullWidth
+											disabled={!canEditFields}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>

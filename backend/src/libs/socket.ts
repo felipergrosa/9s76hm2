@@ -17,7 +17,7 @@ const isValidUUID = (str: string): boolean => {
 };
 
 const isValidStatus = (status: string): boolean => {
-  return ["open", "closed", "pending", "group", "bot"].includes(status);
+  return ["open", "closed", "pending", "group", "bot", "campaign"].includes(status);
 };
 
 const validateJWTPayload = (payload: any): { userId: string; iat?: number; exp?: number } => {

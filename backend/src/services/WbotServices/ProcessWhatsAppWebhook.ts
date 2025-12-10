@@ -215,7 +215,7 @@ async function processIncomingMessage(
   });
 
   // Encontrar ou criar ticket
-  const ticket = await FindOrCreateTicketService(
+  let ticket = await FindOrCreateTicketService(
     contact,
     whatsapp,
     1, // unreadMessages - incrementa 1 para cada mensagem recebida
@@ -231,10 +231,44 @@ async function processIncomingMessage(
     false // isCampaign
   );
 
-  // Incrementar contador de mensagens não lidas
-  await ticket.update({
-    unreadMessages: (ticket.unreadMessages || 0) + 1
-  });
+  // Se o ticket está em status "campaign" e o contato respondeu, mover para fluxo normal
+  if (ticket.status === "campaign") {
+    logger.info(`[WebhookProcessor] Contato respondeu em ticket de campanha #${ticket.id}, movendo para fluxo normal. Fila: ${ticket.queueId}`);
+    
+    // Determinar novo status baseado nas configurações
+    // Prioridade: 1) Se tem fila, vai para pending (fila assume)
+    //             2) Se tem bot ativo, vai para bot
+    //             3) Caso contrário, vai para pending
+    let newStatus = "pending";
+    if (!ticket.queueId && ticket.isBot) {
+      newStatus = "bot";
+    }
+    
+    await ticket.update({
+      status: newStatus,
+      unreadMessages: (ticket.unreadMessages || 0) + 1
+    });
+    
+    // Recarregar ticket
+    const Ticket = (await import("../../models/Ticket")).default;
+    const Queue = (await import("../../models/Queue")).default;
+    const User = (await import("../../models/User")).default;
+    ticket = await Ticket.findByPk(ticket.id, {
+      include: [
+        { model: Contact, as: "contact" },
+        { model: Queue, as: "queue" },
+        { model: User, as: "user" },
+        { model: Whatsapp, as: "whatsapp" }
+      ]
+    });
+    
+    logger.info(`[WebhookProcessor] Ticket #${ticket.id} movido para status "${newStatus}", fila: ${ticket.queueId}`);
+  } else {
+    // Incrementar contador de mensagens não lidas
+    await ticket.update({
+      unreadMessages: (ticket.unreadMessages || 0) + 1
+    });
+  }
   
   logger.info(`[WebhookProcessor] Ticket ${ticket.id} criado/encontrado: status=${ticket.status}, queueId=${ticket.queueId}, isBot=${ticket.isBot}, unreadMessages=${ticket.unreadMessages}`);
 

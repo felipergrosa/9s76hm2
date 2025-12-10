@@ -4286,7 +4286,7 @@ const handleMessage = async (
 
     const mutex = new Mutex();
     // Inclui a busca de ticket aqui, se realmente não achar um ticket, então vai para o findorcreate
-    const ticket = await mutex.runExclusive(async () => {
+    let ticket = await mutex.runExclusive(async () => {
       const result = await FindOrCreateTicketService(
         contact,
         whatsapp,
@@ -4302,6 +4302,37 @@ const handleMessage = async (
       );
       return result;
     });
+
+    // Se o ticket está em status "campaign" e o contato respondeu, mover para fluxo normal
+    if (ticket.status === "campaign" && !msg.key.fromMe) {
+      logger.info(`[wbotMessageListener] Contato respondeu em ticket de campanha #${ticket.id}, movendo para fluxo normal. Fila: ${ticket.queueId}`);
+      
+      // Determinar novo status baseado nas configurações
+      // Prioridade: 1) Se tem fila, vai para pending (fila assume)
+      //             2) Se tem bot ativo, vai para bot
+      //             3) Caso contrário, vai para pending
+      let newStatus = "pending";
+      if (!ticket.queueId && ticket.isBot) {
+        newStatus = "bot";
+      }
+      
+      await ticket.update({
+        status: newStatus,
+        unreadMessages: (ticket.unreadMessages || 0) + 1
+      });
+      
+      // Recarregar ticket com dados atualizados
+      ticket = await Ticket.findByPk(ticket.id, {
+        include: [
+          { model: Contact, as: "contact" },
+          { model: Queue, as: "queue" },
+          { model: User, as: "user" },
+          { model: Whatsapp, as: "whatsapp" }
+        ]
+      });
+      
+      logger.info(`[wbotMessageListener] Ticket #${ticket.id} movido para status "${newStatus}", fila: ${ticket.queueId}`);
+    }
 
     let bodyRollbackTag = "";
     let bodyNextTag = "";

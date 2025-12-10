@@ -93,11 +93,21 @@ const CreateMessageService = async ({
     throw new Error("ERR_CREATING_MESSAGE");
   }
 
+  // Atualizar lastMessage do ticket (para exibir preview na lista)
+  // Não atualizar se for mensagem privada
+  if (!message.isPrivate && message.body) {
+    await message.ticket.update({
+      lastMessage: message.body,
+      updatedAt: new Date()
+    });
+  }
+
   const io = getIO();
 
   // Se é campanha, NÃO emite nada (evita aparecer na tela do atendente)
   // A mensagem será visível apenas ao abrir o ticket específico
   if (!messageData?.ticketImported && !messageData?.isCampaign) {
+    console.log(`[CreateMessageService] Emitindo mensagem para sala ${message.ticket.uuid}, companyId=${companyId}, msgId=${message.id}`);
     await emitToCompanyRoom(
       companyId,
       message.ticket.uuid,

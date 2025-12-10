@@ -74,8 +74,9 @@ const NotificationsPopOver = (volume) => {
 	const [, setDesktopNotifications] = useState([]);
 
 	const { tickets } = useTickets({
-		withUnreadMessages: "true"
-		// showAll: showTicketWithoutQueue ? "true" : "false"
+		withUnreadMessages: "true",
+		queueIds: queueIds,
+		showAll: user.allTicket === "enable" ? "true" : "false"
 	});
 
 	const [play] = useSound(alertSound, volume);

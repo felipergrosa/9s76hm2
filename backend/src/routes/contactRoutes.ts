@@ -3,6 +3,7 @@
 import express from "express";
 import multer from "multer";
 import isAuth from "../middleware/isAuth";
+import { checkPermission } from "../middleware/checkPermission";
 import uploadConfig from "../config/upload";
 
 import * as ContactController from "../controllers/ContactController";
@@ -26,7 +27,7 @@ contactRoutes.get("/contacts/:contactId(\\d+)", isAuth, ContactController.show);
 contactRoutes.post("/contacts", isAuth, ContactController.store);
 // Rota de atualização em massa DEVE vir antes de "/contacts/:contactId"
 contactRoutes.put("/contacts/batch-update", isAuth, ContactController.bulkUpdate);
-contactRoutes.put("/contacts/:contactId(\\d+)", isAuth, ContactController.update);
+contactRoutes.put("/contacts/:contactId(\\d+)", isAuth, checkPermission("contacts.edit-fields"), ContactController.update);
 contactRoutes.post("/contacts/duplicates/process", isAuth, ContactController.processDuplicates);
 contactRoutes.post("/contacts/normalization/process", isAuth, ContactController.processNormalization);
 

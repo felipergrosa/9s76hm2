@@ -25,6 +25,7 @@ import {
   TextRotateUp,
   TextRotationDown,
   Android as BotIcon,
+  Campaign as CampaignIcon,
 } from "@material-ui/icons";
 import VisibilityIcon from "@material-ui/icons/Visibility";
 import VisibilityOffIcon from "@material-ui/icons/VisibilityOff";
@@ -347,6 +348,7 @@ const TicketsManagerTabs = () => {
   const [pendingCount, setPendingCount] = useState(0);
   const [groupingCount, setGroupingCount] = useState(0);
   const [botCount, setBotCount] = useState(0);
+  const [campaignCount, setCampaignCount] = useState(0);
 
   const userQueueIds = user.queues.map((q) => q.id);
   const [selectedQueueIds, setSelectedQueueIds] = useState(userQueueIds || []);
@@ -1096,6 +1098,42 @@ const TicketsManagerTabs = () => {
             name="bot"
             classes={{ root: classes.tabPanelItem }}
           />
+
+          {/* CAMPANHA */}
+          <Tab
+            label={
+              <Grid container alignItems="center" justifyContent="center">
+                <Grid item>
+                  <Badge
+                    overlap="rectangular"
+                    classes={{ badge: classes.customBadge }}
+                    badgeContent={campaignCount}
+                    color="primary"
+                  >
+                    <CampaignIcon
+                      style={{
+                        fontSize: 16,
+                      }}
+                    />
+                  </Badge>
+                </Grid>
+                <Grid item>
+                  <Typography
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 10,
+                      fontWeight: 600,
+                    }}
+                  >
+                    CAMPANHA
+                  </Typography>
+                </Grid>
+              </Grid>
+            }
+            value={"campaign"}
+            name="campaign"
+            classes={{ root: classes.tabPanelItem }}
+          />
         </Tabs>
 
         <Paper className={classes.ticketsWrapper}>
@@ -1135,6 +1173,15 @@ const TicketsManagerTabs = () => {
             selectedQueueIds={selectedQueueIds}
             updateCount={(val) => setBotCount(val)}
             style={applyPanelStyle("bot")}
+            setTabOpen={setTabOpen}
+          />
+          <TicketsList
+            status="campaign"
+            showAll={showAllTickets}
+            sortTickets={sortTickets ? "ASC" : "DESC"}
+            selectedQueueIds={selectedQueueIds}
+            updateCount={(val) => setCampaignCount(val)}
+            style={applyPanelStyle("campaign")}
             setTabOpen={setTabOpen}
           />
         </Paper>

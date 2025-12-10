@@ -46,6 +46,7 @@ import GetWhatsAppAdapter from "./helpers/GetWhatsAppAdapter";
 import SendTemplateToContact from "./services/MetaServices/SendTemplateToContact";
 import GetTemplateDefinition from "./services/MetaServices/GetTemplateDefinition";
 import MapTemplateParameters from "./services/MetaServices/MapTemplateParameters";
+import CreateMessageService from "./services/MessageServices/CreateMessageService";
 
 const connection = process.env.REDIS_URI || "";
 const limiterMax = process.env.REDIS_OPT_LIMITER_MAX || 1;
@@ -1641,86 +1642,135 @@ async function handleDispatchCampaign(job) {
             statusTicket  // Usar status da campanha
           });
         } else {
-          // Envio direto de template sem abrir ticket
-          // Buscar contato do CRM para ter dados completos para mapeamento
-          const contact = await Contact.findOne({
-            where: { number: campaignShipping.number, companyId: campaign.companyId }
+          // openTicket=disabled: Cria ticket com status "campaign" (não aparece em aguardando/atendendo)
+          // Buscar ou criar contato
+          const [contact] = await Contact.findOrCreate({
+            where: {
+              number: campaignShipping.number,
+              companyId: campaign.companyId
+            },
+            defaults: {
+              companyId: campaign.companyId,
+              name: campaignShipping.contact.name,
+              number: campaignShipping.number,
+              email: campaignShipping.contact.email,
+              whatsappId: selectedWhatsappId,
+              profilePicUrl: ""
+            }
           });
 
           // Buscar definição e mapear parâmetros
           let templateComponents = undefined;
-          if (contact) {
-            try {
-              const templateDef = await GetTemplateDefinition(
-                selectedWhatsappId,
-                templateName,
-                languageCode
-              );
-
-              if (templateDef.parameters.length > 0) {
-                // Parsear metaTemplateVariables se vier como string
-                let variablesConfig = (campaign as any).metaTemplateVariables;
-                if (typeof variablesConfig === 'string') {
-                  try {
-                    variablesConfig = JSON.parse(variablesConfig);
-                  } catch (e) {
-                    logger.warn(`[DispatchCampaign] Erro ao parsear metaTemplateVariables: ${e}`);
-                    variablesConfig = undefined;
-                  }
-                }
-                logger.info(`[DispatchCampaign] metaTemplateVariables: ${JSON.stringify(variablesConfig)}`);
-
-                templateComponents = MapTemplateParameters(
-                  templateDef.parameters,
-                  contact,
-                  variablesConfig
-                );
-                logger.info(
-                  `[DispatchCampaign] Template ${templateName} mapeado com ${templateDef.parameters.length} parâmetros`
-                );
-              }
-
-              // NOVO: Se template tem header com mídia, adicionar componente header
-              if (templateDef.headerFormat &&
-                ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDef.headerFormat) &&
-                templateDef.headerHandle) {
-
-                logger.info(`[DispatchCampaign] Template tem header ${templateDef.headerFormat}, incluindo no payload`);
-
-                const headerComponent = {
-                  type: "header",
-                  parameters: [{
-                    type: templateDef.headerFormat.toLowerCase(),
-                    [templateDef.headerFormat.toLowerCase()]: {
-                      link: templateDef.headerHandle
-                    }
-                  }]
-                };
-
-                // Inserir header NO INÍCIO do array de components
-                if (templateComponents && Array.isArray(templateComponents)) {
-                  templateComponents = [headerComponent, ...templateComponents];
-                } else {
-                  templateComponents = [headerComponent];
-                }
-              }
-            } catch (err: any) {
-              logger.warn(`[DispatchCampaign] Erro ao mapear template: ${err.message}`);
-            }
-          } else {
-            logger.warn(
-              `[DispatchCampaign] Contato ${campaignShipping.number} não encontrado no CRM, enviando template sem parâmetros`
+          try {
+            const templateDef = await GetTemplateDefinition(
+              selectedWhatsappId,
+              templateName,
+              languageCode
             );
+
+            if (templateDef.parameters.length > 0) {
+              // Parsear metaTemplateVariables se vier como string
+              let variablesConfig = (campaign as any).metaTemplateVariables;
+              if (typeof variablesConfig === 'string') {
+                try {
+                  variablesConfig = JSON.parse(variablesConfig);
+                } catch (e) {
+                  logger.warn(`[DispatchCampaign] Erro ao parsear metaTemplateVariables: ${e}`);
+                  variablesConfig = undefined;
+                }
+              }
+              logger.info(`[DispatchCampaign] metaTemplateVariables: ${JSON.stringify(variablesConfig)}`);
+
+              templateComponents = MapTemplateParameters(
+                templateDef.parameters,
+                contact,
+                variablesConfig
+              );
+              logger.info(
+                `[DispatchCampaign] Template ${templateName} mapeado com ${templateDef.parameters.length} parâmetros`
+              );
+            }
+
+            // NOVO: Se template tem header com mídia, adicionar componente header
+            if (templateDef.headerFormat &&
+              ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDef.headerFormat) &&
+              templateDef.headerHandle) {
+
+              logger.info(`[DispatchCampaign] Template tem header ${templateDef.headerFormat}, incluindo no payload`);
+
+              const headerComponent = {
+                type: "header",
+                parameters: [{
+                  type: templateDef.headerFormat.toLowerCase(),
+                  [templateDef.headerFormat.toLowerCase()]: {
+                    link: templateDef.headerHandle
+                  }
+                }]
+              };
+
+              // Inserir header NO INÍCIO do array de components
+              if (templateComponents && Array.isArray(templateComponents)) {
+                templateComponents = [headerComponent, ...templateComponents];
+              } else {
+                templateComponents = [headerComponent];
+              }
+            }
+          } catch (err: any) {
+            logger.warn(`[DispatchCampaign] Erro ao mapear template: ${err.message}`);
           }
 
+          // Criar ticket com status "campaign" (não aparece em aguardando/atendendo)
+          let ticket = await FindOrCreateTicketService(
+            contact,
+            whatsapp,
+            0, // unreadMessages
+            campaign.companyId,
+            campaign.queueId,
+            null, // userId - sem usuário atribuído
+            null, // groupContact
+            "whatsapp", // channel
+            false, // isImported
+            false, // isForward
+            null, // settings
+            false, // isTransfered
+            true // isCampaign
+          );
+
+          // Atualizar status para "campaign"
+          await ticket.update({
+            status: "campaign",
+            userId: null
+          });
+          ticket = await ShowTicketService(ticket.id, campaign.companyId);
+          logger.info(`[DispatchCampaign] Ticket #${ticket.id} criado com status "campaign", fila=${campaign.queueId} (openTicket=disabled)`);
+
+          // Enviar template
           const adapter = await GetWhatsAppAdapter(whatsapp);
           if (typeof adapter.sendTemplate === "function") {
-            await adapter.sendTemplate(
+            const sentMessage = await adapter.sendTemplate(
               campaignShipping.number,
               templateName,
               languageCode,
-              templateComponents  // Agora com match automático
+              templateComponents
             );
+
+            // Salvar mensagem no banco para aparecer no histórico do ticket
+            const messageId = sentMessage?.id || `campaign-${Date.now()}`;
+            await CreateMessageService({
+              messageData: {
+                wid: messageId,
+                ticketId: ticket.id,
+                contactId: contact.id,
+                body: campaignShipping.message || `Template: ${templateName}`,
+                fromMe: true,
+                mediaType: "extendedTextMessage",
+                read: true,
+                ack: 1,
+                remoteJid: contact.remoteJid,
+                isCampaign: true // Não emite para a sala (evita notificação)
+              },
+              companyId: campaign.companyId
+            });
           } else {
             logger.error("[DispatchCampaign] Adapter oficial não suporta sendTemplate");
             throw new Error("Adapter oficial não suporta sendTemplate");
@@ -1910,6 +1960,7 @@ async function handleDispatchCampaign(job) {
       }
     }
     else {
+      // openTicket=disabled com Baileys: Cria ticket com status "campaign"
       // Não usar wbot (Baileys) para conexões API Oficial
       if (isOfficial) {
         const errorMsg = "Conexão API Oficial não suporta uso de wbot (Baileys).";
@@ -1926,10 +1977,52 @@ async function handleDispatchCampaign(job) {
         return;
       }
 
+      // Buscar ou criar contato
+      const [contact] = await Contact.findOrCreate({
+        where: {
+          number: campaignShipping.number,
+          companyId: campaign.companyId
+        },
+        defaults: {
+          companyId: campaign.companyId,
+          name: campaignShipping.contact.name,
+          number: campaignShipping.number,
+          email: campaignShipping.contact.email,
+          whatsappId: selectedWhatsappId,
+          profilePicUrl: ""
+        }
+      });
+
+      // Criar ticket com status "campaign"
+      let ticket = await FindOrCreateTicketService(
+        contact,
+        whatsapp,
+        0, // unreadMessages
+        campaign.companyId,
+        campaign.queueId,
+        null, // userId - sem usuário atribuído
+        null, // groupContact
+        "whatsapp", // channel
+        false, // isImported
+        false, // isForward
+        null, // settings
+        false, // isTransfered
+        true // isCampaign
+      );
+
+      // Atualizar status para "campaign"
+      await ticket.update({
+        status: "campaign",
+        userId: null
+      });
+      ticket = await ShowTicketService(ticket.id, campaign.companyId);
+      logger.info(`[DispatchCampaign][Baileys] Ticket #${ticket.id} criado com status "campaign", fila=${campaign.queueId} (openTicket=disabled)`);
+
       if (campaign.confirmation && campaignShipping.confirmation === null) {
-        await wbot.sendMessage(chatId, {
-          text: campaignShipping.confirmationMessage
+        const sentMessage = await wbot.sendMessage(chatId, {
+          text: `\u200c ${campaignShipping.confirmationMessage}`
         });
+        await verifyMessage(sentMessage, ticket, contact, null, true, false, true); // isCampaign=true
         await campaignShipping.update({ confirmationRequestedAt: moment() });
 
       } else {
@@ -1962,9 +2055,10 @@ async function handleDispatchCampaign(job) {
         const hasPerMessageMedia = Boolean(perMessageFilePath && perName);
 
         if (!hasPerMessageMedia && !campaign.mediaPath) {
-          await wbot.sendMessage(chatId, {
-            text: campaignShipping.message
+          const sentMessage = await wbot.sendMessage(chatId, {
+            text: `\u200c ${campaignShipping.message}`
           });
+          await verifyMessage(sentMessage, ticket, contact, null, true, false, true); // isCampaign=true
         }
 
         if (hasPerMessageMedia || campaign.mediaPath) {
@@ -1974,14 +2068,16 @@ async function handleDispatchCampaign(job) {
 
           const fileName = hasPerMessageMedia ? (perName as string) : campaign.mediaName;
 
-          const options = await getMessageOptions(fileName, filePath, String(campaign.companyId), campaignShipping.message);
+          const options = await getMessageOptions(fileName, filePath, String(campaign.companyId), `\u200c ${campaignShipping.message}`);
           if (Object.keys(options).length) {
             if (options.mimetype === "audio/mp4") {
-              await wbot.sendMessage(chatId, {
-                text: campaignShipping.message
+              const audioTextMsg = await wbot.sendMessage(chatId, {
+                text: `\u200c ${campaignShipping.message}`
               });
+              await verifyMessage(audioTextMsg, ticket, contact, null, true, false, true); // isCampaign=true
             }
-            await wbot.sendMessage(chatId, { ...options });
+            const sentMedia = await wbot.sendMessage(chatId, { ...options });
+            await verifyMediaMessage(sentMedia, ticket, contact, null, false, true, wbot, true); // isCampaign=true
           }
         }
       }

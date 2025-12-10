@@ -1511,7 +1511,7 @@ const CampaignModal = ({
                               onChange={(e) => setSelectedQueue(e.target.value)}
                               label={i18n.t("transferTicketModal.fieldQueuePlaceholder")}
                               required={selectedUsers.length > 0}
-                              disabled={!campaignEditable || values.openTicket === 'disabled'}
+                              disabled={!campaignEditable}
                             >
                               {queues.map((queue) => (
                                 <MenuItem key={queue.id} value={queue.id}>
@@ -1521,6 +1521,19 @@ const CampaignModal = ({
                             </Select>
                           </FormControl>
                         </Grid>
+
+                        {/* Alerta informativo quando openTicket=disabled */}
+                        {values.openTicket === 'disabled' && (
+                          <Grid item xs={12}>
+                            <Alert severity="info" icon={<InfoOutlinedIcon />}>
+                              <Typography variant="body2">
+                                <strong>Modo Campanha:</strong> Os tickets ficarão na aba "Campanha" até o contato responder.
+                                {selectedQueue && " Quando responder, será direcionado para a fila selecionada."}
+                                {!selectedQueue && " Selecione uma fila para direcionar quando o contato responder."}
+                              </Typography>
+                            </Alert>
+                          </Grid>
+                        )}
 
                         {/* NOVO: Mapeamento de variáveis do template */}
                         {selectedTemplate && whatsappId && (

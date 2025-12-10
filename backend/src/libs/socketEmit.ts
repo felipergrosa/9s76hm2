@@ -33,21 +33,21 @@ export async function emitToCompanyRoom(
 
   try {
     const sockets = await ns.in(room).fetchSockets();
-    if (debug) {
-      const ids = sockets.map(s => s.id).join(",");
-      logger.info(
-        `[SOCKET EMIT] event=${event} ns=/workspace-${companyId} room=${room} count=${sockets.length} ids=${ids} skipFallback=${skipFallback}`
-      );
-    }
+    const ids = sockets.map(s => s.id).join(",");
+    
+    // Log sempre para debug de mensagens
+    console.log(
+      `[SOCKET EMIT] event=${event} ns=/workspace-${companyId} room=${room} count=${sockets.length} ids=${ids} skipFallback=${skipFallback}`
+    );
 
     if (sockets.length === 0 && fallbackEnabled) {
-      if (debug) logger.warn(`[SOCKET EMIT] fallback namespace broadcast event=${event} ns=/workspace-${companyId} room=${room}`);
+      console.log(`[SOCKET EMIT] fallback namespace broadcast event=${event} ns=/workspace-${companyId} room=${room}`);
       ns.emit(event, { ...payload, fallback: true, room });
     } else {
       ns.to(room).emit(event, payload);
     }
   } catch (e) {
-    if (debug) logger.warn(`[SOCKET EMIT] erro ao consultar sala ns=/workspace-${companyId} room=${room}: ${e}`);
+    console.log(`[SOCKET EMIT] erro ao consultar sala ns=/workspace-${companyId} room=${room}: ${e}`);
     // Em caso de erro ao consultar sockets, ainda tentamos emitir para a sala
     ns.to(room).emit(event, payload);
   }
