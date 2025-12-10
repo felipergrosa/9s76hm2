@@ -918,34 +918,66 @@ export function randomValue(min, max) {
   return Math.floor(Math.random() * max) + min;
 }
 
-async function getCapBackoffSettings(companyId: number): Promise<CapBackoffSettings> {
+async function getCapBackoffSettings(companyId: number, isOfficialApi: boolean = false): Promise<CapBackoffSettings> {
   try {
     const settings = await CampaignSetting.findAll({
       where: { companyId },
       attributes: ["key", "value"]
     });
 
-    // Defaults (lê do .env com fallback seguro)
-    let capHourly = Number(process.env.CAP_HOURLY) || 30;
-    let capDaily = Number(process.env.CAP_DAILY) || 150;
-    let backoffErrorThreshold = Number(process.env.BACKOFF_ERROR_THRESHOLD) || 3;
-    let backoffPauseMinutes = Number(process.env.BACKOFF_PAUSE_MINUTES) || 15;
+    // Defaults para Baileys (conservadores)
+    let capHourly = Number(process.env.CAP_HOURLY) || 300;
+    let capDaily = Number(process.env.CAP_DAILY) || 2000;
+    let backoffErrorThreshold = Number(process.env.BACKOFF_ERROR_THRESHOLD) || 5;
+    let backoffPauseMinutes = Number(process.env.BACKOFF_PAUSE_MINUTES) || 10;
+
+    // Defaults para API Oficial (muito mais altos - Meta permite milhares por dia)
+    let officialCapHourly = Number(process.env.OFFICIAL_API_CAP_HOURLY) || 1000;
+    let officialCapDaily = Number(process.env.OFFICIAL_API_CAP_DAILY) || 10000;
 
     settings.forEach(s => {
-      if (s.key === "capHourly") capHourly = Number(JSON.parse(s.value));
-      if (s.key === "capDaily") capDaily = Number(JSON.parse(s.value));
-      if (s.key === "backoffErrorThreshold") backoffErrorThreshold = Number(JSON.parse(s.value));
-      if (s.key === "backoffPauseMinutes") backoffPauseMinutes = Number(JSON.parse(s.value));
+      try {
+        const v = s.value ? JSON.parse(s.value) : null;
+        if (v == null) return;
+        
+        // Configurações Baileys
+        if (s.key === "capHourly") capHourly = Number(v);
+        if (s.key === "capDaily") capDaily = Number(v);
+        if (s.key === "backoffErrorThreshold") backoffErrorThreshold = Number(v);
+        if (s.key === "backoffPauseMinutes") backoffPauseMinutes = Number(v);
+        
+        // Configurações API Oficial
+        if (s.key === "officialApiCapHourly") officialCapHourly = Number(v);
+        if (s.key === "officialApiCapDaily") officialCapDaily = Number(v);
+      } catch {}
     });
+
+    // Retornar caps baseado no tipo de conexão
+    if (isOfficialApi) {
+      return { 
+        capHourly: officialCapHourly, 
+        capDaily: officialCapDaily, 
+        backoffErrorThreshold, 
+        backoffPauseMinutes 
+      };
+    }
 
     return { capHourly, capDaily, backoffErrorThreshold, backoffPauseMinutes };
   } catch (e) {
-    // Retorna defaults em caso de erro (valores conservadores do .env)
+    // Retorna defaults em caso de erro
+    if (isOfficialApi) {
+      return {
+        capHourly: Number(process.env.OFFICIAL_API_CAP_HOURLY) || 1000,
+        capDaily: Number(process.env.OFFICIAL_API_CAP_DAILY) || 10000,
+        backoffErrorThreshold: Number(process.env.BACKOFF_ERROR_THRESHOLD) || 5,
+        backoffPauseMinutes: Number(process.env.BACKOFF_PAUSE_MINUTES) || 10
+      };
+    }
     return {
-      capHourly: Number(process.env.CAP_HOURLY) || 30,
-      capDaily: Number(process.env.CAP_DAILY) || 150,
-      backoffErrorThreshold: Number(process.env.BACKOFF_ERROR_THRESHOLD) || 3,
-      backoffPauseMinutes: Number(process.env.BACKOFF_PAUSE_MINUTES) || 15
+      capHourly: Number(process.env.CAP_HOURLY) || 300,
+      capDaily: Number(process.env.CAP_DAILY) || 2000,
+      backoffErrorThreshold: Number(process.env.BACKOFF_ERROR_THRESHOLD) || 5,
+      backoffPauseMinutes: Number(process.env.BACKOFF_PAUSE_MINUTES) || 10
     };
   }
 }
@@ -1458,7 +1490,8 @@ async function handleDispatchCampaign(job) {
 
     // Cap, Backoff e Pacing por conexão (whatsappId)
     // API Oficial: pacing muito mais rápido (2-5s) vs Baileys (60s)
-    const caps = await getCapBackoffSettings(campaign.companyId);
+    // API Oficial também tem caps muito mais altos (Meta permite milhares por dia)
+    const caps = await getCapBackoffSettings(campaign.companyId, isOfficial);
     const intervals = await getIntervalSettings(campaign.companyId);
     
     // Para API Oficial, usar intervalos muito menores (2-5 segundos)
@@ -1979,8 +2012,10 @@ async function handleDispatchCampaign(job) {
       const campaignId = job?.data?.campaignId;
       const campaign = campaignId ? await getCampaign(campaignId) : null;
       if (campaign) {
-        const caps = await getCapBackoffSettings(campaign.companyId);
         const selectedWhatsappId: number = (job?.data as any)?.selectedWhatsappId || campaign.whatsappId;
+        const whatsappForCaps = await Whatsapp.findByPk(selectedWhatsappId);
+        const isOfficialForCaps = whatsappForCaps?.channelType === "official";
+        const caps = await getCapBackoffSettings(campaign.companyId, isOfficialForCaps);
         updateBackoffOnError(selectedWhatsappId, caps, err?.message || "");
         const delayMs = getBackoffDeferDelayMs(selectedWhatsappId) || (caps.backoffPauseMinutes * 60 * 1000);
         const { campaignShippingId, contactListItemId } = job.data as DispatchCampaignData;

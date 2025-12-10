@@ -264,15 +264,15 @@ const Campaigns = () => {
   const formatStatus = (val) => {
     switch (val) {
       case "INATIVA":
-        return "Inativa";
+        return <span style={{ color: '#9e9e9e' }}>⚪ Inativa</span>;
       case "PROGRAMADA":
-        return "Programada";
+        return <span style={{ color: '#2196f3' }}>🕐 Programada</span>;
       case "EM_ANDAMENTO":
-        return "Em Andamento";
+        return <span style={{ color: '#4caf50', fontWeight: 'bold' }}>▶️ Em Andamento</span>;
       case "CANCELADA":
-        return "Cancelada";
+        return <span style={{ color: '#ff9800', fontWeight: 'bold' }}>⏸️ Pausada</span>;
       case "FINALIZADA":
-        return "Finalizada";
+        return <span style={{ color: '#673ab7' }}>✅ Finalizada</span>;
       default:
         return val;
     }
@@ -431,8 +431,9 @@ const Campaigns = () => {
                           {campaign.status === "EM_ANDAMENTO" && (
                             <IconButton
                               onClick={() => cancelCampaign(campaign)}
-                              title="Parar Campanha"
+                              title="Pausar Campanha (Em Andamento)"
                               size="small"
+                              style={{ color: '#f44336' }}
                             >
                               <PauseCircleOutlineIcon />
                             </IconButton>
@@ -440,8 +441,9 @@ const Campaigns = () => {
                           {campaign.status === "CANCELADA" && (
                             <IconButton
                               onClick={() => restartCampaign(campaign)}
-                              title="Parar Campanha"
+                              title="Retomar Campanha (Pausada)"
                               size="small"
+                              style={{ color: '#4caf50' }}
                             >
                               <PlayCircleOutlineIcon />
                             </IconButton>
