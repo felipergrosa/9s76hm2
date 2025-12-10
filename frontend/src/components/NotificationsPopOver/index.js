@@ -75,7 +75,7 @@ const NotificationsPopOver = (volume) => {
 
 	const { tickets } = useTickets({
 		withUnreadMessages: "true",
-		queueIds: queueIds,
+		queueIds: JSON.stringify(queueIds),
 		showAll: user.allTicket === "enable" ? "true" : "false"
 	});
 

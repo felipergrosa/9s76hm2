@@ -55,6 +55,31 @@ type IndexQueryReport = {
   onlyRated: string;
 };
 
+const safeParseArray = (value: any): any[] => {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    if (Array.isArray(value)) {
+      return value;
+    }
+
+    const parsed = JSON.parse(value);
+
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+
+    if (parsed === null || parsed === undefined) {
+      return [];
+    }
+
+    return [parsed];
+  } catch (err) {
+    return [];
+  }
+};
 
 interface TicketData {
   contactId: number;
@@ -94,25 +119,11 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   let whatsappIds: number[] = [];
   let statusFilters: string[] = [];
 
-  if (queueIdsStringified) {
-    queueIds = JSON.parse(queueIdsStringified);
-  }
-
-  if (tagIdsStringified) {
-    tagsIds = JSON.parse(tagIdsStringified);
-  }
-
-  if (userIdsStringified) {
-    usersIds = JSON.parse(userIdsStringified);
-  }
-
-  if (whatsappIdsStringified) {
-    whatsappIds = JSON.parse(whatsappIdsStringified);
-  }
-
-  if (statusStringfied) {
-    statusFilters = JSON.parse(statusStringfied);
-  }
+  queueIds = safeParseArray(queueIdsStringified) as number[];
+  tagsIds = safeParseArray(tagIdsStringified) as number[];
+  usersIds = safeParseArray(userIdsStringified) as number[];
+  whatsappIds = safeParseArray(whatsappIdsStringified) as number[];
+  statusFilters = safeParseArray(statusStringfied) as string[];
 
   const { tickets, count, hasMore } = await ListTicketsService({
     searchParam,
@@ -164,26 +175,11 @@ export const report = async (req: Request, res: Response): Promise<Response> => 
   let usersIds: number[] = [];
   let statusIds: string[] = [];
 
-
-  if (statusStringified) {
-    statusIds = JSON.parse(statusStringified);
-  }
-
-  if (whatsappIdsStringified) {
-    whatsappIds = JSON.parse(whatsappIdsStringified);
-  }
-
-  if (queueIdsStringified) {
-    queueIds = JSON.parse(queueIdsStringified);
-  }
-
-  if (tagIdsStringified) {
-    tagsIds = JSON.parse(tagIdsStringified);
-  }
-
-  if (userIdsStringified) {
-    usersIds = JSON.parse(userIdsStringified);
-  }
+  statusIds = safeParseArray(statusStringified) as string[];
+  whatsappIds = safeParseArray(whatsappIdsStringified) as string[];
+  queueIds = safeParseArray(queueIdsStringified) as number[];
+  tagsIds = safeParseArray(tagIdsStringified) as number[];
+  usersIds = safeParseArray(userIdsStringified) as number[];
 
   const { tickets, totalTickets } = await ListTicketsServiceReport(
     companyId,
@@ -233,17 +229,9 @@ export const kanban = async (req: Request, res: Response): Promise<Response> => 
   let tagsIds: number[] = [];
   let usersIds: number[] = [];
 
-  if (queueIdsStringified) {
-    queueIds = JSON.parse(queueIdsStringified);
-  }
-
-  if (tagIdsStringified) {
-    tagsIds = JSON.parse(tagIdsStringified);
-  }
-
-  if (userIdsStringified) {
-    usersIds = JSON.parse(userIdsStringified);
-  }
+  queueIds = safeParseArray(queueIdsStringified) as number[];
+  tagsIds = safeParseArray(tagIdsStringified) as number[];
+  usersIds = safeParseArray(userIdsStringified) as number[];
 
   const { tickets, count, hasMore } = await ListTicketsServiceKanban({
     searchParam,
