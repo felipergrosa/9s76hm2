@@ -5,6 +5,7 @@ import ContactWallet from "../../models/ContactWallet";
 import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 import { Op } from "sequelize";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import DispatchContactWebhookService from "./DispatchContactWebhookService";
 
 interface ExtraInfo {
   id?: number;
@@ -363,6 +364,17 @@ const UpdateContactService = async ({
         attributes: ["id", "name"]
       }]
   });
+
+  try {
+    await DispatchContactWebhookService({
+      companyId,
+      contact,
+      event: "update",
+      source: "update"
+    });
+  } catch (err) {
+    console.warn("[UpdateContactService] Falha ao disparar webhook de contato (update)", err);
+  }
 
   return contact;
 };

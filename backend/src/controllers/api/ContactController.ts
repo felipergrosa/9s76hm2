@@ -111,6 +111,10 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
   const { companyId } = req.body as IndexQuery;
   const contactData = req.body as ContactData;
 
+  // Normaliza silentMode vindo do body (true, "true", etc.)
+  const rawSilentMode = (req.body as any)?.silentMode;
+  const silentMode = rawSilentMode === true || String(rawSilentMode).toLowerCase() === "true";
+
   const schema = Yup.object().shape({
     name: Yup.string().required(),
     number: Yup.string().required(),
@@ -202,7 +206,8 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
       ...contactData,
       companyId: companyId,
       isGroup: false,
-      profilePicUrl: ""
+      profilePicUrl: "",
+      silentMode
     });
 
     let hasTagAssociation = false;
@@ -271,8 +276,8 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
     });
 
     return res.status(200).json(contact);
-  } catch (error) {
+  } catch (error: any) {
     logger.error(error);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: error?.message || "Internal server error" });
   }
 };

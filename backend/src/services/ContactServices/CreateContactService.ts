@@ -6,6 +6,7 @@ import logger from "../../utils/logger";
 import ContactWallet from "../../models/ContactWallet";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
+import DispatchContactWebhookService from "./DispatchContactWebhookService";
 
 interface ExtraInfo extends ContactCustomField {
   name: string;
@@ -394,6 +395,17 @@ const CreateContactService = async ({
     } catch (err) {
       logger.warn("[CreateContactService] Falha ao sincronizar carteiras e tags pessoais (new contact)", err);
     }
+  }
+
+  try {
+    await DispatchContactWebhookService({
+      companyId,
+      contact,
+      event: "create",
+      source: "create"
+    });
+  } catch (err) {
+    logger.warn("[CreateContactService] Falha ao disparar webhook de contato (create)", err);
   }
 
   return contact;

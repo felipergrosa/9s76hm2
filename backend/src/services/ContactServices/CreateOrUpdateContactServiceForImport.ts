@@ -1,6 +1,7 @@
 import { getIO } from "../../libs/socket";
 import Contact from "../../models/Contact";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import DispatchContactWebhookService from "./DispatchContactWebhookService";
 
 interface ExtraInfo {
   name: string;
@@ -132,6 +133,7 @@ const CreateOrUpdateContactServiceForImport = async ({
 
   const io = getIO();
   let contact: Contact | null;
+  let eventType: "create" | "update" = "update";
 
   contact = await Contact.findOne({
     where: isGroup ? { number: rawString.trim(), companyId } : { companyId, canonicalNumber: number }
@@ -188,12 +190,28 @@ const CreateOrUpdateContactServiceForImport = async ({
       canonicalNumber: isGroup ? null : number
     });
 
+    eventType = "create";
+
     if (!silentMode) { // Emitir evento apenas se não estiver em modo silencioso
       io.of(`/workspace-${companyId}`)
         .emit(`company-${companyId}-contact`, {
           action: "create",
           contact
         });
+    }
+  }
+
+  // Dispara webhook para n8n (exceto em modo silencioso)
+  if (!silentMode && contact) {
+    try {
+      await DispatchContactWebhookService({
+        companyId,
+        contact,
+        event: eventType,
+        source: "import"
+      });
+    } catch (err) {
+      console.warn("Falha ao disparar webhook de contato (import)", err);
     }
   }
 

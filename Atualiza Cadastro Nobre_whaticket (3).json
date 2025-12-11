@@ -1,0 +1,476 @@
+{
+  "name": "Atualiza Cadastro Nobre/whaticket (bidi)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds"
+            }
+          ]
+        }
+      },
+      "id": "385092db-7216-4f40-98f8-1c0f09ef2cc4",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        128,
+        -544
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "/* INCREMENTAL por lastSyncDate (compatível com versões antigas) */\n\nSELECT\n  -- Identificação principal\n  C.Cnpj_Cnpf,\n  C.FsCliente,\n  C.RzCliente,\n  C.FlTipo,\n  C.Ie_Rg,\n\n  -- Contatos principais\n  COALESCE(\n    NULLIF(LOWER(C.Email1), ''),\n    NULLIF(LOWER(C.Email2), ''),\n    NULLIF(LOWER(C.Email3), ''),\n    NULLIF(LOWER(C.F_Email1), ''),\n    NULLIF(LOWER(C.C_Email1), ''),\n    NULLIF(LOWER(C.E_Email1), '')\n  ) AS EmailValido,\n\n  -- Whatsapp mais provável\n  COALESCE(\n    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(C.F_WhatsApp1, '(', ''), ')', ''), '-', ''), ' ', ''), ''),\n    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.F_Ddd1, C.F_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), ''),\n    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.C_Ddd1, C.C_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), ''),\n    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.E_Ddd1, C.E_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '')\n  ) AS WhatsAppValido,\n\n  -- Telefones tratados\n  REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.F_Ddd1, C.F_Telefone1), '(', ''), ')', ''), '-', ''), ' ', '') AS Telefone1,\n  REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.C_Ddd1, C.C_Telefone1), '(', ''), ')', ''), '-', ''), ' ', '') AS Telefone2,\n  REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.E_Ddd1, C.E_Telefone1), '(', ''), ')', ''), '-', ''), ' ', '') AS Telefone3,\n\n  -- Endereço/Bairro/Cidade/UF\n  UPPER(LTRIM(RTRIM(REPLACE(COALESCE(NULLIF(C.F_Endereco, ''), NULLIF(C.C_Endereco, ''), NULLIF(C.E_Endereco, '')), '  ', ' ')))) AS EnderecoValido,\n  UPPER(LTRIM(RTRIM(REPLACE(COALESCE(NULLIF(C.F_Bairro,   ''), NULLIF(C.C_Bairro,   ''), NULLIF(C.E_Bairro,   '')), '  ', ' ')))) AS BairroValido,\n  UPPER(LTRIM(RTRIM(REPLACE(COALESCE(NULLIF(C.F_Cidade,   ''), NULLIF(C.C_Cidade,   ''), NULLIF(C.E_Cidade,   '')), '  ', ' ')))) AS CidadeValido,\n  UPPER(LTRIM(RTRIM(COALESCE(NULLIF(C.F_Estado, ''), NULLIF(C.C_Estado, ''), NULLIF(C.E_Estado, ''))))) AS EstadoValido,\n\n  -- CEP / Município\n  REPLACE(COALESCE(NULLIF(C.F_Cep, ''), NULLIF(C.C_Cep, ''), NULLIF(C.E_Cep, '')), ' ', '') AS CepValido,\n  REPLACE(COALESCE(NULLIF(C.F_CdMunicipio, ''), NULLIF(C.C_CdMunicipio, ''), NULLIF(C.E_CdMunicipio, '')), ' ', '') AS CodMunicipioValido,\n\n  -- Segmento\n  C.CdSegmento,\n  CONCAT(RTRIM(C.CdSegmento), ' - ', LTRIM(RTRIM(SM.DsSegmento))) AS DsSegmento,\n\n  -- Região\n  LTRIM(RTRIM(RG.DsRegiao)) AS DsRegiao,\n\n  -- Representante\n  C.CdRepresentante,\n  CONCAT(RTRIM(C.CdRepresentante), ' - ', COALESCE(RTRIM(R.Fsrepresentante), '')) AS CdRepresentante_Nome,\n\n  -- Status / datas\n  C.Ativo_Inativo_ExCliente,\n  C.DtFundacao,\n  C.DtAlteracao,\n\n  -- Empresa / Financeiro\n  E.FsEmpresa,\n  CAST(ISNULL(LC.LimiteCredito, 0) AS money) AS CreditLimit,\n\n  -- Última compra pela LC\n  CONVERT(date, LC.DtUltCompra)       AS DtUltCompra_LC,\n  CAST(ISNULL(LC.VlUltCompra, 0) AS money) AS VlUltCompra_LC\n\nFROM nobregerencia.dbo.BusinessCadCliente AS C\nLEFT JOIN nobregerencia.dbo.BusinessCadClienteLC AS LC\n  ON LC.Cnpj_Cnpf = C.Cnpj_Cnpf\nLEFT JOIN nobregerencia.dbo.BusinessCadSegMercado AS SM\n  ON C.CdSegmento = SM.CdSegmento\nLEFT JOIN nobregerencia.dbo.BusinessCadEmpresa AS E\n  ON LC.CdEmpresa = E.CdEmpresa\nLEFT JOIN nobregerencia.dbo.BusinessCadRepresentante AS R\n  ON R.CdRepresentante = C.CdRepresentante\nLEFT JOIN nobregerencia.dbo.BusinessCadRegiao AS RG\n  ON RG.CdRegiao = C.CdRegiao\n\nWHERE\n      LC.CdEmpresa = 97\n  AND C.Cnpj_Cnpf IS NOT NULL \n  AND C.Cnpj_Cnpf <> ''\n  AND C.Ativo_Inativo_ExCliente IN ('Ativo','Inativo','Excluido','Ex-Cliente','Baixado','Futuro','Excluído')\n  AND C.CdSegmento IN (17, 19, 27, 28, 61, 68, 72, 74, 77, 54, 67, 60)\n  AND (\n    NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(C.F_WhatsApp1, '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL\n    OR NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.F_Ddd1, C.F_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL\n    OR NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.C_Ddd1, C.C_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL\n    OR NULLIF(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.E_Ddd1, C.E_Telefone1), '(', ''), ')', ''), '-', ''), ' ', ''), '') IS NOT NULL\n  )\n  /* INCREMENTAL seguro:\n     - se não houver lastSyncDate → libera tudo\n     - se houver e for conversível → aplica cutoff (lastSyncDate - 30s)\n     - se houver e NÃO for conversível → libera tudo (evita erro) */\n  AND C.DtAlteracao >=\n    CASE\n      WHEN '{{$json.cutoffSql}}' = ''          -- primeira execução (sem lastSync)\n        THEN C.DtAlteracao                     -- passa tudo\n      ELSE CAST('{{$json.cutoffSql}}' AS DATETIME)  -- aplica corte (já no formato certo)\n    END;\n"
+      },
+      "id": "a28ff3c9-f713-4af3-8487-faa84a16df35",
+      "name": "Busca Clientes SQL1",
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1,
+      "position": [
+        576,
+        -544
+      ],
+      "credentials": {
+        "microsoftSql": {
+          "id": "347YbKVdQ6hSkPU6",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "Cnpj_Cnpf",
+              "value": "={{$json.Cnpj_Cnpf}}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.EmailValido }}"
+            },
+            {
+              "name": "FsCliente",
+              "value": "={{ $json.FsCliente }}"
+            },
+            {
+              "name": "RzCliente",
+              "value": "={{$json.RzCliente}}"
+            },
+            {
+              "name": "DtAlteracao",
+              "value": "={{$json.DtAlteracao}}"
+            },
+            {
+              "name": "segmento",
+              "value": "={{ $json.DsSegmento }}"
+            },
+            {
+              "name": "empresa",
+              "value": "={{ $json.FsEmpresa }}"
+            },
+            {
+              "name": "regiao",
+              "value": "={{ $json.DsRegiao }}"
+            },
+            {},
+            {}
+          ],
+          "number": [
+            {
+              "name": "F_WhatsApp1",
+              "value": "={{ $json.WhatsAppValido }}"
+            }
+          ],
+          "boolean": [
+            {
+              "name": "dtUltCompra",
+              "value": "={{ $json.DtUltCompra_LC }}"
+            },
+            {
+              "name": "vlUltCompra",
+              "value": "={{ $json.VlUltCompra_LC }}"
+            }
+          ]
+        },
+        "options": {
+          "dotNotation": true
+        }
+      },
+      "id": "5b4a778b-a952-4f2b-afd3-18c1431abaf3",
+      "name": "Mapeia Campos1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        800,
+        -544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code – Monta Body Whaticket  (COMPLETO)\n// - Valida telefone (DDI 55) e e-mail\n// - Tag por segmento (somente: 17,19,27,28,61,68,72,74,77,67,60) e por representante\n// - Normaliza situação\n// - Inclui DtUltCompra_LC e VlUltCompra_LC\n// - Remove campos undefined\n// - Filtra itens sem número (evita 400 na API)\n\n// Mapeamento: código do representante -> tag\nconst repTagMap = {\n  '1012': '#LEONARDO-ROSA',\n  '1016': '#BRUNA-ZANOBIO',\n  '1015': '#FERNANDA-FREITAS',\n  // adicione aqui: '0000': '#NOME-REP',\n};\n\n// Segmentos que são CLIENTES\nconst clientSegments = new Set([17, 19, 27, 28, 61, 68, 72, 74, 77, 67, 60]);\n\nreturn items\n  .map(item => {\n    const j = item.json ?? {};\n\n    // 📞 Número tratado (mantém DDI 55)\n    const raw = String(j.WhatsAppValido ?? '').trim();\n    const digits = raw.replace(/\\D/g, '');\n    const number = digits ? (digits.startsWith('55') ? digits : '55' + digits) : '';\n\n    // 📧 E-mail válido\n    const rawEmail = String(j.EmailValido ?? '').trim().toLowerCase();\n    const isValidEmail =\n      !!rawEmail &&\n      !['null', 'undefined', '', '[empty]', 'xxx'].includes(rawEmail) &&\n      /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(rawEmail);\n\n    // 🏷️ Tag base por segmento (apenas lista informada) e representantes (54)\n    const seg = Number(j.CdSegmento);\n    let tagBase; // sem default\n    if (seg === 54) {\n      tagBase = '##REPRESENTANTES';\n    } else if (clientSegments.has(seg)) {\n      tagBase = '##CLIENTES';\n    }\n\n    // 🏷️ Tag por representante\n    const repCode = String(j.CdRepresentante ?? '')\n      .replace(/\\D/g, '')\n      .padStart(4, '0');\n    const repTag = repTagMap[repCode];\n\n    // Combina tags (sem duplicatas). Pode ficar vazio se não houver match.\n    const tags = [...new Set([tagBase, repTag].filter(Boolean))].join(',');\n\n    // 📌 Situação normalizada\n    const rawSituation = String(j.Ativo_Inativo_ExCliente ?? '').trim();\n    let situation = 'Ativo';\n    const allowed = ['Ativo', 'Inativo', 'Excluido', 'Ex-Cliente', 'Baixado', 'Futuro'];\n    if (allowed.includes(rawSituation)) {\n      situation = rawSituation;\n    } else if (rawSituation === 'Excluído') {\n      situation = 'Excluido'; // normaliza acento\n    }\n\n    // 🧱 Monta o body (mesmos campos de antes + novos)\n    const body = {\n      companyId: 1,\n      name: String(j.RzCliente ?? '').trim(),\n      number,\n      fantasyName: String(j.FsCliente ?? '').trim(),\n      situation,\n      email: isValidEmail ? rawEmail : undefined,\n      cpfCnpj: String(j.Cnpj_Cnpf ?? '').replace(/\\D/g, '') || undefined,\n      city: String(j.CidadeValido ?? '').trim() || undefined,\n      segmento: String(j.DsSegmento ?? '').trim() || undefined,\n      creditLimit: String(j.CreditLimit ?? '').trim() || undefined,\n      representativeCode: String(j.CdRepresentante_Nome ?? '').trim() || undefined,\n      empresa: String(j.FsEmpresa ?? '').trim() || undefined,\n      regiao: String(j.DsRegiao ?? '').trim() || undefined,\n      tags: tags || undefined, // só envia se houver alguma tag\n    };\n\n    // 📅 Data de fundação (ISO)\n    if (j.DtFundacao) {\n      const d = new Date(j.DtFundacao);\n      if (!isNaN(d.getTime())) body.foundationDate = d.toISOString();\n    }\n\n    // 🛒 NOVOS CAMPOS (LC) → adiciona ao body\n    // DtUltCompra_LC: tenta ISO; senão, manda como string\n    if (j.DtUltCompra_LC !== undefined && j.DtUltCompra_LC !== null && String(j.DtUltCompra_LC).trim() !== '') {\n      const dLc = new Date(j.DtUltCompra_LC);\n      body.DtUltCompra_LC = !isNaN(dLc.getTime())\n        ? dLc.toISOString()\n        : String(j.DtUltCompra_LC).trim();\n    }\n\n    // VlUltCompra_LC: mantém como string limpa\n    if (j.VlUltCompra_LC !== undefined && j.VlUltCompra_LC !== null && String(j.VlUltCompra_LC).trim() !== '') {\n      body.VlUltCompra_LC = String(j.VlUltCompra_LC).trim();\n    }\n\n    // 🧹 Remove undefined para não poluir o JSON\n    Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);\n\n    return { json: body };\n  })\n  // 🛑 Filtra se não tiver número (evita 400 na API)\n  .filter(item => !!item.json.number);\n"
+      },
+      "id": "511a2664-11d9-4371-ba76-7b89d20951df",
+      "name": "Code1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        -544
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://chatsapi.nobreluminarias.com.br/api/contacts/sync",
+        "options": {
+          "timeout": 120000
+        },
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "companyId",
+              "value": "=1"
+            },
+            {
+              "name": "name",
+              "value": "={{ $json.name }}"
+            },
+            {
+              "name": "number",
+              "value": "={{ $json.number }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.email }}"
+            },
+            {
+              "name": "representativeCode",
+              "value": "={{ $json.representativeCode }}"
+            },
+            {
+              "name": "city",
+              "value": "={{ $json.city }}"
+            },
+            {
+              "name": "situation",
+              "value": "={{ $json.situation }}"
+            },
+            {
+              "name": "fantasyName",
+              "value": "={{ $json.fantasyName }}"
+            },
+            {
+              "name": "foundationDate",
+              "value": "={{ $json.foundationDate }}"
+            },
+            {
+              "name": "creditLimit",
+              "value": "={{ $json.creditLimit }}"
+            },
+            {
+              "name": "=segment",
+              "value": "={{ $json.segmento }}"
+            },
+            {
+              "name": "tags",
+              "value": "={{ $json.tags }}"
+            },
+            {
+              "name": "bzEmpresa",
+              "value": "={{ $json.empresa }}"
+            },
+            {
+              "name": "region",
+              "value": "={{ $json.regiao }}"
+            },
+            {
+              "name": "silentMode",
+              "value": "=true"
+            },
+            {
+              "name": "dtUltCompra",
+              "value": "={{ $json.DtUltCompra_LC }}"
+            },
+            {
+              "name": "vlUltCompra",
+              "value": "={{ $json.VlUltCompra_LC }}"
+            }
+          ]
+        },
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "Bearer qsFj2s8e2XY85oHcNMAvEw"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "3f4ff8de-8953-477b-9c04-02fdc3249491",
+      "name": "Sincronizar Contato Whaticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        -544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code node (Run Once for All Items)\nconst sd = $getWorkflowStaticData('global'); // <- correto no Code node\nsd.lastSyncDate = new Date().toISOString();\n\n// devolve os mesmos itens de entrada\nreturn $input.all();\n"
+      },
+      "id": "98be0b89-3a1f-4fb1-b39a-e49589d96b6f",
+      "name": "Atualiza Data Sincronizacao1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        -544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconsole.log('lastSyncDate =', sd.lastSyncDate);\nreturn $input.all();\n"
+      },
+      "id": "5395e491-27a7-4e4f-b44e-52c262eb21ba",
+      "name": "Atualiza Global1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        -544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calcula Cutoff: gera a data de corte no formato que o SQL Server aceita\nconst sd = $getWorkflowStaticData('global');\n\n// -30s de margem (pra não perder borda)\nconst MARGEM_MS = 30_000;\n\nlet cutoffSql = ''; // string vazia = sem corte (primeira carga)\n\nif (sd.lastSyncDate) {\n  const t = new Date(new Date(sd.lastSyncDate).getTime() - MARGEM_MS);\n  const pad2 = n => String(n).padStart(2, '0');\n  const pad3 = n => String(n).padStart(3, '0');\n  cutoffSql =\n    `${t.getFullYear()}-${pad2(t.getMonth()+1)}-${pad2(t.getDate())} ` +\n    `${pad2(t.getHours())}:${pad2(t.getMinutes())}:${pad2(t.getSeconds())}.` +\n    `${pad3(t.getMilliseconds())}`; // YYYY-MM-DD HH:MM:SS.mmm (compatível com SQL Server antigo)\n}\n\n// Devolve só 1 item com a string do cutoff\nreturn [{ json: { cutoffSql } }];\n"
+      },
+      "id": "e6f9d5e7-f094-4d08-9412-dccb4bb8d751",
+      "name": "CALCULA CUTOFF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        -544
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hooks/whaticket/contact",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "id": "6c272787-d38e-4fb7-833f-e243fb72a57d",
+      "name": "Webhook Whaticket – contact",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        480,
+        -240
+      ],
+      "webhookId": "b9154078-bc47-4e30-9715-001316869384"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normaliza payload do Whaticket\nconst p=$json||{};\nconst list=v=>Array.isArray(v)?v:(typeof v==='string'?v.split(','):[]);\nconst tags=list(p.tags).map(t=>String(t).trim()).filter(Boolean).join(',');\nconst numberDigits=String(p.number||'').replace(/\\D/g,'');\nconst cpf=String(p.cpfCnpj||'').replace(/\\D/g,'');\nconst email=String(p.email||'').trim().toLowerCase();\nconst name=String(p.name||'').trim();\nconst city=String(p.city||'').trim().toUpperCase();\nconst uuid=String(p.uuid||p.id||'').trim();\nreturn [{json:{ uuid, numberDigits, cpf, email, name, city, tags, __payload:p }}];"
+      },
+      "id": "260c9ac5-5af1-4d3b-9ad8-da56dde916cf",
+      "name": "Normaliza Evento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "IF OBJECT_ID('dbo.WhaticketContactMap','U') IS NULL\nCREATE TABLE dbo.WhaticketContactMap(\n  WhaticketUUID varchar(64) NOT NULL PRIMARY KEY,\n  Cnpj_Cnpf varchar(20) NULL,\n  LastPulledAt datetime2 NULL,\n  LastPushedAt datetime2 NULL,\n  LastHash char(64) NULL\n);\nIF OBJECT_ID('dbo.WhaticketInbox','U') IS NULL\nCREATE TABLE dbo.WhaticketInbox(\n  Id int IDENTITY(1,1) PRIMARY KEY,\n  WhaticketUUID varchar(64) NOT NULL,\n  EventAt datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),\n  Name nvarchar(120) NULL,\n  Email varchar(300) NULL,\n  Number varchar(30) NULL,\n  City nvarchar(60) NULL,\n  Tags nvarchar(400) NULL,\n  Payload nvarchar(max) NULL\n);\nSELECT 1 AS ok;"
+      },
+      "id": "977ab630-ffc3-40ed-a6b6-4de9eed8be94",
+      "name": "SQL – Prepara Aux",
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1,
+      "position": [
+        976,
+        -240
+      ],
+      "credentials": {
+        "microsoftSql": {
+          "id": "347YbKVdQ6hSkPU6",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DECLARE @Uuid VARCHAR(64) = '{{ $json.uuid }}';\nDECLARE @Number VARCHAR(30) = '{{ $json.numberDigits }}';\nDECLARE @Email VARCHAR(300) = '{{ ($json.email || \"\").replace(/'/g,\"''\") }}';\nDECLARE @Name NVARCHAR(120) = N'{{ ($json.name  || \"\").replace(/'/g,\"''\") }}';\nDECLARE @City NVARCHAR(60) = N'{{ ($json.city  || \"\").replace(/'/g,\"''\") }}';\nDECLARE @Tags NVARCHAR(400) = N'{{ ($json.tags  || \"\").replace(/'/g,\"''\") }}';\nDECLARE @Cnpj VARCHAR(20) = '{{ $json.cpf }}';\nDECLARE @Payload NVARCHAR(MAX) = N'{{ JSON.stringify($json.__payload || {}, null, 0).replace(/'/g,\"''\") }}';\n\nINSERT INTO dbo.WhaticketInbox(WhaticketUUID,Name,Email,Number,City,Tags,Payload)\nVALUES(@Uuid,@Name,@Email,@Number,@City,@Tags,@Payload);\n\nIF NOT EXISTS (SELECT 1 FROM dbo.WhaticketContactMap WHERE WhaticketUUID=@Uuid)\n  INSERT INTO dbo.WhaticketContactMap(WhaticketUUID, LastPulledAt) VALUES(@Uuid, SYSUTCDATETIME());\nELSE\n  UPDATE dbo.WhaticketContactMap SET LastPulledAt = SYSUTCDATETIME() WHERE WhaticketUUID=@Uuid;\n\nDECLARE @CnpjTarget VARCHAR(20) = NULL;\nIF @Cnpj <> '' SET @CnpjTarget = @Cnpj;\nELSE SELECT TOP(1) @CnpjTarget = C.Cnpj_Cnpf\n     FROM nobregerencia.dbo.BusinessCadCliente C\n     WHERE REPLACE(REPLACE(REPLACE(REPLACE(C.F_WhatsApp1,'(',''),')',''),'-',''),' ','') = @Number\n        OR REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.F_Ddd1,C.F_Telefone1),'(',''),')',''),'-',''),' ','') = @Number\n        OR REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.C_Ddd1,C.C_Telefone1),'(',''),')',''),'-',''),' ','') = @Number\n        OR REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(C.E_Ddd1,C.E_Telefone1),'(',''),')',''),'-',''),' ','') = @Number;\n\nIF @CnpjTarget IS NOT NULL\nBEGIN\n  UPDATE C SET\n    F_WhatsApp1 = CASE WHEN @Number<>'' AND REPLACE(REPLACE(REPLACE(REPLACE(C.F_WhatsApp1,'(',''),')',''),'-',''),' ','') <> @Number THEN @Number ELSE C.F_WhatsApp1 END,\n    Email1      = CASE WHEN @Email<>''  AND ISNULL(LOWER(Email1),'') <> LOWER(@Email) THEN @Email ELSE Email1 END,\n    RzCliente   = CASE WHEN @Name<>''   AND C.RzCliente <> @Name THEN @Name ELSE C.RzCliente END,\n    C_Cidade    = CASE WHEN @City<>''   AND C.C_Cidade <> @City THEN @City ELSE C.C_Cidade END,\n    DtAlteracao = CASE WHEN (@Number<>'' AND REPLACE(REPLACE(REPLACE(REPLACE(C.F_WhatsApp1,'(',''),')',''),'-',''),' ','') <> @Number)\n                        OR (@Email<>''  AND ISNULL(LOWER(Email1),'') <> LOWER(@Email))\n                        OR (@Name<>''   AND C.RzCliente <> @Name)\n                        OR (@City<>''   AND C.C_Cidade <> @City)\n                      THEN SYSDATETIME() ELSE C.DtAlteracao END\n  FROM nobregerencia.dbo.BusinessCadCliente C\n  WHERE C.Cnpj_Cnpf = @CnpjTarget;\n\n  UPDATE dbo.WhaticketContactMap SET Cnpj_Cnpf = @CnpjTarget WHERE WhaticketUUID=@Uuid AND (Cnpj_Cnpf IS NULL OR Cnpj_Cnpf='');\nEND;\n\nSELECT 1 AS ok;"
+      },
+      "id": "448e9435-d1d2-4a10-b970-04193230175a",
+      "name": "SQL – Upsert ERP",
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        -240
+      ],
+      "credentials": {
+        "microsoftSql": {
+          "id": "347YbKVdQ6hSkPU6",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "e91b7b48-b427-4471-b80d-23f12d2ad65e",
+      "name": "Responder Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1472,
+        -240
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "CALCULA CUTOFF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca Clientes SQL1": {
+      "main": [
+        [
+          {
+            "node": "Mapeia Campos1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mapeia Campos1": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Sincronizar Contato Whaticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sincronizar Contato Whaticket": {
+      "main": [
+        [
+          {
+            "node": "Atualiza Data Sincronizacao1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CALCULA CUTOFF": {
+      "main": [
+        [
+          {
+            "node": "Busca Clientes SQL1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Whaticket – contact": {
+      "main": [
+        [
+          {
+            "node": "Normaliza Evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normaliza Evento": {
+      "main": [
+        [
+          {
+            "node": "SQL – Prepara Aux",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL – Prepara Aux": {
+      "main": [
+        [
+          {
+            "node": "SQL – Upsert ERP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL – Upsert ERP": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "c2cc2fd2-0337-4188-8f47-57214698e3da",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1e4dd6e5907cfc73b0f183f507966709c4992b7f82d0eaa38d56d177cc8df7ef"
+  },
+  "id": "8VjNDtjUtwgeE6qA",
+  "tags": []
+}

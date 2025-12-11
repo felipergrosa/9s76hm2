@@ -10,8 +10,9 @@ import { isNil } from "lodash";
 import Whatsapp from "../../models/Whatsapp";
 import * as Sentry from "@sentry/node";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import DispatchContactWebhookService from "./DispatchContactWebhookService";
 
-const axios = require('axios');
+const axios = require("axios");
 
 interface ExtraInfo extends ContactCustomField {
   name: string;
@@ -388,6 +389,26 @@ const CreateOrUpdateContactService = async ({
           action: "update",
           contact
         });
+    }
+
+    try {
+      if (createContact && contact) {
+        await DispatchContactWebhookService({
+          companyId,
+          contact,
+          event: "create",
+          source: "wbot"
+        });
+      } else if (shouldEmitUpdate && contact) {
+        await DispatchContactWebhookService({
+          companyId,
+          contact,
+          event: "update",
+          source: "wbot"
+        });
+      }
+    } catch (err) {
+      logger.warn("[CreateOrUpdateContactService] Falha ao disparar webhook de contato", err);
     }
 
     // Chama o serviço centralizado para atualizar nome/avatar com proteção
