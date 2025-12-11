@@ -14,6 +14,7 @@ import Tag from "../models/Tag";
 import KanbanListService from "../services/TagServices/KanbanListService";
 import ContactTag from "../models/ContactTag";
 import ListAllTagsService from "../services/TagServices/ListAllTagsService";
+import SyncContactWalletsAndPersonalTagsService from "../services/ContactServices/SyncContactWalletsAndPersonalTagsService";
 
 type IndexQuery = {
   searchParam?: string;
@@ -270,6 +271,16 @@ export const removeContactTag = async (
       action: "update",
       tag
     });
+
+  try {
+    await SyncContactWalletsAndPersonalTagsService({
+      companyId,
+      contactId,
+      source: "tags"
+    });
+  } catch (err) {
+    console.warn("[TagController.removeContactTag] Falha ao sincronizar carteiras e tags pessoais", err);
+  }
 
   return res.status(200).json({ message: "Tag deleted" });
 };

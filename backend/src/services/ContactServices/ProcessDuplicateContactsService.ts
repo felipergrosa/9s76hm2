@@ -4,6 +4,7 @@ import Contact from "../../models/Contact";
 import sequelize from "../../database";
 import { getIO } from "../../libs/socket";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 
 interface ProcessDuplicateParams {
   companyId: number;
@@ -335,6 +336,18 @@ const ProcessDuplicateContactsService = async ({
     await master.reload({ transaction });
     updatedMaster = master;
   });
+
+  if (updatedMaster) {
+    try {
+      await SyncContactWalletsAndPersonalTagsService({
+        companyId,
+        contactId: updatedMaster.id,
+        source: "tags"
+      });
+    } catch (err) {
+      console.warn("[ProcessDuplicateContactsService] Falha ao sincronizar carteiras e tags pessoais", err);
+    }
+  }
 
   const io = getIO();
 

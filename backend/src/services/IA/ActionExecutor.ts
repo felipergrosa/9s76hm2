@@ -9,6 +9,7 @@ import { transferQueue } from "../WbotServices/wbotMessageListener";
 import { search as ragSearch } from "../RAG/RAGSearchService";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
 import CreateLogTicketService from "../TicketServices/CreateLogTicketService";
+import SyncContactWalletsAndPersonalTagsService from "../ContactServices/SyncContactWalletsAndPersonalTagsService";
 import FilesOptions from "../../models/FilesOptions";
 import LibraryFile from "../../models/LibraryFile";
 import LibraryFolder from "../../models/LibraryFolder";
@@ -1018,6 +1019,16 @@ export class ActionExecutor {
                         companyId: ctx.ticket.companyId
                     });
                     logger.info(`[ActionExecutor] Tag "${agentConfig.qualifiedLeadTag}" adicionada ao contato ${ctx.contact.id}`);
+
+                    try {
+                        await SyncContactWalletsAndPersonalTagsService({
+                            companyId: ctx.ticket.companyId,
+                            contactId: ctx.contact.id,
+                            source: "tags"
+                        });
+                    } catch (err) {
+                        logger.warn("[ActionExecutor] Falha ao sincronizar carteiras e tags pessoais após qualifiedLeadTag", err);
+                    }
                 }
             }
 
@@ -1202,6 +1213,16 @@ export class ActionExecutor {
                         tagId: tag.id,
                         companyId: ctx.ticket.companyId
                     });
+
+                    try {
+                        await SyncContactWalletsAndPersonalTagsService({
+                            companyId: ctx.ticket.companyId,
+                            contactId: ctx.contact.id,
+                            source: "tags"
+                        });
+                    } catch (err) {
+                        logger.warn("[ActionExecutor] Falha ao sincronizar carteiras e tags pessoais após sdrHotLeadTag", err);
+                    }
                 }
             }
 

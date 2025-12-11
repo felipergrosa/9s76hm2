@@ -15,7 +15,7 @@ import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import InputMask from "react-input-mask";
-import { FormControl, InputLabel, MenuItem, Select, Grid } from "@material-ui/core";
+import { FormControl, InputLabel, MenuItem, Select, Grid, Checkbox, ListItemText } from "@material-ui/core";
 import { isValidCPF, isValidCNPJ } from "../../utils/validators";
 
 const useStyles = makeStyles(theme => ({
@@ -82,16 +82,44 @@ const ContactSchema = Yup.object().shape({
     segment: Yup.string().nullable(),
     bzEmpresa: Yup.string().nullable(),
     region: Yup.string().nullable(),
+    wallets: Yup.array().nullable(),
 });
 
 export function ContactForm ({ initialContact, onSave, onCancel }) {
 	const classes = useStyles();
 
-	const [contact, setContact] = useState(initialContact);
+	const [contact, setContact] = useState(initialContact || { wallets: [] });
+	const [userOptions, setUserOptions] = useState([]);
+	const [loadingUsers, setLoadingUsers] = useState(false);
 
-    useEffect(() => {
-        setContact(initialContact);
-    }, [initialContact]);
+	useEffect(() => {
+		if (!initialContact) {
+			setContact({ wallets: [] });
+			return;
+		}
+		setContact({
+			...initialContact,
+			wallets: Array.isArray(initialContact.wallets)
+				? initialContact.wallets.map(w => (typeof w === "object" ? w.id : w))
+				: (initialContact.wallets || [])
+		});
+	}, [initialContact]);
+
+	useEffect(() => {
+		const fetchUsers = async () => {
+			try {
+				setLoadingUsers(true);
+				const { data } = await api.get("/users/");
+				setUserOptions(data.users || []);
+			} catch (err) {
+				toastError(err);
+			} finally {
+				setLoadingUsers(false);
+			}
+		};
+
+		fetchUsers();
+	}, []);
 
 	const handleSaveContact = async values => {
 		try {
@@ -121,7 +149,7 @@ export function ContactForm ({ initialContact, onSave, onCancel }) {
                 }, 400);
             }}
         >
-            {({ values, errors, touched, isSubmitting }) => (
+            {({ values, errors, touched, isSubmitting, setFieldValue }) => (
                 <Form>
                     <Grid container spacing={1}>
                         {/* <Grid item xs={12}>
@@ -142,6 +170,39 @@ export function ContactForm ({ initialContact, onSave, onCancel }) {
                                 className={classes.textField}
                                 fullWidth
                             />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <FormControl
+                                variant="outlined"
+                                margin="dense"
+                                fullWidth
+                                disabled={loadingUsers}
+                            >
+                                <InputLabel id="wallets-label">Carteira (responsáveis)</InputLabel>
+                                <Select
+                                    labelId="wallets-label"
+                                    multiple
+                                    value={values.wallets || []}
+                                    onChange={(e) => setFieldValue("wallets", e.target.value)}
+                                    label="Carteira (responsáveis)"
+                                    renderValue={(selected) => {
+                                        const ids = Array.isArray(selected) ? selected : [];
+                                        const names = userOptions
+                                            .filter(u => ids.includes(u.id))
+                                            .map(u => u.name);
+                                        return names.join(", ");
+                                    }}
+                                >
+                                    {userOptions.map(user => (
+                                        <MenuItem key={user.id} value={user.id}>
+                                            <Checkbox
+                                                checked={Array.isArray(values.wallets) && values.wallets.indexOf(user.id) > -1}
+                                            />
+                                            <ListItemText primary={user.name} />
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
                         </Grid>
                         <Grid item xs={12} md={6}>
                             <Field

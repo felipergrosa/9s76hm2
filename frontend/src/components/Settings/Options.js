@@ -889,7 +889,7 @@ export default function Options(props) {
             </FormHelperText>
           </FormControl>
         </Grid>
-        {/* <Grid xs={12} sm={6} md={4} item>
+        <Grid xs={12} sm={6} md={4} item>
           <FormControl className={classes.selectContainer}>
             <InputLabel id="DirectTicketsToWallets-label"> {i18n.t("settings.settings.options.DirectTicketsToWallets")}</InputLabel>
             <Select
@@ -906,7 +906,7 @@ export default function Options(props) {
               {loadingDirectTicketsToWallets && i18n.t("settings.settings.options.updating")}
             </FormHelperText>
           </FormControl>
-        </Grid> */}
+        </Grid>
       </Grid>
       <br></br>
       {/*-----------------LGPD-----------------*/}

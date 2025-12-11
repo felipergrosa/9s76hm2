@@ -10,6 +10,7 @@ import Contact from "../../models/Contact";
 import { Op } from "sequelize";
 import Tag from "../../models/Tag";
 import ContactTag from "../../models/ContactTag";
+import SyncContactWalletsAndPersonalTagsService from "../../services/ContactServices/SyncContactWalletsAndPersonalTagsService";
 
 type IndexQuery = {
     companyId: number;
@@ -204,6 +205,8 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
       profilePicUrl: ""
     });
 
+    let hasTagAssociation = false;
+
     if (contactData.tags) {
       const tagList = contactData.tags.split(',').map(tag => tag.trim());
 
@@ -230,6 +233,7 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
               tagId: tag.id
             }
           });
+          hasTagAssociation = true;
         } catch (error) {
           logger.info(`Erro ao processar Tag '${tagName}' para o contato ${contact.id}:`, error);
         }
@@ -245,10 +249,19 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
               tagId: tagId
             }
           });
+          hasTagAssociation = true;
         } catch (error) {
           logger.info(`Erro ao associar Tag ID ${tagId} ao contato`, error);
         }
       }
+    }
+
+    if (hasTagAssociation) {
+      await SyncContactWalletsAndPersonalTagsService({
+        companyId,
+        contactId: contact.id,
+        source: "tags"
+      });
     }
 
     const io = getIO();

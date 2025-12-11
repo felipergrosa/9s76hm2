@@ -1,6 +1,7 @@
 import AppError from "../../errors/AppError";
 import Contact from "../../models/Contact";
 import ContactWallet from "../../models/ContactWallet";
+import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 
 interface Request {
   wallets: number[] | string[];
@@ -37,6 +38,16 @@ const UpdateContactWalletsService = async ({
   });
 
   await ContactWallet.bulkCreate(contactWallets);
+
+  try {
+    await SyncContactWalletsAndPersonalTagsService({
+      companyId: Number(companyId),
+      contactId,
+      source: "wallet"
+    });
+  } catch (err) {
+    console.warn("[UpdateContactWalletsService] Falha ao sincronizar carteiras e tags pessoais", err);
+  }
 
   const contact = await Contact.findOne({
     where: { id: contactId, companyId },

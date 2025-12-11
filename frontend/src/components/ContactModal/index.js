@@ -18,7 +18,7 @@ import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import CircularProgress from "@material-ui/core/CircularProgress";
 import Switch from "@material-ui/core/Switch";
 import withStyles from "@material-ui/core/styles/withStyles";
-import { Grid, FormControl, InputLabel, MenuItem, Select } from "@material-ui/core";
+import { Grid, FormControl, InputLabel, MenuItem, Select, Checkbox, ListItemText } from "@material-ui/core";
 import ContactAvatar from "../ContactAvatar";
 
 import { i18n } from "../../translate/i18n";
@@ -92,6 +92,7 @@ const ContactSchema = Yup.object().shape({
   vlUltCompra: Yup.mixed().nullable(),
   bzEmpresa: Yup.string().nullable(),
   region: Yup.string().nullable(),
+  wallets: Yup.array().nullable(),
 });
 
 // Switch personalizado: verde quando ativo (checked), vermelho quando inativo
@@ -116,6 +117,8 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	const isMounted = useRef(true);
     const [avatarOpen, setAvatarOpen] = useState(false);
     const [pendingTags, setPendingTags] = useState([]);
+    const [userOptions, setUserOptions] = useState([]);
+    const [loadingUsers, setLoadingUsers] = useState(false);
     
     // Verificar permissão para editar campos do contato
     const { hasPermission } = usePermissions();
@@ -142,6 +145,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		vlUltCompra: "",
 		bzEmpresa: "",
 		region: "",
+		wallets: [],
 	};
 
 	const [contact, setContact] = useState(initialState);
@@ -153,10 +157,32 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	}, []);
 
 	useEffect(() => {
+		const fetchUsers = async () => {
+			try {
+				setLoadingUsers(true);
+				const { data } = await api.get("/users/");
+				setUserOptions(data.users || []);
+			} catch (err) {
+				toastError(err);
+			} finally {
+				setLoadingUsers(false);
+			}
+		};
+
+		fetchUsers();
+	}, []);
+
+	useEffect(() => {
 		const fetchContact = async () => {
 			if (initialValues) {
 				setContact(prevState => {
-					return { ...prevState, ...initialValues };
+					return {
+						...prevState,
+						...initialValues,
+						wallets: Array.isArray(initialValues.wallets)
+							? initialValues.wallets.map(w => (typeof w === "object" ? w.id : w))
+							: (initialValues.wallets || [])
+					};
 				});
 			}
 
@@ -165,7 +191,12 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			try {
 				const { data } = await api.get(`/contacts/${contactId}`);
 				if (isMounted.current) {
-					setContact(data);
+					setContact({
+						...data,
+						wallets: Array.isArray(data.wallets)
+							? data.wallets.map(w => (typeof w === "object" ? w.id : w))
+							: []
+					});
 					setDisableBot(data.disableBot)
 				}
 			} catch (err) {
@@ -503,6 +534,39 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											fullWidth
 											disabled={!canEditFields}
 										/>
+									</Grid>
+									<Grid item xs={12} md={6}>
+										<FormControl
+											variant="outlined"
+											margin="dense"
+											fullWidth
+											disabled={!canEditFields || loadingUsers}
+										>
+											<InputLabel id="wallets-label">Carteira (responsáveis)</InputLabel>
+											<Select
+												labelId="wallets-label"
+												multiple
+												value={values.wallets || []}
+												onChange={(e) => setFieldValue("wallets", e.target.value)}
+												label="Carteira (responsáveis)"
+												renderValue={(selected) => {
+													const ids = Array.isArray(selected) ? selected : [];
+													const names = userOptions
+														.filter(u => ids.includes(u.id))
+														.map(u => u.name);
+													return names.join(", ");
+												}}
+											>
+												{userOptions.map(user => (
+													<MenuItem key={user.id} value={user.id}>
+														<Checkbox
+															checked={Array.isArray(values.wallets) && values.wallets.indexOf(user.id) > -1}
+														/>
+														<ListItemText primary={user.name} />
+													</MenuItem>
+												))}
+											</Select>
+										</FormControl>
 									</Grid>
 									<Grid item xs={12} md={6}>
 										{contact?.id ? (

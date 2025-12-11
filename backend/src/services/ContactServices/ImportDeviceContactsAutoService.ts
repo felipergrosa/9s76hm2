@@ -3,6 +3,7 @@ import Tag from "../../models/Tag";
 import ContactTag from "../../models/ContactTag";
 import GetDeviceContactsService from "../WbotServices/GetDeviceContactsService";
 import logger from "../../utils/logger";
+import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 
 interface Params {
   companyId: number;
@@ -61,6 +62,18 @@ const ImportDeviceContactsAutoService = async ({ companyId, whatsappId, selected
         if (tagRow) {
           await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: tagRow.id } });
           tagged++;
+        }
+      }
+
+      if (tags.length > 0) {
+        try {
+          await SyncContactWalletsAndPersonalTagsService({
+            companyId,
+            contactId: contact.id,
+            source: "tags"
+          });
+        } catch (err) {
+          logger.warn("[ImportDeviceContactsAutoService] Falha ao sincronizar carteiras e tags pessoais", err);
         }
       }
     } catch (e) {

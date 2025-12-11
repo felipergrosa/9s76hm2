@@ -5,6 +5,7 @@ import ContactCustomField from "../../models/ContactCustomField";
 import logger from "../../utils/logger";
 import ContactWallet from "../../models/ContactWallet";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 
 interface ExtraInfo extends ContactCustomField {
   name: string;
@@ -316,6 +317,16 @@ const CreateContactService = async ({
       });
 
       await ContactWallet.bulkCreate(contactWallets);
+
+      try {
+        await SyncContactWalletsAndPersonalTagsService({
+          companyId,
+          contactId: existingContact.id,
+          source: "wallet"
+        });
+      } catch (err) {
+        logger.warn("[CreateContactService] Falha ao sincronizar carteiras e tags pessoais (existingContact)", err);
+      }
     }
 
     return merged;
@@ -373,9 +384,20 @@ const CreateContactService = async ({
     });
 
     await ContactWallet.bulkCreate(contactWallets);
+
+    try {
+      await SyncContactWalletsAndPersonalTagsService({
+        companyId,
+        contactId: contact.id,
+        source: "wallet"
+      });
+    } catch (err) {
+      logger.warn("[CreateContactService] Falha ao sincronizar carteiras e tags pessoais (new contact)", err);
+    }
   }
 
   return contact;
+
 };
 
 export default CreateContactService;

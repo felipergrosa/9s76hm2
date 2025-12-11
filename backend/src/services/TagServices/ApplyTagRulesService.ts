@@ -3,6 +3,7 @@ import Contact from "../../models/Contact";
 import TagRule from "../../models/TagRule";
 import ContactTag from "../../models/ContactTag";
 import Tag from "../../models/Tag";
+import SyncContactWalletsAndPersonalTagsService from "../ContactServices/SyncContactWalletsAndPersonalTagsService";
 
 interface Request {
   companyId: number;
@@ -57,6 +58,7 @@ const ApplyTagRulesService = async ({
     const tagName = tag.name;
     
     let matchingContactIds: number[] = [];
+    const contactsNeedingSync = new Set<number>();
 
     // Processa regras AND
     if (andRules.length > 0) {
@@ -230,6 +232,7 @@ const ApplyTagRulesService = async ({
           tagId: currentTagId
         });
         contactsAffected++;
+        contactsNeedingSync.add(contactIdToTag);
       }
     }
 
@@ -247,6 +250,20 @@ const ApplyTagRulesService = async ({
       tagName,
       contactsAffected
     });
+
+    if (contactsNeedingSync.size > 0) {
+      for (const contactIdToSync of contactsNeedingSync) {
+        try {
+          await SyncContactWalletsAndPersonalTagsService({
+            companyId,
+            contactId: contactIdToSync,
+            source: "tags"
+          });
+        } catch (err) {
+          console.warn("[ApplyTagRulesService] Falha ao sincronizar carteiras e tags pessoais", err);
+        }
+      }
+    }
   }
 
   return results;

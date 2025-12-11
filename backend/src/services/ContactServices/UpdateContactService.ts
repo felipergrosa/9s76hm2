@@ -2,6 +2,7 @@ import AppError from "../../errors/AppError";
 import Contact from "../../models/Contact";
 import ContactCustomField from "../../models/ContactCustomField";
 import ContactWallet from "../../models/ContactWallet";
+import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 import { Op } from "sequelize";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 
@@ -245,6 +246,16 @@ const UpdateContactService = async ({
     });
 
     await ContactWallet.bulkCreate(contactWallets);
+
+    try {
+      await SyncContactWalletsAndPersonalTagsService({
+        companyId,
+        contactId,
+        source: "wallet"
+      });
+    } catch (err) {
+      console.warn("[UpdateContactService] Falha ao sincronizar carteiras e tags pessoais", err);
+    }
   }
 
   // Função auxiliar para converter strings vazias/whitespace em null

@@ -5,6 +5,7 @@ import ContactTag from "../../models/ContactTag";
 import Tag from "../../models/Tag";
 import Whatsapp from "../../models/Whatsapp";
 import ShowContactService from "./ShowContactService";
+import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 
 export type SituationType = 'Ativo' | 'Baixado' | 'Ex-Cliente' | 'Excluido' | 'Futuro' | 'Inativo';
 
@@ -78,6 +79,16 @@ const BulkUpdateContactsService = async ({ companyId, contactIds, data }: BulkUp
       await ContactTag.destroy({ where: { contactId: c.id } });
       const list = validTagIds.map(tagId => ({ tagId, contactId: c.id }));
       if (list.length > 0) await ContactTag.bulkCreate(list);
+
+      try {
+        await SyncContactWalletsAndPersonalTagsService({
+          companyId,
+          contactId: c.id,
+          source: "tags"
+        });
+      } catch (err) {
+        console.warn("[BulkUpdateContactsService] Falha ao sincronizar carteiras e tags pessoais", err);
+      }
     }
 
     const reloaded = await ShowContactService(c.id, companyId);

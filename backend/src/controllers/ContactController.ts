@@ -48,6 +48,8 @@ import ListDuplicateContactsService from "../services/ContactServices/ListDuplic
 import ProcessDuplicateContactsService from "../services/ContactServices/ProcessDuplicateContactsService";
 import ListContactsPendingNormalizationService from "../services/ContactServices/ListContactsPendingNormalizationService";
 import ProcessContactsNormalizationService from "../services/ContactServices/ProcessContactsNormalizationService";
+import BackfillWalletsAndPersonalTagsService from "../services/ContactServices/BackfillWalletsAndPersonalTagsService";
+import SyncContactWalletsAndPersonalTagsService from "../services/ContactServices/SyncContactWalletsAndPersonalTagsService";
 
 import FindContactTags from "../services/ContactServices/FindContactTags";
 import { log } from "console";
@@ -290,11 +292,14 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
 
   // Associações de tags (por nome ou por IDs), evitando duplicar por cor
   try {
+    let hasTagAssociation = false;
+
     const tagIds = (req.body as any).tagIds as number[] | undefined;
     if (Array.isArray(tagIds) && tagIds.length > 0) {
       const rows = await Tag.findAll({ where: { id: tagIds, companyId } });
       for (const tag of rows) {
         await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: tag.id } });
+        hasTagAssociation = true;
       }
     } else if (tags) {
       const tagList = String(tags).split(',').map((t: string) => t.trim()).filter(Boolean);
@@ -304,7 +309,16 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
           defaults: { color: "#A4CCCC", kanban: 0 }
         });
         await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: tag.id } });
+        hasTagAssociation = true;
       }
+    }
+
+    if (hasTagAssociation) {
+      await SyncContactWalletsAndPersonalTagsService({
+        companyId,
+        contactId: contact.id,
+        source: "tags"
+      });
     }
   } catch (error) {
     logger.info("Erro ao associar Tags (importXls)", error);
@@ -321,6 +335,42 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
   }
 
   return res.status(200).json(contact);
+};
+
+export const backfillWalletsAndPersonalTags = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId } = req.user;
+  const { contactIds, mode, limit, offset } = req.body as {
+    contactIds?: Array<number | string>;
+    mode?: "auto" | "wallet" | "tags";
+    limit?: number;
+    offset?: number;
+  };
+
+  try {
+    const parsedIds = Array.isArray(contactIds)
+      ? contactIds
+          .map(id => Number(id))
+          .filter(id => Number.isInteger(id) && id > 0)
+      : undefined;
+
+    const result = await BackfillWalletsAndPersonalTagsService({
+      companyId,
+      contactIds: parsedIds && parsedIds.length > 0 ? parsedIds : undefined,
+      mode,
+      limit,
+      offset
+    });
+
+    return res.status(200).json(result);
+  } catch (error: any) {
+    logger.error("[Contacts.backfillWalletsAndPersonalTags] Erro ao executar backfill:", error);
+    return res.status(500).json({
+      error: error?.message || "Erro ao executar backfill de carteiras e tags pessoais"
+    });
+  }
 };
 
 export const index = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
@@ -809,10 +859,13 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
   // Suporte a tagIds e tags por nome no store
   try {
     const { tagIds, tags } = req.body as any;
+    let hasTagAssociation = false;
+
     if (Array.isArray(tagIds) && tagIds.length > 0) {
       const rows = await Tag.findAll({ where: { id: tagIds, companyId } });
       for (const tag of rows) {
         await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: tag.id } });
+        hasTagAssociation = true;
       }
     } else if (typeof tags === 'string' && tags.trim() !== '') {
       const tagList = tags.split(',').map((t: string) => t.trim()).filter(Boolean);
@@ -822,7 +875,16 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
           defaults: { color: "#A4CCCC", kanban: 0 }
         });
         await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: tag.id } });
+        hasTagAssociation = true;
       }
+    }
+
+    if (hasTagAssociation) {
+      await SyncContactWalletsAndPersonalTagsService({
+        companyId,
+        contactId: contact.id,
+        source: "tags"
+      });
     }
   } catch (error) {
     logger.info("Erro ao associar Tags (store)", error);

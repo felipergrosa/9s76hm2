@@ -30,6 +30,12 @@ contactRoutes.put("/contacts/batch-update", isAuth, ContactController.bulkUpdate
 contactRoutes.put("/contacts/:contactId(\\d+)", isAuth, checkPermission("contacts.edit-fields"), ContactController.update);
 contactRoutes.post("/contacts/duplicates/process", isAuth, ContactController.processDuplicates);
 contactRoutes.post("/contacts/normalization/process", isAuth, ContactController.processNormalization);
+contactRoutes.post(
+  "/contacts/backfill-wallets-tags",
+  isAuth,
+  checkPermission("settings.view"),
+  ContactController.backfillWalletsAndPersonalTags
+);
 
 // Mova a rota de deleção em massa ANTES da rota de deleção de ID único.
 contactRoutes.delete("/contacts/batch-delete", isAuth, ContactController.bulkRemove); // <-- MOVA ESTA LINHA PARA CIMA

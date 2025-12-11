@@ -36,6 +36,7 @@ export function resetImportProgress(progressId: string) {
 }
 
 import CreateOrUpdateContactServiceForImport from "./CreateOrUpdateContactServiceForImport"; // Importar o serviço
+import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 
 export async function ImportContactsService(
   companyId: number,
@@ -401,6 +402,8 @@ export async function ImportContactsService(
         }
       }
 
+      let hasTagAssociation = false;
+
       // Handle tag associations for device contacts
       if (tagMapping) {
         // 1) Aplicar mapeamentos de labels reais presentes no contato
@@ -427,6 +430,7 @@ export async function ImportContactsService(
                 where: { contactId: contact.id, tagId: systemTagId }
               });
               taggedCount++;
+              hasTagAssociation = true;
             } else if (dryRun) {
               // Apenas simulação: conta associação prevista
               taggedCount++;
@@ -466,6 +470,7 @@ export async function ImportContactsService(
           if (!dryRun && systemTagId) {
             await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: systemTagId } });
             taggedCount++;
+            hasTagAssociation = true;
             const tagNameForReport = mapping.newTagName || (await Tag.findByPk(systemTagId))?.name || "Sem etiqueta";
             perTagApplied[tagNameForReport] = (perTagApplied[tagNameForReport] || 0) + 1;
           } else if (dryRun) {
@@ -474,6 +479,18 @@ export async function ImportContactsService(
             const tagNameForReport = mapping.newTagName || "Sem etiqueta";
             perTagApplied[tagNameForReport] = (perTagApplied[tagNameForReport] || 0) + 1;
           }
+        }
+      }
+
+      if (!dryRun && hasTagAssociation && contact && (contact as any).id) {
+        try {
+          await SyncContactWalletsAndPersonalTagsService({
+            companyId: (contact as any).companyId || companyId,
+            contactId: (contact as any).id,
+            source: "tags"
+          });
+        } catch (err) {
+          logger.warn("[ImportContactsService] Falha ao sincronizar carteiras e tags pessoais", err);
         }
       }
 
