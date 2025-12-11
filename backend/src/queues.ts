@@ -126,24 +126,47 @@ async function getUserIdByContactTags(
   }
 
   try {
-    // Buscar usuários com suas tags e profile
+    // Buscar usuários com profile e allowedContactTags (lista de IDs de tags de permissão)
     const users = await User.findAll({
       where: {
         id: { [Op.in]: userIds },
         companyId
       },
-      include: [{
-        model: Tag,
-        as: "tags",
-        attributes: ["id", "name"],
-        through: { attributes: [] }
-      }],
-      attributes: ["id", "name", "profile"]
+      attributes: ["id", "name", "profile", "allowedContactTags"]
     });
 
     // Separar admins dos usuários normais
     const adminUsers = users.filter((u: any) => u.profile === "admin");
     const normalUsers = users.filter((u: any) => u.profile !== "admin");
+
+    // Pré-carrega todas as tags de permissão referenciadas em allowedContactTags
+    const allAllowedTagIds = new Set<number>();
+    for (const u of users as any[]) {
+      const allowed = Array.isArray(u.allowedContactTags)
+        ? (u.allowedContactTags as number[])
+        : [];
+      for (const tagId of allowed) {
+        if (Number.isInteger(tagId)) {
+          allAllowedTagIds.add(tagId);
+        }
+      }
+    }
+
+    const userPermissionTags: any[] = allAllowedTagIds.size
+      ? await Tag.findAll({
+          where: {
+            companyId,
+            id: { [Op.in]: Array.from(allAllowedTagIds) },
+            name: { [Op.like]: '#%' } // Apenas tags que começam com #
+          },
+          attributes: ["id", "name"]
+        })
+      : [];
+
+    const tagById = new Map<number, any>();
+    for (const t of userPermissionTags) {
+      tagById.set(t.id, t);
+    }
 
     // Buscar tags do contato (apenas tags pessoais que começam com #)
     const contactTags = await Tag.findAll({
@@ -174,10 +197,17 @@ async function getUserIdByContactTags(
 
     // Primeiro, tentar match com usuários normais (não-admin)
     for (const user of normalUsers) {
-      const userTags = (user as any).tags || [];
-      
+      const allowed = Array.isArray((user as any).allowedContactTags)
+        ? ((user as any).allowedContactTags as number[])
+        : [];
+
+      // Tags carregadas para este usuário a partir de allowedContactTags
+      const userTags = allowed
+        .map(id => tagById.get(id))
+        .filter((t: any) => !!t);
+
       // Buscar tags pessoais do usuário (começam com # mas não com ##)
-      const userPersonalTags = userTags.filter((t: any) => 
+      const userPersonalTags = userTags.filter((t: any) =>
         t.name.startsWith('#') && !t.name.startsWith('##')
       );
 

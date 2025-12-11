@@ -21,24 +21,44 @@ const SyncContactWalletsAndPersonalTagsService = async ({
     return;
   }
 
-  // Carrega mapeamentos necessários em paralelo sempre que possível
-  const [contactTagRows, users] = await Promise.all([
-    ContactTag.findAll({
-      where: { contactId: contactIdNum }
-    }),
-    User.findAll({
-      where: { companyId },
-      include: [
-        {
-          model: Tag,
-          as: "tags",
-          attributes: ["id", "name"],
-          through: { attributes: [] }
-        }
-      ],
-      attributes: ["id", "name"]
-    })
-  ]);
+  // Carrega as tags já associadas ao contato
+  const contactTagRows = await ContactTag.findAll({
+    where: { contactId: contactIdNum }
+  });
+
+  // Carrega usuários da empresa com suas allowedContactTags (lista de IDs de tags)
+  const users = await User.findAll({
+    where: { companyId },
+    attributes: ["id", "name", "allowedContactTags"]
+  });
+
+  // Descobre todas as tags referenciadas em allowedContactTags para pré-carregar do banco
+  const allAllowedTagIds = new Set<number>();
+  for (const user of users as any[]) {
+    const allowed = Array.isArray(user.allowedContactTags)
+      ? (user.allowedContactTags as number[])
+      : [];
+    for (const tagId of allowed) {
+      if (Number.isInteger(tagId)) {
+        allAllowedTagIds.add(tagId);
+      }
+    }
+  }
+
+  const allowedTags: any[] = allAllowedTagIds.size
+    ? await Tag.findAll({
+        where: {
+          companyId,
+          id: { [Op.in]: Array.from(allAllowedTagIds) }
+        },
+        attributes: ["id", "name"]
+      })
+    : [];
+
+  const tagById = new Map<number, any>();
+  for (const t of allowedTags) {
+    tagById.set(t.id, t);
+  }
 
   const tagIdsOnContact = contactTagRows.map(ct => ct.tagId);
 
@@ -47,9 +67,14 @@ const SyncContactWalletsAndPersonalTagsService = async ({
   const userIdToPersonalTagIds = new Map<number, number[]>();
 
   for (const user of users as any[]) {
-    const userTags = user.tags || [];
+    const allowed = Array.isArray(user.allowedContactTags)
+      ? (user.allowedContactTags as number[])
+      : [];
 
-    for (const t of userTags as any[]) {
+    for (const tagId of allowed) {
+      const t = tagById.get(tagId);
+      if (!t) continue;
+
       const name = (t.name || "").trim();
       if (!name || !name.startsWith("#") || name.startsWith("##")) continue;
 
