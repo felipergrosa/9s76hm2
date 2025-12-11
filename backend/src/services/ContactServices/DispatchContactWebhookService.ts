@@ -50,8 +50,19 @@ const DispatchContactWebhookService = async ({
       },
       timeout: 15000
     });
-  } catch (error) {
-    logger.warn("[DispatchContactWebhookService] Falha ao enviar webhook de contato para n8n", error);
+  } catch (error: any) {
+    const status = error?.response?.status;
+    const data = error?.response?.data;
+    const code = error?.code;
+    const message = error?.message;
+
+    logger.warn("[DispatchContactWebhookService] Falha ao enviar webhook de contato para n8n", {
+      url: (error?.config && error.config.url) || undefined,
+      status,
+      data,
+      code,
+      message
+    });
   }
 };
 
