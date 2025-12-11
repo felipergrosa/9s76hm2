@@ -148,16 +148,42 @@ const MessagesAPI = () => {
 
   const handleSyncContact = async (values, actions) => {
     const { token, tagIds, ...contactData } = values;
+
+    // Sempre envia o companyId da empresa logada, exigido pelo backend em /api/contacts/sync
+    const payload = {
+      ...contactData,
+      companyId: user?.companyId
+    };
+
     // Converte tagIds (string com vírgulas) para array numérico, se informado
-    if (typeof tagIds === 'string' && tagIds.trim() !== '') {
-      const arr = tagIds.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
-      if (arr.length > 0) contactData.tagIds = arr;
+    if (typeof tagIds === "string" && tagIds.trim() !== "") {
+      const arr = tagIds
+        .split(",")
+        .map(s => parseInt(s.trim(), 10))
+        .filter(n => !isNaN(n));
+      if (arr.length > 0) {
+        payload.tagIds = arr;
+      }
     }
+
+    // Evita enviar situation como string vazia, o que quebraria na validação Yup do backend
+    if (
+      Object.prototype.hasOwnProperty.call(payload, "situation") &&
+      typeof payload.situation === "string"
+    ) {
+      const s = payload.situation.trim();
+      if (!s) {
+        delete payload.situation;
+      } else {
+        payload.situation = s;
+      }
+    }
+
     try {
-      await axios.post(getEndpoint('/api/contacts/sync'), contactData, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      await axios.post(getEndpoint("/api/contacts/sync"), payload, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success('Contato sincronizado com sucesso!');
+      toast.success("Contato sincronizado com sucesso!");
       actions.resetForm();
     } catch (err) {
       toastError(err);
