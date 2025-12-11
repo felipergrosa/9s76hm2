@@ -37,20 +37,20 @@ const FindOrCreateTicketService = async (
   // try {
   // let isCreated = false;
 
-  let openAsLGPD = false
-  if (settings.enableLGPD) { //adicionar lgpdMessage
+  let openAsLGPD = false;
+  if (settings && settings.enableLGPD) { // adicionar lgpdMessage
 
     openAsLGPD = !isCampaign &&
       !isTransfered &&
       settings.enableLGPD === "enabled" &&
       settings.lgpdMessage !== "" &&
       (settings.lgpdConsent === "enabled" ||
-        (settings.lgpdConsent === "disabled" && isNil(contact?.lgpdAcceptedAt)))
+        (settings.lgpdConsent === "disabled" && isNil(contact?.lgpdAcceptedAt)));
   }
 
   const io = getIO();
 
-  const DirectTicketsToWallets = settings.DirectTicketsToWallets;
+  const DirectTicketsToWallets = settings?.DirectTicketsToWallets;
 
   let ticket = await Ticket.findOne({
     where: {

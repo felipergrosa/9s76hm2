@@ -1242,34 +1242,65 @@ export const upload = async (req: Request, res: Response) => {
   };
 
 export const getContactProfileURL = async (req: Request, res: Response) => {
-  const { number } = req.params
+  const { number } = req.params;
   const { companyId } = req.user;
 
-  if (number) {
-    const validNumber = await CheckContactNumber(number, companyId);
-
-
-    const profilePicUrl = await GetProfilePicUrl(validNumber, companyId);
-
-    const contact = await NumberSimpleListService({ number: validNumber, companyId: companyId })
-
-    let obj: any;
-    if (contact.length > 0) {
-      obj = {
-        contactId: contact[0].id,
-        profilePicUrl: profilePicUrl
-      }
-    } else {
-      obj = {
-        contactId: 0,
-        profilePicUrl: profilePicUrl
-      }
-    }
-
-    return res.status(200).json(obj);
+  if (!number) {
+    return res.status(200).json({
+      contactId: 0,
+      profilePicUrl: `${process.env.FRONTEND_URL}/nopicture.png`
+    });
   }
 
-  };
+  try {
+    let validNumber: string;
+
+    try {
+      // Usa serviço padrão de validação/normalização.
+      // Para API oficial ele apenas normaliza, sem consultar WhatsApp.
+      validNumber = await CheckContactNumber(number, companyId);
+    } catch (err: any) {
+      // Qualquer erro na validação NÃO deve quebrar o frontend.
+      // Normaliza localmente apenas para fins de busca de contato.
+      let digits = String(number).replace(/\D/g, "");
+      if (digits.startsWith("0")) {
+        digits = digits.substring(1);
+      }
+      if (digits.length <= 11) {
+        digits = `55${digits}`;
+      }
+      validNumber = digits;
+    }
+
+    let profilePicUrl: string;
+    try {
+      profilePicUrl = await GetProfilePicUrl(validNumber, companyId);
+    } catch {
+      profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
+    }
+
+    const contact = await NumberSimpleListService({ number: validNumber, companyId });
+
+    if (contact.length > 0) {
+      return res.status(200).json({
+        contactId: contact[0].id,
+        profilePicUrl
+      });
+    }
+
+    return res.status(200).json({
+      contactId: 0,
+      profilePicUrl
+    });
+
+  } catch (error: any) {
+    logger.warn(`[getContactProfileURL] Erro ao buscar perfil do contato: ${error?.message}`);
+    return res.status(200).json({
+      contactId: 0,
+      profilePicUrl: `${process.env.FRONTEND_URL}/nopicture.png`
+    });
+  }
+};
 
   export const getContactVcard = async (
     req: Request,

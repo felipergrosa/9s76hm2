@@ -4306,21 +4306,20 @@ const handleMessage = async (
     // Se o ticket está em status "campaign" e o contato respondeu, mover para fluxo normal
     if (ticket.status === "campaign" && !msg.key.fromMe) {
       logger.info(`[wbotMessageListener] Contato respondeu em ticket de campanha #${ticket.id}, movendo para fluxo normal. Fila: ${ticket.queueId}`);
-      
-      // Determinar novo status baseado nas configurações
-      // Prioridade: 1) Se tem fila, vai para pending (fila assume)
-      //             2) Se tem bot ativo, vai para bot
-      //             3) Caso contrário, vai para pending
+
+      // Regra de saída de campanha:
+      // - Se a fila/conexão tem bot/IA configurado (ticket.isBot === true) => vai para BOT
+      // - Caso contrário => vai para AGUARDANDO (pending)
       let newStatus = "pending";
-      if (!ticket.queueId && ticket.isBot) {
+      if (ticket.isBot) {
         newStatus = "bot";
       }
-      
+
       await ticket.update({
         status: newStatus,
         unreadMessages: (ticket.unreadMessages || 0) + 1
       });
-      
+
       // Recarregar ticket com dados atualizados
       ticket = await Ticket.findByPk(ticket.id, {
         include: [
@@ -4330,7 +4329,7 @@ const handleMessage = async (
           { model: Whatsapp, as: "whatsapp" }
         ]
       });
-      
+
       logger.info(`[wbotMessageListener] Ticket #${ticket.id} movido para status "${newStatus}", fila: ${ticket.queueId}`);
     }
 

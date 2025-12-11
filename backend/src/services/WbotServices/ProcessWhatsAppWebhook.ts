@@ -234,21 +234,20 @@ async function processIncomingMessage(
   // Se o ticket está em status "campaign" e o contato respondeu, mover para fluxo normal
   if (ticket.status === "campaign") {
     logger.info(`[WebhookProcessor] Contato respondeu em ticket de campanha #${ticket.id}, movendo para fluxo normal. Fila: ${ticket.queueId}`);
-    
-    // Determinar novo status baseado nas configurações
-    // Prioridade: 1) Se tem fila, vai para pending (fila assume)
-    //             2) Se tem bot ativo, vai para bot
-    //             3) Caso contrário, vai para pending
+
+    // Regra de saída de campanha:
+    // - Se a fila/conexão tem bot/IA configurado (ticket.isBot === true) => vai para BOT
+    // - Caso contrário => vai para AGUARDANDO (pending)
     let newStatus = "pending";
-    if (!ticket.queueId && ticket.isBot) {
+    if (ticket.isBot) {
       newStatus = "bot";
     }
-    
+
     await ticket.update({
       status: newStatus,
       unreadMessages: (ticket.unreadMessages || 0) + 1
     });
-    
+
     // Recarregar ticket
     const Ticket = (await import("../../models/Ticket")).default;
     const Queue = (await import("../../models/Queue")).default;
@@ -261,7 +260,7 @@ async function processIncomingMessage(
         { model: Whatsapp, as: "whatsapp" }
       ]
     });
-    
+
     logger.info(`[WebhookProcessor] Ticket #${ticket.id} movido para status "${newStatus}", fila: ${ticket.queueId}`);
   } else {
     // Incrementar contador de mensagens não lidas

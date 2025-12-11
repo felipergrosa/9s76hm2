@@ -150,53 +150,70 @@ const ListTicketsService = async ({
           };
         }
         else
-          if (user.profile === "user" && status === "pending" && showTicketWithoutQueue) {
-            const TicketsUserFilter: any[] | null = [];
-
-            let ticketsIds = [];
-
-            if (!showTicketAllQueues) {
-              ticketsIds = await Ticket.findAll({
-                where: {
-                  companyId,
-                  userId:
-                    { [Op.or]: [user.id, null] },
-                  status: "pending",
-                  queueId: { [Op.in]: queueIds }
-                },
-              });
-            } else {
-              ticketsIds = await Ticket.findAll({
-                where: {
-                  companyId,
-                  [Op.or]:
-                    [{
-                      userId:
-                        { [Op.or]: [user.id, null] }
-                    },
-                    {
-                      status: "pending"
-                    }
-                    ],
-                  // queueId: { [Op.in] : queueIds},
-                  status: "pending"
-                },
-              });
-            }
-            if (ticketsIds) {
-              TicketsUserFilter.push(ticketsIds.map(t => t.id));
-            }
-            // }
-
-            const ticketsIntersection: number[] = intersection(...TicketsUserFilter);
-
+          if (status === "campaign") {
             whereCondition = {
-              ...whereCondition,
-              id: ticketsIntersection
+              companyId,
+              status: "campaign",
+              queueId: showTicketWithoutQueue
+                ? { [Op.or]: [queueIds, null] }
+                : { [Op.or]: [queueIds] }
             };
           }
+          else
+            if (user.profile === "user" && status === "pending" && showTicketWithoutQueue) {
 
-  if (showAll === "true" && (user.profile === "admin" || user.allUserChat === "enabled") && status !== "search") {
+              const TicketsUserFilter: any[] | null = [];
+
+              let ticketsIds = [];
+
+              if (!showTicketAllQueues) {
+                ticketsIds = await Ticket.findAll({
+                  where: {
+                    companyId,
+                    userId:
+                      { [Op.or]: [user.id, null] },
+                    status: "pending",
+                    queueId: { [Op.in]: queueIds }
+                  },
+                });
+              } else {
+                ticketsIds = await Ticket.findAll({
+                  where: {
+                    companyId,
+                    [Op.or]:
+                      [{
+                        userId:
+                          { [Op.or]: [user.id, null] }
+                      },
+                      {
+                        status: "pending"
+                      }
+                      ],
+                    // queueId: { [Op.in] : queueIds},
+                    status: "pending"
+                  },
+                });
+              }
+              if (ticketsIds) {
+                TicketsUserFilter.push(ticketsIds.map(t => t.id));
+              }
+              // }
+
+              const ticketsIntersection: number[] = intersection(...TicketsUserFilter);
+
+              whereCondition = {
+                ...whereCondition,
+                id: ticketsIntersection
+              };
+            }
+
+  if (
+    showAll === "true" &&
+    (user.profile === "admin" || user.allUserChat === "enabled") &&
+    status !== "search" &&
+    status !== "campaign"
+  ) {
+
     if (user.allHistoric === "enabled" && showTicketWithoutQueue) {
       whereCondition = { companyId };
     } else if (user.allHistoric === "enabled" && !showTicketWithoutQueue) {

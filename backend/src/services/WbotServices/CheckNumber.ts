@@ -1,7 +1,6 @@
 import AppError from "../../errors/AppError";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
 import { getWbot } from "../../libs/wbot";
-import { CheckNumberOfficial } from "../MetaServices/CheckNumberOfficial";
 
 const CheckContactNumber = async (
   number: string,
@@ -10,21 +9,24 @@ const CheckContactNumber = async (
 ): Promise<string> => {
   const whatsapp = await GetDefaultWhatsApp(null, companyId);
 
-  // Se a conexão padrão for API Oficial, usar fluxo próprio
+  // Conexão API oficial: apenas normaliza o número para formato internacional,
+  // sem consulta remota nem erro de "não cadastrado".
   if (whatsapp.channelType === "official") {
-    // Para grupos pela API Oficial não há suporte a validação direta
     if (isGroup) {
       throw new AppError("Validação de grupos não suportada via API oficial");
     }
 
-    const waId = await CheckNumberOfficial(number, companyId);
+    let digits = String(number).replace(/\D/g, "");
 
-    if (!waId) {
-      throw new AppError("Este número não está cadastrado no whatsapp");
+    if (digits.startsWith("0")) {
+      digits = digits.substring(1);
     }
 
-    // CheckNumberOfficial já retorna o número normalizado (sem +)
-    return waId;
+    if (digits.length <= 11) {
+      digits = `55${digits}`;
+    }
+
+    return digits;
   }
 
   // Fluxo padrão Baileys (Web)
