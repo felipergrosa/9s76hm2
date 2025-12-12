@@ -386,23 +386,30 @@ const ProcessDuplicateContactsService = async ({
     }
   }
 
-  const io = getIO();
-
-  if (updatedMaster) {
-    io.of(`/workspace-${companyId}`)
-      .emit(`company-${companyId}-contact`, {
-        action: "update",
-        contact: updatedMaster
-      });
+  let io: any;
+  try {
+    io = getIO();
+  } catch (err) {
+    io = null;
   }
 
-  duplicateIds.forEach(id => {
-    io.of(`/workspace-${companyId}`)
-      .emit(`company-${companyId}-contact`, {
-        action: "delete",
-        contactId: id
-      });
-  });
+  if (io) {
+    if (updatedMaster) {
+      io.of(`/workspace-${companyId}`)
+        .emit(`company-${companyId}-contact`, {
+          action: "update",
+          contact: updatedMaster
+        });
+    }
+
+    duplicateIds.forEach(id => {
+      io.of(`/workspace-${companyId}`)
+        .emit(`company-${companyId}-contact`, {
+          action: "delete",
+          contactId: id
+        });
+    });
+  }
 
   return {
     master: updatedMaster,
