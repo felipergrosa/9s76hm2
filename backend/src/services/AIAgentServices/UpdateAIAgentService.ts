@@ -35,6 +35,19 @@ interface Request {
     voiceName?: string;
     // STT Settings
     sttProvider?: "openai" | "gemini" | "disabled";
+    // Inactivity Timeout
+    inactivityTimeoutMinutes?: number;
+    inactivityAction?: "close" | "transfer";
+    inactivityMessage?: string;
+    // Business Hours
+    businessHours?: any;
+    outOfHoursMessage?: string;
+    // Lead Qualification
+    requireLeadQualification?: boolean;
+    requiredLeadFields?: string[];
+    leadFieldMapping?: any;
+    qualifiedLeadTag?: string;
+    leadQualificationMessage?: string;
     funnelStages?: Array<{
         id?: number;
         order: number;
@@ -77,6 +90,16 @@ const UpdateAIAgentService = async ({
     voiceTemperature,
     voiceName,
     sttProvider,
+    inactivityTimeoutMinutes,
+    inactivityAction,
+    inactivityMessage,
+    businessHours,
+    outOfHoursMessage,
+    requireLeadQualification,
+    requiredLeadFields,
+    leadFieldMapping,
+    qualifiedLeadTag,
+    leadQualificationMessage,
     funnelStages
 }: Request): Promise<AIAgent> => {
     const agent = await AIAgent.findOne({
@@ -127,7 +150,20 @@ const UpdateAIAgentService = async ({
         voiceTemperature: voiceTemperature !== undefined ? voiceTemperature : agent.voiceTemperature,
         voiceName: voiceName !== undefined ? voiceName : agent.voiceName,
         // STT Settings
-        sttProvider: sttProvider !== undefined ? sttProvider : agent.sttProvider
+        sttProvider: sttProvider !== undefined ? sttProvider : agent.sttProvider,
+        // Inactivity Timeout
+        inactivityTimeoutMinutes: inactivityTimeoutMinutes !== undefined ? inactivityTimeoutMinutes : (agent as any).inactivityTimeoutMinutes,
+        inactivityAction: inactivityAction !== undefined ? inactivityAction : (agent as any).inactivityAction,
+        inactivityMessage: inactivityMessage !== undefined ? inactivityMessage : (agent as any).inactivityMessage,
+        // Business Hours
+        businessHours: businessHours !== undefined ? businessHours : (agent as any).businessHours,
+        outOfHoursMessage: outOfHoursMessage !== undefined ? outOfHoursMessage : (agent as any).outOfHoursMessage,
+        // Lead Qualification
+        requireLeadQualification: requireLeadQualification !== undefined ? requireLeadQualification : (agent as any).requireLeadQualification,
+        requiredLeadFields: requiredLeadFields !== undefined ? requiredLeadFields : (agent as any).requiredLeadFields,
+        leadFieldMapping: leadFieldMapping !== undefined ? leadFieldMapping : (agent as any).leadFieldMapping,
+        qualifiedLeadTag: qualifiedLeadTag !== undefined ? qualifiedLeadTag : (agent as any).qualifiedLeadTag,
+        leadQualificationMessage: leadQualificationMessage !== undefined ? leadQualificationMessage : (agent as any).leadQualificationMessage
     });
 
     // Atualizar funnel stages se fornecidas

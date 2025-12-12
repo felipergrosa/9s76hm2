@@ -24,6 +24,21 @@ const funnelStageSchema = Yup.object().shape({
 // Schema de validação para criar agente
 const createSchema = Yup.object().shape({
     name: Yup.string().required("ERR_NAME_REQUIRED"),
+    profile: Yup.string().oneOf(["sales", "support", "service", "hybrid"]),
+    queueIds: Yup.array().of(Yup.number()),
+    voiceEnabled: Yup.boolean(),
+    imageRecognitionEnabled: Yup.boolean(),
+    sentimentAnalysisEnabled: Yup.boolean(),
+    autoSegmentationEnabled: Yup.boolean(),
+    status: Yup.string().oneOf(["active", "inactive"]),
+    aiProvider: Yup.string().nullable().oneOf(["openai", "gemini", null]),
+    aiModel: Yup.string().nullable(),
+    temperature: Yup.number().nullable().min(0).max(1),
+    maxTokens: Yup.number().nullable().min(1),
+    creativity: Yup.string().nullable(),
+    toneStyle: Yup.string().nullable(),
+    emojiUsage: Yup.string().nullable(),
+    hashtagUsage: Yup.string().nullable(),
     responseLength: Yup.string().nullable(),
     language: Yup.string().nullable(),
     brandVoice: Yup.string().nullable(),
@@ -34,6 +49,16 @@ const createSchema = Yup.object().shape({
     voiceTemperature: Yup.number().nullable().min(0).max(1),
     voiceName: Yup.string().nullable(),
     sttProvider: Yup.string().nullable().oneOf(["openai", "gemini", "disabled", null]),
+    inactivityTimeoutMinutes: Yup.number().nullable().min(0),
+    inactivityAction: Yup.string().nullable().oneOf(["close", "transfer", null]),
+    inactivityMessage: Yup.string().nullable(),
+    businessHours: Yup.mixed().nullable(),
+    outOfHoursMessage: Yup.string().nullable(),
+    requireLeadQualification: Yup.boolean(),
+    requiredLeadFields: Yup.array().of(Yup.string()),
+    leadFieldMapping: Yup.mixed().nullable(),
+    qualifiedLeadTag: Yup.string().nullable(),
+    leadQualificationMessage: Yup.string().nullable(),
     funnelStages: Yup.array().of(funnelStageSchema)
 });
 
@@ -65,6 +90,16 @@ const updateSchema = Yup.object().shape({
     voiceTemperature: Yup.number().nullable().min(0).max(1),
     voiceName: Yup.string().nullable(),
     sttProvider: Yup.string().nullable().oneOf(["openai", "gemini", "disabled", null]),
+    inactivityTimeoutMinutes: Yup.number().nullable().min(0),
+    inactivityAction: Yup.string().nullable().oneOf(["close", "transfer", null]),
+    inactivityMessage: Yup.string().nullable(),
+    businessHours: Yup.mixed().nullable(),
+    outOfHoursMessage: Yup.string().nullable(),
+    requireLeadQualification: Yup.boolean(),
+    requiredLeadFields: Yup.array().of(Yup.string()),
+    leadFieldMapping: Yup.mixed().nullable(),
+    qualifiedLeadTag: Yup.string().nullable(),
+    leadQualificationMessage: Yup.string().nullable(),
     funnelStages: Yup.array().of(funnelStageSchema)
 });
 

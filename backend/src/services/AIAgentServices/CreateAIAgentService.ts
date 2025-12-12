@@ -11,6 +11,42 @@ interface Request {
     imageRecognitionEnabled?: boolean;
     sentimentAnalysisEnabled?: boolean;
     autoSegmentationEnabled?: boolean;
+    status?: "active" | "inactive";
+    // AI Model Override
+    aiProvider?: "openai" | "gemini" | null;
+    aiModel?: string | null;
+    temperature?: number | null;
+    maxTokens?: number | null;
+    // Advanced Settings
+    creativity?: string | null;
+    toneStyle?: string | null;
+    emojiUsage?: string | null;
+    hashtagUsage?: string | null;
+    responseLength?: string | null;
+    language?: string | null;
+    brandVoice?: string | null;
+    allowedVariables?: string | null;
+    // Voice/TTS Settings
+    voiceType?: "text" | "generated" | "enabled" | null;
+    voiceApiKey?: string | null;
+    voiceRegion?: string | null;
+    voiceTemperature?: number | null;
+    voiceName?: string | null;
+    // STT Settings
+    sttProvider?: "openai" | "gemini" | "disabled" | null;
+    // Inactivity Timeout
+    inactivityTimeoutMinutes?: number | null;
+    inactivityAction?: "close" | "transfer" | null;
+    inactivityMessage?: string | null;
+    // Business Hours
+    businessHours?: any;
+    outOfHoursMessage?: string | null;
+    // Lead Qualification
+    requireLeadQualification?: boolean;
+    requiredLeadFields?: string[];
+    leadFieldMapping?: any;
+    qualifiedLeadTag?: string | null;
+    leadQualificationMessage?: string | null;
     funnelStages?: Array<{
         order: number;
         name: string;
@@ -32,6 +68,35 @@ const CreateAIAgentService = async ({
     imageRecognitionEnabled = false,
     sentimentAnalysisEnabled = true,
     autoSegmentationEnabled = false,
+    status,
+    aiProvider,
+    aiModel,
+    temperature,
+    maxTokens,
+    creativity,
+    toneStyle,
+    emojiUsage,
+    hashtagUsage,
+    responseLength,
+    language,
+    brandVoice,
+    allowedVariables,
+    voiceType,
+    voiceApiKey,
+    voiceRegion,
+    voiceTemperature,
+    voiceName,
+    sttProvider,
+    inactivityTimeoutMinutes,
+    inactivityAction,
+    inactivityMessage,
+    businessHours,
+    outOfHoursMessage,
+    requireLeadQualification,
+    requiredLeadFields,
+    leadFieldMapping,
+    qualifiedLeadTag,
+    leadQualificationMessage,
     funnelStages = []
 }: Request): Promise<AIAgent> => {
     // Criar agente
@@ -44,7 +109,35 @@ const CreateAIAgentService = async ({
         imageRecognitionEnabled,
         sentimentAnalysisEnabled,
         autoSegmentationEnabled,
-        status: "active"
+        status: status || "active",
+        aiProvider: aiProvider as any,
+        aiModel: aiModel as any,
+        temperature: temperature as any,
+        maxTokens: maxTokens as any,
+        creativity: creativity as any,
+        toneStyle: toneStyle as any,
+        emojiUsage: emojiUsage as any,
+        hashtagUsage: hashtagUsage as any,
+        responseLength: responseLength as any,
+        language: language as any,
+        brandVoice: brandVoice as any,
+        allowedVariables: allowedVariables as any,
+        voiceType: voiceType as any,
+        voiceApiKey: voiceApiKey as any,
+        voiceRegion: voiceRegion as any,
+        voiceTemperature: voiceTemperature as any,
+        voiceName: voiceName as any,
+        sttProvider: sttProvider as any,
+        inactivityTimeoutMinutes: inactivityTimeoutMinutes as any,
+        inactivityAction: inactivityAction as any,
+        inactivityMessage: inactivityMessage as any,
+        businessHours: businessHours as any,
+        outOfHoursMessage: outOfHoursMessage as any,
+        requireLeadQualification: requireLeadQualification as any,
+        requiredLeadFields: requiredLeadFields as any,
+        leadFieldMapping: leadFieldMapping as any,
+        qualifiedLeadTag: qualifiedLeadTag as any,
+        leadQualificationMessage: leadQualificationMessage as any
     });
 
     // Criar etapas do funil se fornecidas
