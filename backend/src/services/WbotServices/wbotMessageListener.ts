@@ -4298,7 +4298,10 @@ const handleMessage = async (
         "whatsapp",
         isImported,
         false,
-        settings
+        settings,
+        false,
+        false,
+        Boolean(msg?.key?.fromMe)
       );
       return result;
     });

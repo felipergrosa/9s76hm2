@@ -32,7 +32,8 @@ const FindOrCreateTicketService = async (
   isForward?: boolean,
   settings?: any,
   isTransfered?: boolean,
-  isCampaign: boolean = false
+  isCampaign: boolean = false,
+  isFromMe: boolean = false
 ): Promise<Ticket> => {
   // try {
   // let isCreated = false;
@@ -78,7 +79,7 @@ const FindOrCreateTicketService = async (
       logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} encontrado: status=${ticket.status}, queueId=${ticket.queueId}, isBot=${ticket.isBot}`);
       await ticket.update({ unreadMessages });
       // Se ticket está "pending", verificar se conexão tem fila com bot agora
-      if (ticket.status === "pending") {
+      if (ticket.status === "pending" && !isFromMe) {
         logger.info(
           `[FindOrCreateTicket] Ticket ${ticket.id} está pending (queueId=${ticket.queueId}), verificando se deve virar bot...`
         );
@@ -180,7 +181,9 @@ const FindOrCreateTicketService = async (
       if ((Number(ticket?.userId) !== Number(userId) && userId !== 0 && userId !== "" && userId !== "0" && !isNil(userId) && !ticket.isGroup)
         // @ts-ignore: Unreachable code error 
         || (queueId !== 0 && Number(ticket?.queueId) !== Number(queueId) && queueId !== "" && queueId !== "0" && !isNil(queueId))) {
-        throw new AppError(`Ticket em outro atendimento. ${"Atendente: " + ticket?.user?.name} - ${"Fila: " + ticket?.queue?.name}`);
+        throw new AppError(
+          `Ticket em outro atendimento. Atendente: ${ticket?.user?.name} - Fila: ${ticket?.queue?.name}`
+        );
       }
     }
 
@@ -312,7 +315,7 @@ const FindOrCreateTicketService = async (
       initialStatus = "lgpd";
     } else if (groupContact && whatsapp.groupAsTicket !== "enabled") {
       initialStatus = "group";
-    } else if (!groupContact && hasBotInDefaultQueue) {
+    } else if (!groupContact && hasBotInDefaultQueue && !isFromMe) {
       // Conexão tem fila padrão COM bot: inicia como bot (vale para clientes novos E campanhas)
       initialStatus = "bot";
       initialIsBot = true;
@@ -347,8 +350,9 @@ const FindOrCreateTicketService = async (
           "lgpd" :  //abre como LGPD caso habilitado parâmetro
           (whatsapp.groupAsTicket === "enabled" || !groupContact) ? // se lgpd estiver desabilitado, verifica se é para tratar ticket como grupo ou se é contato normal
             "open" : //caso  é para tratar grupo como ticket ou não é grupo, abre como pendente
-            "group", // se não é para tratar grupo como ticket, vai direto para grupos
-          ticketData.userId = wallets[0].id;
+            "group"; // se não é para tratar grupo como ticket, vai direto para grupos
+
+        ticketData.userId = wallets[0].id;
       }
     }
 
@@ -364,18 +368,17 @@ const FindOrCreateTicketService = async (
     // });
   }
 
-
   if (queueId != 0 && !isNil(queueId)) {
     //Determina qual a fila esse ticket pertence.
     // Buscar fila com chatbots E prompts para verificar se deve ativar bot
     const Queue = (await import("../../models/Queue")).default;
     const Chatbot = (await import("../../models/Chatbot")).default;
     const Prompt = (await import("../../models/Prompt")).default;
-    
+
     const queue = await Queue.findByPk(queueId, {
       include: [
-        { 
-          model: Chatbot, 
+        {
+          model: Chatbot,
           as: "chatbots",
           attributes: ["id", "name"]
         },
@@ -386,17 +389,17 @@ const FindOrCreateTicketService = async (
         }
       ]
     });
-    
+
     if (queue) {
       const hasChatbot = queue.chatbots && queue.chatbots.length > 0;
       const hasPrompt = queue.prompt && queue.prompt.length > 0;
       const hasBot = hasChatbot || hasPrompt;
-      
+
       // Atualiza status para bot somente se fila tiver chatbot OU prompt configurado
-      await ticket.update({ 
+      await ticket.update({
         queueId: queueId,
-        status: ticket.status === "pending" ? (hasBot ? "bot" : "pending") : ticket.status,
-        isBot: hasBot
+        status: ticket.status === "pending" ? (!isFromMe && hasBot ? "bot" : "pending") : ticket.status,
+        isBot: !isFromMe && hasBot
       });
     } else {
       await ticket.update({ queueId: queueId });
@@ -404,7 +407,7 @@ const FindOrCreateTicketService = async (
   }
 
   if (userId != 0 && !isNil(userId)) {
-    //Determina qual a fila esse ticket pertence.
+    //Determina qual o atendente desse ticket.
     await ticket.update({ userId: userId });
   }
 
@@ -414,7 +417,6 @@ const FindOrCreateTicketService = async (
     ticketId: ticket.id,
     type: openAsLGPD ? "lgpd" : "create"
   });
-
 
   return ticket;
 };

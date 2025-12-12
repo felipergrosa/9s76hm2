@@ -85,8 +85,6 @@ const UpdateTicketService = async ({
 
     let ticket = await ShowTicketService(ticketId, companyId);
 
-
-
     if (ticket.channel === "whatsapp" && ticket.whatsappId) {
       SetTicketMessagesAsRead(ticket);
     }
@@ -94,6 +92,19 @@ const UpdateTicketService = async ({
     const oldStatus = ticket?.status;
     const oldUserId = ticket.user?.id;
     const oldQueueId = ticket?.queueId;
+
+    // Se um atendente está assumindo um ticket que está em BOT,
+    // mover para OPEN e desligar modo bot para não ficar preso na aba BOT.
+    const isAssigningUser = !isNil(userId) && userId !== 0;
+    if (
+      isAssigningUser &&
+      oldStatus === "bot" &&
+      (status === undefined || status === "bot" || status === "pending")
+    ) {
+      status = "open";
+      isBot = false;
+      (ticketData as any).isBot = false;
+    }
 
     if (isNil(ticket.whatsappId) && status === "closed") {
       await CreateLogTicketService({
