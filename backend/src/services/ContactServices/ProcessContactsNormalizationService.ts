@@ -89,7 +89,12 @@ const ProcessContactsNormalizationService = async ({
     throw new AppError("ERR_CONTACTS_NOT_FOUND", 404);
   }
 
-  const io = getIO();
+  let io: any;
+  try {
+    io = getIO();
+  } catch (err) {
+    io = null;
+  }
 
   let resultingTag: Tag | undefined;
 
@@ -136,11 +141,13 @@ const ProcessContactsNormalizationService = async ({
   const updatedContacts = await Contact.findAll({ where: { id: contactIds } });
 
   updatedContacts.forEach(contact => {
-    io.of(`/workspace-${companyId}`)
-      .emit(`company-${companyId}-contact`, {
-        action: "update",
-        contact
-      });
+    if (io) {
+      io.of(`/workspace-${companyId}`)
+        .emit(`company-${companyId}-contact`, {
+          action: "update",
+          contact
+        });
+    }
   });
 
   for (const contactId of contactIds) {

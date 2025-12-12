@@ -35,6 +35,41 @@ const referencingTables: Array<{ table: string; column: string }> = [
   { table: "LogTickets", column: "contactId" }
 ];
 
+const tableExistsCache = new Map<string, boolean>();
+
+const tableExists = async (table: string, transaction?: Transaction): Promise<boolean> => {
+  if (tableExistsCache.has(table)) {
+    return tableExistsCache.get(table)!;
+  }
+
+  const regclassName = `public."${table}"`;
+  const result = await sequelize.query<{ exists: boolean }>(
+    `SELECT to_regclass(:regclassName) IS NOT NULL AS exists`,
+    {
+      replacements: { regclassName },
+      type: QueryTypes.SELECT,
+      transaction
+    }
+  );
+
+  const exists = Boolean(result?.[0]?.exists);
+  tableExistsCache.set(table, exists);
+  return exists;
+};
+
+const filterExistingReferencingTables = async (
+  transaction?: Transaction
+): Promise<Array<{ table: string; column: string }>> => {
+  const checks = await Promise.all(
+    referencingTables.map(async ref => ({
+      ref,
+      exists: await tableExists(ref.table, transaction)
+    }))
+  );
+
+  return checks.filter(item => item.exists).map(item => item.ref);
+};
+
 const mergeStringFields = [
   "email",
   "representativeCode",
@@ -95,9 +130,10 @@ const collectUpdatesFromDuplicate = (master: Contact, duplicate: Contact, canoni
 const updateReferences = async (
   masterId: number,
   duplicateId: number,
+  refs: Array<{ table: string; column: string }>,
   transaction: Transaction
 ): Promise<void> => {
-  for (const ref of referencingTables) {
+  for (const ref of refs) {
     if (ref.table === "ContactTags") {
       await sequelize.query(
         `
@@ -295,6 +331,7 @@ const ProcessDuplicateContactsService = async ({
     || normalizedGroupKey;
 
   await sequelize.transaction(async transaction => {
+    const existingRefs = await filterExistingReferencingTables(transaction);
     const aggregatedUpdates: Record<string, unknown> = {};
 
     if (operation === "merge") {
@@ -317,7 +354,7 @@ const ProcessDuplicateContactsService = async ({
     }
 
     for (const duplicate of duplicates) {
-      await updateReferences(master.id, duplicate.id, transaction);
+      await updateReferences(master.id, duplicate.id, existingRefs, transaction);
 
       await sequelize.query(
         'DELETE FROM "ContactCustomFields" WHERE "contactId" = :duplicateId',

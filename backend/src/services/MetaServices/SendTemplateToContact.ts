@@ -10,6 +10,7 @@ import CreateMessageService from "../MessageServices/CreateMessageService";
 import GetTemplateDefinition, { TemplateDefinition } from "./GetTemplateDefinition";
 import MapTemplateParameters from "./MapTemplateParameters";
 import { Op } from "sequelize";  // NOVO: para query de ticket existente
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 interface SendTemplateToContactParams {
   whatsappId: number;
@@ -159,10 +160,19 @@ const SendTemplateToContact = async ({
 
     console.log("[SendTemplateToContact] finalComponents antes de enviar:", JSON.stringify(finalComponents, null, 2));
 
+    const normalizedRecipient = safeNormalizePhoneNumber(contact.canonicalNumber || contact.number);
+    const recipient = normalizedRecipient?.canonical;
+    if (!recipient || recipient.replace(/\D/g, "").length < 10) {
+      throw new AppError(
+        `Número do contato inválido para envio de template: "${contact.number}" (canonical: "${recipient || ""}")`,
+        400
+      );
+    }
+
     // ENVIAR TEMPLATE PRIMEIRO (antes de criar ticket)
     // Se falhar, lança exceção e não cria ticket
     const sent = await official.sendTemplate(
-      contact.number,
+      recipient,
       templateName,
       languageCode,
       finalComponents
