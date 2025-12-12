@@ -168,6 +168,7 @@ const useStyles = makeStyles((theme) => ({
         width: "100%",
         minWidth: 0,
         paddingRight: 110,
+        overflow: "hidden",
     },
 
     pillsRow: {
@@ -209,13 +210,24 @@ const useStyles = makeStyles((theme) => ({
         paddingRight: "0%",
         marginLeft: "5px",
         color: theme.mode === 'light' ? "black" : grey[400],
+        display: "block",
+        minWidth: 0,
+        maxWidth: "100%",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
     },
 
     contactLastMessageUnread: {
         paddingRight: 20,
         fontWeight: "bold",
         color: theme.mode === 'light' ? "black" : grey[400],
-        width: "50%"
+        display: "block",
+        minWidth: 0,
+        maxWidth: "100%",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
     },
 
     badgeStyle: {
