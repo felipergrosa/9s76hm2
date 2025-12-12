@@ -5093,7 +5093,11 @@ const handleMessage = async (
     }
 
     if (ticket.queue && ticket.queueId && !msg.key.fromMe) {
-      if (!ticket.user || ticket.queue?.chatbots?.length > 0) {
+      const hasChatbot = Boolean(ticket.queue?.chatbots && ticket.queue.chatbots.length > 0);
+      const queuePrompt = (ticket.queue as any)?.prompt;
+      const hasPrompt = Boolean(queuePrompt && Array.isArray(queuePrompt) && queuePrompt.length > 0);
+
+      if (hasChatbot && (!ticket.user || ticket.queue?.chatbots?.length > 0)) {
         await sayChatbot(
           ticket.queueId,
           wbot,
@@ -5102,6 +5106,21 @@ const handleMessage = async (
           msg,
           ticketTraking
         );
+      } else if (ticket.isBot && hasPrompt) {
+        try {
+          await handleOpenAi(
+            queuePrompt[0],
+            msg,
+            wbot,
+            ticket,
+            contact,
+            mediaSent,
+            ticketTraking
+          );
+        } catch (e) {
+          Sentry.captureException(e);
+          logger.error(`[wbotMessageListener] Erro ao processar IA por Prompt da fila. ticketId=${ticket.id}; queueId=${ticket.queueId}; err=${(e as any)?.message || e}`);
+        }
       }
 
       //atualiza mensagem para indicar que houve atividade e aí contar o tempo novamente para enviar mensagem de inatividade

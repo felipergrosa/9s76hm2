@@ -57,7 +57,7 @@ const FindOrCreateTicketService = async (
   let ticket = await Ticket.findOne({
     where: {
       status: {
-        [Op.or]: ["open", "pending", "group", "nps", "lgpd", "bot"]
+        [Op.or]: ["open", "pending", "group", "nps", "lgpd", "bot", "campaign"]
       },
       contactId: groupContact ? groupContact.id : contact.id,
       companyId,

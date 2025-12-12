@@ -97,7 +97,7 @@ const ShowTicketService = async (
         model: Queue,
         as: "queue",
         attributes: ["id", "name", "color"],
-        include: ["chatbots"]
+        include: ["chatbots", "prompt"]
       },
       {
         model: User,
@@ -231,7 +231,7 @@ const ShowTicketService = async (
               model: Queue,
               as: "queue",
               attributes: ["id", "name", "color"],
-              include: ["chatbots"]
+              include: ["chatbots", "prompt"]
             },
             {
               model: User,

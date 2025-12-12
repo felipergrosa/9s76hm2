@@ -32,6 +32,7 @@ import SendWhatsAppMessage from "./services/WbotServices/SendWhatsAppMessage";
 import UpdateTicketService from "./services/TicketServices/UpdateTicketService";
 import { addSeconds, differenceInSeconds } from "date-fns";
 import { GetWhatsapp } from "./helpers/GetWhatsapp";
+import { safeNormalizePhoneNumber } from "./utils/phone";
 const CronJob = require('cron').CronJob;
 import CompaniesSettings from "./models/CompaniesSettings";
 import { verifyMediaMessage, verifyMessage } from "./services/WbotServices/wbotMessageListener";
@@ -1583,15 +1584,17 @@ async function handleDispatchCampaign(job) {
       try {
         if (campaign.openTicket === "enabled") {
           // Cria/usa contato no CRM para poder abrir ticket
+          const { canonical: canonicalNumber } = safeNormalizePhoneNumber(String(campaignShipping.number || ""));
+          const normalizedNumber = canonicalNumber || String(campaignShipping.number || "");
           const [contact] = await Contact.findOrCreate({
             where: {
-              number: campaignShipping.number,
+              number: normalizedNumber,
               companyId: campaign.companyId
             },
             defaults: {
               companyId: campaign.companyId,
               name: campaignShipping.contact.name,
-              number: campaignShipping.number,
+              number: normalizedNumber,
               email: campaignShipping.contact.email,
               whatsappId: selectedWhatsappId,
               profilePicUrl: ""
@@ -1674,15 +1677,17 @@ async function handleDispatchCampaign(job) {
         } else {
           // openTicket=disabled: Cria ticket com status "campaign" (não aparece em aguardando/atendendo)
           // Buscar ou criar contato
+          const { canonical: canonicalNumber } = safeNormalizePhoneNumber(String(campaignShipping.number || ""));
+          const normalizedNumber = canonicalNumber || String(campaignShipping.number || "");
           const [contact] = await Contact.findOrCreate({
             where: {
-              number: campaignShipping.number,
+              number: normalizedNumber,
               companyId: campaign.companyId
             },
             defaults: {
               companyId: campaign.companyId,
               name: campaignShipping.contact.name,
-              number: campaignShipping.number,
+              number: normalizedNumber,
               email: campaignShipping.contact.email,
               whatsappId: selectedWhatsappId,
               profilePicUrl: ""
@@ -1820,15 +1825,17 @@ async function handleDispatchCampaign(job) {
         throw err;
       }
     } else if (campaign.openTicket === "enabled") {
+      const { canonical: canonicalNumber } = safeNormalizePhoneNumber(String(campaignShipping.number || ""));
+      const normalizedNumber = canonicalNumber || String(campaignShipping.number || "");
       const [contact] = await Contact.findOrCreate({
         where: {
-          number: campaignShipping.number,
+          number: normalizedNumber,
           companyId: campaign.companyId
         },
         defaults: {
           companyId: campaign.companyId,
           name: campaignShipping.contact.name,
-          number: campaignShipping.number,
+          number: normalizedNumber,
           email: campaignShipping.contact.email,
           whatsappId: selectedWhatsappId,
           profilePicUrl: ""
@@ -2008,15 +2015,17 @@ async function handleDispatchCampaign(job) {
       }
 
       // Buscar ou criar contato
+      const { canonical: canonicalNumber } = safeNormalizePhoneNumber(String(campaignShipping.number || ""));
+      const normalizedNumber = canonicalNumber || String(campaignShipping.number || "");
       const [contact] = await Contact.findOrCreate({
         where: {
-          number: campaignShipping.number,
+          number: normalizedNumber,
           companyId: campaign.companyId
         },
         defaults: {
           companyId: campaign.companyId,
           name: campaignShipping.contact.name,
-          number: campaignShipping.number,
+          number: normalizedNumber,
           email: campaignShipping.contact.email,
           whatsappId: selectedWhatsappId,
           profilePicUrl: ""
