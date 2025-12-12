@@ -37,6 +37,8 @@ const FindOrCreateTicketService = async (
   // try {
   // let isCreated = false;
 
+  settings = settings ?? (await CompaniesSettings.findOne({ where: { companyId } })) ?? ({} as any);
+
   let openAsLGPD = false;
   if (settings && settings.enableLGPD) { // adicionar lgpdMessage
 
@@ -64,9 +66,6 @@ const FindOrCreateTicketService = async (
     order: [["id", "DESC"]]
   });
 
-
-
-
   if (ticket) {
     if (isCampaign) {
       await ticket.update({
@@ -78,7 +77,6 @@ const FindOrCreateTicketService = async (
       // Se ticket está em "bot", continua bot. Se está em "pending", continua pending.
       logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} encontrado: status=${ticket.status}, queueId=${ticket.queueId}, isBot=${ticket.isBot}`);
       await ticket.update({ unreadMessages });
-      
       // Se ticket está "pending", verificar se conexão tem fila com bot agora
       if (ticket.status === "pending") {
         logger.info(
@@ -310,7 +308,7 @@ const FindOrCreateTicketService = async (
     let initialIsBot = false;
     let initialQueueId = null;
     
-    if (!isImported && !isNil(settings.enableLGPD) && openAsLGPD && !groupContact) {
+    if (!isImported && !isNil(settings?.enableLGPD) && openAsLGPD && !groupContact) {
       initialStatus = "lgpd";
     } else if (groupContact && whatsapp.groupAsTicket !== "enabled") {
       initialStatus = "group";
@@ -344,7 +342,7 @@ const FindOrCreateTicketService = async (
       const wallet: any = contact;
       const wallets = await wallet.getWallets();
       if (wallets && wallets[0]?.id) {
-        ticketData.status = (!isImported && !isNil(settings.enableLGPD)
+        ticketData.status = (!isImported && !isNil(settings?.enableLGPD)
           && openAsLGPD && !groupContact) ? //verifica se lgpd está habilitada e não é grupo e se tem a mensagem e link da política
           "lgpd" :  //abre como LGPD caso habilitado parâmetro
           (whatsapp.groupAsTicket === "enabled" || !groupContact) ? // se lgpd estiver desabilitado, verifica se é para tratar ticket como grupo ou se é contato normal

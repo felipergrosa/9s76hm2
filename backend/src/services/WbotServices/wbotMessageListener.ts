@@ -4273,7 +4273,7 @@ const handleMessage = async (
       where: { companyId }
     });
 
-    const enableLGPD = settings.enableLGPD === "enabled";
+    const enableLGPD = settings?.enableLGPD === "enabled";
 
     const isFirstMsg = await Ticket.findOne({
       where: {

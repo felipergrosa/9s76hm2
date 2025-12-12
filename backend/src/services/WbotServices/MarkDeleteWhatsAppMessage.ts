@@ -47,7 +47,7 @@ const MarkDeleteWhatsAppMessage = async (from: any, timestamp?: any, msgId?: str
                     }
                 })
 
-                if (settings.lgpdDeleteMessage === "enabled" && settings.enableLGPD === "enabled") {
+                if (settings?.lgpdDeleteMessage === "enabled" && settings?.enableLGPD === "enabled") {
 
                     await messageToUpdate.update({ body: "🚫 _Mensagem Apagada_", isDeleted: true });
 
