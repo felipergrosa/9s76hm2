@@ -9,6 +9,7 @@ import makeWASocket, {
 import * as Sentry from "@sentry/node";
 import fs from "fs";
 import path from "path";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 import {
   IWhatsAppAdapter,
   IWhatsAppMessage,
@@ -114,6 +115,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
 
     try {
       const { to, body, mediaType, mediaPath, mediaUrl, caption, quotedMsgId, buttons, listSections, vcard } = options;
+      const toJid = this.normalizeRecipientToJid(to);
       
       let content: any;
       let sentMsg: any;
@@ -127,7 +129,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
           content.quoted = { key: { id: quotedMsgId } };
         }
         
-        sentMsg = await this.socket.sendMessage(to, content);
+        sentMsg = await this.socket.sendMessage(toJid, content);
       }
       // Mensagem com botões
       else if (buttons && buttons.length > 0) {
@@ -140,7 +142,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
           })),
           headerType: 1
         };
-        sentMsg = await this.socket.sendMessage(to, content);
+        sentMsg = await this.socket.sendMessage(toJid, content);
       }
       // Mensagem com lista
       else if (listSections && listSections.length > 0) {
@@ -158,7 +160,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
           title: options.listTitle || "",
           footer: ""
         };
-        sentMsg = await this.socket.sendMessage(to, content as any);
+        sentMsg = await this.socket.sendMessage(toJid, content as any);
       }
       // vCard (contato)
       else if (vcard) {
@@ -168,7 +170,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
             contacts: [{ vcard }]
           }
         };
-        sentMsg = await this.socket.sendMessage(to, content);
+        sentMsg = await this.socket.sendMessage(toJid, content);
       }
       // Mensagem com mídia
       else if (mediaPath || mediaUrl) {
@@ -211,7 +213,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
             );
         }
 
-        sentMsg = await this.socket.sendMessage(to, content);
+        sentMsg = await this.socket.sendMessage(toJid, content);
       }
 
       // Converter para formato normalizado
@@ -225,6 +227,32 @@ export class BaileysAdapter implements IWhatsAppAdapter {
         error
       );
     }
+  }
+
+  private normalizeRecipientToJid(to: string): string {
+    const raw = String(to || "").trim();
+    if (!raw) {
+      throw new WhatsAppAdapterError("Destinatário inválido", "INVALID_RECIPIENT");
+    }
+
+    // Se já vier como JID, manter
+    if (raw.includes("@")) {
+      return raw;
+    }
+
+    // Grupo geralmente vem como "12345-67890" (sem @g.us)
+    if (raw.includes("-")) {
+      return `${raw}@g.us`;
+    }
+
+    // Individual: normalizar para dígitos canônicos (ex: 55DD9XXXXXXXX)
+    const normalized = safeNormalizePhoneNumber(raw);
+    const digits = normalized.canonical || raw.replace(/\D/g, "");
+    if (!digits) {
+      throw new WhatsAppAdapterError("Destinatário inválido", "INVALID_RECIPIENT");
+    }
+
+    return `${digits}@s.whatsapp.net`;
   }
 
   /**

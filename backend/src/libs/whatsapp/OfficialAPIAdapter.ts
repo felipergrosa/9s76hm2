@@ -8,6 +8,7 @@ import {
   WhatsAppAdapterError
 } from "./IWhatsAppAdapter";
 import logger from "../../utils/logger";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 /**
  * Configuração do adapter oficial
@@ -182,8 +183,15 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
     try {
       const { to, body, mediaType, mediaUrl, caption, buttons, listSections, listTitle, listButtonText, vcard } = options;
 
-      // Normalizar número (remover caracteres não numéricos)
-      const recipient = to.replace(/\D/g, "");
+      // Normalizar número para formato canônico (DDI + nacional)
+      const normalized = safeNormalizePhoneNumber(to);
+      const recipient = normalized.canonical || String(to || "").replace(/\D/g, "");
+      if (!recipient || recipient.length < 10) {
+        throw new WhatsAppAdapterError(
+          `Número de destinatário inválido: "${to}" (normalizado: "${recipient}")`,
+          "INVALID_PHONE_NUMBER"
+        );
+      }
 
       let payload: any = {
         messaging_product: "whatsapp",
@@ -777,7 +785,14 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
     components?: any[]
   ): Promise<IWhatsAppMessage> {
     try {
-      const recipient = to.replace(/\D/g, "");
+      const normalized = safeNormalizePhoneNumber(to);
+      const recipient = normalized.canonical || String(to || "").replace(/\D/g, "");
+      if (!recipient || recipient.length < 10) {
+        throw new WhatsAppAdapterError(
+          `Número de destinatário inválido: "${to}" (normalizado: "${recipient}")`,
+          "INVALID_PHONE_NUMBER"
+        );
+      }
 
       const payload: any = {
         messaging_product: "whatsapp",
