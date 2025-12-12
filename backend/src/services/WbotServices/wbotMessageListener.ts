@@ -4320,15 +4320,8 @@ const handleMessage = async (
         unreadMessages: (ticket.unreadMessages || 0) + 1
       });
 
-      // Recarregar ticket com dados atualizados
-      ticket = await Ticket.findByPk(ticket.id, {
-        include: [
-          { model: Contact, as: "contact" },
-          { model: Queue, as: "queue" },
-          { model: User, as: "user" },
-          { model: Whatsapp, as: "whatsapp" }
-        ]
-      });
+      // Recarregar ticket com include completo (inclui queue.chatbots e queue.prompt)
+      ticket = await ShowTicketService(ticket.id, companyId);
 
       logger.info(`[wbotMessageListener] Ticket #${ticket.id} movido para status "${newStatus}", fila: ${ticket.queueId}`);
     }
@@ -5090,6 +5083,16 @@ const handleMessage = async (
     } catch (e) {
       Sentry.captureException(e);
       console.log(e);
+    }
+
+    // Fallback: se o ticket tem queueId mas não veio com a associação carregada,
+    // recarrega para garantir queue.chatbots e queue.prompt e permitir disparo do bot/IA.
+    if (ticket.queueId && !ticket.queue) {
+      try {
+        ticket = await ShowTicketService(ticket.id, companyId);
+      } catch (e) {
+        // silencioso: se falhar, mantém como está
+      }
     }
 
     if (ticket.queue && ticket.queueId && !msg.key.fromMe) {
