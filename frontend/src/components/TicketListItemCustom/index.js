@@ -83,6 +83,10 @@ const useStyles = makeStyles((theme) => ({
         marginRight: "10px",
         borderRadius: 0,
     },
+
+    unreadBelowDate: {
+        marginTop: 8,
+    },
     noTicketsText: {
         textAlign: "center",
         color: "rgb(146, 104, 104)",
@@ -93,10 +97,10 @@ const useStyles = makeStyles((theme) => ({
         background: "green",
         color: "#FFF",
         marginRight: 1,
-        padding: 1,
+        padding: "1px 5px",
         fontWeight: 'bold',
-        borderRadius: 3,
-        fontSize: "0.6em",
+        borderRadius: 4,
+        fontSize: "0.7em",
     },
     noTicketsTitle: {
         textAlign: "center",
@@ -126,21 +130,72 @@ const useStyles = makeStyles((theme) => ({
         justifySelf: "flex-end",
         textAlign: "right",
         position: "relative",
-        top: -30,
+        top: 0,
         marginRight: "1px",
         color: theme.mode === 'light' ? "black" : grey[400],
         fontSize: 11,
+    },
+
+    rightMetaAction: {
+        top: 10,
+        transform: "none",
+        right: 8,
+    },
+
+    rightSideMeta: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        justifyContent: "flex-start",
+        gap: 1,
+        position: "relative",
+    },
+
+    unreadPlaceholder: {
+        visibility: "hidden",
+    },
+
+    rightBadgeDummy: {
+        width: 1,
+        height: 1,
+        display: "inline-block",
+    },
+
+    secondaryContainer: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        width: "100%",
+        minWidth: 0,
+        paddingRight: 110,
+    },
+
+    pillsRow: {
+        display: "flex",
+        flexWrap: "wrap",
+        flexDirection: "row",
+        alignItems: "center",
+        alignContent: "flex-start",
+        gap: 1,
+        marginLeft: "5px",
+        marginTop: 2,
+        maxWidth: "100%",
+        minHeight: 18,
+        "& > *": {
+            flex: "0 0 auto",
+            maxWidth: "100%"
+        }
     },
 
     lastMessageTimeUnread: {
         justifySelf: "flex-end",
         textAlign: "right",
         position: "relative",
-        top: -30,
+        top: -5,
         color: "green",
         fontWeight: "bold",
         marginRight: "1px",
-        fontSize: 11,
+        fontSize: 10,
     },
 
     closedBadge: {
@@ -717,7 +772,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                         </div>
                     }
                     secondary={
-                        <span className={classes.contactNameWrapper}>
+                        <span className={classes.secondaryContainer}>
                             <Typography
                                 className={Number(ticket.unreadMessages) > 0 ? classes.contactLastMessageUnread : classes.contactLastMessage}
                                 noWrap
@@ -732,49 +787,57 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                                             <MarkdownWrapper>Localização</MarkdownWrapper> :
                                             <> {ticket.lastMessage.includes('BEGIN:VCARD') ?
                                                 <MarkdownWrapper>Contato</MarkdownWrapper> :
-                                                <MarkdownWrapper>{truncate(ticket.lastMessage, 40)}</MarkdownWrapper>}
+                                                <MarkdownWrapper>{ticket.lastMessage}</MarkdownWrapper>}
                                             </>
                                         }
                                     </>
                                 ) : (
                                     <br />
                                 )}
-                                <span className={classes.secondaryContentSecond} >
-                                    {ticket?.whatsapp ? <Badge className={classes.connectionTag} style={{ backgroundColor: ticket.channel === "whatsapp" ? "#25D366" : ticket.channel === "facebook" ? "#4267B2" : "#E1306C" }}>{ticket.whatsapp?.name.toUpperCase()}</Badge> : <br></br>}
-                                    {<Badge style={{ backgroundColor: ticket.queue?.color || "#7c7c7c" }} className={classes.connectionTag}>{ticket.queueId ? ticket.queue?.name.toUpperCase() : ticket.status === "lgpd" ? "LGPD" : "SEM FILA"}</Badge>}
-                                    {ticket?.user && (<Badge style={{ backgroundColor: "#000000" }} className={classes.connectionTag}>{ticket.user?.name.toUpperCase()}</Badge>)}
-                                </span>
-                                <span className={classes.secondaryContentSecond} >
-                                    {
-                                        ticket.tags?.map((tag) => {
-                                            return (
-                                                <ContactTag tag={tag} key={`ticket-contact-tag-${ticket.id}-${tag.id}`} />
-                                            );
-                                        })
-                                    }
-                                </span>
                             </Typography>
 
-                            <Badge
-                                className={classes.newMessagesCount}
-                                badgeContent={ticket.unreadMessages}
-                                classes={{
-                                    badge: classes.badgeStyle,
-                                }}
-                            />
+                            <span className={classes.pillsRow}>
+                                {ticket?.whatsapp ? (
+                                    <Badge
+                                        className={classes.connectionTag}
+                                        style={{
+                                            backgroundColor:
+                                                ticket.channel === "whatsapp"
+                                                    ? "#25D366"
+                                                    : ticket.channel === "facebook"
+                                                        ? "#4267B2"
+                                                        : "#E1306C"
+                                        }}
+                                    >
+                                        {ticket.whatsapp?.name.toUpperCase()}
+                                    </Badge>
+                                ) : null}
+
+                                <Badge style={{ backgroundColor: ticket.queue?.color || "#7c7c7c" }} className={classes.connectionTag}>
+                                    {ticket.queueId ? ticket.queue?.name.toUpperCase() : ticket.status === "lgpd" ? "LGPD" : "SEM FILA"}
+                                </Badge>
+
+                                {ticket?.user && (
+                                    <Badge style={{ backgroundColor: "#000000" }} className={classes.connectionTag}>
+                                        {ticket.user?.name.toUpperCase()}
+                                    </Badge>
+                                )}
+
+                                {ticket.tags?.map((tag) => (
+                                    <ContactTag tag={tag} key={`ticket-contact-tag-${ticket.id}-${tag.id}`} />
+                                ))}
+                            </span>
                         </span>
                     }
                 />
-                <ListItemSecondaryAction>
-                    {ticket.lastMessage && (
-                        <>
-
+                <ListItemSecondaryAction className={classes.rightMetaAction}>
+                    {(ticket.lastMessage || ticket.updatedAt) && (
+                        <div className={classes.rightSideMeta}>
                             <Typography
                                 className={Number(ticket.unreadMessages) > 0 ? classes.lastMessageTimeUnread : classes.lastMessageTime}
                                 component="span"
                                 variant="body2"
                             >
-
                                 {(() => {
                                     const d = parseISO(ticket.updatedAt);
                                     if (isSameDay(d, new Date())) return format(d, "HH:mm");
@@ -783,9 +846,16 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                                 })()}
                             </Typography>
 
-                            <br />
-
-                        </>
+                            <Badge
+                                className={`${classes.newMessagesCount} ${classes.unreadBelowDate} ${Number(ticket.unreadMessages) > 0 ? "" : classes.unreadPlaceholder}`}
+                                badgeContent={ticket.unreadMessages}
+                                classes={{
+                                    badge: classes.badgeStyle,
+                                }}
+                            >
+                                <span className={classes.rightBadgeDummy} />
+                            </Badge>
+                        </div>
                     )}
 
                 </ListItemSecondaryAction>
@@ -827,7 +897,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                         )}
                     </span>
                     <span className={classes.secondaryContentSecond1} >
-                        {(ticket.status === "pending" || ticket.status === "open" || ticket.status === "group") && (
+                        {(ticket.status === "pending" || ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
                             <ButtonWithSpinner
                                 style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '50px', position: 'absolute', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
                                 variant="contained"
@@ -843,7 +913,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                         )}
                     </span>
                     <span className={classes.secondaryContentSecond} >
-                        {(ticket.status === "open" || ticket.status === "group") && (
+                        {(ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
                             <>
                                 <ButtonWithSpinner
                                     style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
