@@ -1394,7 +1394,28 @@ const CampaignModal = ({
                             className={classes.formControl}
                           >
                             <InputLabel id="openTicket-selection-label">
-                              {i18n.t("campaigns.dialog.form.openTicket")}
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                {i18n.t("campaigns.dialog.form.openTicket")}
+                                <Tooltip
+                                  arrow
+                                  placement="top"
+                                  title={
+                                    <div style={{ maxWidth: 360 }}>
+                                      <Typography variant="body2" style={{ marginBottom: 6 }}>
+                                        <strong>Habilitado</strong>: cria ticket normal (fluxo atendimento/bot).
+                                      </Typography>
+                                      <Typography variant="body2" style={{ marginBottom: 6 }}>
+                                        <strong>Desabilitado</strong>: fica na aba <strong>Campanha</strong> até o contato responder.
+                                      </Typography>
+                                      <Typography variant="body2">
+                                        <strong>Ao responder</strong>: se a fila tiver bot/agente (Chatbot ou RAG) vai para <strong>BOT</strong>; se não tiver, vai para <strong>Atendendo</strong>.
+                                      </Typography>
+                                    </div>
+                                  }
+                                >
+                                  <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.8 }} />
+                                </Tooltip>
+                              </span>
                             </InputLabel>
                             <Field
                               as={Select}
@@ -1564,7 +1585,25 @@ const CampaignModal = ({
                             className={classes.formControl}
                           >
                             <InputLabel id="statusTicket-selection-label">
-                              {i18n.t("campaigns.dialog.form.statusTicket")}
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                {i18n.t("campaigns.dialog.form.statusTicket")}
+                                <Tooltip
+                                  arrow
+                                  placement="top"
+                                  title={
+                                    <div style={{ maxWidth: 360 }}>
+                                      <Typography variant="body2" style={{ marginBottom: 6 }}>
+                                        Define como o ticket nasce quando <strong>Abrir ticket</strong> estiver <strong>Habilitado</strong>.
+                                      </Typography>
+                                      <Typography variant="body2">
+                                        <strong>Pendente</strong> não cai em Atendendo automaticamente. Quando o contato responder: <strong>BOT</strong> se a fila tiver Chatbot/RAG; senão <strong>Atendendo</strong>.
+                                      </Typography>
+                                    </div>
+                                  }
+                                >
+                                  <InfoOutlinedIcon fontSize="small" style={{ opacity: 0.8 }} />
+                                </Tooltip>
+                              </span>
                             </InputLabel>
                             <Field
                               as={Select}

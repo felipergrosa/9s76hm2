@@ -17,7 +17,7 @@ import ShowTicketService from "./ShowTicketService";
 interface Request {
   contactId: number;
   status: string;
-  userId: number;
+  userId: number | null;
   companyId: number;
   queueId?: number;
   whatsappId: string;
@@ -43,13 +43,14 @@ const CreateTicketService = async ({
   }
 
 
-  defaultWhatsapp = await GetDefaultWhatsAppByUser(userId);
+  const userIdNumber = userId ? Number(userId) : null;
+  defaultWhatsapp = userIdNumber ? await GetDefaultWhatsAppByUser(userIdNumber) : null;
 
   if (whatsapp) {
     defaultWhatsapp = whatsapp;
   }
   if (!defaultWhatsapp)
-    defaultWhatsapp = await GetDefaultWhatsApp(whatsapp.id, companyId);
+    defaultWhatsapp = await GetDefaultWhatsApp(whatsapp?.id, companyId, userIdNumber || undefined);
 
   // console.log("defaultWhatsapp", defaultWhatsapp.id, defaultWhatsapp.channel)
   await CheckContactOpenTickets(contactId, defaultWhatsapp.id, companyId);
@@ -86,10 +87,10 @@ const CreateTicketService = async ({
     whatsappId: defaultWhatsapp.id,
     channel: defaultWhatsapp.channel,
     isGroup,
-    userId,
+    userId: userIdNumber,
     isBot: shouldEnableBot,  // Dinâmico baseado em chatbot OU RAG
     queueId,
-    status: isGroup ? "group" : "open",
+    status: isGroup ? "group" : (status || "open"),
     isActiveDemand: true
   });
 

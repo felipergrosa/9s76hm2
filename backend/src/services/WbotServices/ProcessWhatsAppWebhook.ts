@@ -236,15 +236,33 @@ async function processIncomingMessage(
     logger.info(`[WebhookProcessor] Contato respondeu em ticket de campanha #${ticket.id}, movendo para fluxo normal. Fila: ${ticket.queueId}`);
 
     // Regra de saída de campanha:
-    // - Se a fila/conexão tem bot/IA configurado (ticket.isBot === true) => vai para BOT
-    // - Caso contrário => vai para AGUARDANDO (pending)
-    let newStatus = "pending";
-    if (ticket.isBot) {
-      newStatus = "bot";
+    // - Se a fila tem bot/agente (Chatbot ou RAG) => vai para BOT
+    // - Caso contrário => vai direto para ATENDENDO (open)
+    let shouldGoBot = Boolean(ticket.isBot);
+    try {
+      if (ticket.queueId) {
+        const Queue = (await import("../../models/Queue")).default;
+        const queue = await Queue.findByPk(ticket.queueId, {
+          include: [
+            {
+              association: "chatbots",
+              required: false
+            }
+          ]
+        });
+        const hasChatbot = Boolean(queue?.chatbots && (queue as any).chatbots.length > 0);
+        const hasRAG = Boolean(queue?.ragCollection && String(queue.ragCollection).trim());
+        shouldGoBot = hasChatbot || hasRAG;
+      }
+    } catch (e: any) {
+      logger.warn(`[WebhookProcessor] Erro ao avaliar bot/RAG da fila (queueId=${ticket.queueId}): ${e?.message || e}`);
     }
+
+    const newStatus = shouldGoBot ? "bot" : "open";
 
     await ticket.update({
       status: newStatus,
+      isBot: shouldGoBot,
       unreadMessages: (ticket.unreadMessages || 0) + 1
     });
 
