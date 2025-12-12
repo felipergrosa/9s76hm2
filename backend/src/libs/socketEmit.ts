@@ -27,8 +27,10 @@ export async function emitToCompanyRoom(
 
   const explicit = process.env.SOCKET_FALLBACK_NS_BROADCAST;
   const isProd = process.env.NODE_ENV === "production";
+  const isAppMessageEvent = event.includes("-appMessage");
   // Desabilita fallback se skipFallback=true ou se estamos em produção
-  const fallbackEnabled = !skipFallback && (explicit === "true" || (explicit !== "false" && !isProd));
+  // EXCEÇÃO: para eventos appMessage, manter fallback para evitar perda de realtime quando o cliente não está na sala
+  const fallbackEnabled = isAppMessageEvent || (!skipFallback && (explicit === "true" || (explicit !== "false" && !isProd)));
   const debug = process.env.SOCKET_DEBUG === "true";
 
   try {

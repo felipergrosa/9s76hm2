@@ -189,7 +189,14 @@ class SocketWorker {
   connect() {
     if (!this.socket) {
       this.configureSocket();
+      return;
     }
+
+    try {
+      if (!this.socket.connected && typeof this.socket.connect === "function") {
+        this.socket.connect();
+      }
+    } catch (e) {}
   }
 
   forceReconnect() {

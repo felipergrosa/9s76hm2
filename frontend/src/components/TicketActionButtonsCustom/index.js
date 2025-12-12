@@ -281,11 +281,15 @@ const TicketActionButtonsCustom = ({ ticket
             toastError(err);
         }
         const msg = `${setting.greetingAcceptedMessage}`; //`{{ms}} *{{name}}*, ${i18n.t("mainDrawer.appBar.user.myName")} *${user?.name}* ${i18n.t("mainDrawer.appBar.user.continuity")}.`;
+        const body = (msg || "").trim();
+        if (!body) {
+            return;
+        }
         const message = {
             read: 1,
             fromMe: true,
             mediaUrl: "",
-            body: `${msg.trim()}`,
+            body,
         };
         try {
             await api.post(`/messages/${id}`, message);
