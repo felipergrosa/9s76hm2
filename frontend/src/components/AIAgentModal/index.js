@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import * as Yup from "yup";
 import { Formik, Form, Field, FieldArray } from "formik";
 import { toast } from "react-toastify";
@@ -120,6 +120,88 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
     const [useGlobalAISettings, setUseGlobalAISettings] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
     const [openSystemHelp, setOpenSystemHelp] = useState(false);
+    const [openPromptPreview, setOpenPromptPreview] = useState(false);
+    const [helpStageIndex, setHelpStageIndex] = useState(0);
+    const [promptPreviewText, setPromptPreviewText] = useState("");
+
+    const formikRef = useRef({ values: null, setFieldValue: null });
+
+    const buildSystemPromptTemplate = () => {
+        return `# Papel e objetivo
+- Você é o assistente virtual da empresa.
+- Seu objetivo é atender com clareza, rapidez e alta taxa de conversão.
+
+# Tom e estilo
+- Seja direto, educado e consultivo.
+- Faça perguntas objetivas e sempre uma por vez.
+- Não invente informações: quando não souber, ofereça alternativas (ex.: pedir mais detalhes ou transferir para humano).
+
+# Regras de atendimento
+- Identifique a intenção do cliente (catálogo, tabela de preços, produto específico, suporte, falar com humano).
+- Antes de enviar materiais, confirme o que o cliente precisa (ex.: linha, ambiente, quantidade, prazo).
+- Se o cliente pedir tabela/condições, conduza a coleta de dados (CNPJ e e-mail) com linguagem simples.
+
+# Uso de ferramentas
+- Quando precisar enviar catálogo/tabela/informativo, use as ferramentas disponíveis.
+- Sempre confirme o que foi enviado e pergunte o próximo passo (ex.: “Quer que eu te ajude a escolher um modelo?”).
+
+# Encaminhamento
+- Se o cliente solicitar atendimento humano ou houver impasse, ofereça transferência.
+`;
+    };
+
+    const buildPromptPreview = (values, stage) => {
+        const enabledFunctions = stage?.enabledFunctions || [];
+
+        const anyBusinessHours = Boolean(
+            values?.businessHours &&
+            Object.values(values.businessHours).some(d => (d?.start && d?.end))
+        );
+
+        const qualificationEnabled = Boolean(values?.requireLeadQualification);
+        const inactivityEnabled = Number(values?.inactivityTimeoutMinutes || 0) > 0;
+
+        const toolsText = enabledFunctions.length
+            ? enabledFunctions.join(", ")
+            : "(todas as funções disponíveis / sem restrição por etapa)";
+
+        return `### PREVIEW (aproximado) do prompt final enviado para a IA
+Observação: este preview é uma representação para facilitar entendimento. O backend pode incluir mais contexto e regras de segurança.
+
+---
+
+[1) CONTEXTO AUTOMÁTICO (CRM)]
+- Nome do contato: {{contato.nome}}
+- Telefone/WhatsApp: {{contato.numero}}
+- Empresa/Razão social: {{contato.empresa}}
+- Cidade/UF: {{contato.cidade}}
+- Segmento: {{contato.segmento}}
+- Situação/Tags: {{contato.tags}}
+- CNPJ: {{contato.cnpj}}
+- E-mail: {{contato.email}}
+
+[2) RAG / BASE DE CONHECIMENTO]
+- A IA pode consultar a base da(s) fila(s) (arquivos, sites, tickets, mídias). Se não houver informação, evitar alucinar.
+
+[3) FERRAMENTAS DISPONÍVEIS (POR ETAPA)]
+- Funções habilitadas nesta etapa: ${toolsText}
+
+[4) QUALIFICAÇÃO DE LEAD]
+- Qualificação ativa: ${qualificationEnabled ? "SIM" : "NÃO"}
+- Regra: Catálogos podem ser enviados sem CNPJ/e-mail. Tabela de preços e condições comerciais exigem CNPJ + e-mail antes de enviar.
+
+[5) VALIDAÇÕES AO SALVAR DADOS]
+- CNPJ: valida dígitos verificadores.
+- E-mail: valida formato + MX.
+
+[6) HORÁRIO DE FUNCIONAMENTO / TIMEOUT]
+- Horário configurado: ${anyBusinessHours ? "SIM" : "NÃO"}
+- Timeout de inatividade: ${inactivityEnabled ? `SIM (${values.inactivityTimeoutMinutes} min)` : "NÃO"}
+
+[7) SEU PROMPT DO SISTEMA (ETAPA: ${stage?.name || "(sem nome)"})]
+${stage?.systemPrompt || ""}
+`;
+    };
 
     const initialValues = {
         name: "",
@@ -287,6 +369,8 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
         setAgent(null);
         setSelectedTemplate("");
         setOpenSystemHelp(false);
+        setOpenPromptPreview(false);
+        setPromptPreviewText("");
         onClose();
     };
 
@@ -324,6 +408,11 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
             >
                 {({ values, errors, touched, handleChange, setFieldValue }) => (
                     <Form>
+                        {(() => {
+                            formikRef.current.values = values;
+                            formikRef.current.setFieldValue = setFieldValue;
+                            return null;
+                        })()}
                         <DialogContent dividers>
                             {/* Tabs de Navegação */}
                             <Tabs
@@ -1120,7 +1209,13 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
                                                                 Prompt do Sistema
                                                             </Typography>
                                                             <Tooltip title="Ver o que o sistema já aplica automaticamente" arrow>
-                                                                <IconButton size="small" onClick={() => setOpenSystemHelp(true)}>
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => {
+                                                                        setHelpStageIndex(index);
+                                                                        setOpenSystemHelp(true);
+                                                                    }}
+                                                                >
                                                                     <InfoIcon fontSize="small" />
                                                                 </IconButton>
                                                             </Tooltip>
@@ -1646,6 +1741,30 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
                         Este resumo te ajuda a entender o que já está parametrizado e o que você precisa escrever no prompt.
                     </Typography>
 
+                    <Box mt={2} mb={2}>
+                        <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
+                            Checklist rápido (etapa atual)
+                        </Typography>
+
+                        <Box mt={1}>
+                            <Typography variant="body2">
+                                {((formikRef.current.values || agent || initialValues).funnelStages?.[helpStageIndex]?.systemPrompt || "").trim().length > 0 ? "✅" : "❌"} Prompt do Sistema preenchido
+                            </Typography>
+                            <Typography variant="body2">
+                                {(((formikRef.current.values || agent || initialValues).funnelStages?.[helpStageIndex]?.enabledFunctions || []).length > 0) ? "✅" : "⚠️"} Funções habilitadas definidas (se vazio, libera todas)
+                            </Typography>
+                            <Typography variant="body2">
+                                {(Boolean((formikRef.current.values || agent || initialValues).requireLeadQualification) && String((formikRef.current.values || agent || initialValues).leadQualificationMessage || "").trim().length > 0) || !Boolean((formikRef.current.values || agent || initialValues).requireLeadQualification) ? "✅" : "❌"} Mensagem de qualificação configurada (se qualificação estiver ativa)
+                            </Typography>
+                            <Typography variant="body2">
+                                {Number((formikRef.current.values || agent || initialValues).inactivityTimeoutMinutes || 0) > 0 ? "✅" : "⚠️"} Timeout de inatividade configurado (opcional)
+                            </Typography>
+                            <Typography variant="body2">
+                                {Boolean((formikRef.current.values || agent || initialValues).businessHours && Object.values((formikRef.current.values || agent || initialValues).businessHours).some(d => (d?.start && d?.end))) ? "✅" : "⚠️"} Horário comercial configurado (opcional)
+                            </Typography>
+                        </Box>
+                    </Box>
+
                     <Box mt={2}>
                         <Typography variant="subtitle1" style={{ fontWeight: 600 }}>1) Contexto automático (CRM)</Typography>
                         <Typography variant="body2" color="textSecondary">
@@ -1708,8 +1827,88 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
                     </Box>
                 </DialogContent>
                 <DialogActions>
+                    <Button
+                        onClick={() => {
+                            const currentValues = (formikRef.current.values || agent || initialValues);
+                            const stage = currentValues.funnelStages?.[helpStageIndex];
+                            const preview = buildPromptPreview(currentValues, stage);
+                            setPromptPreviewText(preview);
+                            setOpenPromptPreview(true);
+                        }}
+                        color="primary"
+                        variant="outlined"
+                    >
+                        Ver preview do prompt final
+                    </Button>
+
+                    <Button
+                        onClick={() => {
+                            const currentValues = (formikRef.current.values || agent || initialValues);
+                            const sfv = formikRef.current.setFieldValue;
+                            const template = buildSystemPromptTemplate();
+
+                            if (sfv) {
+                                const currentStagePrompt = String(currentValues.funnelStages?.[helpStageIndex]?.systemPrompt || "");
+                                const nextPrompt = currentStagePrompt.trim().length
+                                    ? `${currentStagePrompt}\n\n${template}`
+                                    : template;
+
+                                sfv(`funnelStages[${helpStageIndex}].systemPrompt`, nextPrompt);
+                                toast.success("Template colado no Prompt do Sistema desta etapa");
+                                return;
+                            }
+
+                            toast.info("Não foi possível colar automaticamente. Copiei para a área de transferência (Ctrl+V)");
+                            if (navigator?.clipboard?.writeText) {
+                                navigator.clipboard.writeText(template).catch(() => {});
+                            }
+                        }}
+                        color="primary"
+                        variant="outlined"
+                    >
+                        Colar template no prompt
+                    </Button>
+
                     <Button onClick={() => setOpenSystemHelp(false)} color="primary" variant="contained">
                         Entendi
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog
+                open={openPromptPreview}
+                onClose={() => setOpenPromptPreview(false)}
+                maxWidth="md"
+                fullWidth
+                scroll="paper"
+            >
+                <DialogTitle>Preview do prompt final</DialogTitle>
+                <DialogContent dividers>
+                    <TextField
+                        fullWidth
+                        multiline
+                        rows={18}
+                        value={promptPreviewText}
+                        variant="outlined"
+                        InputProps={{ readOnly: true }}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        onClick={() => {
+                            toast.info("Preview copiado para a área de transferência (Ctrl+V)");
+                            if (navigator?.clipboard?.writeText) {
+                                navigator.clipboard.writeText(promptPreviewText).catch(() => {});
+                            }
+                        }}
+                        color="primary"
+                        variant="outlined"
+                    >
+                        Copiar preview
+                    </Button>
+
+                    <Button onClick={() => setOpenPromptPreview(false)} color="primary" variant="contained">
+                        Fechar
                     </Button>
                 </DialogActions>
             </Dialog>
