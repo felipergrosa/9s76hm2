@@ -337,7 +337,10 @@ ${onlineUsers === 0 ? "- ⚠️ Nenhum atendente humano online no momento. Você
 📋 QUALIFICAÇÃO DE LEAD - OBRIGATÓRIO:
 - Este cliente NÃO possui cadastro completo.
 - Campos faltantes: ${missingFields.join(", ")}
-- ANTES de enviar tabelas de preços, catálogos ou materiais restritos, você DEVE:
+- REGRA DA EMPRESA:
+  - ✅ Catálogos (incluindo catálogo lite e premium) PODEM ser enviados mesmo sem CNPJ/email.
+  - ⛔ TABELA DE PREÇOS (e condições comerciais) SÓ pode ser enviada após coletar e salvar CNPJ + email.
+- ANTES de enviar TABELA DE PREÇOS, você DEVE:
   1. Solicitar os dados faltantes ao cliente
   2. Usar a função "atualizar_contato" para salvar os dados informados
   3. Só então enviar os materiais solicitados

@@ -20,6 +20,7 @@ import Ticket from "../../models/Ticket";
 import Queue from "../../models/Queue";
 import { Op } from "sequelize";
 import logger from "../../utils/logger";
+import { hasMxRecord, isValidCNPJ, isValidEmailFormat } from "../../utils/validators";
 import fs from "fs";
 import path from "path";
 
@@ -956,7 +957,11 @@ export class ActionExecutor {
             
             if (cnpj) {
                 // Limpar CNPJ (remover pontos, barras, traços)
-                updateData.cnpj = cnpj.replace(/[^\d]/g, '');
+                const cleanedCnpj = cnpj.replace(/[^\d]/g, "");
+                if (!isValidCNPJ(cleanedCnpj)) {
+                    return "❌ O CNPJ informado não é válido. Por favor, confira e envie novamente (somente números ou formatado).";
+                }
+                updateData.cnpj = cleanedCnpj;
             }
             if (razaoSocial) {
                 updateData.name = razaoSocial;
@@ -965,7 +970,15 @@ export class ActionExecutor {
                 updateData.fantasyName = nomeFantasia;
             }
             if (email) {
-                updateData.email = email.toLowerCase().trim();
+                const cleanedEmail = email.toLowerCase().trim();
+                if (!isValidEmailFormat(cleanedEmail)) {
+                    return "❌ O email informado não parece válido. Por favor, confira e envie novamente.";
+                }
+                const mxOk = await hasMxRecord(cleanedEmail);
+                if (!mxOk) {
+                    return "❌ Não consegui validar o domínio do email informado (sem registro MX). Por favor, confira o email e envie novamente.";
+                }
+                updateData.email = cleanedEmail;
             }
             if (cidade) {
                 updateData.city = cidade;

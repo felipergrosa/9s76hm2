@@ -67,3 +67,26 @@ export const isValidCNPJ = (cnpj: string): boolean => {
   }
   return true;
 };
+
+export const isValidEmailFormat = (email: string): boolean => {
+  if (!email) return false;
+  const e = String(email).trim();
+  // Regex pragmática (não perfeita por RFC, mas segura para validação de cadastro)
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+  return re.test(e);
+};
+
+export const hasMxRecord = async (email: string): Promise<boolean> => {
+  try {
+    const e = String(email).trim();
+    const at = e.lastIndexOf("@");
+    if (at <= 0 || at === e.length - 1) return false;
+    const domain = e.slice(at + 1);
+    // Import dinâmico para não quebrar ambientes sem dns/promises
+    const dns = await import("node:dns/promises");
+    const records = await dns.resolveMx(domain);
+    return Array.isArray(records) && records.length > 0;
+  } catch {
+    return false;
+  }
+};

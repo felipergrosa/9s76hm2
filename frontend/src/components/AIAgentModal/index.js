@@ -119,6 +119,7 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
     const [selectedTemplate, setSelectedTemplate] = useState("");
     const [useGlobalAISettings, setUseGlobalAISettings] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
+    const [openSystemHelp, setOpenSystemHelp] = useState(false);
 
     const initialValues = {
         name: "",
@@ -285,6 +286,7 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
     const handleClose = () => {
         setAgent(null);
         setSelectedTemplate("");
+        setOpenSystemHelp(false);
         onClose();
     };
 
@@ -1113,9 +1115,20 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
                                                     </Grid>
 
                                                     <Grid item xs={12}>
+                                                        <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                                                            <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
+                                                                Prompt do Sistema
+                                                            </Typography>
+                                                            <Tooltip title="Ver o que o sistema já aplica automaticamente" arrow>
+                                                                <IconButton size="small" onClick={() => setOpenSystemHelp(true)}>
+                                                                    <InfoIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        </Box>
+
                                                         <TextField
                                                             fullWidth
-                                                            label="Prompt do Sistema"
+                                                            label=""
                                                             name={`funnelStages[${index}].systemPrompt`}
                                                             value={stage.systemPrompt}
                                                             onChange={handleChange}
@@ -1617,8 +1630,90 @@ const AIAgentModal = ({ open, onClose, agentId, onSave }) => {
                     </Form>
                 )
                 }
-            </Formik >
-        </Dialog >
+            </Formik>
+
+            <Dialog
+                open={openSystemHelp}
+                onClose={() => setOpenSystemHelp(false)}
+                maxWidth="md"
+                fullWidth
+                scroll="paper"
+            >
+                <DialogTitle>Como o sistema monta o prompt do agente</DialogTitle>
+                <DialogContent dividers>
+                    <Typography variant="body2" color="textSecondary" gutterBottom>
+                        O campo <b>Prompt do Sistema</b> é o texto que você controla. Porém, o Whaticket também aplica automaticamente regras e contexto antes de enviar para a IA.
+                        Este resumo te ajuda a entender o que já está parametrizado e o que você precisa escrever no prompt.
+                    </Typography>
+
+                    <Box mt={2}>
+                        <Typography variant="subtitle1" style={{ fontWeight: 600 }}>1) Contexto automático (CRM)</Typography>
+                        <Typography variant="body2" color="textSecondary">
+                            O sistema injeta no prompt dados do contato quando existirem (nome, empresa, cidade, segmento, situação, CNPJ e email).
+                        </Typography>
+                    </Box>
+
+                    <Box mt={2}>
+                        <Typography variant="subtitle1" style={{ fontWeight: 600 }}>2) RAG (base de conhecimento)</Typography>
+                        <Typography variant="body2" color="textSecondary">
+                            A IA pode consultar a base (RAG). Se não houver informação, ela deve evitar inventar e pode oferecer transferência.
+                        </Typography>
+                    </Box>
+
+                    <Box mt={2}>
+                        <Typography variant="subtitle1" style={{ fontWeight: 600 }}>3) Ferramentas (Function Calling)</Typography>
+                        <Typography variant="body2" color="textSecondary">
+                            As funções ficam disponíveis para a IA executar ações reais (enviar catálogos, listar opções, enviar tabela, buscar produto detalhado, transferir para humano, etc.).
+                            Você pode restringir por etapa em <b>Funções Habilitadas</b>.
+                        </Typography>
+                    </Box>
+
+                    <Box mt={2}>
+                        <Typography variant="subtitle1" style={{ fontWeight: 600 }}>4) Regra de qualificação (CNPJ + email)</Typography>
+                        <Typography variant="body2" color="textSecondary">
+                            Se <b>Qualificação de Lead</b> estiver ativa, o sistema orienta a IA a coletar dados faltantes.
+                            Regras atuais:
+                        </Typography>
+                        <Box mt={1}>
+                            <Typography variant="body2">- Catálogos (lite e premium): <b>podem</b> ser enviados sem CNPJ/email</Typography>
+                            <Typography variant="body2">- Tabela de preços e condições comerciais: <b>exige</b> CNPJ + email antes de enviar</Typography>
+                        </Box>
+                    </Box>
+
+                    <Box mt={2}>
+                        <Typography variant="subtitle1" style={{ fontWeight: 600 }}>5) Validações ao salvar dados</Typography>
+                        <Typography variant="body2" color="textSecondary">
+                            Ao salvar dados via função <b>atualizar_contato</b>:
+                        </Typography>
+                        <Box mt={1}>
+                            <Typography variant="body2">- CNPJ é validado (dígitos verificadores). Se inválido, não salva.</Typography>
+                            <Typography variant="body2">- Email é validado (formato + MX). Se inválido, não salva.</Typography>
+                        </Box>
+                    </Box>
+
+                    <Box mt={2}>
+                        <Typography variant="subtitle1" style={{ fontWeight: 600 }}>6) Horário de funcionamento e Timeout</Typography>
+                        <Typography variant="body2" color="textSecondary">
+                            Se configurado, o sistema injeta no prompt a informação se está dentro/fora do horário.
+                            E existe job de inatividade que pode fechar/transferir tickets em status bot.
+                        </Typography>
+                    </Box>
+
+                    <Box mt={3}>
+                        <Typography variant="subtitle1" style={{ fontWeight: 600 }}>O que você deve escrever no Prompt do Sistema</Typography>
+                        <Typography variant="body2" color="textSecondary">
+                            Use o prompt para descrever a personalidade do agente, regras de negócio específicas, scripts de atendimento, como perguntar dados (um de cada vez),
+                            e como decidir qual ferramenta usar. Evite repetir regras técnicas (validação, MX, etc.) porque isso já é aplicado no sistema.
+                        </Typography>
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenSystemHelp(false)} color="primary" variant="contained">
+                        Entendi
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </Dialog>
     );
 };
 
