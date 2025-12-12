@@ -1290,6 +1290,9 @@ const MessagesList = ({
       const pdfThumbUrl = message.mediaUrl
         ? message.mediaUrl.replace(/(\.pdf)(\?.*)?$/i, '-thumb.png$2')
         : null;
+      const pdfThumbUrlAlt = message.mediaUrl
+        ? message.mediaUrl.replace(/(\.pdf)(\?.*)?$/i, '-thumb.1.png$2')
+        : null;
 
       return (
         <div
@@ -1303,6 +1306,17 @@ const MessagesList = ({
                 src={pdfThumbUrl}
                 alt="PDF preview"
                 style={{ maxWidth: 180, maxHeight: 180, display: 'block', marginBottom: 6, borderRadius: 4 }}
+                data-fallback-step="0"
+                onError={(e) => {
+                  const el = e.currentTarget;
+                  const step = el?.dataset?.fallbackStep || "0";
+                  if (step === "0" && pdfThumbUrlAlt) {
+                    el.dataset.fallbackStep = "1";
+                    el.src = pdfThumbUrlAlt;
+                    return;
+                  }
+                  el.style.display = "none";
+                }}
               />
             )}
             <div style={{ fontWeight: 700, fontSize: 14 }}>PDF</div>
