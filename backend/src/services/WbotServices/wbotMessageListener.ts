@@ -4455,7 +4455,8 @@ const handleMessage = async (
       ticketId: ticket.id,
       companyId,
       userId,
-      whatsappId: whatsapp?.id
+      whatsappId: whatsapp?.id,
+      queueId: ticket.queueId
     });
 
     let useLGPD = false;
@@ -5126,6 +5127,23 @@ const handleMessage = async (
         } catch (e) {
           Sentry.captureException(e);
           logger.error(`[wbotMessageListener] Erro ao processar IA por Prompt da fila. ticketId=${ticket.id}; queueId=${ticket.queueId}; err=${(e as any)?.message || e}`);
+        }
+      } else if (ticket.isBot && !hasPrompt) {
+        // Agent-only: quando existe AIAgent na fila mas não há Prompt legado, ainda assim precisamos disparar a IA.
+        // handleOpenAi resolve o AIAgent automaticamente a partir do ticket.queueId.
+        try {
+          await handleOpenAi(
+            undefined as any,
+            msg,
+            wbot,
+            ticket,
+            contact,
+            mediaSent,
+            ticketTraking
+          );
+        } catch (e) {
+          Sentry.captureException(e);
+          logger.error(`[wbotMessageListener] Erro ao processar IA por AIAgent (sem prompt). ticketId=${ticket.id}; queueId=${ticket.queueId}; err=${(e as any)?.message || e}`);
         }
       }
 

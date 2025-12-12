@@ -6,13 +6,15 @@ interface Params {
   companyId: string | number;
   whatsappId?: string | number;
   userId?: string | number;
+  queueId?: string | number;
 }
 
 const FindOrCreateATicketTrakingService = async ({
   ticketId,
   companyId,
   whatsappId,
-  userId
+  userId,
+  queueId
 }: Params): Promise<TicketTraking> => {
   const ticketTraking = await TicketTraking.findOne({
     where: {
@@ -24,14 +26,18 @@ const FindOrCreateATicketTrakingService = async ({
   });
 
   if (ticketTraking) {
-     return ticketTraking;
+    if ((ticketTraking.queueId === null || ticketTraking.queueId === undefined) && queueId) {
+      await ticketTraking.update({ queueId: Number(queueId) });
+    }
+    return ticketTraking;
   }
 
   const newRecord = await TicketTraking.create({
     ticketId,
     companyId,
     whatsappId,
-    userId
+    userId,
+    queueId: queueId ? Number(queueId) : null
   });
 
   return newRecord;
