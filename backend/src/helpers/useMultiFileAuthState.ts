@@ -94,8 +94,33 @@ export const useMultiFileAuthState = async (
     } catch {}
   };
 
-  const creds: AuthenticationCreds =
-    (await readData("creds")) || initAuthCreds();
+  const rawStoredCreds = await readData("creds");
+  const defaultCreds = initAuthCreds();
+
+  const mergeObjectField = (base: any, incoming: any, key: string) => {
+    const dv = base?.[key];
+    const iv = incoming?.[key];
+    if (dv && typeof dv === "object" && !Array.isArray(dv)) {
+      if (iv && typeof iv === "object" && !Array.isArray(iv)) {
+        return { ...dv, ...iv };
+      }
+      return dv;
+    }
+    return (iv === null || typeof iv === "undefined") ? dv : iv;
+  };
+
+  const creds: AuthenticationCreds = (() => {
+    if (!rawStoredCreds) return defaultCreds;
+
+    const merged: any = { ...defaultCreds, ...rawStoredCreds };
+
+    // Campos aninhados que mudam entre versões do Baileys e não podem ser null
+    merged.accountSettings = mergeObjectField(defaultCreds as any, rawStoredCreds as any, "accountSettings");
+    merged.deviceProps = mergeObjectField(defaultCreds as any, rawStoredCreds as any, "deviceProps");
+    merged.myAppStateKeyId = mergeObjectField(defaultCreds as any, rawStoredCreds as any, "myAppStateKeyId");
+
+    return merged as AuthenticationCreds;
+  })();
 
   return {
     state: {

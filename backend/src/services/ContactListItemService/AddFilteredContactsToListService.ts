@@ -4,7 +4,7 @@ import ContactListItem from "../../models/ContactListItem";
 import logger from "../../utils/logger";
 import CheckContactNumber from "../WbotServices/CheckNumber";
 import sequelize from "../../database";
-import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { isValidCanonicalPhoneNumber, safeNormalizePhoneNumber } from "../../utils/phone";
 
 interface FilterParams {
   channel?: string[];
@@ -173,6 +173,10 @@ const AddFilteredContactsToListService = async ({
       const conds: string[] = ['c."companyId" = :companyId'];
       const repl: any = { companyId, contactListId };
 
+      // Regra: só inserir contatos com número canônico válido (ou grupos)
+      // canonicalNumber no Contact é preenchido automaticamente no save; se estiver NULL é inválido (ou grupo).
+      conds.push('(c."isGroup" = true OR (c."canonicalNumber" IS NOT NULL AND LENGTH(c."canonicalNumber") BETWEEN 10 AND 16))');
+
       const addIn = (col: string, arr?: string[]) => {
         if (arr && arr.length > 0) {
           conds.push(`c.${col} IN (:${col.replace(/\W/g,'_')})`);
@@ -270,8 +274,17 @@ const AddFilteredContactsToListService = async ({
       const whereSql = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
       const insertSql = `
         INSERT INTO "ContactListItems"
-          ("name","number","email","contactListId","companyId","isGroup","createdAt","updatedAt")
-        SELECT c."name", c."number", COALESCE(c."email", ''), :contactListId, :companyId, c."isGroup", NOW(), NOW()
+          ("name","number","canonicalNumber","email","contactListId","companyId","isGroup","createdAt","updatedAt")
+        SELECT 
+          c."name", 
+          CASE WHEN c."isGroup" = true THEN c."number" ELSE c."canonicalNumber" END AS "number",
+          CASE WHEN c."isGroup" = true THEN NULL ELSE c."canonicalNumber" END AS "canonicalNumber",
+          COALESCE(c."email", ''), 
+          :contactListId, 
+          :companyId, 
+          c."isGroup", 
+          NOW(), 
+          NOW()
         FROM "Contacts" c
         ${whereSql}
         ON CONFLICT ("contactListId","number") DO NOTHING;
@@ -545,15 +558,28 @@ const AddFilteredContactsToListService = async ({
       const name = c?.get ? c.get("name") : (c as any).name;
       const numberRaw = c?.get ? c.get("number") : (c as any).number;
       const emailRaw = c?.get ? c.get("email") : (c as any).email;
-      const { normalized } = normalizePhoneNumber(numberRaw);
-      const finalNumber = normalized || (numberRaw ? String(numberRaw).trim() : "");
+      const isGroup = (c as any).isGroup || false;
+      if (isGroup) {
+        return {
+          name: name || "",
+          number: numberRaw ? String(numberRaw).trim() : "",
+          email: emailRaw ? String(emailRaw).trim() : "",
+          isGroup
+        };
+      }
+
+      const { canonical } = safeNormalizePhoneNumber(numberRaw);
+      if (!canonical || !isValidCanonicalPhoneNumber(canonical)) {
+        return null as any;
+      }
+
       return {
         name: name || "",
-        number: finalNumber,
+        number: canonical,
         email: emailRaw ? String(emailRaw).trim() : "",
-        isGroup: (c as any).isGroup || false
+        isGroup
       };
-    }).filter(c => c.number && c.name);
+    }).filter((c: any) => c && c.number && c.name);
 
     logger.info(`Pré-processamento (SQL path) gerou ${candidates.length} candidatos`);
 
@@ -568,16 +594,19 @@ const AddFilteredContactsToListService = async ({
       let errors = 0;
       await processWithConcurrency(candidates, validationConcurrency, async cand => {
         try {
-          // Normalizar número para garantir consistência
-          const normalizedNumber = cand.number.replace(/\D/g, '');
-          if (normalizedNumber.length >= 10) {
-            cand.number = normalizedNumber;
+          if (!cand.isGroup) {
+            const { canonical } = safeNormalizePhoneNumber(cand.number);
+            if (!canonical || !isValidCanonicalPhoneNumber(canonical)) {
+              errors++;
+              return;
+            }
+            cand.number = canonical;
           }
 
           // Validar número WhatsApp se habilitado
           if (shouldValidateWhatsappEarly) {
             try {
-              const validatedNumber = await CheckContactNumber(cand.number, companyId);
+              const validatedNumber = await CheckContactNumber(cand.number, companyId, Boolean(cand.isGroup));
               if (validatedNumber) {
                 cand.number = validatedNumber;
                 (cand as any).isWhatsappValid = true;
@@ -631,8 +660,14 @@ const AddFilteredContactsToListService = async ({
       for (let i = 0; i < candidates.length; i += chunkSize) {
         const slice = candidates.slice(i, i + chunkSize).map(c => {
           // Normalizar número para garantir associação correta com Contact
-          const { canonical } = safeNormalizePhoneNumber(c.number);
-          const canonicalNumber = canonical || c.number.replace(/\D/g, "");
+          if (!c.isGroup) {
+            const { canonical } = safeNormalizePhoneNumber(c.number);
+            if (!canonical || !isValidCanonicalPhoneNumber(canonical)) {
+              return null as any;
+            }
+            c.number = canonical;
+          }
+          const canonicalNumber = c.isGroup ? null : (safeNormalizePhoneNumber(c.number).canonical || c.number.replace(/\D/g, ""));
           
           return {
             contactListId,
@@ -644,7 +679,7 @@ const AddFilteredContactsToListService = async ({
             isGroup: c.isGroup || false,
             isWhatsappValid: null
           };
-        });
+        }).filter((x: any) => x);
         await ContactListItem.bulkCreate(slice as any[], { returning: false, validate: false, individualHooks: false, ignoreDuplicates: true });
       }
     }

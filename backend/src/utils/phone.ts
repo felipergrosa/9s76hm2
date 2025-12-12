@@ -150,6 +150,38 @@ export const arePhoneNumbersEquivalent = (
   return !!first && !!second && first === second;
 };
 
+export const isValidCanonicalPhoneNumber = (
+  canonical: string | null | undefined
+): boolean => {
+  const digits = String(canonical ?? "").replace(/\D/g, "");
+  if (!digits) return false;
+
+  const { metadata, national, ddi } = resolveCountryMetadata(digits);
+
+  // Fallback genérico quando não reconhece DDI: apenas checa intervalo razoável
+  if (!metadata || !ddi) {
+    return digits.length >= 10 && digits.length <= 16;
+  }
+
+  const allowed = new Set<number>([
+    ...(metadata.mobileNationalLengths || []),
+    ...(metadata.landlineNationalLengths || [])
+  ]);
+
+  if (allowed.size === 0) {
+    return national.length >= 6 && national.length <= 16;
+  }
+
+  return allowed.has(national.length);
+};
+
+export const isValidPhoneNumberByFormat = (
+  value: string | null | undefined
+): boolean => {
+  const { canonical } = safeNormalizePhoneNumber(value);
+  return isValidCanonicalPhoneNumber(canonical);
+};
+
 /**
  * Helper seguro para aplicar normalização centralizada com log em caso de erro.
  */
