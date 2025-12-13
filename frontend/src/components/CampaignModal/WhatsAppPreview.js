@@ -76,6 +76,17 @@ const useStyles = makeStyles((theme) => ({
     position: "relative",
     wordBreak: "break-word",
   },
+  messageBubbleReceived: {
+    background: "#ffffff", // Mensagem recebida
+    padding: "8px 12px 6px",
+    borderRadius: "8px 8px 8px 2px",
+    maxWidth: "80%",
+    marginRight: "auto",
+    marginBottom: 8,
+    boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
+    position: "relative",
+    wordBreak: "break-word",
+  },
   messageBubbleEmpty: {
     background: "#f0f0f0",
     padding: "8px 12px 6px",
@@ -144,6 +155,32 @@ const WhatsAppPreview = ({
 }) => {
   const classes = useStyles();
 
+  const normalizeMessages = (msgs) => {
+    if (!Array.isArray(msgs)) return [];
+    return msgs
+      .map((m, idx) => {
+        if (m === null || m === undefined) return null;
+        if (typeof m === "string") {
+          return {
+            id: idx,
+            text: m,
+            from: "assistant",
+            mediaUrl: mediaUrls[`mediaUrl${idx + 1}`]
+          };
+        }
+        if (typeof m === "object") {
+          return {
+            id: m.id ?? idx,
+            text: m.text ?? m.message ?? "",
+            from: m.from ?? m.side ?? "assistant",
+            mediaUrl: m.mediaUrl ?? mediaUrls[`mediaUrl${idx + 1}`]
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+  };
+
   // Processar variáveis nas mensagens
   const processMessage = (msg) => {
     if (!msg) return "";
@@ -171,7 +208,8 @@ const WhatsAppPreview = ({
     minute: '2-digit' 
   });
 
-  const hasMessages = messages.some(m => m && m.trim());
+  const normalizedMessages = normalizeMessages(messages);
+  const hasMessages = normalizedMessages.some(m => (m.text && String(m.text).trim()) || m.mediaUrl);
 
   return (
     <Box className={classes.phoneFrame}>
@@ -208,15 +246,17 @@ const WhatsAppPreview = ({
             </Typography>
           </Box>
         ) : (
-          messages.map((msg, idx) => {
-            const mediaUrl = mediaUrls[`mediaUrl${idx + 1}`];
+          normalizedMessages.map((msg) => {
+            const mediaUrl = msg.mediaUrl;
             const mediaType = getMediaType(mediaUrl);
-            const processedMsg = processMessage(msg);
-            
-            if (!msg?.trim() && !mediaUrl) return null;
-            
+            const processedMsg = processMessage(msg.text);
+
+            if (!processedMsg?.trim() && !mediaUrl) return null;
+
+            const isReceived = String(msg.from) === "customer" || String(msg.from) === "received";
+
             return (
-              <Box key={idx} className={classes.messageBubble}>
+              <Box key={msg.id} className={isReceived ? classes.messageBubbleReceived : classes.messageBubble}>
                 {/* Mídia */}
                 {mediaUrl && mediaType === "image" && (
                   <img 
@@ -274,8 +314,12 @@ const WhatsAppPreview = ({
                 {/* Timestamp + checks */}
                 <Box className={classes.timestamp}>
                   <span>{timeStr}</span>
-                  <CheckIcon className={classes.checkIcon} />
-                  <CheckIcon className={classes.checkIcon} style={{ marginLeft: -8 }} />
+                  {!isReceived && (
+                    <>
+                      <CheckIcon className={classes.checkIcon} />
+                      <CheckIcon className={classes.checkIcon} style={{ marginLeft: -8 }} />
+                    </>
+                  )}
                 </Box>
               </Box>
             );

@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   CircularProgress,
@@ -13,6 +16,7 @@ import {
   Typography,
   makeStyles
 } from "@material-ui/core";
+import ExpandMoreIcon from "@material-ui/icons/ExpandMore";
 import { toast } from "react-toastify";
 
 import MainContainer from "../../components/MainContainer";
@@ -20,6 +24,7 @@ import MainHeader from "../../components/MainHeader";
 import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
 import Title from "../../components/Title";
 import ForbiddenPage from "../../components/ForbiddenPage";
+import WhatsAppPreview from "../../components/CampaignModal/WhatsAppPreview";
 
 import api from "../../services/api";
 import useWhatsApps from "../../hooks/useWhatsApps";
@@ -318,6 +323,61 @@ const AITraining = () => {
       <Paper className={classes.mainPaper} variant="outlined">
         <Grid container spacing={2}>
           <Grid item xs={12}>
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2">Ajuda (como usar / FAQ)</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Box display="flex" flexDirection="column" width="100%">
+                  <Typography variant="subtitle2">Campos obrigatórios</Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Para enviar mensagem no sandbox: Agente, Etapa do funil, Conexão, Grupo e a mensagem.
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Para "Aplicar no agente": Agente, Etapa do funil e o Prompt preenchido.
+                  </Typography>
+
+                  <Box mt={1} />
+                  <Typography variant="subtitle2">Como testar (sandbox)</Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    1) Selecione o Agente e a Etapa do funil que você quer testar.
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    2) Selecione a Conexão e o Grupo de destino.
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    3) (Opcional) Escreva um Prompt para usar como override da sessão.
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    4) Envie uma mensagem. A sessão é criada automaticamente no primeiro envio.
+                  </Typography>
+
+                  <Box mt={1} />
+                  <Typography variant="subtitle2">Override da sessão vs. corrigir o agente</Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Prompt (override) afeta apenas a sessão atual do sandbox. É útil para iterar rápido sem alterar o agente.
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Quando estiver bom, use "Aplicar no agente (etapa selecionada)" para salvar o texto como systemPrompt da etapa.
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Dica: após aplicar no agente, a sessão é resetada para que os próximos testes reflitam o prompt salvo.
+                  </Typography>
+
+                  <Box mt={1} />
+                  <Typography variant="subtitle2">Logs e troubleshooting</Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    O painel de Logs mostra provider/model e o systemPrompt final utilizado (systemPrompt da etapa + override, se houver).
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Se mudar Agente/Etapa, uma nova sessão será necessária (o contexto anterior não é reaproveitado).
+                  </Typography>
+                </Box>
+              </AccordionDetails>
+            </Accordion>
+          </Grid>
+
+          <Grid item xs={12}>
             <Grid container spacing={2}>
               <Grid item xs={12} md={4}>
                 <FormControl fullWidth variant="outlined" margin="dense">
@@ -442,37 +502,18 @@ const AITraining = () => {
 
           <Grid item xs={12} md={6}>
             <Paper className={classes.leftPane} variant="outlined">
-              <div className={classes.mockPhone}>
-                <div className={classes.mockHeader}>
-                  <Typography variant="subtitle2">
-                    {selectedWhatsapp ? selectedWhatsapp.name : "Selecione a conexão"}
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    {selectedGroupId
-                      ? (groups.find((g) => String(g.id) === String(selectedGroupId))?.subject || "")
-                      : "Selecione o grupo destino"}
-                  </Typography>
-                </div>
+              <Box display="flex" flexDirection="column" alignItems="center" height="100%">
+                <WhatsAppPreview
+                  messages={messages}
+                  contactName={
+                    selectedGroupId
+                      ? (groups.find((g) => String(g.id) === String(selectedGroupId))?.subject || "Cliente")
+                      : "Cliente"
+                  }
+                  companyName={selectedWhatsapp ? selectedWhatsapp.name : "Empresa"}
+                />
 
-                <div className={classes.mockBody}>
-                  <Box display="flex" flexDirection="column">
-                    {messages.map((m, idx) => (
-                      <div
-                        key={idx}
-                        className={m.from === "customer" ? classes.bubbleCustomer : classes.bubbleAgent}
-                      >
-                        {m.text}
-                      </div>
-                    ))}
-                    {messages.length === 0 && (
-                      <Typography variant="body2" color="textSecondary">
-                        Envie uma mensagem para iniciar a simulação.
-                      </Typography>
-                    )}
-                  </Box>
-                </div>
-
-                <div className={classes.mockComposer}>
+                <Box mt={2} width="100%">
                   <Grid container spacing={1} alignItems="center">
                     <Grid item xs>
                       <TextField
@@ -496,8 +537,8 @@ const AITraining = () => {
                       </Button>
                     </Grid>
                   </Grid>
-                </div>
-              </div>
+                </Box>
+              </Box>
             </Paper>
           </Grid>
 
