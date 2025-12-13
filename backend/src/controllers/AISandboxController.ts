@@ -18,8 +18,10 @@ type SandboxSession = {
   userId: number;
   agentId: number;
   stageId: number;
-  whatsappId: number;
-  groupId: string;
+  whatsappId?: number;
+  groupId?: string;
+  toNumber?: string;
+  simulate?: boolean;
   promptOverride: string;
   createdAt: string;
   messages: SandboxMessage[];
@@ -72,10 +74,20 @@ const buildSystemPrompt = (params: {
 export const createSession = async (req: Request, res: Response) => {
   const { companyId, id: userId } = req.user;
 
-  const { agentId, stageId, whatsappId, groupId, promptOverride } = req.body || {};
+  const { agentId, stageId, whatsappId, groupId, toNumber, simulate, promptOverride } = req.body || {};
 
-  if (!agentId || !stageId || !whatsappId || !groupId) {
-    return res.status(400).json({ error: "agentId, stageId, whatsappId e groupId são obrigatórios" });
+  if (!agentId || !stageId) {
+    return res.status(400).json({ error: "agentId e stageId são obrigatórios" });
+  }
+
+  const isSimulate = Boolean(simulate);
+
+  if (!isSimulate && !whatsappId) {
+    return res.status(400).json({ error: "whatsappId é obrigatório quando simulate=false" });
+  }
+
+  if (!isSimulate && !groupId && !toNumber) {
+    return res.status(400).json({ error: "Informe groupId (Baileys) ou toNumber (Official) quando simulate=false" });
   }
 
   const agent = await AIAgent.findOne({
@@ -101,8 +113,10 @@ export const createSession = async (req: Request, res: Response) => {
     userId: Number(userId),
     agentId: Number(agentId),
     stageId: Number(stageId),
-    whatsappId: Number(whatsappId),
-    groupId: String(groupId),
+    whatsappId: whatsappId ? Number(whatsappId) : undefined,
+    groupId: groupId ? String(groupId) : undefined,
+    toNumber: toNumber ? String(toNumber) : undefined,
+    simulate: isSimulate,
     promptOverride: String(promptOverride || ""),
     createdAt: nowIso(),
     messages: []
@@ -117,6 +131,8 @@ export const createSession = async (req: Request, res: Response) => {
       stageId: session.stageId,
       whatsappId: session.whatsappId,
       groupId: session.groupId,
+      toNumber: session.toNumber,
+      simulate: session.simulate,
       promptOverride: session.promptOverride,
       createdAt: session.createdAt
     }
@@ -176,7 +192,7 @@ export const sendMessage = async (req: Request, res: Response) => {
     userId: userId ? Number(userId) : undefined,
     text: customerMsg.text,
     systemPrompt,
-    whatsappId: session.whatsappId,
+    whatsappId: session.whatsappId || undefined,
     temperature: agent.temperature || undefined,
     maxTokens: agent.maxTokens || undefined,
     model: agent.aiModel || undefined,
@@ -186,7 +202,9 @@ export const sendMessage = async (req: Request, res: Response) => {
       sandboxSessionId: session.id,
       agentId: agent.id,
       stageId: session.stageId,
-      groupId: session.groupId
+      groupId: session.groupId,
+      toNumber: session.toNumber,
+      simulate: session.simulate
     }
   });
 
@@ -221,6 +239,8 @@ export const sendMessage = async (req: Request, res: Response) => {
       stageId: session.stageId,
       whatsappId: session.whatsappId,
       groupId: session.groupId,
+      toNumber: session.toNumber,
+      simulate: session.simulate,
       promptOverride: session.promptOverride,
       createdAt: session.createdAt
     },

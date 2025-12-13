@@ -121,6 +121,8 @@ const AITraining = () => {
   const [selectedStageId, setSelectedStageId] = useState("");
   const [selectedWhatsappId, setSelectedWhatsappId] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [toNumber, setToNumber] = useState("");
+  const [simulate, setSimulate] = useState(true);
 
   const [groups, setGroups] = useState([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
@@ -155,7 +157,13 @@ const AITraining = () => {
 
   useEffect(() => {
     const loadGroups = async () => {
-      if (!selectedWhatsappId) {
+      if (!selectedWhatsappId || simulate) {
+        setGroups([]);
+        setSelectedGroupId("");
+        return;
+      }
+
+      if (String(selectedWhatsapp?.channelType) === "official") {
         setGroups([]);
         setSelectedGroupId("");
         return;
@@ -174,7 +182,7 @@ const AITraining = () => {
     };
 
     loadGroups();
-  }, [selectedWhatsappId]);
+  }, [selectedWhatsappId, simulate, selectedWhatsapp?.channelType]);
 
   const appendLog = (line) => {
     setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()} ${line}`]);
@@ -243,8 +251,13 @@ const AITraining = () => {
     const { data } = await api.post("/ai/sandbox/sessions", {
       agentId: Number(selectedAgentId),
       stageId: Number(selectedStageId),
-      whatsappId: Number(selectedWhatsappId),
-      groupId: String(selectedGroupId),
+      whatsappId: simulate ? undefined : Number(selectedWhatsappId),
+      groupId:
+        !simulate && String(selectedWhatsapp?.channelType) !== "official"
+          ? String(selectedGroupId)
+          : undefined,
+      toNumber: !simulate && String(selectedWhatsapp?.channelType) === "official" ? String(toNumber) : undefined,
+      simulate: Boolean(simulate),
       promptOverride: String(promptOverride || "")
     });
 
@@ -260,8 +273,15 @@ const AITraining = () => {
   const handleSendLocal = async () => {
     if (!selectedAgentId) return toast.error("Selecione um agente");
     if (!selectedStageId) return toast.error("Selecione uma etapa");
-    if (!selectedWhatsappId) return toast.error("Selecione uma conexão");
-    if (!selectedGroupId) return toast.error("Selecione um grupo de destino");
+    if (!simulate && !selectedWhatsappId) return toast.error("Selecione uma conexão");
+
+    const isOfficial = String(selectedWhatsapp?.channelType) === "official";
+    if (!simulate && isOfficial && !String(toNumber || "").trim()) {
+      return toast.error("Informe o número do destinatário");
+    }
+    if (!simulate && !isOfficial && !selectedGroupId) {
+      return toast.error("Selecione um grupo de destino");
+    }
     if (!messageText.trim()) return;
 
     if (sending) return;
@@ -271,7 +291,9 @@ const AITraining = () => {
 
     setMessages((prev) => [...prev, { from: "customer", text }]);
     appendLog(`[input] ${text}`);
-    appendLog(`[context] agente=${selectedAgentId} whatsapp=${selectedWhatsappId} grupo=${selectedGroupId}`);
+    appendLog(
+      `[context] agente=${selectedAgentId} stage=${selectedStageId} simulate=${simulate} whatsapp=${selectedWhatsappId || "-"} grupo=${selectedGroupId || "-"} to=${toNumber || "-"}`
+    );
     if (promptOverride.trim()) {
       appendLog(`[prompt-override] ${promptOverride.trim()}`);
     }
@@ -437,7 +459,12 @@ const AITraining = () => {
                   <InputLabel>Conexão</InputLabel>
                   <Select
                     value={selectedWhatsappId}
-                    onChange={(e) => setSelectedWhatsappId(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedWhatsappId(e.target.value);
+                      setSelectedGroupId("");
+                      setToNumber("");
+                      setSessionId("");
+                    }}
                     label="Conexão"
                     disabled={loadingWhatsApps}
                   >
@@ -454,25 +481,56 @@ const AITraining = () => {
               </Grid>
 
               <Grid item xs={12} md={4}>
-                <FormControl fullWidth variant="outlined" margin="dense">
-                  <InputLabel>Grupo (destino)</InputLabel>
-                  <Select
-                    value={selectedGroupId}
-                    onChange={(e) => setSelectedGroupId(e.target.value)}
-                    label="Grupo (destino)"
-                    disabled={!selectedWhatsappId || loadingGroups}
+                <Box display="flex" alignItems="center" height="100%">
+                  <Button
+                    variant={simulate ? "contained" : "outlined"}
+                    color={simulate ? "primary" : "default"}
+                    onClick={() => {
+                      setSimulate((prev) => !prev);
+                      setSessionId("");
+                    }}
                   >
-                    <MenuItem value="">
-                      <em>Selecione</em>
-                    </MenuItem>
-                    {groups.map((g) => (
-                      <MenuItem key={g.id} value={String(g.id)}>
-                        {g.subject} ({g.participantsCount})
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                    Simular (não envia)
+                  </Button>
+                </Box>
               </Grid>
+
+              {!simulate && String(selectedWhatsapp?.channelType) === "official" && (
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    variant="outlined"
+                    margin="dense"
+                    label="Número do destinatário (E.164)"
+                    value={toNumber}
+                    onChange={(e) => setToNumber(e.target.value)}
+                    placeholder="5511999999999"
+                  />
+                </Grid>
+              )}
+
+              {!simulate && String(selectedWhatsapp?.channelType) !== "official" && (
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth variant="outlined" margin="dense">
+                    <InputLabel>Grupo (destino)</InputLabel>
+                    <Select
+                      value={selectedGroupId}
+                      onChange={(e) => setSelectedGroupId(e.target.value)}
+                      label="Grupo (destino)"
+                      disabled={!selectedWhatsappId || loadingGroups}
+                    >
+                      <MenuItem value="">
+                        <em>Selecione</em>
+                      </MenuItem>
+                      {groups.map((g) => (
+                        <MenuItem key={g.id} value={String(g.id)}>
+                          {g.subject} ({g.participantsCount})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
 
               <Grid item xs={12}>
                 <TextField
