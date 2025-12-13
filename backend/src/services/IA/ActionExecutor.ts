@@ -34,6 +34,27 @@ interface ActionContext {
 
 export class ActionExecutor {
 
+    private static getMissingLeadFields(ctx: ActionContext): { missingCnpj: boolean; missingEmail: boolean } {
+        const cnpj = String((ctx.contact as any)?.cnpj || "").trim();
+        const email = String((ctx.contact as any)?.email || "").trim();
+        return {
+            missingCnpj: cnpj.length === 0,
+            missingEmail: email.length === 0
+        };
+    }
+
+    private static blockSendMaterialsIfNotQualified(ctx: ActionContext): string | null {
+        const { missingCnpj, missingEmail } = this.getMissingLeadFields(ctx);
+        if (!missingCnpj && !missingEmail) return null;
+
+        // Pedir um por vez: primeiro CNPJ, depois e-mail.
+        if (missingCnpj) {
+            return "Antes de enviar qualquer material (catálogo, tabela de preços ou informativo), preciso do CNPJ da sua empresa. Pode me informar o CNPJ, por favor?";
+        }
+
+        return "Perfeito. Agora, antes de enviar qualquer material (catálogo, tabela de preços ou informativo), preciso do seu e-mail para envio e cadastro. Pode me informar o e-mail, por favor?";
+    }
+
     static async execute(context: ActionContext): Promise<string> {
         const { functionName, arguments: args } = context;
 
@@ -303,6 +324,16 @@ export class ActionExecutor {
     private static async enviarInformativo(ctx: ActionContext): Promise<string> {
         const tipo = ctx.arguments.tipo || "";
 
+        const blockMessage = this.blockSendMaterialsIfNotQualified(ctx);
+        if (blockMessage) {
+            logger.info("[ActionExecutor] Bloqueando envio de informativo por falta de qualificação (CNPJ/e-mail)", {
+                ticketId: ctx.ticket.id,
+                contactId: (ctx.contact as any)?.id,
+                missing: this.getMissingLeadFields(ctx)
+            });
+            return blockMessage;
+        }
+
         try {
             let informativoFile: FilesOptions | null = null;
 
@@ -453,8 +484,80 @@ export class ActionExecutor {
     private static async enviarCatalogo(ctx: ActionContext): Promise<string> {
         const tipo = ctx.arguments.tipo || "";
 
+        const blockMessage = this.blockSendMaterialsIfNotQualified(ctx);
+        if (blockMessage) {
+            logger.info("[ActionExecutor] Bloqueando envio de catálogo por falta de qualificação (CNPJ/e-mail)", {
+                ticketId: ctx.ticket.id,
+                contactId: (ctx.contact as any)?.id,
+                missing: this.getMissingLeadFields(ctx)
+            });
+            return blockMessage;
+        }
+
         try {
             let catalogoFile: FilesOptions | null = null;
+
+            const normalizeText = (value: string) => {
+                return (value || "")
+                    .toString()
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .toLowerCase()
+                    .replace(/[^a-z0-9\s]/g, " ")
+                    .replace(/\s+/g, " ")
+                    .trim();
+            };
+
+            const pickCatalogByTipo = (files: FilesOptions[], rawTipo: string): FilesOptions | null => {
+                const tipoNorm = normalizeText(rawTipo);
+                if (!tipoNorm) return null;
+
+                // Remove termos genéricos que atrapalham o match
+                const cleanedTipo = tipoNorm
+                    .replace(/\bcatalogo\b/g, "")
+                    .replace(/\bcatalogue\b/g, "")
+                    .replace(/\bcatalog\b/g, "")
+                    .replace(/\bpdf\b/g, "")
+                    .trim();
+
+                const synonyms: Record<string, string[]> = {
+                    premium: ["premium", "completo", "full"],
+                    lite: ["lite", "light", "basico", "basic"],
+                    completo: ["completo", "premium", "full"],
+                    completo_iluminacao: ["loja de iluminacao", "iluminacao", "iluminacao loja", "premium"],
+                    completo_eletrica: ["loja eletrica", "eletrica", "materiais de construcao", "lite"]
+                };
+
+                const tokens = cleanedTipo.split(" ").filter(Boolean);
+
+                const candidates = (files || []).map(f => {
+                    const name = normalizeText((f as any).name || "");
+                    const title = normalizeText((f as any).title || "");
+                    const combined = `${name} ${title}`.trim();
+                    return { f, combined };
+                });
+
+                // 1) Match direto por substring
+                const direct = candidates.find(c => c.combined.includes(cleanedTipo))?.f;
+                if (direct) return direct;
+
+                // 2) Match por tokens (todos os tokens presentes)
+                if (tokens.length) {
+                    const tokenMatch = candidates.find(c => tokens.every(t => c.combined.includes(t)))?.f;
+                    if (tokenMatch) return tokenMatch;
+                }
+
+                // 3) Match por sinônimos (premium/lite/completo)
+                const synonymKey = Object.keys(synonyms).find(k => cleanedTipo.includes(k));
+                const synonymList = synonymKey ? synonyms[synonymKey] : [];
+                for (const s of synonymList) {
+                    const sNorm = normalizeText(s);
+                    const found = candidates.find(c => c.combined.includes(sNorm))?.f;
+                    if (found) return found;
+                }
+
+                return null;
+            };
 
             logger.info(`[ActionExecutor] enviarCatalogo iniciado`, {
                 ticketId: ctx.ticket.id,
@@ -477,11 +580,8 @@ export class ActionExecutor {
 
                 if (allCatalogs.length > 0) {
                     if (tipo) {
-                        // Se tipo especificado, buscar pelo nome do arquivo
-                        const tipoLower = tipo.toLowerCase();
-                        catalogoFile = allCatalogs.find(f => 
-                            f.name?.toLowerCase().includes(tipoLower)
-                        ) || null;
+                        // Se tipo especificado, buscar por nome/título com normalização
+                        catalogoFile = pickCatalogByTipo(allCatalogs, tipo);
                         
                         logger.info(`[ActionExecutor] Busca por tipo "${tipo}": ${catalogoFile ? 'encontrado' : 'não encontrado'}`, {
                             fileName: catalogoFile?.name
@@ -528,11 +628,7 @@ export class ActionExecutor {
                         where: whereConditions,
                         limit: 10
                     });
-                    // Tentar encontrar pelo nome
-                    const tipoLower = tipo.toLowerCase();
-                    catalogoFile = allFiles.find(f => 
-                        f.name?.toLowerCase().includes(tipoLower)
-                    ) || allFiles[0] || null;
+                    catalogoFile = pickCatalogByTipo(allFiles, tipo) || allFiles[0] || null;
                 } else {
                     catalogoFile = fileOptions[0] || null;
                 }
@@ -547,6 +643,35 @@ export class ActionExecutor {
             }
 
             if (!catalogoFile) {
+                // Tentar retornar opções reais para o cliente escolher (evita loop)
+                let fallbackCatalogs: FilesOptions[] = [];
+                if (ctx.ticket.queue?.folderId) {
+                    const baseTags = ["catalogo", "catalogue", "catalog"];
+                    fallbackCatalogs = await this.findAllFilesInLibraryFolder(
+                        ctx.ticket.queue.folderId,
+                        baseTags,
+                        ctx.ticket.companyId
+                    );
+                }
+
+                if (fallbackCatalogs.length === 0 && ctx.ticket.queue?.fileListId) {
+                    fallbackCatalogs = await FilesOptions.findAll({
+                        where: {
+                            fileId: ctx.ticket.queue.fileListId,
+                            isActive: true,
+                            keywords: { [Op.iLike]: "%catalogo%" }
+                        },
+                        limit: 10
+                    });
+                }
+
+                if (fallbackCatalogs.length > 0) {
+                    const lista = fallbackCatalogs
+                        .map(f => `- ${(f as any).title || f.name}`)
+                        .join("\n");
+                    return `❌ Não encontrei o catálogo "${tipo}" exatamente como você pediu.\n\n✅ Catálogos disponíveis:\n${lista}\n\nResponda com o nome exato que eu envio para você.`;
+                }
+
                 logger.warn(`[ActionExecutor] Catálogo não encontrado em nenhum sistema`, {
                     queueId: ctx.ticket.queueId,
                     tipo,
@@ -602,6 +727,16 @@ export class ActionExecutor {
 
     private static async enviarTabelaPrecos(ctx: ActionContext): Promise<string> {
         const tipo = ctx.arguments.tipo || "";
+
+        const blockMessage = this.blockSendMaterialsIfNotQualified(ctx);
+        if (blockMessage) {
+            logger.info("[ActionExecutor] Bloqueando envio de tabela por falta de qualificação (CNPJ/e-mail)", {
+                ticketId: ctx.ticket.id,
+                contactId: (ctx.contact as any)?.id,
+                missing: this.getMissingLeadFields(ctx)
+            });
+            return blockMessage;
+        }
         
         try {
             let tabelaFile: FilesOptions | null = null;

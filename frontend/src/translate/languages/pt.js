@@ -1183,7 +1183,7 @@ const messages = {
             openTicket: "Abrir ticket",
           },
           buttons: {
-            add: "Adicionar",
+            add: "ENVIAR",
             edit: "Atualizar",
             okadd: "Ok",
             cancel: "Cancelar Disparos",

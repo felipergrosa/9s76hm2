@@ -55,6 +55,13 @@ import ChatAssistantPanel from "../ChatAssistantPanel";
 import WhatsAppPreview from "./WhatsAppPreview";
 import { Sparkles } from "lucide-react";
 import TemplateVariableMapper from "../TemplateVariableMapper";  // NOVO
+import * as libraryApi from "../../services/libraryApi";
+import Sidebar from "../../pages/LibraryManager/components/Sidebar";
+import TopBar from "../../pages/LibraryManager/components/TopBar";
+import BreadcrumbNav from "../../pages/LibraryManager/components/BreadcrumbNav";
+import FolderList from "../../pages/LibraryManager/components/FolderList";
+import FolderGrid from "../../pages/LibraryManager/components/FolderGrid";
+import UploadModal from "../../pages/LibraryManager/components/UploadModal";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -292,12 +299,17 @@ const CampaignModal = ({
   const [selectedQueue, setSelectedQueue] = useState("");
   const { findAll: findAllQueues } = useQueues();
 
-  // Biblioteca de arquivos (FileManager)
+  // Seletor de arquivos (File Manager)
   const [fileLibraryOpen, setFileLibraryOpen] = useState(false);
-  const [fileLists, setFileLists] = useState([]);
-  const [expandedFileIds, setExpandedFileIds] = useState({});
-  const [filesSearch, setFilesSearch] = useState("");
   const [fileLibraryTargetIndex, setFileLibraryTargetIndex] = useState(null); // 0..4
+  const [libraryCurrentFolder, setLibraryCurrentFolder] = useState(null);
+  const [libraryBreadcrumbs, setLibraryBreadcrumbs] = useState([{ id: null, name: "Home" }]);
+  const [libraryViewMode, setLibraryViewMode] = useState("list");
+  const [librarySearchValue, setLibrarySearchValue] = useState("");
+  const [libraryFolders, setLibraryFolders] = useState([]);
+  const [libraryFiles, setLibraryFiles] = useState([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryUploadOpen, setLibraryUploadOpen] = useState(false);
   const setFieldValueRef = useRef(null);
   const formValuesRef = useRef(initialState);
 
@@ -681,12 +693,54 @@ const CampaignModal = ({
     let active = true;
     (async () => {
       try {
-        const { data } = await api.get(`/files/list`, { params: { searchParam: filesSearch } });
-        if (active) setFileLists(Array.isArray(data) ? data : []);
-      } catch (_) { }
+        setLibraryLoading(true);
+        const foldersData = await libraryApi.fetchFolders(libraryCurrentFolder);
+        const filesData = libraryCurrentFolder ? await libraryApi.fetchFiles(libraryCurrentFolder) : [];
+        if (!active) return;
+        setLibraryFolders(Array.isArray(foldersData) ? foldersData : []);
+        setLibraryFiles(Array.isArray(filesData) ? filesData : []);
+      } catch (_) {
+        if (!active) return;
+        setLibraryFolders([]);
+        setLibraryFiles([]);
+      } finally {
+        if (active) setLibraryLoading(false);
+      }
     })();
     return () => { active = false; };
-  }, [fileLibraryOpen, filesSearch]);
+  }, [fileLibraryOpen, libraryCurrentFolder]);
+
+  const handleLibraryNavigateToFolder = (folder) => {
+    setLibraryCurrentFolder(folder?.id || null);
+    setLibraryBreadcrumbs((prev) => {
+      const folderId = folder?.id || null;
+      const folderName = folder?.name || "Home";
+      if (!folderId) return [{ id: null, name: "Home" }];
+      const existingIndex = prev.findIndex((crumb) => crumb.id === folderId);
+      if (existingIndex >= 0) return prev.slice(0, existingIndex + 1);
+      return [...prev, { id: folderId, name: folderName }];
+    });
+  };
+
+  const handleLibraryNavigateBreadcrumb = (index) => {
+    setLibraryBreadcrumbs((prev) => {
+      const newBreadcrumbs = prev.slice(0, index + 1);
+      const last = newBreadcrumbs[newBreadcrumbs.length - 1];
+      setLibraryCurrentFolder(last?.id || null);
+      return newBreadcrumbs;
+    });
+  };
+
+  const filterItemsBySearch = (items, searchTerm) => {
+    if (!searchTerm) return items;
+    const term = String(searchTerm).toLowerCase();
+    return (items || []).filter((item) => {
+      const name = (item.name || item.title || "").toLowerCase();
+      const tags = (item.defaultTags || []).join(" ").toLowerCase();
+      const description = (item.description || "").toLowerCase();
+      return name.includes(term) || tags.includes(term) || description.includes(term);
+    });
+  };
 
   useEffect(() => {
     const now = moment();
@@ -783,19 +837,19 @@ const CampaignModal = ({
     }
   };
 
-  const handleChooseFromLibrary = async (opt) => {
+  const handleChooseFromLibrary = async (file) => {
     try {
       const idx = Number.isInteger(fileLibraryTargetIndex) ? fileLibraryTargetIndex : messageTab;
-      const fileUrl = opt.url || opt.path;
+      const fileUrl = file?.fileOption?.url || file?.fileOption?.path || file?.url || file?.path;
       if (!fileUrl) {
         toast.error("Arquivo sem URL disponível");
         return;
       }
-      if (!isAllowedMedia(opt)) {
+      if (!isAllowedMedia({ url: fileUrl, mediaType: file?.mediaType || file?.fileOption?.mediaType || file?.fileOption?.mimeType })) {
         toast.error("Tipo de arquivo não suportado para envio. Permitidos: imagens, áudio, vídeo e PDF.");
         return;
       }
-      const filename = opt.name || (opt.path ? opt.path.split("/").pop() : null) || "arquivo.bin";
+      const filename = file?.title || file?.name || (fileUrl ? fileUrl.split("/").pop() : null) || "arquivo.bin";
       const setFieldValue = setFieldValueRef.current;
       if (setFieldValue) {
         setFieldValue(getMediaUrlFieldByTab(idx), fileUrl);
@@ -811,6 +865,19 @@ const CampaignModal = ({
     } catch (e) {
       toastError(e);
     }
+  };
+
+  const resetLibraryPickerState = () => {
+    setLibraryCurrentFolder(null);
+    setLibraryBreadcrumbs([{ id: null, name: "Home" }]);
+    setLibrarySearchValue("");
+    setLibraryViewMode("list");
+  };
+
+  const closeLibraryPicker = () => {
+    setFileLibraryOpen(false);
+    setFileLibraryTargetIndex(null);
+    resetLibraryPickerState();
   };
 
   const deleteMedia = async () => {
@@ -1939,69 +2006,103 @@ const CampaignModal = ({
                         <Button onClick={closePreview} color="primary" variant="outlined">Fechar</Button>
                       </DialogActions>
                     </Dialog>
-                    {/* Dialog Biblioteca de Arquivos */}
-                    <Dialog open={fileLibraryOpen} onClose={() => setFileLibraryOpen(false)} maxWidth="md" fullWidth scroll="paper">
+                    {/* Dialog Biblioteca de Arquivos (File Manager) */}
+                    <Dialog
+                      open={fileLibraryOpen}
+                      onClose={closeLibraryPicker}
+                      maxWidth="lg"
+                      fullWidth
+                      scroll="paper"
+                    >
                       <DialogTitle>Selecionar arquivo da biblioteca</DialogTitle>
-                      <DialogContent dividers>
-                        <TextField
-                          value={filesSearch}
-                          onChange={(e) => setFilesSearch(e.target.value)}
-                          placeholder="Buscar listas de arquivos..."
-                          variant="outlined"
-                          size="small"
-                          fullWidth
-                          style={{ marginBottom: 8 }}
-                        />
-                        <div>
-                          {(fileLists || []).map(fl => {
-                            const open = !!expandedFileIds[fl.id];
-                            return (
-                              <div key={fl.id} style={{ border: '1px solid #eee', borderRadius: 6, marginBottom: 8 }}>
-                                <div
-                                  style={{ padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                                  onClick={async () => {
-                                    setExpandedFileIds(prev => ({ ...prev, [fl.id]: !open }));
-                                    if (!open) {
-                                      try {
-                                        const { data } = await api.get(`/files/${fl.id}`);
-                                        setExpandedFileIds(prev => ({ ...prev, [fl.id]: data }));
-                                      } catch (_) { }
-                                    }
-                                  }}
-                                >
-                                  <strong>{fl.name}</strong>
-                                  <span style={{ fontSize: 12, opacity: 0.7 }}>{open ? 'Ocultar' : 'Mostrar'}</span>
+                      <DialogContent dividers style={{ padding: 0 }}>
+                        <div style={{ display: "flex", height: "70vh", minHeight: 520 }}>
+                          <Sidebar
+                            currentFolderId={libraryCurrentFolder}
+                            onFolderClick={(folder) => handleLibraryNavigateToFolder(folder)}
+                          />
+
+                          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                            <TopBar
+                              searchValue={librarySearchValue}
+                              onSearchChange={setLibrarySearchValue}
+                              onCreateClick={() => toast.info("Criação de pastas disponível no File Manager")}
+                              onUploadClick={() => setLibraryUploadOpen(true)}
+                              onIndexAllClick={() => toast.info("Indexação disponível no File Manager")}
+                              viewMode={libraryViewMode}
+                              onViewModeChange={setLibraryViewMode}
+                            />
+                            <BreadcrumbNav
+                              breadcrumbs={libraryBreadcrumbs}
+                              onNavigate={handleLibraryNavigateBreadcrumb}
+                            />
+                            <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+                              {libraryLoading ? (
+                                <div style={{ padding: 24, textAlign: "center" }}>
+                                  <CircularProgress size={28} />
                                 </div>
-                                {open && (
-                                  <div style={{ padding: 8 }}>
-                                    {((expandedFileIds[fl.id] && expandedFileIds[fl.id].options) || []).map(opt => (
-                                      <div key={opt.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 4px', borderBottom: '1px dashed #eee' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                          <span style={{ fontSize: 14 }}>{opt.name || opt.path || `Opção ${opt.id}`}</span>
-                                          <span style={{ fontSize: 12, opacity: 0.7 }}>{opt.mediaType || ''}</span>
-                                        </div>
-                                        <Button size="small" variant="outlined" color="primary" onClick={() => handleChooseFromLibrary(opt)}>
-                                          Usar este arquivo
-                                        </Button>
-                                      </div>
-                                    ))}
-                                    {(!expandedFileIds[fl.id] || !expandedFileIds[fl.id].options || expandedFileIds[fl.id].options.length === 0) && (
-                                      <div style={{ padding: 8, fontSize: 12, opacity: 0.7 }}>Sem opções nesta lista.</div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                          {(!fileLists || fileLists.length === 0) && (
-                            <div style={{ padding: 12, textAlign: 'center', opacity: 0.7 }}>Nenhuma lista encontrada.</div>
-                          )}
+                              ) : (
+                                <>
+                                  {libraryViewMode === "grid" ? (
+                                    <FolderGrid
+                                      folders={filterItemsBySearch(libraryFolders, librarySearchValue)}
+                                      files={filterItemsBySearch(libraryFiles, librarySearchValue)}
+                                      onFolderClick={(folder) => handleLibraryNavigateToFolder(folder)}
+                                      onFileClick={(file) => handleChooseFromLibrary(file)}
+                                      onMenuAction={() => {}}
+                                      selectedItems={[]}
+                                      onSelectItem={() => {}}
+                                    />
+                                  ) : (
+                                    <FolderList
+                                      folders={filterItemsBySearch(libraryFolders, librarySearchValue)}
+                                      files={filterItemsBySearch(libraryFiles, librarySearchValue)}
+                                      onFolderClick={(folder) => handleLibraryNavigateToFolder(folder)}
+                                      onFileClick={(file) => handleChooseFromLibrary(file)}
+                                      onMenuAction={() => {}}
+                                      selectedItems={[]}
+                                      onSelectItem={() => {}}
+                                      onSelectAll={() => {}}
+                                    />
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </DialogContent>
                       <DialogActions>
-                        <Button onClick={() => setFileLibraryOpen(false)} color="primary" variant="outlined">Fechar</Button>
+                        <Button
+                          onClick={() => setLibraryUploadOpen(true)}
+                          color="primary"
+                          variant="outlined"
+                        >
+                          Buscar do computador
+                        </Button>
+                        <Button onClick={closeLibraryPicker} color="primary" variant="outlined">Fechar</Button>
                       </DialogActions>
                     </Dialog>
+
+                    <UploadModal
+                      open={libraryUploadOpen}
+                      onClose={() => setLibraryUploadOpen(false)}
+                      currentFolder={libraryCurrentFolder}
+                      user={user}
+                      onUploadComplete={() => {
+                        setLibraryUploadOpen(false);
+                        try {
+                          setLibraryLoading(true);
+                          (async () => {
+                            const foldersData = await libraryApi.fetchFolders(libraryCurrentFolder);
+                            const filesData = libraryCurrentFolder ? await libraryApi.fetchFiles(libraryCurrentFolder) : [];
+                            setLibraryFolders(Array.isArray(foldersData) ? foldersData : []);
+                            setLibraryFiles(Array.isArray(filesData) ? filesData : []);
+                          })().finally(() => setLibraryLoading(false));
+                        } catch (_) {
+                          setLibraryLoading(false);
+                        }
+                      }}
+                    />
 
                   </DialogContent>
                   <DialogActions>

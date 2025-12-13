@@ -261,7 +261,7 @@ ${stage?.systemPrompt || ""}
             segmento: "segment"
         },
         qualifiedLeadTag: "lead_qualificado",
-        leadQualificationMessage: "Para enviar nossa tabela de preços, preciso de algumas informações. Qual o CNPJ da sua empresa?",
+        leadQualificationMessage: "Para enviar nossa tabela de preços e condições comerciais, preciso de algumas informações. Qual o CNPJ da sua empresa?",
         // SDR Settings
         sdrEnabled: false,
         sdrICP: {
