@@ -42,6 +42,43 @@ export const getLabelsDebug = async (req: Request, res: Response) => {
   }
 };
 
+export const listGroups = async (req: Request, res: Response) => {
+  try {
+    const whatsappId = Number(req.params.whatsappId);
+    if (!whatsappId) return res.status(400).json({ error: "whatsappId inválido" });
+
+    const wpp = await Whatsapp.findByPk(whatsappId);
+    if (!wpp) return res.status(404).json({ error: "Whatsapp não encontrado" });
+
+    let wbot: any;
+    try {
+      const { getWbot } = require("../libs/wbot");
+      wbot = getWbot(whatsappId);
+    } catch (err: any) {
+      return res.status(400).json({ error: "WhatsApp não conectado" });
+    }
+
+    if (!wbot?.groupFetchAllParticipating) {
+      return res.status(400).json({ error: "Sessão não suporta listagem de grupos" });
+    }
+
+    const groupsMap = await wbot.groupFetchAllParticipating();
+    const groups = Object.values(groupsMap || {}).map((g: any) => ({
+      id: String(g?.id || ""),
+      subject: String(g?.subject || ""),
+      participantsCount: Array.isArray(g?.participants) ? g.participants.length : 0,
+      owner: g?.owner ? String(g.owner) : null
+    })).filter((g: any) => Boolean(g.id));
+
+    groups.sort((a: any, b: any) => (a.subject || "").localeCompare(b.subject || ""));
+
+    return res.json({ whatsappId, groups });
+  } catch (e: any) {
+    logger.warn(`[listGroups] error: ${e?.message}`);
+    return res.status(500).json({ error: e?.message || "list groups failed" });
+  }
+};
+
 export const rebuildTags = async (req: Request, res: Response) => {
   try {
     const whatsappId = Number(req.params.whatsappId);

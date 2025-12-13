@@ -112,32 +112,34 @@ const sequelize = new Sequelize(dbConfig.database, dbConfig.username, dbConfig.p
 let reconnectAttempts = 0;
 const maxReconnectAttempts = 5;
 
-sequelize.authenticate()
-  .then(() => {
-    logger.info("✅ Database connected successfully");
-    reconnectAttempts = 0;
-  })
-  .catch(err => {
-    logger.error("❌ Database connection error:", err);
+if (process.env.NODE_ENV !== "test") {
+  sequelize.authenticate()
+    .then(() => {
+      logger.info("✅ Database connected successfully");
+      reconnectAttempts = 0;
+    })
+    .catch(err => {
+      logger.error("❌ Database connection error:", err);
 
-    if (reconnectAttempts < maxReconnectAttempts) {
-      reconnectAttempts++;
-      const delay = Math.min(5000 * reconnectAttempts, 30000); // Max 30s
+      if (reconnectAttempts < maxReconnectAttempts) {
+        reconnectAttempts++;
+        const delay = Math.min(5000 * reconnectAttempts, 30000); // Max 30s
 
-      logger.info(`🔄 Attempting to reconnect to database (${reconnectAttempts}/${maxReconnectAttempts}) in ${delay / 1000}s...`);
+        logger.info(`🔄 Attempting to reconnect to database (${reconnectAttempts}/${maxReconnectAttempts}) in ${delay / 1000}s...`);
 
-      setTimeout(() => {
-        sequelize.authenticate()
-          .then(() => {
-            logger.info("✅ Database reconnected successfully");
-            reconnectAttempts = 0;
-          })
-          .catch(e => {
-            logger.error(`❌ Reconnection attempt ${reconnectAttempts} failed:`, e);
-          });
-      }, delay);
-    }
-  });
+        setTimeout(() => {
+          sequelize.authenticate()
+            .then(() => {
+              logger.info("✅ Database reconnected successfully");
+              reconnectAttempts = 0;
+            })
+            .catch(e => {
+              logger.error(`❌ Reconnection attempt ${reconnectAttempts} failed:`, e);
+            });
+        }, delay);
+      }
+    });
+}
 
 const models = [
   Company,

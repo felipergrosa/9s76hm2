@@ -89,7 +89,8 @@ export const AVAILABLE_PERMISSIONS = {
     "ai-agents.view",
     "ai-agents.create",
     "ai-agents.edit",
-    "ai-agents.delete"
+    "ai-agents.delete",
+    "ai-training.view"
   ],
 
   // ADMINISTRAÇÃO
@@ -361,6 +362,7 @@ export const getPermissionsCatalog = () => {
         ...AVAILABLE_PERMISSIONS.modules.filter(key => 
           key.startsWith("ai-agents.") || key.startsWith("prompts.")
         ),
+        "ai-training.view",
         "ai-settings.view",
         "ai-settings.edit",
         "files.view",
@@ -439,6 +441,7 @@ const formatPermissionLabel = (key: string): string => {
     "ai-agents.create": "Criar Agentes de IA",
     "ai-agents.edit": "Editar Agentes de IA",
     "ai-agents.delete": "Deletar Agentes de IA",
+    "ai-training.view": "Acessar Training / Sandbox (IA)",
     "queues.view": "Ver Filas",
     "queues.create": "Criar Filas",
     "queues.edit": "Editar Filas",

@@ -1,6 +1,8 @@
 import { Router } from "express";
 import isAuth from "../middleware/isAuth";
+import { checkPermission } from "../middleware/checkPermission";
 import * as AIAgentController from "../controllers/AIAgentController";
+import * as AIAgentFunnelStageController from "../controllers/AIAgentFunnelStageController";
 
 const aiAgentRoutes = Router();
 
@@ -9,6 +11,22 @@ aiAgentRoutes.get("/ai-agents", isAuth, AIAgentController.index);
 
 // Buscar um agente específico
 aiAgentRoutes.get("/ai-agents/:id", isAuth, AIAgentController.show);
+
+// Listar etapas do funil de um agente
+aiAgentRoutes.get(
+  "/ai-agents/:id/funnel-stages",
+  isAuth,
+  checkPermission("ai-training.view"),
+  AIAgentFunnelStageController.listStages
+);
+
+// Atualizar prompt do sistema de uma etapa do funil
+aiAgentRoutes.put(
+  "/ai-agents/:agentId/funnel-stages/:stageId/system-prompt",
+  isAuth,
+  checkPermission("ai-training.view"),
+  AIAgentFunnelStageController.updateStageSystemPrompt
+);
 
 // Criar novo agente
 aiAgentRoutes.post("/ai-agents", isAuth, AIAgentController.store);

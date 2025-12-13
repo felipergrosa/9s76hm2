@@ -263,6 +263,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
     location.pathname === "/ai-agents" ||
     location.pathname === "/prompts" ||
     location.pathname === "/ai-settings" ||
+    location.pathname === "/ai-training" ||
     location.pathname === "/files";
 
   useEffect(() => {
@@ -767,6 +768,14 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                 icon={<SmartToy />}
                 tooltip={collapsed}
               />
+              {hasPermission("ai-training.view") && (
+                <ListItemLink
+                  to="/ai-training"
+                  primary="🧪 Training / Sandbox"
+                  icon={<SmartToy />}
+                  tooltip={collapsed}
+                />
+              )}
               {hasPermission("prompts.view") && (
                 <ListItemLink
                   to="/prompts"

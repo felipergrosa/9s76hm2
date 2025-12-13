@@ -76,6 +76,7 @@ import ForgotPassword from "../pages/ForgetPassWord";
 import ResetPassword from "../pages/ResetPassword";
 import AISettings from "../components/AISettings";
 import AIAgents from "../pages/AIAgents";
+import AITraining from "../pages/AITraining";
 
 
 const Routes = () => {
@@ -172,6 +173,7 @@ const Routes = () => {
                 <Route exact path="/allConnections" component={AllConnections} isPrivate />
                 <Route exact path="/ai-settings" component={AISettings} isPrivate />
                 <Route exact path="/ai-agents" component={AIAgents} isPrivate />
+                <Route exact path="/ai-training" component={AITraining} isPrivate />
                 {showCampaigns && (
                   <>
                     <Route exact path="/contact-lists" component={ContactLists} isPrivate />
