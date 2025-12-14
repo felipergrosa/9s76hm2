@@ -19,6 +19,10 @@ import FindOrCreateATicketTrakingService from "../services/TicketServices/FindOr
 import ListTicketsServiceReport from "../services/TicketServices/ListTicketsServiceReport";
 import SetTicketMessagesAsRead from "../helpers/SetTicketMessagesAsRead";
 import { Mutex } from "async-mutex";
+import Queue from "../models/Queue";
+import Chatbot from "../models/Chatbot";
+import Prompt from "../models/Prompt";
+import AIAgent from "../models/AIAgent";
 
 type IndexQuery = {
   searchParam: string;
@@ -274,6 +278,77 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       action: "update",
       ticket
     });
+
+  return res.status(200).json(ticket);
+};
+
+export const transferToBot = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+  const { queueId } = req.body as { queueId?: number | string };
+
+  const parsedQueueId = Number(queueId);
+  if (!Number.isInteger(parsedQueueId) || parsedQueueId <= 0) {
+    throw new AppError("ERR_QUEUE_ID_REQUIRED", 400);
+  }
+
+  const queue = await Queue.findOne({
+    where: { id: parsedQueueId, companyId },
+    include: [
+      {
+        model: Chatbot,
+        as: "chatbots",
+        attributes: ["id"],
+        required: false
+      },
+      {
+        model: Prompt,
+        as: "prompt",
+        attributes: ["id"],
+        required: false
+      }
+    ]
+  });
+
+  if (!queue) {
+    throw new AppError("ERR_QUEUE_NOT_FOUND", 404);
+  }
+
+  const hasChatbots = Array.isArray((queue as any).chatbots) && (queue as any).chatbots.length > 0;
+  const hasPrompt = Array.isArray((queue as any).prompt) && (queue as any).prompt.length > 0;
+  const hasRag = Boolean((queue as any).ragCollection && String((queue as any).ragCollection).trim());
+
+  let hasAgent = false;
+  if (!hasChatbots && !hasPrompt && !hasRag) {
+    const agents = await AIAgent.findAll({
+      where: {
+        companyId,
+        status: "active"
+      },
+      attributes: ["queueIds"]
+    });
+    hasAgent = agents.some(agent => Array.isArray((agent as any).queueIds) && (agent as any).queueIds.includes(parsedQueueId));
+  }
+
+  if (!hasChatbots && !hasPrompt && !hasRag && !hasAgent) {
+    throw new AppError("ERR_QUEUE_HAS_NO_BOT", 400);
+  }
+
+  const mutex = new Mutex();
+  const { ticket } = await mutex.runExclusive(async () => {
+    const result = await UpdateTicketService({
+      ticketData: {
+        queueId: parsedQueueId,
+        status: "bot",
+        isBot: true,
+        userId: null,
+        isTransfered: false
+      } as any,
+      ticketId,
+      companyId
+    });
+    return result;
+  });
 
   return res.status(200).json(ticket);
 };

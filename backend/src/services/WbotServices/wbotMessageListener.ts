@@ -5100,6 +5100,17 @@ const handleMessage = async (
     }
 
     if (ticket.queue && ticket.queueId && !msg.key.fromMe) {
+      // CRÍTICO: Respeitar desativação do bot por contato (toggle "Desabilitar chatbot")
+      if ((contact as any)?.disableBot) {
+        return;
+      }
+
+      // CRÍTICO: Bot/IA só pode responder quando o ticket estiver na aba BOT
+      // (status=bot). Se saiu da aba BOT, para imediatamente.
+      if (ticket.status !== "bot") {
+        return;
+      }
+
       const hasChatbot = Boolean(ticket.queue?.chatbots && ticket.queue.chatbots.length > 0);
       const queuePrompt = (ticket.queue as any)?.prompt;
       const hasPrompt = Boolean(queuePrompt && Array.isArray(queuePrompt) && queuePrompt.length > 0);

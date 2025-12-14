@@ -9,18 +9,22 @@ import { isNil } from "lodash";
 
 type QueueFilter = {
   companyId: number;
+  onlyWithBot?: string;
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId: userCompanyId } = req.user;
-  const { companyId: queryCompanyId } = req.query as unknown as QueueFilter;
+  const { companyId: queryCompanyId, onlyWithBot } = req.query as unknown as QueueFilter;
   let companyId = userCompanyId;
 
   if (!isNil(queryCompanyId)) {
     companyId = +queryCompanyId;
   }
 
-  const queues = await ListQueuesService({ companyId });
+  const queues = await ListQueuesService({
+    companyId,
+    onlyWithBot: String(onlyWithBot || "").toLowerCase() === "true"
+  });
 
   return res.status(200).json(queues);
 };

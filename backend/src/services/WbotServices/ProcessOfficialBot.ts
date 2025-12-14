@@ -78,6 +78,17 @@ export async function processOfficialBot({
       return;
     }
 
+    // 4. Respeitar desativação do bot por contato
+    try {
+      const contact = await Contact.findByPk(ticket.contactId);
+      if ((contact as any)?.disableBot) {
+        logger.info(`[ProcessOfficialBot] Contato ${ticket.contactId} com bot desabilitado - pulando IA`);
+        return;
+      }
+    } catch (e) {
+      // silencioso
+    }
+
     // Verificar se fila tem prompt (sistema legado - BAIXA PRIORIDADE)
     const prompts = queue.prompt;
     let prompt = null;

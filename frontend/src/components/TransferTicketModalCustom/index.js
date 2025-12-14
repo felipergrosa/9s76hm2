@@ -36,7 +36,7 @@ const filterOptions = createFilterOptions({
   trim: true,
 });
 
-const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket }) => {
+const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode }) => {
   const history = useHistory();
   const [options, setOptions] = useState([]);
   const [queues, setQueues] = useState([]);
@@ -59,7 +59,10 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket }) => 
   useEffect(() => {
     if (isMounted.current) {
       const loadQueues = async () => {
-        const list = await findAllQueues();
+        const list = mode === "bot"
+          ? await findAllQueues({ onlyWithBot: true })
+          : await findAllQueues();
+
         setAllQueues(list);
         setQueues(list);
 
@@ -67,10 +70,14 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket }) => 
       loadQueues();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [mode]);
 
 
   useEffect(() => {
+    if (mode === "bot") {
+      return;
+    }
+
     if (!modalOpen || searchParam.length < 3) {
       setLoading(false);
       setSelectedQueue("");
@@ -94,7 +101,7 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket }) => 
       fetchUsers();
     }, 500);
     return () => clearTimeout(delayDebounceFn);
-  }, [searchParam, modalOpen]);
+  }, [searchParam, modalOpen, mode]);
 
   const handleMsgTransferChange = (event) => {
     setMsgTransfer(event.target.value);
@@ -112,15 +119,22 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket }) => 
     if (!selectedQueue || selectedQueue === "") return;
     setLoading(true);
     try {
-      let data = {};
+      if (mode === "bot") {
+        await api.post(`/tickets/${ticketid}/transfer-to-bot`, {
+          queueId: selectedQueue
+        });
+      } else {
+        let data = {};
 
-        data.userId = !selectedUser ? null : selectedUser.id;
-        data.status = !selectedUser ? "pending" : ticket.isGroup ? "group" : "open";
-        data.queueId = selectedQueue;
-        data.msgTransfer = msgTransfer ? msgTransfer : null;
-        data.isTransfered = true;
+          data.userId = !selectedUser ? null : selectedUser.id;
+          data.status = !selectedUser ? "pending" : ticket.isGroup ? "group" : "open";
+          data.queueId = selectedQueue;
+          data.msgTransfer = msgTransfer ? msgTransfer : null;
+          data.isTransfered = true;
 
-      await api.put(`/tickets/${ticketid}`, data);
+        await api.put(`/tickets/${ticketid}`, data);
+      }
+
       setLoading(false);
       history.push(`/tickets/`);
       handleClose();
@@ -139,53 +153,55 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket }) => 
       </DialogTitle>
       <DialogContent dividers>
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={6} xl={6}>
-            <Autocomplete
-              fullWidth
-              getOptionLabel={(option) => `${option.name}`}
-              onChange={(e, newValue) => {
-                setSelectedUser(newValue);
-                if (newValue != null && Array.isArray(newValue.queues)) {
-                  if (newValue.queues.length === 1) {
-                    setSelectedQueue(newValue.queues[0].id);
-                  }
-                  setQueues(newValue.queues);
+          {mode !== "bot" && (
+            <Grid item xs={12} sm={6} xl={6}>
+              <Autocomplete
+                fullWidth
+                getOptionLabel={(option) => `${option.name}`}
+                onChange={(e, newValue) => {
+                  setSelectedUser(newValue);
+                  if (newValue != null && Array.isArray(newValue.queues)) {
+                    if (newValue.queues.length === 1) {
+                      setSelectedQueue(newValue.queues[0].id);
+                    }
+                    setQueues(newValue.queues);
 
-                } else {
-                  setQueues(allQueues);
-                  setSelectedQueue("");
-                }
-              }}
-              options={options}
-              filterOptions={filterOptions}
-              freeSolo
-              autoHighlight
-              noOptionsText={i18n.t("transferTicketModal.noOptions")}
-              loading={loading}
-              renderOption={option => (<span> <UserStatusIcon user={option} /> {option.name}</span>)}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label={i18n.t("transferTicketModal.fieldLabel")}
-                  variant="outlined"
-                  autoFocus
-                  onChange={(e) => setSearchParam(e.target.value)}
-                  InputProps={{
-                    ...params.InputProps,
-                    endAdornment: (
-                      <React.Fragment>
-                        {loading ? (
-                          <CircularProgress color="inherit" size={20} />
-                        ) : null}
-                        {params.InputProps.endAdornment}
-                      </React.Fragment>
-                    ),
-                  }}
-                />
-              )}
-            />
-          </Grid>
-          <Grid xs={12} sm={6} xl={6} item >
+                  } else {
+                    setQueues(allQueues);
+                    setSelectedQueue("");
+                  }
+                }}
+                options={options}
+                filterOptions={filterOptions}
+                freeSolo
+                autoHighlight
+                noOptionsText={i18n.t("transferTicketModal.noOptions")}
+                loading={loading}
+                renderOption={option => (<span> <UserStatusIcon user={option} /> {option.name}</span>)}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={i18n.t("transferTicketModal.fieldLabel")}
+                    variant="outlined"
+                    autoFocus
+                    onChange={(e) => setSearchParam(e.target.value)}
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <React.Fragment>
+                          {loading ? (
+                            <CircularProgress color="inherit" size={20} />
+                          ) : null}
+                          {params.InputProps.endAdornment}
+                        </React.Fragment>
+                      ),
+                    }}
+                  />
+                )}
+              />
+            </Grid>
+          )}
+          <Grid xs={12} sm={mode === "bot" ? 12 : 6} xl={mode === "bot" ? 12 : 6} item >
             <FormControl variant="outlined" fullWidth>
               <InputLabel>
                 {i18n.t("transferTicketModal.fieldQueueLabel")}
@@ -205,18 +221,20 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket }) => 
           </Grid>
         </Grid>
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={12} xl={12} >
-            <TextField
-              label={i18n.t("transferTicketModal.msgTransfer")}
-              value={msgTransfer}
-              onChange={handleMsgTransferChange}
-              variant="outlined"
-              multiline
-              maxRows={5}
-              minRows={5}
-              fullWidth
-            />
-          </Grid>
+          {mode !== "bot" && (
+            <Grid item xs={12} sm={12} xl={12} >
+              <TextField
+                label={i18n.t("transferTicketModal.msgTransfer")}
+                value={msgTransfer}
+                onChange={handleMsgTransferChange}
+                variant="outlined"
+                multiline
+                maxRows={5}
+                minRows={5}
+                fullWidth
+              />
+            </Grid>
+          )}
         </Grid>
       </DialogContent>
       <DialogActions>

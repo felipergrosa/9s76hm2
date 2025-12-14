@@ -21,6 +21,12 @@ ticketRoutes.post("/tickets", isAuth, TicketController.store);
 
 ticketRoutes.put("/tickets/:ticketId", isAuth, TicketController.update);
 
+ticketRoutes.post(
+  "/tickets/:ticketId/transfer-to-bot",
+  isAuth,
+  TicketController.transferToBot
+);
+
 ticketRoutes.delete("/tickets/:ticketId", isAuth, TicketController.remove);
 
 ticketRoutes.post("/tickets/closeAll", isAuth, TicketController.closeAll);

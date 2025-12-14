@@ -17,6 +17,7 @@ import ScheduleModal from "../ScheduleModal";
 const TicketOptionsMenu = ({ ticket, menuOpen, handleClose, anchorEl }) => {
 	const [confirmationOpen, setConfirmationOpen] = useState(false);
 	const [transferTicketModalOpen, setTransferTicketModalOpen] = useState(false);
+	const [transferToBotModalOpen, setTransferToBotModalOpen] = useState(false);
 	const isMounted = useRef(true);
 	const { user } = useContext(AuthContext);
 	const history = useHistory();
@@ -49,9 +50,20 @@ const TicketOptionsMenu = ({ ticket, menuOpen, handleClose, anchorEl }) => {
 		handleClose();
 	};
 
+	const handleOpenTransferToBotModal = e => {
+		setTransferToBotModalOpen(true);
+		handleClose();
+	};
+
 	const handleCloseTransferTicketModal = () => {
 		if (isMounted.current) {
 			setTransferTicketModalOpen(false);
+		}
+	};
+
+	const handleCloseTransferToBotModal = () => {
+		if (isMounted.current) {
+			setTransferToBotModalOpen(false);
 		}
 	};
 
@@ -122,6 +134,9 @@ const TicketOptionsMenu = ({ ticket, menuOpen, handleClose, anchorEl }) => {
 				<MenuItem onClick={handleOpenTransferModal}>
 					{i18n.t("ticketOptionsMenu.transfer")}
 				</MenuItem>
+				<MenuItem onClick={handleOpenTransferToBotModal}>
+					Transferir para Bot/Agente
+				</MenuItem>
 				<MenuItem>
 					<Switch
 						size="small"
@@ -155,6 +170,14 @@ const TicketOptionsMenu = ({ ticket, menuOpen, handleClose, anchorEl }) => {
 				modalOpen={transferTicketModalOpen}
 				onClose={handleCloseTransferTicketModal}
 				ticketid={ticket.id}
+				ticket={ticket}
+			/>
+			<TransferTicketModalCustom
+				modalOpen={transferToBotModalOpen}
+				onClose={handleCloseTransferToBotModal}
+				ticketid={ticket.id}
+				ticket={ticket}
+				mode="bot"
 			/>
 			<ScheduleModal
 				open={scheduleModalOpen}
