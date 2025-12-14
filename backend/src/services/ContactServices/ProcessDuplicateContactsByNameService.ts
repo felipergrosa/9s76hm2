@@ -3,12 +3,11 @@ import AppError from "../../errors/AppError";
 import Contact from "../../models/Contact";
 import sequelize from "../../database";
 import { getIO } from "../../libs/socket";
-import { safeNormalizePhoneNumber } from "../../utils/phone";
 import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 
-interface ProcessDuplicateParams {
+interface ProcessDuplicateByNameParams {
   companyId: number;
-  canonicalNumber: string;
+  normalizedName: string;
   masterId: number;
   targetIds?: number[];
   mode?: "selected" | "all";
@@ -85,15 +84,12 @@ const mergeStringFields = [
 
 const mergeDirectFields = ["foundationDate", "dtUltCompra", "vlUltCompra", "situation"] as const;
 
-const shouldReplaceName = (currentName: string | null | undefined, fallbackNumber: string): boolean => {
+const shouldReplaceName = (currentName: string | null | undefined): boolean => {
   const normalized = (currentName || "").trim();
-  if (!normalized) return true;
-
-  const digitsOnly = normalized.replace(/\D/g, "");
-  return digitsOnly === fallbackNumber;
+  return !normalized;
 };
 
-const collectUpdatesFromDuplicate = (master: Contact, duplicate: Contact, canonicalNumber: string) => {
+const collectUpdatesFromDuplicate = (master: Contact, duplicate: Contact) => {
   const updates: Record<string, unknown> = {};
 
   mergeStringFields.forEach(field => {
@@ -119,7 +115,7 @@ const collectUpdatesFromDuplicate = (master: Contact, duplicate: Contact, canoni
   });
 
   const duplicateName = duplicate.name;
-  if (duplicateName && shouldReplaceName(master.name, canonicalNumber)) {
+  if (duplicateName && shouldReplaceName(master.name)) {
     updates.name = duplicateName;
   }
 
@@ -217,54 +213,36 @@ const dedupeContactTags = async (transaction: Transaction): Promise<void> => {
   );
 };
 
-const normalizeGroupKey = (value: string | null | undefined): string | null => {
+const normalizeNameKey = (value: string | null | undefined): string | null => {
   if (!value) return null;
-  const digitsOnly = String(value).replace(/\D/g, "");
-  if (!digitsOnly) return null;
-  if (digitsOnly.length >= 11) {
-    return digitsOnly.slice(-11);
-  }
-  if (digitsOnly.length >= 8) {
-    return digitsOnly;
-  }
-  return null;
+  const trimmed = String(value).trim().toLowerCase();
+  if (!trimmed) return null;
+  return trimmed.replace(/\s+/g, " ");
 };
 
-const ProcessDuplicateContactsService = async ({
+const ProcessDuplicateContactsByNameService = async ({
   companyId,
-  canonicalNumber,
+  normalizedName,
   masterId,
   targetIds = [],
   mode = "selected",
   operation = "merge"
-}: ProcessDuplicateParams): Promise<ProcessDuplicateResult> => {
-  const normalizedGroupKey = normalizeGroupKey(canonicalNumber);
-
-  if (!normalizedGroupKey) {
-    throw new AppError("ERR_INVALID_CANONICAL_NUMBER");
+}: ProcessDuplicateByNameParams): Promise<ProcessDuplicateResult> => {
+  const normalizedKey = normalizeNameKey(normalizedName);
+  if (!normalizedKey) {
+    throw new AppError("ERR_INVALID_NAME_GROUP", 400);
   }
 
   const contactIdRows = await sequelize.query<{ id: number }>(
     `
-      WITH contact_digits AS (
+      WITH normalized_contacts AS (
         SELECT
           "id",
           "companyId",
-          REGEXP_REPLACE(COALESCE("canonicalNumber", "number", ''), '\\D', '', 'g') AS digits
+          TRIM(REGEXP_REPLACE(LOWER(COALESCE("name", '')), '\\s+', ' ', 'g')) AS normalized
         FROM "Contacts"
         WHERE "companyId" = :companyId
           AND "isGroup" = false
-      ),
-      normalized_contacts AS (
-        SELECT
-          "id",
-          CASE
-            WHEN digits IS NULL OR digits = '' THEN NULL
-            WHEN LENGTH(digits) >= 11 THEN RIGHT(digits, 11)
-            WHEN LENGTH(digits) >= 8 THEN digits
-            ELSE NULL
-          END AS normalized
-        FROM contact_digits
       )
       SELECT "id"
       FROM normalized_contacts
@@ -273,13 +251,13 @@ const ProcessDuplicateContactsService = async ({
     {
       replacements: {
         companyId,
-        normalizedKey: normalizedGroupKey
+        normalizedKey
       },
       type: QueryTypes.SELECT
     }
   );
 
-  if (!contactIdRows.length) {
+  if (!contactIdRows.length || contactIdRows.length < 2) {
     throw new AppError("ERR_DUPLICATE_GROUP_NOT_FOUND", 404);
   }
 
@@ -292,7 +270,7 @@ const ProcessDuplicateContactsService = async ({
     }
   });
 
-  if (!contacts.length) {
+  if (!contacts.length || contacts.length < 2) {
     throw new AppError("ERR_DUPLICATE_GROUP_NOT_FOUND", 404);
   }
 
@@ -306,28 +284,20 @@ const ProcessDuplicateContactsService = async ({
     duplicates = contacts.filter(contact => contact.id !== masterId);
   } else {
     if (!targetIds.length) {
-      throw new AppError("ERR_DUPLICATE_TARGETS_REQUIRED");
+      throw new AppError("ERR_DUPLICATE_TARGETS_REQUIRED", 400);
     }
 
     const uniqueTargets = Array.from(new Set(targetIds.filter(id => id !== masterId)));
     duplicates = contacts.filter(contact => uniqueTargets.includes(contact.id));
 
     if (!duplicates.length) {
-      throw new AppError("ERR_NO_VALID_DUPLICATES_SELECTED");
+      throw new AppError("ERR_NO_VALID_DUPLICATES_SELECTED", 400);
     }
   }
 
   const duplicateIds = duplicates.map(contact => contact.id);
 
   let updatedMaster: Contact;
-
-  const canonicalCandidates = contacts
-    .map(contact => safeNormalizePhoneNumber(contact.canonicalNumber || contact.number)?.canonical)
-    .filter((value): value is string => Boolean(value));
-
-  const finalCanonical = canonicalCandidates[0]
-    || safeNormalizePhoneNumber(normalizedGroupKey)?.canonical
-    || normalizedGroupKey;
 
   try {
     await sequelize.transaction(async transaction => {
@@ -336,17 +306,9 @@ const ProcessDuplicateContactsService = async ({
 
       if (operation === "merge") {
         duplicates.forEach(duplicate => {
-          const updates = collectUpdatesFromDuplicate(master, duplicate, finalCanonical);
+          const updates = collectUpdatesFromDuplicate(master, duplicate);
           Object.assign(aggregatedUpdates, updates);
         });
-      }
-
-      if (master.number !== finalCanonical) {
-        aggregatedUpdates.number = finalCanonical;
-      }
-
-      if (master.canonicalNumber !== finalCanonical) {
-        aggregatedUpdates.canonicalNumber = finalCanonical;
       }
 
       if (Object.keys(aggregatedUpdates).length > 0) {
@@ -385,7 +347,7 @@ const ProcessDuplicateContactsService = async ({
         source: "tags"
       });
     } catch (err) {
-      console.warn("[ProcessDuplicateContactsService] Falha ao sincronizar carteiras e tags pessoais", err);
+      console.warn("[ProcessDuplicateContactsByNameService] Falha ao sincronizar carteiras e tags pessoais", err);
     }
   }
 
@@ -418,8 +380,8 @@ const ProcessDuplicateContactsService = async ({
     master: updatedMaster,
     mergedIds: duplicateIds,
     operation,
-    canonicalNumber: finalCanonical
+    canonicalNumber: normalizedKey
   };
 };
 
-export default ProcessDuplicateContactsService;
+export default ProcessDuplicateContactsByNameService;

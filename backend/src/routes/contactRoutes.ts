@@ -29,6 +29,11 @@ contactRoutes.post("/contacts", isAuth, ContactController.store);
 contactRoutes.put("/contacts/batch-update", isAuth, ContactController.bulkUpdate);
 contactRoutes.put("/contacts/:contactId(\\d+)", isAuth, checkPermission("contacts.edit-fields"), ContactController.update);
 contactRoutes.post("/contacts/duplicates/process", isAuth, ContactController.processDuplicates);
+contactRoutes.post(
+  "/contacts/duplicates/process-by-name",
+  isAuth,
+  ContactController.processDuplicatesByName
+);
 contactRoutes.post("/contacts/normalization/process", isAuth, ContactController.processNormalization);
 contactRoutes.post(
   "/contacts/backfill-wallets-tags",

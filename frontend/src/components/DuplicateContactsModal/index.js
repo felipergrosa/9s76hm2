@@ -45,6 +45,8 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
   const [groupState, setGroupState] = useState({});
   const [initialFetchDone, setInitialFetchDone] = useState(false);
   const [normalizationState, setNormalizationState] = useState({});
+  const [duplicatesGroupBy, setDuplicatesGroupBy] = useState("number");
+  const [duplicatesNameFilter, setDuplicatesNameFilter] = useState("");
   const [tags, setTags] = useState([]);
   const [selectedTagId, setSelectedTagId] = useState("");
   const [customTagName, setCustomTagName] = useState("");
@@ -105,6 +107,49 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
       national: digits
     };
   }, [COUNTRY_METADATA]);
+
+  const renderDuplicateFilters = () => {
+    if (activeTab !== "duplicates") return null;
+
+    return (
+      <Box display="flex" gridGap={12} alignItems="flex-end" flexWrap="wrap" mb={2}>
+        <FormControl variant="outlined" style={{ minWidth: 200 }}>
+          <InputLabel>Agrupar por</InputLabel>
+          <Select
+            value={duplicatesGroupBy}
+            onChange={(e) => {
+              setDuplicatesGroupBy(e.target.value);
+              setSelectedGroupIndex(0);
+            }}
+            label="Agrupar por"
+          >
+            <MenuItem value="number">Número</MenuItem>
+            <MenuItem value="name">Nome</MenuItem>
+          </Select>
+        </FormControl>
+
+        {duplicatesGroupBy === "name" && (
+          <TextField
+            variant="outlined"
+            label="Nome (exato)"
+            value={duplicatesNameFilter}
+            onChange={(e) => setDuplicatesNameFilter(e.target.value)}
+            style={{ minWidth: 320 }}
+          />
+        )}
+
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={() => fetchGroups(1, "duplicates")}
+          disabled={loading}
+          startIcon={<Search size={16} />}
+        >
+          Localizar duplicados
+        </Button>
+      </Box>
+    );
+  };
 
   const formatSubscriber = (subscriber) => {
     if (!subscriber) return "";
@@ -198,10 +243,17 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
       setLoading(true);
       const endpoint = tab === "duplicates" ? "/contacts/duplicates" : "/contacts/pending-normalization";
       const requestLimit = tab === "normalization" ? 0 : limit;
+      const duplicateParams = tab === "duplicates"
+        ? {
+            groupBy: duplicatesGroupBy,
+            name: duplicatesGroupBy === "name" && duplicatesNameFilter.trim() ? duplicatesNameFilter.trim() : undefined
+          }
+        : {};
       const { data } = await api.get(endpoint, {
         params: {
           page: pageToLoad,
-          limit: requestLimit
+          limit: requestLimit,
+          ...duplicateParams
         }
       });
 
@@ -242,7 +294,7 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
     } finally {
       setLoading(false);
     }
-  }, [ensureGroupState, limit]);
+  }, [ensureGroupState, limit, duplicatesGroupBy, duplicatesNameFilter]);
 
   useEffect(() => {
     if (open) {
@@ -254,6 +306,8 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
       setSelectedGroupIndex(0);
       setTotal(0);
       setPage(1);
+      setDuplicatesGroupBy("number");
+      setDuplicatesNameFilter("");
       setSelectedTagId("");
       setCustomTagName("");
       setApplyNormalization(false);
@@ -324,11 +378,16 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
     }
 
     const payload = {
-      canonicalNumber: currentGroup.canonicalNumber,
       masterId: state.masterId,
       mode,
       operation
     };
+
+    if (duplicatesGroupBy === "name") {
+      payload.normalizedName = currentGroup.canonicalNumber;
+    } else {
+      payload.canonicalNumber = currentGroup.canonicalNumber;
+    }
 
     if (mode === "selected") {
       const selectedIds = Array.from(state.selectedIds).filter(id => id !== state.masterId);
@@ -341,7 +400,11 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
 
     try {
       setLoading(true);
-      await api.post("/contacts/duplicates/process", payload);
+      if (duplicatesGroupBy === "name") {
+        await api.post("/contacts/duplicates/process-by-name", payload);
+      } else {
+        await api.post("/contacts/duplicates/process", payload);
+      }
       toast.success(operation === "merge" ? "Duplicados mesclados com sucesso." : "Duplicados removidos com sucesso.");
       if (onActionCompleted) {
         onActionCompleted();
@@ -676,7 +739,9 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
                 primary={
                   activeTab === "normalization"
                     ? (group.displayLabel || formatDisplayNumber(group.suggestedCanonical) || group.groupKey)
-                    : `Número: ${group.canonicalNumber}`
+                    : (duplicatesGroupBy === "name"
+                        ? `Nome: ${group.canonicalNumber}`
+                        : `Número: ${group.canonicalNumber}`)
                 }
                 secondary={
                   activeTab === "duplicates"
@@ -710,6 +775,7 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
               <Tab value="normalization" label="Normalizar" />
               <Tab value="duplicates" label="Duplicados" />
             </Tabs>
+            {renderDuplicateFilters()}
             {activeTab === "normalization" && initialFetchDone && (
               <Typography variant="caption" color="textSecondary">
                 Encontrados {totalContacts} contatos pendentes de normalização.

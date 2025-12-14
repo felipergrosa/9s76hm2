@@ -46,6 +46,7 @@ import BulkUpdateContactsService from "../services/ContactServices/BulkUpdateCon
 import NormalizeContactNumbersService from "../services/ContactServices/NormalizeContactNumbersService";
 import ListDuplicateContactsService from "../services/ContactServices/ListDuplicateContactsService";
 import ProcessDuplicateContactsService from "../services/ContactServices/ProcessDuplicateContactsService";
+import ProcessDuplicateContactsByNameService from "../services/ContactServices/ProcessDuplicateContactsByNameService";
 import ListContactsPendingNormalizationService from "../services/ContactServices/ListContactsPendingNormalizationService";
 import ProcessContactsNormalizationService from "../services/ContactServices/ProcessContactsNormalizationService";
 import BackfillWalletsAndPersonalTagsService from "../services/ContactServices/BackfillWalletsAndPersonalTagsService";
@@ -138,10 +139,12 @@ interface ContactData {
 
 export const listDuplicates = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const { page = "1", limit = "20", canonicalNumber } = req.query as {
+  const { page = "1", limit = "20", canonicalNumber, groupBy, name } = req.query as {
     page?: string;
     limit?: string;
     canonicalNumber?: string;
+    groupBy?: "number" | "name";
+    name?: string;
   };
 
   const parsedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
@@ -152,7 +155,9 @@ export const listDuplicates = async (req: AuthenticatedRequest, res: Response): 
     companyId,
     limit: parsedLimit,
     offset,
-    canonicalNumber: canonicalNumber ? String(canonicalNumber).trim() : undefined
+    canonicalNumber: canonicalNumber ? String(canonicalNumber).trim() : undefined,
+    groupBy: groupBy === "name" ? "name" : "number",
+    name: name ? String(name).trim() : undefined
   });
 
   return res.json({
@@ -181,6 +186,34 @@ export const processDuplicates = async (req: AuthenticatedRequest, res: Response
   const result = await ProcessDuplicateContactsService({
     companyId,
     canonicalNumber,
+    masterId,
+    targetIds,
+    mode,
+    operation
+  });
+
+  return res.json(result);
+};
+
+export const processDuplicatesByName = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const {
+    normalizedName,
+    masterId,
+    targetIds,
+    mode = "selected",
+    operation = "merge"
+  }: {
+    normalizedName: string;
+    masterId: number;
+    targetIds?: number[];
+    mode?: "selected" | "all";
+    operation?: "merge" | "delete";
+  } = req.body;
+
+  const result = await ProcessDuplicateContactsByNameService({
+    companyId,
+    normalizedName,
     masterId,
     targetIds,
     mode,
