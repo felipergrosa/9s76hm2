@@ -1206,17 +1206,19 @@ async function verifyAndFinalizeCampaign(campaign) {
 
   const count1 = contacts.length;
 
-  const count2 = await CampaignShipping.count({
+  // Finalizar quando TODOS os registros estiverem em estado terminal.
+  // Importante para evitar loop infinito quando algum contato falha (ex.: número inválido).
+  const terminalCount = await CampaignShipping.count({
     where: {
       campaignId: campaign.id,
-      deliveredAt: {
-        [Op.ne]: null
-      },
-      confirmation: campaign.confirmation ? true : { [Op.or]: [null, false] }
+      [Op.or]: [
+        { deliveredAt: { [Op.ne]: null } },
+        { status: { [Op.in]: ["delivered", "failed", "suppressed"] } }
+      ]
     }
   });
 
-  if (count1 === count2) {
+  if (count1 === terminalCount) {
     await campaign.update({ status: "FINALIZADA", completedAt: moment() });
   }
 
@@ -1461,6 +1463,22 @@ async function handleDispatchCampaign(job) {
     const { data } = job;
     const { campaignShippingId, campaignId } = data as any;
     const campaign = await getCampaign(campaignId);
+
+    // Se a campanha foi pausada/cancelada/finalizada, não deve continuar tentando enviar.
+    if (!campaign || campaign.status !== "EM_ANDAMENTO") {
+      try {
+        const record = campaignShippingId ? await CampaignShipping.findByPk(campaignShippingId) : null;
+        if (record) {
+          await record.update({ jobId: null });
+        }
+      } catch { }
+
+      if (campaign) {
+        await verifyAndFinalizeCampaign(campaign);
+      }
+      return;
+    }
+
     const selectedWhatsappId: number = (data as any)?.selectedWhatsappId || campaign.whatsappId;
     const whatsapp = await Whatsapp.findByPk(selectedWhatsappId);
 
@@ -2157,6 +2175,18 @@ async function handleDispatchCampaign(job) {
       const campaignId = job?.data?.campaignId;
       const campaign = campaignId ? await getCampaign(campaignId) : null;
       if (campaign) {
+        // Se a campanha não está em andamento, não reagendar.
+        if (campaign.status !== "EM_ANDAMENTO") {
+          try {
+            const record = await CampaignShipping.findByPk((job?.data as any)?.campaignShippingId);
+            if (record) {
+              await record.update({ jobId: null });
+            }
+          } catch { }
+          await verifyAndFinalizeCampaign(campaign);
+          return;
+        }
+
         const selectedWhatsappId: number = (job?.data as any)?.selectedWhatsappId || campaign.whatsappId;
         const whatsappForCaps = await Whatsapp.findByPk(selectedWhatsappId);
         const isOfficialForCaps = whatsappForCaps?.channelType === "official";
@@ -2164,11 +2194,6 @@ async function handleDispatchCampaign(job) {
         updateBackoffOnError(selectedWhatsappId, caps, err?.message || "");
         const delayMs = getBackoffDeferDelayMs(selectedWhatsappId) || (caps.backoffPauseMinutes * 60 * 1000);
         const { campaignShippingId, contactListItemId } = job.data as DispatchCampaignData;
-        const nextJob = await campaignQueue.add(
-          "DispatchCampaign",
-          { campaignId: campaign.id, campaignShippingId, contactListItemId, selectedWhatsappId },
-          { delay: delayMs, removeOnComplete: true }
-        );
         const record = await CampaignShipping.findByPk(campaignShippingId);
         if (record) {
           const newAttempts = (record.attempts || 0) + 1;
@@ -2184,8 +2209,15 @@ async function handleDispatchCampaign(job) {
               lastErrorAt: moment().toDate()
             });
             logger.error(`[CAMPAIGN FAILED] Campanha=${campaign.id}; Registro=${campaignShippingId}; Tentativas=${newAttempts}; Erro=${err?.message}`);
+            await verifyAndFinalizeCampaign(campaign);
             return;
           }
+
+          const nextJob = await campaignQueue.add(
+            "DispatchCampaign",
+            { campaignId: campaign.id, campaignShippingId, contactListItemId, selectedWhatsappId },
+            { delay: delayMs, removeOnComplete: true }
+          );
 
           // Caso contrário, reagenda
           await record.update({

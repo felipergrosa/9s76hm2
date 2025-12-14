@@ -57,7 +57,6 @@ import CampaignsConfig from "../pages/CampaignsConfig";
 import CampaignDetailedReport from "../pages/CampaignDetailedReport";
 import Annoucements from "../pages/Annoucements";
 import Chat from "../pages/Chat";
-import Prompts from "../pages/Prompts";
 import AllConnections from "../pages/AllConnections";
 import Reports from "../pages/Reports";
 import { FlowBuilderConfig } from "../pages/FlowBuilderConfig";
@@ -169,7 +168,6 @@ const Routes = () => {
                 <Route exact path="/moments" component={ChatMoments} isPrivate />
                 <Route exact path="/Kanban" component={Kanban} isPrivate />
                 <Route exact path="/TagsKanban" component={TagsKanban} isPrivate />
-                <Route exact path="/prompts" component={Prompts} isPrivate />
                 <Route exact path="/allConnections" component={AllConnections} isPrivate />
                 <Route exact path="/ai-settings" component={AISettings} isPrivate />
                 <Route exact path="/ai-agents" component={AIAgents} isPrivate />
