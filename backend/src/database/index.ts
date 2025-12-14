@@ -63,6 +63,8 @@ import LibraryFile from "../models/LibraryFile";
 import QueueRAGSource from "../models/QueueRAGSource";
 import AIAgent from "../models/AIAgent";
 import FunnelStage from "../models/FunnelStage";
+import AITrainingFeedback from "../models/AITrainingFeedback";
+import AITrainingImprovement from "../models/AITrainingImprovement";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -205,7 +207,9 @@ const models = [
   LibraryFile,
   QueueRAGSource,
   AIAgent,
-  FunnelStage
+  FunnelStage,
+  AITrainingFeedback,
+  AITrainingImprovement
 ];
 
 sequelize.addModels(models);

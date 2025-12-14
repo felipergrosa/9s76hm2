@@ -1,7 +1,9 @@
 import React from "react";
-import { Paper, Typography, Box, Avatar } from "@material-ui/core";
+import { Paper, Typography, Box, Avatar, IconButton } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
 import CheckIcon from "@material-ui/icons/Check";
+import DoneOutlineIcon from "@material-ui/icons/DoneOutline";
+import CloseIcon from "@material-ui/icons/Close";
 
 const useStyles = makeStyles((theme) => ({
   phoneFrame: {
@@ -145,13 +147,34 @@ const useStyles = makeStyles((theme) => ({
     fontSize: 12,
     opacity: 0.9,
   },
+  ratingRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 6,
+    marginTop: 2,
+  },
+  ratingIconCorrect: {
+    color: "#2e7d32",
+  },
+  ratingIconWrong: {
+    color: "#d32f2f",
+  },
+  improvedLabel: {
+    fontSize: 12,
+    fontStyle: "italic",
+    color: "#667781",
+    marginTop: 2,
+  },
 }));
 
 const WhatsAppPreview = ({ 
   messages = [], 
   contactName = "Cliente Exemplo",
   mediaUrls = {},
-  companyName = "Empresa"
+  companyName = "Empresa",
+  onRateMessage,
+  messageRatings = {}
 }) => {
   const classes = useStyles();
 
@@ -211,6 +234,8 @@ const WhatsAppPreview = ({
   const normalizedMessages = normalizeMessages(messages);
   const hasMessages = normalizedMessages.some(m => (m.text && String(m.text).trim()) || m.mediaUrl);
 
+  const canRate = typeof onRateMessage === "function";
+
   return (
     <Box className={classes.phoneFrame}>
       {/* Notch do iPhone */}
@@ -237,90 +262,119 @@ const WhatsAppPreview = ({
       {/* Área de mensagens */}
       <Box className={classes.chatArea}>
         {!hasMessages ? (
-          <Box className={classes.emptyState}>
+          <div className={classes.emptyState}>
             <Typography variant="body2" gutterBottom>
               📱 Prévia da Mensagem
             </Typography>
             <Typography variant="caption">
               Digite uma mensagem nas abas acima para ver como ficará no WhatsApp do cliente
             </Typography>
-          </Box>
+          </div>
         ) : (
-          normalizedMessages.map((msg) => {
-            const mediaUrl = msg.mediaUrl;
+          normalizedMessages.map((m) => {
+            const isCustomer = String(m.from) === "customer";
+            const ratingKey = String(m.id);
+            const rating = messageRatings ? messageRatings[ratingKey] : undefined;
+            const improved = Boolean(m.improved);
+
+            const bubbleClass = isCustomer ? classes.messageBubbleReceived : classes.messageBubble;
+            const text = processMessage(String(m.text || ""));
+
+            const mediaUrl = m.mediaUrl;
             const mediaType = getMediaType(mediaUrl);
-            const processedMsg = processMessage(msg.text);
+            const processedMsg = processMessage(m.text);
 
             if (!processedMsg?.trim() && !mediaUrl) return null;
 
-            const isReceived = String(msg.from) === "customer" || String(msg.from) === "received";
+            const isReceived = String(m.from) === "customer" || String(m.from) === "received";
 
             return (
-              <Box key={msg.id} className={isReceived ? classes.messageBubbleReceived : classes.messageBubble}>
-                {/* Mídia */}
-                {mediaUrl && mediaType === "image" && (
-                  <img 
-                    src={mediaUrl} 
-                    alt="Preview" 
-                    className={classes.mediaPreview}
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
-                  />
-                )}
-                
-                {mediaUrl && mediaType === "video" && (
-                  <video 
-                    src={mediaUrl} 
-                    className={classes.mediaPreview}
-                    controls
-                    style={{ background: "#000" }}
-                  />
-                )}
-                
-                {mediaUrl && mediaType === "audio" && (
-                  <audio 
-                    src={mediaUrl} 
-                    controls
-                    style={{ width: "100%", marginBottom: 6 }}
-                  />
-                )}
-                
-                {mediaUrl && (mediaType === "pdf" || mediaType === "file") && (
-                  <Box
-                    style={{
-                      background: "#fff",
-                      padding: 8,
-                      borderRadius: 4,
-                      marginBottom: 6,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <Typography variant="caption">
-                      📄 {mediaUrl.split('/').pop()?.substring(0, 20) || "arquivo"}...
+              <Box key={String(m.id)} display="flex" flexDirection="column" alignItems={isCustomer ? "flex-start" : "flex-end"}>
+                <Paper className={bubbleClass} elevation={0}>
+                  {mediaUrl && mediaType === "image" && (
+                    <img 
+                      src={mediaUrl} 
+                      alt="Preview" 
+                      className={classes.mediaPreview}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                  )}
+                  
+                  {mediaUrl && mediaType === "video" && (
+                    <video 
+                      src={mediaUrl} 
+                      className={classes.mediaPreview}
+                      controls
+                      style={{ background: "#000" }}
+                    />
+                  )}
+                  
+                  {mediaUrl && mediaType === "audio" && (
+                    <audio 
+                      src={mediaUrl} 
+                      controls
+                      style={{ width: "100%", marginBottom: 6 }}
+                    />
+                  )}
+                  
+                  {mediaUrl && (mediaType === "pdf" || mediaType === "file") && (
+                    <Box
+                      style={{
+                        background: "#fff",
+                        padding: 8,
+                        borderRadius: 4,
+                        marginBottom: 6,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <Typography variant="caption">
+                        📄 {mediaUrl.split('/').pop()?.substring(0, 20) || "arquivo"}...
+                      </Typography>
+                    </Box>
+                  )}
+                  
+                  {/* Texto da mensagem */}
+                  {processedMsg && (
+                    <Typography className={classes.messageText}>
+                      {processedMsg}
                     </Typography>
+                  )}
+                  
+                  {/* Timestamp + checks */}
+                  <Box className={classes.timestamp}>
+                    <span>{timeStr}</span>
+                    {!isReceived && (
+                      <CheckIcon className={classes.checkIcon} />
+                    )}
+                  </Box>
+
+                  {!isCustomer && improved && (
+                    <div className={classes.improvedLabel}>(melhorada)</div>
+                  )}
+                </Paper>
+
+                {!isCustomer && canRate && (
+                  <Box className={classes.ratingRow}>
+                    <IconButton
+                      size="small"
+                      onClick={() => onRateMessage({ messageId: ratingKey, rating: "correct" })}
+                      disabled={Boolean(rating)}
+                    >
+                      <DoneOutlineIcon fontSize="small" className={classes.ratingIconCorrect} />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      onClick={() => onRateMessage({ messageId: ratingKey, rating: "wrong" })}
+                      disabled={Boolean(rating)}
+                    >
+                      <CloseIcon fontSize="small" className={classes.ratingIconWrong} />
+                    </IconButton>
                   </Box>
                 )}
-                
-                {/* Texto da mensagem */}
-                {processedMsg && (
-                  <Typography className={classes.messageText}>
-                    {processedMsg}
-                  </Typography>
-                )}
-                
-                {/* Timestamp + checks */}
-                <Box className={classes.timestamp}>
-                  <span>{timeStr}</span>
-                  {!isReceived && (
-                    <>
-                      <CheckIcon className={classes.checkIcon} />
-                      <CheckIcon className={classes.checkIcon} style={{ marginLeft: -8 }} />
-                    </>
-                  )}
-                </Box>
               </Box>
             );
           })

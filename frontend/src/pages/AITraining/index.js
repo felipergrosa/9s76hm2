@@ -6,6 +6,10 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
   Grid,
   InputLabel,
@@ -132,6 +136,12 @@ const AITraining = () => {
 
   const [sessionId, setSessionId] = useState("");
   const [sending, setSending] = useState(false);
+
+  const [messageRatings, setMessageRatings] = useState({});
+  const [rateModalOpen, setRateModalOpen] = useState(false);
+  const [rateTargetMessageId, setRateTargetMessageId] = useState(null);
+  const [rateCorrectedText, setRateCorrectedText] = useState("");
+  const [rateExplanation, setRateExplanation] = useState("");
 
   const [messages, setMessages] = useState([]);
   const [logs, setLogs] = useState([]);
@@ -289,7 +299,7 @@ const AITraining = () => {
     const text = messageText.trim();
     setMessageText("");
 
-    setMessages((prev) => [...prev, { from: "customer", text }]);
+    setMessages((prev) => [...prev, { id: `m-${Date.now()}-${Math.random()}`, from: "customer", text }]);
     appendLog(`[input] ${text}`);
     appendLog(
       `[context] agente=${selectedAgentId} stage=${selectedStageId} simulate=${simulate} whatsapp=${selectedWhatsappId || "-"} grupo=${selectedGroupId || "-"} to=${toNumber || "-"}`
@@ -308,7 +318,7 @@ const AITraining = () => {
 
       const assistantText = data?.message?.text;
       if (assistantText) {
-        setMessages((prev) => [...prev, { from: "assistant", text: assistantText }]);
+        setMessages((prev) => [...prev, { id: `m-${Date.now()}-${Math.random()}`, from: "assistant", text: assistantText }]);
       }
 
       const meta = data?.metadata || {};
@@ -330,6 +340,147 @@ const AITraining = () => {
   if (!hasPermission("ai-training.view")) {
     return <ForbiddenPage />;
   }
+
+  const closeRateModal = () => {
+    setRateModalOpen(false);
+    setRateTargetMessageId(null);
+    setRateCorrectedText("");
+    setRateExplanation("");
+  };
+
+  const persistFeedback = async (payload) => {
+    await api.post("/ai/training/feedback", payload);
+  };
+
+  const persistImprovement = async (payload) => {
+    const { data } = await api.post("/ai/training/improvements", payload);
+    return data?.improvement;
+  };
+
+  const applyImprovements = async (payload) => {
+    const { data } = await api.post("/ai/training/improvements/apply", payload);
+    return data;
+  };
+
+  const onRateMessage = async ({ messageId, rating }) => {
+    if (!sessionId) {
+      toast.error("Sessão não encontrada. Envie uma mensagem antes de avaliar.");
+      return;
+    }
+
+    if (messageRatings[String(messageId)]) return;
+
+    const idx = messages.findIndex((m) => String(m.id ?? "") === String(messageId));
+    if (idx < 0) return;
+
+    const assistantMsg = messages[idx];
+    const customerMsg = idx > 0 ? messages[idx - 1] : null;
+
+    if (rating === "correct") {
+      try {
+        await persistFeedback({
+          agentId: Number(selectedAgentId),
+          stageId: Number(selectedStageId),
+          sandboxSessionId: String(sessionId),
+          messageIndex: idx,
+          customerText: customerMsg?.from === "customer" ? customerMsg.text : null,
+          assistantText: assistantMsg?.text || null,
+          rating: "correct"
+        });
+        setMessageRatings((prev) => ({ ...prev, [String(messageId)]: "correct" }));
+        appendLog(`[rating] correto messageId=${messageId}`);
+      } catch (err) {
+        toast.error("Erro ao salvar avaliação");
+      }
+      return;
+    }
+
+    setRateTargetMessageId(String(messageId));
+    setRateModalOpen(true);
+  };
+
+  const submitWrongFeedback = async (opts = { applyNow: false }) => {
+    if (!rateTargetMessageId) return;
+    if (!String(rateCorrectedText || "").trim()) {
+      toast.error("Informe a resposta correta");
+      return;
+    }
+    if (!String(rateExplanation || "").trim()) {
+      toast.error("Explique o motivo da correção");
+      return;
+    }
+    if (!sessionId) {
+      toast.error("Sessão não encontrada");
+      return;
+    }
+
+    const idx = messages.findIndex((m) => String(m.id ?? "") === String(rateTargetMessageId));
+    if (idx < 0) return;
+
+    const assistantMsg = messages[idx];
+    const customerMsg = idx > 0 ? messages[idx - 1] : null;
+
+    try {
+      const feedbackPayload = {
+        agentId: Number(selectedAgentId),
+        stageId: Number(selectedStageId),
+        sandboxSessionId: String(sessionId),
+        messageIndex: idx,
+        customerText: customerMsg?.from === "customer" ? customerMsg.text : null,
+        assistantText: assistantMsg?.text || null,
+        rating: "wrong",
+        correctedText: String(rateCorrectedText).trim(),
+        explanation: String(rateExplanation).trim()
+      };
+
+      const feedbackRes = await api.post("/ai/training/feedback", feedbackPayload);
+      const feedbackId = feedbackRes?.data?.feedback?.id;
+
+      const improvementText = [
+        "Correção de resposta do agente:",
+        `Pergunta do cliente: ${customerMsg?.from === "customer" ? String(customerMsg.text || "").trim() : ""}`,
+        `Resposta errada: ${String(assistantMsg?.text || "").trim()}`,
+        `Resposta correta: ${String(rateCorrectedText).trim()}`,
+        `Motivo/explicação: ${String(rateExplanation).trim()}`
+      ].filter(Boolean).join("\n");
+
+      await persistImprovement({
+        agentId: Number(selectedAgentId),
+        stageId: Number(selectedStageId),
+        feedbackId: feedbackId || undefined,
+        improvementText
+      });
+
+      setMessageRatings((prev) => ({ ...prev, [String(rateTargetMessageId)]: "wrong" }));
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `m-${Date.now()}-${Math.random()}`,
+          from: "assistant",
+          text: String(rateCorrectedText).trim(),
+          improved: true
+        }
+      ]);
+      appendLog(`[rating] errado messageId=${rateTargetMessageId} -> resposta melhorada inserida`);
+
+      if (opts?.applyNow) {
+        try {
+          const applied = await applyImprovements({
+            agentId: Number(selectedAgentId),
+            stageId: Number(selectedStageId)
+          });
+          appendLog(`[improvement] aplicado=${applied?.applied || 0} (prompt consolidado salvo na etapa)`);
+          toast.success("Melhoria aplicada na etapa (prompt consolidado)");
+        } catch (e) {
+          toast.error("Falha ao aplicar melhoria na etapa");
+        }
+      }
+
+      closeRateModal();
+    } catch (err) {
+      toast.error("Erro ao salvar correção");
+    }
+  };
 
   return (
     <MainContainer>
@@ -563,6 +714,8 @@ const AITraining = () => {
               <Box display="flex" flexDirection="column" alignItems="center" height="100%">
                 <WhatsAppPreview
                   messages={messages}
+                  onRateMessage={onRateMessage}
+                  messageRatings={messageRatings}
                   contactName={
                     selectedGroupId
                       ? (groups.find((g) => String(g.id) === String(selectedGroupId))?.subject || "Cliente")
@@ -623,6 +776,38 @@ const AITraining = () => {
           </Grid>
         </Grid>
       </Paper>
+
+      <Dialog open={rateModalOpen} onClose={closeRateModal} fullWidth maxWidth="sm">
+        <DialogTitle>Corrigir resposta do agente</DialogTitle>
+        <DialogContent>
+          <Box mb={2} />
+          <TextField
+            fullWidth
+            label="Resposta correta"
+            variant="outlined"
+            margin="dense"
+            value={rateCorrectedText}
+            onChange={(e) => setRateCorrectedText(e.target.value)}
+            multiline
+            minRows={3}
+          />
+          <TextField
+            fullWidth
+            label="Explique a correção (por quê estava errado)"
+            variant="outlined"
+            margin="dense"
+            value={rateExplanation}
+            onChange={(e) => setRateExplanation(e.target.value)}
+            multiline
+            minRows={3}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeRateModal} color="default">Cancelar</Button>
+          <Button onClick={() => submitWrongFeedback({ applyNow: false })} color="primary" variant="outlined">Salvar correção</Button>
+          <Button onClick={() => submitWrongFeedback({ applyNow: true })} color="primary" variant="contained">Salvar e aplicar na etapa</Button>
+        </DialogActions>
+      </Dialog>
     </MainContainer>
   );
 };
