@@ -692,7 +692,9 @@ const MessagesList = ({
     }));
     
     try {
-      const { data } = await api.get(`/messages/transcribeAudio/${encodeURIComponent(fileName)}`);
+      const { data } = await api.get(`/messages/transcribeAudio/${encodeURIComponent(fileName)}`, {
+        params: { ticketId: message.ticketId }
+      });
       
       setTranscriptions(prev => ({
         ...prev,
@@ -704,15 +706,16 @@ const MessagesList = ({
       }));
     } catch (err) {
       console.error("Erro ao transcrever áudio:", err);
+      const errorMessage = err?.response?.data?.error || err?.message || "Erro ao transcrever";
       setTranscriptions(prev => ({
         ...prev,
         [messageId]: { 
           loading: false, 
           text: null, 
-          error: err?.response?.data?.error || "Erro ao transcrever" 
+          error: errorMessage
         }
       }));
-      toastError(err);
+      toastError(errorMessage);
     }
   };
 

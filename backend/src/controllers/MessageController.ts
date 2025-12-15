@@ -36,7 +36,7 @@ import EditWhatsAppMessage from "../services/MessageServices/EditWhatsAppMessage
 import CheckContactNumber from "../services/WbotServices/CheckNumber";
 import { generateWAMessageFromContent, generateWAMessageContent, proto } from "@whiskeysockets/baileys";
 import SendWhatsAppReaction from "../services/WbotServices/SendWhatsAppReaction";
-import TranscribeAudioMessageToText from "../services/MessageServices/TranscribeAudioMessageService";
+import TranscribeAudioMessageService from "../services/MessageServices/TranscribeAudioMessageService";
 import ShowMessageService, { GetWhatsAppFromMessage } from "../services/MessageServices/ShowMessageService";
 
 type IndexQuery = {
@@ -637,11 +637,16 @@ export const sendPIXMessage = async (req: Request, res: Response): Promise<Respo
 
 export const transcribeAudioMessage = async (req: Request, res: Response): Promise<Response> => {
   const { fileName } = req.params;
+  const { ticketId } = req.query;
   const { companyId } = req.user;
 
   try {
-    const transcribeService = new TranscribeAudioMessageToText();
-    const transcribedText = await transcribeService.execute(fileName, companyId);
+    const transcribeService = new TranscribeAudioMessageService();
+    const transcribedText = await transcribeService.execute(fileName, companyId, ticketId ? Number(ticketId) : undefined);
+
+    if ('error' in transcribedText) {
+      return res.status(400).json({ error: transcribedText.error });
+    }
 
     return res.json({ transcribedText });
   } catch (error) {
