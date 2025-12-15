@@ -40,9 +40,17 @@ const isLidNumber = (number: string): boolean => {
   return digits.length > 15 || (digits.length > 13 && !digits.startsWith("55"));
 };
 
+const digitsFromJid = (jid: string): string => {
+  if (!jid) return "";
+  const left = jid.includes("@") ? jid.split("@")[0] : jid;
+  return left.replace(/\D/g, "");
+};
+
 const isRealPhoneNumber = (number: string): boolean => {
   if (!number) return false;
   const digits = number.replace(/\D/g, "");
+  // Se o padrão é de LID, nunca considerar como número real
+  if (isLidNumber(digits)) return false;
   // Número real brasileiro: 12-13 dígitos começando com 55
   if (digits.startsWith("55") && digits.length >= 12 && digits.length <= 13) {
     return true;
@@ -52,6 +60,42 @@ const isRealPhoneNumber = (number: string): boolean => {
     return true;
   }
   return false;
+};
+
+const findPrimaryContactFromMessages = async (
+  companyId: number,
+  possibleLidContact: Contact
+): Promise<Contact | null> => {
+  // Heurística: se em alguma mensagem desse contato o remoteJid for @s.whatsapp.net,
+  // dá pra extrair o número real e encontrar o contato correto.
+  const msgs = await Message.findAll({
+    where: {
+      companyId,
+      contactId: possibleLidContact.id,
+      remoteJid: { [Op.iLike]: "%@s.whatsapp.net" }
+    },
+    attributes: ["remoteJid"],
+    order: [["createdAt", "DESC"]],
+    limit: 30
+  });
+
+  for (const m of msgs) {
+    const digits = digitsFromJid((m as any).remoteJid);
+    if (!digits) continue;
+    if (!isRealPhoneNumber(digits)) continue;
+
+    const candidate = await Contact.findOne({
+      where: {
+        companyId,
+        isGroup: false,
+        id: { [Op.ne]: possibleLidContact.id },
+        [Op.or]: [{ number: digits }, { canonicalNumber: digits }]
+      }
+    });
+    if (candidate) return candidate;
+  }
+
+  return null;
 };
 
 const findDuplicateGroups = async (companyId: number): Promise<DuplicateGroup[]> => {
@@ -359,6 +403,7 @@ const main = async () => {
 
   try {
     let totalStats = { tickets: 0, messages: 0, tags: 0, wallets: 0, contacts: 0, tagsApplied: 0 };
+    const mergedContactIds = new Set<number>();
 
     // PARTE 1: Mesclar duplicatas (se não for --apply-tags-only)
     if (!applyTagsOnly) {
@@ -379,6 +424,8 @@ const main = async () => {
             console.log(`   ❌ Duplicado: ID=${dup.id}, Número=${dup.number}`);
             
             const stats = await mergeContacts(group.primaryContact, dup, dryRun);
+
+            mergedContactIds.add(dup.id);
             
             console.log(`      → Tickets: ${stats.tickets}, Mensagens: ${stats.messages}, Tags: ${stats.tags}, Wallets: ${stats.wallets}`);
             
@@ -389,6 +436,48 @@ const main = async () => {
             totalStats.contacts++;
           }
         }
+      }
+
+      // Segunda passada: LIDs/nomes numéricos que não casam por nome
+      // (ex.: contato criado com nome=número por falta de pushName)
+      const possibleLidContacts = await Contact.findAll({
+        where: {
+          companyId,
+          isGroup: false
+        },
+        attributes: ["id", "name", "number", "remoteJid", "createdAt"]
+      });
+
+      for (const c of possibleLidContacts) {
+        if (mergedContactIds.has(c.id)) continue;
+
+        const numDigits = (c.number || "").replace(/\D/g, "");
+        const nameDigits = (c.name || "").replace(/\D/g, "");
+        const remote = (c as any).remoteJid || "";
+        const looksLikeLid =
+          isLidNumber(numDigits) ||
+          remote.includes("@lid") ||
+          (nameDigits && nameDigits === (c.name || "") && isLidNumber(nameDigits));
+
+        if (!looksLikeLid) continue;
+
+        const primary = await findPrimaryContactFromMessages(companyId, c);
+        if (!primary) continue;
+
+        console.log(`\n🔁 Mesclando por mensagens (LID → número real):`);
+        console.log(`   ✅ Principal: ID=${primary.id}, Número=${primary.number}, Nome=${primary.name}`);
+        console.log(`   ❌ Duplicado: ID=${c.id}, Número=${c.number}, Nome=${c.name}`);
+
+        const stats = await mergeContacts(primary, c, dryRun);
+        mergedContactIds.add(c.id);
+        console.log(
+          `      → Tickets: ${stats.tickets}, Mensagens: ${stats.messages}, Tags: ${stats.tags}, Wallets: ${stats.wallets}`
+        );
+        totalStats.tickets += stats.tickets;
+        totalStats.messages += stats.messages;
+        totalStats.tags += stats.tags;
+        totalStats.wallets += stats.wallets;
+        totalStats.contacts++;
       }
     }
 
