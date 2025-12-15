@@ -14,6 +14,7 @@
  */
 
 import "../bootstrap";
+import sequelize from "../database";
 import Contact from "../models/Contact";
 import Ticket from "../models/Ticket";
 import Message from "../models/Message";
@@ -330,6 +331,15 @@ const main = async () => {
   const companyId = parseInt(companyIdArg, 10);
   if (isNaN(companyId)) {
     console.log("\n❌ companyId deve ser um número");
+    process.exit(1);
+  }
+
+  // Garante que o Sequelize foi inicializado e que os models foram registrados
+  // (evita ModelNotInitializedError ao rodar via ts-node)
+  try {
+    await sequelize.authenticate();
+  } catch (err) {
+    console.error("\n❌ Falha ao conectar no banco (Sequelize.authenticate)", err);
     process.exit(1);
   }
 
