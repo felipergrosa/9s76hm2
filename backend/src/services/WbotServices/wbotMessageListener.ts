@@ -847,13 +847,64 @@ const verifyContact = async (
   const normalizedJid = jidNormalizedUser(msgContact.id);
   const cleaned = normalizedJid.replace(/\D/g, "");
   const isGroup = normalizedJid.includes("g.us");
-  const isLinkedDevice = msgContact.id.includes("@lid");
+  const isLinkedDevice = msgContact.id.includes("@lid") || normalizedJid.includes("@lid");
 
   if (isLinkedDevice) {
-    debugLog("[verifyContact] JID @lid detectado, normalizando", {
+    debugLog("[verifyContact] JID @lid detectado", {
       originalJid: msgContact.id,
-      normalizedJid
+      normalizedJid,
+      pushName: msgContact.name
     });
+
+    // Para JIDs @lid, primeiro buscar por remoteJid (LID) existente
+    const existingByLid = await Contact.findOne({ 
+      where: { remoteJid: normalizedJid, companyId } 
+    });
+    if (existingByLid) {
+      debugLog("[verifyContact] Contato encontrado pelo LID", { contactId: existingByLid.id });
+      return existingByLid;
+    }
+
+    // Se não encontrou pelo LID, tentar buscar pelo nome (pushName) para evitar duplicatas
+    // Isso ajuda quando o mesmo contato já existe com número real
+    if (msgContact.name && msgContact.name.trim()) {
+      const existingByName = await Contact.findOne({
+        where: { 
+          name: msgContact.name.trim(), 
+          companyId,
+          isGroup: false
+        }
+      });
+      if (existingByName) {
+        debugLog("[verifyContact] Contato encontrado pelo nome, atualizando remoteJid com LID", {
+          contactId: existingByName.id,
+          oldRemoteJid: existingByName.remoteJid,
+          newRemoteJid: normalizedJid
+        });
+        // Atualizar o remoteJid para incluir o LID (não sobrescrever se já tem número real)
+        // Apenas retornar o contato existente para evitar duplicata
+        return existingByName;
+      }
+    }
+
+    // Se não encontrou por LID nem por nome, criar contato básico com o LID
+    // Isso é um fallback - idealmente não deveria acontecer
+    logger.warn("[verifyContact] Criando contato com JID @lid (sem número real)", {
+      normalizedJid,
+      pushName: msgContact.name
+    });
+    const basicContactData = {
+      name: msgContact.name || normalizedJid,
+      number: cleaned || normalizedJid,
+      profilePicUrl: "",
+      isGroup: false,
+      companyId,
+      remoteJid: normalizedJid,
+      whatsappId: wbot.id,
+      wbot
+    };
+    const newContact = await CreateOrUpdateContactService(basicContactData);
+    return newContact;
   }
 
   // Validação: só cria contato se não for grupo e o número tiver entre 8 e 15 dígitos
