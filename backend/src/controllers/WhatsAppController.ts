@@ -65,6 +65,7 @@ interface WhatsappData {
   wabaAccessToken?: string;
   wabaBusinessAccountId?: string;
   wabaWebhookVerifyToken?: string;
+  contactTagId?: number;
 }
 
 interface QueryParams {
@@ -130,7 +131,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     wabaPhoneNumberId,
     wabaAccessToken,
     wabaBusinessAccountId,
-    wabaWebhookVerifyToken
+    wabaWebhookVerifyToken,
+    contactTagId
   }: WhatsappData = req.body;
   const { companyId } = req.user;
 
@@ -186,7 +188,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     wabaPhoneNumberId,
     wabaAccessToken,
     wabaBusinessAccountId,
-    wabaWebhookVerifyToken
+    wabaWebhookVerifyToken,
+    contactTagId
   });
 
   StartWhatsAppSessionUnified(whatsapp, companyId);

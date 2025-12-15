@@ -312,7 +312,7 @@ const messages = {
           group: "Permitir grupos",
           timeSendQueue: "Tiempo en minutos para redirigir a la cola",
           importAlert: "ATENCIÓN: Al guardar, tu conexión se cerrará, será necesario leer de nuevo el Código QR para importar los mensajes",
-          groupAsTicket: "Tratar grupos como ticket",
+          groupAsTicket: "Grupos como ticket",
           timeCreateNewTicket: "Crear nuevo ticket en x minutos",
           maxUseBotQueues: "Enviar bot x veces",
           timeUseBotQueues: "Enviar bot en x minutos",

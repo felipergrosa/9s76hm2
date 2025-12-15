@@ -53,6 +53,7 @@ interface WhatsappData {
   metaPageAccessToken?: string;
   metaWebhookVerifyToken?: string;
   instagramAccountId?: string;
+  contactTagId?: number;
 }
 
 interface Request {
@@ -123,7 +124,8 @@ const UpdateWhatsAppService = async ({
     metaPageId,
     metaPageAccessToken,
     metaWebhookVerifyToken,
-    instagramAccountId
+    instagramAccountId,
+    contactTagId
   } = whatsappData;
 
   try {
@@ -199,7 +201,8 @@ const UpdateWhatsAppService = async ({
     metaPageId,
     metaPageAccessToken,
     metaWebhookVerifyToken,
-    instagramAccountId
+    instagramAccountId,
+    contactTagId
   });
 
   if (!requestQR) {

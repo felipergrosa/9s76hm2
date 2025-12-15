@@ -11,8 +11,48 @@ import Whatsapp from "../../models/Whatsapp";
 import * as Sentry from "@sentry/node";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import DispatchContactWebhookService from "./DispatchContactWebhookService";
+import ContactTag from "../../models/ContactTag";
+import Tag from "../../models/Tag";
+import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 
 const axios = require("axios");
+
+const applyAutoTagFromWhatsapp = async (
+  contact: Contact | null,
+  companyId: number,
+  whatsappId?: number
+): Promise<void> => {
+  if (!contact || !whatsappId || Number.isNaN(Number(whatsappId))) return;
+
+  const whatsapp = await Whatsapp.findOne({
+    where: { id: whatsappId, companyId },
+    attributes: ["id", "contactTagId"]
+  });
+
+  const tagId = Number((whatsapp as any)?.contactTagId);
+  if (!tagId || Number.isNaN(tagId)) return;
+
+  const tag = await Tag.findOne({
+    where: { id: tagId, companyId },
+    attributes: ["id"]
+  });
+  if (!tag) return;
+
+  await ContactTag.findOrCreate({
+    where: { contactId: contact.id, tagId: tag.id },
+    defaults: { contactId: contact.id, tagId: tag.id }
+  });
+
+  try {
+    await SyncContactWalletsAndPersonalTagsService({
+      companyId,
+      contactId: contact.id,
+      source: "tags"
+    });
+  } catch (err) {
+    logger.warn("[CreateOrUpdateContactService] Falha ao sincronizar carteiras/tags após auto tag", err);
+  }
+};
 
 interface ExtraInfo extends ContactCustomField {
   name: string;
@@ -365,6 +405,14 @@ const CreateOrUpdateContactService = async ({
         await contact.reload();
         shouldEmitUpdate = true; // Avatar atualizado (facebook/instagram)
       }
+    }
+
+    // Aplica tag automática configurada na conexão
+    try {
+      await applyAutoTagFromWhatsapp(contact, companyId, whatsappId);
+      await contact?.reload();
+    } catch (err) {
+      logger.warn("[CreateOrUpdateContactService] Falha ao aplicar tag automática da conexão", err);
     }
 
     // Recarrega contato completo antes de emitir e retornar

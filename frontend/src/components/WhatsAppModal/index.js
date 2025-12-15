@@ -15,11 +15,13 @@ import {
   Button,
   DialogActions,
   CircularProgress,
+  Tooltip,
   FormControl,
   InputLabel,
   MenuItem,
   Select,
   TextField,
+
   Switch,
   FormControlLabel,
   Grid,
@@ -42,6 +44,7 @@ import useCompanySettings from "../../hooks/useSettings/companySettings";
 import SchedulesForm from "../SchedulesForm";
 import usePlans from "../../hooks/usePlans";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import useTags from "../../hooks/useTags";
 import OfficialAPIFields from "./OfficialAPIFields";
 import OfficialAPIGuide from "./OfficialAPIGuide";
 import MetaAPIFields from "./MetaAPIFields";
@@ -128,6 +131,7 @@ const SessionSchema = Yup.object().shape({
 const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
   const classes = useStyles();
   const [autoToken, setAutoToken] = useState("");
+  const { tags } = useTags();
 
   const inputFileRef = useRef(null);
 
@@ -180,7 +184,8 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
     metaPageId: "",
     metaPageAccessToken: "",
     metaWebhookVerifyToken: "",
-    instagramAccountId: ""
+    instagramAccountId: "",
+    contactTagId: ""
   };
   const [whatsApp, setWhatsApp] = useState(initialState);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
@@ -438,7 +443,8 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
       importOldMessagesGroups: importOldMessagesGroups ? importOldMessagesGroups : null,
       closedTicketsPostImported: closedTicketsPostImported ? closedTicketsPostImported : null,
       token: autoToken ? autoToken : null, schedules,
-      promptId: selectedPrompt ? selectedPrompt : null
+      promptId: selectedPrompt ? selectedPrompt : null,
+      contactTagId: values.contactTagId || null
     };
 
     console.dir(whatsappData)
@@ -559,7 +565,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
             }, 400);
           }}
         >
-          {({ values, touched, errors, isSubmitting }) => (
+          {({ values, touched, errors, isSubmitting, setFieldValue }) => (
             <Form>
               <Paper className={classes.mainPaper} elevation={1}>
                 <Tabs
@@ -638,54 +644,41 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                       </Button>
                     </div>
 
-                    {/* PRIMEIRA LINHA: Tipo de Conexão | Nome | Padrão | Permitir grupos | Tratar grupos como tickets */}
-                    <Grid
-                      container
-                      spacing={2}
-                      alignItems="center"
-                      style={{ marginTop: 16 }}
-                    >
-                      {/* Tipo de Conexão */}
-                      <Grid item xs={12} md={3}>
-                        <FormControl
-                          variant="outlined"
-                          margin="dense"
-                          fullWidth
-                        >
+                    {/* PRIMEIRA LINHA: Tipo de Canal | Nome | Tag padrão | Grupos como Ticket | Permitir grupos | Padrão */}
+                    <Grid container spacing={1} alignItems="center" style={{ marginTop: 16 }}>
+                      {/* Tipo de Canal */}
+                      <Grid item xs={12} md={2}>
+                        <FormControl variant="outlined" margin="dense" fullWidth size="small">
                           <InputLabel>Tipo de Canal</InputLabel>
-                          <Field
-                            as={Select}
-                            label="Tipo de Canal"
-                            name="channelType"
-                          >
+                          <Field as={Select} label="Tipo de Canal" name="channelType">
                             <MenuItem value="baileys">
                               <Box display="flex" alignItems="center" gap={1}>
                                 <WhatsApp style={{ color: "#25D366" }} />
-                                <span>Baileys (Não Oficial - Grátis)</span>
+                                <span>Baileys</span>
                               </Box>
                             </MenuItem>
                             <MenuItem value="official">
                               <Box display="flex" alignItems="center" gap={1}>
                                 <CheckCircle color="primary" />
-                                <span>WhatsApp Business API Oficial</span>
+                                <span>API Oficial</span>
                               </Box>
                             </MenuItem>
                             <MenuItem value="facebook">
                               <Box display="flex" alignItems="center" gap={1}>
                                 <Facebook style={{ color: "#3b5998" }} />
-                                <span>Facebook Messenger</span>
+                                <span>Facebook</span>
                               </Box>
                             </MenuItem>
                             <MenuItem value="instagram">
                               <Box display="flex" alignItems="center" gap={1}>
                                 <Instagram style={{ color: "#e1306c" }} />
-                                <span>Instagram Direct</span>
+                                <span>Instagram</span>
                               </Box>
                             </MenuItem>
                             <MenuItem value="webchat">
                               <Box display="flex" alignItems="center" gap={1}>
                                 <WebChatIcon style={{ color: "#6B46C1" }} />
-                                <span>WebChat (Widget para Site)</span>
+                                <span>WebChat</span>
                               </Box>
                             </MenuItem>
                           </Field>
@@ -693,7 +686,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                       </Grid>
 
                       {/* Nome */}
-                      <Grid item xs={12} md={3}>
+                      <Grid item xs={12} md={2}>
                         <Field
                           as={TextField}
                           label={i18n.t("whatsappModal.form.name")}
@@ -703,66 +696,96 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                           helperText={touched.name && errors.name}
                           variant="outlined"
                           margin="dense"
+                          size="small"
                           fullWidth
                         />
                       </Grid>
 
-                      {/* Padrão */}
+                      {/* Tag padrão do contato */}
                       <Grid item xs={12} md={2}>
-                        <FormControlLabel
-                          control={
+                        <Tooltip
+                          title="Se definido, esta tag será aplicada automaticamente ao contato quando ele for criado/atualizado por esta conexão (ex.: primeira mensagem)."
+                          placement="top"
+                          arrow
+                        >
+                          <FormControl variant="outlined" margin="dense" fullWidth size="small">
+                            <InputLabel>Tag padrão</InputLabel>
                             <Field
-                              as={Switch}
-                              color="primary"
-                              name="isDefault"
-                              checked={values.isDefault}
-                            />
-                          }
-                          label={i18n.t("whatsappModal.form.default")}
-                        />
+                              as={Select}
+                              label="Tag padrão"
+                              name="contactTagId"
+                              value={values.contactTagId || ""}
+                            >
+                              <MenuItem value=""><em>Nenhuma</em></MenuItem>
+                              {tags
+                                .filter(tag => typeof tag?.name === "string" && /^#[^#]/.test(tag.name.trim()))
+                                .map(tag => (
+                                  <MenuItem key={tag.id} value={tag.id}>{tag.name}</MenuItem>
+                                ))}
+                            </Field>
+                          </FormControl>
+                        </Tooltip>
+                      </Grid>
+
+                      {/* Grupos como Ticket */}
+                      <Grid item xs={6} md={2}>
+                        <Tooltip
+                          title='Quando ativado, as conversas de grupo serão tratadas como ticket (1 ticket por grupo). Requer "Permitir grupos" habilitado.'
+                          placement="top"
+                          arrow
+                        >
+                          <FormControlLabel
+                            style={{ margin: 0 }}
+                            control={
+                              <Switch
+                                color="primary"
+                                name="groupAsTicket"
+                                checked={values.groupAsTicket === "enabled"}
+                                onChange={(e) =>
+                                  setFieldValue(
+                                    "groupAsTicket",
+                                    e.target.checked ? "enabled" : "disabled"
+                                  )
+                                }
+                              />
+                            }
+                            label="Grupos como Ticket"
+                          />
+                        </Tooltip>
                       </Grid>
 
                       {/* Permitir grupos */}
-                      <Grid item xs={12} md={2}>
-                        <FormControlLabel
-                          control={
-                            <Field
-                              as={Switch}
-                              color="primary"
-                              name="allowGroup"
-                              checked={values.allowGroup}
-                            />
-                          }
-                          label={i18n.t("whatsappModal.form.group")}
-                        />
+                      <Grid item xs={6} md={2}>
+                        <Tooltip
+                          title="Quando habilitado, o sistema processa mensagens vindas de grupos. Se desabilitado, mensagens de grupos são ignoradas."
+                          placement="top"
+                          arrow
+                        >
+                          <FormControlLabel
+                            style={{ margin: 0 }}
+                            control={
+                              <Field as={Switch} color="primary" name="allowGroup" checked={values.allowGroup} />
+                            }
+                            label={i18n.t("whatsappModal.form.group")}
+                          />
+                        </Tooltip>
                       </Grid>
 
-                      {/* Tratar grupos como tickets */}
-                      <Grid item xs={12} md={2}>
-                        <FormControl
-                          variant="outlined"
-                          margin="dense"
-                          fullWidth
+                      {/* Padrão */}
+                      <Grid item xs={6} md={2}>
+                        <Tooltip
+                          title="Define esta conexão como padrão do sistema (usada por padrão para abertura/uso quando não houver outra conexão selecionada)."
+                          placement="top"
+                          arrow
                         >
-                          <InputLabel id="groupAsTicket-selection-label">
-                            {i18n.t("whatsappModal.form.groupAsTicket")}
-                          </InputLabel>
-                          <Field
-                            as={Select}
-                            label={i18n.t("whatsappModal.form.groupAsTicket")}
-                            placeholder={i18n.t("whatsappModal.form.groupAsTicket")}
-                            labelId="groupAsTicket-selection-label"
-                            id="groupAsTicket"
-                            name="groupAsTicket"
-                          >
-                            <MenuItem value={"disabled"}>
-                              {i18n.t("whatsappModal.menuItem.disabled")}
-                            </MenuItem>
-                            <MenuItem value={"enabled"}>
-                              {i18n.t("whatsappModal.menuItem.enabled")}
-                            </MenuItem>
-                          </Field>
-                        </FormControl>
+                          <FormControlLabel
+                            style={{ margin: 0 }}
+                            control={
+                              <Field as={Switch} color="primary" name="isDefault" checked={values.isDefault} />
+                            }
+                            label={i18n.t("whatsappModal.form.default")}
+                          />
+                        </Tooltip>
                       </Grid>
                     </Grid>
 

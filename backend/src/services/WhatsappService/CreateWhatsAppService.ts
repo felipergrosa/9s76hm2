@@ -63,6 +63,7 @@ interface Request {
   metaPageAccessToken?: string;
   metaWebhookVerifyToken?: string;
   instagramAccountId?: string;
+  contactTagId?: number;
 }
 
 interface Response {
@@ -127,6 +128,7 @@ const CreateWhatsAppService = async ({
   metaPageAccessToken,
   metaWebhookVerifyToken,
   instagramAccountId,
+  contactTagId,
 }: Request): Promise<Response> => {
   const company = await Company.findOne({
     where: {
@@ -274,7 +276,8 @@ const CreateWhatsAppService = async ({
       metaPageId,
       metaPageAccessToken,
       metaWebhookVerifyToken,
-      instagramAccountId
+      instagramAccountId,
+      contactTagId
     },
     { include: ["queues"] }
   );

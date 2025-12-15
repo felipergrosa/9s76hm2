@@ -319,7 +319,7 @@ const messages = {
           timeSendQueue: "Tempo em minutos para redirecionar para fila",
           importAlert:
             "ATENÇÃO: Ao salvar, sua conexão será encerrada, será necessário ler novamente o QR Code para importar as mensagens",
-          groupAsTicket: "Tratar grupos como ticket",
+          groupAsTicket: "Grupos como ticket",
           timeCreateNewTicket: "Criar novo ticket em x minutos",
           maxUseBotQueues: "Enviar bot x vezes",
           timeUseBotQueues: "Enviar bot em x minutos",

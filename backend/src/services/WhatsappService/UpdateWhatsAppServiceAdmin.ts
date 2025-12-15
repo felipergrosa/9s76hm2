@@ -40,6 +40,7 @@ interface WhatsappData {
   schedules?: any[];
   promptId?: number;
   requestQR?: boolean;
+  contactTagId?: number;
 }
 
 interface Request {
@@ -96,7 +97,8 @@ const UpdateWhatsAppServiceAdmin = async ({
     integrationId,
     schedules,
     promptId,
-    requestQR = false
+    requestQR = false,
+    contactTagId
   } = whatsappData;
 
   try {
@@ -156,7 +158,8 @@ const UpdateWhatsAppServiceAdmin = async ({
     timeCreateNewTicket,
     integrationId,
     schedules,
-    promptId
+    promptId,
+    contactTagId
   });
 
   if (!requestQR) {
