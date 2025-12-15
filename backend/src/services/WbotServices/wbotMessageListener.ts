@@ -5517,7 +5517,10 @@ const wbotUserJid = wbot?.user?.id;
   wbot.ev.on("messages.update", (messageUpdate: WAMessageUpdate[]) => {
     if (messageUpdate.length === 0) return;
     messageUpdate.forEach(async (message: WAMessageUpdate) => {
-      (wbot as WASocket)!.readMessages([message.key]);
+      // DESABILITADO: Envio automático de ACKs (read receipts)
+      // O WhatsApp pode banir contas que enviam ACKs automaticamente em massa
+      // Referência: Baileys v7.x removeu isso por esse motivo
+      // (wbot as WASocket)!.readMessages([message.key]);
 
       const msgUp = { ...messageUpdate };
 

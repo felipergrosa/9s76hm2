@@ -6,13 +6,19 @@ import type {
 import { BufferJSON, initAuthCreds, proto } from "@whiskeysockets/baileys";
 import Whatsapp from "../models/Whatsapp";
 
-const KEY_MAP: { [T in keyof SignalDataTypeMap]: string } = {
+// Mapeamento de tipos de dados do Signal para chaves de armazenamento
+// Inclui campos adicionais para compatibilidade futura com Baileys v7.x
+const KEY_MAP: { [key: string]: string } = {
   "pre-key": "preKeys",
   session: "sessions",
   "sender-key": "senderKeys",
   "app-state-sync-key": "appStateSyncKeys",
   "app-state-sync-version": "appStateVersions",
-  "sender-key-memory": "senderKeyMemory"
+  "sender-key-memory": "senderKeyMemory",
+  // Campos adicionais para Baileys v7.x (LID support)
+  "lid-mapping": "lidMapping",
+  "device-list": "deviceList",
+  "tctoken": "tcToken"
 };
 
 const authState = async (
