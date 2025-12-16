@@ -84,6 +84,100 @@ const ListContactsService = async ({
       const allowedContactIds = walletResult.contactIds;
       whereCondition.id = allowedContactIds.length > 0 ? { [Op.in]: allowedContactIds } : { [Op.in]: [] };
     }
+
+    // Modo EXCLUDE: excluir contatos que pertencem à carteira (tags pessoais) dos usuários bloqueados
+    if (Array.isArray(walletResult.excludedUserIds) && walletResult.excludedUserIds.length > 0) {
+      try {
+        const blockedUsers = await User.findAll({
+          where: { id: { [Op.in]: walletResult.excludedUserIds } },
+          attributes: ["id", "allowedContactTags"]
+        });
+
+        const blockedTagIdsRaw: number[] = [];
+        for (const bu of blockedUsers) {
+          const tagIds = Array.isArray((bu as any).allowedContactTags)
+            ? ((bu as any).allowedContactTags as number[])
+            : [];
+          blockedTagIdsRaw.push(...tagIds);
+        }
+
+        if (blockedTagIdsRaw.length > 0) {
+          const blockedPersonalTags = await Tag.findAll({
+            where: {
+              id: { [Op.in]: blockedTagIdsRaw },
+              companyId,
+              name: {
+                [Op.and]: [{ [Op.like]: "#%" }, { [Op.notLike]: "##%" }]
+              }
+            },
+            attributes: ["id"]
+          });
+          const blockedPersonalTagIds = blockedPersonalTags.map(t => t.id);
+
+          if (blockedPersonalTagIds.length > 0) {
+            const blockedContacts = await ContactTag.findAll({
+              where: { tagId: { [Op.in]: blockedPersonalTagIds } },
+              attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
+              raw: true
+            });
+            const blockedContactIds = blockedContacts.map((ct: any) => Number(ct.contactId)).filter(Number.isInteger);
+
+            if (blockedContactIds.length > 0) {
+              const currentIdFilter: any = (whereCondition as any).id;
+              const currentIn: number[] | undefined = currentIdFilter?.[Op.in];
+              if (Array.isArray(currentIn)) {
+                // Intersect do filtro atual com NOT IN (mais seguro do que empilhar operadores)
+                const filtered = currentIn.filter(id => !blockedContactIds.includes(id));
+                (whereCondition as any).id = { [Op.in]: filtered };
+              } else if (currentIdFilter) {
+                // Caso raro: já existe alguma condição id diferente de IN
+                additionalWhere.push({ id: { [Op.notIn]: blockedContactIds } });
+              } else {
+                (whereCondition as any).id = { [Op.notIn]: blockedContactIds };
+              }
+            }
+          }
+        }
+      } catch (e: any) {
+        // Se falhar, não bloqueia listagem inteira; apenas loga
+        // (evita quebrar a UX do usuário)
+        // logger está disponível no arquivo
+      }
+    }
+  }
+
+  // Filtro de segurança: tags permitidas do usuário (allowedContactTags)
+  // Regra: se o usuário tem tags permitidas configuradas, ele só enxerga contatos que possuam ao menos uma delas.
+  if (Array.isArray(allowedContactTags) && allowedContactTags.length > 0) {
+    const allowedTags = await Tag.findAll({
+      where: { id: { [Op.in]: allowedContactTags }, companyId },
+      attributes: ["id"]
+    });
+    const allowedTagIds = allowedTags.map(t => t.id);
+    if (allowedTagIds.length > 0) {
+      const allowedContacts = await ContactTag.findAll({
+        where: { tagId: { [Op.in]: allowedTagIds } },
+        attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
+        raw: true
+      });
+      const allowedContactIds = allowedContacts.map((ct: any) => Number(ct.contactId)).filter(Number.isInteger);
+
+      const currentIdFilter: any = (whereCondition as any).id;
+      const currentIn: number[] | undefined = currentIdFilter?.[Op.in];
+      if (Array.isArray(currentIn)) {
+        // Intersecção de filtros
+        const set = new Set(allowedContactIds);
+        const filtered = currentIn.filter(id => set.has(id));
+        (whereCondition as any).id = { [Op.in]: filtered };
+      } else if (currentIdFilter) {
+        additionalWhere.push({ id: { [Op.in]: allowedContactIds } });
+      } else {
+        (whereCondition as any).id = { [Op.in]: allowedContactIds };
+      }
+    } else {
+      // Tags configuradas mas não encontradas/sem correspondência: não mostrar nada
+      (whereCondition as any).id = { [Op.in]: [] };
+    }
   }
 
   // Filtro por intervalo de última compra
