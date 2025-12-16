@@ -226,7 +226,22 @@ const ListTicketsServiceKanban = async ({
   // Restrição de carteira: vê tickets de sua carteira + carteiras gerenciadas + atribuídos a ele/gerenciados
   if (userId) {
     const walletResult = await GetUserWalletContactIds(Number(userId), companyId);
-    if (walletResult.hasWalletRestriction) {
+    
+    // Modo EXCLUDE: admin vê tudo EXCETO tickets dos usuários excluídos
+    if (walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) {
+      whereCondition = {
+        [Op.and]: [
+          whereCondition,
+          {
+            [Op.or]: [
+              { userId: { [Op.notIn]: walletResult.excludedUserIds } },
+              { userId: Number(userId) }, // Sempre vê os próprios tickets
+              { userId: null } // Tickets sem atribuição
+            ]
+          }
+        ]
+      } as any;
+    } else if (walletResult.hasWalletRestriction) {
       const allowedContactIds = walletResult.contactIds;
       // Inclui o próprio userId + IDs dos usuários gerenciados
       const allowedUserIds = [Number(userId), ...walletResult.managedUserIds];

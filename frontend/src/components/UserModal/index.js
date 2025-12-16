@@ -150,6 +150,7 @@ const UserModal = ({ open, onClose, userId }) => {
     allowConnections: "disabled",
     allowedContactTags: [],
     managedUserIds: [],
+    supervisorViewMode: "include",
     permissions: [], // Inicializar permissions
   };
 
@@ -696,9 +697,24 @@ const UserModal = ({ open, onClose, userId }) => {
                             {i18n.t("userModal.form.managedUsers") || "Usuários Gerenciados (Supervisor)"}
                           </Typography>
                           <Typography variant="caption" color="textSecondary" style={{ marginBottom: 8, display: 'block' }}>
-                            {i18n.t("userModal.form.managedUsersHelp") || "Selecione os usuários cujas carteiras este usuário poderá visualizar. Deixe vazio para ver apenas sua própria carteira."}
+                            {values.supervisorViewMode === "include"
+                              ? "Selecione os usuários cujas carteiras este usuário poderá visualizar. Deixe vazio para ver todos como admin normal."
+                              : "Selecione os usuários cujas carteiras este usuário NÃO poderá visualizar. Verá todos os outros."}
                           </Typography>
                           <Grid container spacing={1}>
+                            <Grid item xs={12}>
+                              <FormControl variant="outlined" margin="dense" fullWidth>
+                                <InputLabel>Modo de visualização</InputLabel>
+                                <Field
+                                  as={Select}
+                                  name="supervisorViewMode"
+                                  label="Modo de visualização"
+                                >
+                                  <MenuItem value="include">Sim - Ver apenas os selecionados</MenuItem>
+                                  <MenuItem value="exclude">Não - Ver todos exceto os selecionados</MenuItem>
+                                </Field>
+                              </FormControl>
+                            </Grid>
                             <Grid item xs={12}>
                               <Field name="managedUserIds">
                                 {({ field, form }) => {
@@ -721,7 +737,7 @@ const UserModal = ({ open, onClose, userId }) => {
                                             {...getTagProps({ index })}
                                             key={option.id}
                                             label={option.name}
-                                            style={{ backgroundColor: "#3f51b5", color: "#fff" }}
+                                            style={{ backgroundColor: values.supervisorViewMode === "include" ? "#3f51b5" : "#f44336", color: "#fff" }}
                                           />
                                         ))
                                       }
@@ -730,7 +746,7 @@ const UserModal = ({ open, onClose, userId }) => {
                                           {...params}
                                           variant="outlined"
                                           margin="dense"
-                                          label={i18n.t("userModal.form.managedUsersLabel") || "Usuários que posso ver"}
+                                          label={values.supervisorViewMode === "include" ? "Usuários que posso ver" : "Usuários que NÃO posso ver"}
                                           fullWidth
                                           InputLabelProps={{ shrink: true }}
                                         />

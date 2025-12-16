@@ -31,6 +31,7 @@ interface SerializedUser {
   allowConnections: string;
   allowedContactTags: number[];
   managedUserIds?: number[];
+  supervisorViewMode?: "include" | "exclude";
   permissions: string[];
 }
 
@@ -69,6 +70,7 @@ export const SerializeUser = async (user: User): Promise<SerializedUser> => {
     allowConnections: user.allowConnections,
     allowedContactTags: user.allowedContactTags,
     managedUserIds: (user as any).managedUserIds || [],
+    supervisorViewMode: (user as any).supervisorViewMode || "include",
     permissions: getUserPermissions(user)
   };
 };

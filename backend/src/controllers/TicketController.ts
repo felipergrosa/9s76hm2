@@ -370,7 +370,17 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 
   // Verificação de acesso por carteira (inclui supervisor via managedUserIds)
   const walletResult = await GetUserWalletContactIds(Number(userId), Number(companyId));
-  if (walletResult.hasWalletRestriction) {
+  
+  // Modo EXCLUDE: bloqueia acesso a tickets dos usuários excluídos
+  if (walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) {
+    const isExcludedUser = walletResult.excludedUserIds.includes(Number(ticket.userId));
+    const isOwnTicket = Number(ticket.userId) === Number(userId);
+    const isUnassigned = !ticket.userId;
+    
+    if (isExcludedUser && !isOwnTicket && !isUnassigned) {
+      throw new AppError("FORBIDDEN_CONTACT_ACCESS", 403);
+    }
+  } else if (walletResult.hasWalletRestriction) {
     const allowedUserIds = [Number(userId), ...walletResult.managedUserIds];
     const allowedContactIds = walletResult.contactIds;
 
@@ -421,7 +431,17 @@ export const showFromUUID = async (
 
   // Verificação de acesso por carteira (inclui supervisor via managedUserIds)
   const walletResult = await GetUserWalletContactIds(Number(userId), Number(companyId));
-  if (walletResult.hasWalletRestriction) {
+  
+  // Modo EXCLUDE: bloqueia acesso a tickets dos usuários excluídos
+  if (walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) {
+    const isExcludedUser = walletResult.excludedUserIds.includes(Number(ticket.userId));
+    const isOwnTicket = Number(ticket.userId) === Number(userId);
+    const isUnassigned = !ticket.userId;
+    
+    if (isExcludedUser && !isOwnTicket && !isUnassigned) {
+      throw new AppError("FORBIDDEN_CONTACT_ACCESS", 403);
+    }
+  } else if (walletResult.hasWalletRestriction) {
     const allowedUserIds = [Number(userId), ...walletResult.managedUserIds];
     const allowedContactIds = walletResult.contactIds;
 

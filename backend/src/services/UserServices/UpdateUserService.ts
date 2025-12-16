@@ -114,6 +114,11 @@ const UpdateUserService = async ({
       ? (userData as any).managedUserIds
       : [];
   }
+
+  // Atualiza supervisorViewMode apenas se enviado
+  if ((userData as any).hasOwnProperty("supervisorViewMode")) {
+    (dataToUpdate as any).supervisorViewMode = (userData as any).supervisorViewMode || "include";
+  }
   
   // Lógica especial para a conexão (whatsappId):
   // Só atualiza se o campo for enviado.
@@ -167,6 +172,7 @@ const UpdateUserService = async ({
     profileImage: user.profileImage,
     allowedContactTags: user.allowedContactTags,
     managedUserIds: (user as any).managedUserIds || [],
+    supervisorViewMode: (user as any).supervisorViewMode || "include",
     permissions: user.permissions || []
   };
 

@@ -192,6 +192,10 @@ class User extends Model<User> {
   @Column(DataType.ARRAY(DataType.INTEGER))
   managedUserIds: number[];
 
+  @Default("include")
+  @Column(DataType.STRING)
+  supervisorViewMode: "include" | "exclude";
+
   @Default([])
   @Column(DataType.ARRAY(DataType.STRING))
   permissions: string[];

@@ -39,6 +39,7 @@ const ShowUserService = async (id: string | number, companyId: string | number):
         "language",
         "allowedContactTags",
         "managedUserIds",
+        "supervisorViewMode",
         "permissions"
       ],
       include: [

@@ -29,6 +29,7 @@ interface Request {
   allowConnections?: string;
   allowedContactTags?: number[];
   managedUserIds?: number[];
+  supervisorViewMode?: "include" | "exclude";
   permissions?: string[];
 }
 
@@ -62,6 +63,7 @@ const CreateUserService = async ({
   allowConnections,
   allowedContactTags = [],
   managedUserIds = [],
+  supervisorViewMode = "include",
   permissions = []
 }: Request): Promise<Response> => {
   if (companyId !== undefined) {
@@ -136,6 +138,7 @@ const CreateUserService = async ({
       allowConnections,
       allowedContactTags,
       managedUserIds,
+      supervisorViewMode,
       permissions
     },
     { include: ["queues", "company"] }

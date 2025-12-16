@@ -7,20 +7,22 @@ interface GetUserWalletResult {
   contactIds: number[];
   hasWalletRestriction: boolean;
   managedUserIds: number[];
+  excludedUserIds: number[];
+  supervisorViewMode: "include" | "exclude";
 }
 
 /**
  * Retorna os IDs de contatos que estão na "carteira" do usuário.
  * Carteira = contatos que têm pelo menos uma tag pessoal (#) do usuário.
  * 
- * Lógica de supervisão:
+ * Lógica de supervisão com supervisorViewMode:
  * - Admin sem managedUserIds: vê TUDO (sem restrição)
- * - Admin com managedUserIds: vê sua carteira + carteiras dos usuários gerenciados
- * - Não-admin: vê sua carteira + carteiras dos usuários que gerencia
+ * - supervisorViewMode = "include": vê sua carteira + carteiras dos usuários selecionados
+ * - supervisorViewMode = "exclude": vê TUDO exceto carteiras dos usuários selecionados
  * 
  * @param userId - ID do usuário
  * @param companyId - ID da empresa
- * @returns Lista de contactIds permitidos, flag de restrição e IDs de usuários gerenciados
+ * @returns Lista de contactIds permitidos, flag de restrição, IDs de usuários gerenciados/excluídos e modo
  */
 const GetUserWalletContactIds = async (
   userId: number,
@@ -28,20 +30,33 @@ const GetUserWalletContactIds = async (
 ): Promise<GetUserWalletResult> => {
   try {
     const user = await User.findByPk(userId, {
-      attributes: ["id", "profile", "allowedContactTags", "managedUserIds"]
+      attributes: ["id", "profile", "allowedContactTags", "managedUserIds", "supervisorViewMode"]
     });
 
     if (!user) {
-      return { contactIds: [], hasWalletRestriction: true, managedUserIds: [] };
+      return { contactIds: [], hasWalletRestriction: true, managedUserIds: [], excludedUserIds: [], supervisorViewMode: "include" };
     }
 
     const managedUserIds = Array.isArray((user as any).managedUserIds)
       ? (user as any).managedUserIds as number[]
       : [];
 
+    const supervisorViewMode = ((user as any).supervisorViewMode || "include") as "include" | "exclude";
+
     // Admin sem usuários gerenciados = sem restrição (vê tudo)
     if (user.profile === "admin" && managedUserIds.length === 0) {
-      return { contactIds: [], hasWalletRestriction: false, managedUserIds: [] };
+      return { contactIds: [], hasWalletRestriction: false, managedUserIds: [], excludedUserIds: [], supervisorViewMode };
+    }
+
+    // Modo EXCLUDE: admin vê tudo EXCETO os usuários selecionados
+    if (user.profile === "admin" && supervisorViewMode === "exclude" && managedUserIds.length > 0) {
+      return { 
+        contactIds: [], 
+        hasWalletRestriction: false, 
+        managedUserIds: [], 
+        excludedUserIds: managedUserIds,
+        supervisorViewMode 
+      };
     }
 
     // Coleta todas as tags pessoais: do próprio usuário + dos usuários gerenciados
@@ -107,7 +122,7 @@ const GetUserWalletContactIds = async (
 
     if (allPersonalTagIds.length === 0) {
       // Sem tags pessoais = sem carteira
-      return { contactIds: [], hasWalletRestriction: true, managedUserIds };
+      return { contactIds: [], hasWalletRestriction: true, managedUserIds, excludedUserIds: [], supervisorViewMode };
     }
 
     // Busca contatos que têm pelo menos uma tag pessoal permitida
@@ -119,10 +134,10 @@ const GetUserWalletContactIds = async (
 
     const contactIds = contactsWithTag.map((ct: any) => ct.contactId);
 
-    return { contactIds, hasWalletRestriction: true, managedUserIds };
+    return { contactIds, hasWalletRestriction: true, managedUserIds, excludedUserIds: [], supervisorViewMode };
   } catch (error) {
     console.error("[GetUserWalletContactIds] Erro:", error);
-    return { contactIds: [], hasWalletRestriction: true, managedUserIds: [] };
+    return { contactIds: [], hasWalletRestriction: true, managedUserIds: [], excludedUserIds: [], supervisorViewMode: "include" };
   }
 };
 
