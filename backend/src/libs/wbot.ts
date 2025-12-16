@@ -455,6 +455,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 sessions.push(wsocket);
               }
 
+              // NOVO: Carregar labels do banco de dados primeiro (recuperação após reinício)
+              try {
+                const { loadLabelsFromDatabase, loadChatLabelsFromDatabase } = require("./labelCache");
+                const labelsCount = await loadLabelsFromDatabase(whatsapp.id);
+                const assocCount = await loadChatLabelsFromDatabase(whatsapp.id);
+                logger.info(`[wbot] Labels carregadas do banco: ${labelsCount} labels, ${assocCount} associações para whatsappId=${whatsapp.id}`);
+              } catch (e: any) {
+                logger.warn(`[wbot] Falha ao carregar labels do banco: ${e?.message}`);
+              }
+
               // Forçar uma sincronização completa do App State ao abrir a conexão
               try {
                 const sock: any = wsocket as any;

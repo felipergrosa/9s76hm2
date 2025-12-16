@@ -13,6 +13,7 @@ import path from "path";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
+import WhatsappLabel from "../../models/WhatsappLabel";
 import logger from "../../utils/logger";
 import { upsertLabel, addChatLabelAssociation, getChatLabelIds } from "../../libs/labelCache";
 import createOrUpdateBaileysService from "../BaileysServices/CreateOrUpdateBaileysService";
@@ -221,7 +222,7 @@ const wbotMonitor = async (
     });
 
     // Captura eventos de edição de labels (criar/editar/remover) vindos do App State
-    wbot.ev.on("labels.edit", (payload: any) => {
+    wbot.ev.on("labels.edit", async (payload: any) => {
       try {
         logger.info(`[wbotMonitor] Evento labels.edit recebido:`, JSON.stringify(payload));
         const items: any[] = Array.isArray(payload)
@@ -236,7 +237,41 @@ const wbotMonitor = async (
           const color = it?.color ?? it?.colorHex ?? it?.backgroundColor;
           const predefinedId = it?.predefinedId;
           const deleted = it?.deleted === true;
+          
+          // 1. Atualizar cache em memória (comportamento existente)
           upsertLabel(whatsapp.id, { id, name, color, predefinedId, deleted });
+          
+          // 2. NOVO: Persistir no banco de dados
+          try {
+            const colorNum = typeof color === 'number' ? color : (typeof color === 'string' ? parseInt(color, 10) || 0 : 0);
+            if (deleted) {
+              // Marcar como deletada no banco
+              await WhatsappLabel.update(
+                { deleted: true },
+                { where: { whatsappLabelId: id, whatsappId: whatsapp.id } }
+              );
+            } else {
+              // Upsert: criar ou atualizar
+              const [dbLabel, created] = await WhatsappLabel.findOrCreate({
+                where: { whatsappLabelId: id, whatsappId: whatsapp.id },
+                defaults: {
+                  whatsappLabelId: id,
+                  name,
+                  color: colorNum,
+                  predefinedId: predefinedId || null,
+                  deleted: false,
+                  whatsappId: whatsapp.id
+                }
+              });
+              if (!created) {
+                await dbLabel.update({ name, color: colorNum, predefinedId: predefinedId || null, deleted: false });
+              }
+            }
+            logger.info(`[wbotMonitor] Label ${id} persistida no banco para whatsappId=${whatsapp.id}`);
+          } catch (dbErr: any) {
+            logger.warn(`[wbotMonitor] Falha ao persistir label ${id} no banco: ${dbErr?.message}`);
+          }
+          
           count++;
         }
         if (count === 0) {
@@ -311,10 +346,54 @@ const wbotMonitor = async (
         if (assocType === "label_jid" || assocType === 0 || assocType === "Chat") {
           const chatId = association.chatId;
           if (chatId && labelId) {
+            // 1. Atualizar cache em memória (comportamento existente)
             addChatLabelAssociation(whatsapp.id, chatId, labelId, labeled);
             logger.info(`[wbotMonitor] Associação ${labeled ? 'add' : 'remove'}: chat=${chatId} label=${labelId}`);
 
-            // Persistir labels deste chat também em Baileys.chats (para fallback e contagem)
+            // 2. NOVO: Persistir associação no banco de dados (ContactWhatsappLabel)
+            try {
+              const ContactWhatsappLabel = (await import("../../models/ContactWhatsappLabel")).default;
+              const Contact = (await import("../../models/Contact")).default;
+              
+              // Extrair número do chatId (formato: 5511999999999@c.us)
+              const number = chatId.split('@')[0];
+              
+              // Buscar contato pelo número
+              const contact = await Contact.findOne({ 
+                where: { number, companyId } 
+              });
+              
+              if (contact) {
+                // Buscar label no banco
+                const dbLabel = await WhatsappLabel.findOne({
+                  where: { whatsappLabelId: labelId, whatsappId: whatsapp.id }
+                });
+                
+                if (dbLabel) {
+                  if (labeled) {
+                    // Adicionar associação
+                    await ContactWhatsappLabel.findOrCreate({
+                      where: { contactId: contact.id, whatsappLabelId: dbLabel.id }
+                    });
+                    logger.info(`[wbotMonitor] Associação persistida no banco: contact=${contact.id} label=${dbLabel.id}`);
+                  } else {
+                    // Remover associação
+                    await ContactWhatsappLabel.destroy({
+                      where: { contactId: contact.id, whatsappLabelId: dbLabel.id }
+                    });
+                    logger.info(`[wbotMonitor] Associação removida do banco: contact=${contact.id} label=${dbLabel.id}`);
+                  }
+                } else {
+                  logger.warn(`[wbotMonitor] Label ${labelId} não encontrada no banco para whatsappId=${whatsapp.id}`);
+                }
+              } else {
+                logger.debug(`[wbotMonitor] Contato ${number} não encontrado no banco para companyId=${companyId}`);
+              }
+            } catch (dbErr: any) {
+              logger.warn(`[wbotMonitor] Falha ao persistir associação no banco: ${dbErr?.message}`);
+            }
+
+            // 3. Persistir labels deste chat também em Baileys.chats (para fallback e contagem)
             try {
               const ids = getChatLabelIds(whatsapp.id, chatId) || [];
               await createOrUpdateBaileysService({

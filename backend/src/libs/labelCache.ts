@@ -80,3 +80,116 @@ export const clearCache = (whatsappId: number) => {
   chatLabelsByWpp.delete(whatsappId);
   logger.info(`[labelCache] Cache limpo para whatsappId=${whatsappId}`);
 };
+
+/**
+ * Carrega labels do banco de dados para o cache em memória.
+ * Útil para recuperar labels após reiniciar o backend.
+ * 
+ * @param whatsappId - ID da conexão WhatsApp
+ * @returns Quantidade de labels carregadas
+ */
+export const loadLabelsFromDatabase = async (whatsappId: number): Promise<number> => {
+  try {
+    // Import dinâmico para evitar dependência circular
+    const WhatsappLabel = (await import("../models/WhatsappLabel")).default;
+    
+    const dbLabels = await WhatsappLabel.findAll({
+      where: { whatsappId, deleted: false }
+    });
+    
+    if (!dbLabels || dbLabels.length === 0) {
+      logger.info(`[labelCache] Nenhuma label encontrada no banco para whatsappId=${whatsappId}`);
+      return 0;
+    }
+    
+    // Limpar cache atual antes de popular
+    let map = labelsByWpp.get(whatsappId);
+    if (!map) {
+      map = new Map();
+      labelsByWpp.set(whatsappId, map);
+    }
+    
+    for (const label of dbLabels) {
+      map.set(String(label.whatsappLabelId), {
+        id: String(label.whatsappLabelId),
+        name: label.name,
+        color: label.color,
+        predefinedId: label.predefinedId
+      });
+    }
+    
+    logger.info(`[labelCache] Carregadas ${dbLabels.length} labels do banco para whatsappId=${whatsappId}`);
+    return dbLabels.length;
+  } catch (err: any) {
+    logger.error(`[labelCache] Erro ao carregar labels do banco: ${err?.message}`);
+    return 0;
+  }
+};
+
+/**
+ * Carrega associações chat-label do banco de dados para o cache.
+ * 
+ * @param whatsappId - ID da conexão WhatsApp
+ * @returns Quantidade de associações carregadas
+ */
+export const loadChatLabelsFromDatabase = async (whatsappId: number): Promise<number> => {
+  try {
+    // Import dinâmico para evitar dependência circular
+    const WhatsappLabel = (await import("../models/WhatsappLabel")).default;
+    const ContactWhatsappLabel = (await import("../models/ContactWhatsappLabel")).default;
+    const Contact = (await import("../models/Contact")).default;
+    const Whatsapp = (await import("../models/Whatsapp")).default;
+    
+    // Buscar companyId do whatsapp
+    const whatsapp = await Whatsapp.findByPk(whatsappId);
+    if (!whatsapp) {
+      logger.warn(`[labelCache] WhatsApp ${whatsappId} não encontrado`);
+      return 0;
+    }
+    
+    // Buscar todas as labels desta conexão
+    const dbLabels = await WhatsappLabel.findAll({
+      where: { whatsappId, deleted: false },
+      include: [{
+        model: ContactWhatsappLabel,
+        as: 'contactLabels',
+        include: [{
+          model: Contact,
+          as: 'contact',
+          where: { companyId: whatsapp.companyId },
+          required: true
+        }]
+      }]
+    });
+    
+    let count = 0;
+    let map = chatLabelsByWpp.get(whatsappId);
+    if (!map) {
+      map = new Map();
+      chatLabelsByWpp.set(whatsappId, map);
+    }
+    
+    for (const label of dbLabels) {
+      const contactLabels = (label as any).contactLabels || [];
+      for (const cl of contactLabels) {
+        const contact = cl.contact;
+        if (contact?.number) {
+          const chatId = `${contact.number}@c.us`;
+          let set = map.get(chatId);
+          if (!set) {
+            set = new Set();
+            map.set(chatId, set);
+          }
+          set.add(String(label.whatsappLabelId));
+          count++;
+        }
+      }
+    }
+    
+    logger.info(`[labelCache] Carregadas ${count} associações chat-label do banco para whatsappId=${whatsappId}`);
+    return count;
+  } catch (err: any) {
+    logger.error(`[labelCache] Erro ao carregar associações do banco: ${err?.message}`);
+    return 0;
+  }
+};

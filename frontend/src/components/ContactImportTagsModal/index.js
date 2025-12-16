@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useContext } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -31,6 +31,8 @@ import { makeStyles } from "@material-ui/core/styles";
 import { toast } from 'react-toastify';
 import toastError from '../../errors/toastError';
 import api from '../../services/api';
+import { SocketContext } from '../../context/Socket/SocketContext';
+import { AuthContext } from '../../context/Auth/AuthContext';
 
 const useStyles = makeStyles((theme) => ({
   tagChip: {
@@ -74,6 +76,11 @@ const useStyles = makeStyles((theme) => ({
 
 const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
   const classes = useStyles();
+  const socketManager = useContext(SocketContext);
+  const { user } = useContext(AuthContext);
+  const companyId = user?.companyId;
+
+  const [compatibilityMode, setCompatibilityMode] = useState(false);
 
   const [deviceTags, setDeviceTags] = useState([]);
   const [systemTags, setSystemTags] = useState([]);
@@ -169,14 +176,27 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    setLabelsProgress({ percent: 1, phase: 'iniciando' });
-    startProgressPolling();
+    if (compatibilityMode) {
+      setLabelsProgress({ percent: 1, phase: 'iniciando' });
+      startProgressPolling();
+    }
     try {
       // Limpa dados anteriores para evitar piscar conteúdo durante o loading
       setDeviceTags([]);
-      // Carregar labels via WhatsApp-Web.js
-      const deviceResponse = await api.get(`/whatsapp-web/labels?whatsappId=${selectedWhatsappId}`);
-      const deviceTagsData = Array.isArray(deviceResponse.data?.labels) ? deviceResponse.data.labels : [];
+
+      // Carregar tags do dispositivo
+      let deviceTagsData = [];
+      if (compatibilityMode) {
+        // WhatsApp-Web.js (modo compatibilidade)
+        const deviceResponse = await api.get(`/whatsapp-web/labels?whatsappId=${selectedWhatsappId}`);
+        deviceTagsData = Array.isArray(deviceResponse.data?.labels) ? deviceResponse.data.labels : [];
+      } else {
+        // Baileys (modo padrão)
+        const deviceResponse = await api.get(`/contacts/device-tags`, { params: { whatsappId: selectedWhatsappId } });
+        deviceTagsData = Array.isArray(deviceResponse.data?.labels)
+          ? deviceResponse.data.labels
+          : (Array.isArray(deviceResponse.data) ? deviceResponse.data : []);
+      }
       setDeviceTags(deviceTagsData);
 
       // Carregar tags do sistema (lista completa)
@@ -203,15 +223,20 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
       toastError(error);
     } finally {
       setLoading(false);
-      // Força 100% ao terminar o ciclo
-      setLabelsProgress(p => ({ percent: 100, phase: 'concluido' }));
-      // Aguarda um pequeno tempo para o usuário ver 100% e encerra polling
-      setTimeout(() => {
+      if (compatibilityMode) {
+        // Força 100% ao terminar o ciclo
+        setLabelsProgress(p => ({ percent: 100, phase: 'concluido' }));
+        // Aguarda um pequeno tempo para o usuário ver 100% e encerra polling
+        setTimeout(() => {
+          stopProgressPolling();
+          setLabelsProgress({ percent: 0, phase: 'idle' });
+        }, 700);
+      } else {
         stopProgressPolling();
         setLabelsProgress({ percent: 0, phase: 'idle' });
-      }, 700);
+      }
     }
-  }, [selectedWhatsappId, startProgressPolling, stopProgressPolling]);
+  }, [selectedWhatsappId, compatibilityMode, startProgressPolling, stopProgressPolling]);
 
   const handleRefreshTags = useCallback(async () => {
     if (!selectedWhatsappId) {
@@ -275,6 +300,39 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
       loadData();
     }
   }, [selectedWhatsappId, isOpen, loadData]);
+
+  // Recarregar ao alternar modo de compatibilidade
+  useEffect(() => {
+    if (isOpen && selectedWhatsappId) {
+      loadData();
+    }
+  }, [compatibilityMode, isOpen, selectedWhatsappId, loadData]);
+
+  // NOVO: Escutar eventos de progresso de importação via Socket.IO
+  useEffect(() => {
+    if (!companyId || !socketManager) return;
+    
+    const socket = socketManager.getSocket(companyId);
+    if (!socket) return;
+
+    const handleImportProgress = (data) => {
+      if (data?.action === "progress") {
+        setImportProgress({
+          total: data.total || 0,
+          processed: data.processed || 0,
+          created: data.created || 0,
+          updated: data.updated || 0,
+          tagged: data.tagged || 0
+        });
+      }
+    };
+
+    socket.on(`importContacts-${companyId}`, handleImportProgress);
+
+    return () => {
+      socket.off(`importContacts-${companyId}`, handleImportProgress);
+    };
+  }, [companyId, socketManager]);
 
   // Infinite scroll: detectar final da lista e carregar próxima página
   const onContactsScroll = (e) => {
@@ -614,25 +672,28 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
               )}
             </Box>
             <Box>
-              {/* Ícones legados removidos */}
-              <Tooltip title="Inicializar WhatsApp-Web.js (gerar QR Code)">
-                <IconButton
-                  onClick={openQrModal}
-                  disabled={loading}
-                  style={{ marginRight: 8 }}
-                >
-                  <span style={{ fontSize: '16px' }}>📱</span>
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Buscar etiquetas via WhatsApp-Web.js">
-                <IconButton
-                  onClick={testWhatsAppWebLabels}
-                  disabled={loading}
-                  style={{ marginRight: 8 }}
-                >
-                  <span style={{ fontSize: '16px' }}>🌐</span>
-                </IconButton>
-              </Tooltip>
+              {compatibilityMode && (
+                <>
+                  <Tooltip title="Inicializar WhatsApp-Web.js (gerar QR Code)">
+                    <IconButton
+                      onClick={openQrModal}
+                      disabled={loading}
+                      style={{ marginRight: 8 }}
+                    >
+                      <span style={{ fontSize: '16px' }}>📱</span>
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Buscar etiquetas via WhatsApp-Web.js">
+                    <IconButton
+                      onClick={testWhatsAppWebLabels}
+                      disabled={loading}
+                      style={{ marginRight: 8 }}
+                    >
+                      <span style={{ fontSize: '16px' }}>🌐</span>
+                    </IconButton>
+                  </Tooltip>
+                </>
+              )}
               <Tooltip title="Sincronizar Etiquetas">
                 <IconButton
                   onClick={loadData}
@@ -667,6 +728,19 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                   ))}
               </Select>
             </FormControl>
+
+            <FormControlLabel
+              style={{ marginTop: 8, whiteSpace: 'nowrap' }}
+              control={
+                <Checkbox
+                  checked={compatibilityMode}
+                  onChange={(e) => setCompatibilityMode(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label="Modo compatibilidade"
+            />
+
             <Tooltip title="Atualizar tags do aparelho">
               <span>
                 <IconButton

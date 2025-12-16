@@ -12,6 +12,7 @@ import ContactTagImportPreset from "../../models/ContactTagImportPreset";
 // Removido: importações de cache/baileys
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
 import WhatsAppWebLabelsService from "../WbotServices/WhatsAppWebLabelsService";
+import { getIO } from "../../libs/socket";
 
 // import CheckContactNumber from "../WbotServices/CheckNumber";
 
@@ -503,6 +504,26 @@ export async function ImportContactsService(
           p.updated = updatedCount;
           p.tagged = taggedCount;
           importProgressMap.set(progressId, p);
+          
+          // NOVO: Emitir progresso via Socket.IO a cada 5 contatos (para não sobrecarregar)
+          if (p.processed % 5 === 0 || p.processed === p.total) {
+            try {
+              const io = getIO();
+              io.of(`/workspace-${companyId}`)
+                .emit(`importContacts-${companyId}`, {
+                  action: "progress",
+                  progressId,
+                  total: p.total,
+                  processed: p.processed,
+                  created: p.created,
+                  updated: p.updated,
+                  tagged: p.tagged,
+                  percent: Math.round((p.processed / p.total) * 100)
+                });
+            } catch (socketErr) {
+              // Ignorar erros de socket silenciosamente
+            }
+          }
         }
       }
       
@@ -523,6 +544,27 @@ export async function ImportContactsService(
         if (p) {
           p.processed += 1;
           importProgressMap.set(progressId, p);
+          
+          // NOVO: Emitir progresso via Socket.IO mesmo com erro
+          if (p.processed % 5 === 0 || p.processed === p.total) {
+            try {
+              const io = getIO();
+              io.of(`/workspace-${companyId}`)
+                .emit(`importContacts-${companyId}`, {
+                  action: "progress",
+                  progressId,
+                  total: p.total,
+                  processed: p.processed,
+                  created: p.created,
+                  updated: p.updated,
+                  tagged: p.tagged,
+                  percent: Math.round((p.processed / p.total) * 100),
+                  errors: errors.length
+                });
+            } catch (socketErr) {
+              // Ignorar erros de socket silenciosamente
+            }
+          }
         }
       }
       
