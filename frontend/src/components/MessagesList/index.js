@@ -147,6 +147,30 @@ const useStyles = makeStyles((theme) => ({
     marginTop: 2,
   },
 
+  // Wrapper para linha de mensagem com checkbox de seleção
+  messageRowWrapper: {
+    display: "flex",
+    alignItems: "flex-start",
+    width: "100%",
+    padding: "0 8px",
+    transition: "background-color 0.15s ease",
+  },
+  messageRowWrapperSelected: {
+    backgroundColor: "rgba(0, 168, 132, 0.12)",
+  },
+  messageRowCheckbox: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 40,
+    paddingTop: 8,
+  },
+  messageRowContent: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+  },
   messagesList: {
     backgroundImage: theme.mode === 'light' ? `url(${whatsBackground})` : `url(${whatsBackgroundDark})`,
     backgroundColor: theme.mode === 'light' ? "transparent" : "#0b0b0d",
@@ -664,7 +688,7 @@ const MessagesList = ({
   // Armazena a sala atual (idealmente ticket.uuid). Antes de sabermos o uuid, usa-se ticketId como fallback.
   const currentRoomIdRef = useRef(null);
 
-  const { showSelectMessageCheckbox } = useContext(ForwardMessageContext);
+  const { showSelectMessageCheckbox, selectedMessages } = useContext(ForwardMessageContext);
 
   const companyId = user.companyId;
 
@@ -1669,18 +1693,32 @@ const MessagesList = ({
         { [isLeft ? classes.messageLeftAudio : classes.messageRightAudio]: message.mediaType === "audio" }
       );
 
+      // Verifica se a mensagem está selecionada
+      const isMessageSelected = showSelectMessageCheckbox && selectedMessages.some((m) => m.id === message.id);
+
       return (
         <React.Fragment key={message.id}>
           {renderDailyTimestamps(message, index)}
           {renderTicketsSeparator(message, index)}
           {renderMessageDivider(message, index)}
-          <div
-            className={bubbleClass}
-            title={message.queueId && message.queue?.name}
-            onDoubleClick={(e) => hanldeReplyMessage(e, message)}
+          <div 
+            className={clsx(
+              classes.messageRowWrapper,
+              { [classes.messageRowWrapperSelected]: isMessageSelected }
+            )}
           >
-            {showSelectMessageCheckbox && (<SelectMessageCheckbox message={message} />)}
-            <IconButton
+            {showSelectMessageCheckbox && (
+              <div className={classes.messageRowCheckbox}>
+                <SelectMessageCheckbox message={message} />
+              </div>
+            )}
+            <div className={classes.messageRowContent}>
+              <div
+                className={bubbleClass}
+                title={message.queueId && message.queue?.name}
+                onDoubleClick={(e) => hanldeReplyMessage(e, message)}
+              >
+                <IconButton
               variant="contained"
               size="small"
               id="messageActionsButton"
@@ -1737,6 +1775,8 @@ const MessagesList = ({
                 {message.isEdited ? "Editada " + format(parseISO(message.createdAt), "HH:mm") : format(parseISO(message.createdAt), "HH:mm")}
                 {!isLeft && renderMessageAck(message)}
               </span>
+            </div>
+              </div>
             </div>
           </div>
         </React.Fragment>

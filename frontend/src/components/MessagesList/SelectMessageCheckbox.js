@@ -1,15 +1,8 @@
-import React, { useContext } from "react";
+import React, { useContext, useEffect } from "react";
 import { makeStyles } from "@material-ui/core/styles";
 import { ForwardMessageContext } from "../../context/ForwarMessage/ForwardMessageContext";
 
 const useStyles = makeStyles((theme) => ({
-  checkboxContainer: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 8,
-    marginLeft: -8,
-  },
   customCheckbox: {
     width: 22,
     height: 22,
@@ -44,7 +37,7 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const SelectMessageCheckbox = ({ message }) => {
+const SelectMessageCheckbox = ({ message, onSelectionChange }) => {
   const classes = useStyles();
   const [isChecked, setIsChecked] = React.useState(false);
   const {
@@ -53,25 +46,44 @@ const SelectMessageCheckbox = ({ message }) => {
     selectedMessages,
   } = useContext(ForwardMessageContext);
 
+  // Reset quando o modo de seleção é desativado
+  useEffect(() => {
+    if (!showSelectMessageCheckbox) {
+      setIsChecked(false);
+    }
+  }, [showSelectMessageCheckbox]);
+
+  // Sincroniza com a lista de mensagens selecionadas
+  useEffect(() => {
+    const isInList = selectedMessages.some((m) => m.id === message.id);
+    setIsChecked(isInList);
+  }, [selectedMessages, message.id]);
+
   const handleSelectMessage = (e) => {
     e.stopPropagation();
     const list = [...selectedMessages];
-    if (!isChecked) {
-      setIsChecked(true);
+    const newChecked = !isChecked;
+    
+    if (newChecked) {
       list.push(message);
     } else {
       const index = list.findIndex((m) => m.id === message.id);
       if (index > -1) {
         list.splice(index, 1);
       }
-      setIsChecked(false);
     }
+    setIsChecked(newChecked);
     setSelectedMessages(list);
+    
+    // Notifica o componente pai sobre a mudança de seleção
+    if (onSelectionChange) {
+      onSelectionChange(newChecked);
+    }
   };
 
   if (showSelectMessageCheckbox) {
     return (
-      <div className={classes.checkboxContainer} onClick={handleSelectMessage}>
+      <div onClick={handleSelectMessage} style={{ cursor: 'pointer' }}>
         <div className={isChecked ? classes.customCheckboxChecked : classes.customCheckbox}>
           {isChecked && <span className={classes.checkIcon}>✓</span>}
         </div>
@@ -82,4 +94,5 @@ const SelectMessageCheckbox = ({ message }) => {
   }
 };
 
+export { SelectMessageCheckbox };
 export default SelectMessageCheckbox;

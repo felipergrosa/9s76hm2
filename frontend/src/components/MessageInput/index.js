@@ -144,6 +144,7 @@ const useStyles = makeStyles((theme) => ({
     backgroundImage: ((theme.palette.mode || theme.palette.type) === 'light') ? `url(${whatsBackground})` : `url(${whatsBackgroundDark})`,
     
     display: "flex",
+    flexDirection: "column",
     borderRadius: 0,
     //flex: 1,
     position: "relative",
