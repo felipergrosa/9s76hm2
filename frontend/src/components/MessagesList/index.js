@@ -46,6 +46,7 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import { QueueSelectedContext } from "../../context/QueuesSelected/QueuesSelectedContext";
 import AudioModal from "../AudioModal";
 import AdMetaPreview from "../AdMetaPreview";
+import ButtonsPreview from "../ButtonsPreview";
 // import PdfModal from "../PdfModal";
 // import LinkPreview from "../LinkPreview";
 
@@ -1609,6 +1610,37 @@ const MessagesList = ({
     return xmlString;
   };
 
+  // Verifica se a mensagem tem botões no dataJson
+  const hasButtonsInDataJson = (message) => {
+    if (!message?.dataJson) return false;
+    try {
+      const data = typeof message.dataJson === "string" 
+        ? JSON.parse(message.dataJson) 
+        : message.dataJson;
+      return !!(
+        data?.message?.buttonsMessage?.buttons?.length ||
+        data?.message?.interactiveMessage?.nativeFlowMessage?.buttons?.length ||
+        data?.message?.viewOnceMessage?.message?.interactiveMessage?.nativeFlowMessage?.buttons?.length ||
+        data?.message?.listMessage?.sections?.length
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  // Limpa o corpo da mensagem removendo marcadores de botão quando há botões visuais
+  const cleanButtonMarkers = (body, message) => {
+    if (!hasButtonsInDataJson(message)) return body;
+    // Remove [BUTTON], [BOTOES], [LIST] e linhas numeradas de opções
+    let cleaned = (body || "")
+      .replace(/^\[BUTTON\]\s*/i, "")
+      .replace(/^\[BOTOES\]\s*/i, "")
+      .replace(/^\[LIST\]\s*/i, "")
+      .replace(/\n\*?\d+\*?\s*-\s*[^\n]+/g, "") // Remove linhas tipo "1 - Opção"
+      .trim();
+    return cleaned;
+  };
+
   const renderMessages = () => {
     if (!messagesList || messagesList.length === 0) {
       return <div>Diga olá para seu novo contato!</div>;
@@ -1689,8 +1721,11 @@ const MessagesList = ({
                     message.mediaType !== "contactMessage" &&
                     !(message.mediaType === "application" && /\.pdf($|\?)/i.test(message.mediaUrl || "") && (getFileNameFromUrl(message.mediaUrl) || "").trim() === (message.body || "").trim())
                   )
-                ) && (xmlRegex.test(message.body) ? <span>{formatXml(message.body)}</span> : <MarkdownWrapper>{(lgpdDeleteMessage && message.isDeleted) ? "🚫 _Mensagem apagada_ " : message.body}</MarkdownWrapper>)
+                ) && (xmlRegex.test(message.body) ? <span>{formatXml(cleanButtonMarkers(message.body, message))}</span> : <MarkdownWrapper>{(lgpdDeleteMessage && message.isDeleted) ? "🚫 _Mensagem apagada_ " : cleanButtonMarkers(message.body, message)}</MarkdownWrapper>)
               )}
+
+              {/* Renderiza botões interativos se houver dataJson com botões */}
+              <ButtonsPreview message={message} />
 
               {message.mediaType === "audio" && (
                 <span className={classes.audioDuration}>

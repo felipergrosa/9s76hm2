@@ -758,6 +758,11 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
         })
       );
     } else {
+      // Se não há conteúdo para enviar, apenas retorna sucesso (ex: marcar como lido)
+      if (!body && !vCard) {
+        return res.json({ message: "ok" });
+      }
+
       if (ticket.channel === "whatsapp" && isPrivate === "false") {
         // Enviar mensagem
         const sentMessage = await SendWhatsAppMessageUnified({ body, ticket, quotedMsg, vCard });
