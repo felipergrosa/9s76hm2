@@ -297,41 +297,51 @@ const useStyles = makeStyles((theme) => ({
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 8,
-    paddingLeft: 73,
-    paddingRight: 7,
-    backgroundColor: theme.palette.optionsBackground,
+    padding: "8px 12px",
+    backgroundColor: theme.mode === "light" ? "#ffffff" : "#1f2c34",
+    borderTop: theme.mode === "light" ? "1px solid #e9edef" : "1px solid #2a3942",
   },
   replyginMsgContainer: {
     flex: 1,
-    marginRight: 5,
+    marginRight: 8,
     overflowY: "hidden",
-    backgroundColor: theme.mode === "light" ? "#f0f0f0" : "#1d282f", //"rgba(0, 0, 0, 0.05)",
-    borderRadius: "7.5px",
+    backgroundColor: theme.mode === "light" ? "#f0f2f5" : "#1d282f",
+    borderRadius: "8px",
     display: "flex",
     position: "relative",
+    maxHeight: 66,
+    overflow: "hidden",
   },
   replyginMsgBody: {
-    padding: 10,
+    padding: "8px 12px",
     height: "auto",
-    display: "block",
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
     whiteSpace: "pre-wrap",
     overflow: "hidden",
+    fontSize: 13,
+    color: theme.mode === "light" ? "#667781" : "#8696a0",
+    lineHeight: 1.4,
   },
   replyginContactMsgSideColor: {
     flex: "none",
     width: "4px",
-    backgroundColor: "#35cd96",
+    borderRadius: "4px 0 0 4px",
+    backgroundColor: "#00a884",
   },
   replyginSelfMsgSideColor: {
     flex: "none",
     width: "4px",
-    backgroundColor: "#6bcbef",
+    borderRadius: "4px 0 0 4px",
+    backgroundColor: "#53bdeb",
   },
   messageContactName: {
     display: "flex",
-    color: "#6bcbef",
-    fontWeight: 500,
+    color: "#00a884",
+    fontWeight: 600,
+    fontSize: 13,
+    marginBottom: 2,
   },
   messageQuickAnswersWrapper: {
     margin: 0,
@@ -452,6 +462,41 @@ const useStyles = makeStyles((theme) => ({
   },
   flexItem: {
     flex: 1,
+  },
+  // Barra de seleção de mensagens (novo estilo WhatsApp)
+  selectionBar: {
+    display: "flex",
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "12px 16px",
+    backgroundColor: theme.mode === "light" ? "#ffffff" : "#1f2c34",
+    borderTop: theme.mode === "light" ? "1px solid #e9edef" : "1px solid #2a3942",
+  },
+  selectionBarLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+  },
+  selectionBarCount: {
+    fontSize: 15,
+    color: theme.mode === "light" ? "#3b4a54" : "#e9edef",
+    fontWeight: 400,
+  },
+  selectionBarCloseIcon: {
+    color: theme.mode === "light" ? "#54656f" : "#aebac1",
+    cursor: "pointer",
+    "&:hover": {
+      color: theme.mode === "light" ? "#3b4a54" : "#e9edef",
+    },
+  },
+  selectionBarForwardIcon: {
+    color: theme.mode === "light" ? "#54656f" : "#aebac1",
+    cursor: "pointer",
+    transform: "scaleX(-1)",
+    "&:hover": {
+      color: theme.mode === "light" ? "#3b4a54" : "#e9edef",
+    },
   },
 }));
 
@@ -699,7 +744,9 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   const {
     selectedMessages,
     setForwardMessageModalOpen,
-    showSelectMessageCheckbox } = useContext(ForwardMessageContext);
+    showSelectMessageCheckbox,
+    setShowSelectMessageCheckbox,
+    setSelectedMessages } = useContext(ForwardMessageContext);
 
   useEffect(() => {
     if (droppedFiles && droppedFiles.length > 0) {
@@ -922,6 +969,11 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
     }
     setForwardMessageModalOpen(true);
   }
+
+  const handleCancelMessageSelection = () => {
+    setShowSelectMessageCheckbox(false);
+    setSelectedMessages([]);
+  };
 
   const getStatusSingMessageLocalstogare = () => {
     const signMessageStorage = JSON.parse(
@@ -1364,8 +1416,28 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
           className={classes.messageInputWrapper}
           onDrop={(e) => handleInputDrop(e)}
         >
-          {(replyingMessage && renderReplyingMessage(replyingMessage)) || (editingMessage && renderReplyingMessage(editingMessage))}
-          <div className={classes.newMessageBox}>
+          {/* Barra de seleção de mensagens (novo estilo WhatsApp) */}
+          {showSelectMessageCheckbox && (
+            <div className={classes.selectionBar}>
+              <div className={classes.selectionBarLeft}>
+                <X 
+                  size={20} 
+                  className={classes.selectionBarCloseIcon} 
+                  onClick={handleCancelMessageSelection}
+                />
+                <span className={classes.selectionBarCount}>
+                  {selectedMessages.length} selecionada{selectedMessages.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <ReplyIcon 
+                size={22} 
+                className={classes.selectionBarForwardIcon} 
+                onClick={handleOpenModalForward}
+              />
+            </div>
+          )}
+          {!showSelectMessageCheckbox && (replyingMessage && renderReplyingMessage(replyingMessage)) || (editingMessage && renderReplyingMessage(editingMessage))}
+          <div className={classes.newMessageBox} style={{ display: showSelectMessageCheckbox ? 'none' : 'flex' }}>
             <Hidden only={["sm", "xs"]}>
               <IconButton
                 aria-label="emojiPicker"
