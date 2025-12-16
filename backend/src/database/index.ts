@@ -65,6 +65,7 @@ import AIAgent from "../models/AIAgent";
 import FunnelStage from "../models/FunnelStage";
 import AITrainingFeedback from "../models/AITrainingFeedback";
 import AITrainingImprovement from "../models/AITrainingImprovement";
+import ContactReleaseRequest from "../models/ContactReleaseRequest";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -209,7 +210,8 @@ const models = [
   AIAgent,
   FunnelStage,
   AITrainingFeedback,
-  AITrainingImprovement
+  AITrainingImprovement,
+  ContactReleaseRequest
 ];
 
 sequelize.addModels(models);

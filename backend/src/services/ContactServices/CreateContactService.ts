@@ -4,9 +4,15 @@ import Contact from "../../models/Contact";
 import ContactCustomField from "../../models/ContactCustomField";
 import logger from "../../utils/logger";
 import ContactWallet from "../../models/ContactWallet";
+import { Op, literal } from "sequelize";
+import User from "../../models/User";
+import Tag from "../../models/Tag";
+import ContactTag from "../../models/ContactTag";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 import DispatchContactWebhookService from "./DispatchContactWebhookService";
+import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
+import CreateContactReleaseRequestService from "./CreateContactReleaseRequestService";
 
 interface ExtraInfo extends ContactCustomField {
   name: string;
@@ -159,6 +165,114 @@ const CreateContactService = async ({
   const existingContact = await Contact.findOne({
     where: { companyId, canonicalNumber: canonical }
   });
+
+  const cleanCpfCnpj = typeof cpfCnpj === "string" ? cpfCnpj.replace(/\D/g, "") : null;
+  const existingByCpfCnpj = cleanCpfCnpj
+    ? await Contact.findOne({
+      where: {
+        companyId,
+        cpfCnpj: cleanCpfCnpj,
+        ...(existingContact?.id ? { id: { [Op.ne]: existingContact.id } } : {})
+      }
+    })
+    : null;
+
+  const existingLocked = existingContact || existingByCpfCnpj;
+
+  const canUserSeeContact = async (contactId: number, uid: number): Promise<boolean> => {
+    const user = await User.findByPk(uid, {
+      attributes: ["id", "profile", "allowedContactTags"]
+    });
+    if (!user) return false;
+
+    // Admin sem restrição normalmente vê tudo; porém o modo exclude é tratado abaixo via GetUserWalletContactIds
+    if (user.profile === "admin") {
+      const walletResult = await GetUserWalletContactIds(uid, companyId);
+      if (Array.isArray(walletResult.excludedUserIds) && walletResult.excludedUserIds.length > 0) {
+        // Se o contato estiver na carteira de algum usuário bloqueado, admin não deve ver.
+        const blockedUsers = await User.findAll({
+          where: { id: { [Op.in]: walletResult.excludedUserIds } },
+          attributes: ["id", "allowedContactTags"]
+        });
+
+        const blockedTagIdsRaw: number[] = [];
+        for (const bu of blockedUsers) {
+          const ids = Array.isArray((bu as any).allowedContactTags) ? ((bu as any).allowedContactTags as number[]) : [];
+          blockedTagIdsRaw.push(...ids);
+        }
+
+        if (blockedTagIdsRaw.length > 0) {
+          const blockedPersonalTags = await Tag.findAll({
+            where: {
+              id: { [Op.in]: blockedTagIdsRaw },
+              companyId,
+              name: {
+                [Op.and]: [{ [Op.like]: "#%" }, { [Op.notLike]: "##%" }]
+              }
+            },
+            attributes: ["id"]
+          });
+          const blockedPersonalTagIds = blockedPersonalTags.map(t => t.id);
+          if (blockedPersonalTagIds.length > 0) {
+            const blocked = await ContactTag.findOne({
+              where: { contactId, tagId: { [Op.in]: blockedPersonalTagIds } }
+            });
+            if (blocked) return false;
+          }
+        }
+      }
+
+      return true;
+    }
+
+    // 1) Carteira (include): se houver restrição, contato deve estar no conjunto permitido
+    const walletResult = await GetUserWalletContactIds(uid, companyId);
+    if (walletResult.hasWalletRestriction) {
+      const allowedIds = walletResult.contactIds || [];
+      if (!allowedIds.includes(contactId)) return false;
+    }
+
+    // 2) allowedContactTags: se configurado, contato deve ter ao menos uma
+    const allowedTagIds = Array.isArray((user as any).allowedContactTags)
+      ? ((user as any).allowedContactTags as number[])
+      : [];
+    if (allowedTagIds.length > 0) {
+      const hasAnyAllowed = await ContactTag.findOne({
+        where: {
+          contactId,
+          tagId: { [Op.in]: allowedTagIds }
+        }
+      });
+      if (!hasAnyAllowed) return false;
+    }
+
+    return true;
+  };
+
+  // Se já existe (por número ou cpf/cnpj) e quem está tentando criar não pode ver,
+  // bloqueia com mensagem amigável para solicitar liberação.
+  if (existingLocked && userId) {
+    const uid = Number(userId);
+    if (Number.isInteger(uid)) {
+      const canSee = await canUserSeeContact(existingLocked.id, uid);
+      if (!canSee) {
+        try {
+          await CreateContactReleaseRequestService({
+            companyId,
+            contactId: existingLocked.id,
+            requesterId: uid,
+            reason: "Contato já cadastrado, porém não está liberado para sua carteira."
+          });
+        } catch (e: any) {
+          logger.warn(`[CreateContactService] Falha ao criar solicitação de liberação: ${e?.message}`);
+        }
+        throw new AppError(
+          "Contato já cadastrado, porém não está liberado para sua carteira. Solicite a liberação para um administrador.",
+          403
+        );
+      }
+    }
+  }
 
   // Validação de CPF/CNPJ
   if (cpfCnpj) {

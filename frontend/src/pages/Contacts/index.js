@@ -425,6 +425,26 @@ const Contacts = () => {
         setSegmentFilter(arr);
     }, [location.search]);
 
+    // Deep-link: abrir modal de contato via querystring (?openContactId=123)
+    useEffect(() => {
+        try {
+            const params = new URLSearchParams(location.search || "");
+            const raw = params.get("openContactId");
+            const id = raw ? Number(raw) : NaN;
+            if (Number.isInteger(id) && id > 0) {
+                setSelectedContactId(id);
+                setContactModalOpen(true);
+
+                // Remove o parâmetro para não reabrir em refresh/navegação
+                params.delete("openContactId");
+                history.replace({
+                    pathname: location.pathname,
+                    search: params.toString() ? `?${params.toString()}` : ""
+                });
+            }
+        } catch (_) { /* ignore */ }
+    }, [location.pathname, location.search, history]);
+
     useEffect(() => {
         // Só reseta a lista quando mudar de página ou de itens por página
         const shouldReset = prevPageRef.current !== pageNumber || prevLimitRef.current !== contactsPerPage;
