@@ -1,11 +1,9 @@
-import fs from 'fs';
-import path from 'path';
-import FormData from 'form-data';
-import axios from 'axios';
-import Setting from '../../models/Setting';
-import CompaniesSettings from '../../models/CompaniesSettings';
-import AIAgent from '../../models/AIAgent';
-import Ticket from '../../models/Ticket';
+import fs from "fs";
+import path from "path";
+import Ticket from "../../models/Ticket";
+import Queue from "../../models/Queue";
+import ResolveAIIntegrationService from "../IA/ResolveAIIntegrationService";
+import IAClientFactory from "../IA/IAClientFactory";
 
 interface Response {
   transcribedText: string;
@@ -21,104 +19,87 @@ class TranscribeAudioMessageService {
       return { error: 'companyId é obrigatório e deve ser um número.' };
     }
 
-    // Construção e verificação do caminho do arquivo
-    const publicFolder = path.resolve(__dirname, '..', '..', '..', 'public');
-    const filePath = `${publicFolder}/company${companyId}/${fileName}`;
+    const decoded = (() => {
+      try {
+        return decodeURIComponent(fileName);
+      } catch {
+        return fileName;
+      }
+    })();
 
-    if (!fs.existsSync(filePath)) {
-      console.error(`Arquivo não encontrado: ${filePath}`);
-      return { error: 'Arquivo não encontrado' };
-    }
+    // Construção e verificação do caminho do arquivo (suporta formatos novos e antigos)
+    const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
+    const companyFolder = path.resolve(publicFolder, `company${companyId}`);
+    const safeRel = decoded
+      .split("?")[0]
+      .split("#")[0]
+      .replace(/\\/g, "/")
+      .replace(/^\/+/, "");
 
-    // Buscar provedor STT do AI Agent (se ticketId fornecido)
-    let transcriptionProvider: string = 'disabled';
-    let apiKey: string | undefined;
+    const candidates: string[] = [];
+    let ticket: Ticket | null = null;
 
     if (ticketId) {
-      const ticket = await Ticket.findByPk(ticketId);
-      if (ticket && ticket.queueId) {
-        // Buscar AI Agent pela fila
-        const agent = await AIAgent.findOne({
-          where: { companyId },
-          // Verifica se a fila do ticket está no queueIds do agente
+      ticket = await Ticket.findByPk(ticketId, { attributes: ["id", "queueId", "whatsappId", "contactId"] });
+      // Toggle por fila: se desabilitado, não transcreve
+      if (ticket?.queueId) {
+        const q = await Queue.findByPk(ticket.queueId, { attributes: ["id", "sttEnabled"] });
+        if (q && (q as any).sttEnabled === false) {
+          return { error: "Transcrição de áudio desabilitada para esta fila" };
+        }
+      }
+      if (ticket?.contactId) {
+        candidates.push(path.resolve(companyFolder, `contact${ticket.contactId}`, path.basename(safeRel)));
+      }
+    }
+
+    // Se vier com subpasta (ex: contact1676/arquivo.ogg), respeita
+    if (safeRel.includes("/")) {
+      candidates.push(path.resolve(companyFolder, safeRel));
+    }
+
+    // Fallback legado: companyX/arquivo
+    candidates.push(path.resolve(companyFolder, path.basename(safeRel)));
+
+    const filePath = candidates.find(p => fs.existsSync(p));
+    if (!filePath) {
+      try {
+        console.error(`[STT] Arquivo não encontrado (companyId=${companyId}, ticketId=${ticketId})`, {
+          fileName: decoded,
+          candidates
         });
-
-        if (agent && agent.sttProvider && agent.sttProvider !== 'disabled') {
-          transcriptionProvider = agent.sttProvider;
-          console.log(`[STT] Usando provedor do AI Agent: ${transcriptionProvider}`);
-        }
-      }
+      } catch {}
+      return { error: "Arquivo não encontrado" };
     }
 
-    // Fallback: buscar de Settings (legacy)
-    if (transcriptionProvider === 'disabled') {
-      console.log('[STT] AI Agent não configurado, tentando Settings (legacy)');
-      const transcriptionSetting = await Setting.findOne({
-        where: { key: 'apiTranscription', companyId },
-      });
-      apiKey = transcriptionSetting?.value;
+    // Resolver provedor/chave no mesmo lugar do orquestrador (1 chave em 1 lugar)
+    const integration = await ResolveAIIntegrationService({
+      companyId,
+      queueId: ticket?.queueId || null,
+      whatsappId: (ticket as any)?.whatsappId || null,
+      preferProvider: "openai"
+    });
 
-      if (apiKey) {
-        // Detectar provedor pela chave
-        if (apiKey.startsWith('sk-')) {
-          transcriptionProvider = 'openai';
-        } else if (apiKey.startsWith('AIzaSy')) {
-          transcriptionProvider = 'gemini';
-        }
-      }
+    if (!integration?.config?.apiKey) {
+      return { error: "Chave da IA não configurada (OpenAI). Configure a integração de IA da empresa/fila." };
     }
-
-    // Buscar chave do provedor nas configurações globais
-    if (transcriptionProvider === 'openai' || transcriptionProvider === 'gemini') {
-      const providerSetting = await CompaniesSettings.findOne({
-        where: { companyId },
-      });
-      
-      if (providerSetting) {
-        apiKey = transcriptionProvider === 'openai' 
-          ? providerSetting.openaiApiKey 
-          : undefined; // Gemini ainda não implementado em CompaniesSettings
-      }
-    }
-
-    if (!apiKey) {
-      console.error(`[STT] Chave da API não encontrada para provedor: ${transcriptionProvider}, companyId: ${companyId}`);
-      return { error: 'Chave da API não configurada' };
-    }
-
-    console.log(`[STT] Transcrevendo com provedor: ${transcriptionProvider}`);
 
     try {
-      const audioFile = fs.createReadStream(filePath);
+      const client = IAClientFactory(integration.provider, integration.config.apiKey);
 
-      if (transcriptionProvider === 'openai') {
-        // Configuração para a API da OpenAI
-        const form = new FormData();
-        form.append('file', audioFile);
-        form.append('model', 'whisper-1');
-        form.append('response_format', 'text');
-        form.append('language', 'pt');
-
-        const response = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
-          headers: {
-            ...form.getHeaders(),
-            Authorization: `Bearer ${apiKey}`,
-          },
-        });
-
-        return { transcribedText: response.data };
-      } else if (transcriptionProvider === 'gemini') {
-        // Gemini não tem API dedicada de transcrição ainda
-        // Como workaround, usar OpenAI Whisper se disponível
-        console.warn('[STT] Gemini não suporta transcrição de áudio diretamente. Use OpenAI.');
-        return { error: 'Gemini não suporta transcrição de áudio. Use OpenAI Whisper.' };
-      } else {
-        console.error(`Provedor de transcrição desconhecido: ${transcriptionProvider} para companyId: ${companyId}`);
-        return { error: 'Provedor de transcrição inválido' };
+      if (!client.transcribe) {
+        return { error: `Provedor de IA não suporta transcrição: ${String(integration.provider)}` };
       }
+
+      const model = integration.provider === "openai"
+        ? (integration.config.sttModel || "whisper-1")
+        : (integration.config.sttModel || integration.config.model || "gemini-2.0-pro");
+
+      const transcribed = await client.transcribe({ filePath, model });
+      return { transcribedText: transcribed };
     } catch (error: any) {
-      console.error(`[STT] Erro ao transcrever áudio para fileName: ${fileName}, companyId: ${companyId}`, error.message);
-      return { error: `Conversão para texto falhou: ${error.message}` };
+      console.error(`[STT] Erro ao transcrever áudio (companyId=${companyId}, ticketId=${ticketId})`, error?.message);
+      return { error: `Conversão para texto falhou: ${error?.message || String(error)}` };
     }
   }
 }

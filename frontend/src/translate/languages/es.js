@@ -497,6 +497,7 @@ const messages = {
           integrationId: "Integración",
           fileListId: "Lista de archivos",
           closeTicket: "Cerrar ticket",
+          sttEnabled: "Transcribir audio",
           queueType: "Tipo de menú",
           message: "Mensaje de retorno",
           queue: "Cola para transferencia",

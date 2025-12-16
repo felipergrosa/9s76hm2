@@ -20,6 +20,7 @@ interface QueueData {
   integrationId?: number;
   fileListId?: number;
   closeTicket?: boolean;
+  sttEnabled?: boolean;
   autoSendStrategy?: "none" | "on_enter" | "on_request" | "manual";
   confirmationTemplate?: string;
   maxFilesPerSession?: number;

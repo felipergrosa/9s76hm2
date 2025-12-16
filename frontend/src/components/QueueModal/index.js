@@ -174,6 +174,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
     integrationId: "",
     fileListId: "",
     closeTicket: false,
+    sttEnabled: true,
     autoSendStrategy: "none",
     confirmationTemplate: "",
     maxFilesPerSession: 3,
@@ -279,6 +280,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
           ...data,
           orderQueue: data.orderQueue || 1,
           tempoRoteador: data.tempoRoteador || 0,
+          sttEnabled: data.sttEnabled !== undefined ? data.sttEnabled : true,
           maxFilesPerSession: data.maxFilesPerSession || 3,
           autoSendStrategy: data.autoSendStrategy || "none",
           confirmationTemplate: data.confirmationTemplate || "",
@@ -522,7 +524,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                           as={Select}
                           label="Arquivos"
                           name="folderId"
-                                                    value={values.folderId || ""}
+                          value={values.folderId || ""}
                           onChange={(e) => {
                             setFieldValue("folderId", e.target.value);
                             setFieldValue("fileListId", null); // Limpa fileListId ao selecionar pasta
@@ -721,6 +723,20 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                           />
                         }
                         label={i18n.t("queueModal.form.closeTicket")}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} md={4}>
+                      <FormControlLabel
+                        control={
+                          <Field
+                            as={Switch}
+                            color="primary"
+                            name="sttEnabled"
+                            checked={values.sttEnabled}
+                          />
+                        }
+                        label={i18n.t("queueModal.form.sttEnabled")}
                       />
                     </Grid>
 

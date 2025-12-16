@@ -121,6 +121,10 @@ class Queue extends Model<Queue> {
   @Column
   closeTicket: boolean;
 
+  @Default(true)
+  @Column
+  sttEnabled: boolean;
+
   // Novos campos para controle inteligente de arquivos
   @Default("none")
   @Column(DataType.ENUM("none", "on_enter", "on_request", "manual"))

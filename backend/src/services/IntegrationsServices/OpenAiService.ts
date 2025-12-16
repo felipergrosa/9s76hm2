@@ -1039,25 +1039,84 @@ export const handleOpenAi = async (
     const messagesAI = prepareMessagesAI(messages, isGeminiModel, promptSystem);
 
     try {
-      // Construir caminho do arquivo de áudio
-      // mediaSent.mediaUrl pode ser:
-      // - Baileys: "filename.ogg" (só o nome)
-      // - API Oficial: "contact1676/filename.ogg" (com subpasta)
-      let audioFilePath: string;
-      
-      if (mediaSent.mediaUrl?.includes("/")) {
-        // API Oficial: mediaUrl já tem o caminho relativo completo
-        audioFilePath = `${publicFolder}/${mediaSent.mediaUrl}`;
-      } else {
-        // Baileys: só o nome do arquivo
-        const mediaUrl = mediaSent.mediaUrl!.split("/").pop();
-        audioFilePath = `${publicFolder}/${mediaUrl}`;
+      // Toggle por fila: se desabilitado, não transcreve áudio
+      try {
+        if (ticket.queueId) {
+          const q = await Queue.findByPk(ticket.queueId, { attributes: ["id", "sttEnabled"] });
+          if (q && (q as any).sttEnabled === false) {
+            const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+              text: "Recebi seu áudio, mas a transcrição está desabilitada nesta fila. Por favor, envie sua mensagem por texto.",
+            });
+            const isOfficial = (wbot as any)?.channelType === "official" || (wbot as any)?.isOfficial;
+            if (!isOfficial) {
+              await verifyMessage(sentMessage!, ticket, contact);
+            }
+            return;
+          }
+        }
+      } catch { }
+
+      // Resolver caminho do arquivo de áudio no disco.
+      // IMPORTANTE: mediaSent.mediaUrl (getter) pode virar URL absoluta.
+      // Para resolver no filesystem, preferimos o valor bruto do DB (relativo), quando disponível.
+      const rawMediaUrl: string = (() => {
+        try {
+          const anyMsg: any = mediaSent as any;
+          const raw = typeof anyMsg?.getDataValue === "function" ? anyMsg.getDataValue("mediaUrl") : null;
+          return String(raw || anyMsg?.mediaUrl || "");
+        } catch {
+          return String((mediaSent as any)?.mediaUrl || "");
+        }
+      })();
+
+      const safeRel = (() => {
+        let rel = rawMediaUrl;
+        // Se vier URL absoluta, extrai o pathname
+        if (/^https?:\/\//i.test(rel)) {
+          try {
+            rel = new URL(rel).pathname;
+          } catch {
+            // mantém rel
+          }
+        }
+        rel = rel
+          .split("?")[0]
+          .split("#")[0]
+          .replace(/\\/g, "/")
+          .replace(/^\/+/, "");
+
+        // Se contiver /public/companyX/, corta a base
+        const marker = `public/company${ticket.companyId}/`;
+        const idx = rel.indexOf(marker);
+        if (idx >= 0) {
+          rel = rel.slice(idx + marker.length);
+        }
+        return rel;
+      })();
+
+      const candidates: string[] = [];
+      // Formato novo padrão do projeto: companyX/contactY/arquivo
+      if (ticket.contactId) {
+        candidates.push(path.resolve(publicFolder, `contact${ticket.contactId}`, path.basename(safeRel)));
       }
+      // Se vier com subpasta (ex: contact1676/arquivo.ogg), respeita
+      if (safeRel.includes("/")) {
+        candidates.push(path.resolve(publicFolder, safeRel));
+      }
+      // Fallback legado: companyX/arquivo
+      candidates.push(path.resolve(publicFolder, path.basename(safeRel)));
 
-      console.log(`[STT] Tentando processar áudio: ${audioFilePath}`);
+      const audioFilePath = candidates.find(p => fs.existsSync(p));
 
-      if (!fs.existsSync(audioFilePath)) {
-        console.error(`[STT] Arquivo de áudio não encontrado: ${audioFilePath}`);
+      console.log(`[STT] Tentando processar áudio: ${audioFilePath || "(não encontrado)"}`);
+
+      if (!audioFilePath) {
+        console.error(`[STT] Arquivo de áudio não encontrado`, {
+          companyId: ticket.companyId,
+          ticketId: ticket.id,
+          rawMediaUrl,
+          candidates
+        });
         const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
           text: "Desculpe, não consegui processar seu áudio. Poderia enviar sua mensagem por texto?",
         });

@@ -44,6 +44,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     fileListId,
     folderId,  // ID da pasta do File Manager
     closeTicket,
+    sttEnabled,
     autoSendStrategy,
     confirmationTemplate,
     maxFilesPerSession,
@@ -66,6 +67,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     fileListId: fileListId === "" ? null : fileListId,
     folderId: folderId === "" ? null : folderId,  // Converter string vazia em null
     closeTicket,
+    sttEnabled,
     autoSendStrategy: autoSendStrategy || "none",
     confirmationTemplate: confirmationTemplate || null,
     maxFilesPerSession: maxFilesPerSession || 3,
@@ -112,6 +114,7 @@ export const update = async (
     fileListId,
     folderId,  // ID da pasta do File Manager
     closeTicket,
+    sttEnabled,
     autoSendStrategy,
     confirmationTemplate,
     maxFilesPerSession,
@@ -133,6 +136,7 @@ export const update = async (
       fileListId: fileListId === "" ? null : fileListId,
       folderId: folderId === "" ? null : folderId,  // Converter string vazia em null
       closeTicket,
+      sttEnabled,
       autoSendStrategy: autoSendStrategy || "none",
       confirmationTemplate: confirmationTemplate || null,
       maxFilesPerSession: maxFilesPerSession || 3,
