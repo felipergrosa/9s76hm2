@@ -692,71 +692,76 @@ const UserModal = ({ open, onClose, userId }) => {
                           </Grid>
 
                           {/* Usuários gerenciados - para supervisores verem carteiras de outros usuários */}
-                          <Divider style={{ marginTop: 16, marginBottom: 16 }} />
-                          <Typography variant="subtitle2" style={{ marginBottom: 8 }}>
-                            {i18n.t("userModal.form.managedUsers") || "Usuários Gerenciados (Supervisor)"}
-                          </Typography>
-                          <Typography variant="caption" color="textSecondary" style={{ marginBottom: 8, display: 'block' }}>
-                            {values.supervisorViewMode === "include"
-                              ? "Selecione os usuários cujas carteiras este usuário poderá visualizar. Deixe vazio para ver todos como admin normal."
-                              : "Selecione os usuários cujas carteiras este usuário NÃO poderá visualizar. Verá todos os outros."}
-                          </Typography>
-                          <Grid container spacing={1}>
-                            <Grid item xs={12}>
-                              <FormControl variant="outlined" margin="dense" fullWidth>
-                                <InputLabel>Modo de visualização</InputLabel>
-                                <Field
-                                  as={Select}
-                                  name="supervisorViewMode"
-                                  label="Modo de visualização"
-                                >
-                                  <MenuItem value="include">Sim - Ver apenas os selecionados</MenuItem>
-                                  <MenuItem value="exclude">Não - Ver todos exceto os selecionados</MenuItem>
-                                </Field>
-                              </FormControl>
-                            </Grid>
-                            <Grid item xs={12}>
-                              <Field name="managedUserIds">
-                                {({ field, form }) => {
-                                  const selectedIds = field.value || [];
-                                  // Filtra para não mostrar o próprio usuário sendo editado
-                                  const availableUsers = allUsers.filter(u => u.id !== userId);
-                                  const selectedObjects = availableUsers.filter(u => selectedIds.includes(u.id));
-                                  return (
-                                    <Autocomplete
-                                      multiple
-                                      options={availableUsers}
-                                      value={selectedObjects}
-                                      getOptionLabel={(option) => option?.name || ""}
-                                      onChange={(e, value) => form.setFieldValue("managedUserIds", (value || []).map(v => v.id))}
-                                      loading={usersLoading}
-                                      filterSelectedOptions
-                                      renderTags={(value, getTagProps) =>
-                                        value.map((option, index) => (
-                                          <Chip
-                                            {...getTagProps({ index })}
-                                            key={option.id}
-                                            label={option.name}
-                                            style={{ backgroundColor: values.supervisorViewMode === "include" ? "#3f51b5" : "#f44336", color: "#fff" }}
-                                          />
-                                        ))
-                                      }
-                                      renderInput={(params) => (
-                                        <TextField
-                                          {...params}
-                                          variant="outlined"
-                                          margin="dense"
-                                          label={values.supervisorViewMode === "include" ? "Usuários que posso ver" : "Usuários que NÃO posso ver"}
-                                          fullWidth
-                                          InputLabelProps={{ shrink: true }}
+                          {/* Apenas superadmin pode ver esta opção */}
+                          {loggedInUser.super && (
+                            <>
+                              <Divider style={{ marginTop: 16, marginBottom: 16 }} />
+                              <Typography variant="subtitle2" style={{ marginBottom: 8 }}>
+                                {i18n.t("userModal.form.managedUsers") || "Usuários Gerenciados (Supervisor)"}
+                              </Typography>
+                              <Typography variant="caption" color="textSecondary" style={{ marginBottom: 8, display: 'block' }}>
+                                {values.supervisorViewMode === "include"
+                                  ? "Selecione os usuários cujas carteiras este usuário poderá visualizar. Deixe vazio para ver todos como admin normal."
+                                  : "Selecione os usuários cujas carteiras este usuário NÃO poderá visualizar. Verá todos os outros."}
+                              </Typography>
+                              <Grid container spacing={1}>
+                                <Grid item xs={12}>
+                                  <FormControl variant="outlined" margin="dense" fullWidth>
+                                    <InputLabel>Modo de visualização</InputLabel>
+                                    <Field
+                                      as={Select}
+                                      name="supervisorViewMode"
+                                      label="Modo de visualização"
+                                    >
+                                      <MenuItem value="include">Sim - Ver apenas os selecionados</MenuItem>
+                                      <MenuItem value="exclude">Não - Ver todos exceto os selecionados</MenuItem>
+                                    </Field>
+                                  </FormControl>
+                                </Grid>
+                                <Grid item xs={12}>
+                                  <Field name="managedUserIds">
+                                    {({ field, form }) => {
+                                      const selectedIds = field.value || [];
+                                      // Filtra para não mostrar o próprio usuário sendo editado
+                                      const availableUsers = allUsers.filter(u => u.id !== userId);
+                                      const selectedObjects = availableUsers.filter(u => selectedIds.includes(u.id));
+                                      return (
+                                        <Autocomplete
+                                          multiple
+                                          options={availableUsers}
+                                          value={selectedObjects}
+                                          getOptionLabel={(option) => option?.name || ""}
+                                          onChange={(e, value) => form.setFieldValue("managedUserIds", (value || []).map(v => v.id))}
+                                          loading={usersLoading}
+                                          filterSelectedOptions
+                                          renderTags={(value, getTagProps) =>
+                                            value.map((option, index) => (
+                                              <Chip
+                                                {...getTagProps({ index })}
+                                                key={option.id}
+                                                label={option.name}
+                                                style={{ backgroundColor: values.supervisorViewMode === "include" ? "#3f51b5" : "#f44336", color: "#fff" }}
+                                              />
+                                            ))
+                                          }
+                                          renderInput={(params) => (
+                                            <TextField
+                                              {...params}
+                                              variant="outlined"
+                                              margin="dense"
+                                              label={values.supervisorViewMode === "include" ? "Usuários que posso ver" : "Usuários que NÃO posso ver"}
+                                              fullWidth
+                                              InputLabelProps={{ shrink: true }}
+                                            />
+                                          )}
                                         />
-                                      )}
-                                    />
-                                  );
-                                }}
-                              </Field>
-                            </Grid>
-                          </Grid>
+                                      );
+                                    }}
+                                  </Field>
+                                </Grid>
+                              </Grid>
+                            </>
+                          )}
                         </>
 
                       }
