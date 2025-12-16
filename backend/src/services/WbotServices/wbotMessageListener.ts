@@ -6,6 +6,7 @@ import * as Sentry from "@sentry/node";
 import { isNil, isNull } from "lodash";
 import { REDIS_URI_MSG_CONN } from "../../config/redis";
 import axios from "axios";
+import { fromPath } from "pdf2pic";
 
 import {
   downloadMediaMessage,
@@ -1119,11 +1120,31 @@ export const verifyMediaMessage = async (
                 });
             });
           }
+        })
+        .then(async () => {
+          // Gerar miniatura para PDFs
+          if (media.mimetype === "application/pdf") {
+            try {
+              const pdfPath = join(folder, media.filename);
+              const thumbName = media.filename.replace(/\.pdf$/i, "-thumb");
+              
+              const options = {
+                density: 100,
+                saveFilename: thumbName,
+                savePath: folder,
+                format: "png",
+                width: 200,
+                height: 280
+              };
+              
+              const convert = fromPath(pdfPath, options);
+              await convert(1); // Converte apenas a primeira página
+              logger.info(`PDF thumbnail generated: ${thumbName}.1.png`);
+            } catch (thumbErr) {
+              logger.warn(`Failed to generate PDF thumbnail: ${thumbErr}`);
+            }
+          }
         });
-      // .then(() => {
-      //   //console.log("Conversão concluída!");
-      //   // Aqui você pode fazer o que desejar com o arquivo MP3 convertido.
-      // })
     } catch (err) {
       Sentry.setExtra("Erro media", {
         companyId: companyId,

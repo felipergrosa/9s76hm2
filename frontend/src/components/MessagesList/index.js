@@ -29,6 +29,7 @@ import MarkdownWrapper from "../MarkdownWrapper";
 import VcardPreview from "../VcardPreview";
 import LocationPreview from "../LocationPreview";
 import ModalImageCors from "../ModalImageCors";
+import MediaModal from "../MediaModal";
 import MessageOptionsMenu from "../MessageOptionsMenu";
 import whatsBackground from "../../assets/wa-background.png";
 import whatsBackgroundDark from "../../assets/wa-background-dark.png";
@@ -451,9 +452,50 @@ const useStyles = makeStyles((theme) => ({
 
   // Classe específica para stickers/GIFs - tamanho pequeno fixo
   stickerMedia: {
-    objectFit: "cover",
-    maxWidth: "120px !important",
-    maxHeight: "120px !important",
+    objectFit: "contain",
+    maxWidth: "150px !important",
+    maxHeight: "150px !important",
+    backgroundColor: "transparent",
+  },
+  // Balão transparente para stickers (sem fundo)
+  messageStickerLeft: {
+    marginRight: 20,
+    marginTop: 2,
+    display: "block",
+    position: "relative",
+    alignSelf: "flex-start",
+    backgroundColor: "transparent !important",
+    boxShadow: "none !important",
+    padding: 0,
+    "&:hover #messageActionsButton": {
+      display: "flex",
+      position: "absolute",
+      top: 0,
+      right: 0,
+    },
+  },
+  messageStickerRight: {
+    marginLeft: 20,
+    marginTop: 2,
+    display: "block",
+    position: "relative",
+    alignSelf: "flex-end",
+    backgroundColor: "transparent !important",
+    boxShadow: "none !important",
+    padding: 0,
+    "&:hover #messageActionsButton": {
+      display: "flex",
+      position: "absolute",
+      top: 0,
+      right: 0,
+    },
+  },
+  stickerTimestamp: {
+    display: "block",
+    textAlign: "right",
+    fontSize: 11,
+    color: theme.mode === 'light' ? "#667781" : "#8696a0",
+    marginTop: 2,
     width: "auto !important",
     height: "auto !important",
     marginBottom: 12,
@@ -694,6 +736,36 @@ const MessagesList = ({
 
   const [videoDialog, setVideoDialog] = useState({ open: false, url: null });
   const [pdfDialog, setPdfDialog] = useState({ open: false, url: null });
+  
+  // Estado para o modal de mídia (estilo WhatsApp)
+  const [mediaModal, setMediaModal] = useState({ 
+    open: false, 
+    mediaUrl: null, 
+    mediaType: "image",
+    message: null 
+  });
+
+  // Função para obter todas as mídias (imagens e vídeos) da conversa
+  const getAllMediaFromConversation = useCallback(() => {
+    return messagesList
+      .filter(m => m.mediaType === "image" || m.mediaType === "video")
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  }, [messagesList]);
+
+  // Função para abrir o modal de mídia
+  const handleOpenMediaModal = useCallback((message) => {
+    setMediaModal({
+      open: true,
+      mediaUrl: message.mediaUrl,
+      mediaType: message.mediaType,
+      message: message
+    });
+  }, []);
+
+  // Função para fechar o modal de mídia
+  const handleCloseMediaModal = useCallback(() => {
+    setMediaModal({ open: false, mediaUrl: null, mediaType: "image", message: null });
+  }, []);
   
   // Estado para transcrições de áudio
   const [transcriptions, setTranscriptions] = useState({}); // { messageId: { loading, text, error } }
@@ -1232,19 +1304,12 @@ const MessagesList = ({
       let messageUser = "Olá! Tenho interesse e queria mais informações, por favor.";
       return <AdMetaPreview image={image} sourceUrl={sourceUrl} title={title} body={body} messageUser={messageUser} />;
     } else if (message.mediaType === "sticker" || message.mediaType === "gif") {
-      // Stickers e GIFs - exibir como imagem animada com tamanho reduzido
+      // Stickers e GIFs - exibir como imagem animada sem fundo
       return (
         <img
           src={message.mediaUrl}
-          alt="sticker"
+          alt=""
           className={classes.stickerMedia}
-          style={{
-            maxWidth: 150,
-            maxHeight: 150,
-            objectFit: "contain",
-            borderRadius: 8,
-            backgroundColor: "transparent"
-          }}
         />
       );
     } else if (message.mediaType === "reactionMessage") {
@@ -1255,7 +1320,14 @@ const MessagesList = ({
         </span>
       );
     } else if (message.mediaType === "image") {
-      return <ModalImageCors imageUrl={message.mediaUrl} />;
+      return (
+        <div 
+          style={{ cursor: "pointer" }} 
+          onClick={() => handleOpenMediaModal(message)}
+        >
+          <ModalImageCors imageUrl={message.mediaUrl} />
+        </div>
+      );
     } else if (message.mediaType === "audio") {
       const transcription = transcriptions[message.id];
       return (
@@ -1306,7 +1378,7 @@ const MessagesList = ({
       );
     } else if (message.mediaType === "video") {
       return (
-        <div onClick={(e) => { e.preventDefault(); setVideoDialog({ open: true, url: message.mediaUrl }); }} style={{ display: 'inline-block', cursor: 'pointer' }}>
+        <div onClick={(e) => { e.preventDefault(); handleOpenMediaModal(message); }} style={{ display: 'inline-block', cursor: 'pointer' }}>
           <VideoWithHdBadge
             className={classes.messageMedia}
             src={message.mediaUrl}
@@ -1688,8 +1760,11 @@ const MessagesList = ({
       }
 
       const isLeft = !message.fromMe;
+      const isSticker = message.mediaType === "sticker" || message.mediaType === "gif";
       const bubbleClass = clsx(
-        isLeft ? classes.messageLeft : (message.isPrivate ? classes.messageRightPrivate : classes.messageRight),
+        isSticker 
+          ? (isLeft ? classes.messageStickerLeft : classes.messageStickerRight)
+          : (isLeft ? classes.messageLeft : (message.isPrivate ? classes.messageRightPrivate : classes.messageRight)),
         { [isLeft ? classes.messageLeftAudio : classes.messageRightAudio]: message.mediaType === "audio" }
       );
 
@@ -1867,6 +1942,19 @@ const MessagesList = ({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Modal de mídia estilo WhatsApp */}
+      <MediaModal
+        open={mediaModal.open}
+        onClose={handleCloseMediaModal}
+        mediaUrl={mediaModal.mediaUrl}
+        mediaType={mediaModal.mediaType}
+        message={mediaModal.message}
+        allMedia={getAllMediaFromConversation()}
+        contactName={mediaModal.message?.contact?.name || mediaModal.message?.ticket?.contact?.name || ""}
+        contactAvatar={mediaModal.message?.contact?.profilePicUrl || mediaModal.message?.ticket?.contact?.profilePicUrl || ""}
+        mediaDate={mediaModal.message?.createdAt ? new Date(mediaModal.message.createdAt).toLocaleString('pt-BR') : ""}
+      />
     </div>
   );
 };
