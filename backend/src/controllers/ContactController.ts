@@ -939,7 +939,7 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
   const { contactId } = req.params;
   const { companyId } = req.user;
 
-  const contact = await ShowContactService(contactId, companyId);
+  const contact = await ShowContactService(contactId, companyId, Number(req.user.id));
 
   return res.status(200).json(contact);
 };
@@ -1078,7 +1078,7 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
     }
   }
 
-  const oldContact = await ShowContactService(contactId, companyId);
+  const oldContact = await ShowContactService(contactId, companyId, Number(req.user.id));
 
   if (oldContact.number != contactData.number && oldContact.channel == "whatsapp") {
     const isGroup = oldContact && oldContact.remoteJid ? oldContact.remoteJid.endsWith("@g.us") : oldContact.isGroup;
@@ -1129,7 +1129,7 @@ export const remove = async (
   const { contactId } = req.params;
   const { companyId } = req.user;
 
-  await ShowContactService(contactId, companyId);
+  await ShowContactService(contactId, companyId, Number(req.user.id));
 
   await DeleteContactService(contactId);
 
@@ -1374,7 +1374,7 @@ export const getContactProfileURL = async (req: Request, res: Response) => {
       profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
     }
 
-    const contact = await NumberSimpleListService({ number: validNumber, companyId });
+    const contact = await NumberSimpleListService({ number: validNumber, companyId, userId: Number(req.user.id) });
 
     if (contact.length > 0) {
       return res.status(200).json({

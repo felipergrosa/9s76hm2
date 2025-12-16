@@ -638,6 +638,9 @@ const messages = {
           allowRealTime: "Ver Painel de Atendimentos",
           allowConnections: "Permitir ações nas conexões",
           allowedContactTags: "Tags permitidas de contato",
+          managedUsers: "Usuários gerenciados (Supervisor)",
+          managedUsersHelp: "Selecione os usuários cujas carteiras este usuário poderá visualizar. Deixe vazio para ver apenas sua própria carteira.",
+          managedUsersLabel: "Usuários que posso ver"
         },
         tabs: {
           general: "Geral",

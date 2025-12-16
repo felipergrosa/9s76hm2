@@ -23,6 +23,7 @@ import Queue from "../models/Queue";
 import Chatbot from "../models/Chatbot";
 import Prompt from "../models/Prompt";
 import AIAgent from "../models/AIAgent";
+import GetUserWalletContactIds from "../helpers/GetUserWalletContactIds";
 
 type IndexQuery = {
   searchParam: string;
@@ -170,8 +171,14 @@ export const report = async (req: Request, res: Response): Promise<Response> => 
   } = req.query as IndexQueryReport;
 
 
-  const userId = req.user.id;
+  const userId = String(req.user.id);
   const { companyId } = req.user;
+
+  const walletResult = await GetUserWalletContactIds(Number(userId), Number(companyId));
+  const walletContactIds = walletResult.hasWalletRestriction ? walletResult.contactIds : null;
+  const walletUserIds = walletResult.hasWalletRestriction
+    ? [Number(userId), ...walletResult.managedUserIds]
+    : null;
 
   let queueIds: number[] = [];
   let whatsappIds: string[] = [];
@@ -198,7 +205,9 @@ export const report = async (req: Request, res: Response): Promise<Response> => 
       userId,
       contactId,
       whatsappId: whatsappIds,
-      onlyRated: onlyRated
+      onlyRated: onlyRated,
+      walletContactIds,
+      walletUserIds
     },
     +pageNumber,
 
@@ -359,47 +368,17 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 
   const ticket = await ShowTicketService(ticketId, companyId);
 
-  // Verificação de acesso hierárquica: admin sempre pode; usuário pode se for dono do ticket
-  // ou se o contato tiver PELO MENOS UMA tag pessoal (#) E PELO MENOS UMA tag complementar (## ou ###) do usuário
-  // Contato sem tags: não libera acesso extra (somente o dono).
-  if (profile !== "admin") {
-    const me = await User.findByPk(Number(userId));
-    const allowedTagIds: number[] = (me && Array.isArray((me as any).allowedContactTags)) ? (me as any).allowedContactTags : [];
-    const isOwner = Number(ticket.userId) === Number(userId);
-    
-    if (!isOwner) {
-      // Busca e categoriza tags do usuário
-      const Tag = require("../models/Tag").default;
-      const { categorizeTagsByName } = require("../helpers/TagCategoryHelper");
-      
-      const userPermissionTags = await Tag.findAll({
-        where: {
-          id: { [Op.in]: allowedTagIds },
-          name: { [Op.like]: "#%" }
-        },
-        attributes: ["id", "name"]
-      });
-      
-      const categorized = categorizeTagsByName(userPermissionTags);
-      const userPersonalTags = categorized.personal;
-      const userComplementaryTags = categorized.complementary;
-      
-      // Tags do contato
-      const contactTags: any[] = Array.isArray((ticket as any)?.contact?.tags)
-        ? (ticket as any).contact.tags
-        : [];
-      const contactTagIds = contactTags.map((t: any) => t.id);
-      
-      // Verifica se contato tem pelo menos uma tag pessoal do usuário
-      const hasPersonalTag = contactTagIds.some(id => userPersonalTags.includes(id));
-      
-      // Verifica se contato tem pelo menos uma tag complementar do usuário (se usuário tiver)
-      const hasComplementaryTag = userComplementaryTags.length === 0 || 
-        contactTagIds.some(id => userComplementaryTags.includes(id));
-      
-      if (!hasPersonalTag || !hasComplementaryTag) {
-        throw new AppError("FORBIDDEN_CONTACT_ACCESS", 403);
-      }
+  // Verificação de acesso por carteira (inclui supervisor via managedUserIds)
+  const walletResult = await GetUserWalletContactIds(Number(userId), Number(companyId));
+  if (walletResult.hasWalletRestriction) {
+    const allowedUserIds = [Number(userId), ...walletResult.managedUserIds];
+    const allowedContactIds = walletResult.contactIds;
+
+    const allowedByTicketOwner = allowedUserIds.includes(Number(ticket.userId));
+    const allowedByWalletContact = allowedContactIds.includes(Number(ticket.contactId));
+
+    if (!allowedByTicketOwner && !allowedByWalletContact) {
+      throw new AppError("FORBIDDEN_CONTACT_ACCESS", 403);
     }
   }
 
@@ -440,45 +419,17 @@ export const showFromUUID = async (
     type: "access"
   });
 
-  // Verificação de acesso hierárquica por tags/dono do ticket (mesma regra do show)
-  if (profile !== "admin") {
-    const me = await User.findByPk(Number(userId));
-    const allowedTagIds: number[] = (me && Array.isArray((me as any).allowedContactTags)) ? (me as any).allowedContactTags : [];
-    const isOwner = Number(ticket.userId) === Number(userId);
-    
-    if (!isOwner) {
-      // Busca e categoriza tags do usuário
-      const Tag = require("../models/Tag").default;
-      const { categorizeTagsByName } = require("../helpers/TagCategoryHelper");
-      
-      const userPermissionTags = await Tag.findAll({
-        where: {
-          id: { [Op.in]: allowedTagIds },
-          name: { [Op.like]: "#%" }
-        },
-        attributes: ["id", "name"]
-      });
-      
-      const categorized = categorizeTagsByName(userPermissionTags);
-      const userPersonalTags = categorized.personal;
-      const userComplementaryTags = categorized.complementary;
-      
-      // Tags do contato
-      const contactTags: any[] = Array.isArray((ticket as any)?.contact?.tags)
-        ? (ticket as any).contact.tags
-        : [];
-      const contactTagIds = contactTags.map((t: any) => t.id);
-      
-      // Verifica se contato tem pelo menos uma tag pessoal do usuário
-      const hasPersonalTag = contactTagIds.some(id => userPersonalTags.includes(id));
-      
-      // Verifica se contato tem pelo menos uma tag complementar do usuário (se usuário tiver)
-      const hasComplementaryTag = userComplementaryTags.length === 0 || 
-        contactTagIds.some(id => userComplementaryTags.includes(id));
-      
-      if (!hasPersonalTag || !hasComplementaryTag) {
-        throw new AppError("FORBIDDEN_CONTACT_ACCESS", 403);
-      }
+  // Verificação de acesso por carteira (inclui supervisor via managedUserIds)
+  const walletResult = await GetUserWalletContactIds(Number(userId), Number(companyId));
+  if (walletResult.hasWalletRestriction) {
+    const allowedUserIds = [Number(userId), ...walletResult.managedUserIds];
+    const allowedContactIds = walletResult.contactIds;
+
+    const allowedByTicketOwner = allowedUserIds.includes(Number(ticket.userId));
+    const allowedByWalletContact = allowedContactIds.includes(Number(ticket.contactId));
+
+    if (!allowedByTicketOwner && !allowedByWalletContact) {
+      throw new AppError("FORBIDDEN_CONTACT_ACCESS", 403);
     }
   }
 

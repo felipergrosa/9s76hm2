@@ -24,6 +24,7 @@ import CreateMessageService from "../MessageServices/CreateMessageService";
 import FindOrCreateTicketService from "./FindOrCreateTicketService";
 import formatBody from "../../helpers/Mustache";
 import { Mutex } from "async-mutex";
+import ApplyUserPersonalTagService from "../ContactServices/ApplyUserPersonalTagService";
 
 interface TicketData {
   status?: string;
@@ -774,6 +775,14 @@ const UpdateTicketService = async ({
         ticket
       });
 
+    // Auto-tag: aplica tag pessoal do novo usuário ao contato quando transferido
+    if (userId && oldUserId !== userId && ticket.contactId) {
+      await ApplyUserPersonalTagService({
+        contactId: ticket.contactId,
+        userId: userId,
+        companyId
+      });
+    }
 
     return { ticket, oldStatus, oldUserId };
   } catch (err) {

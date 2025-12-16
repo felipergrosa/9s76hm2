@@ -189,6 +189,10 @@ class User extends Model<User> {
   allowedContactTags: number[];
 
   @Default([])
+  @Column(DataType.ARRAY(DataType.INTEGER))
+  managedUserIds: number[];
+
+  @Default([])
   @Column(DataType.ARRAY(DataType.STRING))
   permissions: string[];
 

@@ -608,7 +608,10 @@ const messages = {
           userClosePendingTicket: "Permitir cerrar tickets pendientes",
           showDashboard: "Ver Dashboard",
           allowRealTime: "Ver Panel de Atendimientos",
-          allowConnections: "Permitir acciones en las conexiones"
+          allowConnections: "Permitir acciones en las conexiones",
+          managedUsers: "Usuarios gestionados (Supervisor)",
+          managedUsersHelp: "Selecciona los usuarios cuyas carteras podrá visualizar este usuario. Déjalo vacío para ver solo su propia cartera.",
+          managedUsersLabel: "Usuarios que puedo ver"
         },
         tabs: {
           general: "General",

@@ -16,6 +16,7 @@ import ContactTag from "../../models/ContactTag";
 import removeAccents from "remove-accents";
 
 import FindCompanySettingOneService from "../CompaniesSettings/FindCompanySettingOneService";
+import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
 
 interface Request {
   searchParam?: string;
@@ -520,64 +521,23 @@ const ListTicketsService = async ({
     companyId
   };
 
-  // Política de acesso hierárquica:
-  // Contato deve ter PELO MENOS UMA tag pessoal (#) do usuário
-  // E PELO MENOS UMA tag complementar (## ou ###) do usuário
-  if (user.profile !== "admin" && Array.isArray((user as any).allowedContactTags) && (user as any).allowedContactTags.length > 0) {
-    const userTags = (user as any).allowedContactTags as number[];
-    
-    // Busca e categoriza tags de permissão (que começam com #)
-    const { categorizeTagsByName } = require("../../helpers/TagCategoryHelper");
-    const permissionTags = await Tag.findAll({
-      where: {
-        id: { [Op.in]: userTags },
-        name: { [Op.like]: "#%" }
-      },
-      attributes: ["id", "name"]
-    });
-    
-    const categorized = categorizeTagsByName(permissionTags);
-    const userPersonalTags = categorized.personal;
-    const userComplementaryTags = categorized.complementary;
-    
-    if (userPersonalTags.length > 0) {
-      // Busca contatos que têm pelo menos uma tag pessoal do usuário
-      const contactsWithPersonalTag = await ContactTag.findAll({
-        where: { tagId: { [Op.in]: userPersonalTags } },
-        attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
-        raw: true
-      });
-      
-      let allowedContactIds = contactsWithPersonalTag.map((ct: any) => ct.contactId);
-      
-      // Se usuário tem tags complementares, filtra ainda mais
-      if (userComplementaryTags.length > 0 && allowedContactIds.length > 0) {
-        const contactsWithComplementaryTag = await ContactTag.findAll({
-          where: { 
-            contactId: { [Op.in]: allowedContactIds },
-            tagId: { [Op.in]: userComplementaryTags }
-          },
-          attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
-          raw: true
-        });
-        
-        allowedContactIds = contactsWithComplementaryTag.map((ct: any) => ct.contactId);
-      }
-    
-      if (allowedContactIds.length > 0) {
-        whereCondition = {
-          [Op.and]: [
-            { companyId },
-            {
-              [Op.or]: [
-                whereCondition,
-                { contactId: { [Op.in]: allowedContactIds } }
-              ]
-            }
+  // Restrição de carteira: vê tickets de sua carteira + carteiras gerenciadas + atribuídos a ele/gerenciados
+  const walletResult = await GetUserWalletContactIds(userId, companyId);
+  if (walletResult.hasWalletRestriction) {
+    const allowedContactIds = walletResult.contactIds;
+    // Inclui o próprio userId + IDs dos usuários gerenciados
+    const allowedUserIds = [userId, ...walletResult.managedUserIds];
+    whereCondition = {
+      [Op.and]: [
+        whereCondition,
+        {
+          [Op.or]: [
+            { contactId: { [Op.in]: allowedContactIds.length > 0 ? allowedContactIds : [0] } },
+            { userId: { [Op.in]: allowedUserIds } }
           ]
-        } as any;
-      }
-    }
+        }
+      ]
+    } as any;
   }
 
   const limit = 40;

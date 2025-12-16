@@ -26,6 +26,7 @@ import QueueSelect from "../QueueSelect";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import useWhatsApps from "../../hooks/useWhatsApps";
 import useTags from "../../hooks/useTags";
+import useUsers from "../../hooks/useUsers";
 
 import { Can } from "../Can";
 import { Avatar, Grid, Input, Paper, Tab, Tabs, Chip, Typography, Divider } from "@material-ui/core";
@@ -148,6 +149,7 @@ const UserModal = ({ open, onClose, userId }) => {
     allowRealTime: "disabled",
     allowConnections: "disabled",
     allowedContactTags: [],
+    managedUserIds: [],
     permissions: [], // Inicializar permissions
   };
 
@@ -164,6 +166,7 @@ const UserModal = ({ open, onClose, userId }) => {
   const endWorkRef = useRef();
 
   const { tags, loading: tagsLoading } = useTags(); // Usar o hook
+  const { users: allUsers, loading: usersLoading } = useUsers(); // Lista de usuários para selecionar gerenciados
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -639,18 +642,22 @@ const UserModal = ({ open, onClose, userId }) => {
                             onChange={(key, value) => setFieldValue(key, value)}
                           />
 
-                          {/* Tags permitidas - mantém formato original */}
+                          {/* Tags permitidas - exibe apenas tags pessoais (com 1x #, não ##) */}
                           <Divider style={{ marginTop: 16, marginBottom: 16 }} />
                           <Grid container spacing={1}>
                             <Grid item xs={12}>
                               <Field name="allowedContactTags">
                                 {({ field, form }) => {
                                   const selectedIds = field.value || [];
-                                  const selectedObjects = tags.filter(t => selectedIds.includes(t.id));
+                                  // Filtra para mostrar apenas tags pessoais (começam com # mas NÃO com ##)
+                                  const personalTags = tags.filter(t => 
+                                    t.name && t.name.startsWith('#') && !t.name.startsWith('##')
+                                  );
+                                  const selectedObjects = personalTags.filter(t => selectedIds.includes(t.id));
                                   return (
                                     <Autocomplete
                                       multiple
-                                      options={tags}
+                                      options={personalTags}
                                       value={selectedObjects}
                                       getOptionLabel={(option) => option?.name || ""}
                                       onChange={(e, value) => form.setFieldValue("allowedContactTags", (value || []).map(v => v.id))}
@@ -672,6 +679,58 @@ const UserModal = ({ open, onClose, userId }) => {
                                           variant="outlined"
                                           margin="dense"
                                           label={i18n.t("userModal.form.allowedContactTags")}
+                                          fullWidth
+                                          InputLabelProps={{ shrink: true }}
+                                        />
+                                      )}
+                                    />
+                                  );
+                                }}
+                              </Field>
+                            </Grid>
+                          </Grid>
+
+                          {/* Usuários gerenciados - para supervisores verem carteiras de outros usuários */}
+                          <Divider style={{ marginTop: 16, marginBottom: 16 }} />
+                          <Typography variant="subtitle2" style={{ marginBottom: 8 }}>
+                            {i18n.t("userModal.form.managedUsers") || "Usuários Gerenciados (Supervisor)"}
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary" style={{ marginBottom: 8, display: 'block' }}>
+                            {i18n.t("userModal.form.managedUsersHelp") || "Selecione os usuários cujas carteiras este usuário poderá visualizar. Deixe vazio para ver apenas sua própria carteira."}
+                          </Typography>
+                          <Grid container spacing={1}>
+                            <Grid item xs={12}>
+                              <Field name="managedUserIds">
+                                {({ field, form }) => {
+                                  const selectedIds = field.value || [];
+                                  // Filtra para não mostrar o próprio usuário sendo editado
+                                  const availableUsers = allUsers.filter(u => u.id !== userId);
+                                  const selectedObjects = availableUsers.filter(u => selectedIds.includes(u.id));
+                                  return (
+                                    <Autocomplete
+                                      multiple
+                                      options={availableUsers}
+                                      value={selectedObjects}
+                                      getOptionLabel={(option) => option?.name || ""}
+                                      onChange={(e, value) => form.setFieldValue("managedUserIds", (value || []).map(v => v.id))}
+                                      loading={usersLoading}
+                                      filterSelectedOptions
+                                      renderTags={(value, getTagProps) =>
+                                        value.map((option, index) => (
+                                          <Chip
+                                            {...getTagProps({ index })}
+                                            key={option.id}
+                                            label={option.name}
+                                            style={{ backgroundColor: "#3f51b5", color: "#fff" }}
+                                          />
+                                        ))
+                                      }
+                                      renderInput={(params) => (
+                                        <TextField
+                                          {...params}
+                                          variant="outlined"
+                                          margin="dense"
+                                          label={i18n.t("userModal.form.managedUsersLabel") || "Usuários que posso ver"}
                                           fullWidth
                                           InputLabelProps={{ shrink: true }}
                                         />

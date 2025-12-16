@@ -21,6 +21,8 @@ export interface Params {
   users: number[];
   userId: string;
   onlyRated: string;
+  walletContactIds?: number[] | null;
+  walletUserIds?: number[] | null;
 }
 
 
@@ -127,6 +129,21 @@ export default async function ListTicketsServiceReport(
   -- filterPeriod`;
   }
   let where = `where t."companyId" = ${companyId}`;
+
+  // Restrição de carteira (não-admin / supervisor): limitar por contatos da carteira OU tickets atribuídos a usuários permitidos
+  if (
+    (params as any).walletContactIds &&
+    Array.isArray((params as any).walletContactIds) &&
+    (params as any).walletContactIds.length > 0 &&
+    (params as any).walletUserIds &&
+    Array.isArray((params as any).walletUserIds) &&
+    (params as any).walletUserIds.length > 0
+  ) {
+    where += ` and (t."contactId" in (${(params as any).walletContactIds.join(",")}) or t."userId" in (${(params as any).walletUserIds.join(",")}))`;
+  } else if ((params as any).walletContactIds && Array.isArray((params as any).walletContactIds)) {
+    // Se carteira restrita mas sem contatos, garante vazio
+    where += ` and (1=0)`;
+  }
 
   if (_.has(params, "dateFrom")) {
     where += ` and t."createdAt" >= '${params.dateFrom} 00:00:00'`;

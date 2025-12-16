@@ -28,6 +28,7 @@ interface Request {
   allowRealTime?: string;
   allowConnections?: string;
   allowedContactTags?: number[];
+  managedUserIds?: number[];
   permissions?: string[];
 }
 
@@ -60,6 +61,7 @@ const CreateUserService = async ({
   allowRealTime,
   allowConnections,
   allowedContactTags = [],
+  managedUserIds = [],
   permissions = []
 }: Request): Promise<Response> => {
   if (companyId !== undefined) {
@@ -133,6 +135,7 @@ const CreateUserService = async ({
       allowRealTime,
       allowConnections,
       allowedContactTags,
+      managedUserIds,
       permissions
     },
     { include: ["queues", "company"] }

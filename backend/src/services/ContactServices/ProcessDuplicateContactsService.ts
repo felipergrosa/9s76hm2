@@ -22,6 +22,8 @@ interface ProcessDuplicateResult {
   canonicalNumber: string;
 }
 
+// Tabelas que referenciam Contacts via contactId
+// NOTA: LogTickets NÃO tem contactId (só ticketId), então foi removido da lista
 const referencingTables: Array<{ table: string; column: string }> = [
   { table: "Tickets", column: "contactId" },
   { table: "Messages", column: "contactId" },
@@ -30,29 +32,41 @@ const referencingTables: Array<{ table: string; column: string }> = [
   { table: "ContactWallets", column: "contactId" },
   { table: "ContactWhatsappLabels", column: "contactId" },
   { table: "Schedules", column: "contactId" },
-  { table: "TicketNotes", column: "contactId" },
-  { table: "LogTickets", column: "contactId" }
+  { table: "TicketNotes", column: "contactId" }
 ];
 
-const tableExistsCache = new Map<string, boolean>();
+const tableColumnExistsCache = new Map<string, boolean>();
 
-const tableExists = async (table: string, transaction?: Transaction): Promise<boolean> => {
-  if (tableExistsCache.has(table)) {
-    return tableExistsCache.get(table)!;
+const tableAndColumnExist = async (
+  table: string,
+  column: string,
+  transaction?: Transaction
+): Promise<boolean> => {
+  const cacheKey = `${table}.${column}`;
+  if (tableColumnExistsCache.has(cacheKey)) {
+    return tableColumnExistsCache.get(cacheKey)!;
   }
 
-  const regclassName = `public."${table}"`;
+  // Verifica se a tabela E a coluna existem
   const result = await sequelize.query<{ exists: boolean }>(
-    `SELECT to_regclass(:regclassName) IS NOT NULL AS exists`,
+    `
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = :table
+        AND column_name = :column
+    ) AS exists
+    `,
     {
-      replacements: { regclassName },
+      replacements: { table, column },
       type: QueryTypes.SELECT,
       transaction
     }
   );
 
   const exists = Boolean(result?.[0]?.exists);
-  tableExistsCache.set(table, exists);
+  tableColumnExistsCache.set(cacheKey, exists);
   return exists;
 };
 
@@ -62,7 +76,7 @@ const filterExistingReferencingTables = async (
   const checks = await Promise.all(
     referencingTables.map(async ref => ({
       ref,
-      exists: await tableExists(ref.table, transaction)
+      exists: await tableAndColumnExist(ref.table, ref.column, transaction)
     }))
   );
 

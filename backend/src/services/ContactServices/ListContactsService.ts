@@ -9,6 +9,7 @@ import removeAccents from "remove-accents";
 import Whatsapp from "../../models/Whatsapp";
 import User from "../../models/User";
 import ShowUserService from "../UserServices/ShowUserService";
+import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
 
 interface Request {
   searchParam?: string;
@@ -76,64 +77,11 @@ const ListContactsService = async ({
   let whereCondition: Filterable["where"] = {};
   const additionalWhere: any[] = [];
 
-  let userPersonalTags: number[] = [];
-  let userComplementaryTags: number[] = [];
-  
+  // Restrição de carteira: vê contatos de sua carteira + carteiras gerenciadas
   if (userId) {
-    const user = await User.findByPk(userId);
-    if (user && Array.isArray(user.allowedContactTags) && user.allowedContactTags.length > 0) {
-      // Busca tags de permissão (que começam com #)
-      const Tag = require("../../models/Tag").default;
-      const { categorizeTagsByName } = require("../../helpers/TagCategoryHelper");
-      
-      const permissionTags = await Tag.findAll({
-        where: {
-          id: { [Op.in]: user.allowedContactTags },
-          name: { [Op.like]: "#%" }
-        },
-        attributes: ["id", "name"]
-      });
-      
-      const categorized = categorizeTagsByName(permissionTags);
-      userPersonalTags = categorized.personal;
-      userComplementaryTags = categorized.complementary;
-    }
-  }
-
-  // Regra de acesso hierárquica:
-  // Contato deve ter PELO MENOS UMA tag pessoal (#) do usuário
-  // E PELO MENOS UMA tag complementar (## ou ###) do usuário
-  const isRestrictedUser = profile !== 'admin' && !!userId;
-  
-  if (isRestrictedUser) {
-    if (userPersonalTags.length === 0) {
-      // Usuário sem tags pessoais => nenhum contato
-      whereCondition.id = { [Op.in]: [] };
-    } else {
-      // Busca contatos que têm pelo menos uma tag pessoal do usuário
-      const contactsWithPersonalTag = await ContactTag.findAll({
-        where: { tagId: { [Op.in]: userPersonalTags } },
-        attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
-        raw: true
-      });
-      
-      let allowedContactIds = contactsWithPersonalTag.map((ct: any) => ct.contactId);
-      
-      // Se usuário tem tags complementares, filtra ainda mais
-      if (userComplementaryTags.length > 0 && allowedContactIds.length > 0) {
-        // Contatos devem ter também pelo menos uma tag complementar
-        const contactsWithComplementaryTag = await ContactTag.findAll({
-          where: { 
-            contactId: { [Op.in]: allowedContactIds },
-            tagId: { [Op.in]: userComplementaryTags }
-          },
-          attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
-          raw: true
-        });
-        
-        allowedContactIds = contactsWithComplementaryTag.map((ct: any) => ct.contactId);
-      }
-      
+    const walletResult = await GetUserWalletContactIds(userId, companyId);
+    if (walletResult.hasWalletRestriction) {
+      const allowedContactIds = walletResult.contactIds;
       whereCondition.id = allowedContactIds.length > 0 ? { [Op.in]: allowedContactIds } : { [Op.in]: [] };
     }
   }

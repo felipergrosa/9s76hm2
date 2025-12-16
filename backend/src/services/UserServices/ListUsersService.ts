@@ -56,7 +56,8 @@ const ListUsersService = async ({
       "endWork",
       "profileImage",
       "permissions",
-      "allowedContactTags"
+      "allowedContactTags",
+      "managedUserIds"
     ],
     limit,
     offset,

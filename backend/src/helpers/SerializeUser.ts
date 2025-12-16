@@ -30,6 +30,7 @@ interface SerializedUser {
   allowRealTime: string;
   allowConnections: string;
   allowedContactTags: number[];
+  managedUserIds?: number[];
   permissions: string[];
 }
 
@@ -67,6 +68,7 @@ export const SerializeUser = async (user: User): Promise<SerializedUser> => {
     allowRealTime: user.allowRealTime,
     allowConnections: user.allowConnections,
     allowedContactTags: user.allowedContactTags,
+    managedUserIds: (user as any).managedUserIds || [],
     permissions: getUserPermissions(user)
   };
 };

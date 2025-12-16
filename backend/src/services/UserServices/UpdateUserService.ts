@@ -32,6 +32,7 @@ interface UserData {
   profileImage?: string;
   language?: string;
   allowedContactTags?: number[];
+  managedUserIds?: number[];
   permissions?: string[];
 }
 
@@ -106,6 +107,13 @@ const UpdateUserService = async ({
       ? userData.permissions
       : [];
   }
+
+  // Atualiza managedUserIds apenas se enviado (pode ser [] para limpar)
+  if (userData.hasOwnProperty("managedUserIds")) {
+    (dataToUpdate as any).managedUserIds = Array.isArray((userData as any).managedUserIds)
+      ? (userData as any).managedUserIds
+      : [];
+  }
   
   // Lógica especial para a conexão (whatsappId):
   // Só atualiza se o campo for enviado.
@@ -158,6 +166,7 @@ const UpdateUserService = async ({
     allowConnections: user.allowConnections,
     profileImage: user.profileImage,
     allowedContactTags: user.allowedContactTags,
+    managedUserIds: (user as any).managedUserIds || [],
     permissions: user.permissions || []
   };
 

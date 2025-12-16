@@ -8,10 +8,10 @@ interface ListParams {
   offset?: number;
 }
 
-type PhoneClassification = "mobile" | "landline" | "shortcode" | "invalid" | "unknown" | "international";
+type PhoneClassification = "mobile" | "landline" | "shortcode" | "invalid" | "unknown" | "international" | "lid_jid";
 
 interface NormalizationIssue {
-  type: "missing_canonical" | "invalid_length" | "invalid_chars" | "missing_country_code" | "no_number";
+  type: "missing_canonical" | "invalid_length" | "invalid_chars" | "missing_country_code" | "no_number" | "lid_jid_number";
   details?: string;
 }
 
@@ -112,10 +112,26 @@ const formatCanonicalDisplay = (value: string | null | undefined): string | null
   return `${metadata.iso} ${formattedSubscriber}`;
 };
 
+// Detecta se o número parece ser um LID (Linked Device ID) do WhatsApp
+// LIDs são números muito longos (>15 dígitos) ou que não seguem padrão de telefone
+const isLidNumber = (digits: string): boolean => {
+  if (!digits) return false;
+  // LIDs geralmente têm mais de 15 dígitos
+  if (digits.length > 15) return true;
+  // LIDs com 14+ dígitos que não começam com 55 (Brasil)
+  if (digits.length > 13 && !digits.startsWith("55")) return true;
+  return false;
+};
+
 const classifyPhoneNumber = (value: string | null | undefined): PhoneClassification => {
   const digitsOnly = getDigits(value);
   if (!digitsOnly) {
     return "invalid";
+  }
+
+  // Detectar LIDs primeiro (números muito longos que são JIDs @lid)
+  if (isLidNumber(digitsOnly)) {
+    return "lid_jid";
   }
 
   if (digitsOnly.length < 8) {
@@ -163,6 +179,17 @@ const detectIssues = (contact: Contact): NormalizationIssue[] => {
     return issues;
   }
 
+  const numberDigits = getDigits(contact.number);
+  
+  // Detectar LIDs (números muito longos que são JIDs @lid do WhatsApp)
+  if (isLidNumber(numberDigits)) {
+    issues.push({ 
+      type: "lid_jid_number", 
+      details: `Número LID (${numberDigits.length} dígitos) - não é telefone real` 
+    });
+    return issues; // LIDs precisam de tratamento especial, não verificar outras regras
+  }
+
   const canonical = contact.canonicalNumber;
   if (!canonical || canonical.trim() === "") {
     issues.push({ type: "missing_canonical" });
@@ -203,17 +230,34 @@ const buildBaseWhere = (companyId: number): WhereOptions => {
   const conditions: WhereOptions[] = [
     { canonicalNumber: null },
     { canonicalNumber: "" },
+    // Números canônicos muito curtos (<8 dígitos)
     sequelizeWhere(fn("length", fn("COALESCE", col("canonicalNumber"), "")), { [Op.lt]: 8 }),
+    // Números canônicos muito longos (>15 dígitos) - possíveis LIDs
     sequelizeWhere(fn("length", fn("COALESCE", col("canonicalNumber"), "")), { [Op.gt]: 15 }),
     // Incluir contatos onde number != canonicalNumber (possível desatualização)
     literal('COALESCE("number", \'\') != COALESCE("canonicalNumber", \'\')')
+  ];
+
+  // Condições adicionais para detectar LIDs no campo "number"
+  // LIDs são números muito longos (>15 dígitos) que não são telefones reais
+  const lidConditions: WhereOptions[] = [
+    // Números com mais de 15 dígitos (LIDs)
+    sequelizeWhere(
+      fn("length", fn("REGEXP_REPLACE", col("number"), literal("'[^0-9]'"), literal("''"), literal("'g'"))),
+      { [Op.gt]: 15 }
+    ),
+    // Números com 14+ dígitos que não começam com 55 (Brasil)
+    literal(`
+      LENGTH(REGEXP_REPLACE("number", '[^0-9]', '', 'g')) > 13
+      AND LEFT(REGEXP_REPLACE("number", '[^0-9]', '', 'g'), 2) != '55'
+    `)
   ];
 
   return {
     companyId,
     number: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: "" }] },
     isGroup: false,
-    [Op.or]: conditions
+    [Op.or]: [...conditions, ...lidConditions]
   } as WhereOptions;
 };
 
@@ -287,7 +331,8 @@ const ListContactsPendingNormalizationService = async ({
           shortcode: classification === "shortcode" ? 1 : 0,
           invalid: classification === "invalid" ? 1 : 0,
           unknown: classification === "unknown" ? 1 : 0,
-          international: classification === "international" ? 1 : 0
+          international: classification === "international" ? 1 : 0,
+          lid_jid: classification === "lid_jid" ? 1 : 0
         },
         displayLabel
       });
