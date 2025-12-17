@@ -167,11 +167,6 @@ const getBaseUserPermissions = (): string[] => {
  * FALLBACK para retrocompatibilidade
  */
 export const getUserPermissions = (user: User): string[] => {
-  // Se usuário já tem permissões definidas, usa elas
-  if (user.permissions && Array.isArray(user.permissions) && user.permissions.length > 0) {
-    return user.permissions;
-  }
-
   // FALLBACK: converte perfil antigo para permissões
   let permissions: string[] = [];
 
@@ -184,6 +179,11 @@ export const getUserPermissions = (user: User): string[] => {
   if (user.profile === "admin") {
     permissions = [...getAdminPermissions()];
     return permissions;
+  }
+
+  // Se usuário já tem permissões definidas, usa elas (exceto admin/super)
+  if (user.permissions && Array.isArray(user.permissions) && user.permissions.length > 0) {
+    return user.permissions;
   }
 
   // User comum: começa com permissões básicas

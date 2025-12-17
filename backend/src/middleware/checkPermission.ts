@@ -12,6 +12,34 @@ interface RequestWithUser extends Request {
 }
 
 /**
+ * Middleware para permitir apenas admin (profile=admin) ou superadmin (super=true)
+ * Uso: router.post("/rota", isAuth, checkAdminOrSuper(), controller)
+ */
+export const checkAdminOrSuper = () => {
+  return async (req: RequestWithUser, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user?.id) {
+        throw new AppError("ERR_SESSION_EXPIRED", 401);
+      }
+
+      const user = await User.findByPk(req.user.id);
+
+      if (!user) {
+        throw new AppError("ERR_USER_NOT_FOUND", 404);
+      }
+
+      if (user.super === true || user.profile === "admin") {
+        return next();
+      }
+
+      throw new AppError("ERR_NO_PERMISSION", 403);
+    } catch (err) {
+      return next(err);
+    }
+  };
+};
+
+/**
  * Middleware para verificar se usuário tem permissão específica
  * Uso: router.get("/rota", isAuth, checkPermission("users.view"), controller)
  */

@@ -570,15 +570,29 @@ const getSenderMessage = (
 
 const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   const isGroup = msg.key.remoteJid.includes("g.us");
-  const rawNumber = msg.key.remoteJid.replace(/\D/g, "");
+  const remoteJid = msg.key.remoteJid;
+  const rawNumber = remoteJid.replace(/\D/g, "");
+  const participantJid = msg.participant || msg.key.participant;
+  const participantDigits = participantJid ? participantJid.replace(/\D/g, "") : "";
+
+  const looksPhoneLike = (digits: string) => digits.length >= 8 && digits.length <= 15;
+
+  // Em alguns eventos de sistema (ex.: chamadas), remoteJid pode vir com um identificador interno.
+  // Nesses casos, o remetente real costuma estar em participant.
+  const contactJid =
+    !isGroup && participantJid && looksPhoneLike(participantDigits) && !looksPhoneLike(rawNumber)
+      ? participantJid
+      : remoteJid;
+
+  const contactRawNumber = contactJid.replace(/\D/g, "");
   return isGroup
     ? {
         id: getSenderMessage(msg, wbot),
         name: msg.pushName
       }
     : {
-        id: msg.key.remoteJid,
-        name: msg.key.fromMe ? rawNumber : msg.pushName || rawNumber
+        id: contactJid,
+        name: msg.key.fromMe ? contactRawNumber : msg.pushName || contactRawNumber
       };
 };
 
@@ -849,6 +863,22 @@ const verifyContact = async (
   const cleaned = normalizedJid.replace(/\D/g, "");
   const isGroup = normalizedJid.includes("g.us");
   const isLinkedDevice = msgContact.id.includes("@lid") || normalizedJid.includes("@lid");
+
+  // Se não é grupo e não é @lid, só trata como contato se tiver cara de telefone.
+  // Isso evita criar contatos/tickets para identificadores internos (ex.: eventos de chamada).
+  if (!isGroup && !isLinkedDevice) {
+    const isPhoneLike = cleaned.length >= 8 && cleaned.length <= 15;
+    if (!isPhoneLike) {
+      logger.warn("[verifyContact] Ignorando identificador não-phone-like (evita contato duplicado)", {
+        originalJid: msgContact.id,
+        normalizedJid,
+        cleanedLength: cleaned.length,
+        pushName: msgContact.name,
+        companyId
+      });
+      return null as any;
+    }
+  }
 
   if (isLinkedDevice) {
     debugLog("[verifyContact] JID @lid detectado", {
