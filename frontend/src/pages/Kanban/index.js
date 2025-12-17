@@ -36,6 +36,44 @@ const useStyles = makeStyles(theme => ({
       width: '350px !important',
       maxWidth: '350px !important',
     },
+    // Ocultar scrollbars do Kanban (Windows/Chrome/Edge) sem perder o scroll
+    '.react-trello-board': {
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none',
+    },
+    '.react-trello-board::-webkit-scrollbar': {
+      width: '0px !important',
+      height: '0px !important',
+      display: 'none !important',
+    },
+    '.react-trello-lane__cards': {
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none',
+    },
+    '.react-trello-lane__cards::-webkit-scrollbar': {
+      width: '0px !important',
+      height: '0px !important',
+      display: 'none !important',
+    },
+    '.react-trello-lane__cards *::-webkit-scrollbar': {
+      width: '0px !important',
+      height: '0px !important',
+      display: 'none !important',
+    },
+    '.smooth-dnd-container': {
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none',
+    },
+    '.smooth-dnd-container::-webkit-scrollbar': {
+      width: '0px !important',
+      height: '0px !important',
+      display: 'none !important',
+    },
+    '.smooth-dnd-container *::-webkit-scrollbar': {
+      width: '0px !important',
+      height: '0px !important',
+      display: 'none !important',
+    },
   },
   root: {
     display: "flex",

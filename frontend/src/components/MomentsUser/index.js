@@ -47,6 +47,7 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     flexDirection: "column",
     height: "100%",
+    minHeight: 0,
     backgroundColor: "#f5f5f5",
     borderRadius: theme.shape.borderRadius,
     border: "1px solid rgba(0,0,0,0.12)",
@@ -59,6 +60,7 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "space-between",
     borderBottom: "1px solid rgba(0,0,0,0.08)",
     backgroundColor: "#fff",
+    flex: "0 0 auto",
   },
   columnTitle: {
     fontWeight: 600,
@@ -75,6 +77,15 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     flexDirection: "column",
     gap: theme.spacing(1),
+    minHeight: 0,
+    overflowX: "hidden",
+    scrollbarWidth: "none",
+    msOverflowStyle: "none",
+    "&::-webkit-scrollbar": {
+      width: 0,
+      height: 0,
+      display: "none",
+    },
   },
   ticketCard: {
     boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
