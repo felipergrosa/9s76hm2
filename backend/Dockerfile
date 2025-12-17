@@ -16,6 +16,8 @@ RUN apt-get update \
        build-essential pkg-config libssl-dev git ca-certificates \
        # Dependências para node-canvas (geração de thumbnails de PDF)
        libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
+       # GraphicsMagick para pdf2pic (geração de thumbnails de PDF)
+       graphicsmagick ghostscript \
   && rm -rf /var/lib/apt/lists/*
 
 # Instala dependências baseadas no package-lock (mais reprodutível) com diagnóstico detalhado e fallback
@@ -69,6 +71,8 @@ RUN apt-get update \
        chromium \
        # Libs de runtime para node-canvas (geração de thumbnails de PDF)
        libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libjpeg62-turbo libgif7 librsvg2-2 \
+       # GraphicsMagick e Ghostscript para pdf2pic (geração de thumbnails de PDF)
+       graphicsmagick ghostscript \
   && rm -rf /var/lib/apt/lists/*
 
 # Build info injection

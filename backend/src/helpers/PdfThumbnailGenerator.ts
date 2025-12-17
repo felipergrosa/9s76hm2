@@ -3,73 +3,87 @@ import * as path from "path";
 import logger from "../utils/logger";
 
 /**
- * Gera thumbnail de PDF usando pdfjs-dist + canvas (puro JavaScript, sem GraphicsMagick)
- * Usa NodeCanvasFactory para compatibilidade com node-canvas
+ * Gera thumbnail de PDF usando pdf2pic (se GraphicsMagick disponível)
+ * ou retorna null para fallback do frontend
  */
 export async function generatePdfThumbnail(pdfPath: string): Promise<string | null> {
   logger.info(`[PdfThumbnail] Iniciando geração de thumbnail para: ${pdfPath}`);
   
+  // Tentar com pdf2pic primeiro (requer GraphicsMagick/ImageMagick)
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { fromPath } = require("pdf2pic");
+    
+    const dir = path.dirname(pdfPath);
+    const baseName = path.basename(pdfPath, path.extname(pdfPath));
+    
+    const options = {
+      density: 100,
+      saveFilename: `${baseName}-thumb`,
+      savePath: dir,
+      format: "png",
+      width: 200,
+      height: 280
+    };
+    
+    const convert = fromPath(pdfPath, options);
+    await convert(1); // Converte apenas a primeira página
+    
+    // pdf2pic salva como -thumb.1.png
+    const thumbPath = path.join(dir, `${baseName}-thumb.1.png`);
+    
+    if (fs.existsSync(thumbPath)) {
+      logger.info(`[PdfThumbnail] Thumbnail gerado com pdf2pic: ${thumbPath}`);
+      return thumbPath;
+    }
+  } catch (pdf2picError: any) {
+    logger.warn(`[PdfThumbnail] pdf2pic falhou (GraphicsMagick não disponível?): ${pdf2picError?.message}`);
+  }
+  
+  // Tentar com pdfjs-dist + canvas como fallback
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.mjs");
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const canvasModule = require("canvas");
+    const { createCanvas } = require("canvas");
     
-    logger.info(`[PdfThumbnail] Dependências carregadas com sucesso`);
-
-    // Factory customizada para node-canvas (necessária para pdfjs-dist funcionar no Node.js)
-    class NodeCanvasFactory {
-      create(width: number, height: number) {
-        const canvas = canvasModule.createCanvas(width, height);
-        const context = canvas.getContext("2d");
-        return { canvas, context };
-      }
-      
-      reset(canvasAndContext: any, width: number, height: number) {
-        canvasAndContext.canvas.width = width;
-        canvasAndContext.canvas.height = height;
-      }
-      
-      destroy(canvasAndContext: any) {
-        canvasAndContext.canvas.width = 0;
-        canvasAndContext.canvas.height = 0;
-        canvasAndContext.canvas = null;
-        canvasAndContext.context = null;
-      }
-    }
+    logger.info(`[PdfThumbnail] Tentando com pdfjs-dist + canvas`);
 
     // Ler o PDF
     const pdfBuffer = fs.readFileSync(pdfPath);
     const pdfData = new Uint8Array(pdfBuffer);
 
-    // Carregar o documento PDF com a factory customizada
-    const loadingTask = pdfjsLib.getDocument({
+    // Carregar o documento PDF
+    const loadingTask = pdfjsLib.getDocument({ 
       data: pdfData,
-      canvasFactory: new NodeCanvasFactory(),
+      useSystemFonts: true,
+      disableFontFace: true,
     });
     const pdfDoc = await loadingTask.promise;
 
     // Pegar a primeira página
     const page = await pdfDoc.getPage(1);
 
-    // Definir escala para thumbnail (200x280 aproximadamente)
+    // Definir escala para thumbnail
     const viewport = page.getViewport({ scale: 1.0 });
     const scale = Math.min(200 / viewport.width, 280 / viewport.height);
     const scaledViewport = page.getViewport({ scale });
 
-    // Criar canvas usando a factory
-    const canvasFactory = new NodeCanvasFactory();
-    const canvasAndContext = canvasFactory.create(
-      Math.floor(scaledViewport.width),
-      Math.floor(scaledViewport.height)
-    );
+    // Criar canvas
+    const width = Math.floor(scaledViewport.width);
+    const height = Math.floor(scaledViewport.height);
+    const canvas = createCanvas(width, height);
+    const context = canvas.getContext("2d");
+    
+    // Fundo branco
+    context.fillStyle = "white";
+    context.fillRect(0, 0, width, height);
 
-    // Renderizar a página no canvas
-    const renderContext = {
-      canvasContext: canvasAndContext.context,
+    // Renderizar a página
+    await page.render({
+      canvasContext: context,
       viewport: scaledViewport,
-    };
-    await page.render(renderContext).promise;
+    }).promise;
 
     // Gerar nome do arquivo de thumbnail
     const dir = path.dirname(pdfPath);
@@ -77,20 +91,18 @@ export async function generatePdfThumbnail(pdfPath: string): Promise<string | nu
     const thumbPath = path.join(dir, `${baseName}-thumb.png`);
 
     // Salvar como PNG
-    const buffer = canvasAndContext.canvas.toBuffer("image/png");
+    const buffer = canvas.toBuffer("image/png");
     fs.writeFileSync(thumbPath, buffer);
 
-    logger.info(`[PdfThumbnail] Thumbnail gerado: ${thumbPath}`);
+    logger.info(`[PdfThumbnail] Thumbnail gerado com pdfjs-dist: ${thumbPath}`);
     return thumbPath;
-  } catch (error: any) {
-    if (error?.code === "MODULE_NOT_FOUND" || error?.code === "ERR_MODULE_NOT_FOUND") {
-      logger.warn("[PdfThumbnail] pdfjs-dist ou canvas não instalado; pulando geração de thumbnail");
-      return null;
-    }
-
-    logger.warn(`[PdfThumbnail] Falha ao gerar thumbnail: ${error?.message || error}`);
-    return null;
+  } catch (pdfjsError: any) {
+    logger.warn(`[PdfThumbnail] pdfjs-dist também falhou: ${pdfjsError?.message}`);
   }
+  
+  // Se ambos falharem, retornar null (frontend mostrará ícone genérico)
+  logger.warn(`[PdfThumbnail] Não foi possível gerar thumbnail para: ${pdfPath}`);
+  return null;
 }
 
 export default generatePdfThumbnail;
