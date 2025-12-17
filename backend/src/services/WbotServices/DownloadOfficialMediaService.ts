@@ -4,6 +4,7 @@ import path from "path";
 import logger from "../../utils/logger";
 import Whatsapp from "../../models/Whatsapp";
 import * as Sentry from "@sentry/node";
+import { generatePdfThumbnail } from "../../helpers/PdfThumbnailGenerator";
 
 interface DownloadMediaOptions {
   mediaId: string;
@@ -181,35 +182,3 @@ function getDefaultExtension(mediaType: string): string {
 }
 
 export default DownloadOfficialMediaService;
-
-async function generatePdfThumbnail(filePath: string): Promise<void> {
-  try {
-    // Import dinâmico para evitar problemas de tipagem em tempo de compilação
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pdf2pic = require("pdf2pic");
-
-    const dir = path.dirname(filePath);
-    const baseName = path.basename(filePath, path.extname(filePath));
-
-    const convert = pdf2pic.fromPath(filePath, {
-      density: 120,
-      saveFilename: `${baseName}-thumb`,
-      savePath: dir,
-      format: "png",
-      width: 600,
-      height: 800
-    });
-
-    // Converte apenas a primeira página
-    await convert(1);
-
-    logger.info(`[DownloadOfficialMedia] Thumbnail PDF gerado para ${filePath}`);
-  } catch (error: any) {
-    if (error?.code === "MODULE_NOT_FOUND") {
-      logger.warn("[DownloadOfficialMedia] pdf2pic não instalado; pulando geração de thumbnail PDF");
-      return;
-    }
-
-    throw error;
-  }
-}

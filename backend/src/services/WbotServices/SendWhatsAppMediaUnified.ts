@@ -8,6 +8,7 @@ import Contact from "../../models/Contact";
 import formatBody from "../../helpers/Mustache";
 import logger from "../../utils/logger";
 import { IWhatsAppMessage } from "../../libs/whatsapp";
+import { generatePdfThumbnail } from "../../helpers/PdfThumbnailGenerator";
 
 interface Request {
   media: Express.Multer.File;
@@ -245,35 +246,3 @@ const SendWhatsAppMediaUnified = async ({
 };
 
 export default SendWhatsAppMediaUnified;
-
-async function generatePdfThumbnail(filePath: string): Promise<void> {
-  try {
-    // Import dinâmico para evitar problemas de tipagem em tempo de compilação
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pdf2pic = require("pdf2pic");
-
-    const dir = path.dirname(filePath);
-    const baseName = path.basename(filePath, path.extname(filePath));
-
-    const convert = pdf2pic.fromPath(filePath, {
-      density: 120,
-      saveFilename: `${baseName}-thumb`,
-      savePath: dir,
-      format: "png",
-      width: 600,
-      height: 800
-    });
-
-    // Converte apenas a primeira página
-    await convert(1);
-
-    logger.info(`[SendMediaUnified] Thumbnail PDF gerado para ${filePath}`);
-  } catch (error: any) {
-    if (error?.code === "MODULE_NOT_FOUND") {
-      logger.warn("[SendMediaUnified] pdf2pic não instalado; pulando geração de thumbnail PDF");
-      return;
-    }
-
-    throw error;
-  }
-}

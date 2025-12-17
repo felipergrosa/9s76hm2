@@ -9,11 +9,13 @@ ENV npm_config_python=/usr/bin/python3
 # Copia apenas manifestos para aproveitar cache
 COPY package*.json ./
 
-# Toolchain para dependências nativas (mysql2/pg/node-gyp, etc.)
+# Toolchain para dependências nativas (mysql2/pg/node-gyp, canvas para PDF thumbnails, etc.)
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
        python3 python-is-python3 python3-dev python3-distutils \
        build-essential pkg-config libssl-dev git ca-certificates \
+       # Dependências para node-canvas (geração de thumbnails de PDF)
+       libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
   && rm -rf /var/lib/apt/lists/*
 
 # Instala dependências baseadas no package-lock (mais reprodutível) com diagnóstico detalhado e fallback
@@ -60,11 +62,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
-# Dependências de runtime necessárias (FFmpeg para processamento/conversão de mídia e Chromium para puppeteer)
+# Dependências de runtime necessárias (FFmpeg, Chromium, e libs para canvas/PDF thumbnails)
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
        ffmpeg \
        chromium \
+       # Libs de runtime para node-canvas (geração de thumbnails de PDF)
+       libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libjpeg62-turbo libgif7 librsvg2-2 \
   && rm -rf /var/lib/apt/lists/*
 
 # Build info injection
