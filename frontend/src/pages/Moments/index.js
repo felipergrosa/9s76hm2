@@ -56,12 +56,12 @@ const ChatMoments = () => {
       :
       <MainHeader>
         <Grid container style={{ width: "100%", padding: "0 10px" }} direction="column">
-          <Grid item>
-            <Title>Monitoramento de Atendimentos</Title>
+          <Grid item style={{ textAlign: "left" }}>
+            <Title>Painel de Atendimentos</Title>
             <Typography 
               variant="body1" 
               color="textSecondary" 
-              style={{ marginBottom: 16, marginTop: -10 }}
+              style={{ marginBottom: 16, marginTop: -10, fontStyle: "italic", textAlign: "left" }}
             >
               Visão geral em tempo real dos atendimentos organizados por categorias (Bot, Campanhas, Pendentes) e filas de usuários.
             </Typography>
