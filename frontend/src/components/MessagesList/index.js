@@ -1844,9 +1844,21 @@ useEffect(() => {
               {message.quotedMsg && renderQuotedMessage(message)}
               {message.mediaType !== "adMetaPreview" && (
                 (
-                  ((message.mediaType === "image" || message.mediaType === "video") && (getFileNameFromUrl(message.mediaUrl) || "").trim() !== (message.body || "").trim()) ||
+                  // Imagens/Vídeos: só exibe legenda se for diferente do nome do arquivo E não for vazio
+                  ((message.mediaType === "image" || message.mediaType === "video") && 
+                    (message.body || "").trim() !== "" && 
+                    (getFileNameFromUrl(message.mediaUrl) || "").trim() !== (message.body || "").trim() &&
+                    // Não exibir se o body parecer ser um nome de arquivo (contém extensão comum)
+                    !/\.(jpe?g|png|gif|webp|mp4|mov|avi|mkv|pdf)$/i.test((message.body || "").trim())
+                  ) ||
+                  // Stickers/GIFs: nunca exibir texto
+                  (message.mediaType === "sticker" || message.mediaType === "gif") ? false :
                   (
                     message.mediaType !== "audio" &&
+                    message.mediaType !== "image" &&
+                    message.mediaType !== "video" &&
+                    message.mediaType !== "sticker" &&
+                    message.mediaType !== "gif" &&
                     message.mediaType != "reactionMessage" &&
                     message.mediaType != "locationMessage" &&
                     message.mediaType !== "contactMessage" &&
