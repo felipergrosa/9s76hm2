@@ -10,6 +10,16 @@ const useStyles = makeStyles(theme => ({
     alignItems: "center",
     justifyContent: "space-between",
     padding: theme.spacing(1.5, 1.5, 0.5),
+    backgroundColor: "#fff", // Fundo branco para o header
+    borderBottom: "1px solid rgba(0,0,0,0.08)",
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    cursor: "grab",
+    userSelect: "none",
+    touchAction: "none",
+    "&:active": {
+      cursor: "grabbing",
+    },
   },
   left: {
     display: "flex",
@@ -21,6 +31,7 @@ const useStyles = makeStyles(theme => ({
     height: 10,
     borderRadius: 999,
     background: theme.palette.primary.main,
+    display: "none", // Ocultar o ponto, pois já usamos borda no topo
   },
   count: {
     marginLeft: theme.spacing(1),
@@ -34,6 +45,22 @@ export default function KanbanLaneHeader(props) {
   const classes = useStyles();
   const [anchorEl, setAnchorEl] = useState(null);
 
+  const handlePointerDown = (e) => {
+    if (e.button !== 0) return;
+    // Não iniciar pan quando clicar em elementos interativos
+    try {
+      const isInteractive = e.target.closest('button,a,input,textarea,select');
+      if (isInteractive) return;
+    } catch (_) {}
+    try { e.preventDefault(); } catch (_) {}
+    try {
+      if (e.pointerId != null && e.currentTarget?.setPointerCapture) {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }
+    } catch (_) {}
+    if (props.onPanStart) props.onPanStart(e);
+  };
+
   const handleOpen = (e) => setAnchorEl(e.currentTarget);
   const handleClose = () => setAnchorEl(null);
   const handleHide = () => {
@@ -45,7 +72,6 @@ export default function KanbanLaneHeader(props) {
       if (id && !arr.includes(id)) {
         arr.push(id);
         localStorage.setItem(key, JSON.stringify(arr));
-        // Opcional: notificar quem estiver escutando
         window.dispatchEvent(new CustomEvent('kanban:lanesHiddenChanged'));
       }
     } catch (e) {}
@@ -64,24 +90,36 @@ export default function KanbanLaneHeader(props) {
     handleClose();
   };
   return (
-    <div className={classes.header}>
+    <div className={classes.header} onPointerDown={handlePointerDown}>
       <div className={classes.left}>
-        <span className={classes.dot} style={{ background: color || "#999" }} />
-        <Typography variant="subtitle2" style={{ fontWeight: 800 }}>{title}</Typography>
-        <Chip size="small" label={label} variant="default" />
+        <Typography variant="subtitle2" style={{ fontWeight: 800, color: color || "#333" }}>{title}</Typography>
+        <Chip size="small" label={label} variant="default" style={{ height: 20, fontSize: "0.7rem", fontWeight: 600 }} />
         {typeof unreadCount === 'number' && unreadCount > 0 && (
-          <Chip size="small" color="secondary" label={`${unreadCount} ${i18n.t('kanban.unread')}`} style={{ marginLeft: 6 }} />
+          <Chip size="small" color="secondary" label={`${unreadCount}`} style={{ height: 20, fontSize: "0.7rem", marginLeft: 4 }} />
         )}
       </div>
       <Tooltip title={i18n.t('kanban.options')}>
-        <IconButton size="small" onClick={handleOpen}>
+        <IconButton
+          size="small"
+          onPointerDown={(e) => { e.stopPropagation(); }}
+          onMouseDown={(e) => { e.stopPropagation(); }}
+          onClick={(e) => { e.stopPropagation(); handleOpen(e); }}
+        >
           <MoreHorizIcon fontSize="small" />
         </IconButton>
       </Tooltip>
-      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleClose} getContentAnchorEl={null} anchorOrigin={{vertical:'bottom', horizontal:'right'}} transformOrigin={{vertical:'top', horizontal:'right'}}>
-        <MenuItem onClick={handleHide}><ListItemText primary={i18n.t('kanban.hideColumn')} /></MenuItem>
-        <MenuItem onClick={handleManage}><ListItemText primary={i18n.t('kanban.manageColumns')} /></MenuItem>
-        <MenuItem onClick={handleCopyLink}><ListItemText primary={i18n.t('kanban.copyLink')} /></MenuItem>
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleClose}
+        onClick={(e) => e.stopPropagation()}
+        getContentAnchorEl={null}
+        anchorOrigin={{vertical:'bottom', horizontal:'right'}}
+        transformOrigin={{vertical:'top', horizontal:'right'}}
+      >
+        <MenuItem onClick={(e) => { e.stopPropagation(); handleHide(); }}><ListItemText primary={i18n.t('kanban.hideColumn')} /></MenuItem>
+        <MenuItem onClick={(e) => { e.stopPropagation(); handleManage(); }}><ListItemText primary={i18n.t('kanban.manageColumns')} /></MenuItem>
+        <MenuItem onClick={(e) => { e.stopPropagation(); handleCopyLink(); }}><ListItemText primary={i18n.t('kanban.copyLink')} /></MenuItem>
       </Menu>
     </div>
   );

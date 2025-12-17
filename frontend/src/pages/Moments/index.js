@@ -5,7 +5,7 @@ import MomentsUser from "../../components/MomentsUser";
 // import MomentsQueues from "../../components/MomentsQueues";
 
 import MainHeader from "../../components/MainHeader";
-import { Grid, Paper } from "@material-ui/core";
+import { Grid, Paper, Typography } from "@material-ui/core";
 import Title from "../../components/Title";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -20,9 +20,14 @@ const useStyles = makeStyles((theme) => ({
   mainPaper: {
     display: "flex",
     padding: theme.spacing(1),
-    overflowY: "scroll",
+    overflowY: "hidden",
+    overflowX: "auto",
     ...theme.scrollbarStyles,
-    alignItems: "center"
+    alignItems: "flex-start",
+    height: "calc(100vh - 100px)", // Ajuste para ocupar altura correta descontando header
+    backgroundColor: "transparent",
+    border: "none",
+    boxShadow: "none"
   },
   fixedHeightPaper: {
     padding: theme.spacing(2),
@@ -50,15 +55,22 @@ const ChatMoments = () => {
       <ForbiddenPage />
       :
       <MainHeader>
-        <Grid style={{ width: "99.6%" }} container justifyContent="center" alignItems="flex-start">
-          <Grid xs={12} sm={8} xl={4} item >
-            <Title>{"Painel de Atendimentos"}</Title>
+        <Grid container style={{ width: "100%", padding: "0 10px" }} direction="column">
+          <Grid item>
+            <Title>Monitoramento de Atendimentos</Title>
+            <Typography 
+              variant="body1" 
+              color="textSecondary" 
+              style={{ marginBottom: 16, marginTop: -10 }}
+            >
+              Visão geral em tempo real dos atendimentos organizados por categorias (Bot, Campanhas, Pendentes) e filas de usuários.
+            </Typography>
           </Grid>
-          <Grid style={{ width: "100%", height: "100vh" }} item >
+          <Grid item style={{ width: "100%", height: "calc(100vh - 160px)" }}>
             <Paper
               className={classes.mainPaper}
               variant="outlined"
-              style={{ maxWidth: "100%" }}
+              style={{ maxWidth: "100%", height: "100%" }}
             >
               <MomentsUser />
             </Paper>

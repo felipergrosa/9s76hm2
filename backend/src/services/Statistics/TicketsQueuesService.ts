@@ -81,7 +81,9 @@ const TicketsQueuesService = async ({
 
   // eslint-disable-next-line eqeqeq
   if (showAll == "true") {
-    whereCondition = {};
+    // Mantém o filtro de filas se ele já foi definido, mas remove filtros de userId/status anteriores
+    const queueFilter = whereCondition.queueId ? { queueId: whereCondition.queueId } : {};
+    whereCondition = { ...queueFilter };
   }
 
   whereCondition = {

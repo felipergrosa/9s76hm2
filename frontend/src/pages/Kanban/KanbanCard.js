@@ -1,146 +1,181 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState, useMemo, useEffect, useContext } from "react";
 import { makeStyles } from "@material-ui/core/styles";
-import { Avatar, Chip, Typography, Tooltip, IconButton, Menu, MenuItem, ListItemText } from "@material-ui/core";
-import { Facebook, Instagram, WhatsApp, Close as CloseIcon } from "@material-ui/icons";
+import { Typography, Tooltip, Divider, Card, CardActionArea, CardContent, IconButton, Menu, MenuItem, ListItemText, Avatar } from "@material-ui/core";
+import { Facebook, Instagram, WhatsApp, Close as CloseIcon, MoreVert as MoreVertIcon, ChatBubbleOutline, AttachFile, EventAvailable } from "@material-ui/icons";
 import ContactAvatar from "../../components/ContactAvatar";
-import { ChatBubbleOutline, AttachFile, EventAvailable } from "@material-ui/icons";
-import MoreVertIcon from "@material-ui/icons/MoreVert";
 import { i18n } from "../../translate/i18n";
-import { format, parseISO } from "date-fns";
+import { format, isSameDay, parseISO } from "date-fns";
+import { AuthContext } from "../../context/Auth/AuthContext";
 
 const useStyles = makeStyles(theme => ({
-  card: {
+  ticketCard: {
     background: theme.palette.background.paper,
-    borderRadius: 16,
-    boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
-    padding: theme.spacing(2),
-    margin: '8px auto',
-    width: '95%',
-    maxWidth: 340,
-    boxSizing: 'border-box',
-    cursor: "pointer",
-    transition: "box-shadow 0.2s ease, transform 0.1s ease",
-    position: 'relative',
-    '&:hover': {
-      boxShadow: "0 8px 22px rgba(0,0,0,0.12)",
-      transform: "translateY(-1px)",
-    }
+    borderRadius: 8,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+    border: "1px solid transparent",
+    transition: "all 0.2s",
+    marginBottom: 8,
+    width: "100%",
+    boxSizing: "border-box",
+    position: "relative",
+    "&:hover": {
+      borderColor: theme.palette.primary.main,
+      transform: "translateY(-2px)",
+      boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+    },
+  },
+  ticketContent: {
+    padding: "12px !important",
+  },
+  ticketHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: theme.spacing(1),
+  },
+  avatarContainer: {
+    position: "relative",
+    marginRight: theme.spacing(1),
+  },
+  connectionBadge: {
+    position: "absolute",
+    bottom: -2,
+    left: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 999,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "2px solid #fff",
+    boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
+  },
+  ticketName: {
+    fontWeight: 600,
+    fontSize: "0.95rem",
+    color: theme.palette.text.primary,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    maxWidth: 180,
+  },
+  ticketId: {
+    fontSize: "0.75rem",
+    color: theme.palette.text.secondary,
+  },
+  ticketMessage: {
+    fontSize: "0.85rem",
+    color: theme.palette.text.secondary,
+    display: "-webkit-box",
+    "-webkit-line-clamp": 2,
+    "-webkit-box-orient": "vertical",
+    overflow: "hidden",
+    marginBottom: theme.spacing(1),
+    lineHeight: 1.3,
+    minHeight: 36,
+  },
+  ticketFooter: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: theme.spacing(1),
+  },
+  badge: {
+    fontSize: "0.7rem",
+    height: 20,
+    padding: "0 6px",
+    borderRadius: 4,
+    fontWeight: 600,
+    display: "flex",
+    alignItems: "center",
+  },
+  queueTag: {
+    backgroundColor: theme.palette.grey[300],
+    color: theme.palette.text.primary,
+    marginRight: theme.spacing(1),
+  },
+  whatsappTag: {
+    backgroundColor: "#25D366",
+    color: "#fff",
+  },
+  time: {
+    fontSize: "0.75rem",
+    color: theme.palette.text.secondary,
+  },
+  actionButton: {
+    padding: 4,
+    color: theme.palette.text.secondary,
+    "&:hover": {
+      color: theme.palette.primary.main,
+    },
   },
   closeBtn: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: 2,
+    right: 2,
     padding: 4,
+    zIndex: 10,
   },
   menuBtn: {
     position: 'absolute',
-    top: 4,
-    left: -4,
+    top: 2,
+    left: 2,
     padding: 4,
+    zIndex: 10,
   },
   priorityDot: {
     position: 'absolute',
     top: 38,
-    right: 90, 
-    width: 12,
-    height: 12,
+    right: 12,
+    width: 10,
+    height: 10,
     borderRadius: 999,
+    border: "1px solid #fff",
+    zIndex: 5,
   },
-  topRow: {
-    display: "flex",
-    alignItems: "center",
-    marginBottom: theme.spacing(1),
-    gap: 8,
-  },
-  avatarWrap: {
-    position: 'relative',
-    width: 36,
-    height: 36,
-  },
-  channelBadge: {
-    position: 'absolute',
-    bottom: -2,
-    left: -2,
-    width: 16,
-    height: 16,
-    borderRadius: 999,
-    background: theme.palette.background.paper,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 0 0 1px rgba(0,0,0,0.06)'
-  },
-  queuePill: {
-    padding: '3px 10px',
-    borderRadius: 999,
-    fontSize: 11,
-    fontWeight: 700,
-    lineHeight: '14px',
-    display: 'inline-flex',
-    alignItems: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  contactInfo: {
-    marginLeft: theme.spacing(1),
-    display: "flex",
-    flexDirection: "column",
-    minWidth: 0,
-  },
-  title: {
-    fontWeight: 700,
-    lineHeight: 1.2,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  note: {
-    color: theme.palette.text.secondary,
-    marginTop: 4,
-    marginBottom: theme.spacing(1),
-  },
+  // Barra de progresso
   progressWrap: {
     marginTop: theme.spacing(1),
     marginBottom: theme.spacing(1),
   },
   progressTrack: {
     width: '100%',
-    height: 8,
-    borderRadius: 6,
+    height: 6,
+    borderRadius: 4,
     background: theme.palette.action.hover,
     overflow: 'hidden',
-    marginTop: 4,
   },
   progressBar: {
     height: '100%',
   },
-  bottomRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: theme.spacing(1)
-  },
-  userWrap: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-  },
-  userAvatar: {
-    width: 24,
-    height: 24,
-    fontSize: 12,
-  },
-  counters: {
+  // Contadores
+  countersRow: {
     display: 'flex',
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,
+    marginTop: theme.spacing(1),
+    paddingTop: theme.spacing(1),
+    borderTop: `1px solid ${theme.palette.divider}`,
   },
   counterItem: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+    color: theme.palette.text.secondary,
+    fontSize: '0.8rem',
+  },
+  // Usuário atribuído
+  userRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginTop: theme.spacing(1),
+  },
+  userAvatar: {
+    width: 20,
+    height: 20,
+    fontSize: 10,
   },
 }));
 
@@ -151,13 +186,9 @@ const getPriorityFromUnread = (unread) => {
   return { label: "Medium", color: "#f59e0b" };
 };
 
-const getProgress = (unread) => {
-  const u = Number(unread) || 0;
-  return Math.max(0, 100 - Math.min(u, 10) * 10);
-};
-
 export default function KanbanCard({ ticket, onClick, allTags = [], onMoveRequest }) {
   const classes = useStyles();
+  const { user } = useContext(AuthContext);
   const [menuEl, setMenuEl] = useState(null);
   const [moveEl, setMoveEl] = useState(null);
   const [prioritySignal, setPrioritySignal] = useState(0);
@@ -184,95 +215,188 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
     return getPriorityFromUnread(ticket?.unreadMessages);
   }, [override, ticket?.unreadMessages]);
 
-  const progress = getProgress(ticket?.unreadMessages);
+  const channelBadge = useMemo(() => {
+    const bg = ticket?.channel === 'facebook'
+      ? '#3b5998'
+      : ticket?.channel === 'instagram'
+        ? '#e1306c'
+        : '#25D366';
 
-  const lastInteractionText = useMemo(() => {
-    try {
-      const raw = ticket?.lastInteractionAt || ticket?.updatedAt || ticket?.lastMessageDate || ticket?.createdAt;
-      if (!raw) return null;
-      const date = typeof raw === 'string' ? parseISO(raw) : new Date(raw);
-      if (!date || isNaN(date)) return null;
-      return format(date, "dd/MM/yyyy HH:mm");
-    } catch (_) { return null; }
-  }, [ticket?.lastInteractionAt, ticket?.updatedAt, ticket?.lastMessageDate, ticket?.createdAt]);
+    const Icon = ticket?.channel === 'facebook'
+      ? Facebook
+      : ticket?.channel === 'instagram'
+        ? Instagram
+        : WhatsApp;
 
-  const channelIcon = useMemo(() => {
-    const style = { fontSize: 12 };
-    switch (ticket?.channel) {
-      case 'facebook': return <Facebook style={{ ...style, color: "#3b5998" }} />;
-      case 'instagram': return <Instagram style={{ ...style, color: "#e1306c" }} />;
-      case 'whatsapp': return <WhatsApp style={{ ...style, color: "#25d366" }} />;
-      default: return null;
-    }
+    return { bg, Icon };
   }, [ticket?.channel]);
 
+  const ChannelBadgeIcon = channelBadge.Icon;
+
+  // Calcular progresso baseado em mensagens não lidas
+  const progress = useMemo(() => {
+    const u = Number(ticket?.unreadMessages) || 0;
+    return Math.max(0, 100 - Math.min(u, 10) * 10);
+  }, [ticket?.unreadMessages]);
+
+  // Contadores
+  const comments = Number(ticket?.unreadMessages) || 0;
+  const attachments = Number(ticket?.mediaCount) || 0;
+  const schedules = Number(ticket?.schedulesCount || ticket?.appointmentsCount || 0);
+
+  // Iniciais do usuário atribuído
   const userInitials = ticket?.user?.name
     ? ticket.user.name.split(" ").map(p => p[0]).slice(0, 2).join("")
     : "?";
 
-  const comments = Number(ticket?.unreadMessages) || 0; // mensagens não lidas
-  const attachments = Number(ticket?.mediaCount) || 0; // anexos
-  const schedules = Number(ticket?.schedulesCount || ticket?.appointmentsCount || 0); // agendamentos
-
   return (
-    <div className={classes.card} onClick={onClick}>
-      {/* Botões e indicadores no topo */}
-      <IconButton className={classes.menuBtn} size="small" onClick={(e)=>{ e.stopPropagation(); setMenuEl(e.currentTarget); }}>
-        <MoreVertIcon fontSize="small" />
-      </IconButton>
-      <IconButton className={classes.closeBtn} size="small" onClick={(e)=>{ e.stopPropagation(); try { window.dispatchEvent(new CustomEvent('kanban:cardClose', { detail: { id: ticket?.id } })); } catch (err) {} }}>
-        <CloseIcon fontSize="small" />
-      </IconButton>
-      <span className={classes.priorityDot} style={{ background: priority.color }} />
-      <div className={classes.topRow}>
-        <div className={classes.avatarWrap}>
-          <ContactAvatar contact={ticket?.contact} style={{ width: 36, height: 36 }} />
-          <div className={classes.channelBadge}>
-            {channelIcon}
+    <Card className={classes.ticketCard} onClick={onClick}>
+      {/* Botões de Ação */}
+      <Tooltip title="Opções">
+        <IconButton className={classes.menuBtn} size="small" onClick={(e) => { e.stopPropagation(); setMenuEl(e.currentTarget); }}>
+          <MoreVertIcon style={{ fontSize: 16 }} />
+        </IconButton>
+      </Tooltip>
+      
+      {(user.profile === "admin" || ticket.userId === user.id) && (
+        <Tooltip title="Fechar Ticket">
+          <IconButton className={classes.closeBtn} size="small" onClick={(e) => { 
+            e.stopPropagation(); 
+            try { window.dispatchEvent(new CustomEvent('kanban:cardClose', { detail: { id: ticket?.id } })); } catch (err) {} 
+          }}>
+            <CloseIcon style={{ fontSize: 16 }} />
+          </IconButton>
+        </Tooltip>
+      )}
+
+      {/* Indicador de Prioridade */}
+      <Tooltip title={`Prioridade: ${priority.label}`}>
+        <span className={classes.priorityDot} style={{ background: priority.color }} />
+      </Tooltip>
+
+      <CardActionArea style={{ paddingTop: 20 }}>
+        <CardContent className={classes.ticketContent}>
+          {/* Header: Avatar + Nome + Ticket ID */}
+          <div className={classes.ticketHeader}>
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <div className={classes.avatarContainer}>
+                <ContactAvatar
+                  contact={ticket?.contact}
+                  style={{ width: 40, height: 40 }}
+                />
+                <Tooltip title={ticket?.whatsapp?.name || i18n.t('kanban.connection')}>
+                  <div className={classes.connectionBadge} style={{ background: channelBadge.bg }}>
+                    <ChannelBadgeIcon style={{ fontSize: 12, color: '#fff' }} />
+                  </div>
+                </Tooltip>
+              </div>
+              <div>
+                <Tooltip title={ticket?.contact?.name || "Contato"}>
+                  <Typography className={classes.ticketName}>
+                    {ticket?.contact?.name}
+                  </Typography>
+                </Tooltip>
+                <Typography className={classes.ticketId}>
+                  Ticket #{ticket?.id}
+                </Typography>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className={classes.contactInfo}>
-          <Tooltip title={ticket?.contact?.name || ticket?.contact?.number || "Contato"}>
-            <Typography variant="subtitle1" className={classes.title}>
-              {ticket?.contact?.name || ticket?.contact?.number || "Contato"}
+
+          {/* Última Mensagem (limitada a 2 linhas) */}
+          <Tooltip title={ticket?.lastMessage || "Sem mensagens"}>
+            <Typography className={classes.ticketMessage}>
+              {ticket?.lastMessage || "Sem mensagens"}
             </Typography>
           </Tooltip>
-          <Typography variant="caption" color="textSecondary">
-            Ticket #{ticket?.id}
-          </Typography>
-        </div>
-        {/* espaço flex */}
-        <div style={{ marginLeft: 'auto' }} />
-      </div>
 
-      {/* Menus (fixos no topo/esquerda) */}
-      <Menu anchorEl={menuEl} open={Boolean(menuEl)} onClose={()=>setMenuEl(null)} getContentAnchorEl={null} anchorOrigin={{vertical:'bottom', horizontal:'left'}} transformOrigin={{vertical:'top', horizontal:'left'}} onClick={(e)=>e.stopPropagation()}>
-        <MenuItem onClick={async ()=>{ try { await navigator.clipboard.writeText(`${window.location.origin}/tickets/${ticket?.uuid}`); } catch(e){} setMenuEl(null); }}>
+          {/* Barra de Progresso */}
+          <div className={classes.progressWrap}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="caption" color="textSecondary">{i18n.t('kanban.progress')}</Typography>
+              <Typography variant="caption" color="textSecondary">
+                {isSameDay(parseISO(ticket?.updatedAt), new Date())
+                  ? format(parseISO(ticket?.updatedAt), "HH:mm")
+                  : format(parseISO(ticket?.updatedAt), "dd/MM/yyyy HH:mm")}
+              </Typography>
+            </div>
+            <div className={classes.progressTrack}>
+              <div className={classes.progressBar} style={{ width: `${progress}%`, background: priority.color }} />
+            </div>
+          </div>
+
+          {/* Usuário Atribuído + Fila */}
+          <div className={classes.userRow}>
+            <Avatar className={classes.userAvatar}>{userInitials}</Avatar>
+            <Typography variant="caption" color="textSecondary">
+              {ticket?.user?.name || i18n.t('kanban.noAssignee')}
+            </Typography>
+            <div style={{ marginLeft: 'auto' }}>
+              <div
+                className={`${classes.badge} ${classes.queueTag}`}
+                style={{
+                  backgroundColor: ticket?.queue?.color || "#e0e0e0",
+                  color: ticket?.queue?.color ? "#fff" : "inherit",
+                }}
+              >
+                {ticket?.queue?.name || "Sem Fila"}
+              </div>
+            </div>
+          </div>
+
+          {/* Contadores: Mensagens, Anexos, Agendamentos */}
+          <div className={classes.countersRow}>
+            <Tooltip title={i18n.t('kanban.counters.comments')}>
+              <div className={classes.counterItem}>
+                <ChatBubbleOutline style={{ fontSize: 16 }} />
+                <span>{comments}</span>
+              </div>
+            </Tooltip>
+            <Tooltip title={i18n.t('kanban.counters.attachments')}>
+              <div className={classes.counterItem}>
+                <AttachFile style={{ fontSize: 16 }} />
+                <span>{attachments}</span>
+              </div>
+            </Tooltip>
+            <Tooltip title={i18n.t('kanban.counters.subtasks')}>
+              <div className={classes.counterItem}>
+                <EventAvailable style={{ fontSize: 16 }} />
+                <span>{schedules}</span>
+              </div>
+            </Tooltip>
+          </div>
+        </CardContent>
+      </CardActionArea>
+
+      {/* Menus Flutuantes Restaurados */}
+      <Menu anchorEl={menuEl} open={Boolean(menuEl)} onClose={() => setMenuEl(null)} onClick={(e) => e.stopPropagation()}>
+        <MenuItem onClick={async () => { try { await navigator.clipboard.writeText(`${window.location.origin}/tickets/${ticket?.uuid}`); } catch (e) { } setMenuEl(null); }}>
           <ListItemText primary={i18n.t('kanban.copyTicketLink')} />
         </MenuItem>
-        <MenuItem onClick={(e)=>{ setMoveEl(e.currentTarget); }}>
+        <MenuItem onClick={(e) => { setMoveEl(e.currentTarget); }}>
           <ListItemText primary={i18n.t('kanban.moveToTag')} />
         </MenuItem>
-        <MenuItem onClick={()=>{
+        <MenuItem onClick={() => {
           try {
             const raw = localStorage.getItem(priorityKey);
             const map = raw ? JSON.parse(raw) : {};
-            const order = ['Low','Medium','High'];
+            const order = ['Low', 'Medium', 'High'];
             const current = map[String(ticket?.id)] || null;
-            const next = current ? order[(order.indexOf(current)+1)%order.length] : 'High';
+            const next = current ? order[(order.indexOf(current) + 1) % order.length] : 'High';
             map[String(ticket?.id)] = next;
             localStorage.setItem(priorityKey, JSON.stringify(map));
             setPrioritySignal(s => s + 1);
-            try { window.dispatchEvent(new CustomEvent('kanban:priorityChanged')); } catch (_) {}
-          } catch(e) {}
+            try { window.dispatchEvent(new CustomEvent('kanban:priorityChanged')); } catch (_) { }
+          } catch (e) { }
           setMenuEl(null);
         }}>
           <ListItemText primary={i18n.t('kanban.togglePriority')} />
         </MenuItem>
       </Menu>
-      <Menu anchorEl={moveEl} open={Boolean(moveEl)} onClose={()=>setMoveEl(null)} getContentAnchorEl={null} anchorOrigin={{vertical:'bottom', horizontal:'left'}} transformOrigin={{vertical:'top', horizontal:'left'}} onClick={(e)=>e.stopPropagation()}>
-        {allTags && allTags.length ? allTags.map(t=> (
-          <MenuItem key={t.id} onClick={()=>{ setMoveEl(null); setMenuEl(null); onMoveRequest && onMoveRequest(String(t.id)); }}>
+
+      <Menu anchorEl={moveEl} open={Boolean(moveEl)} onClose={() => setMoveEl(null)} onClick={(e) => e.stopPropagation()}>
+        {allTags && allTags.length ? allTags.map(t => (
+          <MenuItem key={t.id} onClick={() => { setMoveEl(null); setMenuEl(null); onMoveRequest && onMoveRequest(String(t.id)); }}>
             <span style={{ width: 8, height: 8, borderRadius: 999, background: t.color, display: 'inline-block', marginRight: 8 }} />
             <ListItemText primary={t.name} />
           </MenuItem>
@@ -282,63 +406,6 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
           </MenuItem>
         )}
       </Menu>
-
-      {ticket?.lastMessage && (
-        <Typography variant="body2" className={classes.note}>
-          {ticket.lastMessage}
-        </Typography>
-      )}
-
-      <div className={classes.progressWrap}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="caption" color="textSecondary">{i18n.t('kanban.progress')}</Typography>
-          {lastInteractionText && (
-            <Tooltip title={'Última interação'}>
-              <Typography variant="caption" color="textSecondary">{lastInteractionText}</Typography>
-            </Tooltip>
-          )}
-        </div>
-        <div className={classes.progressTrack}>
-          <div className={classes.progressBar} style={{ width: `${progress}%`, background: priority.color }} />
-        </div>
-      </div>
-
-      <div className={classes.bottomRow}>
-        <div className={classes.userWrap}>
-          <Avatar className={classes.userAvatar}>{userInitials}</Avatar>
-          <Typography variant="caption" color="textSecondary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {ticket?.user?.name || i18n.t('kanban.noAssignee')} |
-            <span className={classes.queuePill} style={{ background: (ticket?.queue?.color || '#9CA3AF'), color: '#fff' }}>
-              {ticket?.queue?.name || ticket?.whatsapp?.name || 'Fila'}
-            </span>
-          </Typography>
-        </div>
-      </div>
-      <div className={classes.bottomRow}>
-        <div className={classes.counters}>
-          <Tooltip title={i18n.t('kanban.counters.comments')}>
-            <div className={classes.counterItem}>
-              <ChatBubbleOutline style={{ fontSize: 16 }} />
-              <span>{comments}</span>
-            </div>
-          </Tooltip>
-          <Tooltip title={i18n.t('kanban.counters.attachments')}>
-            <div className={classes.counterItem}>
-              <AttachFile style={{ fontSize: 16 }} />
-              <span>{attachments}</span>
-            </div>
-          </Tooltip>
-          <Tooltip title={i18n.t('kanban.counters.subtasks')}>
-            <div className={classes.counterItem}>
-              <EventAvailable style={{ fontSize: 16 }} />
-              <span>{schedules}</span>
-            </div>
-          </Tooltip>
-        </div>
-      </div>
-    </div>
+    </Card>
   );
 }
-
-// listen globally to priority change to update this card immediately
-// placed after component for clarity; could be inside but we need hooks, so using inside component:

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useMemo } from "react";
+import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
 import { makeStyles, useTheme } from "@material-ui/core/styles";
 import api from "../../services/api";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -14,41 +14,147 @@ import KanbanLaneHeader from "./KanbanLaneHeader";
 import { format, isSameDay, parseISO, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from "date-fns";
 import { Can } from "../../components/Can";
 import KanbanFiltersModal from "./KanbanFiltersModal";
+import Title from "../../components/Title"; // Importando Title
 
 const useStyles = makeStyles(theme => ({
+  '@global': {
+    '.smooth-dnd-ghost': {
+      width: '350px !important',
+      maxWidth: '350px !important',
+      flex: '0 0 350px !important',
+      boxSizing: 'border-box !important',
+    },
+    '.smooth-dnd-ghost > *': {
+      width: '350px !important',
+      maxWidth: '350px !important',
+    },
+    '.smooth-dnd-ghost .react-trello-card': {
+      width: '350px !important',
+      maxWidth: '350px !important',
+    },
+    '.smooth-dnd-ghost .smooth-dnd-draggable-wrapper': {
+      width: '350px !important',
+      maxWidth: '350px !important',
+    },
+  },
   root: {
     display: "flex",
     flexDirection: "column",
     alignItems: "stretch",
-    padding: "16px",
+    height: "100vh",
+    padding: theme.spacing(1),
+    overflow: "hidden",
+  },
+  headerContainer: {
+    padding: "0 10px",
+    marginBottom: theme.spacing(1),
+    textAlign: "left",
   },
   kanbanContainer: {
+    flex: 1,
+    padding: "0 10px",
+    paddingRight: 240, // Espaço extra para última coluna aparecer inteira
+    overflowX: "auto",
+    overflowY: "hidden",
     width: "100%",
-  },
-  topbar: {
-    width: "100%",
-    margin: "0 0 16px",
-  },
-  tabsWrap: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
+    height: "100%",
+    // CSS para forçar layout horizontal no react-trello
+    "& .react-trello-board": {
+      display: "flex !important",
+      flexDirection: "row !important",
+      flexWrap: "nowrap !important",
+      alignItems: "flex-start !important",
+      height: "100% !important",
+      width: "100% !important",
+      minWidth: "fit-content !important",
+      padding: "0 !important",
+      backgroundColor: "transparent !important",
+    },
+    "& .smooth-dnd-container.horizontal": {
+      display: "flex !important",
+      flexDirection: "row !important",
+      flexWrap: "nowrap !important",
+      gap: "6px !important",
+      height: "100% !important",
+      width: "100% !important",
+      minWidth: "fit-content !important",
+    },
+    "& .react-trello-lane": {
+      minWidth: "350px !important",
+      width: "350px !important",
+      maxWidth: "350px !important",
+      flex: "0 0 350px !important",
+      height: "100% !important",
+      maxHeight: "100% !important",
+      marginRight: "0px !important",
+      display: "flex !important",
+      flexDirection: "column !important",
+    },
+    "& section": {
+      minWidth: "350px !important",
+      width: "350px !important",
+      flex: "0 0 350px !important",
+      marginRight: "0px !important",
+    },
+    // Aproximar visual do /moments: padding interno da lista e cards ocupando largura total
+    "& .react-trello-lane__cards": {
+      padding: `${theme.spacing(1)}px !important`,
+      boxSizing: "border-box !important",
+    },
+    // Corrige card esticando durante drag (smooth-dnd ghost herda widths grandes)
+    "& .smooth-dnd-ghost": {
+      width: "350px !important",
+      maxWidth: "350px !important",
+      flex: "0 0 350px !important",
+      boxSizing: "border-box !important",
+    },
+    "& .smooth-dnd-ghost > *": {
+      width: "350px !important",
+      maxWidth: "350px !important",
+    },
+    "& .smooth-dnd-dragging": {
+      width: "auto !important",
+      maxWidth: "none !important",
+      flex: "initial !important",
+    },
+    "& .smooth-dnd-ghost .react-trello-card": {
+      width: "350px !important",
+      maxWidth: "350px !important",
+    },
+    "& .smooth-dnd-ghost .smooth-dnd-draggable-wrapper": {
+      width: "350px !important",
+      maxWidth: "350px !important",
+    },
+    // Restaurar largura dos cards (350px)
+    "& .smooth-dnd-draggable-wrapper": {
+      width: "100% !important",
+      maxWidth: "100% !important",
+      marginBottom: `${theme.spacing(1)}px !important`,
+    },
+    "& .react-trello-card": {
+      width: "100% !important",
+      maxWidth: "100% !important",
+      margin: "0 !important",
+    },
   },
   actionsBar: {
     display: "flex",
     alignItems: "center",
     gap: 12,
+    flexWrap: "wrap",
+    rowGap: 8,
     padding: 12,
     background: theme.palette.background.paper,
     borderRadius: 12,
     boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+    marginBottom: theme.spacing(2),
   },
   searchInput: {
     padding: "6px 10px",
     borderRadius: 8,
     background: theme.palette.action.hover,
-    minWidth: 240,
+    minWidth: 200,
+    maxWidth: 300,
   },
   connectionTag: {
     background: "green",
@@ -89,9 +195,12 @@ const useStyles = makeStyles(theme => ({
 
 const Kanban = () => {
   const classes = useStyles();
-  const theme = useTheme(); // Obter o tema atual
+  const theme = useTheme(); 
   const history = useHistory();
   const { user, socket } = useContext(AuthContext);
+  const kanbanScrollRef = useRef(null);
+  const panRef = useRef({ active: false, startX: 0, scrollLeft: 0 });
+  const bodyStyleRef = useRef({ cursor: "", userSelect: "" });
   const [tags, setTags] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [ticketNot, setTicketNot] = useState(0);
@@ -99,10 +208,10 @@ const Kanban = () => {
   const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), "yyyy-MM-dd"));
   const [searchText, setSearchText] = useState("");
-  const [sortBy, setSortBy] = useState("recent"); // recent | oldest | unread | priority
-  const [filterQueues, setFilterQueues] = useState([]); // ids
-  const [filterUsers, setFilterUsers] = useState([]); // ids
-  const [filterTags, setFilterTags] = useState([]); // ids
+  const [sortBy, setSortBy] = useState("recent"); 
+  const [filterQueues, setFilterQueues] = useState([]); 
+  const [filterUsers, setFilterUsers] = useState([]); 
+  const [filterTags, setFilterTags] = useState([]); 
   const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeAnchor, setRangeAnchor] = useState(null);
   const [range, setRange] = useState({ startDate: parseISO(format(startOfMonth(new Date()), "yyyy-MM-dd")), endDate: parseISO(format(endOfMonth(new Date()), "yyyy-MM-dd")) });
@@ -157,9 +266,11 @@ const Kanban = () => {
         }
       });
       setTickets(data.tickets);
+      return data.tickets;
     } catch (err) {
       console.log(err);
       setTickets([]);
+      return [];
     }
   };
 
@@ -191,23 +302,9 @@ const Kanban = () => {
     setEndDate(event.target.value);
   };
 
-  // Atualiza a lista de tickets ao alterar intervalo de datas
   useEffect(() => {
     fetchTickets();
   }, [startDate, endDate]);
-
-  const IconChannel = (channel) => {
-    switch (channel) {
-      case "facebook":
-        return <Facebook style={{ color: "#3b5998", verticalAlign: "middle", fontSize: "16px" }} />;
-      case "instagram":
-        return <Instagram style={{ color: "#e1306c", verticalAlign: "middle", fontSize: "16px" }} />;
-      case "whatsapp":
-        return <WhatsApp style={{ color: "#25d366", verticalAlign: "middle", fontSize: "16px" }} />
-      default:
-        return "error";
-    }
-  };
 
   const lighten = (hex, amount = 0.85) => {
     if (!hex) return '#f5f5f5';
@@ -233,7 +330,6 @@ const Kanban = () => {
         (t.contact?.number || "").toLowerCase().includes(q)
       );
     }
-    // filtros avançados
     if (filterQueues.length) {
       filtered = filtered.filter(t => filterQueues.includes(String(t.queueId || t.whatsappId)) || filterQueues.includes(String(t.queue?.id)));
     }
@@ -259,8 +355,20 @@ const Kanban = () => {
     return filtered;
   };
 
-  const popularCards = (jsonString) => {
-    const filteredTickets = applySearchAndSort(tickets.filter(ticket => ticket.tags.length === 0));
+  const popularCards = (jsonString, ticketsSource = tickets) => {
+    const filteredTickets = applySearchAndSort((ticketsSource || []).filter(ticket => ticket.tags.length === 0));
+
+    // Estilo padrão das lanes (colunas)
+    const laneStyle = {
+      backgroundColor: "#f5f5f5", // Fundo neutro
+      borderRadius: 8,
+      border: "1px solid rgba(0,0,0,0.12)",
+      maxHeight: "100%",
+      display: "flex",
+      flexDirection: "column",
+      minWidth: 350,
+      width: 350,
+    };
 
     let lanes = [
       {
@@ -268,8 +376,8 @@ const Kanban = () => {
         title: i18n.t("tagsKanban.laneDefault"),
         label: filteredTickets.length.toString(),
         unreadCount: filteredTickets.reduce((acc, t) => acc + Number(t.unreadMessages || 0), 0),
-        laneColor: '#e9d5ff',
-        style: { backgroundColor: lighten('#8b5cf6', 0.88), borderRadius: 16, padding: 8 },
+        laneColor: '#5C5C5C', // Cor padrão para "Em aberto"
+        style: { ...laneStyle, borderTop: `4px solid #5C5C5C` }, // Borda colorida no topo
         cards: filteredTickets.map(ticket => ({
           id: ticket.id.toString(),
           label: "",
@@ -283,7 +391,7 @@ const Kanban = () => {
         })),
       },
       ...tags.map(tag => {
-        const filteredTickets = applySearchAndSort(tickets.filter(ticket => {
+        const filteredTickets = applySearchAndSort((ticketsSource || []).filter(ticket => {
           const tagIds = ticket.tags.map(tag => tag.id);
           return tagIds.includes(tag.id);
         }));
@@ -295,7 +403,7 @@ const Kanban = () => {
           label: filteredTickets?.length.toString(),
           unreadCount: unreadSum,
           laneColor: tag.color,
-          style: { backgroundColor: lighten(tag.color, 0.88), borderRadius: 16, padding: 8 },
+          style: { ...laneStyle, borderTop: `4px solid ${tag.color}` }, // Borda colorida no topo
           cards: filteredTickets.map(ticket => ({
             id: ticket.id.toString(),
             label: "",
@@ -310,7 +418,7 @@ const Kanban = () => {
         };
       }),
     ];
-    // Filtra colunas ocultas via localStorage
+    
     try {
       const raw = localStorage.getItem('kanbanHiddenLanes');
       const hidden = raw ? JSON.parse(raw) : [];
@@ -327,22 +435,42 @@ const Kanban = () => {
   };
 
   useEffect(() => {
-    // Recalcula o board sempre que filtros/ordenação/busca mudarem
     popularCards(jsonString);
   }, [tags, tickets, searchText, sortBy, filterQueues, filterUsers, filterTags]);
 
-  const handleCardMove = async (sourceLaneId, targetLaneId, cardId) => {
+  const handleCardMove = async (...args) => {
     try {
-      const ticketId = String(cardId);
+      // Compatibilidade: algumas versões do react-trello chamam:
+      // (fromLaneId, toLaneId, cardId, index)
+      // outras chamam:
+      // (cardId, fromLaneId, toLaneId, position, cardDetails)
+      const laneIds = new Set((file?.lanes || []).map(l => String(l.id)));
+      let sourceLaneId;
+      let targetLaneId;
+      let cardId;
 
-      // Remove tag(s) atuais do ticket
+      if (args.length >= 3 && laneIds.has(String(args[0])) && laneIds.has(String(args[1]))) {
+        sourceLaneId = String(args[0]);
+        targetLaneId = String(args[1]);
+        cardId = String(args[2]);
+      } else if (args.length >= 3 && laneIds.has(String(args[1])) && laneIds.has(String(args[2]))) {
+        cardId = String(args[0]);
+        sourceLaneId = String(args[1]);
+        targetLaneId = String(args[2]);
+      } else {
+        // fallback (mantém compat com a assinatura antiga)
+        sourceLaneId = String(args[0]);
+        targetLaneId = String(args[1]);
+        cardId = String(args[2]);
+      }
+
+      const ticketId = String(cardId);
       await api.delete(`/ticket-tags/${ticketId}`);
-      // Se destino não for "sem tag" (lane0), adiciona nova tag
       if (String(targetLaneId) !== 'lane0') {
         await api.put(`/ticket-tags/${ticketId}/${targetLaneId}`);
       }
-      await fetchTickets();
-      popularCards(jsonString);
+      const updatedTickets = await fetchTickets();
+      popularCards(jsonString, updatedTickets);
     } catch (err) {
       console.log(err);
     }
@@ -368,6 +496,31 @@ const Kanban = () => {
   };
 
   useEffect(() => {
+    try {
+      const currentCursor = document.body.style.cursor;
+      const currentUserSelect = document.body.style.userSelect;
+
+      const sanitizedCursor = (currentCursor === 'grab' || currentCursor === 'grabbing') ? '' : currentCursor;
+      const sanitizedUserSelect = (currentUserSelect === 'none') ? '' : currentUserSelect;
+
+      bodyStyleRef.current = {
+        cursor: sanitizedCursor,
+        userSelect: sanitizedUserSelect,
+      };
+
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    } catch (_) {}
+
+    return () => {
+      try {
+        document.body.style.cursor = bodyStyleRef.current.cursor || "";
+        document.body.style.userSelect = bodyStyleRef.current.userSelect || "";
+      } catch (_) {}
+    };
+  }, []);
+
+  useEffect(() => {
     const onHiddenChanged = () => popularCards(jsonString);
     window.addEventListener('kanban:lanesHiddenChanged', onHiddenChanged);
     const onPriorityChanged = () => popularCards(jsonString);
@@ -378,22 +531,56 @@ const Kanban = () => {
     };
   }, [tags, tickets]);
 
+  const handlePanStart = (e) => {
+    const evt = e?.nativeEvent || e;
+    if (evt?.button != null && evt.button !== 0) return;
+    const container = kanbanScrollRef.current;
+    if (!container) return;
+    panRef.current.active = true;
+    panRef.current.startX = evt.clientX;
+    panRef.current.scrollLeft = container.scrollLeft;
+    panRef.current.pointerId = evt.pointerId != null ? evt.pointerId : null;
+  };
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!panRef.current.active) return;
+      if (panRef.current.pointerId != null && e.pointerId != null && panRef.current.pointerId !== e.pointerId) return;
+      const container = kanbanScrollRef.current;
+      if (!container) return;
+      const dx = e.clientX - panRef.current.startX;
+      container.scrollLeft = panRef.current.scrollLeft - dx;
+    };
+
+    const onUp = (e) => {
+      if (!panRef.current.active) return;
+      if (panRef.current.pointerId != null && e?.pointerId != null && panRef.current.pointerId !== e.pointerId) return;
+      panRef.current.active = false;
+      panRef.current.pointerId = null;
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, []);
+
   return (
     <div className={classes.root}>
-      <div className={classes.topbar}>
-        <div className={classes.tabsWrap}>
-          <Typography variant="h6" style={{ fontWeight: 800 }}>{i18n.t('kanban.title')}</Typography>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Can role={user.profile} perform="dashboard:view" yes={() => (
-              <Button variant="outlined" color="default" onClick={handleAddConnectionClick}>
-                {i18n.t('kanban.addColumns')}
-              </Button>
-            )} />
-            <Button variant="text" color="primary" onClick={handleResetHiddenLanes}>{i18n.t('kanban.resetColumns')}</Button>
-          </div>
-        </div>
-        {/* Filtros removidos da barra principal — agora acessíveis via modal */}
-        {/* Menu de abas removido conforme solicitação */}
+      <div className={classes.headerContainer}>
+        <Title>CRM - Kanban</Title>
+        <Typography
+          variant="body1"
+          color="textSecondary"
+          style={{ marginBottom: 16, marginTop: -10, fontStyle: "italic", textAlign: "left" }}
+        >
+          Organize seus atendimentos por tags e etapas visuais. Arraste os cards para mover entre as colunas.
+        </Typography>
+
         <div className={classes.actionsBar}>
           <InputBase
             placeholder={i18n.t('kanban.searchContact')}
@@ -401,7 +588,17 @@ const Kanban = () => {
             onChange={(e) => setSearchText(e.target.value)}
             className={classes.searchInput}
           />
-          <div style={{ flex: 1 }} />
+
+          <Can role={user.profile} perform="dashboard:view" yes={() => (
+            <Button variant="outlined" color="primary" onClick={handleAddConnectionClick}>
+              {i18n.t('kanban.addColumns')}
+            </Button>
+          )} />
+
+          <Button variant="text" color="primary" onClick={handleResetHiddenLanes}>
+            {i18n.t('kanban.resetColumns')}
+          </Button>
+
           <Button
             variant="outlined"
             size="small"
@@ -412,35 +609,33 @@ const Kanban = () => {
           </Button>
         </div>
       </div>
-      <div className={classes.kanbanContainer}>
+
+      <div className={classes.kanbanContainer} ref={kanbanScrollRef}>
         {!file || !file.lanes ? (
-          // Loader simples: blocos placeholder
           <div style={{ display: 'flex', gap: 12 }}>
-            {[1,2,3].map(i=> (
-              <div key={i} style={{ width: 320, borderRadius: 16, padding: 8, background: '#f5f5f5' }}>
-                <div style={{ height: 28, background: '#e9e9e9', borderRadius: 8, marginBottom: 8 }} />
-                {[1,2,3].map(j=> (
-                  <div key={j} style={{ height: 80, background: '#ededed', borderRadius: 12, margin: '8px 0' }} />
-                ))}
-              </div>
+            {[1, 2, 3].map(i => (
+              <div key={i} style={{ width: 350, height: "100%", borderRadius: 8, padding: 8, background: '#f5f5f5' }} />
             ))}
           </div>
         ) : (
-          file.lanes.length === 0 || file.lanes.every(l=> (l.cards||[]).length===0) ? (
+          file.lanes.length === 0 || file.lanes.every(l => (l.cards || []).length === 0) ? (
             <Typography variant="body2" color="textSecondary">{i18n.t('kanban.empty.noTickets')}</Typography>
           ) : (
             <Board
               data={file}
               onCardMoveAcrossLanes={handleCardMove}
-              components={{ LaneHeader: KanbanLaneHeader }}
+              components={{ LaneHeader: (props) => <KanbanLaneHeader {...props} onPanStart={handlePanStart} /> }}
               customCardLayout
               hideCardDeleteIcon
-              style={{ backgroundColor: 'rgba(252, 252, 252, 0.03)' }}
+              style={{ backgroundColor: 'transparent', height: '100%', padding: 0 }}
+              draggable
+              cardDraggable
+              laneDraggable={false}
             />
           )
         )}
       </div>
-      {/* Modal de filtros */}
+
       <KanbanFiltersModal
         open={filtersModalOpen}
         onClose={() => setFiltersModalOpen(false)}
