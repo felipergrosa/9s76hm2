@@ -1148,11 +1148,7 @@ export const remove = async (
 // ATUALIZAÇÃO EM MASSA DE CONTATOS (apenas admin)
 export const bulkUpdate = async (req: Request, res: Response): Promise<Response> => {
   const { contactIds, data } = req.body as { contactIds: number[]; data: { tagIds?: number[]; situation?: 'Ativo' | 'Baixado' | 'Ex-Cliente' | 'Excluido' | 'Futuro' | 'Inativo'; whatsappId?: number | null } };
-  const { companyId, profile } = req.user;
-
-  if (profile !== "admin") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
+  const { companyId } = req.user;
 
   if (!Array.isArray(contactIds) || contactIds.length === 0) {
     throw new AppError("Nenhum ID de contato fornecido para atualização em massa.", 400);

@@ -1063,121 +1063,137 @@ const MessagesList = ({
     fetchMessages();
   }, [pageNumber, ticketId, selectedQueuesMessage]);
 
-  // Garante que, quando o composer sinalizar que está pronto, a lista role ao final
-  useEffect(() => {
-    const onComposerReady = () => {
-      composerReadyRef.current = true;
-      setTimeout(() => {
-        scrollToBottom();
-        setUiReady(true);
-        try { window.dispatchEvent(new Event('messages-ready')); } catch {}
-      }, 60);
-    };
-    window.addEventListener('composer-ready', onComposerReady);
-    return () => window.removeEventListener('composer-ready', onComposerReady);
-  }, []);
+// Garante que, quando o composer sinalizar que está pronto, a lista role ao final
+useEffect(() => {
+  const onComposerReady = () => {
+    composerReadyRef.current = true;
+    setTimeout(() => {
+      scrollToBottom();
+      setUiReady(true);
+      try { window.dispatchEvent(new Event('messages-ready')); } catch {}
+    }, 60);
+  };
+  window.addEventListener('composer-ready', onComposerReady);
+  return () => window.removeEventListener('composer-ready', onComposerReady);
+}, []);
 
-  useEffect(() => {
-    if (!ticketId || ticketId === "undefined") {
-      return;
-    }
+useEffect(() => {
+  if (!ticketId || ticketId === "undefined") {
+    return;
+  }
 
-    // Aguarda socket e user.companyId disponíveis
-    if (!socket || typeof socket.on !== "function") {
-      return;
-    }
-    if (!user || !user.companyId) {
-      return;
-    }
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const normalizedTicketId = (ticketId ?? "").toString().trim();
+  const ticketUuidFromUrl = uuidRegex.test(normalizedTicketId) ? normalizedTicketId : null;
+  // Se a rota já estiver em UUID, usamos isso como sala atual imediatamente
+  if (ticketUuidFromUrl && !currentRoomIdRef.current) {
+    currentRoomIdRef.current = ticketUuidFromUrl;
+  }
 
-    const companyId = user.companyId;
+  // Aguarda socket e user.companyId disponíveis
+  if (!socket || typeof socket.on !== "function") {
+    return;
+  }
+  if (!user || !user.companyId) {
+    return;
+  }
 
-    const connectEventMessagesList = () => {
-      try {
-        // Prioriza entrar pela sala UUID se já conhecida
-        const normalizedId = (ticketId ?? "").toString().trim();
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-        const candidateFromUrl = uuidRegex.test(normalizedId) ? normalizedId : "";
-        const roomToJoin = (currentRoomIdRef.current || candidateFromUrl || "").toString().trim();
-        if (!roomToJoin || roomToJoin === "undefined") {
-          console.debug("[MessagesList] skip joinChatBox - invalid ticketId", { ticketId });
-          return;
-        }
-        console.log("[MessagesList] socket connect - joinChatBox", { room: roomToJoin, hasJoinRoom: typeof socket.joinRoom === "function", connected: !!socket.connected });
-        if (typeof socket.joinRoom === "function") {
-          socket.joinRoom(roomToJoin, (err) => {
-            if (err) console.log("[MessagesList] joinChatBox ack error", err);
-            else {
-              console.log("[MessagesList] joinChatBox ok", { room: roomToJoin });
-              if (typeof socket.checkRoom === "function") {
-                socket.checkRoom(roomToJoin, (res) => console.log("[MessagesList] checkRoom after connect join", res));
-              }
-            }
-          });
-        } else {
-          socket.emit("joinChatBox", roomToJoin, (err) => {
-            if (err) console.log("[MessagesList] joinChatBox ack error", err);
-            else {
-              console.log("[MessagesList] joinChatBox ok", { room: roomToJoin });
-              if (typeof socket.checkRoom === "function") {
-                socket.checkRoom(roomToJoin, (res) => console.log("[MessagesList] checkRoom after connect join", res));
-              }
-            }
-          });
-        }
-      } catch (e) {
-        console.debug("[MessagesList] error emitting joinChatBox", e);
+  const companyId = user.companyId;
+
+  const connectEventMessagesList = () => {
+    try {
+      // Prioriza entrar pela sala UUID se já conhecida
+      const candidateFromUrl = ticketUuidFromUrl || "";
+      const roomToJoin = (currentRoomIdRef.current || candidateFromUrl || "").toString().trim();
+      if (!roomToJoin || roomToJoin === "undefined") {
+        console.debug("[MessagesList] skip joinChatBox - invalid ticketId", { ticketId });
+        return;
       }
-    };
+      console.log("[MessagesList] socket connect - joinChatBox", { room: roomToJoin, hasJoinRoom: typeof socket.joinRoom === "function", connected: !!socket.connected });
+      if (typeof socket.joinRoom === "function") {
+        socket.joinRoom(roomToJoin, (err) => {
+          if (err) console.log("[MessagesList] joinChatBox ack error", err);
+          else {
+            console.log("[MessagesList] joinChatBox ok", { room: roomToJoin });
+            if (typeof socket.checkRoom === "function") {
+              socket.checkRoom(roomToJoin, (res) => console.log("[MessagesList] checkRoom after connect join", res));
+            }
+          }
+        });
+      } else {
+        socket.emit("joinChatBox", roomToJoin, (err) => {
+          if (err) console.log("[MessagesList] joinChatBox ack error", err);
+          else {
+            console.log("[MessagesList] joinChatBox ok", { room: roomToJoin });
+            if (typeof socket.checkRoom === "function") {
+              socket.checkRoom(roomToJoin, (res) => console.log("[MessagesList] checkRoom after connect join", res));
+            }
+          }
+        });
+      }
+    } catch (e) {
+      console.debug("[MessagesList] error emitting joinChatBox", e);
+    }
+  };
 
-    const onAppMessageMessagesList = (data) => {
-      try {
-        const evtUuid = data?.message?.ticket?.uuid || data?.ticket?.uuid;
-        const evtTicketId = data?.message?.ticketId || data?.ticket?.id;
-        const hasUuid = Boolean(evtUuid);
-        
-        console.debug("[MessagesList] appMessage", {
-          action: data?.action,
+  const onAppMessageMessagesList = (data) => {
+    try {
+      const evtUuid = data?.message?.ticket?.uuid || data?.ticket?.uuid;
+      const evtTicketId = data?.message?.ticketId || data?.ticket?.id;
+      const hasUuid = Boolean(evtUuid);
+      const currentUuid = (currentRoomIdRef.current || ticketUuidFromUrl || "").toString().trim();
+      const urlIsUuid = Boolean(ticketUuidFromUrl);
+
+      console.debug("[MessagesList] appMessage", {
+        action: data?.action,
+        evtUuid,
+        evtTicketId,
+        hasUuid,
+        currentRoom: currentRoomIdRef.current,
+        currentTicketId: ticketId,
+        currentUuid,
+        msgId: data?.message?.id,
+      });
+
+      // CRÍTICO: Sempre verificar se a mensagem pertence ao ticket atual
+      // Se não houver UUID, verificar pelo ticketId
+      // Se nenhum dos dois bater, REJEITAR a mensagem
+      let shouldHandle = false;
+      // Preferência: comparar UUID quando disponível (rota em uuid ou sala em uuid)
+      if (hasUuid && currentUuid && String(evtUuid) === String(currentUuid)) {
+        shouldHandle = true;
+      } else if (!urlIsUuid && evtTicketId && String(evtTicketId) === String(ticketId)) {
+        // Compatibilidade: quando a rota ainda é numérica, compara ticketId
+        shouldHandle = true;
+      }
+
+      if (!shouldHandle) {
+        console.debug("[MessagesList] Rejeitando mensagem de outro ticket", {
           evtUuid,
           evtTicketId,
-          hasUuid,
           currentRoom: currentRoomIdRef.current,
-          currentTicketId: ticketId,
-          msgId: data?.message?.id,
+          currentUuid,
+          ticketId
         });
-
-        // CRÍTICO: Sempre verificar se a mensagem pertence ao ticket atual
-        // Se não houver UUID, verificar pelo ticketId
-        // Se nenhum dos dois bater, REJEITAR a mensagem
-        let shouldHandle = false;
-        if (hasUuid && evtUuid === currentRoomIdRef.current) {
-          shouldHandle = true;
-        } else if (evtTicketId && String(evtTicketId) === String(ticketId)) {
-          // Comparar como string para evitar problemas de tipo (number vs string)
-          shouldHandle = true;
-        }
-
-        if (!shouldHandle) {
-          console.debug("[MessagesList] Rejeitando mensagem de outro ticket", { evtUuid, evtTicketId, currentRoom: currentRoomIdRef.current, ticketId });
-          return;
-        }
-
-        if (data.action === "create") {
-          dispatch({ type: "ADD_MESSAGE", payload: data.message });
-          scrollToBottom();
-        }
-
-        if (data.action === "update") {
-          dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
-        }
-
-        if (data.action == "delete") {
-          dispatch({ type: "DELETE_MESSAGE", payload: data.messageId });
-        }
-      } catch (e) {
-        console.debug("[MessagesList] error handling appMessage", e, data);
+        return;
       }
-    };
+
+      if (data.action === "create") {
+        dispatch({ type: "ADD_MESSAGE", payload: data.message });
+        scrollToBottom();
+      }
+
+      if (data.action === "update") {
+        dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
+      }
+
+      if (data.action === "delete") {
+        dispatch({ type: "DELETE_MESSAGE", payload: data.messageId });
+      }
+    } catch (e) {
+      console.debug("[MessagesList] error handling appMessage", e, data);
+    }
+  };
 
     socket.on("connect", connectEventMessagesList);
     socket.on(`company-${companyId}-appMessage`, onAppMessageMessagesList);

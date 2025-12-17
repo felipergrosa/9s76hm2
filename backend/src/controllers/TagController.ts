@@ -171,10 +171,6 @@ export const syncTags = async (
   const data = req.body as any;
   const { companyId } = req.user;
 
-  if (req.user.profile !== "admin") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
-
   // Normaliza a entrada de tags para aceitar:
   // - string ("CLIENTES")
   // - array de strings (["CLIENTES", "VIP"])

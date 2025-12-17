@@ -1,5 +1,6 @@
 import express from "express";
 import isAuth from "../middleware/isAuth";
+import { checkPermission } from "../middleware/checkPermission";
 
 import * as TagController from "../controllers/TagController";
 
@@ -12,7 +13,7 @@ tagRoutes.get("/tags/:tagId", isAuth, TagController.show);
 tagRoutes.get("/tag/kanban", isAuth, TagController.kanban);
 
 tagRoutes.post("/tags", isAuth, TagController.store);
-tagRoutes.post("/tags/sync", isAuth, TagController.syncTags);
+tagRoutes.post("/tags/sync", isAuth, checkPermission("contacts.edit"), TagController.syncTags);
 
 tagRoutes.put("/tags/:tagId", isAuth, TagController.update);
 

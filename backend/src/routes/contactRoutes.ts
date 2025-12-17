@@ -26,7 +26,7 @@ contactRoutes.get("/contacts/profile/:number", isAuth, ContactController.getCont
 contactRoutes.get("/contacts/:contactId(\\d+)", isAuth, ContactController.show);
 contactRoutes.post("/contacts", isAuth, ContactController.store);
 // Rota de atualização em massa DEVE vir antes de "/contacts/:contactId"
-contactRoutes.put("/contacts/batch-update", isAuth, ContactController.bulkUpdate);
+contactRoutes.put("/contacts/batch-update", isAuth, checkPermission("contacts.bulk-edit"), ContactController.bulkUpdate);
 contactRoutes.put("/contacts/:contactId(\\d+)", isAuth, checkPermission("contacts.edit-fields"), ContactController.update);
 contactRoutes.post("/contacts/duplicates/process", isAuth, ContactController.processDuplicates);
 contactRoutes.post(
