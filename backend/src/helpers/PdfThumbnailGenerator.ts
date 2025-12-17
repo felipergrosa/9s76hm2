@@ -6,10 +6,16 @@ import logger from "../utils/logger";
  * Gera thumbnail de PDF usando pdfjs-dist + canvas (puro JavaScript, sem GraphicsMagick)
  */
 export async function generatePdfThumbnail(pdfPath: string): Promise<string | null> {
+  logger.info(`[PdfThumbnail] Iniciando geração de thumbnail para: ${pdfPath}`);
+  
   try {
-    // Imports dinâmicos para evitar problemas se as dependências não estiverem instaladas
-    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    const { createCanvas } = await import("canvas");
+    // Imports dinâmicos usando require para compatibilidade com ambiente compilado
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.mjs");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createCanvas } = require("canvas");
+    
+    logger.info(`[PdfThumbnail] Dependências carregadas com sucesso`);
 
     // Ler o PDF
     const pdfBuffer = fs.readFileSync(pdfPath);
@@ -42,7 +48,8 @@ export async function generatePdfThumbnail(pdfPath: string): Promise<string | nu
     // Gerar nome do arquivo de thumbnail
     const dir = path.dirname(pdfPath);
     const baseName = path.basename(pdfPath, path.extname(pdfPath));
-    const thumbPath = path.join(dir, `${baseName}-thumb.1.png`);
+    // Gerar como -thumb.png (formato esperado pelo frontend)
+    const thumbPath = path.join(dir, `${baseName}-thumb.png`);
 
     // Salvar como PNG
     const buffer = canvas.toBuffer("image/png");
