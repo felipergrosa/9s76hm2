@@ -424,8 +424,8 @@ const AudioModal = ({ url, contact, fromMe }) => {
         <IconButton className={classes.playButton} size="small" onClick={togglePlay}>
           {playing ? <Pause /> : <PlayArrow />}
         </IconButton>
+        <span className={classes.time}>{formatTime(currentTime)} </span>
         <canvas ref={canvasRef} className={classes.waveform} onClick={handleWaveformClick} />
-        <span className={classes.time}>{formatTime(currentTime)}</span>
         <audio ref={audioRef} preload="metadata" style={{ display: "none" }}>
           {getAudioSource()}
         </audio>
