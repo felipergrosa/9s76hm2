@@ -13,6 +13,7 @@ import Whatsapp from "../models/Whatsapp";
 import path from "path";
 import { isNil } from "lodash";
 import { Mutex } from "async-mutex";
+import { Op } from "sequelize";
 
 import ListMessagesService from "../services/MessageServices/ListMessagesService";
 import ShowTicketService from "../services/TicketServices/ShowTicketService";
@@ -646,6 +647,80 @@ export const transcribeAudioMessage = async (req: Request, res: Response): Promi
 
     if ('error' in transcribedText) {
       return res.status(400).json({ error: transcribedText.error });
+    }
+
+    // Persistir em Message quando possível (para reabrir ticket e manter transcrição)
+    try {
+      const decoded = (() => {
+        try {
+          return decodeURIComponent(fileName);
+        } catch {
+          return fileName;
+        }
+      })();
+      const safeRel = decoded
+        .split("?")[0]
+        .split("#")[0]
+        .replace(/\\/g, "/")
+        .replace(/^\/+/, "");
+      const baseName = safeRel.split("/").pop() || safeRel;
+      const ticketIdNum = ticketId ? Number(ticketId) : undefined;
+
+      let msg: Message | null = null;
+
+      if (ticketIdNum && !Number.isNaN(ticketIdNum)) {
+        msg = await Message.findOne({
+          where: {
+            companyId,
+            ticketId: ticketIdNum,
+            mediaType: "audio",
+            [Op.or]: [
+              { mediaUrl: safeRel },
+              { mediaUrl: baseName },
+              { mediaUrl: { [Op.like]: `%/${baseName}` } }
+            ]
+          },
+          order: [["id", "DESC"]]
+        });
+      }
+
+      if (!msg) {
+        msg = await Message.findOne({
+          where: {
+            companyId,
+            mediaType: "audio",
+            [Op.or]: [
+              { mediaUrl: safeRel },
+              { mediaUrl: baseName },
+              { mediaUrl: { [Op.like]: `%/${baseName}` } }
+            ]
+          },
+          order: [["id", "DESC"]]
+        });
+      }
+
+      if (msg) {
+        await msg.update({ audioTranscription: transcribedText.transcribedText });
+
+        // Emite update em realtime para atualizar UI sem refresh
+        try {
+          const ticket = await Ticket.findByPk(msg.ticketId);
+          if (ticket) {
+            await emitToCompanyRoom(
+              companyId,
+              ticket.uuid,
+              `company-${companyId}-appMessage`,
+              {
+                action: "update",
+                message: msg,
+                ticket
+              }
+            );
+          }
+        } catch {}
+      }
+    } catch (persistErr) {
+      console.warn("[STT] Falha ao persistir transcrição no banco", persistErr);
     }
 
     return res.json({ transcribedText });

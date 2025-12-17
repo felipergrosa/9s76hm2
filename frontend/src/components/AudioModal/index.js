@@ -342,6 +342,36 @@ const AudioModal = ({ url, contact, fromMe }) => {
     }
   };
 
+  const handleWaveformClick = (e) => {
+    const a = audioRef.current;
+    const canvas = canvasRef.current;
+    if (!a || !canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const ratio = rect.width > 0 ? (x / rect.width) : 0;
+
+    const total = (isFinite(a.duration) && a.duration > 0)
+      ? a.duration
+      : (durationRef.current || decodedDurationRef.current || 0);
+
+    if (!total) return;
+
+    const nextTime = Math.max(0, Math.min(total, ratio * total));
+    const wasPlaying = !a.paused;
+    a.currentTime = nextTime;
+    currentTimeRef.current = nextTime;
+    setCurrentTime(nextTime);
+    drawWave(total ? nextTime / total : 0);
+
+    // mantém tocando se já estava tocando
+    if (wasPlaying) {
+      try {
+        a.play();
+      } catch {}
+    }
+  };
+
   const formatTime = (s) => {
     if (!isFinite(s)) return "0:00";
     const m = Math.floor(s / 60);
@@ -394,7 +424,7 @@ const AudioModal = ({ url, contact, fromMe }) => {
         <IconButton className={classes.playButton} size="small" onClick={togglePlay}>
           {playing ? <Pause /> : <PlayArrow />}
         </IconButton>
-        <canvas ref={canvasRef} className={classes.waveform} />
+        <canvas ref={canvasRef} className={classes.waveform} onClick={handleWaveformClick} />
         <span className={classes.time}>{formatTime(currentTime)}</span>
         <audio ref={audioRef} preload="metadata" style={{ display: "none" }}>
           {getAudioSource()}

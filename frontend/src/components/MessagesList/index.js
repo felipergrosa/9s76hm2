@@ -797,7 +797,7 @@ const MessagesList = ({
         ...prev,
         [messageId]: { 
           loading: false, 
-          text: data?.transcribedText?.transcribedText || data?.transcribedText || "Transcrição não disponível",
+          text: data?.transcribedText?.transcribedText || data?.transcribedText || "", 
           error: null 
         }
       }));
@@ -1345,9 +1345,11 @@ useEffect(() => {
         </div>
       );
     } else if (message.mediaType === "audio") {
+      const persistedText = message?.audioTranscription;
       const transcription = transcriptions[message.id];
+      const transcriptionText = transcription?.text || persistedText || "";
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
           <AudioModal url={message.mediaUrl} contact={getAvatarContactForMessage(message, message?.ticket?.contact)} fromMe={message.fromMe} />
           
           {/* Botão de transcrição */}
@@ -1366,17 +1368,17 @@ useEffect(() => {
           </div>
           
           {/* Exibir transcrição */}
-          {transcription?.text && (
+          {transcriptionText && (
             <div style={{ 
               backgroundColor: 'rgba(0,0,0,0.05)', 
               borderRadius: 4, 
               padding: '6px 8px', 
-              fontSize: 12,
-              fontStyle: 'italic',
-              maxWidth: 280,
+              fontSize: 14,
+              fontStyle: 'normal',
+              width: '100%',
               wordBreak: 'break-word'
             }}>
-              📝 {transcription.text}
+              {transcriptionText}
             </div>
           )}
           

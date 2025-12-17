@@ -46,6 +46,9 @@ class Message extends Model<Message> {
   @Column(DataType.TEXT)
   body: string;
 
+  @Column(DataType.TEXT)
+  audioTranscription: string;
+
   @Column(DataType.STRING)
   get mediaUrl(): string | null {
     if (this.getDataValue("mediaUrl")) {
