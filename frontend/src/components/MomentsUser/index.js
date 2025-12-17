@@ -44,6 +44,7 @@ const useStyles = makeStyles((theme) => ({
   column: {
     width: 350,
     minWidth: 350,
+    flex: "0 0 350px",
     display: "flex",
     flexDirection: "column",
     height: "100%",
@@ -61,6 +62,7 @@ const useStyles = makeStyles((theme) => ({
     borderBottom: "1px solid rgba(0,0,0,0.08)",
     backgroundColor: "#fff",
     flex: "0 0 auto",
+    cursor: "grab",
   },
   columnTitle: {
     fontWeight: 600,
@@ -176,7 +178,7 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const MomentsUser = () => {
+const MomentsUser = ({ onPanStart }) => {
   const classes = useStyles();
   const history = useHistory();
   const { user, socket } = useContext(AuthContext);
@@ -333,7 +335,7 @@ const MomentsUser = () => {
 
   const renderColumn = (title, icon, items, color) => (
     <Paper className={classes.column} elevation={0}>
-      <div className={classes.columnHeader} style={{ borderTop: `4px solid ${color}` }}>
+      <div className={classes.columnHeader} onPointerDown={onPanStart} style={{ borderTop: `4px solid ${color}` }}>
         <div className={classes.columnTitle} style={{ color }}>
           {icon}
           {title}
@@ -383,7 +385,7 @@ const MomentsUser = () => {
       {/* Colunas de Usuários */}
       {userTickets.map((group) => (
         <Paper key={group.user.id} className={classes.column} elevation={0}>
-          <div className={classes.columnHeader} style={{ borderTop: `4px solid ${green[600]}` }}>
+          <div className={classes.columnHeader} onPointerDown={onPanStart} style={{ borderTop: `4px solid ${green[600]}` }}>
             <div className={classes.columnTitle}>
               <Avatar
                 src={group.user.profileImage ? `${backendUrl}/public/company${user.companyId}/user/${group.user.profileImage}` : null}

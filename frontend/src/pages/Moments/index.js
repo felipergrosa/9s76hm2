@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useRef } from "react";
 import { makeStyles } from "@material-ui/core/styles";
 
 import MomentsUser from "../../components/MomentsUser";
@@ -20,10 +20,18 @@ const useStyles = makeStyles((theme) => ({
   mainPaper: {
     display: "flex",
     padding: theme.spacing(1),
+    ...theme.scrollbarStyles,
     overflowY: "hidden",
     overflowX: "auto",
-    ...theme.scrollbarStyles,
-    alignItems: "flex-start",
+    scrollbarWidth: "none",
+    msOverflowStyle: "none",
+    "&::-webkit-scrollbar": {
+      width: 0,
+      height: 0,
+      display: "none",
+    },
+    alignItems: "stretch",
+    minHeight: 0,
     height: "calc(100vh - 100px)", // Ajuste para ocupar altura correta descontando header
     backgroundColor: "transparent",
     border: "none",
@@ -49,6 +57,36 @@ const useStyles = makeStyles((theme) => ({
 const ChatMoments = () => {
   const classes = useStyles();
   const { user } = useContext(AuthContext)
+
+  const momentsScrollRef = useRef(null);
+  const panRef = useRef({ active: false, startX: 0, scrollLeft: 0 });
+
+  const handlePanStart = (e) => {
+    if (!momentsScrollRef.current) return;
+    if (e && e.button != null && e.button !== 0) return;
+
+    panRef.current.active = true;
+    panRef.current.startX = e.clientX;
+    panRef.current.scrollLeft = momentsScrollRef.current.scrollLeft;
+
+    const onMove = (ev) => {
+      if (!panRef.current.active || !momentsScrollRef.current) return;
+      const dx = ev.clientX - panRef.current.startX;
+      momentsScrollRef.current.scrollLeft = panRef.current.scrollLeft - dx;
+    };
+
+    const onUp = () => {
+      panRef.current.active = false;
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("pointercancel", onUp);
+    };
+
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onUp);
+  };
+
   return (
 
     user.profile === "user" && user.allowRealTime === "disabled" ?
@@ -71,8 +109,9 @@ const ChatMoments = () => {
               className={classes.mainPaper}
               variant="outlined"
               style={{ maxWidth: "100%", height: "100%" }}
+              ref={momentsScrollRef}
             >
-              <MomentsUser />
+              <MomentsUser onPanStart={handlePanStart} />
             </Paper>
           </Grid>
         </Grid>

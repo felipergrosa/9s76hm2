@@ -146,7 +146,7 @@ const useStyles = makeStyles(theme => ({
     },
     // Aproximar visual do /moments: padding interno da lista e scroll vertical dentro da coluna
     "& .react-trello-lane__cards": {
-      padding: `${theme.spacing(1)}px !important`,
+      padding: `${theme.spacing(0.5)}px !important`,
       paddingBottom: `${theme.spacing(2)}px !important`,
       boxSizing: "border-box !important",
       flex: "1 1 auto !important",
@@ -189,7 +189,7 @@ const useStyles = makeStyles(theme => ({
     "& .smooth-dnd-draggable-wrapper": {
       width: "100% !important",
       maxWidth: "100% !important",
-      marginBottom: `${theme.spacing(1)}px !important`,
+      marginBottom: `${theme.spacing(0.5)}px !important`,
     },
     "& .react-trello-card": {
       width: "100% !important",
