@@ -53,11 +53,18 @@ const useStyles = makeStyles(theme => ({
   kanbanContainer: {
     flex: 1,
     padding: "0 10px",
-    paddingRight: 240, // Espaço extra para última coluna aparecer inteira
+    paddingRight: 350, // Espaço extra para última coluna aparecer inteira
     overflowX: "auto",
     overflowY: "hidden",
     width: "100%",
     height: "100%",
+    scrollbarWidth: "none",
+    msOverflowStyle: "none",
+    "&::-webkit-scrollbar": {
+      width: 0,
+      height: 0,
+      display: "none",
+    },
     // CSS para forçar layout horizontal no react-trello
     "& .react-trello-board": {
       display: "flex !important",
@@ -67,6 +74,7 @@ const useStyles = makeStyles(theme => ({
       height: "100% !important",
       width: "100% !important",
       minWidth: "fit-content !important",
+      minHeight: "0 !important",
       padding: "0 !important",
       backgroundColor: "transparent !important",
     },
@@ -78,6 +86,7 @@ const useStyles = makeStyles(theme => ({
       height: "100% !important",
       width: "100% !important",
       minWidth: "fit-content !important",
+      minHeight: "0 !important",
     },
     "& .react-trello-lane": {
       minWidth: "350px !important",
@@ -86,6 +95,7 @@ const useStyles = makeStyles(theme => ({
       flex: "0 0 350px !important",
       height: "100% !important",
       maxHeight: "100% !important",
+      minHeight: "0 !important",
       marginRight: "0px !important",
       display: "flex !important",
       flexDirection: "column !important",
@@ -96,10 +106,22 @@ const useStyles = makeStyles(theme => ({
       flex: "0 0 350px !important",
       marginRight: "0px !important",
     },
-    // Aproximar visual do /moments: padding interno da lista e cards ocupando largura total
+    // Aproximar visual do /moments: padding interno da lista e scroll vertical dentro da coluna
     "& .react-trello-lane__cards": {
       padding: `${theme.spacing(1)}px !important`,
+      paddingBottom: `${theme.spacing(2)}px !important`,
       boxSizing: "border-box !important",
+      flex: "1 1 auto !important",
+      minHeight: "0 !important",
+      overflowY: "auto !important",
+      overflowX: "hidden !important",
+      scrollbarWidth: "none",
+      msOverflowStyle: "none",
+      "&::-webkit-scrollbar": {
+        width: 0,
+        height: 0,
+        display: "none",
+      },
     },
     // Corrige card esticando durante drag (smooth-dnd ghost herda widths grandes)
     "& .smooth-dnd-ghost": {
