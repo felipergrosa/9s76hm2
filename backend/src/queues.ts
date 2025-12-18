@@ -1600,8 +1600,10 @@ async function handleDispatchCampaign(job) {
       const languageCode = ((campaign as any).metaTemplateLanguage as string) || "pt_BR";
 
       try {
-        if (campaign.openTicket === "enabled") {
-          // Cria/usa contato no CRM para poder abrir ticket
+        // REGRA UNIFICADA: TODA campanha cria ticket "campaign" primeiro
+        // Exceto se já existe ticket "open" - nesse caso, reusar e apenas registrar mensagem
+        {
+          // Cria/usa contato no CRM
           const { canonical: canonicalNumber } = safeNormalizePhoneNumber(String(campaignShipping.number || ""));
           const normalizedNumber = canonicalNumber || String(campaignShipping.number || "");
           const [contact] = await Contact.findOrCreate({
@@ -1619,6 +1621,16 @@ async function handleDispatchCampaign(job) {
             }
           });
 
+          // Verificar se já existe ticket OPEN para este contato
+          const existingOpenTicket = await Ticket.findOne({
+            where: {
+              contactId: contact.id,
+              whatsappId: selectedWhatsappId,
+              companyId: campaign.companyId,
+              status: "open"
+            }
+          });
+
           // Parsear metaTemplateVariables se vier como string
           let variablesConfig = (campaign as any).metaTemplateVariables;
           if (typeof variablesConfig === 'string') {
@@ -1629,7 +1641,7 @@ async function handleDispatchCampaign(job) {
               variablesConfig = undefined;
             }
           }
-          logger.info(`[DispatchCampaign] openTicket=enabled, metaTemplateVariables: ${JSON.stringify(variablesConfig)}`);
+          logger.info(`[DispatchCampaign][Official] metaTemplateVariables: ${JSON.stringify(variablesConfig)}`);
 
           // Mapear parâmetros do template se houver configuração
           let templateComponents = undefined;
@@ -1646,15 +1658,41 @@ async function handleDispatchCampaign(job) {
                   contact,
                   variablesConfig
                 );
-                logger.info(`[DispatchCampaign] Template mapeado com ${templateDef.parameters.length} parâmetros usando variablesConfig`);
+                logger.info(`[DispatchCampaign] Template mapeado com ${templateDef.parameters.length} parâmetros`);
               }
             } catch (e) {
               logger.warn(`[DispatchCampaign] Erro ao mapear template: ${e}`);
             }
           }
 
+          // NOVO: Se template tem header com mídia, adicionar componente header
+          try {
+            const templateDef = await GetTemplateDefinition(selectedWhatsappId, templateName, languageCode);
+            if (templateDef.headerFormat &&
+              ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDef.headerFormat) &&
+              templateDef.headerHandle) {
+              logger.info(`[DispatchCampaign] Template tem header ${templateDef.headerFormat}, incluindo no payload`);
+              const headerComponent = {
+                type: "header",
+                parameters: [{
+                  type: templateDef.headerFormat.toLowerCase(),
+                  [templateDef.headerFormat.toLowerCase()]: {
+                    link: templateDef.headerHandle
+                  }
+                }]
+              };
+              if (templateComponents && Array.isArray(templateComponents)) {
+                templateComponents = [headerComponent, ...templateComponents];
+              } else {
+                templateComponents = [headerComponent];
+              }
+            }
+          } catch (err: any) {
+            logger.warn(`[DispatchCampaign] Erro ao processar header do template: ${err.message}`);
+          }
+
           // Determinar usuário baseado nas tags do contato (se múltiplos usuários configurados)
-          let targetUserId = campaign.userId || 0;
+          let targetUserId = campaign.userId || null;
           if ((campaign as any).userIds) {
             try {
               const userIdsArray = typeof (campaign as any).userIds === 'string' 
@@ -1665,137 +1703,50 @@ async function handleDispatchCampaign(job) {
                 const matchedUserId = await getUserIdByContactTags(contact.id, userIdsArray, campaign.companyId);
                 if (matchedUserId) {
                   targetUserId = matchedUserId;
-                  logger.info(`[DispatchCampaign] Usuário ${targetUserId} selecionado por tag para contato ${contact.id}`);
+                  logger.info(`[DispatchCampaign][Official] Usuário ${targetUserId} selecionado por tag para contato ${contact.id}`);
                 } else {
-                  // Sem match de tag - usar primeiro usuário ou deixar sem usuário
-                  targetUserId = userIdsArray[0] || campaign.userId || 0;
-                  logger.info(`[DispatchCampaign] Sem match de tag, usando usuário padrão ${targetUserId}`);
+                  targetUserId = null;
+                  logger.info(`[DispatchCampaign][Official] Sem match de tag, ticket ficará sem usuário específico`);
                 }
               }
             } catch (e) {
-              logger.warn(`[DispatchCampaign] Erro ao processar userIds: ${e}`);
+              logger.warn(`[DispatchCampaign][Official] Erro ao processar userIds: ${e}`);
             }
           }
 
-          // Se status for "pending", não passar userId para que fique em AGUARDANDO
-          const statusTicket = campaign.statusTicket || "pending";
-          const userIdForTemplate = statusTicket === "pending" ? null : targetUserId;
-          
-          await SendTemplateToContact({
-            whatsappId: selectedWhatsappId,
-            contactId: contact.id,
-            companyId: campaign.companyId,
-            userId: userIdForTemplate,
-            queueId: campaign.queueId || undefined,
-            templateName,
-            languageCode,
-            components: templateComponents,  // Passar os components mapeados
-            statusTicket  // Usar status da campanha
-          });
-        } else {
-          // openTicket=disabled: Cria ticket com status "campaign" (não aparece em aguardando/atendendo)
-          // Buscar ou criar contato
-          const { canonical: canonicalNumber } = safeNormalizePhoneNumber(String(campaignShipping.number || ""));
-          const normalizedNumber = canonicalNumber || String(campaignShipping.number || "");
-          const [contact] = await Contact.findOrCreate({
-            where: {
-              number: normalizedNumber,
-              companyId: campaign.companyId
-            },
-            defaults: {
-              companyId: campaign.companyId,
-              name: campaignShipping.contact.name,
-              number: normalizedNumber,
-              email: campaignShipping.contact.email,
-              whatsappId: selectedWhatsappId,
-              profilePicUrl: ""
-            }
-          });
+          let ticket: Ticket;
 
-          // Buscar definição e mapear parâmetros
-          let templateComponents = undefined;
-          try {
-            const templateDef = await GetTemplateDefinition(
-              selectedWhatsappId,
-              templateName,
-              languageCode
+          if (existingOpenTicket) {
+            // REGRA: Se já existe ticket OPEN, reusar e apenas registrar mensagem
+            ticket = existingOpenTicket;
+            logger.info(`[DispatchCampaign][Official] Reusando ticket OPEN #${ticket.id} para contato ${contact.id}`);
+          } else {
+            // REGRA: Criar ticket com status "campaign" primeiro
+            ticket = await FindOrCreateTicketService(
+              contact,
+              whatsapp,
+              0, // unreadMessages
+              campaign.companyId,
+              campaign.queueId,
+              null, // userId - sem usuário atribuído inicialmente
+              null, // groupContact
+              "whatsapp", // channel
+              false, // isImported
+              false, // isForward
+              null, // settings
+              false, // isTransfered
+              true // isCampaign
             );
 
-            if (templateDef.parameters.length > 0) {
-              // Parsear metaTemplateVariables se vier como string
-              let variablesConfig = (campaign as any).metaTemplateVariables;
-              if (typeof variablesConfig === 'string') {
-                try {
-                  variablesConfig = JSON.parse(variablesConfig);
-                } catch (e) {
-                  logger.warn(`[DispatchCampaign] Erro ao parsear metaTemplateVariables: ${e}`);
-                  variablesConfig = undefined;
-                }
-              }
-              logger.info(`[DispatchCampaign] metaTemplateVariables: ${JSON.stringify(variablesConfig)}`);
-
-              templateComponents = MapTemplateParameters(
-                templateDef.parameters,
-                contact,
-                variablesConfig
-              );
-              logger.info(
-                `[DispatchCampaign] Template ${templateName} mapeado com ${templateDef.parameters.length} parâmetros`
-              );
-            }
-
-            // NOVO: Se template tem header com mídia, adicionar componente header
-            if (templateDef.headerFormat &&
-              ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDef.headerFormat) &&
-              templateDef.headerHandle) {
-
-              logger.info(`[DispatchCampaign] Template tem header ${templateDef.headerFormat}, incluindo no payload`);
-
-              const headerComponent = {
-                type: "header",
-                parameters: [{
-                  type: templateDef.headerFormat.toLowerCase(),
-                  [templateDef.headerFormat.toLowerCase()]: {
-                    link: templateDef.headerHandle
-                  }
-                }]
-              };
-
-              // Inserir header NO INÍCIO do array de components
-              if (templateComponents && Array.isArray(templateComponents)) {
-                templateComponents = [headerComponent, ...templateComponents];
-              } else {
-                templateComponents = [headerComponent];
-              }
-            }
-          } catch (err: any) {
-            logger.warn(`[DispatchCampaign] Erro ao mapear template: ${err.message}`);
+            // Forçar status "campaign" mas PRESERVAR userId para carteiras
+            await ticket.update({
+              status: "campaign",
+              userId: targetUserId, // IMPORTANTE: preservar carteira do usuário
+              queueId: campaign.queueId || ticket.queueId
+            });
+            ticket = await ShowTicketService(ticket.id, campaign.companyId);
+            logger.info(`[DispatchCampaign][Official] Ticket #${ticket.id} criado com status "campaign", fila=${campaign.queueId}, userId=${targetUserId} (carteira)`);
           }
-
-          // Criar ticket com status "campaign" (não aparece em aguardando/atendendo)
-          let ticket = await FindOrCreateTicketService(
-            contact,
-            whatsapp,
-            0, // unreadMessages
-            campaign.companyId,
-            campaign.queueId,
-            null, // userId - sem usuário atribuído
-            null, // groupContact
-            "whatsapp", // channel
-            false, // isImported
-            false, // isForward
-            null, // settings
-            false, // isTransfered
-            true // isCampaign
-          );
-
-          // Atualizar status para "campaign"
-          await ticket.update({
-            status: "campaign",
-            userId: null
-          });
-          ticket = await ShowTicketService(ticket.id, campaign.companyId);
-          logger.info(`[DispatchCampaign] Ticket #${ticket.id} criado com status "campaign", fila=${campaign.queueId} (openTicket=disabled)`);
 
           // Enviar template
           const adapter = await GetWhatsAppAdapter(whatsapp);
@@ -1824,8 +1775,9 @@ async function handleDispatchCampaign(job) {
               },
               companyId: campaign.companyId
             });
+            logger.info(`[DispatchCampaign][Official] Template ${templateName} enviado para ticket #${ticket.id}`);
           } else {
-            logger.error("[DispatchCampaign] Adapter oficial não suporta sendTemplate");
+            logger.error("[DispatchCampaign][Official] Adapter oficial não suporta sendTemplate");
             throw new Error("Adapter oficial não suporta sendTemplate");
           }
         }
@@ -1842,7 +1794,9 @@ async function handleDispatchCampaign(job) {
         logger.error(`[DispatchCampaign][OfficialTemplate] Erro ao enviar template: ${err.message}`);
         throw err;
       }
-    } else if (campaign.openTicket === "enabled") {
+    } else {
+      // REGRA UNIFICADA BAILEYS: TODA campanha cria ticket "campaign" primeiro
+      // Exceto se já existe ticket "open" - nesse caso, reusar e apenas registrar mensagem
       const { canonical: canonicalNumber } = safeNormalizePhoneNumber(String(campaignShipping.number || ""));
       const normalizedNumber = canonicalNumber || String(campaignShipping.number || "");
       const [contact] = await Contact.findOrCreate({
@@ -1858,8 +1812,17 @@ async function handleDispatchCampaign(job) {
           whatsappId: selectedWhatsappId,
           profilePicUrl: ""
         }
-      })
-      // já temos whatsapp selecionado
+      });
+
+      // Verificar se já existe ticket OPEN para este contato
+      const existingOpenTicket = await Ticket.findOne({
+        where: {
+          contactId: contact.id,
+          whatsappId: selectedWhatsappId,
+          companyId: campaign.companyId,
+          status: "open"
+        }
+      });
 
       // Determinar usuário baseado nas tags do contato (se múltiplos usuários configurados)
       let targetUserId = campaign.userId || null;
@@ -1875,7 +1838,6 @@ async function handleDispatchCampaign(job) {
               targetUserId = matchedUserId;
               logger.info(`[DispatchCampaign][Baileys] Usuário ${targetUserId} selecionado por tag para contato ${contact.id}`);
             } else {
-              // Sem match de tag - ticket fica sem usuário específico (visível a todos)
               targetUserId = null;
               logger.info(`[DispatchCampaign][Baileys] Sem match de tag, ticket ficará sem usuário específico`);
             }
@@ -1885,47 +1847,38 @@ async function handleDispatchCampaign(job) {
         }
       }
 
-      // Determinar status do ticket baseado na campanha
-      const targetStatus = campaign.statusTicket || "pending";
-      
-      // Buscar ou criar ticket
-      // Se status for "pending", não passar userId para que fique em AGUARDANDO
-      const userIdForTicket = targetStatus === "pending" ? null : targetUserId;
-      let ticket = await FindOrCreateTicketService(
-        contact,
-        whatsapp,  // Objeto Whatsapp, não ID
-        0, // unreadMessages
-        campaign.companyId,
-        campaign.queueId,
-        userIdForTicket,
-        null, // groupContact
-        "whatsapp", // channel
-        false, // isImported
-        false, // isForward
-        null, // settings
-        false, // isTransfered
-        true // isCampaign
-      );
+      let ticket: Ticket;
 
-      // Se a campanha pede status "pending", garantir que o ticket fique em aguardando
-      // Para ficar em "AGUARDANDO", o ticket deve ter status "pending" e userId null
-      if (targetStatus === "pending") {
-        if (ticket.status !== "pending" || ticket.userId !== null) {
-          await ticket.update({
-            status: "pending",
-            userId: null  // Sem usuário = fica em AGUARDANDO
-          });
-          ticket = await ShowTicketService(ticket.id, campaign.companyId);
-        }
-      } else if (targetStatus === "open" && targetUserId) {
-        // Se status for "open" e tiver usuário, atribuir ao usuário
-        if (ticket.status !== "open" || ticket.userId !== targetUserId) {
-          await ticket.update({
-            status: "open",
-            userId: targetUserId
-          });
-          ticket = await ShowTicketService(ticket.id, campaign.companyId);
-        }
+      if (existingOpenTicket) {
+        // REGRA: Se já existe ticket OPEN, reusar e apenas registrar mensagem
+        ticket = existingOpenTicket;
+        logger.info(`[DispatchCampaign][Baileys] Reusando ticket OPEN #${ticket.id} para contato ${contact.id}`);
+      } else {
+        // REGRA: Criar ticket com status "campaign" primeiro
+        ticket = await FindOrCreateTicketService(
+          contact,
+          whatsapp,
+          0, // unreadMessages
+          campaign.companyId,
+          campaign.queueId,
+          null, // userId - sem usuário atribuído inicialmente
+          null, // groupContact
+          "whatsapp", // channel
+          false, // isImported
+          false, // isForward
+          null, // settings
+          false, // isTransfered
+          true // isCampaign
+        );
+
+        // Forçar status "campaign" mas PRESERVAR userId para carteiras
+        await ticket.update({
+          status: "campaign",
+          userId: targetUserId, // IMPORTANTE: preservar carteira do usuário
+          queueId: campaign.queueId || ticket.queueId
+        });
+        ticket = await ShowTicketService(ticket.id, campaign.companyId);
+        logger.info(`[DispatchCampaign][Baileys] Ticket #${ticket.id} criado com status "campaign", fila=${campaign.queueId}, userId=${targetUserId} (carteira)`);
       }
 
       if (whatsapp.status === "CONNECTED") {
@@ -2013,140 +1966,6 @@ async function handleDispatchCampaign(job) {
         resetBackoffOnSuccess(selectedWhatsappId);
         updatePacingOnSuccess(selectedWhatsappId, intervals);
       }
-    }
-    else {
-      // openTicket=disabled com Baileys: Cria ticket com status "campaign"
-      // Não usar wbot (Baileys) para conexões API Oficial
-      if (isOfficial) {
-        const errorMsg = "Conexão API Oficial não suporta uso de wbot (Baileys).";
-        logger.error(
-          `[DispatchCampaign] Conexão API Oficial (whatsappId=${selectedWhatsappId}) não suporta uso de wbot (Baileys). Campanha=${campaignId}; Registro=${campaignShippingId}`
-        );
-        await campaignShipping.update({
-          status: 'failed',
-          attempts: (campaignShipping.attempts || 0) + 1,
-          lastError: errorMsg,
-          lastErrorAt: moment().toDate()
-        });
-        await verifyAndFinalizeCampaign(campaign);
-        return;
-      }
-
-      // Buscar ou criar contato
-      const { canonical: canonicalNumber } = safeNormalizePhoneNumber(String(campaignShipping.number || ""));
-      const normalizedNumber = canonicalNumber || String(campaignShipping.number || "");
-      const [contact] = await Contact.findOrCreate({
-        where: {
-          number: normalizedNumber,
-          companyId: campaign.companyId
-        },
-        defaults: {
-          companyId: campaign.companyId,
-          name: campaignShipping.contact.name,
-          number: normalizedNumber,
-          email: campaignShipping.contact.email,
-          whatsappId: selectedWhatsappId,
-          profilePicUrl: ""
-        }
-      });
-
-      // Criar ticket com status "campaign"
-      let ticket = await FindOrCreateTicketService(
-        contact,
-        whatsapp,
-        0, // unreadMessages
-        campaign.companyId,
-        campaign.queueId,
-        null, // userId - sem usuário atribuído
-        null, // groupContact
-        "whatsapp", // channel
-        false, // isImported
-        false, // isForward
-        null, // settings
-        false, // isTransfered
-        true // isCampaign
-      );
-
-      // Atualizar status para "campaign"
-      await ticket.update({
-        status: "campaign",
-        userId: null
-      });
-      ticket = await ShowTicketService(ticket.id, campaign.companyId);
-      logger.info(`[DispatchCampaign][Baileys] Ticket #${ticket.id} criado com status "campaign", fila=${campaign.queueId} (openTicket=disabled)`);
-
-      if (campaign.confirmation && campaignShipping.confirmation === null) {
-        const sentMessage = await wbot.sendMessage(chatId, {
-          text: `\u200c ${campaignShipping.confirmationMessage}`
-        });
-        await verifyMessage(sentMessage, ticket, contact, null, true, false, true); // isCampaign=true
-        await campaignShipping.update({ confirmationRequestedAt: moment() });
-
-      } else {
-
-        // Seleciona mídia por mensagem (prioridade) ou global (fallback)
-        const msgIdx: number | undefined = (campaignShipping as any).messageIndex;
-        const perUrl: string | null = msgIdx ? (campaign as any)[`mediaUrl${msgIdx}`] : null;
-        const perName: string | null = msgIdx ? (campaign as any)[`mediaName${msgIdx}`] : null;
-
-        const publicFolder = path.resolve(__dirname, "..", "public");
-        const urlToLocalPath = (url: string | null | undefined): string | null => {
-          try {
-            if (!url) return null;
-            let p = url as string;
-            if (/^https?:\/\//i.test(p)) {
-              const u = new URL(p);
-              p = u.pathname;
-            }
-            const marker = "/public/";
-            const idx = p.indexOf(marker);
-            if (idx >= 0) {
-              const rel = p.substring(idx + marker.length);
-              return path.join(publicFolder, rel);
-            }
-            p = p.replace(/^\/+/, "");
-            return path.join(publicFolder, p);
-          } catch { return null; }
-        };
-        const perMessageFilePath = urlToLocalPath(perUrl);
-        const hasPerMessageMedia = Boolean(perMessageFilePath && perName);
-
-        if (!hasPerMessageMedia && !campaign.mediaPath) {
-          const sentMessage = await wbot.sendMessage(chatId, {
-            text: `\u200c ${campaignShipping.message}`
-          });
-          await verifyMessage(sentMessage, ticket, contact, null, true, false, true); // isCampaign=true
-        }
-
-        if (hasPerMessageMedia || campaign.mediaPath) {
-          const filePath = hasPerMessageMedia
-            ? (perMessageFilePath as string)
-            : path.join(publicFolder, `company${campaign.companyId}`, campaign.mediaPath);
-
-          const fileName = hasPerMessageMedia ? (perName as string) : campaign.mediaName;
-
-          const options = await getMessageOptions(fileName, filePath, String(campaign.companyId), `\u200c ${campaignShipping.message}`);
-          if (Object.keys(options).length) {
-            if (options.mimetype === "audio/mp4") {
-              const audioTextMsg = await wbot.sendMessage(chatId, {
-                text: `\u200c ${campaignShipping.message}`
-              });
-              await verifyMessage(audioTextMsg, ticket, contact, null, true, false, true); // isCampaign=true
-            }
-            const sentMedia = await wbot.sendMessage(chatId, { ...options });
-            await verifyMediaMessage(sentMedia, ticket, contact, null, false, true, wbot, true); // isCampaign=true
-          }
-        }
-      }
-
-      await campaignShipping.update({
-        deliveredAt: moment(),
-        status: 'delivered',
-        attempts: (campaignShipping.attempts || 0) + 1
-      });
-      resetBackoffOnSuccess(selectedWhatsappId);
-      updatePacingOnSuccess(selectedWhatsappId, intervals);
-
     }
     await verifyAndFinalizeCampaign(campaign);
 

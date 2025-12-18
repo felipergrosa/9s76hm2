@@ -258,7 +258,8 @@ async function processIncomingMessage(
       logger.warn(`[WebhookProcessor] Erro ao avaliar bot/RAG da fila (queueId=${ticket.queueId}): ${e?.message || e}`);
     }
 
-    const newStatus = shouldGoBot ? "bot" : "open";
+    // REGRA UNIFICADA: Se não tem bot, vai para PENDING (Aguardando), não para OPEN
+    const newStatus = shouldGoBot ? "bot" : "pending";
 
     await ticket.update({
       status: newStatus,

@@ -62,6 +62,8 @@ import BreadcrumbNav from "../../pages/LibraryManager/components/BreadcrumbNav";
 import FolderList from "../../pages/LibraryManager/components/FolderList";
 import FolderGrid from "../../pages/LibraryManager/components/FolderGrid";
 import UploadModal from "../../pages/LibraryManager/components/UploadModal";
+import CampaignHowItWorks from "./CampaignHowItWorks";
+import HelpOutlineIcon from "@material-ui/icons/HelpOutline";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -286,6 +288,7 @@ const CampaignModal = ({
   const [contactLists, setContactLists] = useState([]);
   const [tagLists, setTagLists] = useState([]);
   const [messageTab, setMessageTab] = useState(0);
+  const [mainTab, setMainTab] = useState(0); // 0 = Formulário, 1 = Como Funciona
   const [attachment, setAttachment] = useState(null);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [campaignEditable, setCampaignEditable] = useState(true);
@@ -971,16 +974,30 @@ const CampaignModal = ({
         maxWidth="xl"
         scroll="paper"
       >
-        <DialogTitle id="form-dialog-title">
-          {campaignEditable ? (
-            <>
-              {campaignId
-                ? `${i18n.t("campaigns.dialog.update")}`
-                : `${i18n.t("campaigns.dialog.new")}`}
-            </>
-          ) : (
-            <>{`${i18n.t("campaigns.dialog.readonly")}`}</>
-          )}
+        <DialogTitle id="form-dialog-title" style={{ paddingBottom: 0 }}>
+          <Box display="flex" alignItems="center" justifyContent="space-between">
+            <Typography variant="h6">
+              {campaignEditable ? (
+                <>
+                  {campaignId
+                    ? `${i18n.t("campaigns.dialog.update")}`
+                    : `${i18n.t("campaigns.dialog.new")}`}
+                </>
+              ) : (
+                <>{`${i18n.t("campaigns.dialog.readonly")}`}</>
+              )}
+            </Typography>
+          </Box>
+          <Tabs
+            value={mainTab}
+            onChange={(e, newValue) => setMainTab(newValue)}
+            indicatorColor="primary"
+            textColor="primary"
+            style={{ marginTop: 8 }}
+          >
+            <Tab label="Configuração" />
+            <Tab label="Como Funciona" icon={<HelpOutlineIcon style={{ fontSize: 18 }} />} />
+          </Tabs>
         </DialogTitle>
         <div style={{ display: "none" }}>
           <input
@@ -989,13 +1006,39 @@ const CampaignModal = ({
             onChange={(e) => handleAttachmentFile(e)}
           />
         </div>
-        {campaignLoading ? (
+        {/* Aba "Como Funciona" - Tutorial */}
+        {mainTab === 1 && (
+          <>
+            <DialogContent dividers style={{ padding: 0 }}>
+              <CampaignHowItWorks />
+            </DialogContent>
+            <DialogActions>
+              <Button
+                onClick={handleClose}
+                color="primary"
+                variant="outlined"
+              >
+                Fechar
+              </Button>
+              <Button
+                onClick={() => setMainTab(0)}
+                color="primary"
+                variant="contained"
+              >
+                Ir para Configuração
+              </Button>
+            </DialogActions>
+          </>
+        )}
+
+        {/* Aba "Configuração" - Formulário */}
+        {mainTab === 0 && campaignLoading ? (
           <DialogContent dividers>
             <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
               <CircularProgress />
             </div>
           </DialogContent>
-        ) : (
+        ) : mainTab === 0 && (
           <Formik
             initialValues={campaign}
             enableReinitialize={true}
