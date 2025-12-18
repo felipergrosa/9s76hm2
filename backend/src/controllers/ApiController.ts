@@ -133,7 +133,7 @@ const createContact = async (
     });
 
     if (createTicket && createTicket.channel === "whatsapp") {
-      SetTicketMessagesAsRead(createTicket);
+      await SetTicketMessagesAsRead(createTicket);
 
       await FindOrCreateATicketTrakingService({ ticketId: createTicket.id, companyId, whatsappId: whatsapp.id, userId });
 

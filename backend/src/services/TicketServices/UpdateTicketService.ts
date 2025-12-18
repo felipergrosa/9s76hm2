@@ -87,7 +87,7 @@ const UpdateTicketService = async ({
     let ticket = await ShowTicketService(ticketId, companyId);
 
     if (ticket.channel === "whatsapp" && ticket.whatsappId) {
-      SetTicketMessagesAsRead(ticket);
+      await SetTicketMessagesAsRead(ticket);
     }
 
     const oldStatus = ticket?.status;

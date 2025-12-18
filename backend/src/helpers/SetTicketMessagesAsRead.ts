@@ -15,7 +15,8 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
       ticket.companyId
     );
 
-    if (["open", "group"].includes(ticket.status) && whatsapp && whatsapp.status === 'CONNECTED' && ticket.unreadMessages > 0) {
+    // Zera mensagens não lidas para tickets open, group OU pending (quando usuário abre a conversa)
+    if (["open", "group", "pending"].includes(ticket.status) && whatsapp && ticket.unreadMessages > 0) {
       try {
         // Para conexões oficiais, não há Baileys; apenas atualiza banco/cache e emite evento.
         if (whatsapp.channelType === "official") {
@@ -42,26 +43,36 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
           return;
         }
 
-        // Conexões Baileys (Web) continuam marcando mensagens remotamente
-        const wbot = await GetTicketWbot(ticket);
-        const getJsonMessage = await Message.findAll({
-          where: {
-            ticketId: ticket.id,
-            fromMe: false,
-            read: false
-          },
-          order: [["createdAt", "DESC"]]
-        });
+        // Conexões Baileys (Web) - tenta marcar mensagens remotamente, mas não bloqueia se falhar
+        if (whatsapp.status === 'CONNECTED') {
+          try {
+            const wbot = await GetTicketWbot(ticket);
+            const getJsonMessage = await Message.findAll({
+              where: {
+                ticketId: ticket.id,
+                fromMe: false,
+                read: false
+              },
+              order: [["createdAt", "DESC"]]
+            });
 
-        if (getJsonMessage.length > 0) {
-          getJsonMessage.forEach(async message => {
-            const msg: proto.IWebMessageInfo = JSON.parse(message.dataJson);
-            if (msg.key && msg.key.fromMe === false && !ticket.isBot && (ticket.userId || ticket.isGroup)) {
-              await wbot.readMessages([msg.key]);
+            if (getJsonMessage.length > 0) {
+              getJsonMessage.forEach(async message => {
+                const msg: proto.IWebMessageInfo = JSON.parse(message.dataJson);
+                if (msg.key && msg.key.fromMe === false && !ticket.isBot && (ticket.userId || ticket.isGroup)) {
+                  await wbot.readMessages([msg.key]);
+                }
+              });
             }
-          });
+          } catch (err) {
+            logger.warn(
+              `Could not mark messages as read on WhatsApp. Session may be disconnected: ${err}`
+            );
+            // Continua para atualizar o banco e emitir evento mesmo se falhar no WhatsApp
+          }
         }
 
+        // SEMPRE atualiza o banco de dados e emite evento, independente do status do WhatsApp
         await Message.update(
           { read: true },
           {
@@ -84,7 +95,7 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
 
       } catch (err) {
         logger.warn(
-          `Could not mark messages as read. Maybe whatsapp session disconnected? Err: ${err}`
+          `Could not update unread messages in database: ${err}`
         );
       }
     }
