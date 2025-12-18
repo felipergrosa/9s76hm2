@@ -6,8 +6,8 @@ import Board from 'react-trello';
 import { toast } from "react-toastify";
 import { i18n } from "../../translate/i18n";
 import { useHistory } from 'react-router-dom';
-import { Facebook, Instagram, WhatsApp, FilterList } from "@material-ui/icons";
-import { Badge, Tooltip, Typography, Button, TextField, Box, InputBase, Select, MenuItem, Paper, FormControl, InputLabel, Checkbox, ListItemText, Popover } from "@material-ui/core";
+import { Facebook, Instagram, WhatsApp, FilterList, Add, Refresh } from "@material-ui/icons";
+import { Badge, Tooltip, Typography, IconButton, TextField, Box, InputBase, Select, MenuItem, Paper, FormControl, InputLabel, Checkbox, ListItemText, Popover } from "@material-ui/core";
 import { DateRangePicker } from 'materialui-daterange-picker';
 import KanbanCard from "./KanbanCard";
 import KanbanLaneHeader from "./KanbanLaneHeader";
@@ -189,7 +189,7 @@ const useStyles = makeStyles(theme => ({
     "& .smooth-dnd-draggable-wrapper": {
       width: "100% !important",
       maxWidth: "100% !important",
-      marginBottom: `${theme.spacing(0.5)}px !important`,
+      marginBottom: "6px !important",
     },
     "& .react-trello-card": {
       width: "100% !important",
@@ -210,11 +210,19 @@ const useStyles = makeStyles(theme => ({
     marginBottom: theme.spacing(2),
   },
   searchInput: {
+    flex: 1,
     padding: "6px 10px",
     borderRadius: 8,
     background: theme.palette.action.hover,
-    minWidth: 200,
-    maxWidth: 300,
+    minWidth: 150,
+  },
+  actionButton: {
+    padding: 8,
+    borderRadius: 8,
+    border: `1px solid ${theme.palette.divider}`,
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover,
+    },
   },
   connectionTag: {
     background: "green",
@@ -650,23 +658,24 @@ const Kanban = () => {
           />
 
           <Can role={user.profile} perform="dashboard:view" yes={() => (
-            <Button variant="outlined" color="primary" onClick={handleAddConnectionClick}>
-              {i18n.t('kanban.addColumns')}
-            </Button>
+            <Tooltip title={i18n.t('kanban.addColumns')}>
+              <IconButton className={classes.actionButton} color="primary" onClick={handleAddConnectionClick}>
+                <Add />
+              </IconButton>
+            </Tooltip>
           )} />
 
-          <Button variant="text" color="primary" onClick={handleResetHiddenLanes}>
-            {i18n.t('kanban.resetColumns')}
-          </Button>
+          <Tooltip title={i18n.t('kanban.resetColumns')}>
+            <IconButton className={classes.actionButton} color="primary" onClick={handleResetHiddenLanes}>
+              <Refresh />
+            </IconButton>
+          </Tooltip>
 
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<FilterList />}
-            onClick={() => setFiltersModalOpen(true)}
-          >
-            Filtrar e ordenar
-          </Button>
+          <Tooltip title="Filtrar e ordenar">
+            <IconButton className={classes.actionButton} onClick={() => setFiltersModalOpen(true)}>
+              <FilterList />
+            </IconButton>
+          </Tooltip>
         </div>
       </div>
 

@@ -49,15 +49,12 @@ export default function KanbanLaneHeader(props) {
     if (e.button !== 0) return;
     // Não iniciar pan quando clicar em elementos interativos
     try {
-      const isInteractive = e.target.closest('button,a,input,textarea,select');
+      const isInteractive = e.target.closest('button,a,input,textarea,select,[role="button"]');
       if (isInteractive) return;
     } catch (_) {}
+    // Não capturar pointer se o menu estiver aberto
+    if (anchorEl) return;
     try { e.preventDefault(); } catch (_) {}
-    try {
-      if (e.pointerId != null && e.currentTarget?.setPointerCapture) {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      }
-    } catch (_) {}
     if (props.onPanStart) props.onPanStart(e);
   };
 

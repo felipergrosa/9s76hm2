@@ -14,7 +14,7 @@ const useStyles = makeStyles(theme => ({
     boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
     border: "1px solid transparent",
     transition: "all 0.2s",
-    marginBottom: 8,
+    marginBottom: 0,
     width: "100%",
     boxSizing: "border-box",
     position: "relative",
