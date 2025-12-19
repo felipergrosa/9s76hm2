@@ -373,7 +373,26 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 `Socket  ${name} Connection Update ${connection || ""} ${lastDisconnect ? lastDisconnect.error.message : ""
                 }`
               );
-              if ((lastDisconnect?.error as Boom)?.output?.statusCode === 403) {
+              
+              const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+              const isConflict = statusCode === 440; // Stream Errored (conflict)
+              const isForbidden = statusCode === 403;
+              const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+              const isRestartRequired = statusCode === 515; // Stream Errored (restart required)
+              
+              // Conflito: outra sessão está ativa. NÃO reconectar imediatamente para evitar loop
+              if (isConflict) {
+                logger.warn(`[wbot] Conflito de sessão detectado para ${name}. Aguardando 30s antes de tentar reconectar.`);
+                removeWbot(id, false);
+                // Aguardar mais tempo para evitar loop de conflito
+                setTimeout(
+                  () => StartWhatsAppSession(whatsapp, whatsapp.companyId),
+                  30000 // 30 segundos
+                );
+                return;
+              }
+              
+              if (isForbidden) {
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
                 await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
@@ -393,11 +412,21 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     session: whatsapp
                   });
                 removeWbot(id, false);
+                return;
               }
-              if (
-                (lastDisconnect?.error as Boom)?.output?.statusCode !==
-                DisconnectReason.loggedOut
-              ) {
+              
+              // Restart required: reconectar com delay moderado
+              if (isRestartRequired) {
+                logger.info(`[wbot] Restart necessário para ${name}. Reconectando em 5s.`);
+                removeWbot(id, false);
+                setTimeout(
+                  () => StartWhatsAppSession(whatsapp, whatsapp.companyId),
+                  5000
+                );
+                return;
+              }
+              
+              if (!isLoggedOut) {
                 removeWbot(id, false);
                 setTimeout(
                   () => StartWhatsAppSession(whatsapp, whatsapp.companyId),

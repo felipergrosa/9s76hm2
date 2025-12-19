@@ -575,15 +575,52 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   const rawNumber = remoteJid.replace(/\D/g, "");
   const participantJid = msg.participant || msg.key.participant;
   const participantDigits = participantJid ? participantJid.replace(/\D/g, "") : "";
+  const isLid = remoteJid?.includes("@lid");
 
   const looksPhoneLike = (digits: string) => digits.length >= 8 && digits.length <= 15;
 
   // Em alguns eventos de sistema (ex.: chamadas), remoteJid pode vir com um identificador interno.
   // Nesses casos, o remetente real costuma estar em participant.
-  const contactJid =
+  let contactJid =
     !isGroup && participantJid && looksPhoneLike(participantDigits) && !looksPhoneLike(rawNumber)
       ? participantJid
       : remoteJid;
+
+  // CORREÇÃO: Para mensagens fromMe=true com LID, tentar resolver o número real
+  // O WhatsApp às vezes usa LID ao invés do número real quando enviamos pelo celular
+  if (msg.key.fromMe && isLid && !isGroup) {
+    // Tentar obter o número real do store/cache do Baileys
+    try {
+      const sock = wbot as any;
+      // Baileys pode ter o mapeamento LID -> número real no store
+      if (sock.store?.contacts) {
+        const lidContact = sock.store.contacts[remoteJid];
+        if (lidContact?.id && lidContact.id.includes("@s.whatsapp.net")) {
+          contactJid = lidContact.id;
+          debugLog("[getContactMessage] LID resolvido via store.contacts", { 
+            originalLid: remoteJid, 
+            resolvedJid: contactJid 
+          });
+        }
+      }
+      
+      // Alternativa: verificar se há um número no pushName da mensagem
+      if (contactJid === remoteJid && msg.pushName) {
+        const pushNameDigits = msg.pushName.replace(/\D/g, "");
+        if (looksPhoneLike(pushNameDigits)) {
+          // pushName contém um número válido, usar como JID
+          contactJid = `${pushNameDigits}@s.whatsapp.net`;
+          debugLog("[getContactMessage] LID resolvido via pushName", { 
+            originalLid: remoteJid, 
+            pushName: msg.pushName,
+            resolvedJid: contactJid 
+          });
+        }
+      }
+    } catch (err) {
+      debugLog("[getContactMessage] Erro ao tentar resolver LID", { err, remoteJid });
+    }
+  }
 
   const contactRawNumber = contactJid.replace(/\D/g, "");
   return isGroup
@@ -928,9 +965,67 @@ const verifyContact = async (
       }
     }
 
-    // 4. (REMOVIDO) A busca por nome foi removida pois causava mistura de contatos
-    // quando o pushName era genérico (ex: "Rafael", "João").
-    // Se não encontrou pelo LID nem telefone, segue para criar um novo contato vinculado ao LID.
+    // 4. Buscar contato através de mensagens anteriores que tenham este LID no remoteJid
+    // Isso funciona quando o sistema já processou mensagens deste contato antes
+    try {
+      const messageWithLid = await Message.findOne({
+        where: { 
+          remoteJid: normalizedJid,
+          companyId 
+        },
+        include: [{
+          model: Ticket,
+          as: "ticket",
+          attributes: ["contactId"],
+          required: true
+        }],
+        order: [["createdAt", "DESC"]]
+      });
+      
+      if (messageWithLid?.ticket?.contactId) {
+        const existingContact = await Contact.findByPk(messageWithLid.ticket.contactId);
+        if (existingContact && !existingContact.remoteJid?.includes("@lid")) {
+          debugLog("[verifyContact] Contato encontrado via mensagem anterior com LID", {
+            contactId: existingContact.id,
+            contactNumber: existingContact.number,
+            lidUsed: normalizedJid
+          });
+          return existingContact;
+        }
+      }
+    } catch (err) {
+      debugLog("[verifyContact] Erro ao buscar contato via mensagens", { err });
+    }
+
+    // 5. Buscar contato através de tickets que tenham mensagens com este LID
+    try {
+      const ticketWithLid = await Ticket.findOne({
+        where: { companyId },
+        include: [{
+          model: Message,
+          as: "messages",
+          where: { remoteJid: normalizedJid },
+          required: true,
+          limit: 1
+        }, {
+          model: Contact,
+          as: "contact",
+          required: true
+        }],
+        order: [["updatedAt", "DESC"]]
+      });
+      
+      if (ticketWithLid?.contact && !ticketWithLid.contact.remoteJid?.includes("@lid")) {
+        debugLog("[verifyContact] Contato encontrado via ticket com mensagem LID", {
+          contactId: ticketWithLid.contact.id,
+          contactNumber: ticketWithLid.contact.number,
+          ticketId: ticketWithLid.id
+        });
+        return ticketWithLid.contact;
+      }
+    } catch (err) {
+      debugLog("[verifyContact] Erro ao buscar contato via tickets", { err });
+    }
 
     // Se não encontrou por nada, criar contato básico com o LID
     logger.warn("[verifyContact] Criando contato com JID @lid (sem match de número)", {
