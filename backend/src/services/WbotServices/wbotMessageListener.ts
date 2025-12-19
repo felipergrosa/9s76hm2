@@ -928,26 +928,12 @@ const verifyContact = async (
       }
     }
 
-    // 4. Se não encontrou pelo LID nem telefone, tentar buscar pelo nome (pushName) exato
-    if (msgContact.name && msgContact.name.trim()) {
-      const existingByName = await Contact.findOne({
-        where: { 
-          name: msgContact.name.trim(), 
-          companyId,
-          isGroup: false
-        }
-      });
-      if (existingByName) {
-        debugLog("[verifyContact] Contato encontrado pelo nome", {
-          contactId: existingByName.id,
-          name: existingByName.name
-        });
-        return existingByName;
-      }
-    }
+    // 4. (REMOVIDO) A busca por nome foi removida pois causava mistura de contatos
+    // quando o pushName era genérico (ex: "Rafael", "João").
+    // Se não encontrou pelo LID nem telefone, segue para criar um novo contato vinculado ao LID.
 
     // Se não encontrou por nada, criar contato básico com o LID
-    logger.warn("[verifyContact] Criando contato com JID @lid (sem match de número/nome)", {
+    logger.warn("[verifyContact] Criando contato com JID @lid (sem match de número)", {
       normalizedJid,
       pushName: msgContact.name
     });

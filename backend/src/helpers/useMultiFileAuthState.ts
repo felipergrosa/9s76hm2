@@ -10,6 +10,7 @@ import cacheLayer from "../libs/cache";
 import Whatsapp from "../models/Whatsapp";
 import fs from "fs";
 import path from "path";
+import * as crypto from "crypto";
 
 export const useMultiFileAuthState = async (
   whatsapp: Whatsapp
@@ -37,12 +38,19 @@ export const useMultiFileAuthState = async (
     }
   };
 
-  // Em Windows, nomes de arquivos não podem conter caracteres reservados. Também evitamos '@' e '::' usados pelo Baileys em IDs.
-  const sanitizeFileName = (name: string) =>
-    name
+  // Em Windows, nomes de arquivos não podem conter caracteres reservados.
+  // Além disso, o sistema de arquivos é case-insensitive, o que causa colisão para chaves Base64.
+  // Adicionamos um hash do nome original para garantir unicidade física.
+  const sanitizeFileName = (name: string) => {
+    const valid = name
       .replace(/[<>:\\"/\\|?*]/g, "_") // caracteres inválidos gerais
       .replace(/@/g, "_at_")
       .replace(/::/g, "__");
+    
+    // Hash MD5 curto (6 chars) do nome original para diferenciar case (ex: "Key" vs "key")
+    const hash = crypto.createHash("md5").update(name).digest("hex").slice(0, 6);
+    return `${valid}-${hash}`;
+  };
 
   const fsPathFor = (file: string) => path.join(baseDir, `${sanitizeFileName(file)}.json`);
 
