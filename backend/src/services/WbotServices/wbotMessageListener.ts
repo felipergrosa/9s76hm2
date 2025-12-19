@@ -34,6 +34,7 @@ import { Mutex } from "async-mutex";
 import { getIO } from "../../libs/socket";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import logger from "../../utils/logger";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
 import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
@@ -884,10 +885,11 @@ const verifyContact = async (
     debugLog("[verifyContact] JID @lid detectado", {
       originalJid: msgContact.id,
       normalizedJid,
-      pushName: msgContact.name
+      pushName: msgContact.name,
+      cleaned
     });
 
-    // Para JIDs @lid, primeiro buscar por remoteJid (LID) existente
+    // 1. Para JIDs @lid, primeiro buscar por remoteJid (LID) existente
     const existingByLid = await Contact.findOne({ 
       where: { remoteJid: normalizedJid, companyId } 
     });
@@ -896,8 +898,37 @@ const verifyContact = async (
       return existingByLid;
     }
 
-    // Se não encontrou pelo LID, tentar buscar pelo nome (pushName) para evitar duplicatas
-    // Isso ajuda quando o mesmo contato já existe com número real
+    // 2. Tentar extrair telefone do pushName (muitas vezes é o próprio número)
+    const { canonical: canonicalFromPushName } = safeNormalizePhoneNumber(msgContact.name);
+    if (canonicalFromPushName) {
+      const existingByNumber = await Contact.findOne({
+        where: { canonicalNumber: canonicalFromPushName, companyId, isGroup: false }
+      });
+      if (existingByNumber) {
+        debugLog("[verifyContact] Contato encontrado pelo telefone no pushName", { 
+          contactId: existingByNumber.id, 
+          canonicalFromPushName 
+        });
+        return existingByNumber;
+      }
+    }
+
+    // 3. Tentar extrair telefone do próprio LID (caso seja numero@lid)
+    const { canonical: canonicalFromLid } = safeNormalizePhoneNumber(cleaned);
+    if (canonicalFromLid) {
+      const existingByLidNumber = await Contact.findOne({
+        where: { canonicalNumber: canonicalFromLid, companyId, isGroup: false }
+      });
+      if (existingByLidNumber) {
+        debugLog("[verifyContact] Contato encontrado pelo número no LID", { 
+          contactId: existingByLidNumber.id, 
+          canonicalFromLid 
+        });
+        return existingByLidNumber;
+      }
+    }
+
+    // 4. Se não encontrou pelo LID nem telefone, tentar buscar pelo nome (pushName) exato
     if (msgContact.name && msgContact.name.trim()) {
       const existingByName = await Contact.findOne({
         where: { 
@@ -907,20 +938,16 @@ const verifyContact = async (
         }
       });
       if (existingByName) {
-        debugLog("[verifyContact] Contato encontrado pelo nome, atualizando remoteJid com LID", {
+        debugLog("[verifyContact] Contato encontrado pelo nome", {
           contactId: existingByName.id,
-          oldRemoteJid: existingByName.remoteJid,
-          newRemoteJid: normalizedJid
+          name: existingByName.name
         });
-        // Atualizar o remoteJid para incluir o LID (não sobrescrever se já tem número real)
-        // Apenas retornar o contato existente para evitar duplicata
         return existingByName;
       }
     }
 
-    // Se não encontrou por LID nem por nome, criar contato básico com o LID
-    // Isso é um fallback - idealmente não deveria acontecer
-    logger.warn("[verifyContact] Criando contato com JID @lid (sem número real)", {
+    // Se não encontrou por nada, criar contato básico com o LID
+    logger.warn("[verifyContact] Criando contato com JID @lid (sem match de número/nome)", {
       normalizedJid,
       pushName: msgContact.name
     });
