@@ -562,6 +562,7 @@ async function handleVerifyCampaigns(job) {
 
 
 async function getCampaign(id) {
+  // Primeiro busca a campanha com o whatsapp para verificar o tipo de canal
   const campaign = await Campaign.findOne({
     where: { id },
     include: [
@@ -573,32 +574,49 @@ async function getCampaign(id) {
           {
             model: ContactListItem,
             as: "contacts",
-            attributes: ["id", "name", "number", "email", "isWhatsappValid", "isGroup"],
-            where: {
-              [Op.or]: [
-                { isWhatsappValid: true },   // contatos já validados como válidos
-                { isWhatsappValid: null }    // contatos ainda não validados
-              ]
-            }
+            attributes: ["id", "name", "number", "email", "isWhatsappValid", "isGroup"]
           }
         ]
       },
       {
         model: Whatsapp,
         as: "whatsapp",
-        attributes: ["id", "name"]
-      },
-      // {
-      //   model: CampaignShipping,
-      //   as: "shipping",
-      //   include: [{ model: ContactListItem, as: "contact" }]
-      // }
+        attributes: ["id", "name", "channelType"]
+      }
     ]
   });
   
-  // DEBUG: Log para verificar se metaTemplateVariables está sendo carregado
+  // DEBUG: Log detalhado para verificar contatos carregados
   if (campaign) {
+    const contactListId = campaign.contactListId;
+    const contactList = campaign.contactList;
+    const contacts = contactList?.contacts;
+    const contactCount = contacts?.length || 0;
+    
+    logger.info(`[getCampaign] Campaign ${id} | contactListId: ${contactListId} | ContactList loaded: ${!!contactList} | Contatos: ${contactCount}`);
+    
+    // Se não carregou contatos, buscar diretamente para debug
+    if (contactCount === 0 && contactListId) {
+      const directCount = await ContactListItem.count({ where: { contactListId } });
+      logger.warn(`[getCampaign] Campaign ${id} | Contagem direta de ContactListItem: ${directCount}`);
+      
+      // Se há contatos no banco mas não vieram no include, buscar manualmente
+      if (directCount > 0) {
+        logger.info(`[getCampaign] Campaign ${id} | Buscando contatos manualmente...`);
+        const manualContacts = await ContactListItem.findAll({
+          where: { contactListId },
+          attributes: ["id", "name", "number", "email", "isWhatsappValid", "isGroup"]
+        });
+        if (campaign.contactList) {
+          campaign.contactList.contacts = manualContacts;
+        }
+        logger.info(`[getCampaign] Campaign ${id} | Contatos carregados manualmente: ${manualContacts.length}`);
+      }
+    }
+    
     console.log(`[getCampaign] Campaign ${id} metaTemplateVariables:`, JSON.stringify((campaign as any).metaTemplateVariables));
+  } else {
+    logger.error(`[getCampaign] Campaign ${id} não encontrada!`);
   }
   
   return campaign;
@@ -1236,9 +1254,22 @@ async function handleProcessCampaign(job) {
     const campaign = await getCampaign(id);
     const settings = await getSettings(campaign);
     if (campaign) {
-      const { contacts } = campaign.contactList;
-      if (isArray(contacts)) {
-        const contactData = contacts.map(contact => ({
+      // Verificação de segurança para contactList
+      if (!campaign.contactList) {
+        logger.error(`[ProcessCampaign] Campanha ${id} não tem contactList associada`);
+        return;
+      }
+      
+      const contacts = campaign.contactList.contacts || [];
+      logger.info(`[ProcessCampaign] Campanha ${id} | ContactList: ${campaign.contactList.id} | Total de contatos: ${contacts.length}`);
+      
+      if (!isArray(contacts) || contacts.length === 0) {
+        logger.warn(`[ProcessCampaign] Campanha ${id} não tem contatos na lista. Verifique se a lista tem contatos válidos.`);
+        return;
+      }
+      
+      // Processar contatos da lista
+      const contactData = contacts.map(contact => ({
           contactId: contact.id,
           campaignId: campaign.id,
           variables: settings.variables,
@@ -1274,11 +1305,8 @@ async function handleProcessCampaign(job) {
           );
           queuePromises.push(queuePromise);
           logger.info(`Registro enviado pra fila de disparo: Campanha=${campaign.id};Contato=${contacts[i].name};delay=${delay}`);
-          // }
         }
         await Promise.all(queuePromises);
-        // await campaign.update({ status: "EM_ANDAMENTO" });
-      }
     }
   } catch (err: any) {
     Sentry.captureException(err);

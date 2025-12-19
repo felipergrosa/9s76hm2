@@ -11,6 +11,9 @@ export async function RestartService(id: number) {
     throw new Error("Campanha não encontrada");
   }
 
+  // Log detalhado da campanha
+  logger.info(`[RESTART CAMPAIGN] ID=${id} | contactListId: ${campaign.contactListId} | whatsappId: ${campaign.whatsappId} | status: ${campaign.status}`);
+
   // Verifica quantos contatos já foram processados
   const totalShipped = await CampaignShipping.count({
     where: {
