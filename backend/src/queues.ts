@@ -630,6 +630,16 @@ async function getContact(id) {
 
 async function getSettings(campaign): Promise<CampaignSettings> {
   try {
+    if (!campaign) {
+      logger.error("[getSettings] Campanha nula recebida, retornando defaults.");
+      return {
+        messageInterval: 20,
+        longerIntervalAfter: 20,
+        greaterInterval: 60,
+        variables: []
+      };
+    }
+
     const settings = await CampaignSetting.findAll({
       where: { companyId: campaign.companyId },
       attributes: ["key", "value"]
@@ -1252,6 +1262,10 @@ async function handleProcessCampaign(job) {
   try {
     const { id }: ProcessCampaignData = job.data;
     const campaign = await getCampaign(id);
+    if (!campaign) {
+      logger.error(`[ProcessCampaign] Campanha ${id} não encontrada, ignorando job.`);
+      return;
+    }
     const settings = await getSettings(campaign);
     if (campaign) {
       // Verificação de segurança para contactList
@@ -1694,12 +1708,17 @@ async function handleDispatchCampaign(job) {
           }
 
           // NOVO: Se template tem header com mídia, adicionar componente header
+          // e guardar info para salvar mídia no histórico
+          let templateHeaderMediaType: string | null = null;
+          let templateHeaderHandle: string | null = null;
           try {
             const templateDef = await GetTemplateDefinition(selectedWhatsappId, templateName, languageCode);
             if (templateDef.headerFormat &&
               ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDef.headerFormat) &&
               templateDef.headerHandle) {
               logger.info(`[DispatchCampaign] Template tem header ${templateDef.headerFormat}, incluindo no payload`);
+              templateHeaderMediaType = templateDef.headerFormat.toLowerCase();
+              templateHeaderHandle = templateDef.headerHandle;
               const headerComponent = {
                 type: "header",
                 parameters: [{
@@ -1795,7 +1814,9 @@ async function handleDispatchCampaign(job) {
                 contactId: contact.id,
                 body: campaignShipping.message || `Template: ${templateName}`,
                 fromMe: true,
-                mediaType: "extendedTextMessage",
+                // Se o template tinha header de mídia, salvar mediaUrl/mediaType para exibir no ticket
+                mediaType: templateHeaderMediaType || "extendedTextMessage",
+                mediaUrl: templateHeaderHandle || undefined,
                 read: true,
                 ack: 1,
                 remoteJid: contact.remoteJid,

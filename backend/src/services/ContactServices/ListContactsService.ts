@@ -38,6 +38,8 @@ interface Request {
   florder?: boolean;
   bzEmpresa?: string[];
   isWhatsappValid?: boolean;
+  walletIds?: number[]; // Novo: IDs de usuários para filtro de carteira
+  whatsappIds?: number[]; // Novo: IDs de conexões WhatsApp
 }
 
 interface Response {
@@ -72,7 +74,9 @@ const ListContactsService = async ({
                                      maxVlUltCompra,
                                      florder,
                                      bzEmpresa,
-                                     isWhatsappValid
+                                     isWhatsappValid,
+                                     walletIds, // Novo: IDs de usuários para filtro de carteira
+                                     whatsappIds // Novo: IDs de conexões WhatsApp
   }: Request): Promise<Response> => {
   let whereCondition: Filterable["where"] = {};
   const additionalWhere: any[] = [];
@@ -405,6 +409,57 @@ const ListContactsService = async ({
       ...whereCondition,
       isGroup: false
     }
+  }
+
+  // Filtro por carteira (usuários responsáveis)
+  if (Array.isArray(walletIds) && walletIds.length > 0) {
+    try {
+      // Para cada usuário selecionado, obter IDs dos contatos na carteira
+      const walletContactIdsArrays: number[][] = [];
+      
+      for (const userId of walletIds) {
+        const walletResult = await GetUserWalletContactIds(userId, companyId);
+        if (walletResult.hasWalletRestriction && walletResult.contactIds.length > 0) {
+          walletContactIdsArrays.push(walletResult.contactIds);
+        }
+      }
+      
+      // Se não encontrou nenhum contato nas carteiras selecionadas, retorna lista vazia
+      if (walletContactIdsArrays.length === 0) {
+        whereCondition.id = { [Op.in]: [] };
+      } else {
+        // Interseção de todos os arrays (contatos que estão em TODAS as carteiras selecionadas)
+        const intersection = walletContactIdsArrays.reduce((acc, current) => {
+          return acc.filter(id => current.includes(id));
+        });
+        
+        if (intersection.length === 0) {
+          whereCondition.id = { [Op.in]: [] };
+        } else {
+          // Combinar com filtro existente de carteira (se houver)
+          const currentIdFilter: any = (whereCondition as any).id;
+          if (currentIdFilter && currentIdFilter[Op.in]) {
+            // Interseção com filtro existente
+            const existingIds = currentIdFilter[Op.in];
+            const finalIntersection = intersection.filter(id => existingIds.includes(id));
+            (whereCondition as any).id = { [Op.in]: finalIntersection };
+          } else {
+            (whereCondition as any).id = { [Op.in]: intersection };
+          }
+        }
+      }
+    } catch (error: any) {
+      // Se falhar, não bloqueia listagem; apenas loga
+      console.warn("[ListContactsService] Erro ao filtrar por carteira:", error.message);
+    }
+  }
+
+  // Filtro por conexões WhatsApp
+  if (Array.isArray(whatsappIds) && whatsappIds.length > 0) {
+    whereCondition = {
+      ...whereCondition,
+      whatsappId: { [Op.in]: whatsappIds }
+    };
   }
 
   const pageLimit = Number(limit) || 100;
