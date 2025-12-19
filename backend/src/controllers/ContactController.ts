@@ -103,6 +103,8 @@ type IndexQuery = {
   florder?: string;
   bzEmpresa?: string | string[];
   isWhatsappValid?: string;
+  walletIds?: string | string[];
+  whatsappIds?: string | string[];
 };
 
 type IndexGetContactQuery = {
@@ -563,6 +565,19 @@ if (tagsQuery) {
   const florder = parseBooleanParam("florder");
   const isWhatsappValid = parseBooleanParam("isWhatsappValid");
 
+  // Parse walletIds e whatsappIds como arrays de números
+  const parseIdArrayParam = (key: string): number[] | undefined => {
+    const arr = parseStringArrayParam(key);
+    if (!arr) return undefined;
+    const nums = arr
+      .map(val => Number(val))
+      .filter(val => Number.isInteger(val) && val > 0);
+    return nums.length ? Array.from(new Set(nums)) : undefined;
+  };
+
+  const walletIds = parseIdArrayParam("walletIds");
+  const whatsappIds = parseIdArrayParam("whatsappIds");
+
   const result = await ListContactsService({
     searchParam,
     pageNumber,
@@ -589,7 +604,9 @@ if (tagsQuery) {
     maxVlUltCompra,
     florder,
     bzEmpresa: bzEmpresas,
-    isWhatsappValid
+    isWhatsappValid,
+    walletIds,
+    whatsappIds
   });
 
   // [ANTI-BAN] Dispara validações em background de forma controlada

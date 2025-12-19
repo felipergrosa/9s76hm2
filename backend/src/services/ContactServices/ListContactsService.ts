@@ -415,37 +415,32 @@ const ListContactsService = async ({
   if (Array.isArray(walletIds) && walletIds.length > 0) {
     try {
       // Para cada usuário selecionado, obter IDs dos contatos na carteira
-      const walletContactIdsArrays: number[][] = [];
+      const allWalletContactIds = new Set<number>();
       
       for (const userId of walletIds) {
         const walletResult = await GetUserWalletContactIds(userId, companyId);
         if (walletResult.hasWalletRestriction && walletResult.contactIds.length > 0) {
-          walletContactIdsArrays.push(walletResult.contactIds);
+          // Adiciona todos os IDs ao Set (união)
+          walletResult.contactIds.forEach(id => allWalletContactIds.add(id));
         }
       }
       
       // Se não encontrou nenhum contato nas carteiras selecionadas, retorna lista vazia
-      if (walletContactIdsArrays.length === 0) {
+      if (allWalletContactIds.size === 0) {
         whereCondition.id = { [Op.in]: [] };
       } else {
-        // Interseção de todos os arrays (contatos que estão em TODAS as carteiras selecionadas)
-        const intersection = walletContactIdsArrays.reduce((acc, current) => {
-          return acc.filter(id => current.includes(id));
-        });
+        // Converter Set para array
+        const walletContactIdsArray = Array.from(allWalletContactIds);
         
-        if (intersection.length === 0) {
-          whereCondition.id = { [Op.in]: [] };
+        // Combinar com filtro existente de carteira (se houver)
+        const currentIdFilter: any = (whereCondition as any).id;
+        if (currentIdFilter && currentIdFilter[Op.in]) {
+          // Interseção com filtro existente de carteira do usuário logado
+          const existingIds = currentIdFilter[Op.in];
+          const finalIntersection = walletContactIdsArray.filter(id => existingIds.includes(id));
+          (whereCondition as any).id = { [Op.in]: finalIntersection };
         } else {
-          // Combinar com filtro existente de carteira (se houver)
-          const currentIdFilter: any = (whereCondition as any).id;
-          if (currentIdFilter && currentIdFilter[Op.in]) {
-            // Interseção com filtro existente
-            const existingIds = currentIdFilter[Op.in];
-            const finalIntersection = intersection.filter(id => existingIds.includes(id));
-            (whereCondition as any).id = { [Op.in]: finalIntersection };
-          } else {
-            (whereCondition as any).id = { [Op.in]: intersection };
-          }
+          (whereCondition as any).id = { [Op.in]: walletContactIdsArray };
         }
       }
     } catch (error: any) {
