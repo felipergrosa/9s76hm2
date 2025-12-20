@@ -1090,17 +1090,20 @@ function getBackoffDeferDelayMs(whatsappId: number): number {
 }
 
 // ==== Intervalos (messageInterval, longerIntervalAfter, greaterInterval) ====
-async function getIntervalSettings(companyId: number): Promise<IntervalSettings> {
+async function getIntervalSettings(companyId: number, isOfficialApi: boolean = false): Promise<IntervalSettings> {
   try {
     const settings = await CampaignSetting.findAll({
       where: { companyId },
-      attributes: ["key", "value"],
+      attributes: ["key", "value"]
     });
 
-    // Defaults conservadores (lê do .env)
+    // Defaults conservadores para Baileys (lê do .env)
     let messageInterval = Number(process.env.MESSAGE_INTERVAL_SEC) || 60;       // segundos
     let longerIntervalAfter = Number(process.env.LONGER_INTERVAL_AFTER) || 10;   // mensagens
     let greaterInterval = Number(process.env.GREATER_INTERVAL_SEC) || 300;       // segundos
+
+    // Defaults para API Oficial (muito mais rápidos)
+    let officialApiMessageInterval = 1; // 1 segundo padrão
 
     settings.forEach(s => {
       try {
@@ -1108,15 +1111,33 @@ async function getIntervalSettings(companyId: number): Promise<IntervalSettings>
         if (s.key === "messageInterval" && v != null) messageInterval = Number(v);
         if (s.key === "longerIntervalAfter" && v != null) longerIntervalAfter = Number(v);
         if (s.key === "greaterInterval" && v != null) greaterInterval = Number(v);
+        if (s.key === "officialApiMessageInterval" && v != null) officialApiMessageInterval = Number(v);
       } catch { }
     });
 
+    // Se for API Oficial, usar configurações otimizadas da interface
+    if (isOfficialApi) {
+      return {
+        messageIntervalMs: Math.max(0, officialApiMessageInterval) * 1000,
+        longerIntervalAfter: 100, // Pausa longa após 100 mensagens
+        greaterIntervalMs: 30000,  // Pausa de 30 segundos
+      };
+    }
+
+    // Baileys usa configurações conservadoras
     return {
       messageIntervalMs: Math.max(0, messageInterval) * 1000,
       longerIntervalAfter: Math.max(0, longerIntervalAfter),
       greaterIntervalMs: Math.max(0, greaterInterval) * 1000,
     };
   } catch {
+    if (isOfficialApi) {
+      return {
+        messageIntervalMs: 1000, // 1 segundo
+        longerIntervalAfter: 100,
+        greaterIntervalMs: 30000
+      };
+    }
     return {
       messageIntervalMs: (Number(process.env.MESSAGE_INTERVAL_SEC) || 60) * 1000,
       longerIntervalAfter: Number(process.env.LONGER_INTERVAL_AFTER) || 10,
@@ -1581,21 +1602,14 @@ async function handleDispatchCampaign(job) {
     }
 
     // Cap, Backoff e Pacing por conexão (whatsappId)
-    // API Oficial: pacing muito mais rápido (2-5s) vs Baileys (60s)
+    // API Oficial: pacing muito mais rápido vs Baileys
     // API Oficial também tem caps muito mais altos (Meta permite milhares por dia)
     const caps = await getCapBackoffSettings(campaign.companyId, isOfficial);
-    const intervals = await getIntervalSettings(campaign.companyId);
-    
-    // Para API Oficial, usar intervalos muito menores (2-5 segundos)
-    const officialIntervals: IntervalSettings = isOfficial ? {
-      messageIntervalMs: 2000,  // 2 segundos entre mensagens
-      longerIntervalAfter: 50,  // Pausa longa após 50 mensagens
-      greaterIntervalMs: 10000  // Pausa de 10 segundos
-    } : intervals;
+    const intervals = await getIntervalSettings(campaign.companyId, isOfficial);
     
     const capDelayMs = await getCapDeferDelayMs(selectedWhatsappId, caps);
     const backoffDelayMs = getBackoffDeferDelayMs(selectedWhatsappId);
-    const pacingDelayMs = getPacingDeferDelayMs(selectedWhatsappId, officialIntervals);
+    const pacingDelayMs = getPacingDeferDelayMs(selectedWhatsappId, intervals);
     const deferMs = Math.max(capDelayMs, backoffDelayMs, pacingDelayMs);
     if (deferMs > 0) {
       const nextJob = await campaignQueue.add(
@@ -1711,8 +1725,25 @@ async function handleDispatchCampaign(job) {
           // e guardar info para salvar mídia no histórico
           let templateHeaderMediaType: string | null = null;
           let templateHeaderHandle: string | null = null;
+          let templateBodyText: string = "";
           try {
             const templateDef = await GetTemplateDefinition(selectedWhatsappId, templateName, languageCode);
+            
+            // Extrair texto do body do template
+            templateBodyText = templateDef.body || "";
+            
+            // Substituir variáveis {{1}}, {{2}}, etc. pelos valores reais
+            if (templateComponents && Array.isArray(templateComponents)) {
+              const bodyComponent = templateComponents.find((c: any) => c.type === "body");
+              if (bodyComponent && bodyComponent.parameters) {
+                bodyComponent.parameters.forEach((param: any, index: number) => {
+                  const placeholder = `{{${index + 1}}}`;
+                  const value = param.text || "";
+                  templateBodyText = templateBodyText.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
+                });
+              }
+            }
+            
             if (templateDef.headerFormat &&
               ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDef.headerFormat) &&
               templateDef.headerHandle) {
@@ -1812,7 +1843,7 @@ async function handleDispatchCampaign(job) {
                 wid: messageId,
                 ticketId: ticket.id,
                 contactId: contact.id,
-                body: campaignShipping.message || `Template: ${templateName}`,
+                body: templateBodyText || campaignShipping.message || `Template: ${templateName}`,
                 fromMe: true,
                 // Se o template tinha header de mídia, salvar mediaUrl/mediaType para exibir no ticket
                 mediaType: templateHeaderMediaType || "extendedTextMessage",
