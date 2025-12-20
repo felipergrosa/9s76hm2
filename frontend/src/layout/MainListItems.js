@@ -520,7 +520,10 @@ const MainListItems = ({ collapsed, drawerClose }) => {
             <ListItem
               dense
               button
-              onClick={() => setOpenCampaignSubmenu((prev) => !prev)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenCampaignSubmenu((prev) => !prev);
+              }}
               onMouseEnter={() => setCampaignHover(true)}
               onMouseLeave={() => setCampaignHover(false)}
             >
@@ -581,7 +584,10 @@ const MainListItems = ({ collapsed, drawerClose }) => {
             <ListItem
               dense
               button
-              onClick={() => setOpenFlowSubmenu((prev) => !prev)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenFlowSubmenu((prev) => !prev);
+              }}
               onMouseEnter={() => setFlowHover(true)}
               onMouseLeave={() => setFlowHover(false)}
             >
@@ -730,7 +736,10 @@ const MainListItems = ({ collapsed, drawerClose }) => {
             <ListItem
               dense
               button
-              onClick={() => setOpenIASubmenu((prev) => !prev)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenIASubmenu((prev) => !prev);
+              }}
               onMouseEnter={() => setIaHover(true)}
               onMouseLeave={() => setIaHover(false)}
             >

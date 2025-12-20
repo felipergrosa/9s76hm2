@@ -89,6 +89,14 @@ const ModalImageCors = ({ imageUrl }) => {
 				// Verificar se URL é absoluta (começa com http:// ou https://)
 				const isAbsoluteUrl = /^https?:\/\//i.test(cleanUrl);
 				
+				// URLs externas (WhatsApp CDN, etc): usar diretamente sem fetch
+				// Isso evita problemas de CORS e carrega mais rápido
+				if (isAbsoluteUrl && (cleanUrl.includes('whatsapp.net') || cleanUrl.includes('fbcdn.net'))) {
+					setBlobUrl(cleanUrl);
+					setFetching(false);
+					return;
+				}
+				
 				let data, headers;
 				
 				if (isAbsoluteUrl) {
