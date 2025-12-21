@@ -1844,12 +1844,22 @@ useEffect(() => {
               {message.quotedMsg && renderQuotedMessage(message)}
               {message.mediaType !== "adMetaPreview" && (
                 (
-                  // Imagens/Vídeos: só exibe legenda se for diferente do nome do arquivo E não for vazio
+                  // Imagens/Vídeos: exibe caption se houver texto válido (não vazio e com mais de 10 caracteres OU contém espaços/quebras de linha)
                   ((message.mediaType === "image" || message.mediaType === "video") && 
                     (message.body || "").trim() !== "" && 
-                    (getFileNameFromUrl(message.mediaUrl) || "").trim() !== (message.body || "").trim() &&
-                    // Não exibir se o body parecer ser um nome de arquivo (contém extensão comum)
-                    !/\.(jpe?g|png|gif|webp|mp4|mov|avi|mkv|pdf)$/i.test((message.body || "").trim())
+                    (
+                      // Exibir se: texto tem mais de 10 chars OU contém espaços/quebras (indica caption real, não nome de arquivo)
+                      (message.body || "").trim().length > 10 ||
+                      /[\s\n]/.test((message.body || "").trim()) ||
+                      // OU se for diferente do nome do arquivo
+                      (getFileNameFromUrl(message.mediaUrl) || "").trim() !== (message.body || "").trim()
+                    ) &&
+                    // Não exibir se for APENAS um nome de arquivo simples (sem espaços e com extensão)
+                    !(
+                      !/[\s\n]/.test((message.body || "").trim()) &&
+                      /\.(jpe?g|png|gif|webp|mp4|mov|avi|mkv|pdf)$/i.test((message.body || "").trim()) &&
+                      (message.body || "").trim().length < 50
+                    )
                   ) ||
                   // Stickers/GIFs: nunca exibir texto
                   (message.mediaType === "sticker" || message.mediaType === "gif") ? false :

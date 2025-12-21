@@ -5,45 +5,66 @@
 -- O QUE FAZ:
 --   - Atualiza mensagens de campanha já enviadas (isCampaign = true)
 --   - Para mensagens com mediaType em ('image','document','video') e body vazio/nulo
---   - Usa Campaign.metaTemplateBody como fonte do texto
+--   - Usa texto da campanha (message1..message5) concatenado como fonte do caption
 --
 -- IMPORTANTE:
 --   - Só roda para conexões API Oficial (Campaign.whatsappId -> Whatsapp.channelType = 'official')
 --   - Não duplica mensagens; apenas preenche body onde está vazio
 --
 
--- 1) Criar tabela de apoio com corpo do template por campanha (apenas API Oficial)
-DROP TABLE IF EXISTS tmp_campaign_template_body;
-CREATE TEMP TABLE tmp_campaign_template_body AS
+-- 1) Identificar campanhas API Oficial e seu texto
+DROP TABLE IF EXISTS tmp_campaign_text;
+CREATE TEMP TABLE tmp_campaign_text AS
 SELECT
   c.id AS campaign_id,
-  COALESCE(NULLIF(TRIM(c."metaTemplateBody"), ''), NULL) AS template_body
+  c."whatsappId",
+  NULLIF(TRIM(CONCAT_WS(
+    E'\n',
+    NULLIF(TRIM(c.message1), ''),
+    NULLIF(TRIM(c.message2), ''),
+    NULLIF(TRIM(c.message3), ''),
+    NULLIF(TRIM(c.message4), ''),
+    NULLIF(TRIM(c.message5), '')
+  )), '') AS campaign_text
 FROM "Campaigns" c
 INNER JOIN "Whatsapps" w ON w.id = c."whatsappId"
-WHERE w."channelType" = 'official';
+WHERE w."channelType" = 'official'
+  AND c."metaTemplateName" IS NOT NULL;
 
--- 2) Atualizar mensagens de campanha sem texto (body vazio/nulo) mas com mídia (image/document/video)
---    Define o body a partir do template_body da campanha
+-- 2) Atualizar mensagens de campanha sem texto mas com mídia
+--    Identifica por: ticket com status='campaign' + fromMe=true + mediaType
+--    Usa o texto da campanha (message1..5 concatenado)
 UPDATE "Messages" m
-SET body = t.template_body
+SET body = t.campaign_text
 FROM "Tickets" tk
-JOIN "CampaignShipping" cs ON cs.id = tk."campaignShippingId"
-JOIN tmp_campaign_template_body t ON t.campaign_id = cs."campaignId"
+JOIN tmp_campaign_text t ON t."whatsappId" = tk."whatsappId"
 WHERE m."ticketId" = tk.id
-  AND m."isCampaign" = true
-  AND (m.body IS NULL OR m.body = '' OR m.body = 'Template: ' || (SELECT "metaTemplateName" FROM "Campaigns" c WHERE c.id = cs."campaignId"))
+  AND m."fromMe" = true
+  AND (m.body IS NULL OR m.body = '' OR m.body LIKE 'Template:%')
   AND m."mediaType" IN ('image','document','video')
-  AND t.template_body IS NOT NULL;
+  AND t.campaign_text IS NOT NULL
+  AND tk.status = 'campaign';
 
--- 3) Relatório rápido
+-- 3) Relatório: quantas mensagens foram atualizadas
 SELECT
   m."mediaType",
-  COUNT(*) AS total_atualizados
+  COUNT(*) AS total_atualizados,
+  COUNT(DISTINCT tk."whatsappId") AS conexoes_afetadas
 FROM "Messages" m
 JOIN "Tickets" tk ON tk.id = m."ticketId"
-JOIN "CampaignShipping" cs ON cs.id = tk."campaignShippingId"
-JOIN tmp_campaign_template_body t ON t.campaign_id = cs."campaignId"
-WHERE m."isCampaign" = true
-  AND m.body = t.template_body
+JOIN tmp_campaign_text t ON t."whatsappId" = tk."whatsappId"
+WHERE m."fromMe" = true
+  AND m.body = t.campaign_text
   AND m."mediaType" IN ('image','document','video')
+  AND tk.status = 'campaign'
 GROUP BY m."mediaType";
+
+-- 4) Verificar se ainda há mensagens sem texto em tickets de campanha
+SELECT
+  COUNT(*) AS mensagens_ainda_sem_texto
+FROM "Messages" m
+JOIN "Tickets" tk ON tk.id = m."ticketId"
+WHERE m."fromMe" = true
+  AND (m.body IS NULL OR m.body = '' OR m.body LIKE 'Template:%')
+  AND m."mediaType" IN ('image','document','video')
+  AND tk.status = 'campaign';
