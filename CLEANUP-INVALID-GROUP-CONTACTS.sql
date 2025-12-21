@@ -11,8 +11,8 @@
 -- ⚠️ IMPORTANTE: Faça backup do banco antes de executar!
 -- =====================================================
 
--- PASSO 1: Identificar contatos com números inválidos (mais de 15 dígitos)
--- Números válidos no padrão E.164 têm no máximo 15 dígitos
+-- PASSO 1: Identificar contatos inválidos (mais de 13 dígitos)
+-- Para BR: canônico deve ter 12 ou 13 dígitos (55 + DDD + 8/9)
 SELECT 
     id,
     name,
@@ -24,17 +24,17 @@ SELECT
 FROM "Contacts"
 WHERE 
     "isGroup" = false
-    AND LENGTH(REGEXP_REPLACE(number, '[^0-9]', '', 'g')) > 15
+    AND LENGTH(REGEXP_REPLACE(number, '[^0-9]', '', 'g')) > 13
 ORDER BY "createdAt" DESC;
 
--- PASSO 2: Contar quantos contatos serão afetados
+-- PASSO 2: Contar quantos contatos serão afetados (>13 dígitos)
 SELECT 
     COUNT(*) as total_invalid_contacts,
     "companyId"
 FROM "Contacts"
 WHERE 
     "isGroup" = false
-    AND LENGTH(REGEXP_REPLACE(number, '[^0-9]', '', 'g')) > 15
+    AND LENGTH(REGEXP_REPLACE(number, '[^0-9]', '', 'g')) > 13
 GROUP BY "companyId";
 
 -- PASSO 3: Verificar se existem tickets associados a esses contatos
@@ -48,7 +48,7 @@ FROM "Contacts" c
 LEFT JOIN "Tickets" t ON t."contactId" = c.id
 WHERE 
     c."isGroup" = false
-    AND LENGTH(REGEXP_REPLACE(c.number, '[^0-9]', '', 'g')) > 15
+    AND LENGTH(REGEXP_REPLACE(c.number, '[^0-9]', '', 'g')) > 13
 GROUP BY c.id, c.number
 HAVING COUNT(t.id) > 0
 ORDER BY ticket_count DESC;
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS "Contacts_Invalid_Backup" AS
 SELECT * FROM "Contacts"
 WHERE 
     "isGroup" = false
-    AND LENGTH(REGEXP_REPLACE(number, '[^0-9]', '', 'g')) > 15;
+    AND LENGTH(REGEXP_REPLACE(number, '[^0-9]', '', 'g')) > 13;
 
 -- PASSO 5: Deletar contatos inválidos SEM tickets associados
 -- (Seguro - não afeta histórico de conversas)
@@ -70,7 +70,7 @@ WHERE
         LEFT JOIN "Tickets" t ON t."contactId" = c.id
         WHERE 
             c."isGroup" = false
-            AND LENGTH(REGEXP_REPLACE(c.number, '[^0-9]', '', 'g')) > 15
+            AND LENGTH(REGEXP_REPLACE(c.number, '[^0-9]', '', 'g')) > 13
         GROUP BY c.id
         HAVING COUNT(t.id) = 0
     );
@@ -88,7 +88,7 @@ WHERE
         INNER JOIN "Tickets" t ON t."contactId" = c.id
         WHERE 
             c."isGroup" = false
-            AND LENGTH(REGEXP_REPLACE(c.number, '[^0-9]', '', 'g')) > 15
+            AND LENGTH(REGEXP_REPLACE(c.number, '[^0-9]', '', 'g')) > 13
         GROUP BY c.id
         HAVING COUNT(t.id) > 0
     )
@@ -128,15 +128,15 @@ SELECT
 FROM "Contacts"
 WHERE 
     "isGroup" = false
-    AND LENGTH(REGEXP_REPLACE(number, '[^0-9]', '', 'g')) BETWEEN 8 AND 15
+    AND LENGTH(REGEXP_REPLACE(number, '[^0-9]', '', 'g')) BETWEEN 10 AND 13
 UNION ALL
 SELECT 
-    'Contatos com números inválidos (>15 dígitos)' as metric,
+    'Contatos com números inválidos (>13 dígitos)' as metric,
     COUNT(*) as value
 FROM "Contacts"
 WHERE 
     "isGroup" = false
-    AND LENGTH(REGEXP_REPLACE(number, '[^0-9]', '', 'g')) > 15;
+    AND LENGTH(REGEXP_REPLACE(number, '[^0-9]', '', 'g')) > 13;
 
 -- =====================================================
 -- FIM DO SCRIPT

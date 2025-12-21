@@ -577,7 +577,7 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   const participantDigits = participantJid ? participantJid.replace(/\D/g, "") : "";
   const isLid = remoteJid?.includes("@lid");
 
-  const looksPhoneLike = (digits: string) => digits.length >= 8 && digits.length <= 15;
+  const looksPhoneLike = (digits: string) => digits.length >= 10 && digits.length <= 13;
 
   // CORREÇÃO CRÍTICA: Para mensagens de GRUPOS, sempre usar participant
   // O remoteJid em grupos é o ID do grupo (xxxxx@g.us), não o número do contato
@@ -964,9 +964,9 @@ const verifyContact = async (
   const isLinkedDevice = msgContact.id.includes("@lid") || normalizedJid.includes("@lid");
 
   // VALIDAÇÃO RIGOROSA: Rejeitar números com tamanho inválido
-  // Números válidos devem ter entre 8 e 15 dígitos (padrão E.164)
+  // Números BR válidos devem ter entre 10 e 13 dígitos (55 + DDD + 8/9)
   if (!isGroup && !isLinkedDevice) {
-    const isPhoneLike = cleaned.length >= 8 && cleaned.length <= 15;
+    const isPhoneLike = cleaned.length >= 10 && cleaned.length <= 13;
     if (!isPhoneLike) {
       logger.warn("[verifyContact] Ignorando identificador não-phone-like (evita contato duplicado)", {
         originalJid: msgContact.id,
@@ -981,7 +981,7 @@ const verifyContact = async (
   
   // VALIDAÇÃO EXTRA: Para números normais (não-LID, não-grupo), validar tamanho
   if (!isGroup && !isLinkedDevice) {
-    if (cleaned.length > 15) {
+    if (cleaned.length > 13) {
       logger.error("[verifyContact] REJEITADO: Número muito longo (provavelmente ID interno)", {
         originalJid: msgContact.id,
         normalizedJid,
@@ -1122,8 +1122,8 @@ const verifyContact = async (
     return newContact;
   }
 
-  // VALIDAÇÃO RIGOROSA: só cria contato se não for grupo e o número tiver entre 8 e 15 dígitos
-  const isPhoneLike = !isGroup && cleaned.length >= 8 && cleaned.length <= 15;
+  // VALIDAÇÃO RIGOROSA: só cria contato se não for grupo e o número tiver entre 10 e 13 dígitos
+  const isPhoneLike = !isGroup && cleaned.length >= 10 && cleaned.length <= 13;
   if (!isPhoneLike && !isGroup) {
     // Para não-grupos com número inválido, tentar buscar existente
     const existing = await Contact.findOne({ where: { remoteJid: normalizedJid, companyId } });
@@ -1160,8 +1160,8 @@ const verifyContact = async (
   });
   
   // VALIDAÇÃO FINAL antes de criar/atualizar
-  if (!isGroup && cleaned.length > 15) {
-    logger.error("[verifyContact] BLOQUEIO FINAL: Número excede 15 dígitos", {
+  if (!isGroup && cleaned.length > 13) {
+    logger.error("[verifyContact] BLOQUEIO FINAL: Número excede 13 dígitos (BR)", {
       cleaned,
       length: cleaned.length,
       normalizedJid,
