@@ -2,7 +2,7 @@ import React from "react";
 import { useParams } from "react-router-dom";
 import Grid from "@material-ui/core/Grid";
 import Paper from "@material-ui/core/Paper";
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useMediaQuery, useTheme } from "@material-ui/core/styles";
 
 import TicketsManager from "../../components/TicketsManager";
 import Ticket from "../../components/Ticket";
@@ -54,30 +54,37 @@ const useStyles = makeStyles(theme => ({
 const Chat = () => {
 	const classes = useStyles();
 	const { ticketId } = useParams();
+	const theme = useTheme();
+	const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
 	return (
 		<div className={classes.chatContainer}>
 			<div className={classes.chatPapper}>
 				<Grid container spacing={0}>
-					<Grid item xs={4} className={classes.contactsWrapper}>
-						<TicketsManager />
-					</Grid>
-					<Grid item xs={8} className={classes.messagessWrapper}>
-						{ticketId ? (
-							<>
-								<Ticket />
-							</>
-						) : (
-							<Paper square variant="outlined" className={classes.welcomeMsg}>
-								<span>
-									<center>
-										<img className={classes.logo} width="50%" alt="" />
-									</center>
-									{i18n.t("chat.noTicketMessage")}
-								</span>
-							</Paper>
-						)}
-					</Grid>
+					{/* Em mobile: mostra lista OU ticket. Em desktop: mostra ambos */}
+					{(!isMobile || !ticketId) && (
+						<Grid item xs={isMobile ? 12 : 4} className={classes.contactsWrapper}>
+							<TicketsManager />
+						</Grid>
+					)}
+					{(!isMobile || ticketId) && (
+						<Grid item xs={isMobile ? 12 : 8} className={classes.messagessWrapper}>
+							{ticketId ? (
+								<>
+									<Ticket />
+								</>
+							) : (
+								<Paper square variant="outlined" className={classes.welcomeMsg}>
+									<span>
+										<center>
+											<img className={classes.logo} width="50%" alt="" />
+										</center>
+										{i18n.t("chat.noTicketMessage")}
+									</span>
+								</Paper>
+							)}
+						</Grid>
+					)}
 				</Grid>
 			</div>
 		</div>

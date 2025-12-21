@@ -31,7 +31,7 @@ const TicketHeader = ({ loading, children }) => {
 	const history = useHistory();
 
 	const handleBack = () => {
-
+		// Volta para a lista de tickets
 		history.push("/tickets");
 	};
 

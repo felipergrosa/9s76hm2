@@ -40,21 +40,26 @@ const useStyles = makeStyles(theme => ({
 const TicketAdvanced = (props) => {
     const classes = useStyles();
     const { ticketId } = useParams();
-    const [option, setOption] = useState(0);
+    // Inicializa mostrando a lista de tickets quando não há ticket selecionado
+    const [option, setOption] = useState(ticketId ? 0 : 1);
     const { currentTicket, setCurrentTicket } = useContext(TicketsContext)
 
     useEffect(() => {
         if (currentTicket.id !== null) {
             setCurrentTicket({ id: currentTicket.id, code: '#open' })
         }
+        // Sempre mostrar lista de tickets quando não há ticket selecionado
         if (!ticketId) {
-            setOption(1)
+            setOption(1);
+            setCurrentTicket({ id: null, code: null });
+        } else {
+            setOption(0);
         }
         return () => {
             setCurrentTicket({ id: null, code: null })
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [ticketId, currentTicket?.id])
 
     useEffect(() => {
         if (currentTicket.id !== null) {
@@ -90,20 +95,8 @@ const TicketAdvanced = (props) => {
 
             <TicketAdvancedLayout>
                 <Box className={classes.header}>
-                    {(option === 0 && ticketId && ticketId !== "undefined") ? (
+                    {(option === 0 && ticketId && ticketId !== "undefined") && (
                         <ExternalTicketHeader />
-                    ) : (
-                        <BottomNavigation
-                            value={option}
-                            onChange={(event, newValue) => {
-                                setOption(newValue);
-                            }}
-                            showLabels
-                            className={classes.root}
-                        >
-                            <BottomNavigationAction label="Ticket" icon={<ChatIcon />} />
-                            <BottomNavigationAction label="Atendimentos" icon={<QuestionAnswerIcon />} />
-                        </BottomNavigation>
                     )}
                 </Box>
                 <Box className={classes.content}>

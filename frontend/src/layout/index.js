@@ -72,6 +72,10 @@ const useStyles = makeStyles((theme) => ({
     maxWidth: "100%",
     overflowX: "hidden",
     backgroundColor: theme.palette.fancyBackground,
+    [theme.breakpoints.down("sm")]: {
+      overflowX: "hidden",
+      position: "relative",
+    },
 
     "& .MuiButton-outlinedPrimary": {
       color: theme.palette.primary,
@@ -95,8 +99,24 @@ const useStyles = makeStyles((theme) => ({
     paddingRight: 24, // keep right padding when drawer closed
     color: theme.palette.dark.main,
     background: theme.palette.barraSuperior,
-    // ADIÇÃO PARA CORRIGIR SOBREPOSIÇÃO NO MOBILE
     gap: theme.spacing(1),
+    [theme.breakpoints.down("sm")]: {
+      flexWrap: "nowrap",
+      overflowX: "auto",
+      overflowY: "hidden",
+      paddingRight: 8,
+      paddingLeft: 8,
+      minHeight: 48,
+      gap: theme.spacing(0.5),
+      WebkitOverflowScrolling: "touch",
+      scrollbarWidth: "none",
+      "&::-webkit-scrollbar": {
+        display: "none",
+      },
+      "& > *": {
+        flexShrink: 0,
+      },
+    },
   },
   toolbarIcon: {
     display: "flex",
@@ -145,14 +165,17 @@ const useStyles = makeStyles((theme) => ({
     left: 0,
     height: "100vh",
     whiteSpace: "nowrap",
-    // overflowX: "hidden",
     width: drawerWidth,
     transition: theme.transitions.create("width", {
       easing: theme.transitions.easing.sharp,
       duration: theme.transitions.duration.enteringScreen,
     }),
     overflowX: "hidden",
-    overflowY: "hidden",
+    overflowY: "auto",
+    [theme.breakpoints.down("sm")]: {
+      overflowY: "auto",
+      height: "100vh",
+    },
   },
 
   drawerPaperClose: {
@@ -161,7 +184,7 @@ const useStyles = makeStyles((theme) => ({
     left: 0,
     height: "100vh",
     overflowX: "hidden",
-    overflowY: "hidden",
+    overflowY: "auto",
     transition: theme.transitions.create("width", {
       easing: theme.transitions.easing.sharp,
       duration: theme.transitions.duration.leavingScreen,
@@ -169,6 +192,9 @@ const useStyles = makeStyles((theme) => ({
     width: theme.spacing(7),
     [theme.breakpoints.up("sm")]: {
       width: theme.spacing(9),
+    },
+    [theme.breakpoints.down("sm")]: {
+      overflowY: "auto",
     },
   },
 
@@ -208,17 +234,22 @@ const useStyles = makeStyles((theme) => ({
   //   },
   containerWithScroll: {
     flex: 1,
-    // padding: theme.spacing(1),
-    overflowY: "scroll", // Use "auto" para mostrar a barra de rolagem apenas quando necessário
-    overflowX: "hidden", // Oculta a barra de rolagem horizontal
+    overflowY: "auto",
+    overflowX: "hidden",
     ...theme.scrollbarStyles,
     borderRadius: "8px",
     border: "2px solid transparent",
     "&::-webkit-scrollbar": {
-      display: "none",
+      width: "6px",
     },
-    "-ms-overflow-style": "none",
-    "scrollbar-width": "none",
+    "&::-webkit-scrollbar-thumb": {
+      backgroundColor: "rgba(0,0,0,0.2)",
+      borderRadius: "3px",
+    },
+    [theme.breakpoints.down("sm")]: {
+      overflowY: "auto",
+      maxHeight: "calc(100vh - 120px)",
+    },
   },
   NotificationsPopOver: {
     // color: theme.barraSuperior.secondary.main,
@@ -559,11 +590,15 @@ const LoggedInLayout = ({ children, themeToggle }) => {
             setRingVolume={setRingVolume} // Callback function
             timelocale={'UTC-3'} //Set time local for call history
           /> */}
-          <IconButton edge="start" onClick={colorMode.toggleColorMode}>
+          <IconButton 
+            edge="start" 
+            onClick={colorMode.toggleColorMode}
+            style={{ padding: greaterThenSm ? 12 : 8 }}
+          >
             {theme.mode === "dark" ? (
-              <Brightness7Icon style={{ color: "white" }} />
+              <Brightness7Icon style={{ color: "white", fontSize: greaterThenSm ? 24 : 20 }} />
             ) : (
-              <Brightness4Icon style={{ color: "white" }} />
+              <Brightness4Icon style={{ color: "white", fontSize: greaterThenSm ? 24 : 20 }} />
             )}
           </IconButton>
 
@@ -573,8 +608,9 @@ const LoggedInLayout = ({ children, themeToggle }) => {
             onClick={handleRefreshPage}
             aria-label={i18n.t("mainDrawer.appBar.refresh")}
             color="inherit"
+            style={{ padding: greaterThenSm ? 12 : 8 }}
           >
-            <CachedIcon style={{ color: "white" }} />
+            <CachedIcon style={{ color: "white", fontSize: greaterThenSm ? 24 : 20 }} />
           </IconButton>
 
           {/* <DarkMode themeToggle={themeToggle} /> */}

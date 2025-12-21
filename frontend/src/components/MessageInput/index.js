@@ -86,14 +86,18 @@ const useStyles = makeStyles((theme) => ({
       left: 0,
       right: 0,
       width: "100%",
+      maxWidth: "100vw",
       borderTop: 'none',
-      padding: 0,
+      padding: '8px',
+      paddingBottom: '8px',
       zIndex: 10,
       backgroundColor: theme.mode === 'light' ? 'transparent' : '#0b0b0d',
       backgroundImage: theme.mode === 'light' ? `url(${whatsBackground})` : `url(${whatsBackgroundDark})`,
       backgroundRepeat: 'repeat',
       backgroundSize: '400px auto',
-      backgroundPosition: 'center bottom'
+      backgroundPosition: 'center bottom',
+      boxSizing: 'border-box',
+      overflowX: 'hidden',
     },
   },
   avatar: {
@@ -130,52 +134,54 @@ const useStyles = makeStyles((theme) => ({
       ? "0 2px 6px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08)"
       : "0 2px 6px rgba(0,0,0,0.50)",
     gap: 4,
-    // Altura fixa para eliminar qualquer "salto" visual
-    height: 56,
+    minHeight: 56,
+    maxHeight: 200,
     [theme.breakpoints.down('sm')]: {
-      height: 60,
+      minHeight: 48,
+      maxHeight: 150,
+      width: '100%',
+      maxWidth: '100%',
+      boxSizing: 'border-box',
+      padding: '0px 4px',
+      gap: 2,
     }
   },
   messageInputWrapper: {
-    //padding: 10,
-    //marginRight: 7,
     marginBottom: 0,
-    
     backgroundImage: ((theme.palette.mode || theme.palette.type) === 'light') ? `url(${whatsBackground})` : `url(${whatsBackgroundDark})`,
-    
     display: "flex",
     flexDirection: "column",
     borderRadius: 0,
-    //flex: 1,
     position: "relative",
     boxShadow: "none !important",
     border: "none",
-    // Container do InputBase: controla a borda e o fundo do campo de digitação
     '& .MuiInputBase-root': {
       backgroundColor: ((theme.palette.mode || theme.palette.type) === 'light') ? '#ffffff' : '#202c33',
       borderRadius: 0,
-      // Para deixar sem borda depois, troque a linha abaixo por: 'border: "none"'
       border: ((theme.palette.mode || theme.palette.type) === 'light') ? '0px solid #ffffff' : '0px solid rgba(255,255,255,0.18)',
-      // Garante que o input ocupe altura fixa dentro do composer
-      height: 40,
+      minHeight: 40,
+      maxHeight: 120,
       display: 'flex',
-      alignItems: 'center'
+      alignItems: 'flex-start',
+      paddingTop: 8,
+      paddingBottom: 8,
     },
-    // Ajuste específico para o textarea interno do InputBase multiline
     '& .MuiInputBase-multiline': {
-      paddingTop: 10,
-      paddingBottom: 10,
+      paddingTop: 8,
+      paddingBottom: 8,
+      height: 'auto',
     },
     '& .MuiInputBase-inputMultiline': {
       padding: 0,
-      
-      maxHeight: 24,
+      maxHeight: 100,
       overflowY: 'auto',
+      lineHeight: 1.4,
+      fontSize: 14,
     },
     '& .MuiInputBase-input': {
       padding: 0,
       fontSize: 14,
-      lineHeight: 1.1
+      lineHeight: 1.4,
     },
     [theme.breakpoints.down('sm')]: {
       width: '100%',
@@ -187,6 +193,12 @@ const useStyles = makeStyles((theme) => ({
       right: 0,
       position: 'relative',
       boxShadow: 'none',
+      '& .MuiInputBase-root': {
+        maxHeight: 100,
+      },
+      '& .MuiInputBase-inputMultiline': {
+        maxHeight: 80,
+      },
     }
   },
   messageInputWrapperPrivate: {
@@ -1651,8 +1663,8 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                           : i18n.t("messagesInput.placeholderClosed")
                       }
                       multiline
-                      rowsMin={1}
-                      maxRows={isMobile ? 3 : 5}
+                      rows={1}
+                      rowsMax={isMobile ? 4 : 6}
                       value={inputMessage}
                       onChange={handleChangeInput}
                       disabled={disableOption()}
@@ -1701,8 +1713,8 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       className={classes.messageInput}
                       placeholder={placeholderText}
                       multiline
-                      rowsMin={1}
-                      maxRows={isMobile ? 3 : 5}
+                      rows={1}
+                      rowsMax={isMobile ? 4 : 6}
                       value={inputMessage}
                       onChange={handleChangeInput}
                       disabled={disableOption()}

@@ -178,6 +178,9 @@ const useStyles = makeStyles((theme) => ({
     marginLeft: theme.spacing(1),
     marginRight: theme.spacing(1),
     padding: theme.spacing(0.5),
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
   },
 
   serachInputWrapper: {
