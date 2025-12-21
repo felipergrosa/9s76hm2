@@ -244,26 +244,36 @@ const SendTemplateToContact = async ({
     let mediaUrl: string | undefined = undefined;
     let mediaType: string | undefined = undefined;
 
-    // Substituir variáveis no corpo da mensagem
-    if (templateDefinition && finalComponents) {
+    // Substituir variáveis no corpo da mensagem (garantir texto salvo mesmo com header de imagem)
+    if (finalComponents) {
       // Pegar parâmetros do BODY
       const bodyComponent = finalComponents.find(c => c.type === "body");
+
+      // Se existe templateDefinition.body, substitui placeholders; senão, monta texto a partir dos parâmetros
       if (bodyComponent?.parameters) {
+        const texts: string[] = [];
         bodyComponent.parameters.forEach((param: any, index: number) => {
           if (param.type === "text") {
-            // Substituir {{1}}, {{2}}, etc. pelos valores reais
-            messageBody = messageBody.replace(new RegExp(`\\{\\{${index + 1}\\}\\}`, 'g'), param.text);
+            if (templateDefinition?.body) {
+              messageBody = messageBody.replace(new RegExp(`\\{\\{${index + 1}\\}\\}`, 'g'), param.text);
+            }
+            texts.push(param.text);
           }
         });
-      }
 
-      // Adicionar informação do header se for documento/imagem/vídeo
-      if (templateDefinition.headerFormat && ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDefinition.headerFormat)) {
-        mediaType = templateDefinition.headerFormat.toLowerCase();
-        mediaUrl = templateDefinition.headerHandle; // URL original do arquivo
-
-        logger.info(`[SendTemplateToContact] Salvando ${mediaType} na mensagem: ${mediaUrl}`);
+        // Se não havia templateDefinition.body, usa os textos concatenados
+        if (!templateDefinition?.body && texts.length) {
+          messageBody = texts.join("\n");
+        }
       }
+    }
+
+    // Adicionar informação do header se for documento/imagem/vídeo
+    if (templateDefinition && templateDefinition.headerFormat && ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDefinition.headerFormat)) {
+      mediaType = templateDefinition.headerFormat.toLowerCase();
+      mediaUrl = templateDefinition.headerHandle; // URL original do arquivo
+
+      logger.info(`[SendTemplateToContact] Salvando ${mediaType} na mensagem: ${mediaUrl}`);
     }
 
     const message = await CreateMessageService({
