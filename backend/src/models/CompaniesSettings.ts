@@ -131,6 +131,9 @@ import {
 
     @Column
     openaiModel: string;
+
+    @Column
+    autoCaptureGroupContacts: string; // "enabled" ou "disabled" - controla captura automática de contatos de grupos
   }
   
   export default CompaniesSettings;

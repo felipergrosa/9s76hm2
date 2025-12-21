@@ -579,12 +579,54 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
 
   const looksPhoneLike = (digits: string) => digits.length >= 8 && digits.length <= 15;
 
-  // Em alguns eventos de sistema (ex.: chamadas), remoteJid pode vir com um identificador interno.
-  // Nesses casos, o remetente real costuma estar em participant.
-  let contactJid =
-    !isGroup && participantJid && looksPhoneLike(participantDigits) && !looksPhoneLike(rawNumber)
-      ? participantJid
-      : remoteJid;
+  // CORREÇÃO CRÍTICA: Para mensagens de GRUPOS, sempre usar participant
+  // O remoteJid em grupos é o ID do grupo (xxxxx@g.us), não o número do contato
+  let contactJid;
+  
+  if (isGroup) {
+    // Em grupos, SEMPRE usar participant (quem enviou a mensagem)
+    if (!participantJid) {
+      debugLog("[getContactMessage] ERRO: Mensagem de grupo sem participant", {
+        remoteJid,
+        msgKey: msg.key
+      });
+      return { id: remoteJid, name: "Grupo" };
+    }
+    
+    // Validar se participant é um número válido
+    if (!looksPhoneLike(participantDigits)) {
+      debugLog("[getContactMessage] AVISO: Participant de grupo com formato inválido", {
+        participantJid,
+        participantDigits,
+        length: participantDigits.length
+      });
+      // Tentar extrair número do JID mesmo assim
+      const jidParts = participantJid.split('@')[0];
+      const cleanJid = jidParts.replace(/\D/g, "");
+      if (looksPhoneLike(cleanJid)) {
+        contactJid = `${cleanJid}@s.whatsapp.net`;
+        debugLog("[getContactMessage] Número extraído do JID", { contactJid });
+      } else {
+        // Número inválido, não processar
+        debugLog("[getContactMessage] ERRO: Impossível extrair número válido do participant", {
+          participantJid,
+          cleanJid,
+          length: cleanJid.length
+        });
+        return null;
+      }
+    } else {
+      contactJid = participantJid;
+    }
+  } else {
+    // Em conversas diretas (não-grupo)
+    // Em alguns eventos de sistema (ex.: chamadas), remoteJid pode vir com um identificador interno.
+    // Nesses casos, o remetente real costuma estar em participant.
+    contactJid =
+      !isGroup && participantJid && looksPhoneLike(participantDigits) && !looksPhoneLike(rawNumber)
+        ? participantJid
+        : remoteJid;
+  }
 
   // CORREÇÃO: Para mensagens fromMe=true com LID, tentar resolver o número real
   // O WhatsApp às vezes usa LID ao invés do número real quando enviamos pelo celular
@@ -623,10 +665,23 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   }
 
   const contactRawNumber = contactJid.replace(/\D/g, "");
+  
+  // Validação final: número deve ter tamanho válido
+  if (!looksPhoneLike(contactRawNumber)) {
+    debugLog("[getContactMessage] ERRO FINAL: Número com tamanho inválido", {
+      contactJid,
+      contactRawNumber,
+      length: contactRawNumber.length,
+      isGroup,
+      participantJid
+    });
+    return null;
+  }
+  
   return isGroup
     ? {
-        id: getSenderMessage(msg, wbot),
-        name: msg.pushName
+        id: contactJid, // CORREÇÃO: usar contactJid (participant) ao invés de getSenderMessage
+        name: msg.pushName || contactRawNumber
       }
     : {
         id: contactJid,
@@ -896,14 +951,20 @@ const verifyContact = async (
   companyId: number,
   userId: number = null
 ): Promise<Contact> => {
+  // VALIDAÇÃO CRÍTICA: msgContact pode ser null se getContactMessage falhou
+  if (!msgContact || !msgContact.id) {
+    logger.error("[verifyContact] msgContact inválido ou null", { msgContact });
+    return null as any;
+  }
+
   let profilePicUrl = ""; // Busca de avatar é feita por serviço dedicado, não aqui.
   const normalizedJid = jidNormalizedUser(msgContact.id);
   const cleaned = normalizedJid.replace(/\D/g, "");
   const isGroup = normalizedJid.includes("g.us");
   const isLinkedDevice = msgContact.id.includes("@lid") || normalizedJid.includes("@lid");
 
-  // Se não é grupo e não é @lid, só trata como contato se tiver cara de telefone.
-  // Isso evita criar contatos/tickets para identificadores internos (ex.: eventos de chamada).
+  // VALIDAÇÃO RIGOROSA: Rejeitar números com tamanho inválido
+  // Números válidos devem ter entre 8 e 15 dígitos (padrão E.164)
   if (!isGroup && !isLinkedDevice) {
     const isPhoneLike = cleaned.length >= 8 && cleaned.length <= 15;
     if (!isPhoneLike) {
@@ -911,6 +972,21 @@ const verifyContact = async (
         originalJid: msgContact.id,
         normalizedJid,
         cleanedLength: cleaned.length,
+        pushName: msgContact.name,
+        companyId
+      });
+      return null as any;
+    }
+  }
+  
+  // VALIDAÇÃO EXTRA: Para números normais (não-LID, não-grupo), validar tamanho
+  if (!isGroup && !isLinkedDevice) {
+    if (cleaned.length > 15) {
+      logger.error("[verifyContact] REJEITADO: Número muito longo (provavelmente ID interno)", {
+        originalJid: msgContact.id,
+        normalizedJid,
+        cleaned,
+        length: cleaned.length,
         pushName: msgContact.name,
         companyId
       });
@@ -1046,35 +1122,53 @@ const verifyContact = async (
     return newContact;
   }
 
-  // Validação: só cria contato se não for grupo e o número tiver entre 8 e 15 dígitos
+  // VALIDAÇÃO RIGOROSA: só cria contato se não for grupo e o número tiver entre 8 e 15 dígitos
   const isPhoneLike = !isGroup && cleaned.length >= 8 && cleaned.length <= 15;
-  if (!isPhoneLike) {
+  if (!isPhoneLike && !isGroup) {
+    // Para não-grupos com número inválido, tentar buscar existente
     const existing = await Contact.findOne({ where: { remoteJid: normalizedJid, companyId } });
     if (existing) {
+      logger.warn("[verifyContact] Retornando contato existente com número inválido", {
+        contactId: existing.id,
+        number: existing.number,
+        normalizedJid
+      });
       return existing;
     }
-    // Se não existe, cria um contato básico para evitar erro null
-    const basicContactData = {
-      name: msgContact.name || normalizedJid,
-      number: cleaned || normalizedJid,
-      profilePicUrl: "",
-      isGroup,
-      companyId,
-      remoteJid: normalizedJid,
-      whatsappId: wbot.id,
-      wbot
-    };
-    const newContact = await CreateOrUpdateContactService(basicContactData);
-    return newContact;
+    
+    // CRÍTICO: NÃO criar contato com número inválido
+    logger.error("[verifyContact] BLOQUEADO: Tentativa de criar contato com número inválido", {
+      normalizedJid,
+      cleaned,
+      length: cleaned.length,
+      pushName: msgContact.name,
+      companyId
+    });
+    return null as any;
   }
 
+  // Log detalhado para debug
   debugLog('[verifyContact] processamento de contato', {
     isGroup,
     originalJid: msgContact.id,
     normalizedJid,
     cleaned,
-    name: msgContact.name
+    cleanedLength: cleaned.length,
+    name: msgContact.name,
+    isLinkedDevice,
+    isPhoneLike
   });
+  
+  // VALIDAÇÃO FINAL antes de criar/atualizar
+  if (!isGroup && cleaned.length > 15) {
+    logger.error("[verifyContact] BLOQUEIO FINAL: Número excede 15 dígitos", {
+      cleaned,
+      length: cleaned.length,
+      normalizedJid,
+      companyId
+    });
+    return null as any;
+  }
   // Corrige: nunca sobrescrever nome personalizado
   let nomeContato = msgContact.name;
   if (!isGroup) {
@@ -4320,8 +4414,15 @@ const handleMessage = async (
 
     const whatsapp = await ShowWhatsAppService(wbot.id!, companyId);
 
-
     if (!whatsapp.allowGroup && isGroup) return;
+
+    // Buscar configurações da empresa
+    const settings = await CompaniesSettings.findOne({
+      where: { companyId }
+    });
+
+    // NOVA FUNCIONALIDADE: Verificar se captura automática de contatos de grupos está habilitada
+    const autoCaptureGroupContacts = settings?.autoCaptureGroupContacts === "enabled";
 
     if (isGroup) {
       const groupJid = msg.key.remoteJid;
@@ -4358,12 +4459,59 @@ const handleMessage = async (
       groupContact = await verifyContact(msgGroupContact, wbot, companyId, userId);
     }
 
-    const contact = await verifyContact(msgContact, wbot, companyId);
-
-    // Validação de segurança: se contact for null, interrompe processamento
-    if (!contact) {
-      console.error('[handleMessage] ERROR: verifyContact retornou null para:', msgContact.id);
-      return;
+    // CONTROLE DE CAPTURA AUTOMÁTICA DE CONTATOS DE GRUPOS
+    let contact: Contact | null = null;
+    
+    if (isGroup && !autoCaptureGroupContacts) {
+      // Se captura automática está DESABILITADA, apenas buscar contato existente
+      // NÃO criar novo contato automaticamente
+      const participantJid = msg.participant || msg.key.participant;
+      if (participantJid) {
+        const normalizedParticipantJid = jidNormalizedUser(participantJid);
+        const participantNumber = normalizedParticipantJid.replace(/\D/g, "");
+        
+        // Buscar apenas se já existe
+        contact = await Contact.findOne({
+          where: {
+            companyId,
+            canonicalNumber: participantNumber
+          }
+        });
+        
+        if (!contact) {
+          logger.info("[handleMessage] Captura automática de contatos de grupos DESABILITADA. Participante não cadastrado, ignorando mensagem.", {
+            participantJid,
+            participantNumber,
+            groupJid: msg.key.remoteJid,
+            companyId
+          });
+          return; // Não processar mensagem de participante não cadastrado
+        }
+        
+        logger.info("[handleMessage] Participante de grupo já cadastrado, processando mensagem.", {
+          contactId: contact.id,
+          contactNumber: contact.number,
+          groupJid: msg.key.remoteJid
+        });
+      } else {
+        logger.warn("[handleMessage] Mensagem de grupo sem participant, ignorando.", {
+          groupJid: msg.key.remoteJid
+        });
+        return;
+      }
+    } else {
+      // Captura automática HABILITADA ou não é grupo: comportamento normal
+      contact = await verifyContact(msgContact, wbot, companyId);
+      
+      // Validação de segurança: se contact for null, interrompe processamento
+      if (!contact) {
+        logger.error('[handleMessage] ERROR: verifyContact retornou null', {
+          msgContactId: msgContact?.id,
+          isGroup,
+          autoCaptureGroupContacts
+        });
+        return;
+      }
     }
 
     let unreadMessages = 0;
@@ -4378,10 +4526,6 @@ const handleMessage = async (
         `${unreadMessages}`
       );
     }
-
-    const settings = await CompaniesSettings.findOne({
-      where: { companyId }
-    });
 
     const enableLGPD = settings?.enableLGPD === "enabled";
 
