@@ -240,11 +240,11 @@ const useStyles = makeStyles((theme) => ({
     borderRadius: "8px",
     border: "2px solid transparent",
     "&::-webkit-scrollbar": {
-      width: "6px",
+      width: "0px",
     },
     "&::-webkit-scrollbar-thumb": {
-      backgroundColor: "rgba(0,0,0,0.2)",
-      borderRadius: "3px",
+      backgroundColor: "transparent",
+      borderRadius: "0px",
     },
     [theme.breakpoints.down("sm")]: {
       overflowY: "auto",
