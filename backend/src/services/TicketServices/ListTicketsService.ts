@@ -555,8 +555,9 @@ const ListTicketsService = async ({
     } as any;
   }
 
-  const limit = 40;
-  const offset = limit * (+pageNumber - 1);
+  // Limite/paginação: para showAll === "true", retornamos muitos registros para o modal de processamento em massa
+  const limit = showAll === "true" ? 10000 : 40;
+  const offset = showAll === "true" ? 0 : limit * (+pageNumber - 1);
 
   const { count, rows: tickets } = await Ticket.findAndCountAll({
     where: whereCondition,

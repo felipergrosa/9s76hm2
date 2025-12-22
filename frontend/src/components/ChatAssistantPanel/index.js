@@ -266,7 +266,7 @@ const ChatAssistantPanel = ({
   title,
 }) => {
   const classes = useStyles({ dialogMode });
-  const [tab, setTab] = useState(1); // 0=Corretor 1=Aprimorar 2=Tradutor
+  const [tab, setTab] = useState(1); // 0=Corretor 1=Aprimorar 2=Tradutor 3=Criar
   const [targetLang, setTargetLang] = useState("pt-BR");
   const [provider, setProvider] = useState(() => {
     try { return localStorage.getItem('ai_provider') || 'openai'; } catch { return 'openai'; }
@@ -280,7 +280,12 @@ const ChatAssistantPanel = ({
   const [lockedProvider, setLockedProvider] = useState(false);
   const [integrationConfig, setIntegrationConfig] = useState(null);
 
-  const transformMode = useMemo(() => (tab === 2 ? "translate" : tab === 0 ? "spellcheck" : "enhance"), [tab]);
+  const transformMode = useMemo(() => {
+    if (tab === 3) return "create";
+    if (tab === 2) return "translate";
+    if (tab === 0) return "spellcheck";
+    return "enhance";
+  }, [tab]);
 
   useEffect(() => {
     if (!open) return;
@@ -334,6 +339,14 @@ const ChatAssistantPanel = ({
       setLoading(true);
       setError("");
       setResult("");
+      
+      // Validação para modo Criar
+      if (transformMode === "create" && !inputMessage.trim()) {
+        setError("💡 Digite uma instrução para criar a mensagem");
+        setLoading(false);
+        return;
+      }
+      
       const payload = {
         mode: transformMode,
         text: inputMessage,
@@ -375,11 +388,12 @@ const ChatAssistantPanel = ({
   useEffect(() => {
     if (!open) return;
     if (!initializing) setInitializing(true);
+    
+    // Precisa de texto no input para todos os modos
     const txt = (inputMessage || "").trim();
     if (!txt) return;
     const t = setTimeout(() => {
       if (!loading) run();
-      // esconde placeholder de inicialização após primeira execução
       setTimeout(() => setInitializing(false), 150);
     }, 600);
     return () => clearTimeout(t);
@@ -471,6 +485,13 @@ const ChatAssistantPanel = ({
             </div>
           )}
 
+          {/* Dica para modo Criar */}
+          {tab === 3 && (
+            <div style={{ marginBottom: 8, padding: '8px 12px', background: 'rgba(37, 211, 102, 0.1)', borderRadius: 8, fontSize: 12 }}>
+              💡 <strong>Modo Criar:</strong> Digite uma instrução no campo de mensagem (ex: "mensagem de agradecimento pela parceria")
+            </div>
+          )}
+
           {/* Resultado + ações em linha */}
           {(!!result || loading || initializing) && (
             <div className={classes.resultContainer}>
@@ -488,6 +509,11 @@ const ChatAssistantPanel = ({
                 <Tooltip title="Tradutor">
                   <IconButton size="small" onClick={() => setTab(2)} className={tab === 2 ? classes.modeButtonActive : classes.modeButton}>
                     <TranslateIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Criar do zero">
+                  <IconButton size="small" onClick={() => setTab(3)} className={tab === 3 ? classes.modeButtonActive : classes.modeButton}>
+                    <BotIcon size={18} />
                   </IconButton>
                 </Tooltip>
               </div>

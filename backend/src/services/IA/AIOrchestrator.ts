@@ -5,7 +5,7 @@ import { search as ragSearch } from "../RAG/RAGSearchService";
 import AIUsageLogger from "./AIUsageLogger";
 
 export type ModuleContext = "campaign" | "ticket" | "prompt" | "general";
-export type AIMode = "enhance" | "translate" | "spellcheck" | "chat" | "rag";
+export type AIMode = "enhance" | "translate" | "spellcheck" | "create" | "chat" | "rag";
 
 export interface AIRequest {
   // Contexto da requisição
@@ -365,6 +365,7 @@ export default class AIOrchestrator {
       enhance: "Você aprimora mensagens para WhatsApp (claras, naturais, sem SPAM).",
       translate: "Você é um tradutor profissional.",
       spellcheck: "Você corrige ortografia e gramática em pt-BR sem mudar o sentido.",
+      create: "Você é um especialista em copywriting para WhatsApp. Cria mensagens claras, naturais e envolventes.",
       chat: "Você é um assistente útil e prestativo.",
       rag: "Você responde perguntas baseado no contexto fornecido."
     };
@@ -387,6 +388,9 @@ export default class AIOrchestrator {
       
       case "enhance":
         return `Aprimore esta mensagem para WhatsApp:\n\n"${text}"`;
+      
+      case "create":
+        return `Crie uma mensagem profissional em português brasileiro baseada nesta instrução:\n\n"${text}"\n\nDiretrizes:\n- Tom caloroso e profissional\n- Use emojis com moderação (2-3 no máximo)\n- Seja conciso (3-5 linhas)\n- Evite CAPS excessivo\n- Inclua call-to-action sutil se apropriado\n- Mantenha naturalidade conversacional`;
       
       default:
         return text;
@@ -441,7 +445,7 @@ export default class AIOrchestrator {
   static async transformText(params: {
     companyId: number;
     text: string;
-    mode: "translate" | "spellcheck" | "enhance";
+    mode: "translate" | "spellcheck" | "enhance" | "create";
     targetLang?: string;
     integrationType?: "openai" | "gemini";
     queueId?: number | string | null;

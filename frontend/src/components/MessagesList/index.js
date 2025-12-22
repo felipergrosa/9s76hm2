@@ -1416,38 +1416,26 @@ useEffect(() => {
         <div
           className={classes.fileFrame}
           onClick={(e) => { e.preventDefault(); setPdfDialog({ open: true, url: message.mediaUrl }); }}
-          style={{ cursor: 'pointer' }}
+          style={{ cursor: 'pointer', padding: 0, border: 'none', boxShadow: 'none' }}
         >
-          <div>
-            {pdfThumbUrl && (
-              <img
-                src={pdfThumbUrl}
-                alt="PDF preview"
-                style={{ maxWidth: 180, maxHeight: 180, display: 'block', marginBottom: 6, borderRadius: 4 }}
-                data-fallback-step="0"
-                onError={(e) => {
-                  const el = e.currentTarget;
-                  const step = el?.dataset?.fallbackStep || "0";
-                  if (step === "0" && pdfThumbUrlAlt) {
-                    el.dataset.fallbackStep = "1";
-                    el.src = pdfThumbUrlAlt;
-                    return;
-                  }
+          {pdfThumbUrl && (
+            <img
+              src={pdfThumbUrl}
+              alt="PDF preview"
+              style={{ maxWidth: 200, maxHeight: 200, display: 'block', borderRadius: 6 }}
+              data-fallback-step="0"
+              onError={(e) => {
+                const el = e.currentTarget;
+                const step = Number(el.dataset.fallbackStep || "0");
+                if (step === 0 && pdfThumbUrlAlt) {
+                  el.src = pdfThumbUrlAlt;
+                  el.dataset.fallbackStep = "1";
+                } else {
                   el.style.display = "none";
-                }}
-              />
-            )}
-            <div style={{ fontWeight: 700, fontSize: 14 }}>PDF</div>
-            <div className={classes.fileName}>{getFileNameFromUrl(message.mediaUrl) || 'arquivo.pdf'}</div>
-            <Button
-              startIcon={<GetApp />}
-              variant="outlined"
-              href={message.mediaUrl}
-              onClick={(e) => { e.preventDefault(); handleDirectDownload(message.mediaUrl); }}
-            >
-              Baixar
-            </Button>
-          </div>
+                }
+              }}
+            />
+          )}
         </div>
       );
     } else if (message.mediaType === "application" || message.mediaType === "document") {
@@ -1843,38 +1831,33 @@ useEffect(() => {
             )}>
               {message.quotedMsg && renderQuotedMessage(message)}
               {message.mediaType !== "adMetaPreview" && (
-                (
-                  // Imagens/Vídeos: exibe caption se houver texto válido (não vazio e com mais de 10 caracteres OU contém espaços/quebras de linha)
-                  ((message.mediaType === "image" || message.mediaType === "video") && 
-                    (message.body || "").trim() !== "" && 
-                    (
-                      // Exibir se: texto tem mais de 10 chars OU contém espaços/quebras (indica caption real, não nome de arquivo)
-                      (message.body || "").trim().length > 10 ||
-                      /[\s\n]/.test((message.body || "").trim()) ||
-                      // OU se for diferente do nome do arquivo
-                      (getFileNameFromUrl(message.mediaUrl) || "").trim() !== (message.body || "").trim()
-                    ) &&
-                    // Não exibir se for APENAS um nome de arquivo simples (sem espaços e com extensão)
-                    !(
-                      !/[\s\n]/.test((message.body || "").trim()) &&
-                      /\.(jpe?g|png|gif|webp|mp4|mov|avi|mkv|pdf)$/i.test((message.body || "").trim()) &&
-                      (message.body || "").trim().length < 50
-                    )
-                  ) ||
+                (() => {
+                  const bodyTrim = (message.body || "").trim();
+
                   // Stickers/GIFs: nunca exibir texto
-                  (message.mediaType === "sticker" || message.mediaType === "gif") ? false :
-                  (
-                    message.mediaType !== "audio" &&
-                    message.mediaType !== "image" &&
-                    message.mediaType !== "video" &&
-                    message.mediaType !== "sticker" &&
-                    message.mediaType !== "gif" &&
-                    message.mediaType != "reactionMessage" &&
-                    message.mediaType != "locationMessage" &&
-                    message.mediaType !== "contactMessage" &&
-                    !(message.mediaType === "application" && /\.pdf($|\?)/i.test(message.mediaUrl || "") && (getFileNameFromUrl(message.mediaUrl) || "").trim() === (message.body || "").trim())
-                  )
-                ) && (xmlRegex.test(message.body) ? <span>{formatXml(cleanButtonMarkers(message.body, message))}</span> : <MarkdownWrapper>{(lgpdDeleteMessage && message.isDeleted) ? "🚫 _Mensagem apagada_ " : cleanButtonMarkers(message.body, message)}</MarkdownWrapper>)
+                  if (message.mediaType === "sticker" || message.mediaType === "gif") return null;
+
+                  // Remover legendas de mídia (imagem, vídeo, áudio, arquivos) e reações/location/contact
+                  if (
+                    message.mediaType === "image" ||
+                    message.mediaType === "video" ||
+                    message.mediaType === "audio" ||
+                    message.mediaType === "application" ||
+                    message.mediaType === "document" ||
+                    message.mediaType === "reactionMessage" ||
+                    message.mediaType === "locationMessage" ||
+                    message.mediaType === "contactMessage"
+                  ) {
+                    return null;
+                  }
+
+                  // Demais tipos (texto)
+                  return xmlRegex.test(message.body)
+                    ? <span>{formatXml(cleanButtonMarkers(message.body, message))}</span>
+                    : <MarkdownWrapper>{(lgpdDeleteMessage && message.isDeleted) ? "🚫 _Mensagem apagada_ " : cleanButtonMarkers(message.body, message)}</MarkdownWrapper>;
+
+                  return null;
+                })()
               )}
 
               {/* Renderiza botões interativos se houver dataJson com botões */}

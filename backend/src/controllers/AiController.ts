@@ -26,7 +26,7 @@ export const transformText = async (req: Request, res: Response) => {
       whatsappId, 
       context 
     }: { 
-      mode: "translate" | "spellcheck" | "enhance"; 
+      mode: "translate" | "spellcheck" | "enhance" | "create"; 
       text: string; 
       targetLang?: string; 
       integrationType?: "openai" | "gemini"; 
@@ -42,7 +42,7 @@ export const transformText = async (req: Request, res: Response) => {
     if (!text || typeof text !== "string") {
       return res.status(400).json({ error: "text é obrigatório" });
     }
-    if (!mode || !["translate", "spellcheck", "enhance"].includes(mode)) {
+    if (!mode || !["translate", "spellcheck", "enhance", "create"].includes(mode)) {
       return res.status(400).json({ error: "mode inválido" });
     }
 

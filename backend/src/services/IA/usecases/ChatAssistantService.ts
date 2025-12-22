@@ -7,7 +7,7 @@ import { search as ragSearch } from "../../RAG/RAGSearchService";
 import GetIntegrationByTypeService from "../../QueueIntegrationServices/GetIntegrationByTypeService";
 import AIOrchestrator from "../AIOrchestrator";
 
-export type TransformMode = "translate" | "spellcheck" | "enhance";
+export type TransformMode = "translate" | "spellcheck" | "enhance" | "create";
 
 export interface TransformTextParams {
   companyId: number;
@@ -49,12 +49,16 @@ export default class ChatAssistantService {
     let userMsg = "";
     let outLang: string | undefined = undefined;
 
-    if (mode === "translate") {
+    if (mode === "create") {
+      // Modo CRIAR - gera texto do zero a partir de instrução
+      systemMsg = `Você é um especialista em copywriting para WhatsApp. Cria mensagens claras, naturais e envolventes que geram engajamento sem parecer spam.`;
+      userMsg = `Crie uma mensagem profissional em português brasileiro baseada nesta instrução:\n\n"${text}"\n\n${keepVars}\n\nDiretrizes:\n- Tom caloroso e profissional\n- Use emojis com moderação (2-3 no máximo)\n- Seja conciso (3-5 linhas)\n- Evite CAPS excessivo\n- Inclua call-to-action sutil se apropriado\n- Mantenha naturalidade conversacional`;
+    } else if (mode === "translate") {
       systemMsg = `Você é um tradutor profissional.`;
       userMsg = `Traduza para ${tLang}. ${keepVars}\n\nTexto:\n\"\"\"${text}\"\"\"`;
     } else if (mode === "spellcheck") {
-      systemMsg = `Você corrige ortografia e gramática em pt-BR sem mudar o sentido.`;
-      userMsg = `${keepVars}\n\nTexto:\n\"\"\"${text}\"\"\"`;
+      systemMsg = `Você é um revisor especializado em português brasileiro. Corrige ortografia, gramática e pontuação mantendo o tom e intenção originais.`;
+      userMsg = `Corrija este texto preservando seu estilo e significado. ${keepVars}\n\nTexto:\n\"\"\"${text}\"\"\"`;
     } else {
       // Usar configurações do preset se disponível, senão fallback para enhanceDefaults
       const ed = cfg?.enhanceDefaults || {};
@@ -106,15 +110,15 @@ export default class ChatAssistantService {
 
       const voice = brandVoice ? `Voz da marca: ${brandVoice}.` : "";
 
-      const style = `Escreva de forma natural, leve e próxima, evitando formalidade excessiva. Prefira voz ativa, frases curtas, fluxo conversacional e positividade. Se o contexto for comemorativo (ex.: aniversário), permita uma linha extra de celebração.`;
+      const style = `IMPORTANTE - Faça mudanças SIGNIFICATIVAS:\n- Reestruture frases para maior clareza e impacto\n- Adicione elementos persuasivos sutis\n- Melhore o fluxo e ritmo da mensagem\n- Torne mais conversacional e humano\n- Elimine redundâncias e palavras vazias\n- Fortaleça o call-to-action se houver\n- Mantenha tom natural, evitando formalidade excessiva\n- Use voz ativa e frases curtas\n- Se contexto comemorativo, celebre com entusiasmo`;
 
       // Usar systemPrompt do preset se disponível, senão usar padrão
       if (cfg?.systemPrompt && cfg.systemPrompt.trim()) {
         systemMsg = cfg.systemPrompt;
         userMsg = `${keepVars}\n\nTexto:\n\"\"\"${text}\"\"\"`;
       } else {
-        systemMsg = `Você aprimora mensagens para WhatsApp (claras, naturais, sem SPAM). ${voice}`;
-        userMsg = `Reescreva em ${outLangCfg} com TOM ${tone}. ${emojiGuide}. ${hashtagsGuide}. Tamanho: ${lengthGuide}. ${style} ${keepVars}\n\nTexto:\n\"\"\"${text}\n\"\"\"`;
+        systemMsg = `Você é um especialista em copywriting para WhatsApp. Seu objetivo é TRANSFORMAR mensagens comuns em comunicações impactantes e envolventes. ${voice}`;
+        userMsg = `APRIMORE SIGNIFICATIVAMENTE esta mensagem em ${outLangCfg}:\n\nTOM: ${tone}\nEMOJIS: ${emojiGuide}\nHASHTAGS: ${hashtagsGuide}\nTAMANHO: ${lengthGuide}\n\n${style}\n\n${keepVars}\n\nMensagem original:\n\"\"\"${text}\n\"\"\"\n\nSua versão aprimorada:`;
       }
     }
 
