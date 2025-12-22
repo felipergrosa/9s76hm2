@@ -34,6 +34,7 @@ import ToggleButton from "@material-ui/lab/ToggleButton";
 import { FilterAltOff, FilterAlt, PlaylistAddCheckOutlined } from "@mui/icons-material";
 
 import NewTicketModal from "../NewTicketModal";
+import BulkProcessTicketsModal from "../BulkProcessTicketsModal";
 import TicketsList from "../TicketsListCustom";
 import TabPanel from "../TabPanel";
 import { Can } from "../Can";
@@ -337,6 +338,7 @@ const TicketsManagerTabs = () => {
   const [tab, setTab] = useState("open");
   // const [tabOpen, setTabOpen] = useState("open");
   const [newTicketModalOpen, setNewTicketModalOpen] = useState(false);
+  const [bulkProcessModalOpen, setBulkProcessModalOpen] = useState(false);
   const [showAllTickets, setShowAllTickets] = useState(false);
   const [sortTickets, setSortTickets] = useState(false);
 
@@ -559,13 +561,19 @@ const TicketsManagerTabs = () => {
   };
 
   return (
-    <Paper elevation={0} variant="outlined" className={classes.ticketsWrapper}>
+    <>
       <NewTicketModal
         modalOpen={newTicketModalOpen}
         onClose={(ticket) => {
           handleCloseOrOpenTicket(ticket);
         }}
       />
+      <BulkProcessTicketsModal
+        open={bulkProcessModalOpen}
+        onClose={() => setBulkProcessModalOpen(false)}
+        initialFilters={{ status: tab }}
+      />
+      <Paper elevation={0} variant="outlined" className={classes.ticketsWrapper}>
       <div className={classes.serachInputWrapper}>
         <SearchIcon className={classes.searchIcon} />
         <InputBase
@@ -754,6 +762,18 @@ const TicketsManagerTabs = () => {
                 <AddIcon className={classes.icon} />
               </IconButton>
             </Badge>
+            {tab === 'pending' && (
+              <Tooltip placement="top" title="Processar em Massa">
+                <IconButton
+                  className={classes.button}
+                  onClick={() => {
+                    setBulkProcessModalOpen(true);
+                  }}
+                >
+                  <PlaylistAddCheckOutlined className={classes.icon} />
+                </IconButton>
+              </Tooltip>
+            )}
             {user.profile === "admin" && (
               <Badge
                 color="primary"
@@ -1230,7 +1250,8 @@ const TicketsManagerTabs = () => {
           />
         )}
       </TabPanel>
-    </Paper >
+    </Paper>
+    </>
   );
 };
 

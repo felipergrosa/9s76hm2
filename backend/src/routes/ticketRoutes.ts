@@ -31,4 +31,6 @@ ticketRoutes.delete("/tickets/:ticketId", isAuth, TicketController.remove);
 
 ticketRoutes.post("/tickets/closeAll", isAuth, TicketController.closeAll);
 
+ticketRoutes.post("/tickets/bulk-process", isAuth, TicketController.bulkProcess);
+
 export default ticketRoutes;

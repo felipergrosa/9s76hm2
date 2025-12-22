@@ -502,6 +502,64 @@ export const remove = async (
   return res.status(200).json({ message: "ticket deleted" });
 };
 
+export const bulkProcess = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId, id: userId } = req.user;
+  const {
+    ticketIds,
+    responseType,
+    responseMessage,
+    aiAgentId,
+    kanbanLaneId,
+    tagIds,
+    newStatus,
+    closeTicket,
+    addNote,
+    queueId
+  } = req.body;
+
+  try {
+    // Validações
+    if (!Array.isArray(ticketIds) || ticketIds.length === 0) {
+      return res.status(400).json({ error: "ticketIds é obrigatório e deve ser um array" });
+    }
+
+    if (!responseType || !['none', 'standard', 'ai'].includes(responseType)) {
+      return res.status(400).json({ error: "responseType inválido" });
+    }
+
+    if (responseType === 'standard' && !responseMessage) {
+      return res.status(400).json({ error: "responseMessage é obrigatório quando responseType é 'standard'" });
+    }
+
+    if (responseType === 'ai' && !aiAgentId) {
+      return res.status(400).json({ error: "aiAgentId é obrigatório quando responseType é 'ai'" });
+    }
+
+    // Importar service dinamicamente para evitar circular dependency
+    const BulkProcessTicketsService = (await import("../services/TicketServices/BulkProcessTicketsService")).default;
+
+    const result = await BulkProcessTicketsService({
+      ticketIds,
+      companyId,
+      userId: Number(userId),
+      responseType,
+      responseMessage,
+      aiAgentId,
+      kanbanLaneId,
+      tagIds,
+      newStatus,
+      closeTicket,
+      addNote,
+      queueId
+    });
+
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error("[BulkProcess] Erro:", error);
+    return res.status(500).json({ error: error.message || "Erro ao processar tickets em massa" });
+  }
+};
+
 export const closeAll = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
   const { status }: TicketData = req.body;
