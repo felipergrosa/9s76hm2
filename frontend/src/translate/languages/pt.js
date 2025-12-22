@@ -778,6 +778,7 @@ const messages = {
       },
       tickets: {
         inbox: {
+          bulkProcess: "Processar em Massa",
           closedAllTickets: "Fechar todos os tickets?",
           closedAll: "Fechar Todos",
           newTicket: "Novo Ticket",

@@ -31,7 +31,7 @@ import VisibilityIcon from "@material-ui/icons/Visibility";
 import VisibilityOffIcon from "@material-ui/icons/VisibilityOff";
 import ToggleButton from "@material-ui/lab/ToggleButton";
 
-import { FilterAltOff, FilterAlt, PlaylistAddCheckOutlined } from "@mui/icons-material";
+import { FilterAltOff, FilterAlt, PlaylistAddCheckOutlined, HighlightOff } from "@mui/icons-material";
 
 import NewTicketModal from "../NewTicketModal";
 import BulkProcessTicketsModal from "../BulkProcessTicketsModal";
@@ -82,8 +82,8 @@ const useStyles = makeStyles((theme) => ({
   },
 
   tab: {
-    minWidth: "auto",
-    width: "auto",
+    // minWidth: "auto",
+    // width: "auto",
     padding: theme.spacing(0.5, 1),
     borderRadius: 8,
     transition: "0.3s",
@@ -143,8 +143,9 @@ const useStyles = makeStyles((theme) => ({
     [theme.breakpoints.down("sm")]: {
       fontSize: 7,
       padding: "3px 2px !important",
-      minWidth: 55,
-      maxWidth: 75,
+      minWidth: "unset", // Remover largura mínima fixa no mobile
+      maxWidth: "none", // Remover limite de largura no mobile para fullWidth funcionar
+      flexGrow: 1, // Garantir que cresça
     },
   },
 
@@ -163,6 +164,7 @@ const useStyles = makeStyles((theme) => ({
     padding: "0 8px",
     backgroundColor: theme.mode === "light" ? theme.palette.primary.main : "#FFF",
     color: theme.mode === "light" ? "#FFF" : theme.palette.primary.main,
+    zIndex: 10, // Garantir que fique sobre outros elementos se necessário
   },
   ticketOptionsBox: {
     display: "flex",
@@ -179,9 +181,8 @@ const useStyles = makeStyles((theme) => ({
     marginLeft: theme.spacing(1),
     marginRight: theme.spacing(1),
     padding: theme.spacing(0.5),
-    [theme.breakpoints.down("sm")]: {
-      display: "none",
-    },
+    overflow: "visible", // Permitir que elementos (badges) vazem o container
+    
   },
 
   serachInputWrapper: {
@@ -312,14 +313,23 @@ const useStyles = makeStyles((theme) => ({
     borderColor: "#aaa",
     borderRadius: 8,
     marginRight: 8,
+    padding: 0, // Remover padding para evitar barra de rolagem interna nos botões pequenos
     "&:hover": {
       borderColor: theme.mode === "light" ? theme.palette.primary.main : "#FFF",
+    },
+    [theme.breakpoints.down("sm")]: {
+      height: 28, // Reduzir altura no mobile
+      width: 28,  // Reduzir largura no mobile
+      marginRight: 2, // Margem mínima
     },
   },
   icon: {
     color: "#aaa",
     "&:hover": {
       color: theme.mode === "light" ? theme.palette.primary.main : "#FFF",
+    },
+    [theme.breakpoints.down("sm")]: {
+      fontSize: "1.2rem", // Reduzir ícone levemente
     },
   },
   buttonOpen: {
@@ -372,6 +382,46 @@ const TicketsManagerTabs = () => {
   const [isHoveredOpen, setIsHoveredOpen] = useState(false);
   const [isHoveredClosed, setIsHoveredClosed] = useState(false);
   const [isHoveredSort, setIsHoveredSort] = useState(false);
+  const [isHoveredBulk, setIsHoveredBulk] = useState(false);
+
+  const resetHovers = () => {
+    setIsHoveredAll(false);
+    setIsHoveredNew(false);
+    setIsHoveredResolve(false);
+    setIsHoveredOpen(false);
+    setIsHoveredClosed(false);
+    setIsHoveredSort(false);
+    setIsHoveredBulk(false);
+  };
+
+  const handleHover = (name) => {
+    resetHovers();
+    switch (name) {
+      case "all":
+        setIsHoveredAll(true);
+        break;
+      case "new":
+        setIsHoveredNew(true);
+        break;
+      case "resolve":
+        setIsHoveredResolve(true);
+        break;
+      case "open":
+        setIsHoveredOpen(true);
+        break;
+      case "closed":
+        setIsHoveredClosed(true);
+        break;
+      case "sort":
+        setIsHoveredSort(true);
+        break;
+      case "bulk":
+        setIsHoveredBulk(true);
+        break;
+      default:
+        break;
+    }
+  };
 
   const [isFilterActive, setIsFilterActive] = useState(false);
 
@@ -631,28 +681,6 @@ const TicketsManagerTabs = () => {
             <FilterAltOff className={classes.icon} />
           )}
         </IconButton>
-        {tab === 'pending' && (
-          <Tooltip placement="top" title="Processar Tickets em Massa">
-            <IconButton
-              style={{
-                backgroundColor: "transparent",
-                boxShadow: "none",
-                border: "none",
-                borderRadius: "50%",
-                justifyContent: "flex-end",
-                alignItems: "center",
-              }}
-              variant="contained"
-              aria-label="bulk-process"
-              className={classes.filterIcon}
-              onClick={() => {
-                setBulkProcessModalOpen(true);
-              }}
-            >
-              <PlaylistAddCheckOutlined className={classes.icon} />
-            </IconButton>
-          </Tooltip>
-        )}
       </div>
 
       {filter === true && (
@@ -698,7 +726,7 @@ const TicketsManagerTabs = () => {
         </Tabs>
       </Paper> */}
       <Paper square elevation={0} className={classes.ticketOptionsBox}>
-        <Grid container alignItems="center" justifyContent="space-between">
+        <Grid container alignItems="center" justifyContent="space-between" wrap="nowrap">
           <Grid item>
             <Can
               role={user.allUserChat === 'enabled' && user.profile === 'user' ? 'admin' : user.profile}
@@ -765,6 +793,8 @@ const TicketsManagerTabs = () => {
               color="primary"
               invisible={
                 isHoveredAll ||
+                isHoveredBulk ||
+                isHoveredSort ||
                 !isHoveredNew ||
                 isHoveredResolve ||
                 isHoveredOpen ||
@@ -774,8 +804,8 @@ const TicketsManagerTabs = () => {
               classes={{ badge: classes.tabsBadge }}
             >
               <IconButton
-                onMouseEnter={() => setIsHoveredNew(true)}
-                onMouseLeave={() => setIsHoveredNew(false)}
+                onMouseEnter={() => handleHover("new")}
+                onMouseLeave={resetHovers}
                 className={classes.button}
                 onClick={() => {
                   setNewTicketModalOpen(true);
@@ -784,9 +814,24 @@ const TicketsManagerTabs = () => {
                 <AddIcon className={classes.icon} />
               </IconButton>
             </Badge>
-            {tab === 'pending' && (
-              <Tooltip placement="top" title="Processar em Massa">
+            {(tab === 'pending' || (tab === 'open' && tabOpen === 'pending')) && (
+              <Badge
+                color="primary"
+                invisible={
+                  !isHoveredBulk ||
+                  isHoveredAll ||
+                  isHoveredNew ||
+                  isHoveredResolve ||
+                  isHoveredOpen ||
+                  isHoveredClosed ||
+                  isHoveredSort
+                }
+                badgeContent={i18n.t("tickets.inbox.bulkProcess")}
+                classes={{ badge: classes.tabsBadge }}
+              >
                 <IconButton
+                  onMouseEnter={() => handleHover("bulk")}
+                  onMouseLeave={resetHovers}
                   className={classes.button}
                   onClick={() => {
                     setBulkProcessModalOpen(true);
@@ -794,7 +839,7 @@ const TicketsManagerTabs = () => {
                 >
                   <PlaylistAddCheckOutlined className={classes.icon} />
                 </IconButton>
-              </Tooltip>
+              </Badge>
             )}
             {user.profile === "admin" && (
               <Badge
@@ -802,6 +847,8 @@ const TicketsManagerTabs = () => {
                 invisible={
                   isHoveredAll ||
                   isHoveredNew ||
+                  isHoveredBulk ||
+                  isHoveredSort ||
                   !isHoveredResolve ||
                   isHoveredOpen ||
                   isHoveredClosed
@@ -810,12 +857,12 @@ const TicketsManagerTabs = () => {
                 classes={{ badge: classes.tabsBadge }}
               >
                 <IconButton
-                  onMouseEnter={() => setIsHoveredResolve(true)}
-                  onMouseLeave={() => setIsHoveredResolve(false)}
+                  onMouseEnter={() => handleHover("resolve")}
+                  onMouseLeave={resetHovers}
                   className={classes.button}
                   onClick={handleSnackbarOpen}
                 >
-                  <PlaylistAddCheckOutlined style={{ color: theme.mode === "light" ? "green" : "#FFF" }} />
+                  <HighlightOff style={{ color: "red" }} />
                 </IconButton>
               </Badge>
             )}
@@ -827,6 +874,7 @@ const TicketsManagerTabs = () => {
                   !isHoveredAll &&
                   !isHoveredNew &&
                   !isHoveredResolve &&
+                  !isHoveredBulk &&
                   !isHoveredClosed &&
                   !isHoveredSort
                 ) && !isHoveredOpen
@@ -836,11 +884,11 @@ const TicketsManagerTabs = () => {
             >
               <IconButton
                 onMouseEnter={() => {
-                  setIsHoveredOpen(true);
+                  handleHover("open");
                   setHoveredButton("open");
                 }}
                 onMouseLeave={() => {
-                  setIsHoveredOpen(false);
+                  resetHovers();
                   setHoveredButton(null);
                 }}
                 style={{
@@ -887,6 +935,7 @@ const TicketsManagerTabs = () => {
                   !isHoveredNew &&
                   !isHoveredResolve &&
                   !isHoveredOpen &&
+                  !isHoveredBulk &&
                   !isHoveredSort
                 ) && !isHoveredClosed
               }
@@ -895,11 +944,11 @@ const TicketsManagerTabs = () => {
             >
               <IconButton
                 onMouseEnter={() => {
-                  setIsHoveredClosed(true);
+                  handleHover("closed");
                   setHoveredButton("closed");
                 }}
                 onMouseLeave={() => {
-                  setIsHoveredClosed(false);
+                  resetHovers();
                   setHoveredButton(null);
                 }}
                 style={{
@@ -945,14 +994,15 @@ const TicketsManagerTabs = () => {
                   isHoveredNew ||
                   isHoveredResolve ||
                   isHoveredOpen ||
-                  isHoveredClosed
+                  isHoveredClosed ||
+                  isHoveredBulk
                 }
                 badgeContent={!sortTickets ? "Crescente" : "Decrescente"}
                 classes={{ badge: classes.tabsBadge }}
               >
                 <ToggleButton
-                  onMouseEnter={() => setIsHoveredSort(true)}
-                  onMouseLeave={() => setIsHoveredSort(false)}
+                  onMouseEnter={() => handleHover("sort")}
+                  onMouseLeave={resetHovers}
                   className={classes.button}
                   value="uncheck"
                   selected={sortTickets}

@@ -122,6 +122,21 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
+const normalizeAiAgents = (data) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.aiAgents)) return data.aiAgents;
+  if (Array.isArray(data?.agents)) return data.agents;
+  return [];
+};
+
+const normalizeTags = (data) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.tags)) return data.tags;
+  return [];
+};
+
 const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
   const classes = useStyles();
   const { user, socket } = useContext(AuthContext);
@@ -170,7 +185,9 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
     if (!socket || !processing) return;
 
     const handleProgress = (data) => {
+      console.log('[BulkProcess] Progress event received:', data);
       if (data.userId === user.id) {
+        console.log('[BulkProcess] Updating progress to:', data.progress);
         setProgress(data.progress);
         setProcessLog((prev) => [
           ...prev,
@@ -183,10 +200,20 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
     };
 
     const handleComplete = (data) => {
+      console.log('[BulkProcess] Complete event received:', data);
       if (data.userId === user.id) {
+        console.log('[BulkProcess] Setting progress to 100% and processing to false');
         setProcessing(false);
+        setProgress(100);
         setProcessResult(data.result);
         toast.success(`Processamento concluído! ${data.result.success} tickets processados com sucesso.`);
+        setProcessLog((prev) => [
+          ...prev,
+          {
+            time: new Date().toLocaleTimeString(),
+            message: `Processamento concluído: ${data.result.success} sucesso, ${data.result.errors} erros`,
+          },
+        ]);
       }
     };
 
@@ -222,7 +249,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
   const loadTags = async () => {
     try {
       const { data } = await api.get('/tags');
-      setAvailableTags(data);
+      setAvailableTags(normalizeTags(data));
     } catch (error) {
       console.error('Erro ao carregar tags:', error);
     }
@@ -240,7 +267,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
   const loadAIAgents = async () => {
     try {
       const { data } = await api.get('/ai-agents');
-      setAiAgents(data || []);
+      setAiAgents(normalizeAiAgents(data));
     } catch (error) {
       console.error('Erro ao carregar agentes IA:', error);
     }
@@ -342,6 +369,64 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
       </DialogTitle>
 
       <DialogContent dividers>
+        {processing || processResult ? (
+          // Modo de Processamento: Mostrar apenas progresso
+          <Box className={classes.progressContainer}>
+            <Typography variant="h6" gutterBottom>
+              {processing ? 'Processando Tickets...' : 'Processamento Concluído'}
+            </Typography>
+            <Box className={classes.progressText}>
+              <Typography variant="body2">
+                {processing ? 'Aguarde enquanto processamos os tickets' : 'Todos os tickets foram processados'}
+              </Typography>
+              <Typography variant="body2">{progress}%</Typography>
+            </Box>
+            <LinearProgress variant="determinate" value={progress} style={{ marginBottom: 16 }} />
+
+            {processLog.length > 0 && (
+              <List className={classes.logList}>
+                {processLog.map((log, index) => (
+                  <ListItem key={index} dense>
+                    <ListItemText
+                      primary={log.message}
+                      secondary={log.time}
+                      primaryTypographyProps={{ variant: 'body2' }}
+                      secondaryTypographyProps={{ variant: 'caption' }}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            )}
+
+            {processResult && (
+              <Box mt={2}>
+                <Typography variant="body2">
+                  <strong>Resultado:</strong>
+                </Typography>
+                <Box display="flex" gap={2} mt={1}>
+                  <Chip
+                    icon={<CheckCircleIcon />}
+                    label={`${processResult.success} Sucesso`}
+                    color="primary"
+                    size="small"
+                  />
+                  <Chip
+                    icon={<ErrorIcon />}
+                    label={`${processResult.errors} Erros`}
+                    color="secondary"
+                    size="small"
+                  />
+                  <Chip
+                    label={`Duração: ${Math.round(processResult.duration / 1000)}s`}
+                    size="small"
+                  />
+                </Box>
+              </Box>
+            )}
+          </Box>
+        ) : (
+          // Modo de Configuração: Mostrar opções
+          <>
         {/* STEP 1: Seleção de Tickets */}
         <Accordion defaultExpanded className={classes.accordion}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} className={classes.accordionSummary}>
@@ -560,79 +645,35 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
             </Box>
           </AccordionDetails>
         </Accordion>
-
-        {/* Progresso */}
-        {(processing || processResult) && (
-          <Box className={classes.progressContainer}>
-            <Divider style={{ marginBottom: 16 }} />
-            <Typography variant="subtitle1">
-              <strong>Progresso</strong>
-            </Typography>
-            <Box className={classes.progressText}>
-              <Typography variant="body2">
-                {processing ? 'Processando...' : 'Concluído'}
-              </Typography>
-              <Typography variant="body2">{progress}%</Typography>
-            </Box>
-            <LinearProgress variant="determinate" value={progress} />
-
-            {processLog.length > 0 && (
-              <List className={classes.logList}>
-                {processLog.map((log, index) => (
-                  <ListItem key={index} dense>
-                    <ListItemText
-                      primary={log.message}
-                      secondary={log.time}
-                      primaryTypographyProps={{ variant: 'body2' }}
-                      secondaryTypographyProps={{ variant: 'caption' }}
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            )}
-
-            {processResult && (
-              <Box mt={2}>
-                <Typography variant="body2">
-                  <strong>Resultado:</strong>
-                </Typography>
-                <Box display="flex" gap={2} mt={1}>
-                  <Chip
-                    icon={<CheckCircleIcon />}
-                    label={`${processResult.success} Sucesso`}
-                    color="primary"
-                    size="small"
-                  />
-                  <Chip
-                    icon={<ErrorIcon />}
-                    label={`${processResult.errors} Erros`}
-                    color="secondary"
-                    size="small"
-                  />
-                  <Chip
-                    label={`Duração: ${Math.round(processResult.duration / 1000)}s`}
-                    size="small"
-                  />
-                </Box>
-              </Box>
-            )}
-          </Box>
+        </>
         )}
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={handleClose} disabled={processing}>
-          {processResult ? 'Fechar' : 'Cancelar'}
-        </Button>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleProcess}
-          disabled={selectedTickets.length === 0 || processing}
-          startIcon={<SendIcon />}
-        >
-          Processar {selectedTickets.length} Tickets
-        </Button>
+        {processResult ? (
+          <Button onClick={handleClose} variant="contained" color="primary">
+            Fechar
+          </Button>
+        ) : processing ? (
+          <Button onClick={handleClose} disabled>
+            Processando...
+          </Button>
+        ) : (
+          <>
+            <Button onClick={handleClose}>
+              Cancelar
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleProcess}
+              disabled={selectedTickets.length === 0}
+              startIcon={<SendIcon />}
+            >
+              Processar {selectedTickets.length} Tickets
+            </Button>
+          </>
+        )}
       </DialogActions>
     </Dialog>
   );

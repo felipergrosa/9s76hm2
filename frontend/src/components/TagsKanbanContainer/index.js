@@ -78,13 +78,11 @@ export function TagsKanbanContainer({ ticket }) {
                 style={{
                     backgroundColor: selectedTag.color,
                     color: "#FFF",
-                    marginRight: 1,
-                    padding: 1,
+                    marginRight: 4,
+                    padding: "1px 4px",
                     fontWeight: 'bold',
-                    paddingLeft: 5,
-                    paddingRight: 5,
                     borderRadius: 3,
-                    fontSize: "0.8em",
+                    fontSize: "0.75em",
                     whiteSpace: "nowrap"
                 }}
                 label={selectedTag.name}

@@ -3,12 +3,12 @@ import React from "react";
 
 const useStyles = makeStyles(theme => ({
     tag: {
-        padding: "1px 5px",
+        padding: "1px 4px",
         borderRadius: "3px",
-        fontSize: "0.8em",
+        fontSize: "0.75em",
         fontWeight: "bold",
         color: "#FFF",
-        marginRight: "5px",
+        marginRight: "4px",
         whiteSpace: "nowrap"
     }
 }));

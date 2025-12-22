@@ -277,15 +277,32 @@ const useStyles = makeStyles((theme) => ({
     },
     secondaryContentSecond: {
         display: 'flex',
-        alignItems: "flex-start",
+        alignItems: "center",
         flexWrap: "nowrap",
         flexDirection: "row",
-        alignContent: "flex-start",
+        alignContent: "center",
+        gap: theme.spacing(0.5),
     },
     ticketInfo1: {
         position: "relative",
         top: 13,
         right: 0
+    },
+    ticketActionButtons: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: theme.spacing(0.25),
+        position: 'absolute !important',
+        bottom: "8px !important",
+        right: "8px !important",
+        top: "auto !important",
+        left: "auto !important",
+        zIndex: 999,
+    },
+    actionButton: {
+        minWidth: 24,
+        minHeight: 24,
+        padding: 2,
     },
     Radiusdot: {
         "& .MuiBadge-badge": {
@@ -509,14 +526,9 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
         }
     }, []);
 
-    const handleOpenTransferModal = () => {
-        setLoading(true)
+    const handleOpenTransferModal = (e) => {
+        e.stopPropagation();
         setTransferTicketModalOpen(true);
-        if (isMounted.current) {
-            setLoading(false);
-        }
-        handleSelectTicket(ticket);
-        history.push(`/tickets/${ticket.uuid}`);
     }
 
     const handleAcepptTicket = async (id) => {
@@ -750,6 +762,10 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                 className={clsx(classes.ticket, {
                     [classes.pendingTicket]: ticket.status === "pending",
                 })}
+                style={{
+                    position: "relative",
+                    paddingBottom: theme.spacing(2.5), // espaço para os botões no rodapé
+                }}
             >
                 <ListItemAvatar style={{ marginLeft: "-15px" }}>
                     <div className={classes.avatarContainer}>
@@ -871,145 +887,147 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     )}
 
                 </ListItemSecondaryAction>
-                <ListItemSecondaryAction>
-                    {/* Ícones informativos e de espiar (canto inferior direito) */}
-                    <span className={classes.secondaryContentSecond}>
-                        {/* Ícone de Espiar ao lado do Fechar (será colocado após o botão de fechar) */}
-                    </span>
-                    <span className={classes.secondaryContentSecond}>
-                        {((ticket.status === "pending" || ticket.status === "bot") && (ticket.queueId === null || ticket.queueId === undefined)) && (
-                            <ButtonWithSpinner
-                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '80px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto', position: 'absolute' }}
-                                variant="contained"
-                                className={classes.acceptButton}
-                                size="small"
-                                loading={loading}
-                                onClick={e => handleOpenAcceptTicketWithouSelectQueue()}
-                            >
-                                <Tooltip title={`${i18n.t("ticketsList.buttons.accept")}`}>
-                                    <Done fontSize="small" />
-                                </Tooltip>
-                            </ButtonWithSpinner>
-                        )}
-                    </span>
-                    <span className={classes.secondaryContentSecond} >
-                        {((ticket.status === "pending" || ticket.status === "bot") && ticket.queueId !== null) && (
-                            <ButtonWithSpinner
-                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '80px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto', position: 'absolute' }}
-                                variant="contained"
-                                className={classes.acceptButton}
-                                size="small"
-                                loading={loading}
-                                onClick={e => handleAcepptTicket(ticket.id)}
-                            >
-                                <Tooltip title={`${i18n.t("ticketsList.buttons.accept")}`}>
-                                    <Done fontSize="small" />
-                                </Tooltip>
-                            </ButtonWithSpinner>
-                        )}
-                    </span>
-                    <span className={classes.secondaryContentSecond1} >
-                        {(ticket.status === "pending" || ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
-                            <ButtonWithSpinner
-                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '50px', position: 'absolute', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
-                                variant="contained"
-                                className={classes.acceptButton}
-                                size="small"
-                                loading={loading}
-                                onClick={handleOpenTransferModal}
-                            >
-                                <Tooltip title={`${i18n.t("ticketsList.buttons.transfer")}`}>
-                                    <SwapHoriz fontSize="small" />
-                                </Tooltip>
-                            </ButtonWithSpinner>
-                        )}
-                    </span>
-                    <span className={classes.secondaryContentSecond} >
-                        {(ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
-                            <>
-                                <ButtonWithSpinner
-                                    style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
-                                    variant="contained"
-                                    className={classes.acceptButton}
+                
+                <div 
+                    className={classes.ticketActionButtons}
+                    style={{
+                        position: 'absolute',
+                        bottom: 8,
+                        right: 8,
+                        display: 'flex',
+                        gap: 4,
+                        zIndex: 999
+                    }}
+                >
+                    {/* Aceitar ticket sem fila */}
+                    {((ticket.status === "pending" || ticket.status === "bot") && (ticket.queueId === null || ticket.queueId === undefined)) && (
+                        <Tooltip title={i18n.t("ticketsList.buttons.accept")}>
+                                <IconButton
                                     size="small"
-                                    loading={loading}
-                                    onClick={e => handleCloseTicket(ticket.id)}
+                                    className={classes.actionButton}
+                                    onClick={e => {
+                                        e.stopPropagation();
+                                        handleOpenAcceptTicketWithouSelectQueue();
+                                    }}
+                                    disabled={loading}
                                 >
-                                    <Tooltip title={`${i18n.t("ticketsList.buttons.closed")}`}>
-                                        <HighlightOff fontSize="small" />
-                                    </Tooltip>
-                                </ButtonWithSpinner>
-                                {/* Ícone de espiar imediatamente ao lado do fechar */}
-                                <Tooltip title="Espiar Conversa">
-                                    <IconButton
-                                        size="small"
-                                        onClick={handleOpenMessageDialog}
-                                        style={{
-                                            position: 'absolute',
-                                            bottom: '-30px',
-                                            right: '26px',
-                                            padding: 0
-                                        }}
-                                    >
-                                        <VisibilityIcon fontSize="small" style={{ color: blue[700] }} />
-                                    </IconButton>
-                                </Tooltip>
-                            </>
+                                    <Done fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                                </IconButton>
+                            </Tooltip>
                         )}
-                    </span>
-                    <span className={classes.secondaryContentSecond} >
+                        
+                        {/* Aceitar ticket com fila */}
+                        {((ticket.status === "pending" || ticket.status === "bot") && ticket.queueId !== null) && (
+                            <Tooltip title={i18n.t("ticketsList.buttons.accept")}>
+                                <IconButton
+                                    size="small"
+                                    className={classes.actionButton}
+                                    onClick={e => {
+                                        e.stopPropagation();
+                                        handleAcepptTicket(ticket.id);
+                                    }}
+                                    disabled={loading}
+                                >
+                                    <Done fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                        
+                        {/* Transferir ticket */}
+                        {(ticket.status === "pending" || ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
+                            <Tooltip title={i18n.t("ticketsList.buttons.transfer")}>
+                                <IconButton
+                                    size="small"
+                                    className={classes.actionButton}
+                                    onClick={handleOpenTransferModal}
+                                    disabled={loading}
+                                >
+                                    <SwapHoriz fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                        
+                        {/* Espiar conversa */}
+                        {(ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
+                            <Tooltip title="Espiar Conversa">
+                                <IconButton
+                                    size="small"
+                                    className={classes.actionButton}
+                                    onClick={handleOpenMessageDialog}
+                                >
+                                    <VisibilityIcon fontSize="small" style={{ color: blue[700] }} />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                        
+                        {/* Fechar ticket */}
+                        {(ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
+                            <Tooltip title={i18n.t("ticketsList.buttons.closed")}>
+                                <IconButton
+                                    size="small"
+                                    className={classes.actionButton}
+                                    onClick={e => {
+                                        e.stopPropagation();
+                                        handleCloseTicket(ticket.id);
+                                    }}
+                                    disabled={loading}
+                                >
+                                    <HighlightOff fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                        
+                        {/* Ignorar ticket pendente */}
                         {((ticket.status === "pending" || ticket.status === "lgpd") && (user.userClosePendingTicket === "enabled" || user.profile === "admin")) && (
-                            <ButtonWithSpinner
-                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
-                                variant="contained"
-                                className={classes.acceptButton}
-                                size="small"
-                                loading={loading}
-                                onClick={e => handleCloseIgnoreTicket(ticket.id)}
-                            >
-                                <Tooltip title={`${i18n.t("ticketsList.buttons.ignore")}`}>
-                                    <HighlightOff />
-                                </Tooltip>
-                            </ButtonWithSpinner>
+                            <Tooltip title={i18n.t("ticketsList.buttons.ignore")}>
+                                <IconButton
+                                    size="small"
+                                    className={classes.actionButton}
+                                    onClick={e => {
+                                        e.stopPropagation();
+                                        handleCloseIgnoreTicket(ticket.id);
+                                    }}
+                                    disabled={loading}
+                                >
+                                    <HighlightOff fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                                </IconButton>
+                            </Tooltip>
                         )}
-                    </span>
-                    <span className={classes.secondaryContentSecond} >
-                    {(ticket.status === "closed" && (ticket.queueId === null || ticket.queueId === undefined)) && (
-                            <ButtonWithSpinner
-                                //color="primary"
-                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
-                                variant="contained"
-                                className={classes.acceptButton}
-                                size="small"
-                                loading={loading}
-                                onClick={e => handleOpenAcceptTicketWithouSelectQueue()}
-                            >
-                                <Tooltip title={`${i18n.t("ticketsList.buttons.reopen")}`}>
-                                    <Replay />
-                                </Tooltip>
-                            </ButtonWithSpinner>
-
+                        
+                        {/* Reabrir ticket fechado sem fila */}
+                        {(ticket.status === "closed" && (ticket.queueId === null || ticket.queueId === undefined)) && (
+                            <Tooltip title={i18n.t("ticketsList.buttons.reopen")}>
+                                <IconButton
+                                    size="small"
+                                    className={classes.actionButton}
+                                    onClick={e => {
+                                        e.stopPropagation();
+                                        handleOpenAcceptTicketWithouSelectQueue();
+                                    }}
+                                    disabled={loading}
+                                >
+                                    <Replay fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                                </IconButton>
+                            </Tooltip>
                         )}
-                    </span>
-                    <span className={classes.secondaryContentSecond} >
+                        
+                        {/* Reabrir ticket fechado com fila */}
                         {(ticket.status === "closed" && ticket.queueId !== null) && (
-                            <ButtonWithSpinner
-                                //color="primary"
-                                style={{ backgroundColor: 'transparent', boxShadow: 'none', border: 'none', color: theme.mode === "light" ? "#0872B9" : "#FFF", padding: '0px', borderRadius: "50%", right: '1px', fontSize: '0.6rem', bottom: '-30px', minWidth: '2em', width: 'auto' }}
-                                variant="contained"
-                                className={classes.acceptButton}
-                                size="small"
-                                loading={loading}
-                                onClick={e => handleAcepptTicket(ticket.id)}
-                            >
-                                <Tooltip title={`${i18n.t("ticketsList.buttons.reopen")}`}>
-                                    <Replay />
-                                </Tooltip>
-                            </ButtonWithSpinner>
-
+                            <Tooltip title={i18n.t("ticketsList.buttons.reopen")}>
+                                <IconButton
+                                    size="small"
+                                    className={classes.actionButton}
+                                    onClick={e => {
+                                        e.stopPropagation();
+                                        handleAcepptTicket(ticket.id);
+                                    }}
+                                    disabled={loading}
+                                >
+                                    <Replay fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                                </IconButton>
+                            </Tooltip>
                         )}
-                    </span>
-                </ListItemSecondaryAction>
+                    </div>
             </ListItem>
             {/* <Divider variant="inset" component="li" /> */}
         </React.Fragment>
