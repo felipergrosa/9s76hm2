@@ -5,6 +5,7 @@ import AppError from "../../errors/AppError";
 import ResolveAIAgentForTicketService from "../AIAgentServices/ResolveAIAgentForTicketService";
 import ResolveAIIntegrationService from "../IA/ResolveAIIntegrationService";
 import IAClientFactory from "../IA/IAClientFactory";
+import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
 import logger from "../../utils/logger";
 import { getIO } from "../../libs/socket";
 
@@ -134,33 +135,45 @@ const SendAIResponseService = async ({
 
     logger.info(`[SendAIResponse] AI response generated: "${responseText.substring(0, 100)}..."`);
 
-    // Criar mensagem no banco de dados
-    const newMessage = await Message.create({
-      body: responseText,
-      ticketId: ticket.id,
-      contactId: ticket.contactId,
-      fromMe: true,
-      read: true,
-      mediaType: "chat",
-      quotedMsgId: null,
-      ack: 2, // Enviada
-      isPrivate: false,
-      companyId
-    });
-
-    // Emitir evento via Socket.IO
-    const io = getIO();
-    io.of(String(companyId))
-      .to(String(ticketId))
-      .to(`company-${companyId}-mainchannel`)
-      .emit(`company-${companyId}-appMessage`, {
-        action: "create",
-        message: newMessage,
-        ticket,
-        contact: ticket.contact
+    // Enviar mensagem pelo WhatsApp (cria no banco e envia de verdade)
+    try {
+      await SendWhatsAppMessage({
+        body: responseText,
+        ticket
+      });
+      
+      logger.info(`[SendAIResponse] AI response sent successfully via WhatsApp for ticket ${ticketId}`);
+    } catch (sendError: any) {
+      logger.error(`[SendAIResponse] Error sending WhatsApp message for ticket ${ticketId}:`, sendError);
+      
+      // Se falhar ao enviar, criar mensagem no banco mesmo assim
+      const newMessage = await Message.create({
+        body: responseText,
+        ticketId: ticket.id,
+        contactId: ticket.contactId,
+        fromMe: true,
+        read: true,
+        mediaType: "chat",
+        quotedMsgId: null,
+        ack: 0, // Falha no envio
+        isPrivate: false,
+        companyId
       });
 
-    logger.info(`[SendAIResponse] AI response sent successfully for ticket ${ticketId}`);
+      // Emitir evento via Socket.IO
+      const io = getIO();
+      io.of(String(companyId))
+        .to(String(ticketId))
+        .to(`company-${companyId}-mainchannel`)
+        .emit(`company-${companyId}-appMessage`, {
+          action: "create",
+          message: newMessage,
+          ticket,
+          contact: ticket.contact
+        });
+
+      throw sendError;
+    }
 
     return {
       success: true,

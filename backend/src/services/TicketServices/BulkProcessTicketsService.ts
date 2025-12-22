@@ -219,20 +219,20 @@ const BulkProcessTicketsService = async (
         // 4. Atualizar status/fila
         const updateData: any = {};
         
-        if (newStatus) {
+        // IMPORTANTE: Se resposta IA, SEMPRE configurar modo bot
+        // (independente do status selecionado pelo usuário)
+        if (responseType === 'ai' && aiAgentId) {
+          updateData.isBot = true;
+          updateData.status = 'bot';
+          updateData.userId = null; // Remove atendente humano
+          logger.info(`[BulkProcess] Ticket ${ticket.id} configurado para modo bot com agente ${aiAgentId}`);
+        } else if (newStatus) {
+          // Só aplica status selecionado se NÃO for resposta IA
           updateData.status = newStatus;
         }
 
         if (queueId) {
           updateData.queueId = queueId;
-        }
-
-        // Se resposta IA, garantir modo bot
-        if (responseType === 'ai') {
-          updateData.isBot = true;
-          if (!newStatus) {
-            updateData.status = 'bot';
-          }
         }
 
         if (closeTicket) {
