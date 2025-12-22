@@ -227,8 +227,17 @@ const BulkProcessTicketsService = async (
           updateData.queueId = queueId;
         }
 
+        // Se resposta IA, garantir modo bot
+        if (responseType === 'ai') {
+          updateData.isBot = true;
+          if (!newStatus) {
+            updateData.status = 'bot';
+          }
+        }
+
         if (closeTicket) {
           updateData.status = 'closed';
+          updateData.isBot = false;
         }
 
         if (Object.keys(updateData).length > 0) {
