@@ -3,7 +3,9 @@ import { toast } from "react-toastify";
 
 import { useHistory } from "react-router-dom";
 
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+import useMediaQuery from "@material-ui/core/useMediaQuery";
+import Grid from "@material-ui/core/Grid";
 import Paper from "@material-ui/core/Paper";
  
 import Table from "@material-ui/core/Table";
@@ -31,7 +33,7 @@ import TableRowSkeleton from "../../components/TableRowSkeleton";
 import ContactListDialog from "../../components/ContactListDialog";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
-import { Grid, Popover, Button, Typography, Chip } from "@material-ui/core";
+import { Popover, Button, Typography, Chip } from "@material-ui/core";
 import { Plus as PlusIcon, Filter as FilterIcon } from "lucide-react";
 
 import planilhaExemplo from "../../assets/planilha.xlsx";
@@ -89,14 +91,74 @@ const reducer = (state, action) => {
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
     flex: 1,
-    padding: theme.spacing(1),
-    // Removido overflow e scrollbar interna para usar scroll da janela
+    padding: theme.spacing(2),
+    // Removido overflowY e scrollbar interna para usar scroll da janela
+  },
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(2),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  card: {
+    borderRadius: 14,
+    padding: theme.spacing(2),
+    boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    fontWeight: 700,
+    fontSize: "1.05rem",
+    lineHeight: 1.2,
+    wordBreak: "break-word",
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.85rem",
+    color: theme.palette.text.secondary,
+  },
+  metaValue: {
+    fontSize: "0.95rem",
+    fontWeight: 600,
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
   },
 }));
 
 const ContactLists = () => {
   const classes = useStyles();
   const history = useHistory();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
@@ -321,15 +383,16 @@ const ContactLists = () => {
         contactListId={selectedContactList && selectedContactList.id}
       />
       <MainHeader>
-        <Grid style={{ width: "99.6%" }} container>
-          <Grid xs={12} sm={5} item>
+        <Grid container spacing={isMobile ? 1 : 2} alignItems="center">
+          <Grid item xs={12} sm={5}>
             <Title>{i18n.t("contactLists.title")}</Title>
           </Grid>
-          <Grid xs={12} sm={7} item>
-            <Grid container alignItems="center" spacing={2}>
-              <Grid item xs>
+          <Grid item xs={12} sm={7}>
+            <Grid container alignItems="center" spacing={1} justifyContent={isMobile ? "stretch" : "flex-end"}>
+              <Grid item xs={12} sm>
                 <TextField
                   fullWidth
+                  size="small"
                   placeholder={i18n.t("contacts.searchPlaceholder")}
                   type="search"
                   value={searchParam}
@@ -343,16 +406,17 @@ const ContactLists = () => {
                   }}
                 />
               </Grid>
-              <Grid item>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                  <button
-                    onClick={handleOpenContactListModal}
-                    className="px-4 py-2 text-sm font-semibold uppercase text-white bg-green-400 hover:bg-green-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 flex items-center"
-                  >
-                    <PlusIcon className="w-4 h-4 mr-2" />
-                    {i18n.t("contactLists.buttons.add")}
-                  </button>
-                </div>
+              <Grid item xs={12} sm="auto">
+                <Button
+                  fullWidth={isMobile}
+                  variant="contained"
+                  color="primary"
+                  onClick={handleOpenContactListModal}
+                  style={{ minHeight: 44 }}
+                  startIcon={<PlusIcon size={16} />}
+                >
+                  {i18n.t("contactLists.buttons.add")}
+                </Button>
               </Grid>
             </Grid>
           </Grid>
@@ -362,22 +426,18 @@ const ContactLists = () => {
         className={classes.mainPaper}
         variant="outlined"
       >
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell align="left">{i18n.t("contactLists.table.name")}</TableCell>
-              <TableCell align="left">{i18n.t("contactLists.table.contacts")}</TableCell>
-              <TableCell align="left">Filtro salvo</TableCell>
-              <TableCell align="right">{i18n.t("contactLists.table.actions")}</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            <>
-              {contactLists.map((contactList) => (
-                <TableRow key={contactList.id}>
-                  <TableCell align="left">{contactList.name}</TableCell>
-                  <TableCell align="left">{contactList.contactsCount || 0}</TableCell>
-                  <TableCell align="left" style={{ maxWidth: 560 }}>
+        {/* Mobile cards */}
+        <div className={classes.mobileList}>
+          {contactLists.map((contactList) => (
+            <div key={contactList.id} className={classes.card}>
+              <div className={classes.cardHeader}>
+                <div className={classes.cardTitle}>{contactList.name}</div>
+                <div className={classes.metaValue}>{contactList.contactsCount || 0} contatos</div>
+              </div>
+              <div className={classes.cardMeta}>
+                <div>
+                  <div className={classes.metaLabel}>Filtro salvo</div>
+                  <div className={classes.metaValue}>
                     {(() => {
                       const sf = contactList && contactList.savedFilter ? contactList.savedFilter : null;
                       if (!sf) return <span style={{ color: '#999' }}>—</span>;
@@ -412,7 +472,6 @@ const ContactLists = () => {
                         <Button
                           size="small"
                           variant="outlined"
-                          onMouseEnter={(e) => openDetails(e, sf)}
                           onClick={(e) => openDetails(e, sf)}
                           startIcon={<FilterIcon size={16} color="#059669" />}
                         >
@@ -420,44 +479,142 @@ const ContactLists = () => {
                         </Button>
                       );
                     })()}
-                  </TableCell>
-                  <TableCell align="right">
-                    <a href={planilhaExemplo} download="planilha.xlsx">
-                      <IconButton size="small" title="Baixar Planilha Exemplo">
-                        <DownloadIcon />
+                  </div>
+                </div>
+              </div>
+              <div className={classes.cardActions}>
+                <IconButton
+                  size="small"
+                  className={classes.actionButton}
+                  onClick={() => goToContacts(contactList.id)}
+                >
+                  <PeopleIcon />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  className={classes.actionButton}
+                  onClick={() => handleEditContactList(contactList)}
+                >
+                  <EditIcon />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  className={classes.actionButton}
+                  onClick={() => {
+                    setConfirmModalOpen(true);
+                    setDeletingContactList(contactList);
+                  }}
+                >
+                  <DeleteOutlineIcon />
+                </IconButton>
+                <IconButton size="small" className={classes.actionButton} component="a" href={planilhaExemplo} download="planilha.xlsx" title="Baixar Planilha Exemplo">
+                  <DownloadIcon />
+                </IconButton>
+              </div>
+            </div>
+          ))}
+          {loading && <TableRowSkeleton columns={1} />}
+        </div>
+
+        {/* Desktop table */}
+        <div className={classes.desktopTableWrapper}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell align="left">{i18n.t("contactLists.table.name")}</TableCell>
+                <TableCell align="left">{i18n.t("contactLists.table.contacts")}</TableCell>
+                <TableCell align="left">Filtro salvo</TableCell>
+                <TableCell align="right">{i18n.t("contactLists.table.actions")}</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              <>
+                {contactLists.map((contactList) => (
+                  <TableRow key={contactList.id}>
+                    <TableCell align="left">{contactList.name}</TableCell>
+                    <TableCell align="left">{contactList.contactsCount || 0}</TableCell>
+                    <TableCell align="left" style={{ maxWidth: 560 }}>
+                      {(() => {
+                        const sf = contactList && contactList.savedFilter ? contactList.savedFilter : null;
+                        if (!sf) return <span style={{ color: '#999' }}>—</span>;
+                        const hasAny = (
+                          (Array.isArray(sf.channel) && sf.channel.length > 0) ||
+                          (Array.isArray(sf.representativeCode) && sf.representativeCode.length > 0) ||
+                          (Array.isArray(sf.city) && sf.city.length > 0) ||
+                          (Array.isArray(sf.segment) && sf.segment.length > 0) ||
+                          (Array.isArray(sf.situation) && sf.situation.length > 0) ||
+                          (Array.isArray(sf.foundationMonths) && sf.foundationMonths.length > 0) ||
+                          (!!sf.minCreditLimit || !!sf.maxCreditLimit) ||
+                          (typeof sf.florder !== 'undefined') ||
+                          (!!sf.dtUltCompraStart || !!sf.dtUltCompraEnd) ||
+                          (sf.minVlUltCompra != null || sf.maxVlUltCompra != null) ||
+                          (Array.isArray(sf.tags) && sf.tags.length > 0)
+                        );
+                        if (!hasAny) return <span style={{ color: '#999' }}>—</span>;
+                        const activeCount = [
+                          Array.isArray(sf.channel) && sf.channel.length > 0,
+                          Array.isArray(sf.representativeCode) && sf.representativeCode.length > 0,
+                          Array.isArray(sf.city) && sf.city.length > 0,
+                          Array.isArray(sf.segment) && sf.segment.length > 0,
+                          Array.isArray(sf.situation) && sf.situation.length > 0,
+                          Array.isArray(sf.foundationMonths) && sf.foundationMonths.length > 0,
+                          (!!sf.minCreditLimit || !!sf.maxCreditLimit),
+                          (typeof sf.florder !== 'undefined'),
+                          (!!sf.dtUltCompraStart || !!sf.dtUltCompraEnd),
+                          (sf.minVlUltCompra != null || sf.maxVlUltCompra != null),
+                          (Array.isArray(sf.tags) && sf.tags.length > 0)
+                        ].filter(Boolean).length;
+                        return (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onMouseEnter={(e) => openDetails(e, sf)}
+                            onClick={(e) => openDetails(e, sf)}
+                            startIcon={<FilterIcon size={16} color="#059669" />}
+                          >
+                            {`Filtro salvo${activeCount ? ` (${activeCount})` : ''}`}
+                          </Button>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell align="right">
+                      <a href={planilhaExemplo} download="planilha.xlsx">
+                        <IconButton size="small" title="Baixar Planilha Exemplo">
+                          <DownloadIcon />
+                        </IconButton>
+                      </a>
+
+                      <IconButton
+                        size="small"
+                        onClick={() => goToContacts(contactList.id)}
+                      >
+                        <PeopleIcon />
                       </IconButton>
-                    </a>
 
-                    <IconButton
-                      size="small"
-                      onClick={() => goToContacts(contactList.id)}
-                    >
-                      <PeopleIcon />
-                    </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleEditContactList(contactList)}
+                      >
+                        <EditIcon />
+                      </IconButton>
 
-                    <IconButton
-                      size="small"
-                      onClick={() => handleEditContactList(contactList)}
-                    >
-                      <EditIcon />
-                    </IconButton>
-
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        setConfirmModalOpen(true);
-                        setDeletingContactList(contactList);
-                      }}
-                    >
-                      <DeleteOutlineIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {loading && <TableRowSkeleton columns={4} />}
-            </>
-          </TableBody>
-        </Table>
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          setConfirmModalOpen(true);
+                          setDeletingContactList(contactList);
+                        }}
+                      >
+                        <DeleteOutlineIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {loading && <TableRowSkeleton columns={4} />}
+              </>
+            </TableBody>
+          </Table>
+        </div>
       </Paper>
       {/* Popover de detalhes do filtro salvo */}
       <Popover

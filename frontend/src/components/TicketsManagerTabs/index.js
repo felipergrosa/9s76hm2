@@ -631,6 +631,28 @@ const TicketsManagerTabs = () => {
             <FilterAltOff className={classes.icon} />
           )}
         </IconButton>
+        {tab === 'pending' && (
+          <Tooltip placement="top" title="Processar Tickets em Massa">
+            <IconButton
+              style={{
+                backgroundColor: "transparent",
+                boxShadow: "none",
+                border: "none",
+                borderRadius: "50%",
+                justifyContent: "flex-end",
+                alignItems: "center",
+              }}
+              variant="contained"
+              aria-label="bulk-process"
+              className={classes.filterIcon}
+              onClick={() => {
+                setBulkProcessModalOpen(true);
+              }}
+            >
+              <PlaylistAddCheckOutlined className={classes.icon} />
+            </IconButton>
+          </Tooltip>
+        )}
       </div>
 
       {filter === true && (

@@ -11,11 +11,13 @@ import {
   TableHead,
   TableRow,
   Typography,
+  useTheme,
+  Grid,
 } from "@material-ui/core";
+import useMediaQuery from "@material-ui/core/useMediaQuery";
 
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
-import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 import Title from "../../components/Title";
 import { i18n } from "../../translate/i18n";
@@ -33,13 +35,79 @@ import usePermissions from "../../hooks/usePermissions";
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
     flex: 1,
-    padding: theme.spacing(1),
+    padding: theme.spacing(2),
     ...theme.scrollbarStyles,
   },
   customTableCell: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+  },
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(2),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  card: {
+    borderRadius: 14,
+    padding: theme.spacing(2),
+    boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    fontWeight: 700,
+    fontSize: "1.05rem",
+  },
+  colorSwatch: {
+    width: 18,
+    height: 18,
+    borderRadius: 6,
+    border: `1px solid ${theme.palette.divider}`,
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.85rem",
+    color: theme.palette.text.secondary,
+  },
+  metaValue: {
+    fontSize: "0.95rem",
+    fontWeight: 600,
+    wordBreak: "break-word",
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
   },
 }));
 
@@ -88,6 +156,8 @@ const reducer = (state, action) => {
 
 const Queues = () => {
   const classes = useStyles();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [queues, dispatch] = useReducer(reducer, []);
   const [loading, setLoading] = useState(false);
@@ -193,105 +263,165 @@ const Queues = () => {
       {hasPermission("queues.view") ? (
         <>
           <MainHeader>
-            <Title>{i18n.t("queues.title")} ({queues.length})</Title>
-            <MainHeaderButtonsWrapper>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleOpenQueueModal}
-              >
-                {i18n.t("queues.buttons.add")}
-              </Button>
-            </MainHeaderButtonsWrapper>
+            <Grid container spacing={isMobile ? 1 : 2} alignItems="center">
+              <Grid item xs={12} sm={6}>
+                <Title>{i18n.t("queues.title")} ({queues.length})</Title>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Grid container spacing={1} justifyContent="flex-end">
+                  <Grid item xs={12} sm="auto">
+                    <Button
+                      fullWidth={isMobile}
+                      variant="contained"
+                      color="primary"
+                      onClick={handleOpenQueueModal}
+                      style={{ minHeight: 44 }}
+                    >
+                      {i18n.t("queues.buttons.add")}
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Grid>
+            </Grid>
           </MainHeader>
           <Paper className={classes.mainPaper} variant="outlined">
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell align="center">
-                    {i18n.t("queues.table.ID")}
-                  </TableCell>
-                  <TableCell align="center">
-                    {i18n.t("queues.table.name")}
-                  </TableCell>
-                  <TableCell align="center">
-                    {i18n.t("queues.table.color")}
-                  </TableCell>
-                  <TableCell align="center">
-                    {i18n.t("queues.table.orderQueue")}
-                  </TableCell>
-                  <TableCell align="center">
-                    {i18n.t("queues.table.greeting")}
-                  </TableCell>
-                  <TableCell align="center">
-                    {i18n.t("queues.table.actions")}
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <>
-                  {queues.map((queue) => (
-                    <TableRow key={queue.id}>
-                      <TableCell align="center">{queue.id}</TableCell>
-                      <TableCell align="center">{queue.name}</TableCell>
-                      <TableCell align="center">
-                        <div className={classes.customTableCell}>
-                          <span
-                            style={{
-                              backgroundColor: queue.color,
-                              width: 60,
-                              height: 20,
-                              alignSelf: "center",
-                            }}
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell align="center">
-                        <div className={classes.customTableCell}>
-                          <Typography
-                            style={{ width: 300, align: "center" }}
-                            noWrap
-                            variant="body2"
-                          >
-                            {queue.orderQueue}
-                          </Typography>
-                        </div>
-                      </TableCell>
-                      <TableCell align="center">
-                        <div className={classes.customTableCell}>
-                          <Typography
-                            style={{ width: 300, align: "center" }}
-                            noWrap
-                            variant="body2"
-                          >
-                            {queue.greetingMessage}
-                          </Typography>
-                        </div>
-                      </TableCell>
-                      <TableCell align="center">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditQueue(queue)}
-                        >
-                          <Edit />
-                        </IconButton>
+            {/* Mobile cards */}
+            <div className={classes.mobileList}>
+              {queues.map((queue) => (
+                <div key={queue.id} className={classes.card}>
+                  <div className={classes.cardHeader}>
+                    <div className={classes.cardTitle}>
+                      <span className={classes.colorSwatch} style={{ backgroundColor: queue.color }} />
+                      {queue.name}
+                    </div>
+                    <div className={classes.metaValue}>ID #{queue.id}</div>
+                  </div>
+                  <div className={classes.cardMeta}>
+                    <div>
+                      <div className={classes.metaLabel}>{i18n.t("queues.table.orderQueue")}</div>
+                      <div className={classes.metaValue}>{queue.orderQueue ?? "—"}</div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>{i18n.t("queues.table.greeting")}</div>
+                      <div className={classes.metaValue}>
+                        {queue.greetingMessage ? queue.greetingMessage.slice(0, 90) + (queue.greetingMessage.length > 90 ? "…" : "") : "—"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className={classes.cardActions}>
+                    <IconButton
+                      size="small"
+                      className={classes.actionButton}
+                      onClick={() => handleEditQueue(queue)}
+                    >
+                      <Edit />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      className={classes.actionButton}
+                      onClick={() => {
+                        setSelectedQueue(queue);
+                        setConfirmModalOpen(true);
+                      }}
+                    >
+                      <DeleteOutline />
+                    </IconButton>
+                  </div>
+                </div>
+              ))}
+              {loading && <TableRowSkeleton columns={1} />}
+            </div>
 
-                        <IconButton
-                          size="small"
-                          onClick={() => {
-                            setSelectedQueue(queue);
-                            setConfirmModalOpen(true);
-                          }}
-                        >
-                          <DeleteOutline />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {loading && <TableRowSkeleton columns={4} />}
-                </>
-              </TableBody>
-            </Table>
+            {/* Desktop table */}
+            <div className={classes.desktopTableWrapper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell align="center">
+                      {i18n.t("queues.table.ID")}
+                    </TableCell>
+                    <TableCell align="center">
+                      {i18n.t("queues.table.name")}
+                    </TableCell>
+                    <TableCell align="center">
+                      {i18n.t("queues.table.color")}
+                    </TableCell>
+                    <TableCell align="center">
+                      {i18n.t("queues.table.orderQueue")}
+                    </TableCell>
+                    <TableCell align="center">
+                      {i18n.t("queues.table.greeting")}
+                    </TableCell>
+                    <TableCell align="center">
+                      {i18n.t("queues.table.actions")}
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <>
+                    {queues.map((queue) => (
+                      <TableRow key={queue.id}>
+                        <TableCell align="center">{queue.id}</TableCell>
+                        <TableCell align="center">{queue.name}</TableCell>
+                        <TableCell align="center">
+                          <div className={classes.customTableCell}>
+                            <span
+                              style={{
+                                backgroundColor: queue.color,
+                                width: 60,
+                                height: 20,
+                                alignSelf: "center",
+                              }}
+                            />
+                          </div>
+                        </TableCell>
+                        <TableCell align="center">
+                          <div className={classes.customTableCell}>
+                            <Typography
+                              style={{ width: 300, align: "center" }}
+                              noWrap
+                              variant="body2"
+                            >
+                              {queue.orderQueue}
+                            </Typography>
+                          </div>
+                        </TableCell>
+                        <TableCell align="center">
+                          <div className={classes.customTableCell}>
+                            <Typography
+                              style={{ width: 300, align: "center" }}
+                              noWrap
+                              variant="body2"
+                            >
+                              {queue.greetingMessage}
+                            </Typography>
+                          </div>
+                        </TableCell>
+                        <TableCell align="center">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEditQueue(queue)}
+                          >
+                            <Edit />
+                          </IconButton>
+
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setSelectedQueue(queue);
+                              setConfirmModalOpen(true);
+                            }}
+                          >
+                            <DeleteOutline />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {loading && <TableRowSkeleton columns={4} />}
+                  </>
+                </TableBody>
+              </Table>
+            </div>
           </Paper>
         </>
       ) : <ForbiddenPage />}

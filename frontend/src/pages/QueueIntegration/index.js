@@ -8,13 +8,13 @@ import typebot from "../../assets/typebot.jpg";
 import flowbuilder from "../../assets/flowbuilders.png";
 import openai from "../../assets/openai.png";
 
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+import useMediaQuery from "@material-ui/core/useMediaQuery";
 
 import {
   Avatar,
   Button,
   IconButton,
-  InputAdornment,
   Paper,
   Table,
   TableBody,
@@ -22,10 +22,8 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Card,
-  CardContent,
-  Typography,
-  Box,
+  InputAdornment,
+  Grid,
 } from "@material-ui/core";
 
 import {
@@ -37,7 +35,6 @@ import SearchIcon from "@material-ui/icons/Search";
 
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
-import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
 import Title from "../../components/Title";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 import IntegrationModal from "../../components/QueueIntegrationModal";
@@ -109,10 +106,73 @@ const useStyles = makeStyles((theme) => ({
     height: "40px",
     borderRadius: 4
   },
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(2),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  card: {
+    borderRadius: 14,
+    padding: theme.spacing(2),
+    boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    fontWeight: 700,
+    fontSize: "1.05rem",
+    lineHeight: 1.2,
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.85rem",
+    color: theme.palette.text.secondary,
+  },
+  metaValue: {
+    fontSize: "0.95rem",
+    fontWeight: 600,
+    wordBreak: "break-word",
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
+  },
 }));
 
 const QueueIntegration = () => {
   const classes = useStyles();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
@@ -262,97 +322,173 @@ const QueueIntegration = () => {
         <>
 
           <MainHeader>
-            <Title>{i18n.t("queueIntegration.title")} ({queueIntegration.length})</Title>
-            <MainHeaderButtonsWrapper>
-              <TextField
-                placeholder={i18n.t("queueIntegration.searchPlaceholder")}
-                type="search"
-                value={searchParam}
-                onChange={handleSearch}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon color="secondary" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleOpenUserModal}
-              >
-                {i18n.t("queueIntegration.buttons.add")}
-              </Button>
-            </MainHeaderButtonsWrapper>
+            <Grid container spacing={isMobile ? 1 : 2} alignItems="center">
+              <Grid item xs={12} sm={6}>
+                <Title>{i18n.t("queueIntegration.title")} ({queueIntegration.length})</Title>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Grid container spacing={1} alignItems="center" justifyContent="flex-end">
+                  <Grid item xs={12} sm>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder={i18n.t("queueIntegration.searchPlaceholder")}
+                      type="search"
+                      value={searchParam}
+                      onChange={handleSearch}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon color="secondary" />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm="auto">
+                    <Button
+                      fullWidth={isMobile}
+                      variant="contained"
+                      color="primary"
+                      onClick={handleOpenUserModal}
+                      style={{ minHeight: 44 }}
+                    >
+                      {i18n.t("queueIntegration.buttons.add")}
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Grid>
+            </Grid>
           </MainHeader>
           <Paper
             className={classes.mainPaper}
             variant="outlined"
             onScroll={handleScroll}
           >
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox"></TableCell>
-                  <TableCell align="center">{i18n.t("queueIntegration.table.id")}</TableCell>
-                  <TableCell align="center">{i18n.t("queueIntegration.table.name")}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <>
-                  {queueIntegration
-                    .filter((integration) => !["openai", "gemini", "knowledge"].includes(String(integration.type || '').toLowerCase()))
-                    .map((integration) => (
-                    <TableRow key={integration.id}>
-                      <TableCell >
-                        {integration.type === "dialogflow" && (<Avatar
-                          src={dialogflow} className={classes.avatar} />)}
-                        {integration.type === "n8n" && (<Avatar
-                          src={n8n} className={classes.avatar} />)}
-                        {integration.type === "webhook" && (<Avatar
-                          src={webhooks} className={classes.avatar} />)}
-                        {integration.type === "typebot" && (<Avatar
-                          src={typebot} className={classes.avatar} />)}
-                        {integration.type === "flowbuilder" && (<Avatar
-                          src={flowbuilder} className={classes.avatar} />)}
-                        {integration.type === "openai" && (<Avatar
-                          src={openai} className={classes.avatar} />)}
-                        {integration.type === "gemini" && (<Avatar
-                          src={openai} className={classes.avatar} />)}
-                        {integration.type === "knowledge" && (
-                          <Avatar className={classes.avatar}>
-                            KB
-                          </Avatar>
-                        )}
-                      </TableCell>
-
-                      <TableCell align="center">{integration.id}</TableCell>
-                      <TableCell align="center">{integration.name}</TableCell>
-                      <TableCell align="center">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditIntegration(integration)}
+            {/* Mobile cards */}
+            <div className={classes.mobileList}>
+              {queueIntegration
+                .filter((integration) => !["openai", "gemini", "knowledge"].includes(String(integration.type || '').toLowerCase()))
+                .map((integration) => (
+                  <div key={integration.id} className={classes.card}>
+                    <div className={classes.cardHeader}>
+                      <div className={classes.cardTitle}>
+                        <Avatar
+                          src={
+                            integration.type === "dialogflow" ? dialogflow :
+                            integration.type === "n8n" ? n8n :
+                            integration.type === "webhook" ? webhooks :
+                            integration.type === "typebot" ? typebot :
+                            integration.type === "flowbuilder" ? flowbuilder :
+                            integration.type === "openai" ? openai :
+                            integration.type === "gemini" ? openai :
+                            undefined
+                          }
+                          className={classes.avatar}
                         >
-                          <Edit color="secondary" />
-                        </IconButton>
+                          {["openai", "gemini", "knowledge"].includes(String(integration.type || '').toLowerCase()) ? "KB" : null}
+                        </Avatar>
+                        {integration.name}
+                      </div>
+                      <div className={classes.metaValue}>ID #{integration.id}</div>
+                    </div>
+                    <div className={classes.cardMeta}>
+                      <div>
+                        <div className={classes.metaLabel}>Tipo</div>
+                        <div className={classes.metaValue}>{integration.type || "—"}</div>
+                      </div>
+                    </div>
+                    <div className={classes.cardActions}>
+                      <IconButton
+                        size="small"
+                        className={classes.actionButton}
+                        onClick={() => handleEditIntegration(integration)}
+                      >
+                        <Edit color="secondary" />
+                      </IconButton>
 
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            setConfirmModalOpen(true);
-                            setDeletingUser(integration);
-                          }}
-                        >
-                          <DeleteOutline color="secondary" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {loading && <TableRowSkeleton columns={7} />}
-                </>
-              </TableBody>
-            </Table>
+                      <IconButton
+                        size="small"
+                        className={classes.actionButton}
+                        onClick={(e) => {
+                          setConfirmModalOpen(true);
+                          setDeletingUser(integration);
+                        }}
+                      >
+                        <DeleteOutline color="secondary" />
+                      </IconButton>
+                    </div>
+                  </div>
+                ))}
+              {loading && <TableRowSkeleton columns={1} />}
+            </div>
+
+            {/* Desktop table */}
+            <div className={classes.desktopTableWrapper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox"></TableCell>
+                    <TableCell align="center">{i18n.t("queueIntegration.table.id")}</TableCell>
+                    <TableCell align="center">{i18n.t("queueIntegration.table.name")}</TableCell>
+                    <TableCell align="center">{i18n.t("queueIntegration.table.actions")}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <>
+                    {queueIntegration
+                      .filter((integration) => !["openai", "gemini", "knowledge"].includes(String(integration.type || '').toLowerCase()))
+                      .map((integration) => (
+                      <TableRow key={integration.id}>
+                        <TableCell >
+                          {integration.type === "dialogflow" && (<Avatar
+                            src={dialogflow} className={classes.avatar} />)}
+                          {integration.type === "n8n" && (<Avatar
+                            src={n8n} className={classes.avatar} />)}
+                          {integration.type === "webhook" && (<Avatar
+                            src={webhooks} className={classes.avatar} />)}
+                          {integration.type === "typebot" && (<Avatar
+                            src={typebot} className={classes.avatar} />)}
+                          {integration.type === "flowbuilder" && (<Avatar
+                            src={flowbuilder} className={classes.avatar} />)}
+                          {integration.type === "openai" && (<Avatar
+                            src={openai} className={classes.avatar} />)}
+                          {integration.type === "gemini" && (<Avatar
+                            src={openai} className={classes.avatar} />)}
+                          {integration.type === "knowledge" && (
+                            <Avatar className={classes.avatar}>
+                              KB
+                            </Avatar>
+                          )}
+                        </TableCell>
+
+                        <TableCell align="center">{integration.id}</TableCell>
+                        <TableCell align="center">{integration.name}</TableCell>
+                        <TableCell align="center">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEditIntegration(integration)}
+                          >
+                            <Edit color="secondary" />
+                          </IconButton>
+
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              setConfirmModalOpen(true);
+                              setDeletingUser(integration);
+                            }}
+                          >
+                            <DeleteOutline color="secondary" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {loading && <TableRowSkeleton columns={7} />}
+                  </>
+                </TableBody>
+              </Table>
+            </div>
           </Paper>
         </>
       ) : <ForbiddenPage />}

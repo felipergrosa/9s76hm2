@@ -7,7 +7,8 @@ import Menu from "@material-ui/core/Menu";
 import MenuItem from "@material-ui/core/MenuItem";
 import PopupState, { bindTrigger, bindMenu } from "material-ui-popup-state";
 // import { SocketContext } from "../../context/Socket/SocketContext";
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+import useMediaQuery from "@material-ui/core/useMediaQuery";
 import { green } from "@material-ui/core/colors";
 import {
   Button,
@@ -24,7 +25,8 @@ import {
   Box,
   Card,
   CardContent,
-  Chip
+  Chip,
+  Grid
 } from "@material-ui/core";
 import {
   Edit,
@@ -45,7 +47,6 @@ import FacebookLogin from "react-facebook-login/dist/facebook-login-render-props
 
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
-import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
 import Title from "../../components/Title";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 
@@ -87,6 +88,67 @@ const useStyles = makeStyles((theme) => ({
   },
   buttonProgress: {
     color: green[500],
+  },
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(2),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  card: {
+    borderRadius: 14,
+    padding: theme.spacing(2),
+    boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    fontWeight: 700,
+    fontSize: "1.05rem",
+    lineHeight: 1.2,
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.85rem",
+    color: theme.palette.text.secondary,
+  },
+  metaValue: {
+    fontSize: "0.95rem",
+    fontWeight: 600,
+    wordBreak: "break-word",
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
   },
 }));
 
@@ -158,6 +220,8 @@ const IconChannel = (channel, channelType) => {
 
 const Connections = () => {
   const classes = useStyles();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const { whatsApps, loading } = useContext(WhatsAppsContext);
 
@@ -647,129 +711,146 @@ const Connections = () => {
         :
         <>
           <MainHeader>
-            <Title>{i18n.t("connections.title")} ({whatsApps.length})</Title>
-            <MainHeaderButtonsWrapper>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={restartWhatsapps}
-              >
-                {i18n.t("connections.restartConnections")}
-              </Button>
-
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={() => openInNewTab(`https://wa.me/${process.env.REACT_APP_NUMBER_SUPPORT}`)}
-              >
-                {i18n.t("connections.callSupport")}
-              </Button>
-              <PopupState variant="popover" popupId="demo-popup-menu">
-                {(popupState) => (
-                  <React.Fragment>
-                    <Can
-                      role={user.profile}
-                      perform="connections-page:addConnection"
-                      yes={() => (
-                        <>
-                          <Button
-                            variant="contained"
-                            color="primary"
-                            {...bindTrigger(popupState)}
-                          >
-                            {i18n.t("connections.newConnection")}
-                          </Button>
-                          <Menu 
-                              {...bindMenu(popupState)}
-                              anchorOrigin={{
-                                vertical: 'bottom',
-                                horizontal: 'right',
-                              }}
-                              transformOrigin={{
-                                vertical: 'top',
-                                horizontal: 'right',
-                              }}
-                              getContentAnchorEl={null}
-                            >
-                            {/* WHATSAPP */}
-                            <MenuItem
-                              disabled={planConfig?.plan?.useWhatsapp ? false : true}
-                              onClick={() => {
-                                setSelectedWhatsApp(null);
-                                handleOpenWhatsAppModal();
-                                popupState.close();
-                              }}
-                            >
-                              <WhatsApp
-                                fontSize="small"
-                                style={{
-                                  marginRight: "10px",
-                                  color: "#25D366",
-                                }}
-                              />
-                              WhatsApp
-                            </MenuItem>
-                            {/* FACEBOOK */}
-                            <MenuItem
-                              disabled={planConfig?.plan?.useFacebook ? false : true}
-                              onClick={() => {
-                                setSelectedWhatsApp({ channel: "facebook", channelType: "facebook" });
-                                handleOpenWhatsAppModal();
-                                popupState.close();
-                              }}
-                            >
-                              <Facebook
-                                fontSize="small"
-                                style={{
-                                  marginRight: "10px",
-                                  color: "#3b5998",
-                                }}
-                              />
-                              Facebook
-                            </MenuItem>
-                            {/* INSTAGRAM */}
-                            <MenuItem
-                              disabled={planConfig?.plan?.useInstagram ? false : true}
-                              onClick={() => {
-                                setSelectedWhatsApp({ channel: "instagram", channelType: "instagram" });
-                                handleOpenWhatsAppModal();
-                                popupState.close();
-                              }}
-                            >
-                              <Instagram
-                                fontSize="small"
-                                style={{
-                                  marginRight: "10px",
-                                  color: "#e1306c",
-                                }}
-                              />
-                              Instagram
-                            </MenuItem>
-                            {/* WEBCHAT */}
-                            <MenuItem
-                              onClick={() => {
-                                setSelectedWhatsApp({ channel: "webchat", channelType: "webchat" });
-                                handleOpenWhatsAppModal();
-                                popupState.close();
-                              }}
-                            >
-                              <WebChatIcon
-                                fontSize="small"
-                                style={{
-                                  marginRight: "10px",
-                                  color: "#6B46C1",
-                                }}
-                              />
-                              WebChat
-                            </MenuItem>
-                          </Menu>
-                        </>
+            <Grid container spacing={isMobile ? 1 : 2} alignItems="center">
+              <Grid item xs={12} sm={6}>
+                <Title>{i18n.t("connections.title")} ({whatsApps.length})</Title>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Grid container spacing={1} justifyContent="flex-end">
+                  <Grid item xs={12} sm="auto">
+                    <Button
+                      fullWidth={isMobile}
+                      variant="contained"
+                      color="primary"
+                      onClick={restartWhatsapps}
+                      style={{ minHeight: 44 }}
+                    >
+                      {i18n.t("connections.restartConnections")}
+                    </Button>
+                  </Grid>
+                  <Grid item xs={12} sm="auto">
+                    <Button
+                      fullWidth={isMobile}
+                      variant="contained"
+                      color="primary"
+                      onClick={() => openInNewTab(`https://wa.me/${process.env.REACT_APP_NUMBER_SUPPORT}`)}
+                      style={{ minHeight: 44 }}
+                    >
+                      {i18n.t("connections.callSupport")}
+                    </Button>
+                  </Grid>
+                  <Grid item xs={12} sm="auto">
+                    <PopupState variant="popover" popupId="demo-popup-menu">
+                      {(popupState) => (
+                        <React.Fragment>
+                          <Can
+                            role={user.profile}
+                            perform="connections-page:addConnection"
+                            yes={() => (
+                              <>
+                                <Button
+                                  fullWidth={isMobile}
+                                  variant="contained"
+                                  color="primary"
+                                  {...bindTrigger(popupState)}
+                                  style={{ minHeight: 44 }}
+                                >
+                                  {i18n.t("connections.newConnection")}
+                                </Button>
+                                <Menu 
+                                    {...bindMenu(popupState)}
+                                    anchorOrigin={{
+                                      vertical: 'bottom',
+                                      horizontal: 'right',
+                                    }}
+                                    transformOrigin={{
+                                      vertical: 'top',
+                                      horizontal: 'right',
+                                    }}
+                                    getContentAnchorEl={null}
+                                  >
+                                  {/* WHATSAPP */}
+                                  <MenuItem
+                                    disabled={planConfig?.plan?.useWhatsapp ? false : true}
+                                    onClick={() => {
+                                      setSelectedWhatsApp(null);
+                                      handleOpenWhatsAppModal();
+                                      popupState.close();
+                                    }}
+                                  >
+                                    <WhatsApp
+                                      fontSize="small"
+                                      style={{
+                                        marginRight: "10px",
+                                        color: "#25D366",
+                                      }}
+                                    />
+                                    WhatsApp
+                                  </MenuItem>
+                                  {/* FACEBOOK */}
+                                  <MenuItem
+                                    disabled={planConfig?.plan?.useFacebook ? false : true}
+                                    onClick={() => {
+                                      setSelectedWhatsApp({ channel: "facebook", channelType: "facebook" });
+                                      handleOpenWhatsAppModal();
+                                      popupState.close();
+                                    }}
+                                  >
+                                    <Facebook
+                                      fontSize="small"
+                                      style={{
+                                        marginRight: "10px",
+                                        color: "#3b5998",
+                                      }}
+                                    />
+                                    Facebook
+                                  </MenuItem>
+                                  {/* INSTAGRAM */}
+                                  <MenuItem
+                                    disabled={planConfig?.plan?.useInstagram ? false : true}
+                                    onClick={() => {
+                                      setSelectedWhatsApp({ channel: "instagram", channelType: "instagram" });
+                                      handleOpenWhatsAppModal();
+                                      popupState.close();
+                                    }}
+                                  >
+                                    <Instagram
+                                      fontSize="small"
+                                      style={{
+                                        marginRight: "10px",
+                                        color: "#e1306c",
+                                      }}
+                                    />
+                                    Instagram
+                                  </MenuItem>
+                                  {/* WEBCHAT */}
+                                  <MenuItem
+                                    onClick={() => {
+                                      setSelectedWhatsApp({ channel: "webchat", channelType: "webchat" });
+                                      handleOpenWhatsAppModal();
+                                      popupState.close();
+                                    }}
+                                  >
+                                    <WebChatIcon
+                                      fontSize="small"
+                                      style={{
+                                        marginRight: "10px",
+                                        color: "#6B46C1",
+                                      }}
+                                    />
+                                    WebChat
+                                  </MenuItem>
+                                </Menu>
+                              </>
+                            )}
+                          />
+                        </React.Fragment>
                       )}
-                    />
-                  </React.Fragment>
-                )}
-              </PopupState>
-            </MainHeaderButtonsWrapper>
+                    </PopupState>
+                  </Grid>
+                </Grid>
+              </Grid>
+            </Grid>
           </MainHeader>
 
           {
@@ -812,107 +893,200 @@ const Connections = () => {
           }
 
           <Paper className={classes.mainPaper} variant="outlined">
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell align="center">Channel</TableCell>
-                  <TableCell align="center">{i18n.t("connections.table.name")}</TableCell>
-                  <TableCell align="center">{i18n.t("connections.table.number")}</TableCell>
-                  <TableCell align="center">{i18n.t("connections.table.status")}</TableCell>
-                  <TableCell align="center">{i18n.t("connections.table.session")}</TableCell>
-                  <TableCell align="center">{i18n.t("connections.table.lastUpdate")}</TableCell>
-                  <TableCell align="center">{i18n.t("connections.table.default")}</TableCell>
-                  <Can
-                    role={user.profile === "user" && user.allowConnections === "enabled" ? "admin" : user.profile}
-                    perform="connections-page:addConnection"
-                    yes={() => (
-                      <TableCell align="center">{i18n.t("connections.table.actions")}</TableCell>
-                    )}
-                  />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading ? (
-                  <TableRowSkeleton />
-                ) : (
-                  <>
-                    {whatsApps?.length > 0 &&
-                      whatsApps.map((whatsApp) => (
-                        <TableRow key={whatsApp.id}>
-                          <TableCell align="center">{IconChannel(whatsApp.channel, whatsApp.channelType)}</TableCell>
-                          <TableCell align="center">
-                            <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
-                              <span>{whatsApp.name}</span>
-                              {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
-                                <Chip
-                                  label="API Oficial"
-                                  color="primary"
-                                  size="small"
-                                  style={{ fontSize: '0.7rem', height: '20px' }}
-                                />
-                              )}
-                              {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "baileys" && (
-                                <Chip
-                                  label="Baileys"
-                                  size="small"
-                                  variant="outlined"
-                                  style={{ fontSize: '0.7rem', height: '20px' }}
-                                />
-                              )}
-                            </Box>
-                          </TableCell>
-                          <TableCell align="center">{whatsApp.number && whatsApp.channel === 'whatsapp' ? (<>{formatSerializedId(whatsApp.number)}</>) : whatsApp.number}</TableCell>
-                          <TableCell align="center">{renderStatusToolTips(whatsApp)}</TableCell>
-                          <TableCell align="center">{renderActionButtons(whatsApp)}</TableCell>
-                          <TableCell align="center">{format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm")}</TableCell>
-                          <TableCell align="center">
-                            {whatsApp.isDefault && (
-                              <div className={classes.customTableCell}>
-                                <CheckCircle style={{ color: green[500] }} />
-                              </div>
-                            )}
-                          </TableCell>
-                          <Can
-                            role={user.profile}
-                            perform="connections-page:addConnection"
-                            yes={() => (
-                              <TableCell align="center">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleEditWhatsApp(whatsApp)}
-                                >
-                                  <Edit />
-                                </IconButton>
+            {/* Mobile cards */}
+            <div className={classes.mobileList}>
+              {loading ? (
+                <TableRowSkeleton columns={1} />
+              ) : (
+                whatsApps?.map((whatsApp) => (
+                  <div key={whatsApp.id} className={classes.card}>
+                    <div className={classes.cardHeader}>
+                      <div className={classes.cardTitle}>
+                        {IconChannel(whatsApp.channel, whatsApp.channelType)}
+                        {whatsApp.name}
+                        {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
+                          <Chip
+                            label="API Oficial"
+                            color="primary"
+                            size="small"
+                            style={{ fontSize: '0.7rem', height: '20px' }}
+                          />
+                        )}
+                        {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "baileys" && (
+                          <Chip
+                            label="Baileys"
+                            size="small"
+                            variant="outlined"
+                            style={{ fontSize: '0.7rem', height: '20px' }}
+                          />
+                        )}
+                      </div>
+                      <div className={classes.metaValue}>{whatsApp.number && whatsApp.channel === 'whatsapp' ? formatSerializedId(whatsApp.number) : (whatsApp.number || "—")}</div>
+                    </div>
+                    <div className={classes.cardMeta}>
+                      <div>
+                        <div className={classes.metaLabel}>{i18n.t("connections.table.status")}</div>
+                        <div className={classes.metaValue}>{renderStatusToolTips(whatsApp)}</div>
+                      </div>
+                      <div>
+                        <div className={classes.metaLabel}>{i18n.t("connections.table.lastUpdate")}</div>
+                        <div className={classes.metaValue}>{format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm")}</div>
+                      </div>
+                      <div>
+                        <div className={classes.metaLabel}>{i18n.t("connections.table.default")}</div>
+                        <div className={classes.metaValue}>{whatsApp.isDefault ? <CheckCircle style={{ color: green[500] }} /> : "—"}</div>
+                      </div>
+                    </div>
+                    <div className={classes.cardActions}>
+                      {renderActionButtons(whatsApp)}
+                      <Can
+                        role={user.profile}
+                        perform="connections-page:addConnection"
+                        yes={() => (
+                          <>
+                            <IconButton
+                              size="small"
+                              className={classes.actionButton}
+                              onClick={() => handleEditWhatsApp(whatsApp)}
+                            >
+                              <Edit />
+                            </IconButton>
 
+                            {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
+                              <IconButton
+                                size="small"
+                                className={classes.actionButton}
+                                onClick={(e) => {
+                                  e.stopPropagation && e.stopPropagation();
+                                  handleOpenMetaMenu(e);
+                                }}
+                              >
+                                <MoreVert />
+                              </IconButton>
+                            )}
+
+                            <IconButton
+                              size="small"
+                              className={classes.actionButton}
+                              onClick={() => {
+                                handleOpenConfirmationModal("delete", whatsApp.id);
+                              }}
+                            >
+                              <DeleteOutline />
+                            </IconButton>
+                          </>
+                        )}
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Desktop table */}
+            <div className={classes.desktopTableWrapper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell align="center">Channel</TableCell>
+                    <TableCell align="center">{i18n.t("connections.table.name")}</TableCell>
+                    <TableCell align="center">{i18n.t("connections.table.number")}</TableCell>
+                    <TableCell align="center">{i18n.t("connections.table.status")}</TableCell>
+                    <TableCell align="center">{i18n.t("connections.table.session")}</TableCell>
+                    <TableCell align="center">{i18n.t("connections.table.lastUpdate")}</TableCell>
+                    <TableCell align="center">{i18n.t("connections.table.default")}</TableCell>
+                    <Can
+                      role={user.profile === "user" && user.allowConnections === "enabled" ? "admin" : user.profile}
+                      perform="connections-page:addConnection"
+                      yes={() => (
+                        <TableCell align="center">{i18n.t("connections.table.actions")}</TableCell>
+                      )}
+                    />
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {loading ? (
+                    <TableRowSkeleton />
+                  ) : (
+                    <>
+                      {whatsApps?.length > 0 &&
+                        whatsApps.map((whatsApp) => (
+                          <TableRow key={whatsApp.id}>
+                            <TableCell align="center">{IconChannel(whatsApp.channel, whatsApp.channelType)}</TableCell>
+                            <TableCell align="center">
+                              <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
+                                <span>{whatsApp.name}</span>
                                 {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
+                                  <Chip
+                                    label="API Oficial"
+                                    color="primary"
+                                    size="small"
+                                    style={{ fontSize: '0.7rem', height: '20px' }}
+                                  />
+                                )}
+                                {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "baileys" && (
+                                  <Chip
+                                    label="Baileys"
+                                    size="small"
+                                    variant="outlined"
+                                    style={{ fontSize: '0.7rem', height: '20px' }}
+                                  />
+                                )}
+                              </Box>
+                            </TableCell>
+                            <TableCell align="center">{whatsApp.number && whatsApp.channel === 'whatsapp' ? (<>{formatSerializedId(whatsApp.number)}</>) : whatsApp.number}</TableCell>
+                            <TableCell align="center">{renderStatusToolTips(whatsApp)}</TableCell>
+                            <TableCell align="center">{renderActionButtons(whatsApp)}</TableCell>
+                            <TableCell align="center">{format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm")}</TableCell>
+                            <TableCell align="center">
+                              {whatsApp.isDefault && (
+                                <div className={classes.customTableCell}>
+                                  <CheckCircle style={{ color: green[500] }} />
+                                </div>
+                              )}
+                            </TableCell>
+                            <Can
+                              role={user.profile}
+                              perform="connections-page:addConnection"
+                              yes={() => (
+                                <TableCell align="center">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleEditWhatsApp(whatsApp)}
+                                  >
+                                    <Edit />
+                                  </IconButton>
+
+                                  {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation && e.stopPropagation();
+                                        handleOpenMetaMenu(e);
+                                      }}
+                                    >
+                                      <MoreVert />
+                                    </IconButton>
+                                  )}
+
                                   <IconButton
                                     size="small"
                                     onClick={(e) => {
-                                      e.stopPropagation && e.stopPropagation();
-                                      handleOpenMetaMenu(e);
+                                      handleOpenConfirmationModal("delete", whatsApp.id);
                                     }}
                                   >
-                                    <MoreVert />
+                                    <DeleteOutline />
                                   </IconButton>
-                                )}
-
-                                <IconButton
-                                  size="small"
-                                  onClick={(e) => {
-                                    handleOpenConfirmationModal("delete", whatsApp.id);
-                                  }}
-                                >
-                                  <DeleteOutline />
-                                </IconButton>
-                              </TableCell>
-                            )}
-                          />
-                        </TableRow>
-                      ))}
-                  </>
-                )}
-              </TableBody>
-            </Table>
+                                </TableCell>
+                              )}
+                            />
+                          </TableRow>
+                        ))}
+                    </>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </Paper>
         </>
       }

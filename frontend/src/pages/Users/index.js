@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useReducer, useContext } from "react";
 
 import { toast } from "react-toastify";
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+import useMediaQuery from "@material-ui/core/useMediaQuery";
+import Grid from "@material-ui/core/Grid";
 import Paper from "@material-ui/core/Paper";
 import Button from "@material-ui/core/Button";
 import Table from "@material-ui/core/Table";
@@ -19,16 +21,13 @@ import EditIcon from "@material-ui/icons/Edit";
 import { AccountCircle } from "@material-ui/icons";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
-import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
 import Title from "../../components/Title";
 import whatsappIcon from '../../assets/nopicture.png'
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n"; // Já importado, ótimo!
-import TableRowSkeleton from "../../components/TableRowSkeleton";
 import UserModal from "../../components/UserModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
-import { SocketContext, socketManager } from "../../context/Socket/SocketContext";
 import UserStatusIcon from "../../components/UserModal/statusIcon";
 import { getBackendUrl } from "../../config";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -92,6 +91,67 @@ const useStyles = makeStyles((theme) => ({
     padding: theme.spacing(2),
     // Removido overflowY e scrollbar interna para usar scroll da janela
   },
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(2),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  card: {
+    borderRadius: 14,
+    padding: theme.spacing(2),
+    boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.25),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    fontWeight: 700,
+    fontSize: "1.05rem",
+    lineHeight: 1.2,
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.85rem",
+    color: theme.palette.text.secondary,
+  },
+  metaValue: {
+    fontSize: "0.95rem",
+    fontWeight: 600,
+    wordBreak: "break-word",
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
+  },
   userAvatar: {
     width: theme.spacing(6),
     height: theme.spacing(6),
@@ -116,6 +176,8 @@ const useStyles = makeStyles((theme) => ({
 
 const Users = () => {
   const classes = useStyles();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
@@ -171,7 +233,7 @@ const Users = () => {
         socket.off(`company-${companyId}-user`, onCompanyUser);
       };
     }
-  }, [socket]);
+  }, [socket, loggedInUser]);
 
   const handleOpenUserModal = () => {
     setSelectedUser(null);
@@ -286,96 +348,173 @@ const Users = () => {
       {hasPermission("users.view") ? (
         <>
           <MainHeader>
-            <Title>{i18n.t("users.title")} ({users.length})</Title>
-            <MainHeaderButtonsWrapper>
-              <TextField
-                placeholder={i18n.t("contacts.searchPlaceholder")}
-                type="search"
-                value={searchParam}
-                onChange={handleSearch}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon style={{ color: "gray" }} />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleOpenUserModal}
-              >
-                {i18n.t("users.buttons.add")}
-              </Button>
-            </MainHeaderButtonsWrapper>
+            <Grid container spacing={isMobile ? 1 : 2} alignItems="center">
+              <Grid item xs={12} sm={6}>
+                <Title>{i18n.t("users.title")} ({users.length})</Title>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Grid container spacing={1} alignItems="center" justifyContent="flex-end">
+                  <Grid item xs={12} sm>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder={i18n.t("contacts.searchPlaceholder")}
+                      type="search"
+                      value={searchParam}
+                      onChange={handleSearch}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon style={{ color: "gray" }} />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm="auto">
+                    <Button
+                      fullWidth={isMobile}
+                      variant="contained"
+                      color="primary"
+                      onClick={handleOpenUserModal}
+                      style={{ minHeight: 44 }}
+                    >
+                      {i18n.t("users.buttons.add")}
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Grid>
+            </Grid>
           </MainHeader>
           <Paper
             className={classes.mainPaper}
             variant="outlined"
           >
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell align="center">{i18n.t("users.table.ID")}</TableCell>
-                  <TableCell align="center">{i18n.t("users.table.status")}</TableCell>
+            {/* Mobile cards */}
+            <div className={classes.mobileList}>
+              {users.map((user) => (
+                <div key={user.id} className={classes.card}>
+                  <div className={classes.cardHeader}>
+                    <div className={classes.cardTitle}>
+                      <UserStatusIcon user={user} />
+                      {renderProfileImage(user)}
+                      <span>{user.name}</span>
+                    </div>
+                    <div className={classes.metaValue}>ID #{user.id}</div>
+                  </div>
+                  <div className={classes.cardMeta}>
+                    <div>
+                      <div className={classes.metaLabel}>{i18n.t("users.table.email")}</div>
+                      <div className={classes.metaValue}>{user.email || "—"}</div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>{i18n.t("users.table.profile")}</div>
+                      <div className={classes.metaValue}>{user.profile}</div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>{i18n.t("users.table.startWork")}</div>
+                      <div className={classes.metaValue}>{user.startWork || "—"}</div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>{i18n.t("users.table.endWork")}</div>
+                      <div className={classes.metaValue}>{user.endWork || "—"}</div>
+                    </div>
+                  </div>
+                  <div className={classes.cardActions}>
+                    <IconButton
+                      size="small"
+                      className={classes.actionButton}
+                      onClick={() => handleEditUser(user)}
+                    >
+                      <EditIcon />
+                    </IconButton>
 
-                  <TableCell align="center">
-                    Avatar
-                  </TableCell>
-                  <TableCell align="center">{i18n.t("users.table.name")}</TableCell>
-                  <TableCell align="center">{i18n.t("users.table.email")}</TableCell>
-                  <TableCell align="center">{i18n.t("users.table.profile")}</TableCell>
-                  <TableCell align="center">{i18n.t("users.table.startWork")}</TableCell>
-                  <TableCell align="center">{i18n.t("users.table.endWork")}</TableCell>
-                  <TableCell align="center">{i18n.t("users.table.actions")}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell align="center">{user.id}</TableCell>
-                      <TableCell align="center"><UserStatusIcon user={user} /></TableCell>
-                      <TableCell align="center" >
-                        <div className={classes.avatarDiv}>
-                          {renderProfileImage(user)}
-                        </div>
-                      </TableCell>
-                      <TableCell align="center">{user.name}</TableCell>
-                      <TableCell align="center">{user.email}</TableCell>
-                      <TableCell align="center">{user.profile}</TableCell>
-                      <TableCell align="center">{user.startWork}</TableCell>
-                      <TableCell align="center">{user.endWork}</TableCell>
-                      <TableCell align="center">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditUser(user)}
-                        >
-                          <EditIcon />
-                        </IconButton>
+                    <IconButton
+                      size="small"
+                      className={classes.actionButton}
+                      onClick={() => {
+                        setConfirmModalOpen(true);
+                        setDeletingUser(user);
+                      }}
+                    >
+                      <DeleteOutlineIcon />
+                    </IconButton>
+                  </div>
+                </div>
+              ))}
+              {loading && (
+                <div className={classes.loadingContainer}>
+                  <CircularProgress />
+                  <span className={classes.loadingText}>{i18n.t("loading")}</span>
+                </div>
+              )}
+            </div>
 
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            setConfirmModalOpen(true);
-                            setDeletingUser(user);
-                          }}
-                        >
-                          <DeleteOutlineIcon />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </>
-              </TableBody>
-            </Table>
-            {loading && (
-              <div className={classes.loadingContainer}>
-                <CircularProgress />
-                <span className={classes.loadingText}>{i18n.t("loading")}</span>
-              </div>
-            )}
+            {/* Desktop table */}
+            <div className={classes.desktopTableWrapper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell align="center">{i18n.t("users.table.ID")}</TableCell>
+                    <TableCell align="center">{i18n.t("users.table.status")}</TableCell>
+
+                    <TableCell align="center">
+                      Avatar
+                    </TableCell>
+                    <TableCell align="center">{i18n.t("users.table.name")}</TableCell>
+                    <TableCell align="center">{i18n.t("users.table.email")}</TableCell>
+                    <TableCell align="center">{i18n.t("users.table.profile")}</TableCell>
+                    <TableCell align="center">{i18n.t("users.table.startWork")}</TableCell>
+                    <TableCell align="center">{i18n.t("users.table.endWork")}</TableCell>
+                    <TableCell align="center">{i18n.t("users.table.actions")}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <>
+                    {users.map((user) => (
+                      <TableRow key={user.id}>
+                        <TableCell align="center">{user.id}</TableCell>
+                        <TableCell align="center"><UserStatusIcon user={user} /></TableCell>
+                        <TableCell align="center" >
+                          <div className={classes.avatarDiv}>
+                            {renderProfileImage(user)}
+                          </div>
+                        </TableCell>
+                        <TableCell align="center">{user.name}</TableCell>
+                        <TableCell align="center">{user.email}</TableCell>
+                        <TableCell align="center">{user.profile}</TableCell>
+                        <TableCell align="center">{user.startWork}</TableCell>
+                        <TableCell align="center">{user.endWork}</TableCell>
+                        <TableCell align="center">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEditUser(user)}
+                          >
+                            <EditIcon />
+                          </IconButton>
+
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              setConfirmModalOpen(true);
+                              setDeletingUser(user);
+                            }}
+                          >
+                            <DeleteOutlineIcon />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </>
+                </TableBody>
+              </Table>
+              {loading && (
+                <div className={classes.loadingContainer}>
+                  <CircularProgress />
+                  <span className={classes.loadingText}>{i18n.t("loading")}</span>
+                </div>
+              )}
+            </div>
           </Paper>
           {/* Paginação numerada */}
           <nav className="flex justify-center mt-4" aria-label="Page navigation">

@@ -3,7 +3,9 @@ import { toast } from "react-toastify";
 import { useHistory } from "react-router-dom";
 // import { SocketContext } from "../../context/Socket/SocketContext"; //
 
-import { makeStyles } from "@material-ui/core/styles"; //
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+import useMediaQuery from "@material-ui/core/useMediaQuery";
+import Grid from "@material-ui/core/Grid"; //
 import Paper from "@material-ui/core/Paper"; //
 import Button from "@material-ui/core/Button"; //
 import Table from "@material-ui/core/Table"; //
@@ -14,6 +16,8 @@ import TableRow from "@material-ui/core/TableRow"; //
 import IconButton from "@material-ui/core/IconButton"; // Adicionado para os botões de ação na tabela
 import TextField from "@material-ui/core/TextField"; // Adicionado para o campo de busca
 import InputAdornment from "@material-ui/core/InputAdornment"; // Adicionado para o ícone de busca
+import Card from "@material-ui/core/Card";
+import CardContent from "@material-ui/core/CardContent";
 
 import SearchIcon from "@material-ui/icons/Search"; // Adicionado para o ícone de busca
 import EditIcon from "@material-ui/icons/Edit"; // Adicionado para o ícone de editar
@@ -21,7 +25,7 @@ import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline"; // Adicionado 
 
 import MainContainer from "../../components/MainContainer"; //
 import MainHeader from "../../components/MainHeader"; //
-import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper"; // Adicionado, presumindo que é um componente que você tem
+ // Adicionado, presumindo que é um componente que você tem
 
 import Title from "../../components/Title"; //
 
@@ -88,11 +92,74 @@ const useStyles = makeStyles((theme) => ({
         overflowY: "scroll", //
         ...theme.scrollbarStyles, //
     },
+    mobileList: {
+        display: "grid",
+        gridTemplateColumns: "1fr",
+        gap: theme.spacing(2),
+        [theme.breakpoints.up("sm")]: {
+            display: "none",
+        },
+    },
+    desktopTableWrapper: {
+        [theme.breakpoints.down("sm")]: {
+            display: "none",
+        },
+    },
+    card: {
+        borderRadius: 14,
+        padding: theme.spacing(2),
+        boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+        border: `1px solid ${theme.palette.divider}`,
+        display: "flex",
+        flexDirection: "column",
+        gap: theme.spacing(1.25),
+        background: theme.palette.background.paper,
+    },
+    cardHeader: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: theme.spacing(1),
+    },
+    cardTitle: {
+        display: "flex",
+        alignItems: "center",
+        gap: theme.spacing(1),
+        fontWeight: 700,
+        fontSize: "1.05rem",
+        lineHeight: 1.2,
+    },
+    cardMeta: {
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+        gap: theme.spacing(1),
+    },
+    metaLabel: {
+        fontSize: "0.85rem",
+        color: theme.palette.text.secondary,
+    },
+    metaValue: {
+        fontSize: "0.95rem",
+        fontWeight: 600,
+        wordBreak: "break-word",
+    },
+    cardActions: {
+        display: "flex",
+        alignItems: "center",
+        gap: theme.spacing(1),
+        flexWrap: "wrap",
+    },
+    actionButton: {
+        minWidth: 44,
+        minHeight: 44,
+    },
 }));
 
 const Companies = () => {
-    const classes = useStyles(); //
-    const history = useHistory(); //
+    const classes = useStyles();
+    const history = useHistory();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down("sm")); //
 
     const [loading, setLoading] = useState(false); //
     const [pageNumber, setPageNumber] = useState(1); //
@@ -283,95 +350,185 @@ const Companies = () => {
                 companyId={selectedCompany && selectedCompany.id} //
             />
             <MainHeader>
-                <Title>{i18n.t("compaies.title")} ({companies.length})</Title>
-                <MainHeaderButtonsWrapper>
-                    <TextField
-                        placeholder={i18n.t("contacts.searchPlaceholder")} //
-                        type="search" //
-                        value={searchParam} //
-                        onChange={handleSearch} //
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon style={{ color: "gray" }} />
-                                </InputAdornment>
-                            ),
-                        }}
-                    />
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        onClick={handleOpenCompanyModal} //
-                    >
-                        {i18n.t("compaies.buttons.add")}
-                    </Button>
-                </MainHeaderButtonsWrapper>
+                <Grid container spacing={isMobile ? 1 : 2} alignItems="center">
+                    <Grid item xs={12} sm={6}>
+                        <Title>{i18n.t("compaies.title")} ({companies.length})</Title>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <Grid container spacing={1} alignItems="center" justifyContent="flex-end">
+                            <Grid item xs={12} sm>
+                                <TextField
+                                    fullWidth
+                                    size="small"
+                                    placeholder={i18n.t("contacts.searchPlaceholder")}
+                                    type="search"
+                                    value={searchParam}
+                                    onChange={handleSearch}
+                                    InputProps={{
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <SearchIcon style={{ color: "gray" }} />
+                                            </InputAdornment>
+                                        ),
+                                    }}
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm="auto">
+                                <Button
+                                    fullWidth={isMobile}
+                                    variant="contained"
+                                    color="primary"
+                                    onClick={handleOpenCompanyModal}
+                                    style={{ minHeight: 44 }}
+                                >
+                                    {i18n.t("compaies.buttons.add")}
+                                </Button>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                </Grid>
             </MainHeader>
             <Paper
                 className={classes.mainPaper} //
                 variant="outlined" //
                 onScroll={handleScroll} //
             >
-                <Table size="small">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell align="center">{i18n.t("compaies.table.ID")}</TableCell>
-                            <TableCell align="center">{i18n.t("compaies.table.status")}</TableCell>
-                            <TableCell align="center">{i18n.t("compaies.table.name")}</TableCell>
-                            <TableCell align="center">{i18n.t("compaies.table.email")}</TableCell>
-                            <TableCell align="center">{i18n.t("compaies.table.namePlan")}</TableCell>
-                            <TableCell align="center">{i18n.t("compaies.table.value")}</TableCell>
-                            <TableCell align="center">{i18n.t("compaies.table.createdAt")}</TableCell>
-                            <TableCell align="center">{i18n.t("compaies.table.dueDate")}</TableCell>
-                            <TableCell align="center">{i18n.t("compaies.table.lastLogin")}</TableCell>
-                            <TableCell align="center">Tamanho da pasta</TableCell>
-                            <TableCell align="center">Total de arquivos</TableCell>
-                            <TableCell align="center">Ultimo update</TableCell>
-                            {/* Descomentado a coluna de ações */}
-                            <TableCell align="center">{i18n.t("compaies.table.actions")}</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        <>
-                            {companies.map((company) => (
-                                <TableRow style={rowStyle(company)} key={company.id}>
-                                    <TableCell align="center">{company.id}</TableCell>
-                                    <TableCell align="center">{renderStatus(company.status)}</TableCell>
-                                    <TableCell align="center">{company.name}</TableCell>
-                                    <TableCell align="center">{company.email}</TableCell>
-                                    <TableCell align="center">{company?.plan?.name}</TableCell> {/* Acesso seguro a plan.name */}
-                                    <TableCell align="center">R$ {renderPlanValue(company)}</TableCell>
-                                    <TableCell align="center">{dateToClient(company.createdAt)}</TableCell>
-                                    <TableCell align="center">{dateToClient(company.dueDate)}<br /><span>{company.recurrence}</span></TableCell>
-                                    <TableCell align="center">{datetimeToClient(company.lastLogin)}</TableCell>
-                                    <TableCell align="center">{company.folderSize}</TableCell>
-                                    <TableCell align="center">{company.numberFileFolder}</TableCell>
-                                    <TableCell align="center">{datetimeToClient(company.updatedAtFolder)}</TableCell>
-                                    {/* Descomentado os botões de ação */}
-                                    <TableCell align="center">
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => handleEditCompany(company)} //
-                                        >
-                                            <EditIcon />
-                                        </IconButton>
+                {/* Mobile cards */}
+                <div className={classes.mobileList}>
+                    {companies.map((company) => (
+                        <Card key={company.id} className={classes.card} style={rowStyle(company)}>
+                            <div className={classes.cardHeader}>
+                                <div className={classes.cardTitle}>
+                                    #{company.id} · {company.name || "—"}
+                                </div>
+                                <div className={classes.metaValue}>{renderStatus(company.status)}</div>
+                            </div>
+                            <div className={classes.cardMeta}>
+                                <div>
+                                    <div className={classes.metaLabel}>{i18n.t("compaies.table.email")}</div>
+                                    <div className={classes.metaValue}>{company.email || "—"}</div>
+                                </div>
+                                <div>
+                                    <div className={classes.metaLabel}>{i18n.t("compaies.table.namePlan")}</div>
+                                    <div className={classes.metaValue}>{company?.plan?.name || "—"}</div>
+                                </div>
+                                <div>
+                                    <div className={classes.metaLabel}>{i18n.t("compaies.table.value")}</div>
+                                    <div className={classes.metaValue}>R$ {renderPlanValue(company)}</div>
+                                </div>
+                                <div>
+                                    <div className={classes.metaLabel}>{i18n.t("compaies.table.createdAt")}</div>
+                                    <div className={classes.metaValue}>{dateToClient(company.createdAt)}</div>
+                                </div>
+                                <div>
+                                    <div className={classes.metaLabel}>{i18n.t("compaies.table.dueDate")}</div>
+                                    <div className={classes.metaValue}>{dateToClient(company.dueDate)} <span>{company.recurrence}</span></div>
+                                </div>
+                                <div>
+                                    <div className={classes.metaLabel}>{i18n.t("compaies.table.lastLogin")}</div>
+                                    <div className={classes.metaValue}>{datetimeToClient(company.lastLogin)}</div>
+                                </div>
+                                <div>
+                                    <div className={classes.metaLabel}>Tamanho da pasta</div>
+                                    <div className={classes.metaValue}>{company.folderSize || "—"}</div>
+                                </div>
+                                <div>
+                                    <div className={classes.metaLabel}>Total de arquivos</div>
+                                    <div className={classes.metaValue}>{company.numberFileFolder || "—"}</div>
+                                </div>
+                                <div>
+                                    <div className={classes.metaLabel}>Último update</div>
+                                    <div className={classes.metaValue}>{datetimeToClient(company.updatedAtFolder)}</div>
+                                </div>
+                            </div>
+                            <div className={classes.cardActions}>
+                                <IconButton
+                                    size="small"
+                                    className={classes.actionButton}
+                                    onClick={() => handleEditCompany(company)} //
+                                >
+                                    <EditIcon />
+                                </IconButton>
 
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => { // Modificado para não passar o evento 'e' se não for usado
-                                                setConfirmModalOpen(true); //
-                                                setDeletingCompany(company); //
-                                            }}
-                                        >
-                                            <DeleteOutlineIcon />
-                                        </IconButton>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                            {loading && <TableRowSkeleton columns={4} />}
-                        </>
-                    </TableBody>
-                </Table>
+                                <IconButton
+                                    size="small"
+                                    className={classes.actionButton}
+                                    onClick={() => { // Modificado para não passar o evento 'e' se não for usado
+                                        setConfirmModalOpen(true); //
+                                        setDeletingCompany(company); //
+                                    }}
+                                >
+                                    <DeleteOutlineIcon />
+                                </IconButton>
+                            </div>
+                        </Card>
+                    ))}
+                    {loading && <TableRowSkeleton columns={4} />}
+                </div>
+
+                {/* Desktop table */}
+                <div className={classes.desktopTableWrapper}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell align="center">{i18n.t("compaies.table.ID")}</TableCell>
+                                <TableCell align="center">{i18n.t("compaies.table.status")}</TableCell>
+                                <TableCell align="center">{i18n.t("compaies.table.name")}</TableCell>
+                                <TableCell align="center">{i18n.t("compaies.table.email")}</TableCell>
+                                <TableCell align="center">{i18n.t("compaies.table.namePlan")}</TableCell>
+                                <TableCell align="center">{i18n.t("compaies.table.value")}</TableCell>
+                                <TableCell align="center">{i18n.t("compaies.table.createdAt")}</TableCell>
+                                <TableCell align="center">{i18n.t("compaies.table.dueDate")}</TableCell>
+                                <TableCell align="center">{i18n.t("compaies.table.lastLogin")}</TableCell>
+                                <TableCell align="center">Tamanho da pasta</TableCell>
+                                <TableCell align="center">Total de arquivos</TableCell>
+                                <TableCell align="center">Ultimo update</TableCell>
+                                {/* Descomentado a coluna de ações */}
+                                <TableCell align="center">{i18n.t("compaies.table.actions")}</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            <>
+                                {companies.map((company) => (
+                                    <TableRow style={rowStyle(company)} key={company.id}>
+                                        <TableCell align="center">{company.id}</TableCell>
+                                        <TableCell align="center">{renderStatus(company.status)}</TableCell>
+                                        <TableCell align="center">{company.name}</TableCell>
+                                        <TableCell align="center">{company.email}</TableCell>
+                                        <TableCell align="center">{company?.plan?.name}</TableCell> {/* Acesso seguro a plan.name */}
+                                        <TableCell align="center">R$ {renderPlanValue(company)}</TableCell>
+                                        <TableCell align="center">{dateToClient(company.createdAt)}</TableCell>
+                                        <TableCell align="center">{dateToClient(company.dueDate)}<br /><span>{company.recurrence}</span></TableCell>
+                                        <TableCell align="center">{datetimeToClient(company.lastLogin)}</TableCell>
+                                        <TableCell align="center">{company.folderSize}</TableCell>
+                                        <TableCell align="center">{company.numberFileFolder}</TableCell>
+                                        <TableCell align="center">{datetimeToClient(company.updatedAtFolder)}</TableCell>
+                                        {/* Descomentado os botões de ação */}
+                                        <TableCell align="center">
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => handleEditCompany(company)} //
+                                            >
+                                                <EditIcon />
+                                            </IconButton>
+
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => { // Modificado para não passar o evento 'e' se não for usado
+                                                    setConfirmModalOpen(true); //
+                                                    setDeletingCompany(company); //
+                                                }}
+                                            >
+                                                <DeleteOutlineIcon />
+                                            </IconButton>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                                {loading && <TableRowSkeleton columns={4} />}
+                            </>
+                        </TableBody>
+                    </Table>
+                </div>
             </Paper>
         </MainContainer>
     );
