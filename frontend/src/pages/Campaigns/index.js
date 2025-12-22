@@ -5,7 +5,8 @@ import { toast } from "react-toastify";
 
 import { useHistory } from "react-router-dom";
 
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+import useMediaQuery from "@material-ui/core/useMediaQuery";
 import Paper from "@material-ui/core/Paper";
 import Button from "@material-ui/core/Button";
 import Table from "@material-ui/core/Table";
@@ -107,11 +108,86 @@ const useStyles = makeStyles((theme) => ({
     width: "100%",
     tableLayout: "fixed",
   },
+  mobileList: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(2),
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
+  },
+  desktopTableWrapper: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+  card: {
+    borderRadius: 14,
+    padding: theme.spacing(2),
+    boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+    border: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1.5),
+    background: theme.palette.background.paper,
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(1),
+  },
+  cardTitle: {
+    fontSize: "1.05rem",
+    fontWeight: 700,
+    lineHeight: 1.2,
+    wordBreak: "break-word",
+  },
+  statusPill: {
+    padding: theme.spacing(0.5, 1.25),
+    borderRadius: 999,
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    background: "rgba(0,0,0,0.06)",
+  },
+  cardMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: theme.spacing(1),
+  },
+  metaLabel: {
+    fontSize: "0.85rem",
+    color: theme.palette.text.secondary,
+  },
+  metaValue: {
+    fontSize: "0.95rem",
+    fontWeight: 600,
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
+  },
+  headerActions: {
+    display: "flex",
+    gap: theme.spacing(1),
+    marginTop: theme.spacing(1),
+    [theme.breakpoints.down("sm")]: {
+      flexDirection: "column",
+    },
+  },
 }));
 
 const Campaigns = () => {
   const classes = useStyles();
   const history = useHistory();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
@@ -332,7 +408,7 @@ const Campaigns = () => {
               <Grid xs={12} sm={8} item>
                 <Title>{i18n.t("campaigns.title")}</Title>
                   <Grid spacing={2} container>
-                    <Grid xs={6} sm={6} item>
+                    <Grid xs={12} sm={6} item>
                       <TextField
                         fullWidth
                         placeholder={i18n.t("campaigns.searchPlaceholder")}
@@ -348,12 +424,13 @@ const Campaigns = () => {
                         }}
                       />
                     </Grid>
-                    <Grid xs={6} sm={6} item>
+                    <Grid xs={12} sm={6} item className={classes.headerActions}>
                       <Button
                         fullWidth
                         variant="contained"
                         onClick={handleOpenCampaignModal}
                         color="primary"
+                        style={{ minHeight: 44 }}
                       >
                         {i18n.t("campaigns.buttons.add")}
                       </Button>
@@ -366,120 +443,212 @@ const Campaigns = () => {
               className={classes.mainPaper}
               variant="outlined"
             >
-              <div className={classes.tableContainer}>
-                <Table size="small" className={classes.table}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell align="center">
-                      {i18n.t("campaigns.table.name")}
-                    </TableCell>
-                    <TableCell align="center">
-                      {i18n.t("campaigns.table.status")}
-                    </TableCell>
-                    <TableCell align="center">
-                      {i18n.t("campaigns.table.contactList")}
-                    </TableCell>
-                    <TableCell align="center">
-                      {i18n.t("campaigns.table.whatsapp")}
-                    </TableCell>
-                    <TableCell align="center">
-                      {i18n.t("campaigns.table.scheduledAt")}
-                    </TableCell>
-                    <TableCell align="center">
-                      {i18n.t("campaigns.table.completedAt")}
-                    </TableCell>
-                    <TableCell align="center">
-                      {i18n.t("campaigns.table.confirmation")}
-                    </TableCell>
-                    <TableCell align="center">
-                      {i18n.t("campaigns.table.actions")}
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  <>
-                    {campaigns.map((campaign) => (
-                      <TableRow key={campaign.id}>
-                        <TableCell align="center">{campaign.name}</TableCell>
-                        <TableCell align="center">
-                          {formatStatus(campaign.status)}
-                        </TableCell>
-                        <TableCell align="center">
-                          {campaign.contactListId
-                            ? campaign.contactList.name
-                            : "Não definida"}
-                        </TableCell>
-                        <TableCell align="center">
-                          {campaign.whatsappId
-                            ? campaign.whatsapp.name
-                            : "Não definido"}
-                        </TableCell>
-                        <TableCell align="center">
-                          {campaign.scheduledAt
-                            ? datetimeToClient(campaign.scheduledAt)
-                            : "Sem agendamento"}
-                        </TableCell>
-                        <TableCell align="center">
-                          {campaign.completedAt
-                            ? datetimeToClient(campaign.completedAt)
-                            : "Não concluída"}
-                        </TableCell>
-                        <TableCell align="center">
-                          {campaign.confirmation ? "Habilitada" : "Desabilitada"}
-                        </TableCell>
-                        <TableCell align="center">
-                          {campaign.status === "EM_ANDAMENTO" && (
-                            <IconButton
-                              onClick={() => cancelCampaign(campaign)}
-                              title="Pausar Campanha (Em Andamento)"
-                              size="small"
-                              style={{ color: '#f44336' }}
-                            >
-                              <PauseCircleOutlineIcon />
-                            </IconButton>
-                          )}
-                          {campaign.status === "CANCELADA" && (
-                            <IconButton
-                              onClick={() => restartCampaign(campaign)}
-                              title="Retomar Campanha (Pausada)"
-                              size="small"
-                              style={{ color: '#4caf50' }}
-                            >
-                              <PlayCircleOutlineIcon />
-                            </IconButton>
-                          )}
-                          <IconButton
-                            onClick={() =>
-                              history.push(`/campaign/${campaign.id}/detailed-report`)
-                            }
-                            size="small"
-                            title="Relatório Detalhado"
-                          >
-                            <DescriptionIcon />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleEditCampaign(campaign)}
-                          >
-                            <EditIcon />
-                          </IconButton>
+              {/* Mobile cards */}
+              <div className={classes.mobileList}>
+                {campaigns.map((campaign) => (
+                  <div key={campaign.id} className={classes.card}>
+                    <div className={classes.cardHeader}>
+                      <div className={classes.cardTitle}>{campaign.name}</div>
+                      <div className={classes.statusPill}>
+                        {formatStatus(campaign.status)}
+                      </div>
+                    </div>
+                    <div className={classes.cardMeta}>
+                      <div>
+                        <div className={classes.metaLabel}>{i18n.t("campaigns.table.contactList")}</div>
+                        <div className={classes.metaValue}>{campaign.contactListId ? campaign.contactList.name : "Não definida"}</div>
+                      </div>
+                      <div>
+                        <div className={classes.metaLabel}>{i18n.t("campaigns.table.whatsapp")}</div>
+                        <div className={classes.metaValue}>{campaign.whatsappId ? campaign.whatsapp.name : "Não definido"}</div>
+                      </div>
+                      <div>
+                        <div className={classes.metaLabel}>{i18n.t("campaigns.table.scheduledAt")}</div>
+                        <div className={classes.metaValue}>{campaign.scheduledAt ? datetimeToClient(campaign.scheduledAt) : "Sem agendamento"}</div>
+                      </div>
+                      <div>
+                        <div className={classes.metaLabel}>{i18n.t("campaigns.table.completedAt")}</div>
+                        <div className={classes.metaValue}>{campaign.completedAt ? datetimeToClient(campaign.completedAt) : "Não concluída"}</div>
+                      </div>
+                      <div>
+                        <div className={classes.metaLabel}>{i18n.t("campaigns.table.confirmation")}</div>
+                        <div className={classes.metaValue}>{campaign.confirmation ? "Habilitada" : "Desabilitada"}</div>
+                      </div>
+                    </div>
+                    <div className={classes.cardActions}>
+                      {campaign.status === "EM_ANDAMENTO" && (
+                        <IconButton
+                          onClick={() => cancelCampaign(campaign)}
+                          title="Pausar Campanha (Em Andamento)"
+                          size="small"
+                          className={classes.actionButton}
+                          style={{ color: '#f44336' }}
+                        >
+                          <PauseCircleOutlineIcon />
+                        </IconButton>
+                      )}
+                      {campaign.status === "CANCELADA" && (
+                        <IconButton
+                          onClick={() => restartCampaign(campaign)}
+                          title="Retomar Campanha (Pausada)"
+                          size="small"
+                          className={classes.actionButton}
+                          style={{ color: '#4caf50' }}
+                        >
+                          <PlayCircleOutlineIcon />
+                        </IconButton>
+                      )}
+                      <IconButton
+                        onClick={() =>
+                          history.push(`/campaign/${campaign.id}/detailed-report`)
+                        }
+                        size="small"
+                        className={classes.actionButton}
+                        title="Relatório Detalhado"
+                      >
+                        <DescriptionIcon />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        className={classes.actionButton}
+                        onClick={() => handleEditCampaign(campaign)}
+                      >
+                        <EditIcon />
+                      </IconButton>
 
-                          <IconButton
-                            size="small"
-                            onClick={(e) => {
-                              setConfirmModalOpen(true);
-                              setDeletingCampaign(campaign);
-                            }}
-                          >
-                            <DeleteOutlineIcon />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {loading && <TableRowSkeleton columns={8} />}
-                  </>
-                </TableBody>
-              </Table>
+                      <IconButton
+                        size="small"
+                        className={classes.actionButton}
+                        onClick={() => {
+                          setConfirmModalOpen(true);
+                          setDeletingCampaign(campaign);
+                        }}
+                      >
+                        <DeleteOutlineIcon />
+                      </IconButton>
+                    </div>
+                  </div>
+                ))}
+                {loading && <TableRowSkeleton columns={1} />}
+              </div>
+
+              {/* Desktop table */}
+              <div className={classes.desktopTableWrapper}>
+                <div className={classes.tableContainer}>
+                  <Table size="small" className={classes.table}>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell align="center">
+                        {i18n.t("campaigns.table.name")}
+                      </TableCell>
+                      <TableCell align="center">
+                        {i18n.t("campaigns.table.status")}
+                      </TableCell>
+                      <TableCell align="center">
+                        {i18n.t("campaigns.table.contactList")}
+                      </TableCell>
+                      <TableCell align="center">
+                        {i18n.t("campaigns.table.whatsapp")}
+                      </TableCell>
+                      <TableCell align="center">
+                        {i18n.t("campaigns.table.scheduledAt")}
+                      </TableCell>
+                      <TableCell align="center">
+                        {i18n.t("campaigns.table.completedAt")}
+                      </TableCell>
+                      <TableCell align="center">
+                        {i18n.t("campaigns.table.confirmation")}
+                      </TableCell>
+                      <TableCell align="center">
+                        {i18n.t("campaigns.table.actions")}
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <>
+                      {campaigns.map((campaign) => (
+                        <TableRow key={campaign.id}>
+                          <TableCell align="center">{campaign.name}</TableCell>
+                          <TableCell align="center">
+                            {formatStatus(campaign.status)}
+                          </TableCell>
+                          <TableCell align="center">
+                            {campaign.contactListId
+                              ? campaign.contactList.name
+                              : "Não definida"}
+                          </TableCell>
+                          <TableCell align="center">
+                            {campaign.whatsappId
+                              ? campaign.whatsapp.name
+                              : "Não definido"}
+                          </TableCell>
+                          <TableCell align="center">
+                            {campaign.scheduledAt
+                              ? datetimeToClient(campaign.scheduledAt)
+                              : "Sem agendamento"}
+                          </TableCell>
+                          <TableCell align="center">
+                            {campaign.completedAt
+                              ? datetimeToClient(campaign.completedAt)
+                              : "Não concluída"}
+                          </TableCell>
+                          <TableCell align="center">
+                            {campaign.confirmation ? "Habilitada" : "Desabilitada"}
+                          </TableCell>
+                          <TableCell align="center">
+                            {campaign.status === "EM_ANDAMENTO" && (
+                              <IconButton
+                                onClick={() => cancelCampaign(campaign)}
+                                title="Pausar Campanha (Em Andamento)"
+                                size="small"
+                                style={{ color: '#f44336' }}
+                              >
+                                <PauseCircleOutlineIcon />
+                              </IconButton>
+                            )}
+                            {campaign.status === "CANCELADA" && (
+                              <IconButton
+                                onClick={() => restartCampaign(campaign)}
+                                title="Retomar Campanha (Pausada)"
+                                size="small"
+                                style={{ color: '#4caf50' }}
+                              >
+                                <PlayCircleOutlineIcon />
+                              </IconButton>
+                            )}
+                            <IconButton
+                              onClick={() =>
+                                history.push(`/campaign/${campaign.id}/detailed-report`)
+                              }
+                              size="small"
+                              title="Relatório Detalhado"
+                            >
+                              <DescriptionIcon />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleEditCampaign(campaign)}
+                            >
+                              <EditIcon />
+                            </IconButton>
+
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                setConfirmModalOpen(true);
+                                setDeletingCampaign(campaign);
+                              }}
+                            >
+                              <DeleteOutlineIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {loading && <TableRowSkeleton columns={8} />}
+                    </>
+                  </TableBody>
+                </Table>
+                </div>
               </div>
             </Paper>
             {/* Paginação numerada */}

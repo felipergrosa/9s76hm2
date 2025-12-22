@@ -3,6 +3,7 @@ import Contact from "../../models/Contact";
 import Message from "../../models/Message";
 import AppError from "../../errors/AppError";
 import ResolveAIAgentForTicketService from "../AIAgentServices/ResolveAIAgentForTicketService";
+import ResolveAIIntegrationService from "../IA/ResolveAIIntegrationService";
 import IAClientFactory from "../IA/IAClientFactory";
 import logger from "../../utils/logger";
 import { getIO } from "../../libs/socket";
@@ -79,10 +80,22 @@ const SendAIResponseService = async ({
     // Adicionar prompt do sistema
     const systemPrompt = agentConfig.systemPrompt || "Você é um assistente virtual prestativo.";
     
+    // Resolver integração (API key + provedor)
+    const resolvedIntegration = await ResolveAIIntegrationService({
+      companyId,
+      queueId: ticket.queueId as any,
+      whatsappId: (ticket as any)?.whatsappId,
+      preferProvider: agentConfig.agent.aiProvider || undefined
+    });
+
+    if (!resolvedIntegration?.config?.apiKey) {
+      throw new AppError("Nenhuma integração de IA configurada para este ticket", 400);
+    }
+
     // Obter cliente IA
-    const iaClient = IAClientFactory.getClient(
-      agentConfig.agent.aiProvider || "openai",
-      agentConfig.agent.aiApiKey || process.env.OPENAI_API_KEY || ""
+    const iaClient = IAClientFactory(
+      resolvedIntegration.provider,
+      resolvedIntegration.config.apiKey
     );
 
     // Preparar mensagens para a IA
@@ -102,11 +115,11 @@ const SendAIResponseService = async ({
     logger.info(`[SendAIResponse] Generating AI response for ticket ${ticketId} with ${aiMessages.length} messages`);
 
     // Gerar resposta da IA
-    const aiResponse = await iaClient.chat.completions.create({
-      model: agentConfig.agent.aiModel || "gpt-4o-mini",
+    const aiResponse = await (iaClient as any).chat.completions.create({
+      model: agentConfig.agent.aiModel || resolvedIntegration.config.model || "gpt-4o-mini",
       messages: aiMessages as any,
-      temperature: agentConfig.agent.temperature ?? 0.7,
-      max_tokens: agentConfig.agent.maxTokens ?? 500
+      temperature: agentConfig.agent.temperature ?? resolvedIntegration.config.temperature ?? 0.7,
+      max_tokens: agentConfig.agent.maxTokens ?? resolvedIntegration.config.maxTokens ?? 500
     });
 
     const responseText = aiResponse.choices[0]?.message?.content;
