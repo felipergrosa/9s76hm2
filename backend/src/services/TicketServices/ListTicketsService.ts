@@ -44,6 +44,7 @@ interface Request {
   allTicket?: string;
   sortTickets?: string;
   searchOnMessages?: string;
+  walletOnly?: string | boolean;
 }
 
 interface Response {
@@ -70,7 +71,8 @@ const ListTicketsService = async ({
   statusFilters,
   companyId,
   sortTickets = "DESC",
-  searchOnMessages = "false"
+  searchOnMessages = "false",
+  walletOnly = false
 }: Request): Promise<Response> => {
   const user = await ShowUserService(userId, companyId);
 
@@ -79,14 +81,13 @@ const ListTicketsService = async ({
   const showGroups = user.allowGroup === true;
   const showPendingNotification = await FindCompanySettingOneService({ companyId, column: "showNotificationPending" });
   const showNotificationPendingValue = showPendingNotification[0].showNotificationPending;
-    let whereCondition: Filterable["where"];
+  let whereCondition: Filterable["where"];
 
   whereCondition = {
     [Op.or]: [{ userId }, { status: "pending" }],
     queueId: showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : { [Op.or]: [queueIds] },
     companyId
   };
-
 
   let includeCondition: Includeable[];
 
@@ -525,8 +526,10 @@ const ListTicketsService = async ({
   // Restrição de carteira: vê tickets de sua carteira + carteiras gerenciadas + atribuídos a ele/gerenciados
   const walletResult = await GetUserWalletContactIds(userId, companyId);
   
+  const forceWallet = walletOnly === true || walletOnly === "true";
+  
   // Modo EXCLUDE: admin vê tudo EXCETO tickets dos usuários excluídos
-  if (walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) {
+  if ((walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) || (forceWallet && walletResult.excludedUserIds?.length)) {
     whereCondition = {
       [Op.and]: [
         whereCondition,
@@ -539,17 +542,16 @@ const ListTicketsService = async ({
         }
       ]
     } as any;
-  } else if (walletResult.hasWalletRestriction) {
+  } else if (walletResult.hasWalletRestriction || forceWallet) {
     const allowedContactIds = walletResult.contactIds;
-    // Inclui o próprio userId + IDs dos usuários gerenciados
-    const allowedUserIds = [userId, ...walletResult.managedUserIds];
+    const allowedUserIds = [userId, ...(walletResult.managedUserIds || [])];
     whereCondition = {
       [Op.and]: [
         whereCondition,
         {
           [Op.or]: [
             { contactId: { [Op.in]: allowedContactIds.length > 0 ? allowedContactIds : [0] } },
-            { userId: { [Op.in]: allowedUserIds } }
+            { userId: { [Op.in]: allowedUserIds.length > 0 ? allowedUserIds : [userId] } }
           ]
         }
       ]

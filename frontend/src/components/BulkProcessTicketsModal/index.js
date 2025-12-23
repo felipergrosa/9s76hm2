@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -169,6 +169,24 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
   const [progress, setProgress] = useState(0);
   const [processResult, setProcessResult] = useState(null);
   const [processLog, setProcessLog] = useState([]);
+  const progressTimerRef = useRef(null);
+
+  const startProgressTimer = () => {
+    if (progressTimerRef.current) return;
+    progressTimerRef.current = setInterval(() => {
+      setProgress((p) => {
+        const next = p < 90 ? p + 1 : 90;
+        return next;
+      });
+    }, 500);
+  };
+
+  const stopProgressTimer = () => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+  };
 
   // Carregar dados iniciais
   useEffect(() => {
@@ -189,6 +207,11 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
       if (data.userId === user.id) {
         console.log('[BulkProcess] Updating progress to:', data.progress);
         setProgress(data.progress);
+        if (data.progress >= 100) {
+          stopProgressTimer();
+        } else {
+          startProgressTimer();
+        }
         setProcessLog((prev) => [
           ...prev,
           {
@@ -203,6 +226,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
       console.log('[BulkProcess] Complete event received:', data);
       if (data.userId === user.id) {
         console.log('[BulkProcess] Setting progress to 100% and processing to false');
+        stopProgressTimer();
         setProcessing(false);
         setProgress(100);
         setProcessResult(data.result);
@@ -239,7 +263,8 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
           pageNumber: 1,
           showAll: true,
           queueIds,
-          statusFilters
+          statusFilters,
+          walletOnly: true
         },
       });
       setTickets(data.tickets || []);
@@ -311,9 +336,10 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
     }
 
     setProcessing(true);
-    setProgress(0);
+    setProgress(5);
     setProcessLog([]);
     setProcessResult(null);
+    startProgressTimer();
 
     try {
       const payload = {
@@ -346,6 +372,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
         setProcessing((currentProcessing) => {
           if (currentProcessing) {
             console.log('[BulkProcess] Ainda processando após timeout, forçando conclusão via fallback');
+            stopProgressTimer();
             setProgress(100);
             setProcessResult({
               success: selectedTickets.length,
@@ -371,6 +398,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
       console.error('Erro ao processar tickets:', error);
       toast.error('Erro ao processar tickets: ' + (error.response?.data?.error || error.message));
       setProcessing(false);
+      stopProgressTimer();
       setProgress(0);
     }
   };
@@ -382,6 +410,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
       setSelectedTickets([]);
       setResponseType('none');
       setResponseMessage('');
+      stopProgressTimer();
       setProgress(0);
       setProcessResult(null);
       setProcessLog([]);
