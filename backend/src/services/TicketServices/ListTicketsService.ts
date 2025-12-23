@@ -227,7 +227,8 @@ const ListTicketsService = async ({
   }
 
 
-  if (status && status !== "search") {
+  // Não sobrescrever o filtro específico de campanha definido acima
+  if (status && status !== "search" && status !== "campaign") {
     whereCondition = {
       ...whereCondition,
       status: showAll === "true" && status === "pending" ? { [Op.or]: [status, "lgpd"] } : status

@@ -146,7 +146,7 @@ const useStyles = makeStyles(theme => ({
     },
     // Aproximar visual do /moments: padding interno da lista e scroll vertical dentro da coluna
     "& .react-trello-lane__cards": {
-      padding: `${theme.spacing(0.5)}px !important`,
+      padding: `${theme.spacing(1)}px !important`,
       paddingBottom: `${theme.spacing(2)}px !important`,
       boxSizing: "border-box !important",
       flex: "1 1 auto !important",
@@ -155,6 +155,9 @@ const useStyles = makeStyles(theme => ({
       overflowX: "hidden !important",
       scrollbarWidth: "none",
       msOverflowStyle: "none",
+      display: "flex",
+      flexDirection: "column",
+      gap: `${theme.spacing(1)}px`,
       "&::-webkit-scrollbar": {
         width: 0,
         height: 0,
@@ -195,6 +198,9 @@ const useStyles = makeStyles(theme => ({
       width: "100% !important",
       maxWidth: "100% !important",
       margin: "0 !important",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.08) !important",
+      borderRadius: "8px !important",
+      background: "#fff !important",
     },
   },
   actionsBar: {

@@ -14,6 +14,7 @@ import DispatchContactWebhookService from "./DispatchContactWebhookService";
 import ContactTag from "../../models/ContactTag";
 import Tag from "../../models/Tag";
 import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
+import { Op, UniqueConstraintError } from "sequelize";
 
 const axios = require("axios");
 
@@ -221,8 +222,18 @@ const CreateOrUpdateContactService = async ({
     const io = getIO();
     let contact: Contact | null;
 
+    // Busca por número/canonical E pelo remoteJid quando for LID, para evitar duplicados
     contact = await Contact.findOne({
-      where: isGroup ? { number: rawNumberDigits, companyId } : { companyId, canonicalNumber: number }
+      where: isGroup
+        ? { number: rawNumberDigits, companyId }
+        : {
+            companyId,
+            [Op.or]: [
+              { canonicalNumber: number },
+              { number },
+              remoteJid ? { remoteJid } : {}
+            ]
+          }
     });
 
     let updateImage = (!contact || contact?.profilePicUrl !== profilePicUrl && profilePicUrl !== "") && wbot || false;
@@ -332,30 +343,98 @@ const CreateOrUpdateContactService = async ({
       {
         const incomingName = (name || "").trim();
         const effectiveName = incomingName && incomingName !== number ? incomingName : number;
-        contact = await Contact.create({
-          ...contactData,
-          name: effectiveName,
-          channel,
-          acceptAudioMessage: acceptAudioMessageContact === 'enabled' ? true : false,
-          remoteJid: newRemoteJid,
-          whatsappId,
-          canonicalNumber: isGroup ? null : number
-        });
+        try {
+          contact = await Contact.create({
+            ...contactData,
+            name: effectiveName,
+            channel,
+            acceptAudioMessage: acceptAudioMessageContact === 'enabled' ? true : false,
+            remoteJid: newRemoteJid,
+            whatsappId,
+            canonicalNumber: isGroup ? null : number
+          });
+          createContact = true;
+        } catch (error) {
+          if (error instanceof UniqueConstraintError) {
+            logger.warn(
+              { number, companyId, remoteJid: newRemoteJid },
+              "CreateOrUpdateContactService: contato já existe (constraint) — reutilizando."
+            );
+            contact = await Contact.findOne({
+              where: {
+                companyId,
+                [Op.or]: [
+                  { canonicalNumber: number },
+                  { number },
+                  newRemoteJid ? { remoteJid: newRemoteJid } : {}
+                ]
+              }
+            });
+            if (contact) {
+              await contact.update({
+                ...contactData,
+                name: contact.name || effectiveName,
+                channel,
+                acceptAudioMessage: acceptAudioMessageContact === 'enabled' ? true : false,
+                remoteJid: newRemoteJid,
+                whatsappId,
+                canonicalNumber: isGroup ? null : number
+              });
+              createContact = false;
+            } else {
+              throw error;
+            }
+          } else {
+            throw error;
+          }
+        }
       }
-      
-      createContact = true;
     } else if (['facebook', 'instagram'].includes(channel)) {
       // Mesma proteção ao criar via outros canais
       {
         const incomingName = (name || "").trim();
         const effectiveName = incomingName && incomingName !== number ? incomingName : number;
-        contact = await Contact.create({
-          ...contactData,
-          name: effectiveName,
-          channel,
-          whatsappId,
-          canonicalNumber: isGroup ? null : number
-        });
+        try {
+          contact = await Contact.create({
+            ...contactData,
+            name: effectiveName,
+            channel,
+            whatsappId,
+            canonicalNumber: isGroup ? null : number
+          });
+          createContact = true;
+        } catch (error) {
+          if (error instanceof UniqueConstraintError) {
+            logger.warn(
+              { number, companyId, remoteJid },
+              "CreateOrUpdateContactService: contato já existe (constraint) — reutilizando."
+            );
+            contact = await Contact.findOne({
+              where: {
+                companyId,
+                [Op.or]: [
+                  { canonicalNumber: number },
+                  { number },
+                  remoteJid ? { remoteJid } : {}
+                ]
+              }
+            });
+            if (contact) {
+              await contact.update({
+                ...contactData,
+                name: contact.name || effectiveName,
+                channel,
+                whatsappId,
+                canonicalNumber: isGroup ? null : number
+              });
+              createContact = false;
+            } else {
+              throw error;
+            }
+          } else {
+            throw error;
+          }
+        }
       }
     }
 

@@ -229,12 +229,17 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
   const loadTickets = async () => {
     setLoading(true);
     try {
+      const queueIds = (user?.queues || []).map(q => q?.UserQueue?.queueId || q?.id).filter(Boolean);
+      const statusFilters = filters.status ? [filters.status] : undefined;
+
       const { data } = await api.get('/tickets', {
         params: {
           status: filters.status,
           searchParam: filters.searchParam,
           pageNumber: 1,
           showAll: true,
+          queueIds,
+          statusFilters
         },
       });
       setTickets(data.tickets || []);
