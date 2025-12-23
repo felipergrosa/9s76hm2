@@ -47,6 +47,15 @@ interface Request {
     leadFieldMapping?: any;
     qualifiedLeadTag?: string | null;
     leadQualificationMessage?: string | null;
+    // Anti bot-bot / delay inicial
+    startDelayEnabled?: boolean | null;
+    startDelaySeconds?: number | null;
+    startDelayJitterSeconds?: number | null;
+    antiBotTraitsRegex?: string | null;
+    maxBotLoopMessages?: number | null;
+    requireHistoryForAI?: boolean | null;
+    // Tag de lead quente
+    sdrHotLeadTag?: string | null;
     funnelStages?: Array<{
         order: number;
         name: string;
@@ -97,6 +106,15 @@ const CreateAIAgentService = async ({
     leadFieldMapping,
     qualifiedLeadTag,
     leadQualificationMessage,
+    // Anti bot-bot / delay inicial
+    startDelayEnabled,
+    startDelaySeconds,
+    startDelayJitterSeconds,
+    antiBotTraitsRegex,
+    maxBotLoopMessages,
+    requireHistoryForAI,
+    // Tag de lead quente
+    sdrHotLeadTag,
     funnelStages = []
 }: Request): Promise<AIAgent> => {
     // Criar agente
@@ -137,7 +155,14 @@ const CreateAIAgentService = async ({
         requiredLeadFields: requiredLeadFields as any,
         leadFieldMapping: leadFieldMapping as any,
         qualifiedLeadTag: qualifiedLeadTag as any,
-        leadQualificationMessage: leadQualificationMessage as any
+        leadQualificationMessage: leadQualificationMessage as any,
+        startDelayEnabled: startDelayEnabled as any,
+        startDelaySeconds: startDelaySeconds as any,
+        startDelayJitterSeconds: startDelayJitterSeconds as any,
+        antiBotTraitsRegex: antiBotTraitsRegex as any,
+        maxBotLoopMessages: maxBotLoopMessages as any,
+        requireHistoryForAI: requireHistoryForAI as any,
+        sdrHotLeadTag: sdrHotLeadTag as any
     });
 
     // Criar etapas do funil se fornecidas

@@ -5754,16 +5754,45 @@ const wbotUserJid = wbot?.user?.id;
           contact.imgUrl === ""
             ? ""
             : await wbot!.profilePictureUrl(contact.id!).catch(() => null);
-        // Busca contato atual no banco
-        const existingContact = await Contact.findOne({ where: { remoteJid: contact.id, companyId } });
-        let newName = existingContact?.name;
         const numero = contact.id.replace(/\D/g, "");
-        // Só atualiza nome se não existir nome válido
-        if (!newName || newName.replace(/\D/g, "") === numero) {
-          newName = contact.notify && contact.notify.trim() !== "" ? contact.notify : numero;
+        
+        // PRIORIDADE 1: Nome da agenda do WhatsApp (notify)
+        let finalName = contact.notify;
+        
+        // Se notify estiver vazio (comum em contatos LID), busca outras fontes
+        if (!finalName || finalName.trim() === "") {
+          console.log(`[contacts.update] notify vazio para ${contact.id}, buscando outras fontes`);
+          
+          // PRIORIDADE 2: Nome já cadastrado no CRM (se não for apenas o número)
+          const existingContact = await Contact.findOne({ where: { remoteJid: contact.id, companyId } });
+          if (existingContact?.name && existingContact.name.replace(/\D/g, "") !== numero) {
+            finalName = existingContact.name;
+            console.log(`[contacts.update] Usando nome do CRM: ${finalName}`);
+          } else {
+            // PRIORIDADE 3: Nome do perfil do usuário (businessProfile)
+            try {
+              console.log(`[contacts.update] Tentando buscar perfil do usuário: ${contact.id}`);
+              const businessProfile = await wbot.getBusinessProfile(contact.id).catch(() => null);
+              if (businessProfile?.description) {
+                finalName = businessProfile.description;
+                console.log(`[contacts.update] Nome do perfil encontrado: ${finalName}`);
+              } else if (businessProfile?.email) {
+                finalName = businessProfile.email;
+                console.log(`[contacts.update] Email do perfil encontrado: ${finalName}`);
+              } else {
+                finalName = numero;
+                console.log(`[contacts.update] Nenhum nome encontrado, usando número: ${numero}`);
+              }
+            } catch (err) {
+              finalName = numero;
+              console.log(`[contacts.update] Erro ao buscar perfil, usando número:`, err);
+            }
+          }
+        } else {
+          console.log(`[contacts.update] Usando notify da agenda: ${finalName}`);
         }
         const contactData = {
-          name: newName,
+          name: finalName,
           number: numero,
           isGroup: contact.id.includes("@g.us") ? true : false,
           companyId: companyId,

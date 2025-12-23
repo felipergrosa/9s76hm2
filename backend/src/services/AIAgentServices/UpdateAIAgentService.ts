@@ -48,6 +48,15 @@ interface Request {
     leadFieldMapping?: any;
     qualifiedLeadTag?: string;
     leadQualificationMessage?: string;
+    // Anti bot-bot / delay inicial
+    startDelayEnabled?: boolean | null;
+    startDelaySeconds?: number | null;
+    startDelayJitterSeconds?: number | null;
+    antiBotTraitsRegex?: string | null;
+    maxBotLoopMessages?: number | null;
+    requireHistoryForAI?: boolean | null;
+    // Tag de lead quente
+    sdrHotLeadTag?: string | null;
     funnelStages?: Array<{
         id?: number;
         order: number;
@@ -100,6 +109,13 @@ const UpdateAIAgentService = async ({
     leadFieldMapping,
     qualifiedLeadTag,
     leadQualificationMessage,
+    startDelayEnabled,
+    startDelaySeconds,
+    startDelayJitterSeconds,
+    antiBotTraitsRegex,
+    maxBotLoopMessages,
+    requireHistoryForAI,
+    sdrHotLeadTag,
     funnelStages
 }: Request): Promise<AIAgent> => {
     const agent = await AIAgent.findOne({
@@ -163,7 +179,14 @@ const UpdateAIAgentService = async ({
         requiredLeadFields: requiredLeadFields !== undefined ? requiredLeadFields : (agent as any).requiredLeadFields,
         leadFieldMapping: leadFieldMapping !== undefined ? leadFieldMapping : (agent as any).leadFieldMapping,
         qualifiedLeadTag: qualifiedLeadTag !== undefined ? qualifiedLeadTag : (agent as any).qualifiedLeadTag,
-        leadQualificationMessage: leadQualificationMessage !== undefined ? leadQualificationMessage : (agent as any).leadQualificationMessage
+        leadQualificationMessage: leadQualificationMessage !== undefined ? leadQualificationMessage : (agent as any).leadQualificationMessage,
+        startDelayEnabled: startDelayEnabled !== undefined ? startDelayEnabled : (agent as any).startDelayEnabled,
+        startDelaySeconds: startDelaySeconds !== undefined ? startDelaySeconds : (agent as any).startDelaySeconds,
+        startDelayJitterSeconds: startDelayJitterSeconds !== undefined ? startDelayJitterSeconds : (agent as any).startDelayJitterSeconds,
+        antiBotTraitsRegex: antiBotTraitsRegex !== undefined ? antiBotTraitsRegex : (agent as any).antiBotTraitsRegex,
+        maxBotLoopMessages: maxBotLoopMessages !== undefined ? maxBotLoopMessages : (agent as any).maxBotLoopMessages,
+        requireHistoryForAI: requireHistoryForAI !== undefined ? requireHistoryForAI : (agent as any).requireHistoryForAI,
+        sdrHotLeadTag: sdrHotLeadTag !== undefined ? sdrHotLeadTag : (agent as any).sdrHotLeadTag
     });
 
     // Atualizar funnel stages se fornecidas

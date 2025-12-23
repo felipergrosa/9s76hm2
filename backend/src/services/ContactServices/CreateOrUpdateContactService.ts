@@ -148,29 +148,23 @@ const CreateOrUpdateContactService = async ({
     const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
 
     const rawNumberDigits = isGroup ? (rawNumber || "").toString().trim() : (rawNumber || "").toString();
+    const isLinkedDevice = !!remoteJid && remoteJid.includes("@lid");
     const { canonical } = !isGroup ? safeNormalizePhoneNumber(rawNumberDigits) : { canonical: null };
 
-    const number = isGroup ? rawNumberDigits : canonical;
+    // Para LID, não bloquear pela canonical: usa rawNumberDigits ou remoteJid como fallback
+    let number = isGroup ? rawNumberDigits : canonical;
+    if (!isGroup && isLinkedDevice) {
+      number = canonical || rawNumberDigits || remoteJid || "";
+    }
 
-    if (!isGroup) {
-      if (!number) {
-        logger.warn("[CreateOrUpdateContactService] Número inválido após normalização", { rawNumber, companyId });
-        return null as any;
-      }
-
-      const numLen = number.length;
-      // Somente números BR: 12 ou 13 dígitos (55 + DDD + 8/9)
-      if (numLen < 12 || numLen > 13) {
-        try {
-          const existing = await Contact.findOne({ where: { companyId, canonicalNumber: number } });
-          if (existing) {
-            return existing;
-          }
-        } catch (err) {
-          logger.warn("Falha ao buscar contato existente para número inválido", err);
-        }
-        return null as any;
-      }
+    if (!isGroup && !number) {
+      logger.warn("[CreateOrUpdateContactService] Número inválido após normalização", {
+        rawNumber,
+        companyId,
+        isLinkedDevice,
+        remoteJid
+      });
+      return null as any;
     }
 
 

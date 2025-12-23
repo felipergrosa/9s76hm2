@@ -14,6 +14,7 @@ import defaultLogoLight from "./assets/logo.png";
 import defaultLogoDark from "./assets/logo-black.png";
 import defaultLogoFavicon from "./assets/favicon.ico";
 import useSettings from "./hooks/useSettings";
+import ConnectionLostModal from "./components/ConnectionLostModal";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,8 @@ const App = () => {
   const { getPublicSetting } = useSettings();
   // Estado para controlar o prompt de instalação do PWA
   const [deferredPrompt, setDeferredPrompt] = useState(null);
+  // Modal de desconexão do WhatsApp
+  const [waConnLost, setWaConnLost] = useState({ open: false, data: null });
 
   const colorMode = useMemo(
     () => ({
@@ -245,6 +248,18 @@ const App = () => {
     fetchVersionData();
   }, []);
 
+  // Listener global para desconexão do WhatsApp (evento emitido pelo SocketWorker)
+  useEffect(() => {
+    const handler = (evt) => {
+      const detail = evt?.detail || {};
+      setWaConnLost({ open: true, data: detail });
+    };
+    window.addEventListener("wa-conn-lost", handler);
+    return () => window.removeEventListener("wa-conn-lost", handler);
+  }, []);
+
+  const handleCloseWaModal = () => setWaConnLost({ open: false, data: null });
+
   return (
     <>
       <Favicon url={appLogoFavicon ? getBackendUrl() + "/public/" + appLogoFavicon : defaultLogoFavicon} />
@@ -254,6 +269,7 @@ const App = () => {
             <ActiveMenuProvider>
   <div style={{ position: "relative", overflow: "visible", zIndex: 0, minHeight: "100vh" }}>
     <Routes />
+    <ConnectionLostModal open={waConnLost.open} data={waConnLost.data} onClose={handleCloseWaModal} />
   </div>
             </ActiveMenuProvider>
           </QueryClientProvider>

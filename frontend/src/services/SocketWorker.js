@@ -88,6 +88,19 @@ class SocketWorker {
       this.reconnectAfterDelay();
     });
 
+    // Evento customizado: sessão do WhatsApp desconectou (emitido pelo backend)
+    this.socket.on("wa-conn-lost", (data) => {
+      console.log("[SocketWorker] wa-conn-lost", data);
+      try {
+        if (typeof window !== "undefined") {
+          const evt = new CustomEvent("wa-conn-lost", { detail: data });
+          window.dispatchEvent(evt);
+        }
+      } catch (e) {
+        console.log("[SocketWorker] wa-conn-lost dispatch error", e);
+      }
+    });
+
     this.socket.on("connect_error", (err) => {
       console.log("Socket connect_error:", err?.message || err);
     });

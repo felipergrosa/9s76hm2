@@ -243,12 +243,32 @@ class AIAgent extends Model<AIAgent> {
     @Column({ type: DataType.TEXT, defaultValue: "Vou transferir você para um de nossos especialistas que poderá te ajudar com mais detalhes. Um momento!" })
     sdrHandoffMessage: string;
 
-    // Tag adicionada quando lead atinge score mínimo
+    // Tag para leads quentes (usado em ActionExecutor)
     @Column({ type: DataType.STRING, defaultValue: "lead_quente" })
     sdrHotLeadTag: string;
 
-    @BelongsTo(() => Company)
-    company: Company;
+    // Delay inicial anti bot-bot
+    @Column({ type: DataType.BOOLEAN, defaultValue: false })
+    startDelayEnabled: boolean;
+
+    @Column({ type: DataType.INTEGER, defaultValue: 15 })
+    startDelaySeconds: number;
+
+    // Jitter para aleatorizar levemente o delay (em segundos)
+    @Column({ type: DataType.INTEGER, defaultValue: 5 })
+    startDelayJitterSeconds: number;
+
+    // Regex de traços de bot (texto suspeito que indica IA)
+    @Column(DataType.TEXT)
+    antiBotTraitsRegex: string;
+
+    // Máximo de trocas sem humano antes de interromper (anti-loop)
+    @Column({ type: DataType.INTEGER, defaultValue: 4 })
+    maxBotLoopMessages: number;
+
+    // Exigir histórico prévio para responder (whitelist/origem)
+    @Column({ type: DataType.BOOLEAN, defaultValue: false })
+    requireHistoryForAI: boolean;
 
     @HasMany(() => FunnelStage)
     funnelStages: FunnelStage[];

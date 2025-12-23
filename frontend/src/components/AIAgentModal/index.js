@@ -83,6 +83,9 @@ const AgentSchema = Yup.object().shape({
     inactivityTimeoutMinutes: Yup.number().nullable().min(0, "Deve ser 0 ou maior"),
     inactivityAction: Yup.string().nullable(),
     inactivityMessage: Yup.string().nullable(),
+    // Delay de início para evitar conversa entre agentes
+    startDelayEnabled: Yup.boolean().nullable(),
+    startDelaySeconds: Yup.number().nullable().min(0, "Deve ser 0 ou maior"),
     // Funnel stages
     funnelStages: Yup.array().of(
         Yup.object().shape({
@@ -238,6 +241,9 @@ ${stage?.systemPrompt || ""}
         inactivityTimeoutMinutes: 0,
         inactivityAction: "close",
         inactivityMessage: "Não recebi sua resposta. Vou encerrar nosso atendimento por enquanto. Se precisar de algo, é só me chamar novamente! 👋",
+        // Delay de início de conversa (anti bot-bot)
+        startDelayEnabled: false,
+        startDelaySeconds: 15,
         // Business Hours Settings
         businessHours: {
             seg: { start: "08:00", end: "18:00" },
@@ -347,7 +353,12 @@ ${stage?.systemPrompt || ""}
                 aiModel: useGlobalAISettings ? null : (values.aiModel || null),
                 temperature: useGlobalAISettings ? null : (values.temperature === "" || values.temperature === null ? null : Number(values.temperature)),
                 maxTokens: useGlobalAISettings ? null : (values.maxTokens === "" || values.maxTokens === null ? null : Number(values.maxTokens)),
-                voiceTemperature: values.voiceTemperature === "" || values.voiceTemperature === null ? null : Number(values.voiceTemperature)
+                voiceTemperature: values.voiceTemperature === "" || values.voiceTemperature === null ? null : Number(values.voiceTemperature),
+                // Delay de início
+                startDelayEnabled: Boolean(values.startDelayEnabled),
+                startDelaySeconds: values.startDelayEnabled
+                    ? (values.startDelaySeconds === "" || values.startDelaySeconds === null ? null : Number(values.startDelaySeconds))
+                    : null
             };
 
             let savedAgent;
@@ -693,6 +704,45 @@ ${stage?.systemPrompt || ""}
                                 </Grid>
                             </Grid>
 
+                            {/* Delay de início de conversa (anti bot-bot) */}
+                            <Box mt={3} mb={1}>
+                                <SectionTitle
+                                    icon="⏳"
+                                    title="Delay de início (anti bot-bot)"
+                                    tooltip="Aguarde alguns segundos antes de o agente responder a primeira mensagem. Ajuda a evitar conversas entre chatbots."
+                                />
+                            </Box>
+
+                            <Grid container spacing={2} alignItems="center">
+                                <Grid item xs={12} sm={4}>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                color="primary"
+                                                name="startDelayEnabled"
+                                                checked={Boolean(values.startDelayEnabled)}
+                                                onChange={(e) => setFieldValue("startDelayEnabled", e.target.checked)}
+                                            />
+                                        }
+                                        label="Ativar delay inicial"
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={4}>
+                                    <TextField
+                                        fullWidth
+                                        label="Delay (segundos)"
+                                        name="startDelaySeconds"
+                                        value={values.startDelaySeconds || ""}
+                                        onChange={handleChange}
+                                        type="number"
+                                        inputProps={{ min: 0, step: 1 }}
+                                        placeholder="15"
+                                        disabled={!values.startDelayEnabled}
+                                        helperText="Intervalo antes da primeira resposta"
+                                    />
+                                </Grid>
+                            </Grid>
+
                             <Box mt={3} mb={2}>
                                 <Divider />
                             </Box>
@@ -990,6 +1040,47 @@ ${stage?.systemPrompt || ""}
                                         variant="outlined"
                                         size="small"
                                         helperText="Mensagem enviada ao cliente antes de fechar/transferir"
+                                    />
+                                </Grid>
+                            </Grid>
+
+                            {/* Delay de início de conversa (anti bot-bot) */}
+                            <Box mt={3} mb={1}>
+                                <SectionTitle
+                                    icon="⏳"
+                                    title="Delay de início (anti bot-bot)"
+                                    tooltip="Aguarde alguns segundos antes de o agente responder a primeira mensagem. Ajuda a evitar conversas entre chatbots."
+                                />
+                            </Box>
+
+                            <Grid container spacing={2} alignItems="center">
+                                <Grid item xs={12} sm={4}>
+                                    <FormControlLabel
+                                        control={
+                                            <Field
+                                                as={Switch}
+                                                color="primary"
+                                                name="startDelayEnabled"
+                                                checked={Boolean(values.startDelayEnabled)}
+                                                onChange={(e) => setFieldValue("startDelayEnabled", e.target.checked)}
+                                            />
+                                        }
+                                        label="Ativar delay inicial"
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={4}>
+                                    <Field
+                                        as={TextField}
+                                        fullWidth
+                                        label="Delay (segundos)"
+                                        name="startDelaySeconds"
+                                        value={values.startDelaySeconds || ""}
+                                        onChange={handleChange}
+                                        type="number"
+                                        inputProps={{ min: 0, step: 1 }}
+                                        placeholder="15"
+                                        disabled={!values.startDelayEnabled}
+                                        helperText="Intervalo antes da primeira resposta"
                                     />
                                 </Grid>
                             </Grid>

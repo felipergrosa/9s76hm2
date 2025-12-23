@@ -373,6 +373,17 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 `Socket  ${name} Connection Update ${connection || ""} ${lastDisconnect ? lastDisconnect.error.message : ""
                 }`
               );
+
+              // Notifica front para exibir modal de reconexão
+              try {
+                io.of(`/workspace-${companyId}`)
+                  .emit("wa-conn-lost", {
+                    whatsappId: id,
+                    statusCode: (lastDisconnect?.error as Boom)?.output?.statusCode,
+                    reason: lastDisconnect?.error?.message || "Connection closed",
+                    qrUrl: `${process.env.FRONTEND_URL || ""}/connections/${id}`
+                  });
+              } catch {}
               
               const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
               const isConflict = statusCode === 440; // Stream Errored (conflict)
