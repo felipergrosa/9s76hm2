@@ -478,6 +478,8 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                     <MenuItem value="pending">Aguardando</MenuItem>
                     <MenuItem value="open">Aberto</MenuItem>
                     <MenuItem value="closed">Fechado</MenuItem>
+                    <MenuItem value="bot">Bot</MenuItem>
+                    <MenuItem value="campaign">Campanha</MenuItem>
                   </Select>
                 </FormControl>
 
@@ -651,6 +653,8 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                     <MenuItem value="pending">Aguardando</MenuItem>
                     <MenuItem value="open">Aberto</MenuItem>
                     <MenuItem value="closed">Fechado</MenuItem>
+                    <MenuItem value="bot">Bot</MenuItem>
+                    <MenuItem value="campaign">Campanha</MenuItem>
                   </Select>
                 </FormControl>
               </Box>

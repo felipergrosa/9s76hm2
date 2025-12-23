@@ -48,8 +48,8 @@ const SendAIResponseService = async ({
       throw new AppError("Ticket não encontrado", 404);
     }
 
-    // Resolver configuração do AI Agent para o ticket
-    const agentConfig = await ResolveAIAgentForTicketService({ ticket });
+    // Resolver configuração do AI Agent para o ticket (usa aiAgentId se informado)
+    const agentConfig = await ResolveAIAgentForTicketService({ ticket, aiAgentId });
 
     if (!agentConfig) {
       logger.warn(`[SendAIResponse] No AI Agent configured for ticket ${ticketId}`);

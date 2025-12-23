@@ -17,30 +17,54 @@ interface AIAgentConfig {
 
 interface Request {
     ticket: Ticket;
+    aiAgentId?: number;
 }
 
 const ResolveAIAgentForTicketService = async ({
-    ticket
+    ticket,
+    aiAgentId
 }: Request): Promise<AIAgentConfig | null> => {
     try {
-        // Buscar agente ativo configurado para a fila do ticket
-        const agent = await AIAgent.findOne({
-            where: {
-                companyId: ticket.companyId,
-                status: "active",
-                // PostgreSQL: verificar se queueId está no array queueIds
-                queueIds: {
-                    [Op.contains]: [ticket.queueId]
-                }
-            },
-            include: [
-                {
-                    model: FunnelStage,
-                    as: "funnelStages",
-                    required: false
-                }
-            ]
-        });
+        let agent: AIAgent | null = null;
+
+        // Se um agente específico foi solicitado, priorizar ele (desde que ativo e da empresa)
+        if (aiAgentId) {
+            agent = await AIAgent.findOne({
+                where: {
+                    id: aiAgentId,
+                    companyId: ticket.companyId,
+                    status: "active"
+                },
+                include: [
+                    {
+                        model: FunnelStage,
+                        as: "funnelStages",
+                        required: false
+                    }
+                ]
+            });
+        }
+
+        // Caso não tenha sido solicitado ou não encontrado, buscar por fila
+        if (!agent) {
+            agent = await AIAgent.findOne({
+                where: {
+                    companyId: ticket.companyId,
+                    status: "active",
+                    // PostgreSQL: verificar se queueId está no array queueIds
+                    queueIds: {
+                        [Op.contains]: [ticket.queueId]
+                    }
+                },
+                include: [
+                    {
+                        model: FunnelStage,
+                        as: "funnelStages",
+                        required: false
+                    }
+                ]
+            });
+        }
 
         if (!agent) {
             console.log(`[AI Agent] No active agent found for ticket ${ticket.id}, queue ${ticket.queueId}`);
