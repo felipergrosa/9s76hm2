@@ -99,6 +99,9 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
   const [contactsPage, setContactsPage] = useState(1);
   const [contactsHasMore, setContactsHasMore] = useState(true);
   const [contactsLoadingPage, setContactsLoadingPage] = useState(false);
+  const [targetSystemTag, setTargetSystemTag] = useState(null); // Tag do sistema para aplicar em massa
+  const [selectAll, setSelectAll] = useState(false);
+  const [totalContactsCount, setTotalContactsCount] = useState(0); // Total vindo do backend
 
   const contactsLoadingRef = useRef(false);
   const contactsListRef = useRef(null);
@@ -183,10 +186,20 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
     try {
       const pageSize = 100;
       const resp = await api.get(`/contacts/device-contacts?whatsappId=${selectedWhatsappId}&page=${page}&pageSize=${pageSize}`);
-      const { contacts = [], hasMore = false } = resp.data || {};
+      const { contacts = [], hasMore = false, total = 0 } = resp.data || {};
       setDeviceContacts(prev => append ? [...prev, ...contacts] : contacts);
       setContactsHasMore(!!hasMore);
+      setTotalContactsCount(total);
       setContactsPage(page);
+
+      // Se "Selecionar Todos" estiver ativo, adiciona os novos contatos carregados à seleção
+      if (selectAll) {
+        setSelectedDeviceContacts(prev => {
+          const next = new Set(prev);
+          contacts.forEach(c => next.add(c.id));
+          return next;
+        });
+      }
     } catch (err) {
       toastError(err);
     } finally {
@@ -229,6 +242,10 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
       setDeviceContacts([]);
       setContactsPage(1);
       setContactsHasMore(false);
+      setTotalContactsCount(0);
+      setSelectAll(false);
+      setSelectedDeviceContacts(new Set());
+      setTargetSystemTag(null);
 
       // Se não houver tags, carrega contatos automaticamente para permitir importação manual
       if (deviceTagsData.length === 0) {
@@ -365,6 +382,24 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
     const next = new Set(selectedDeviceContacts);
     if (next.has(jid)) next.delete(jid); else next.add(jid);
     setSelectedDeviceContacts(next);
+
+    // Se desmarcar um, remove o "Select All" visualmente (mas mantém a lógica funcional)
+    if (next.has(jid) === false) {
+      setSelectAll(false);
+    }
+  };
+
+  const handleSelectAllToggle = () => {
+    if (selectAll) {
+      // Desmarcar todos
+      setSelectAll(false);
+      setSelectedDeviceContacts(new Set());
+    } else {
+      // Marcar todos (os carregados)
+      setSelectAll(true);
+      const allLoaded = new Set(deviceContacts.map(c => c.id));
+      setSelectedDeviceContacts(allLoaded);
+    }
   };
 
   const handleSystemTagMapping = (deviceTagId, systemTagId) => {
@@ -450,10 +485,25 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
       const payload = {
         whatsappId: selectedWhatsappId,
         selectedJids: Array.from(selectedDeviceContacts),
-        autoCreateTags: true
+        autoCreateTags: true,
+        targetTagId: targetSystemTag
       };
-      await api.post('/contacts/import-device-contacts', payload);
-      handleClose();
+      const { data } = await api.post('/contacts/import-device-contacts', payload);
+
+      const { created = 0, updated = 0, tagged = 0, failed = 0 } = data;
+
+      let msg = `✅ Importação concluída! Criados: ${created}, Atualizados: ${updated}`;
+      if (failed > 0) {
+        msg += `, ⚠️ Falhas: ${failed}`;
+        toast.warn(msg, { autoClose: 8000 });
+      } else {
+        toast.success(msg);
+      }
+
+      // Se houver falhas, não fechar automaticamente para permitir que o usuário veja
+      if (failed === 0) {
+        handleCloseModal();
+      }
     } catch (error) {
       toastError(error);
     } finally {
@@ -769,9 +819,48 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                 Nenhuma tag de WhatsApp foi encontrada para esta conexão. Você pode importar contatos do dispositivo e usar as tags exibidas ao lado de cada contato.
               </Alert>
 
-              <Typography variant="h6" gutterBottom>
-                Contatos do Dispositivo ({Array.isArray(deviceContacts) ? deviceContacts.length : 0})
-              </Typography>
+              <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                <Box>
+                  <Typography variant="h6">
+                    Contatos do Dispositivo
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    Total encontrado: {totalContactsCount} | Carregados: {deviceContacts.length} | Selecionados: {selectedDeviceContacts.size}
+                  </Typography>
+                </Box>
+
+                <Box display="flex" alignItems="center" gap={1}>
+                  <FormControl variant="outlined" size="small" className={classes.systemTagSelect} style={{ width: 220 }}>
+                    <InputLabel id="target-tag-label">Aplicar Tag (Sistema)</InputLabel>
+                    <Select
+                      labelId="target-tag-label"
+                      value={targetSystemTag || ''}
+                      onChange={(e) => setTargetSystemTag(e.target.value)}
+                      label="Aplicar Tag (Sistema)"
+                    >
+                      <MenuItem value="">
+                        <em>Nenhuma</em>
+                      </MenuItem>
+                      {systemTags.map((tag) => (
+                        <MenuItem key={tag.id} value={tag.id}>
+                          {tag.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={selectAll}
+                        onChange={handleSelectAllToggle}
+                        color="primary"
+                      />
+                    }
+                    label="Todos"
+                  />
+                </Box>
+              </Box>
 
               <div
                 ref={(contactsListRef) => {
