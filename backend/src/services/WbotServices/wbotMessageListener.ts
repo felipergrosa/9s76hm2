@@ -87,7 +87,7 @@ import pino from "pino";
 import BullQueues from "../../libs/queue";
 import { Transform } from "stream";
 import { msgDB } from "../../libs/wbot";
-import {CheckSettings1, CheckCompanySetting} from "../../helpers/CheckSettings";
+import { CheckSettings1, CheckCompanySetting } from "../../helpers/CheckSettings";
 import { title } from "process";
 import { FlowBuilderModel } from "../../models/FlowBuilder";
 import { IConnections, INodes } from "../WebhookService/DispatchWebHookService";
@@ -308,27 +308,27 @@ const getBodyButton = (msg: any): string => {
 
     if (msg?.messageType === "interactiveMessage" || msg?.message?.interactiveMessage) {
       let bodyMessage = '';
-      
+
 
       // Verifica se há botões na mensagem
       const buttons = msg?.message?.interactiveMessage?.nativeFlowMessage?.buttons;
-      
+
 
       // Verifica se buttons é um array e se contém o botão 'reviewand_pay'
       const bodyTextWithPix = Array.isArray(buttons) && buttons.some(button => button.name = 'review_and_pay');
 
       if (bodyTextWithPix) {
         bodyMessage += `[PIX]`;
-        
+
       } else {
-        
+
       }
 
       // Log do bodyMessage final antes do retorno
-      
+
       // Retornar bodyMessage se não estiver vazio
       return bodyMessage || null; // Verifique se este ponto é alcançado
-  }
+    }
 
     if (msg?.messageType === "viewOnceMessage" || msg?.message?.viewOnceMessage?.message?.interactiveMessage) {
       let bodyMessage = '';
@@ -383,25 +383,25 @@ const getBodyPIX = (msg: any): string => {
     // Verifica se é uma mensagem interativa
     if (msg?.messageType === "interactiveMessage" || msg?.message?.interactiveMessage) {
       let bodyMessage = '[PIX]'; // Inicializa bodyMessage com [PIX]
-      
+
 
       // Verifica se há botões na mensagem
       const buttons = msg?.message?.interactiveMessage?.nativeFlowMessage?.buttons;
-      
+
 
       // Se buttons existe e contém o botão 'review_and_pay'
       const bodyTextWithPix = Array.isArray(buttons) && buttons.some(button => button.name = 'review_and_pay');
 
       // Se o botão específico foi encontrado
       if (bodyTextWithPix) {
-        
+
       } else {
-        
+
         return ''; // Retorna vazio se não encontrar o botão
       }
 
       // Log do bodyMessage final antes do retorno
-      
+
       return bodyMessage; // Retorna [PIX]
     }
   } catch (error) {
@@ -461,7 +461,7 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
       interactiveMessage: getBodyPIX(msg),
       listMessage:
         getBodyButton(msg) || msg.message?.listResponseMessage?.title,
-        viewOnceMessage: getBodyButton(msg) || msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId,
+      viewOnceMessage: getBodyButton(msg) || msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId,
       reactionMessage: msg.message?.reactionMessage?.text || "reaction",
       senderKeyDistributionMessage:
         msg?.message?.senderKeyDistributionMessage
@@ -471,13 +471,13 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
           ?.caption,
       viewOnceMessageV2:
         msg.message?.viewOnceMessageV2?.message?.imageMessage?.caption,
-        adMetaPreview: msgAdMetaPreview(
-          msg.message?.extendedTextMessage?.contextInfo?.externalAdReply?.thumbnail,
-          msg.message?.extendedTextMessage?.contextInfo?.externalAdReply?.title,
-          msg.message?.extendedTextMessage?.contextInfo?.externalAdReply?.body,
-          msg.message?.extendedTextMessage?.contextInfo?.externalAdReply?.sourceUrl,
-          msg.message?.extendedTextMessage?.text
-        ), // Adicionado para tratar mensagens de anúncios;
+      adMetaPreview: msgAdMetaPreview(
+        msg.message?.extendedTextMessage?.contextInfo?.externalAdReply?.thumbnail,
+        msg.message?.extendedTextMessage?.contextInfo?.externalAdReply?.title,
+        msg.message?.extendedTextMessage?.contextInfo?.externalAdReply?.body,
+        msg.message?.extendedTextMessage?.contextInfo?.externalAdReply?.sourceUrl,
+        msg.message?.extendedTextMessage?.text
+      ), // Adicionado para tratar mensagens de anúncios;
       editedMessage:
         msg?.message?.protocolMessage?.editedMessage?.conversation ||
         msg?.message?.editedMessage?.message?.protocolMessage?.editedMessage
@@ -492,7 +492,7 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
       advertising:
         getAd(msg) ||
         msg.message?.listResponseMessage?.contextInfo?.externalAdReply?.title,
-        pollCreationMessageV3: msg?.message?.pollCreationMessageV3 ? `*Enquete*\n${msg.message.pollCreationMessageV3.name}\n\n${msg.message.pollCreationMessageV3.options.map(option => option.optionName).join('\n')}` : null,
+      pollCreationMessageV3: msg?.message?.pollCreationMessageV3 ? `*Enquete*\n${msg.message.pollCreationMessageV3.name}\n\n${msg.message.pollCreationMessageV3.options.map(option => option.optionName).join('\n')}` : null,
       eventMessage: msg?.message?.eventMessage?.name ? `*Nome do Evento: ${msg.message.eventMessage.name}*\n` : 'sem nome do evento\n',
     };
 
@@ -531,7 +531,7 @@ export const getQuotedMessage = (msg: proto.IWebMessageInfo) => {
   if (!body?.contextInfo?.quotedMessage) return;
   const quoted = extractMessageContent(
     body?.contextInfo?.quotedMessage[
-      Object.keys(body?.contextInfo?.quotedMessage).values().next().value
+    Object.keys(body?.contextInfo?.quotedMessage).values().next().value
     ]
   );
 
@@ -582,7 +582,7 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   // CORREÇÃO CRÍTICA: Para mensagens de GRUPOS, sempre usar participant
   // O remoteJid em grupos é o ID do grupo (xxxxx@g.us), não o número do contato
   let contactJid;
-  
+
   if (isGroup) {
     // Em grupos, SEMPRE usar participant (quem enviou a mensagem)
     if (!participantJid) {
@@ -592,7 +592,7 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
       });
       return { id: remoteJid, name: "Grupo" };
     }
-    
+
     // Validar se participant é um número válido
     if (!looksPhoneLike(participantDigits)) {
       debugLog("[getContactMessage] AVISO: Participant de grupo com formato inválido", {
@@ -639,23 +639,23 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
         const lidContact = sock.store.contacts[remoteJid];
         if (lidContact?.id && lidContact.id.includes("@s.whatsapp.net")) {
           contactJid = lidContact.id;
-          debugLog("[getContactMessage] LID resolvido via store.contacts", { 
-            originalLid: remoteJid, 
-            resolvedJid: contactJid 
+          debugLog("[getContactMessage] LID resolvido via store.contacts", {
+            originalLid: remoteJid,
+            resolvedJid: contactJid
           });
         }
       }
-      
+
       // Alternativa: verificar se há um número no pushName da mensagem
       if (contactJid === remoteJid && msg.pushName) {
         const pushNameDigits = msg.pushName.replace(/\D/g, "");
         if (looksPhoneLike(pushNameDigits)) {
           // pushName contém um número válido, usar como JID
           contactJid = `${pushNameDigits}@s.whatsapp.net`;
-          debugLog("[getContactMessage] LID resolvido via pushName", { 
-            originalLid: remoteJid, 
+          debugLog("[getContactMessage] LID resolvido via pushName", {
+            originalLid: remoteJid,
             pushName: msg.pushName,
-            resolvedJid: contactJid 
+            resolvedJid: contactJid
           });
         }
       }
@@ -665,7 +665,7 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   }
 
   const contactRawNumber = contactJid.replace(/\D/g, "");
-  
+
   // Validação final: número deve ter tamanho válido
   if (!looksPhoneLike(contactRawNumber)) {
     debugLog("[getContactMessage] ERRO FINAL: Número com tamanho inválido", {
@@ -677,16 +677,16 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
     });
     return null;
   }
-  
+
   return isGroup
     ? {
-        id: contactJid, // CORREÇÃO: usar contactJid (participant) ao invés de getSenderMessage
-        name: msg.pushName || contactRawNumber
-      }
+      id: contactJid, // CORREÇÃO: usar contactJid (participant) ao invés de getSenderMessage
+      name: msg.pushName || contactRawNumber
+    }
     : {
-        id: contactJid,
-        name: msg.key.fromMe ? contactRawNumber : msg.pushName || contactRawNumber
-      };
+      id: contactJid,
+      name: msg.key.fromMe ? contactRawNumber : msg.pushName || contactRawNumber
+    };
 };
 
 // const downloadMedia = async (msg: proto.IWebMessageInfo, companyId: number, whatsappId: number) => {
@@ -978,7 +978,7 @@ const verifyContact = async (
       return null as any;
     }
   }
-  
+
   // VALIDAÇÃO EXTRA: Para números normais (não-LID, não-grupo), validar tamanho
   if (!isGroup && !isLinkedDevice) {
     if (cleaned.length > 13) {
@@ -1003,8 +1003,8 @@ const verifyContact = async (
     });
 
     // 1. Para JIDs @lid, primeiro buscar por remoteJid (LID) existente
-    const existingByLid = await Contact.findOne({ 
-      where: { remoteJid: normalizedJid, companyId } 
+    const existingByLid = await Contact.findOne({
+      where: { remoteJid: normalizedJid, companyId }
     });
     if (existingByLid) {
       debugLog("[verifyContact] Contato encontrado pelo LID", { contactId: existingByLid.id });
@@ -1018,9 +1018,9 @@ const verifyContact = async (
         where: { canonicalNumber: canonicalFromPushName, companyId, isGroup: false }
       });
       if (existingByNumber) {
-        debugLog("[verifyContact] Contato encontrado pelo telefone no pushName", { 
-          contactId: existingByNumber.id, 
-          canonicalFromPushName 
+        debugLog("[verifyContact] Contato encontrado pelo telefone no pushName", {
+          contactId: existingByNumber.id,
+          canonicalFromPushName
         });
         return existingByNumber;
       }
@@ -1033,9 +1033,9 @@ const verifyContact = async (
         where: { canonicalNumber: canonicalFromLid, companyId, isGroup: false }
       });
       if (existingByLidNumber) {
-        debugLog("[verifyContact] Contato encontrado pelo número no LID", { 
-          contactId: existingByLidNumber.id, 
-          canonicalFromLid 
+        debugLog("[verifyContact] Contato encontrado pelo número no LID", {
+          contactId: existingByLidNumber.id,
+          canonicalFromLid
         });
         return existingByLidNumber;
       }
@@ -1045,9 +1045,9 @@ const verifyContact = async (
     // Isso funciona quando o sistema já processou mensagens deste contato antes
     try {
       const messageWithLid = await Message.findOne({
-        where: { 
+        where: {
           remoteJid: normalizedJid,
-          companyId 
+          companyId
         },
         include: [{
           model: Ticket,
@@ -1057,7 +1057,7 @@ const verifyContact = async (
         }],
         order: [["createdAt", "DESC"]]
       });
-      
+
       if (messageWithLid?.ticket?.contactId) {
         const existingContact = await Contact.findByPk(messageWithLid.ticket.contactId);
         if (existingContact && !existingContact.remoteJid?.includes("@lid")) {
@@ -1090,7 +1090,7 @@ const verifyContact = async (
         }],
         order: [["updatedAt", "DESC"]]
       });
-      
+
       if (ticketWithLid?.contact && !ticketWithLid.contact.remoteJid?.includes("@lid")) {
         debugLog("[verifyContact] Contato encontrado via ticket com mensagem LID", {
           contactId: ticketWithLid.contact.id,
@@ -1135,7 +1135,7 @@ const verifyContact = async (
       });
       return existing;
     }
-    
+
     // CRÍTICO: NÃO criar contato com número inválido
     logger.error("[verifyContact] BLOQUEADO: Tentativa de criar contato com número inválido", {
       normalizedJid,
@@ -1158,7 +1158,7 @@ const verifyContact = async (
     isLinkedDevice,
     isPhoneLike
   });
-  
+
   // VALIDAÇÃO FINAL antes de criar/atualizar
   if (!isGroup && cleaned.length > 13) {
     logger.error("[verifyContact] BLOQUEIO FINAL: Número excede 13 dígitos (BR)", {
@@ -1293,8 +1293,12 @@ export const verifyMediaMessage = async (
       media.filename = `${name.trim()}_${new Date().getTime()}.${ext}`;
     }
 
+    // Validação de segurança: se contact.id for undefined, usa fallback
+    const contactFolder = contact?.id ? `contact${contact.id}` : `contact_imported_${Date.now()}`;
+
     try {
       // Criar pasta por contato para melhor organização
+
       const folder = path.resolve(
         __dirname,
         "..",
@@ -1302,7 +1306,7 @@ export const verifyMediaMessage = async (
         "..",
         "public",
         `company${companyId}`,
-        `contact${contact.id}`
+        contactFolder
       );
 
       // Criar pasta recursivamente se não existir
@@ -1344,7 +1348,7 @@ export const verifyMediaMessage = async (
                     // Atualiza media.filename para apontar ao convertido
                     const newName = path.basename(outputFile);
                     media.filename = newName;
-                  } catch {}
+                  } catch { }
                   resolve();
                 })
                 .on("error", (err: any) => {
@@ -1377,11 +1381,11 @@ export const verifyMediaMessage = async (
     }
 
     const body = getBodyMessage(msg);
-    
+
     // Determinar mediaType corretamente (sticker, gif, etc)
     const msgType = getTypeMessage(msg);
     let finalMediaType = media.mimetype.split("/")[0];
-    
+
     // Stickers são webp - marcar como "sticker" para renderização especial
     if (msgType === "stickerMessage" || media.mimetype === "image/webp") {
       finalMediaType = "sticker";
@@ -1398,7 +1402,7 @@ export const verifyMediaMessage = async (
       body: body || media.filename,
       fromMe: msg.key.fromMe,
       read: msg.key.fromMe,
-      mediaUrl: `contact${contact.id}/${media.filename}`, // Incluir contactId no caminho
+      mediaUrl: `${contactFolder}/${media.filename}`, // Incluir contactId no caminho
       mediaType: finalMediaType,
       quotedMsgId: quotedMsg?.id,
       ack:
@@ -1534,7 +1538,7 @@ export const verifyMessage = async (
   await CreateMessageService({ messageData, companyId: companyId });
 
   if (!msg.key.fromMe && ticket.status === "closed") {
-    
+
     await ticket.update({ status: "pending" });
     await ticket.reload({
       include: [
@@ -1794,7 +1798,7 @@ const verifyQueue = async (
 ) => {
   const companyId = ticket.companyId;
 
-  
+
   // console.log("GETTING WHATSAPP VERIFY QUEUE", ticket.whatsappId, wbot.id)
   const { queues, greetingMessage, maxUseBotQueues, timeUseBotQueues } =
     await ShowWhatsAppService(wbot.id!, companyId);
@@ -1872,8 +1876,7 @@ const verifyQueue = async (
           const debouncedSentgreetingMediaAttachment = debounce(
             async () => {
               const sentMessage = await wbot.sendMessage(
-                `${ticket.contact.number}@${
-                  ticket.isGroup ? "g.us" : "s.whatsapp.net"
+                `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
                 }`,
                 { ...optionsMsg }
               );
@@ -2154,8 +2157,7 @@ const verifyQueue = async (
           const debouncedSentMessage = debounce(
             async () => {
               await wbot.sendMessage(
-                `${ticket.contact.number}@${
-                  ticket.isGroup ? "g.us" : "s.whatsapp.net"
+                `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
                 }`,
                 {
                   text: body
@@ -2338,7 +2340,7 @@ const verifyQueue = async (
         }
       });
 
-      
+
       await CreateLogTicketService({
         ticketId: ticket.id,
         type: "queue",
@@ -2419,7 +2421,7 @@ const verifyQueue = async (
 
       wbot.sendPresenceUpdate("composing", contact.remoteJid);
 
-      
+
       queues.forEach((queue, index) => {
         options += `*[ ${index + 1} ]* - ${queue.name}\n`;
       });
@@ -2459,8 +2461,7 @@ const verifyQueue = async (
           const debouncedSentgreetingMediaAttachment = debounce(
             async () => {
               let sentMessage = await wbot.sendMessage(
-                `${ticket.contact.number}@${
-                  ticket.isGroup ? "g.us" : "s.whatsapp.net"
+                `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
                 }`,
                 { ...optionsMsg }
               );
@@ -2483,8 +2484,7 @@ const verifyQueue = async (
           const debouncedSentMessage = debounce(
             async () => {
               const sentMessage = await wbot.sendMessage(
-                `${contact.number}@${
-                  ticket.isGroup ? "g.us" : "s.whatsapp.net"
+                `${contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
                 }`,
                 {
                   text: body
@@ -2859,11 +2859,11 @@ const verifyQueue = async (
         });
       });
 
-     sectionsRows.push({
-          title: "Voltar Menu Inicial",
-          rowId: "#"
-        });
-        
+      sectionsRows.push({
+        title: "Voltar Menu Inicial",
+        rowId: "#"
+      });
+
       await CreateLogTicketService({
         ticketId: ticket.id,
         type: "chatBot"
@@ -3580,8 +3580,8 @@ const verifyQueue = async (
   if (typeBot === "text") {
     return botText();
   }
-  
-   if (typeBot === "list") {
+
+  if (typeBot === "list") {
     return botList();
   }
 
@@ -3827,7 +3827,7 @@ const flowbuilderIntegration = async (
   */
 
   if (!msg.key.fromMe && ticket.status === "closed") {
-    
+
     await ticket.update({ status: "pending" });
     await ticket.reload({
       include: [
@@ -4461,7 +4461,7 @@ const handleMessage = async (
 
     // CONTROLE DE CAPTURA AUTOMÁTICA DE CONTATOS DE GRUPOS
     let contact: Contact | null = null;
-    
+
     if (isGroup && !autoCaptureGroupContacts) {
       // Se captura automática está DESABILITADA, apenas buscar contato existente
       // NÃO criar novo contato automaticamente
@@ -4469,7 +4469,7 @@ const handleMessage = async (
       if (participantJid) {
         const normalizedParticipantJid = jidNormalizedUser(participantJid);
         const participantNumber = normalizedParticipantJid.replace(/\D/g, "");
-        
+
         // Buscar apenas se já existe
         contact = await Contact.findOne({
           where: {
@@ -4477,7 +4477,7 @@ const handleMessage = async (
             canonicalNumber: participantNumber
           }
         });
-        
+
         if (!contact) {
           logger.info("[handleMessage] Captura automática de contatos de grupos DESABILITADA. Participante não cadastrado, ignorando mensagem.", {
             participantJid,
@@ -4487,7 +4487,7 @@ const handleMessage = async (
           });
           return; // Não processar mensagem de participante não cadastrado
         }
-        
+
         logger.info("[handleMessage] Participante de grupo já cadastrado, processando mensagem.", {
           contactId: contact.id,
           contactNumber: contact.number,
@@ -4502,7 +4502,7 @@ const handleMessage = async (
     } else {
       // Captura automática HABILITADA ou não é grupo: comportamento normal
       contact = await verifyContact(msgContact, wbot, companyId);
-      
+
       // Validação de segurança: se contact for null, interrompe processamento
       if (!contact) {
         logger.error('[handleMessage] ERROR: verifyContact retornou null', {
@@ -4797,7 +4797,7 @@ const handleMessage = async (
       Sentry.captureException(e);
       console.log(e);
     }
-    
+
     // Atualiza o ticket se a ultima mensagem foi enviada por mim, para que possa ser finalizado.
     try {
       await ticket.update({
@@ -4865,7 +4865,7 @@ const handleMessage = async (
             if (ticketTraking.chatbotAt !== null) {
               dataLimite.setMinutes(
                 ticketTraking.chatbotAt.getMinutes() +
-                  Number(whatsapp.timeUseBotQueues)
+                Number(whatsapp.timeUseBotQueues)
               );
               if (
                 ticketTraking.chatbotAt !== null &&
@@ -4896,7 +4896,7 @@ const handleMessage = async (
       console.log(e);
     }
 
-   
+
 
     const flow = await FlowBuilderModel.findOne({
       where: {
@@ -4940,7 +4940,7 @@ const handleMessage = async (
         const nodeIndex = nodes.findIndex(node => node.id === nodeSelected.id);
 
         const lastFlowId = nodes[nodeIndex + 1].id;
-         await ticket.update({
+        await ticket.update({
           lastFlowId: lastFlowId,
           dataWebhook: {
             variables: {
@@ -4977,17 +4977,17 @@ const handleMessage = async (
       return;
     }
 
-    
+
     if (isOpenai && !isNil(flow) && !ticket.queue) {
       const nodeSelected = flow.flow["nodes"].find(
         (node: any) => node.id === ticket.lastFlowId
       );
-    
+
       if (!nodeSelected?.data?.typebotIntegration) {
         console.error("typebotIntegration not found in nodeSelected");
         return;
       }
-    
+
       const {
         name,
         prompt,
@@ -5001,7 +5001,7 @@ const handleMessage = async (
         maxMessages,
         model // <- Aqui está o campo ausente
       } = nodeSelected.data.typebotIntegration as IOpenAi;
-    
+
       const openAiSettings = {
         name,
         prompt,
@@ -5015,7 +5015,7 @@ const handleMessage = async (
         maxMessages: Number(maxMessages) || 0,
         model
       };
-    
+
       await handleOpenAi(
         openAiSettings,
         msg,
@@ -5025,10 +5025,10 @@ const handleMessage = async (
         mediaSent,
         ticketTraking
       );
-    
+
       return;
     }
-    
+
 
 
 
@@ -5262,7 +5262,7 @@ const handleMessage = async (
             if (ticketTraking.chatbotAt !== null) {
               dataLimite.setMinutes(
                 ticketTraking.chatbotAt.getMinutes() +
-                  Number(whatsapp.timeUseBotQueues)
+                Number(whatsapp.timeUseBotQueues)
               );
 
               if (
@@ -5289,8 +5289,7 @@ const handleMessage = async (
             const debouncedSentMessage = debounce(
               async () => {
                 await wbot.sendMessage(
-                  `${ticket.contact.number}@${
-                    ticket.isGroup ? "g.us" : "s.whatsapp.net"
+                  `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
                   }`,
                   {
                     text: body
@@ -5597,7 +5596,7 @@ const filterMessages = (msg: WAMessage): boolean => {
 };
 
 const wbotMessageListener = (wbot: Session, companyId: number): void => {
-const wbotUserJid = wbot?.user?.id;
+  const wbotUserJid = wbot?.user?.id;
   wbot.ev.on("messages.upsert", async (messageUpsert: ImessageUpsert) => {
     const messages = messageUpsert.messages
       .filter(filterMessages)
@@ -5755,14 +5754,14 @@ const wbotUserJid = wbot?.user?.id;
             ? ""
             : await wbot!.profilePictureUrl(contact.id!).catch(() => null);
         const numero = contact.id.replace(/\D/g, "");
-        
+
         // PRIORIDADE 1: Nome da agenda do WhatsApp (notify)
         let finalName = contact.notify;
-        
+
         // Se notify estiver vazio (comum em contatos LID), busca outras fontes
         if (!finalName || finalName.trim() === "") {
           console.log(`[contacts.update] notify vazio para ${contact.id}, buscando outras fontes`);
-          
+
           // PRIORIDADE 2: Nome já cadastrado no CRM (se não for apenas o número)
           const existingContact = await Contact.findOne({ where: { remoteJid: contact.id, companyId } });
           if (existingContact?.name && existingContact.name.replace(/\D/g, "") !== numero) {
@@ -5814,12 +5813,12 @@ const wbotUserJid = wbot?.user?.id;
       const nameGroup = group.subject && group.subject.trim() !== "" ? group.subject : "Grupo desconhecido";
 
       let profilePicUrl: string = "";
-       try {
-         profilePicUrl = await wbot.profilePictureUrl(group.id, "image");
-       } catch (e) {
-         Sentry.captureException(e);
-         profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
-       }
+      try {
+        profilePicUrl = await wbot.profilePictureUrl(group.id, "image");
+      } catch (e) {
+        Sentry.captureException(e);
+        profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
+      }
       const contactData = {
         name: nameGroup,
         number: number,

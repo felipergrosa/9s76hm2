@@ -205,6 +205,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           connectTimeoutMs: 25_000,
           // keepAliveIntervalMs: 60_000,
           getMessage: msgDB.get,
+          // Habilita download de histórico quando importação está ativa
+          syncFullHistory: !!whatsapp.importOldMessages,
         });
 
         // Store em memória desabilitada nesta versão; usamos snapshot/persistência via messaging-history.set
@@ -231,7 +233,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               statusImportMessages
             });
             wsocket.ev.on("messaging-history.set", async (messageSet: any) => {
-              //if(messageSet.isLatest){
+              logger.info(`[Import] messaging-history.set recebido para whatsappId=${whatsapp.id}. Mensagens=${messageSet?.messages?.length || 0}, Chats=${messageSet?.chats?.length || 0}`);
 
               const statusImportMessages = new Date().getTime();
 
@@ -293,6 +295,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               } else {
                 dataMessages[whatsappId].unshift(...filteredDateMessages);
               }
+
+              logger.info(`[Import] Filtradas ${filteredDateMessages.length} mensagens no range de datas. Total em dataMessages[${whatsappId}]=${dataMessages[whatsappId]?.length || 0}`);
 
               setTimeout(async () => {
                 const wpp = await Whatsapp.findByPk(whatsappId);
@@ -374,23 +378,26 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 }`
               );
 
-              // Notifica front para exibir modal de reconexão
-              try {
-                io.of(`/workspace-${companyId}`)
-                  .emit("wa-conn-lost", {
-                    whatsappId: id,
-                    statusCode: (lastDisconnect?.error as Boom)?.output?.statusCode,
-                    reason: lastDisconnect?.error?.message || "Connection closed",
-                    qrUrl: `${process.env.FRONTEND_URL || ""}/connections/${id}`
-                  });
-              } catch {}
-              
               const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
               const isConflict = statusCode === 440; // Stream Errored (conflict)
               const isForbidden = statusCode === 403;
               const isLoggedOut = statusCode === DisconnectReason.loggedOut;
               const isRestartRequired = statusCode === 515; // Stream Errored (restart required)
-              
+
+              // Só notifica front para exibir modal se for erro que precisa de ação do usuário
+              // NÃO mostra modal para 515 (restart) pois reconecta automaticamente
+              if (isConflict || isForbidden || isLoggedOut) {
+                try {
+                  io.of(`/workspace-${companyId}`)
+                    .emit("wa-conn-lost", {
+                      whatsappId: id,
+                      statusCode,
+                      reason: lastDisconnect?.error?.message || "Connection closed",
+                      qrUrl: `${process.env.FRONTEND_URL || ""}/connections/${id}`
+                    });
+                } catch { }
+              }
+
               // Conflito: outra sessão está ativa. NÃO reconectar imediatamente para evitar loop
               if (isConflict) {
                 logger.warn(`[wbot] Conflito de sessão detectado para ${name}. Aguardando 30s antes de tentar reconectar.`);
@@ -402,7 +409,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 );
                 return;
               }
-              
+
               if (isForbidden) {
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
@@ -416,7 +423,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     String(whatsapp.id)
                   );
                   await fs.promises.rm(baseDir, { recursive: true, force: true });
-                } catch {}
+                } catch { }
                 io.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",
@@ -425,7 +432,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 removeWbot(id, false);
                 return;
               }
-              
+
               // Restart required: reconectar com delay moderado
               if (isRestartRequired) {
                 logger.info(`[wbot] Restart necessário para ${name}. Reconectando em 5s.`);
@@ -436,7 +443,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 );
                 return;
               }
-              
+
               if (!isLoggedOut) {
                 removeWbot(id, false);
                 setTimeout(
@@ -456,7 +463,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     String(whatsapp.id)
                   );
                   await fs.promises.rm(baseDir, { recursive: true, force: true });
-                } catch {}
+                } catch { }
                 io.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",
@@ -517,7 +524,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     try {
                       await sock.resyncAppState(labelPatches, true);
                       logger.info(`[wbot] Label-only resync requested for whatsappId=${whatsapp.id}`);
-                    } catch (e:any) {
+                    } catch (e: any) {
                       logger.warn(`[wbot] Label-only resync failed: ${e?.message}`);
                     }
                   }
@@ -525,7 +532,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   try {
                     await sock.resyncAppState(ALL_WA_PATCH_NAMES, true);
                     logger.info(`[wbot] Full resyncAppState requested for whatsappId=${whatsapp.id}`);
-                  } catch (e:any) {
+                  } catch (e: any) {
                     logger.warn(`[wbot] full resyncAppState failed: ${e?.message}`);
                   }
                 }
@@ -599,7 +606,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     logger.info(`[wbot][labels.edit] ID: ${item.id}, Nome: ${item.name}, Cor: ${item.color || 'N/A'}`);
                   }
                 });
-              } catch {}
+              } catch { }
             }
           };
           (wsocket.ev as any).on("labels.relations", logEvent("labels.relations"));
@@ -629,7 +636,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 logger.info(`[wbot] Processando label: ID=${id}, Nome=${name}, Deletada=${deleted}`);
                 upsertLabel(whatsapp.id, { id, name, color, predefinedId: item?.predefinedId, deleted });
               }
-            } catch (e:any) {
+            } catch (e: any) {
               logger.warn(`[wbot] labels.edit upsert failed: ${e?.message}`);
             }
           });
@@ -684,16 +691,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 // Persistir labels por chat em Baileys.chats
                 try {
                   const batch = chats
-                    .map((c: any) => ({ id: String(c?.id || c?.jid || ""), labels: Array.isArray(c?.labels) ? c.labels.map((x:any)=>String(x)) : [] }))
+                    .map((c: any) => ({ id: String(c?.id || c?.jid || ""), labels: Array.isArray(c?.labels) ? c.labels.map((x: any) => String(x)) : [] }))
                     .filter((x: any) => x.id && x.labels.length);
                   if (batch.length) {
-                    await createOrUpdateBaileysService({ whatsappId: whatsapp.id, chats: batch.map((b:any)=>({ ...b, labelsAbsolute: true })) });
+                    await createOrUpdateBaileysService({ whatsappId: whatsapp.id, chats: batch.map((b: any) => ({ ...b, labelsAbsolute: true })) });
                   }
-                } catch (e:any) {
+                } catch (e: any) {
                   logger.warn(`[wbot] persist from messaging-history.set failed: ${e?.message}`);
                 }
               }
-            } catch (e:any) {
+            } catch (e: any) {
               logger.warn(`[wbot] messaging-history.set label extract failed: ${e?.message}`);
             }
           });
@@ -715,9 +722,9 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     const lname = String(lab?.name || lab?.label || lab?.title || lid);
                     const lcolor = lab?.color || lab?.colorHex || lab?.backgroundColor;
                     upsertLabel(whatsapp.id, { id: lid, name: lname, color: lcolor });
-                  } catch {}
+                  } catch { }
                 }
-                const ids: string[] = Array.from(new Set((raw || []).map((x:any)=>String(typeof x === 'object' ? (x.id ?? x.value ?? x) : x))));
+                const ids: string[] = Array.from(new Set((raw || []).map((x: any) => String(typeof x === 'object' ? (x.id ?? x.value ?? x) : x))));
                 if (!ids.length) continue;
                 for (const lid of ids) addChatLabelAssociation(whatsapp.id, jid, lid, true);
                 batch.push({ id: jid, labels: ids, labelsAbsolute: true });
@@ -726,14 +733,14 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 await createOrUpdateBaileysService({ whatsappId: whatsapp.id, chats: batch as any });
                 logger.info(`[wbot] persisted ${batch.length} chat label updates from ${source}`);
               }
-            } catch (e:any) {
+            } catch (e: any) {
               logger.warn(`[wbot] handleChatLabelUpdate failed (${source}): ${e?.message}`);
             }
           };
 
           wsocket.ev.on("chats.upsert" as any, async (payload: any) => handleChatLabelUpdate(payload, 'chats.upsert'));
           wsocket.ev.on("chats.update" as any, async (payload: any) => handleChatLabelUpdate(payload, 'chats.update'));
-        } catch (e:any) {
+        } catch (e: any) {
           logger.warn(`[wbot] failed to register messaging-history.set handler: ${e?.message}`);
         }
       })();

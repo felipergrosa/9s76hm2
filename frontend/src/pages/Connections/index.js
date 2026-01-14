@@ -568,13 +568,13 @@ const Connections = () => {
       <div className={classes.customTableCell}>
         {(whatsApp.status === "DISCONNECTED" ||
           (whatsApp.status === "qrcode" && !isBaileys)) && (
-          <CustomToolTip
-            title={i18n.t("connections.toolTips.disconnected.title")}
-            content={i18n.t("connections.toolTips.disconnected.content")}
-          >
-            <SignalCellularConnectedNoInternet0Bar color="secondary" />
-          </CustomToolTip>
-        )}
+            <CustomToolTip
+              title={i18n.t("connections.toolTips.disconnected.title")}
+              content={i18n.t("connections.toolTips.disconnected.content")}
+            >
+              <SignalCellularConnectedNoInternet0Bar color="secondary" />
+            </CustomToolTip>
+          )}
         {whatsApp.status === "OPENING" && (
           <CircularProgress size={24} className={classes.buttonProgress} />
         )}
@@ -757,18 +757,18 @@ const Connections = () => {
                                 >
                                   {i18n.t("connections.newConnection")}
                                 </Button>
-                                <Menu 
-                                    {...bindMenu(popupState)}
-                                    anchorOrigin={{
-                                      vertical: 'bottom',
-                                      horizontal: 'right',
-                                    }}
-                                    transformOrigin={{
-                                      vertical: 'top',
-                                      horizontal: 'right',
-                                    }}
-                                    getContentAnchorEl={null}
-                                  >
+                                <Menu
+                                  {...bindMenu(popupState)}
+                                  anchorOrigin={{
+                                    vertical: 'bottom',
+                                    horizontal: 'right',
+                                  }}
+                                  transformOrigin={{
+                                    vertical: 'top',
+                                    horizontal: 'right',
+                                  }}
+                                  getContentAnchorEl={null}
+                                >
                                   {/* WHATSAPP */}
                                   <MenuItem
                                     disabled={planConfig?.plan?.useWhatsapp ? false : true}
@@ -853,44 +853,6 @@ const Connections = () => {
             </Grid>
           </MainHeader>
 
-          {
-            statusImport?.all ? (
-              <>
-                <div style={{ margin: "auto", marginBottom: 12 }}>
-                  <Card className={classes.root}>
-                    <CardContent className={classes.content}>
-                      <Typography component="h5" variant="h5">
-
-                        {statusImport?.this === -1 ? i18n.t("connections.buttons.preparing") : i18n.t("connections.buttons.importing")}
-
-                      </Typography>
-                      {statusImport?.this === -1 ?
-                        <Typography component="h6" variant="h6" align="center">
-
-                          <CircularProgress
-                            size={24}
-                          />
-
-                        </Typography>
-                        :
-                        <>
-                          <Typography component="h6" variant="h6" align="center">
-                            {`${i18n.t(`connections.typography.processed`)} ${statusImport?.this} ${i18n.t(`connections.typography.in`)} ${statusImport?.all}  ${i18n.t(`connections.typography.date`)}: ${statusImport?.date} `}
-                          </Typography>
-                          <Typography align="center">
-                            <CircularProgressWithLabel
-                              style={{ margin: "auto" }}
-                              value={(statusImport?.this / statusImport?.all) * 100}
-                            />
-                          </Typography>
-                        </>
-                      }
-                    </CardContent>
-                  </Card>
-                </div>
-              </>
-            ) : null
-          }
 
           <Paper className={classes.mainPaper} variant="outlined">
             {/* Mobile cards */}

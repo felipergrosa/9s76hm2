@@ -57,6 +57,7 @@ import { getBackendUrl } from "../config";
 import useSettings from "../hooks/useSettings";
 import useVersion from "../hooks/useVersion";
 import pkg from "../../package.json";
+import ImportProgressBar from "../components/ImportProgressBar";
 
 // import { SocketContext } from "../context/Socket/SocketContext";
 
@@ -340,6 +341,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
   const greaterThenSm = useMediaQuery(theme.breakpoints.up("sm"));
 
   const [volume, setVolume] = useState(localStorage.getItem("volume") || 1);
+  const [statusImport, setStatusImport] = useState(null);
 
   const { dateToClient } = useDate();
   const [profileUrl, setProfileUrl] = useState(null);
@@ -370,7 +372,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
     getSetting();
   });
 
-  
+
 
   useEffect(() => {
     // Envia a versão do frontend para o backend (/version)
@@ -423,7 +425,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
 
       const ImageUrl = user.profileImage;
       if (ImageUrl !== undefined && ImageUrl !== null)
-      setProfileUrl(`${backendUrl}/public/company${user.companyId}/${ImageUrl}`);
+        setProfileUrl(`${backendUrl}/public/company${user.companyId}/${ImageUrl}`);
       else setProfileUrl(`${process.env.FRONTEND_URL}/nopicture.png`);
 
       const onCompanyAuthLayout = (data) => {
@@ -450,6 +452,26 @@ const LoggedInLayout = ({ children, themeToggle }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket]);
+
+  // Listener para progresso de importação de mensagens
+  useEffect(() => {
+    if (!socket || typeof socket.on !== 'function' || !user?.companyId) return;
+
+    const handleImportMessages = (data) => {
+      if (data.action === "refresh") {
+        setStatusImport(null);
+      }
+      if (data.action === "update") {
+        setStatusImport(data.status);
+      }
+    };
+
+    socket.on(`importMessages-${user.companyId}`, handleImportMessages);
+
+    return () => {
+      socket.off(`importMessages-${user.companyId}`, handleImportMessages);
+    };
+  }, [socket, user?.companyId]);
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -577,7 +599,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
           )}
 
           {/* DESABILITADO POIS TEM BUGS */}
-          {<UserLanguageSelector /> }
+          {<UserLanguageSelector />}
           {/* <SoftPhone
             callVolume={33} //Set Default callVolume
             ringVolume={44} //Set Default ringVolume
@@ -590,8 +612,8 @@ const LoggedInLayout = ({ children, themeToggle }) => {
             setRingVolume={setRingVolume} // Callback function
             timelocale={'UTC-3'} //Set time local for call history
           /> */}
-          <IconButton 
-            edge="start" 
+          <IconButton
+            edge="start"
             onClick={colorMode.toggleColorMode}
             style={{ padding: greaterThenSm ? 12 : 8 }}
           >
@@ -670,6 +692,12 @@ const LoggedInLayout = ({ children, themeToggle }) => {
           </div>
         </Toolbar>
       </AppBar>
+      {/* Barra de progresso flutuante para importação de mensagens */}
+      <ImportProgressBar
+        statusImport={statusImport}
+        onClose={() => setStatusImport(null)}
+      />
+
       <main className={clsx(classes.content, drawerOpen ? classes.contentShift : classes.contentShiftClose)}>
         <div className={classes.appBarSpacer} />
 

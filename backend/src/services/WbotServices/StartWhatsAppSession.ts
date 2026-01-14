@@ -21,10 +21,22 @@ export const StartWhatsAppSession = async (
 
   try {
     const wbot = await initWASocket(whatsapp);
-   
+
     if (wbot.id) {
       wbotMessageListener(wbot, companyId);
       wbotMonitor(wbot, whatsapp, companyId);
+
+      // Reidratar cache de labels e associações do banco de dados
+      // Isso permite que o Baileys tenha acesso às labels mesmo após restart
+      setTimeout(async () => {
+        try {
+          const { loadLabelsFromDatabase, loadChatLabelsFromDatabase } = require("../../libs/labelCache");
+          await loadLabelsFromDatabase(whatsapp.id);
+          await loadChatLabelsFromDatabase(whatsapp.id);
+        } catch (e: any) {
+          logger.warn(`[StartWhatsAppSession] Falha ao reidratar cache de labels: ${e?.message}`);
+        }
+      }, 2000);
     }
   } catch (err) {
     Sentry.captureException(err);

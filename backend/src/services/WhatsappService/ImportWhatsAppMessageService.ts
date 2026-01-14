@@ -13,6 +13,7 @@ import { handleMessage } from "../WbotServices/wbotMessageListener";
 import fs from 'fs';
 import moment from "moment";
 import { addLogs } from "../../helpers/addLogs";
+import logger from "../../utils/logger";
 
 
 export const closeTicketsImported = async (whatsappId) => {
@@ -91,8 +92,18 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
     })
 
 
-    const qtd = messages.length
-    let i = 0
+    const qtd = messages.length;
+    let i = 0;
+
+    // Emite estado inicial "PREPARING" para o frontend mostrar loading
+    io.of(`/workspace-${whatsApp.companyId}`)
+      .emit(`importMessages-${whatsApp.companyId}`, {
+        action: "update",
+        status: { this: 0, all: qtd, state: "PREPARING", date: moment().format("DD/MM/YY HH:mm:ss") }
+      });
+
+    logger.info(`[Import] Iniciando importação de ${qtd} mensagens para whatsappId=${whatsappId}`);
+
     while (i < qtd) {
 
       try {
@@ -105,13 +116,15 @@ Mensagem ${i + 1} de ${qtd}
 
         if (i % 2 === 0) {
           const timestampMsg = Math.floor(msg.messageTimestamp["low"] * 1000)
-          io.of(whatsApp.companyId.toString())
+          io.of(`/workspace-${whatsApp.companyId}`)
             .emit(`importMessages-${whatsApp.companyId}`, {
               action: "update",
-              status: { this: i + 1, all: qtd, date: moment(timestampMsg).format("DD/MM/YY HH:mm:ss") }
+              status: { this: i + 1, all: qtd, state: "IMPORTING", date: moment(timestampMsg).format("DD/MM/YY HH:mm:ss") }
             });
-
         }
+
+        // Delay anti-ban: 500ms entre mensagens para evitar detecção de bot
+        await new Promise(r => setTimeout(r, 500));
 
 
         if (i + 1 === qtd) {
@@ -133,7 +146,13 @@ Mensagem ${i + 1} de ${qtd}
               action: "refresh",
             });
         }
-      } catch (error) { }
+      } catch (error: any) {
+        logger.error(`[Import] Erro ao importar mensagem ${i + 1}/${qtd}: ${error?.message || error}`);
+        addLogs({
+          fileName: `processImportMessagesWppId${whatsappId}.txt`,
+          text: `ERRO na mensagem ${i + 1}: ${error?.message || error}`
+        });
+      }
 
       i++
     }

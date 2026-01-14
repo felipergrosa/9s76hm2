@@ -167,11 +167,11 @@ class WhatsAppWebLabelsService {
 
       // logs reduzidos
       await client.initialize();
-      
+
       // Aguardar mais tempo para garantir que está totalmente carregado
       // logs reduzidos
       await new Promise(resolve => setTimeout(resolve, 5000));
-      
+
       return client;
 
     } catch (error: any) {
@@ -181,17 +181,52 @@ class WhatsAppWebLabelsService {
     }
   }
 
+
+
   async getDeviceLabels(companyId: number, whatsappId?: number): Promise<DeviceLabel[]> {
     try {
       const defaultWhatsapp = await GetDefaultWhatsApp(whatsappId, companyId);
       this.setProgress(defaultWhatsapp.id, 5, "iniciando");
 
-      const syncResult = await LabelSyncService.sync({ companyId, whatsappId: defaultWhatsapp.id });
-      logger.info(`[WhatsAppWebLabels] Sync concluído para whatsappId=${defaultWhatsapp.id}: ${JSON.stringify(syncResult)}`);
+      let labels: DeviceLabel[] = [];
 
-      this.setProgress(defaultWhatsapp.id, 25, "cache_consolidado");
+      // 1. Tentar obter labels via WhatsApp-Web.js (se conectado)
+      if (this.clients.has(defaultWhatsapp.id)) {
+        try {
+          const client = this.clients.get(defaultWhatsapp.id);
+          const state = await client?.getState();
 
-      let labels = await GetDeviceLabelsService(companyId, defaultWhatsapp.id);
+          if (state === 'CONNECTED') {
+            logger.info(`[WhatsAppWebLabels] Cliente WWebJS conectado, buscando labels diretamente...`);
+            this.setProgress(defaultWhatsapp.id, 10, "labels_recebidas");
+
+            // @ts-ignore - getLabels existe no client do whatsapp-web.js mas pode não estar na tipagem
+            const wwebLabels = await client.getLabels();
+
+            if (Array.isArray(wwebLabels)) {
+              labels = wwebLabels.map((l: any) => ({
+                id: l.id,
+                name: l.name,
+                color: l.color ? (typeof l.color === 'number' ? l.color : l.hexColor) : undefined,
+                count: 0 // WWebJS retorna count? verificar. Se não, será calculado abaixo via contatos.
+              }));
+              logger.info(`[WhatsAppWebLabels] ${labels.length} labels encontradas via WWebJS direct call`);
+            }
+          }
+        } catch (wwebError: any) {
+          logger.warn(`[WhatsAppWebLabels] Falha ao buscar labels via WWebJS: ${wwebError?.message}`);
+        }
+      }
+
+      // 2. Se não encontrou via WWebJS, tentar via Baileys (Sync + Cache)
+      if (labels.length === 0) {
+        const syncResult = await LabelSyncService.sync({ companyId, whatsappId: defaultWhatsapp.id });
+        logger.info(`[WhatsAppWebLabels] Sync concluído para whatsappId=${defaultWhatsapp.id}: ${JSON.stringify(syncResult)}`);
+
+        this.setProgress(defaultWhatsapp.id, 25, "cache_consolidado");
+
+        labels = await GetDeviceLabelsService(companyId, defaultWhatsapp.id);
+      }
 
       // Garantir que labels especiais existam para o frontend
       const ensureSyntheticLabel = (id: string, name: string, color: string, count: number) => {
