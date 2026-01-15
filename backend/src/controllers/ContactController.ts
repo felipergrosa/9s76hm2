@@ -2003,3 +2003,34 @@ export const refreshDeviceTags = async (
     });
   }
 };
+
+// Verificar quais números já existem no sistema (para badge "Já existe")
+export const checkExistingNumbers = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const { numbers } = req.body as { numbers?: string[] };
+
+  if (!Array.isArray(numbers) || numbers.length === 0) {
+    return res.status(200).json({ existing: [] });
+  }
+
+  try {
+    // Extrair apenas o número do JID (remover @s.whatsapp.net)
+    const cleanNumbers = numbers.map(n => String(n).split('@')[0]).filter(n => n);
+
+    const Contact = require("../models/Contact").default;
+    const existingContacts = await Contact.findAll({
+      where: {
+        companyId,
+        number: { [Op.in]: cleanNumbers }
+      },
+      attributes: ['number']
+    });
+
+    const existingSet = existingContacts.map((c: any) => c.number);
+
+    return res.status(200).json({ existing: existingSet });
+  } catch (error: any) {
+    logger.error(`[checkExistingNumbers] Erro: ${error.message}`);
+    return res.status(500).json({ error: error.message || "Erro ao verificar contatos existentes" });
+  }
+};

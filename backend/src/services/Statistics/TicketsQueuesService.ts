@@ -5,6 +5,7 @@ import UsersQueues from "../../models/UserQueue";
 import User from "../../models/User";
 import Contact from "../../models/Contact";
 import Queue from "../../models/Queue";
+import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
 
 interface Request {
   dateStart: string;
@@ -102,6 +103,39 @@ const TicketsQueuesService = async ({
         ]
       }
     };
+  }
+
+  // Aplica restrição de carteiras (wallet) - mesmo padrão de ListTicketsService
+  const walletResult = await GetUserWalletContactIds(+userId, +companyId);
+
+  // Modo EXCLUDE: admin vê tudo EXCETO tickets dos usuários excluídos
+  if (walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) {
+    whereCondition = {
+      [Op.and]: [
+        whereCondition,
+        {
+          [Op.or]: [
+            { userId: { [Op.notIn]: walletResult.excludedUserIds } },
+            { userId: +userId }, // Sempre vê os próprios tickets
+            { userId: null } // Tickets sem atribuição
+          ]
+        }
+      ]
+    } as any;
+  } else if (walletResult.hasWalletRestriction) {
+    const allowedContactIds = walletResult.contactIds;
+    const allowedUserIds = [+userId, ...(walletResult.managedUserIds || [])];
+    whereCondition = {
+      [Op.and]: [
+        whereCondition,
+        {
+          [Op.or]: [
+            { contactId: { [Op.in]: allowedContactIds.length > 0 ? allowedContactIds : [0] } },
+            { userId: { [Op.in]: allowedUserIds.length > 0 ? allowedUserIds : [+userId] } }
+          ]
+        }
+      ]
+    } as any;
   }
 
   const { count, rows: tickets } = await Ticket.findAndCountAll({

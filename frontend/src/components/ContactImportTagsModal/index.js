@@ -25,7 +25,7 @@ import {
   AccordionSummary,
   AccordionDetails
 } from '@material-ui/core';
-import { Refresh, ExpandMore } from "@material-ui/icons";
+import { Refresh, ExpandMore, Search } from "@material-ui/icons";
 import { Alert } from '@material-ui/lab';
 import { makeStyles } from "@material-ui/core/styles";
 import { toast } from 'react-toastify';
@@ -71,8 +71,179 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'center',
     alignItems: 'center',
     padding: theme.spacing(4),
-  }
+  },
+  // --- Estilos modernos do dialog ---
+  dialogPaper: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  dialogTitle: {
+    backgroundColor: theme.palette.primary.main,
+    color: '#fff',
+    borderRadius: '16px 16px 0 0',
+    '& h2': {
+      fontWeight: 600,
+    },
+  },
+  actionButton: {
+    borderRadius: 8,
+    textTransform: 'none',
+    fontWeight: 500,
+  },
+  // --- Estilos modernos para contatos ---
+  contactCard: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: theme.spacing(1.5),
+    marginBottom: theme.spacing(1),
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+    border: '1px solid #f0f0f0',
+    transition: 'box-shadow 0.2s, border-color 0.2s',
+    '&:hover': {
+      boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+      borderColor: '#e0e0e0',
+    },
+  },
+  contactCardSelected: {
+    borderColor: theme.palette.primary.main,
+    backgroundColor: 'rgba(25, 118, 210, 0.04)',
+  },
+  contactAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 600,
+    fontSize: 16,
+    color: '#fff',
+    marginRight: theme.spacing(1.5),
+    flexShrink: 0,
+  },
+  contactInfo: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+  },
+  contactName: {
+    fontWeight: 500,
+    fontSize: 14,
+    color: '#333',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  contactNumber: {
+    fontSize: 12,
+    color: '#888',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  existsBadge: {
+    backgroundColor: '#e8f5e9',
+    color: '#2e7d32',
+    fontSize: 11,
+    fontWeight: 500,
+    padding: '2px 8px',
+    borderRadius: 12,
+    marginLeft: theme.spacing(1),
+  },
+  newBadge: {
+    backgroundColor: '#e3f2fd',
+    color: '#1565c0',
+    fontSize: 11,
+    fontWeight: 500,
+    padding: '2px 8px',
+    borderRadius: 12,
+    marginLeft: theme.spacing(1),
+  },
+  searchBar: {
+    marginBottom: theme.spacing(2),
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    '& .MuiOutlinedInput-root': {
+      borderRadius: 8,
+    },
+  },
+  contactsList: {
+    maxHeight: 400,
+    overflowY: 'auto',
+    padding: theme.spacing(1),
+    backgroundColor: '#fafafa',
+    borderRadius: 8,
+  },
 }));
+
+// ============ FUNÇÕES UTILITÁRIAS ============
+
+// Formatar número de telefone para exibição amigável
+const formatPhoneNumber = (jid) => {
+  if (!jid) return '';
+  const number = String(jid).split('@')[0];
+  if (!number || number.length < 8) return number;
+
+  // Detectar código de país (Brasil = 55)
+  if (number.startsWith('55') && number.length >= 12) {
+    const ddd = number.slice(2, 4);
+    const rest = number.slice(4);
+    if (rest.length === 9) {
+      return `+55 ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
+    } else if (rest.length === 8) {
+      return `+55 ${ddd} ${rest.slice(0, 4)}-${rest.slice(4)}`;
+    }
+  }
+
+  // Fallback: formatar genérico
+  if (number.length > 6) {
+    return `+${number.slice(0, 2)} ${number.slice(2, -4)} ${number.slice(-4)}`;
+  }
+  return number;
+};
+
+// Extrair iniciais do nome para avatar
+const getInitials = (name, jid) => {
+  if (name && typeof name === 'string' && name.trim()) {
+    const parts = name.trim().split(' ').filter(p => p.length > 0);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    } else if (parts.length === 1) {
+      return parts[0].slice(0, 2).toUpperCase();
+    }
+  }
+  // Fallback: últimos 2 dígitos do número
+  const num = String(jid || '').split('@')[0];
+  return num.slice(-2);
+};
+
+// Gerar cor de fundo baseada no nome/número
+const getAvatarColor = (seed) => {
+  const colors = [
+    '#1976d2', '#388e3c', '#d32f2f', '#7b1fa2', '#1565c0',
+    '#00796b', '#c2185b', '#512da8', '#0097a7', '#689f38',
+    '#e64a19', '#5d4037', '#455a64', '#f57c00', '#303f9f'
+  ];
+  let hash = 0;
+  const str = String(seed || '');
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
+
+// Verificar se é contato especial a ser filtrado
+const isSpecialContact = (jid) => {
+  if (!jid) return true;
+  const lower = String(jid).toLowerCase();
+  return lower.includes('status@broadcast') ||
+    lower.includes('@g.us') ||
+    lower.includes('lid:') ||
+    lower === 'undefined' ||
+    !lower.includes('@');
+};
 
 const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
   const classes = useStyles();
@@ -102,6 +273,8 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
   const [targetSystemTag, setTargetSystemTag] = useState(null); // Tag do sistema para aplicar em massa
   const [selectAll, setSelectAll] = useState(false);
   const [totalContactsCount, setTotalContactsCount] = useState(0); // Total vindo do backend
+  const [searchQuery, setSearchQuery] = useState(''); // Filtro de busca
+  const [existingNumbers, setExistingNumbers] = useState(new Set()); // Números já cadastrados
 
   const contactsLoadingRef = useRef(false);
   const contactsListRef = useRef(null);
@@ -192,6 +365,9 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
       setTotalContactsCount(total);
       setContactsPage(page);
 
+      // Verificar quais contatos já existem (delayed para não bloquear render)
+      setTimeout(() => checkExistingContacts(contacts), 100);
+
       // Se "Selecionar Todos" estiver ativo, adiciona os novos contatos carregados à seleção
       if (selectAll) {
         setSelectedDeviceContacts(prev => {
@@ -207,6 +383,24 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
       contactsLoadingRef.current = false;
     }
   }, [selectedWhatsappId]);
+
+  // Verificar quais contatos já existem no sistema
+  const checkExistingContacts = useCallback(async (contacts) => {
+    if (!contacts || contacts.length === 0) return;
+    try {
+      const numbers = contacts.map(c => c.id).filter(Boolean);
+      const { data } = await api.post('/contacts/check-existing', { numbers });
+      if (Array.isArray(data?.existing)) {
+        setExistingNumbers(prev => {
+          const next = new Set(prev);
+          data.existing.forEach(n => next.add(n));
+          return next;
+        });
+      }
+    } catch (err) {
+      console.warn('[checkExistingContacts] Falha ao verificar:', err);
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -668,9 +862,9 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
 
   return (
     <>
-      <Dialog fullWidth maxWidth="md" open={isOpen} onClose={handleCloseModal}>
-        <DialogTitle>
-          Importar Contatos com Tags
+      <Dialog fullWidth maxWidth="md" open={isOpen} onClose={handleCloseModal} PaperProps={{ className: classes.dialogPaper }}>
+        <DialogTitle className={classes.dialogTitle}>
+          📥 Importar Contatos com Tags
         </DialogTitle>
 
         <DialogContent>
@@ -862,62 +1056,136 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                 </Box>
               </Box>
 
+              {/* Barra de Busca */}
+              <TextField
+                fullWidth
+                variant="outlined"
+                size="small"
+                placeholder="Buscar por nome ou número..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={classes.searchBar}
+                InputProps={{
+                  startAdornment: <Search style={{ color: '#999', marginRight: 8 }} />,
+                }}
+              />
+
+              {/* Lista de Contatos Modernizada */}
               <div
-                ref={(contactsListRef) => {
-                  if (contactsListRef) {
-                    contactsListRef.addEventListener('scroll', onContactsScroll);
+                ref={(ref) => {
+                  if (ref) {
+                    ref.addEventListener('scroll', onContactsScroll);
                   }
                 }}
-                style={{
-                  maxHeight: 380,
-                  overflowY: 'auto',
-                  border: '1px dashed #eee',
-                  borderRadius: 8,
-                  padding: 4,
-                }}
+                className={classes.contactsList}
               >
-                <List>
-                  {Array.isArray(deviceContacts) &&
-                    deviceContacts.map((c) => (
-                      <div key={c.id} className={classes.deviceTagItem}>
-                        <Box display="flex" alignItems="center" justifyContent="space-between">
-                          <FormControlLabel
-                            control={
-                              <Checkbox
-                                checked={selectedDeviceContacts.has(c.id)}
-                                onChange={() => handleDeviceContactToggle(c.id)}
-                                color="primary"
-                              />
-                            }
-                            label={(c.name || c.notify || c.pushname || c.id)}
-                          />
-                          <Box>
-                            {Array.isArray(c.tags) &&
-                              c.tags.map((t) => (
-                                <Chip
-                                  key={`${c.id}-${t.id}`}
-                                  label={t.name || t.id}
-                                  size="small"
-                                  className={classes.tagChip}
-                                />
-                              ))}
-                          </Box>
+                {(() => {
+                  // Filtrar contatos especiais e aplicar busca
+                  const filteredContacts = (deviceContacts || [])
+                    .filter(c => !isSpecialContact(c.id))
+                    .filter(c => {
+                      if (!searchQuery.trim()) return true;
+                      const q = searchQuery.toLowerCase();
+                      const name = (c.name || c.notify || c.pushname || '').toLowerCase();
+                      const number = String(c.id || '').split('@')[0];
+                      return name.includes(q) || number.includes(q);
+                    });
+
+                  if (filteredContacts.length === 0) {
+                    return (
+                      <Box textAlign="center" py={4}>
+                        <Typography color="textSecondary">
+                          {searchQuery ? 'Nenhum contato encontrado para esta busca.' : 'Nenhum contato disponível.'}
+                        </Typography>
+                      </Box>
+                    );
+                  }
+
+                  return filteredContacts.map((c) => {
+                    const displayName = c.name || c.notify || c.pushname || '';
+                    const formattedNumber = formatPhoneNumber(c.id);
+                    const initials = getInitials(displayName, c.id);
+                    const avatarColor = getAvatarColor(c.id);
+                    const isSelected = selectedDeviceContacts.has(c.id);
+                    const cleanNumber = String(c.id || '').split('@')[0];
+                    const isExisting = existingNumbers.has(cleanNumber);
+
+                    return (
+                      <div
+                        key={c.id}
+                        className={`${classes.contactCard} ${isSelected ? classes.contactCardSelected : ''}`}
+                        onClick={() => handleDeviceContactToggle(c.id)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {/* Checkbox */}
+                        <Checkbox
+                          checked={isSelected}
+                          color="primary"
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => handleDeviceContactToggle(c.id)}
+                          style={{ padding: 4, marginRight: 8 }}
+                        />
+
+                        {/* Avatar */}
+                        <div
+                          className={classes.contactAvatar}
+                          style={{ backgroundColor: avatarColor }}
+                        >
+                          {initials}
+                        </div>
+
+                        {/* Info */}
+                        <div className={classes.contactInfo}>
+                          <div className={classes.contactName}>
+                            {displayName || formattedNumber}
+                          </div>
+                          <div className={classes.contactNumber}>
+                            {displayName ? formattedNumber : ''}
+                          </div>
+                        </div>
+
+                        {/* Badge "Já existe" */}
+                        {isExisting && (
+                          <span className={classes.existsBadge}>
+                            Já existe
+                          </span>
+                        )}
+
+                        {/* Tags */}
+                        <Box display="flex" alignItems="center" flexWrap="wrap" style={{ maxWidth: 200 }}>
+                          {Array.isArray(c.tags) && c.tags.slice(0, 3).map((t) => (
+                            <Chip
+                              key={`${c.id}-${t.id}`}
+                              label={t.name || t.id}
+                              size="small"
+                              style={{ margin: 2, fontSize: 10 }}
+                            />
+                          ))}
+                          {Array.isArray(c.tags) && c.tags.length > 3 && (
+                            <Chip
+                              label={`+${c.tags.length - 3}`}
+                              size="small"
+                              style={{ margin: 2, fontSize: 10, backgroundColor: '#e0e0e0' }}
+                            />
+                          )}
                         </Box>
                       </div>
-                    ))}
-                  {contactsLoadingPage && (
-                    <Box display="flex" justifyContent="center" p={1}>
-                      <CircularProgress size={20} />
-                    </Box>
-                  )}
-                  {!contactsHasMore && (
-                    <Box display="flex" justifyContent="center" p={1}>
-                      <Typography variant="caption" color="textSecondary">
-                        Fim da lista
-                      </Typography>
-                    </Box>
-                  )}
-                </List>
+                    );
+                  });
+                })()}
+
+                {contactsLoadingPage && (
+                  <Box display="flex" justifyContent="center" p={2}>
+                    <CircularProgress size={24} />
+                  </Box>
+                )}
+                {!contactsHasMore && !searchQuery && (
+                  <Box display="flex" justifyContent="center" p={1}>
+                    <Typography variant="caption" color="textSecondary">
+                      ✓ Todos os contatos carregados
+                    </Typography>
+                  </Box>
+                )}
               </div>
             </div>
           ) : (!loading && !importing && !importSummary && (

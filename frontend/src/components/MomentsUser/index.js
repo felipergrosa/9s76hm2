@@ -57,6 +57,10 @@ const useStyles = makeStyles((theme) => ({
     borderRadius: theme.shape.borderRadius,
     border: "1px solid rgba(0,0,0,0.12)",
     overflow: "hidden",
+    cursor: "grab",
+    "&:active": {
+      cursor: "grabbing",
+    },
   },
   columnHeader: {
     padding: theme.spacing(2),
@@ -337,8 +341,8 @@ const MomentsUser = ({ onPanStart }) => {
   );
 
   const renderColumn = (title, icon, items, color) => (
-    <Paper className={classes.column} elevation={0}>
-      <div className={classes.columnHeader} onPointerDown={onPanStart} style={{ borderTop: `4px solid ${color}` }}>
+    <Paper className={classes.column} elevation={0} onPointerDown={onPanStart}>
+      <div className={classes.columnHeader} style={{ borderTop: `4px solid ${color}` }}>
         <div className={classes.columnTitle} style={{ color }}>
           {icon}
           {title}
@@ -351,7 +355,7 @@ const MomentsUser = ({ onPanStart }) => {
         {items.length > 0 ? (
           items.map(renderTicketCard)
         ) : (
-          <div style={{ padding: 20, textAlign: "center", color: "#bdbdbd" }}>
+          <div onPointerDown={onPanStart} style={{ padding: 20, textAlign: "center", color: "#bdbdbd", cursor: "grab" }}>
             <Typography variant="body2">Nenhum atendimento</Typography>
           </div>
         )}
@@ -387,8 +391,8 @@ const MomentsUser = ({ onPanStart }) => {
 
       {/* Colunas de Usuários */}
       {userTickets.map((group) => (
-        <Paper key={group.user.id} className={classes.column} elevation={0}>
-          <div className={classes.columnHeader} onPointerDown={onPanStart} style={{ borderTop: `4px solid ${green[600]}` }}>
+        <Paper key={group.user.id} className={classes.column} elevation={0} onPointerDown={onPanStart}>
+          <div className={classes.columnHeader} style={{ borderTop: `4px solid ${green[600]}` }}>
             <div className={classes.columnTitle}>
               <Avatar
                 src={group.user.profileImage ? `${backendUrl}/public/company${user.companyId}/user/${group.user.profileImage}` : null}

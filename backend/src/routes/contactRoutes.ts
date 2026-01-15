@@ -73,6 +73,7 @@ contactRoutes.get("/contacts/debug-device-data", isAuth, ContactController.debug
 contactRoutes.post("/contacts/force-appstate-sync", isAuth, ContactController.forceAppStateSync);
 contactRoutes.post("/contacts/test-create-label", isAuth, ContactController.testCreateLabel);
 contactRoutes.post("/contacts/normalize-numbers", isAuth, ContactController.normalizeNumbers);
+contactRoutes.post("/contacts/check-existing", isAuth, ContactController.checkExistingNumbers);
 
 // ========== ROTAS DE IMPORTAÇÃO ASSÍNCRONA ==========
 contactRoutes.post("/contacts/import-async", isAuth, upload.single("file"), ContactController.importContactsAsync);

@@ -4,6 +4,8 @@ import Contact from "../../models/Contact";
 import ContactTag from "../../models/ContactTag";
 import Tag from "../../models/Tag";
 import Whatsapp from "../../models/Whatsapp";
+import ContactWallet from "../../models/ContactWallet";
+import User from "../../models/User";
 import ShowContactService from "./ShowContactService";
 import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 
@@ -13,6 +15,8 @@ interface BulkUpdateData {
   tagIds?: number[];
   situation?: SituationType;
   whatsappId?: number | null;
+  walletIds?: number[]; // IDs dos usuários para atribuir carteira
+  disableBot?: boolean; // Desabilitar chatbot
 }
 
 interface BulkUpdateRequest {
@@ -26,7 +30,7 @@ const BulkUpdateContactsService = async ({ companyId, contactIds, data }: BulkUp
     throw new AppError("Nenhum ID de contato fornecido para atualização em massa.", 400);
   }
 
-  const { tagIds, situation, whatsappId } = data || {};
+  const { tagIds, situation, whatsappId, walletIds, disableBot } = data || {};
 
   // Valida situação se fornecida
   if (typeof situation !== "undefined") {
@@ -70,6 +74,7 @@ const BulkUpdateContactsService = async ({ companyId, contactIds, data }: BulkUp
     const updatePayload: any = {};
     if (typeof situation !== "undefined") updatePayload.situation = situation;
     if (typeof whatsappId !== "undefined") updatePayload.whatsappId = whatsappId;
+    if (typeof disableBot !== "undefined") updatePayload.disableBot = disableBot;
 
     if (Object.keys(updatePayload).length > 0) {
       await c.update(updatePayload);
@@ -93,6 +98,30 @@ const BulkUpdateContactsService = async ({ companyId, contactIds, data }: BulkUp
 
     const reloaded = await ShowContactService(c.id, companyId);
     updatedContacts.push(reloaded);
+  }
+
+  // Atualiza carteiras em massa (fora do loop para eficiência)
+  if (Array.isArray(walletIds)) {
+    // Valida que os usuários existem na empresa
+    const validUsers = await User.findAll({
+      where: { id: { [Op.in]: walletIds }, companyId },
+      attributes: ['id']
+    });
+    const validUserIds = validUsers.map(u => u.id);
+
+    // Para cada contato, remove carteiras antigas e adiciona novas
+    for (const c of contacts) {
+      await ContactWallet.destroy({ where: { contactId: c.id } });
+
+      if (validUserIds.length > 0) {
+        const walletEntries = validUserIds.map(userId => ({
+          walletId: userId,
+          contactId: c.id,
+          companyId
+        }));
+        await ContactWallet.bulkCreate(walletEntries as any);
+      }
+    }
   }
 
   return updatedContacts;
