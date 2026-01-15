@@ -1317,9 +1317,10 @@ const MessagesList = ({
     const pollNewMessages = async () => {
       try {
         // Só faz polling se temos mensagens carregadas (para comparar)
-        if (filteredMessages.length === 0) return;
+        // Usa messagesList em vez de filteredMessages para evitar erro de referência antes da inicialização
+        if (!messagesList || messagesList.length === 0) return;
 
-        const lastKnownId = lastMessageIdRef.current || filteredMessages[filteredMessages.length - 1]?.id;
+        const lastKnownId = lastMessageIdRef.current || messagesList[messagesList.length - 1]?.id;
 
         const { data } = await api.get(`/messages/${ticketId}`, {
           params: { pageNumber: 1, selectedQueues: JSON.stringify(selectedQueuesMessage) }
@@ -1328,7 +1329,7 @@ const MessagesList = ({
         if (data?.messages?.length) {
           // Verificar se há mensagens novas que não temos
           const newMessages = data.messages.filter(
-            (msg) => !filteredMessages.some((m) => m.id === msg.id)
+            (msg) => !messagesList.some((m) => m.id === msg.id)
           );
 
           if (newMessages.length > 0) {
@@ -1353,7 +1354,7 @@ const MessagesList = ({
     const interval = setInterval(pollNewMessages, 30000);
 
     return () => clearInterval(interval);
-  }, [ticketId, selectedQueuesMessage, filteredMessages]);
+  }, [ticketId, selectedQueuesMessage, messagesList]);
 
   const loadMore = () => {
     if (loadingMore) return;
