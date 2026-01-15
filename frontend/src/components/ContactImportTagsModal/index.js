@@ -275,6 +275,7 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
   const [totalContactsCount, setTotalContactsCount] = useState(0); // Total vindo do backend
   const [searchQuery, setSearchQuery] = useState(''); // Filtro de busca
   const [existingNumbers, setExistingNumbers] = useState(new Set()); // Números já cadastrados
+  const [importMode, setImportMode] = useState('manual'); // 'all' | 'newOnly' | 'manual'
 
   const contactsLoadingRef = useRef(false);
   const contactsListRef = useRef(null);
@@ -668,25 +669,33 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
       return;
     }
 
-    // Caminho 2: Importação por contatos do dispositivo (fallback quando sem tags)
-    if (selectedDeviceContacts.size === 0) {
+    // Caminho 2: Importação por contatos do dispositivo (quando sem tags selecionadas)
+    // Verifica se está em modo manual sem seleção
+    if (importMode === 'manual' && selectedDeviceContacts.size === 0) {
       toastError('Selecione pelo menos uma tag do dispositivo ou ao menos um contato do dispositivo');
       return;
     }
 
     setImporting(true);
+    setImportProgress({ total: 0, processed: 0, created: 0, updated: 0, tagged: 0, skipped: 0 });
+
     try {
       const payload = {
         whatsappId: selectedWhatsappId,
-        selectedJids: Array.from(selectedDeviceContacts),
+        // Se modo 'all' ou 'newOnly', envia lista vazia para backend processar todos
+        selectedJids: importMode === 'manual' ? Array.from(selectedDeviceContacts) : [],
         autoCreateTags: true,
-        targetTagId: targetSystemTag
+        targetTagId: targetSystemTag,
+        importMode: importMode // 'all' | 'newOnly' | 'manual'
       };
       const { data } = await api.post('/contacts/import-device-contacts', payload);
 
-      const { created = 0, updated = 0, tagged = 0, failed = 0 } = data;
+      const { created = 0, updated = 0, tagged = 0, failed = 0, skipped = 0 } = data;
 
       let msg = `✅ Importação concluída! Criados: ${created}, Atualizados: ${updated}`;
+      if (skipped > 0) {
+        msg += `, Ignorados: ${skipped}`;
+      }
       if (failed > 0) {
         msg += `, ⚠️ Falhas: ${failed}`;
         toast.warn(msg, { autoClose: 8000 });
@@ -899,7 +908,7 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
               </Box>
               <Typography variant="body2" color="textSecondary">
                 {importProgress && importProgress.total > 0
-                  ? `Importando contatos... ${importProgress.processed}/${importProgress.total} (criados: ${importProgress.created}, atualizados: ${importProgress.updated}, etiquetados: ${importProgress.tagged})`
+                  ? `Importando contatos... ${importProgress.processed}/${importProgress.total} (criados: ${importProgress.created}, atualizados: ${importProgress.updated}${importProgress.skipped > 0 ? `, ignorados: ${importProgress.skipped}` : ''})`
                   : 'Importando contatos... aguarde concluir.'}
               </Typography>
             </Box>
@@ -1043,16 +1052,28 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                     </Select>
                   </FormControl>
 
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={selectAll}
-                        onChange={handleSelectAllToggle}
-                        color="primary"
-                      />
-                    }
-                    label="Todos"
-                  />
+                  <FormControl variant="outlined" size="small" style={{ minWidth: 180 }}>
+                    <InputLabel id="import-mode-label">Modo de Seleção</InputLabel>
+                    <Select
+                      labelId="import-mode-label"
+                      value={importMode}
+                      onChange={(e) => {
+                        const mode = e.target.value;
+                        setImportMode(mode);
+                        if (mode === 'all' || mode === 'newOnly') {
+                          setSelectAll(true);
+                        } else {
+                          setSelectAll(false);
+                          setSelectedDeviceContacts(new Set());
+                        }
+                      }}
+                      label="Modo de Seleção"
+                    >
+                      <MenuItem value="manual">Seleção manual</MenuItem>
+                      <MenuItem value="all">Todos os contatos ({totalContactsCount})</MenuItem>
+                      <MenuItem value="newOnly">Somente novos</MenuItem>
+                    </Select>
+                  </FormControl>
                 </Box>
               </Box>
 
