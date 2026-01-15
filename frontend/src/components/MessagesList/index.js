@@ -638,6 +638,31 @@ const useStyles = makeStyles((theme) => ({
 
   deletedMessage: {
     color: '#f55d65'
+  },
+
+  messageReaction: {
+    position: 'absolute',
+    bottom: -10,
+    right: 10,
+    backgroundColor: theme.mode === 'light' ? '#fff' : '#202c33',
+    borderRadius: '16px',
+    padding: '2px 6px 2px 6px',
+    fontSize: '12px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
+    zIndex: 10,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 26,
+    height: 24,
+    border: theme.mode === 'light' ? '1px solid #e1e1e1' : '1px solid #333',
+    color: '#333',
+    whiteSpace: 'nowrap'
+  },
+  messageReactionSpan: {
+    margin: '0 1px',
+    fontSize: '14px',
+    lineHeight: '18px'
   }
 }));
 
@@ -736,13 +761,13 @@ const MessagesList = ({
 
   const [videoDialog, setVideoDialog] = useState({ open: false, url: null });
   const [pdfDialog, setPdfDialog] = useState({ open: false, url: null });
-  
+
   // Estado para o modal de mídia (estilo WhatsApp)
-  const [mediaModal, setMediaModal] = useState({ 
-    open: false, 
-    mediaUrl: null, 
+  const [mediaModal, setMediaModal] = useState({
+    open: false,
+    mediaUrl: null,
     mediaType: "image",
-    message: null 
+    message: null
   });
 
   // Função para obter todas as mídias (imagens e vídeos) da conversa
@@ -766,39 +791,39 @@ const MessagesList = ({
   const handleCloseMediaModal = useCallback(() => {
     setMediaModal({ open: false, mediaUrl: null, mediaType: "image", message: null });
   }, []);
-  
+
   // Estado para transcrições de áudio
   const [transcriptions, setTranscriptions] = useState({}); // { messageId: { loading, text, error } }
 
   // Função para transcrever áudio
   const handleTranscribeAudio = async (message) => {
     if (!message?.mediaUrl) return;
-    
+
     const messageId = message.id;
-    
+
     // Se já está carregando ou já tem transcrição, não faz nada
     if (transcriptions[messageId]?.loading || transcriptions[messageId]?.text) return;
-    
+
     // Extrair nome do arquivo da URL
     const fileName = message.mediaUrl.split('/').pop();
     if (!fileName) return;
-    
+
     setTranscriptions(prev => ({
       ...prev,
       [messageId]: { loading: true, text: null, error: null }
     }));
-    
+
     try {
       const { data } = await api.get(`/messages/transcribeAudio/${encodeURIComponent(fileName)}`, {
         params: { ticketId: message.ticketId }
       });
-      
+
       setTranscriptions(prev => ({
         ...prev,
-        [messageId]: { 
-          loading: false, 
-          text: data?.transcribedText?.transcribedText || data?.transcribedText || "", 
-          error: null 
+        [messageId]: {
+          loading: false,
+          text: data?.transcribedText?.transcribedText || data?.transcribedText || "",
+          error: null
         }
       }));
     } catch (err) {
@@ -806,9 +831,9 @@ const MessagesList = ({
       const errorMessage = err?.response?.data?.error || err?.message || "Erro ao transcrever";
       setTranscriptions(prev => ({
         ...prev,
-        [messageId]: { 
-          loading: false, 
-          text: null, 
+        [messageId]: {
+          loading: false,
+          text: null,
           error: errorMessage
         }
       }));
@@ -869,7 +894,7 @@ const MessagesList = ({
       a.click();
       a.remove();
       window.URL.revokeObjectURL(blobUrl);
-    } catch {}
+    } catch { }
   };
 
   // Exibe duração do áudio (mm:ss) usando apenas metadata do arquivo
@@ -927,7 +952,7 @@ const MessagesList = ({
       <div className={classes.mediaWrapper}>
         {!isGif && isHd && <span className={classes.hdBadge}>HD</span>}
         <video
-              className={`${classes.messageMedia} ${className || ''}`}
+          className={`${classes.messageMedia} ${className || ''}`}
           src={src}
           controls
           ref={videoRef}
@@ -973,227 +998,227 @@ const MessagesList = ({
   useEffect(() => {
     setLoading(true);
     const fetchMessages = async () => {
-        if (!ticketId || ticketId === "undefined") {
-          history.push("/tickets");
-          return;
-        }
-        if (isNil(ticketId)) return;
-        try {
-          const { data } = await api.get("/messages/" + ticketId, {
-            params: { pageNumber, selectedQueues: JSON.stringify(selectedQueuesMessage) },
-          });
+      if (!ticketId || ticketId === "undefined") {
+        history.push("/tickets");
+        return;
+      }
+      if (isNil(ticketId)) return;
+      try {
+        const { data } = await api.get("/messages/" + ticketId, {
+          params: { pageNumber, selectedQueues: JSON.stringify(selectedQueuesMessage) },
+        });
 
-          if (currentTicketId.current === ticketId) {
-            dispatch({ type: "LOAD_MESSAGES", payload: data.messages });
-            setHasMore(data.hasMore);
-            setLoading(false);
-            setLoadingMore(false);
-
-            // Descobre o UUID do ticket diretamente do payload (mais confiável)
-            const ticketUuid = data?.ticket?.uuid || null;
-            // Fallback: tenta pegar da primeira mensagem caso necessário
-            const firstMsg = data?.messages?.[0];
-            const firstMsgUuid = firstMsg?.ticket?.uuid || null;
-            const newRoomId = ticketUuid || firstMsgUuid || null;
-            if (newRoomId) {
-              try {
-                const prevRoom = currentRoomIdRef.current;
-                if (prevRoom && prevRoom !== newRoomId) {
-                  if (typeof socket.leaveRoom === "function") {
-                    socket.leaveRoom(prevRoom, (err) => {
-                      if (err) console.log("[MessagesList] leave prev room ack error", err);
-                      else console.log("[MessagesList] left prev room", { room: prevRoom });
-                    });
-                  } else {
-                    socket.emit("joinChatBoxLeave", prevRoom, (err) => {
-                      if (err) console.log("[MessagesList] leave prev room ack error", err);
-                      else console.log("[MessagesList] left prev room", { room: prevRoom });
-                    });
-                  }
-                }
-                if (prevRoom !== newRoomId) {
-                  currentRoomIdRef.current = newRoomId;
-                  if (typeof socket.joinRoom === "function") {
-                    socket.joinRoom(newRoomId, (err) => {
-                      if (err) console.log("[MessagesList] join after fetch ack error", err);
-                      else {
-                        console.log("[MessagesList] joined room by uuid after fetch", { room: newRoomId });
-                        if (typeof socket.checkRoom === "function") {
-                          socket.checkRoom(newRoomId, (res) => console.log("[MessagesList] checkRoom after fetch join", res));
-                        }
-                      }
-                    });
-                  } else {
-                    socket.emit("joinChatBox", newRoomId, (err) => {
-                      if (err) console.log("[MessagesList] join after fetch ack error", err);
-                      else {
-                        console.log("[MessagesList] joined room by uuid after fetch", { room: newRoomId });
-                        if (typeof socket.checkRoom === "function") {
-                          socket.checkRoom(newRoomId, (res) => console.log("[MessagesList] checkRoom after fetch join", res));
-                        }
-                      }
-                    });
-                  }
-                }
-              } catch {}
-            }
-          }
-
-          if (pageNumber === 1) {
-            // aguarda composer e layout
-            const doReady = () => {
-              scrollToBottom();
-              setUiReady(true);
-              try { window.dispatchEvent(new Event('messages-ready')); } catch {}
-            };
-            if (composerReadyRef.current) {
-              setTimeout(doReady, 30);
-            } else {
-              // fallback: garante readiness mesmo sem evento
-              setTimeout(doReady, 180);
-            }
-          }
-        } catch (err) {
+        if (currentTicketId.current === ticketId) {
+          dispatch({ type: "LOAD_MESSAGES", payload: data.messages });
+          setHasMore(data.hasMore);
           setLoading(false);
-          toastError(err);
           setLoadingMore(false);
+
+          // Descobre o UUID do ticket diretamente do payload (mais confiável)
+          const ticketUuid = data?.ticket?.uuid || null;
+          // Fallback: tenta pegar da primeira mensagem caso necessário
+          const firstMsg = data?.messages?.[0];
+          const firstMsgUuid = firstMsg?.ticket?.uuid || null;
+          const newRoomId = ticketUuid || firstMsgUuid || null;
+          if (newRoomId) {
+            try {
+              const prevRoom = currentRoomIdRef.current;
+              if (prevRoom && prevRoom !== newRoomId) {
+                if (typeof socket.leaveRoom === "function") {
+                  socket.leaveRoom(prevRoom, (err) => {
+                    if (err) console.log("[MessagesList] leave prev room ack error", err);
+                    else console.log("[MessagesList] left prev room", { room: prevRoom });
+                  });
+                } else {
+                  socket.emit("joinChatBoxLeave", prevRoom, (err) => {
+                    if (err) console.log("[MessagesList] leave prev room ack error", err);
+                    else console.log("[MessagesList] left prev room", { room: prevRoom });
+                  });
+                }
+              }
+              if (prevRoom !== newRoomId) {
+                currentRoomIdRef.current = newRoomId;
+                if (typeof socket.joinRoom === "function") {
+                  socket.joinRoom(newRoomId, (err) => {
+                    if (err) console.log("[MessagesList] join after fetch ack error", err);
+                    else {
+                      console.log("[MessagesList] joined room by uuid after fetch", { room: newRoomId });
+                      if (typeof socket.checkRoom === "function") {
+                        socket.checkRoom(newRoomId, (res) => console.log("[MessagesList] checkRoom after fetch join", res));
+                      }
+                    }
+                  });
+                } else {
+                  socket.emit("joinChatBox", newRoomId, (err) => {
+                    if (err) console.log("[MessagesList] join after fetch ack error", err);
+                    else {
+                      console.log("[MessagesList] joined room by uuid after fetch", { room: newRoomId });
+                      if (typeof socket.checkRoom === "function") {
+                        socket.checkRoom(newRoomId, (res) => console.log("[MessagesList] checkRoom after fetch join", res));
+                      }
+                    }
+                  });
+                }
+              }
+            } catch { }
+          }
         }
+
+        if (pageNumber === 1) {
+          // aguarda composer e layout
+          const doReady = () => {
+            scrollToBottom();
+            setUiReady(true);
+            try { window.dispatchEvent(new Event('messages-ready')); } catch { }
+          };
+          if (composerReadyRef.current) {
+            setTimeout(doReady, 30);
+          } else {
+            // fallback: garante readiness mesmo sem evento
+            setTimeout(doReady, 180);
+          }
+        }
+      } catch (err) {
+        setLoading(false);
+        toastError(err);
+        setLoadingMore(false);
+      }
     };
 
     fetchMessages();
   }, [pageNumber, ticketId, selectedQueuesMessage]);
 
-// Garante que, quando o composer sinalizar que está pronto, a lista role ao final
-useEffect(() => {
-  const onComposerReady = () => {
-    composerReadyRef.current = true;
-    setTimeout(() => {
-      scrollToBottom();
-      setUiReady(true);
-      try { window.dispatchEvent(new Event('messages-ready')); } catch {}
-    }, 60);
-  };
-  window.addEventListener('composer-ready', onComposerReady);
-  return () => window.removeEventListener('composer-ready', onComposerReady);
-}, []);
+  // Garante que, quando o composer sinalizar que está pronto, a lista role ao final
+  useEffect(() => {
+    const onComposerReady = () => {
+      composerReadyRef.current = true;
+      setTimeout(() => {
+        scrollToBottom();
+        setUiReady(true);
+        try { window.dispatchEvent(new Event('messages-ready')); } catch { }
+      }, 60);
+    };
+    window.addEventListener('composer-ready', onComposerReady);
+    return () => window.removeEventListener('composer-ready', onComposerReady);
+  }, []);
 
-useEffect(() => {
-  if (!ticketId || ticketId === "undefined") {
-    return;
-  }
-
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  const normalizedTicketId = (ticketId ?? "").toString().trim();
-  const ticketUuidFromUrl = uuidRegex.test(normalizedTicketId) ? normalizedTicketId : null;
-  // Se a rota já estiver em UUID, usamos isso como sala atual imediatamente
-  if (ticketUuidFromUrl && !currentRoomIdRef.current) {
-    currentRoomIdRef.current = ticketUuidFromUrl;
-  }
-
-  // Aguarda socket e user.companyId disponíveis
-  if (!socket || typeof socket.on !== "function") {
-    return;
-  }
-  if (!user || !user.companyId) {
-    return;
-  }
-
-  const companyId = user.companyId;
-
-  const connectEventMessagesList = () => {
-    try {
-      // Prioriza entrar pela sala UUID se já conhecida
-      const candidateFromUrl = ticketUuidFromUrl || "";
-      const roomToJoin = (currentRoomIdRef.current || candidateFromUrl || "").toString().trim();
-      if (!roomToJoin || roomToJoin === "undefined") {
-        console.debug("[MessagesList] skip joinChatBox - invalid ticketId", { ticketId });
-        return;
-      }
-      console.log("[MessagesList] socket connect - joinChatBox", { room: roomToJoin, hasJoinRoom: typeof socket.joinRoom === "function", connected: !!socket.connected });
-      if (typeof socket.joinRoom === "function") {
-        socket.joinRoom(roomToJoin, (err) => {
-          if (err) console.log("[MessagesList] joinChatBox ack error", err);
-          else {
-            console.log("[MessagesList] joinChatBox ok", { room: roomToJoin });
-            if (typeof socket.checkRoom === "function") {
-              socket.checkRoom(roomToJoin, (res) => console.log("[MessagesList] checkRoom after connect join", res));
-            }
-          }
-        });
-      } else {
-        socket.emit("joinChatBox", roomToJoin, (err) => {
-          if (err) console.log("[MessagesList] joinChatBox ack error", err);
-          else {
-            console.log("[MessagesList] joinChatBox ok", { room: roomToJoin });
-            if (typeof socket.checkRoom === "function") {
-              socket.checkRoom(roomToJoin, (res) => console.log("[MessagesList] checkRoom after connect join", res));
-            }
-          }
-        });
-      }
-    } catch (e) {
-      console.debug("[MessagesList] error emitting joinChatBox", e);
+  useEffect(() => {
+    if (!ticketId || ticketId === "undefined") {
+      return;
     }
-  };
 
-  const onAppMessageMessagesList = (data) => {
-    try {
-      const evtUuid = data?.message?.ticket?.uuid || data?.ticket?.uuid;
-      const evtTicketId = data?.message?.ticketId || data?.ticket?.id;
-      const hasUuid = Boolean(evtUuid);
-      const currentUuid = (currentRoomIdRef.current || ticketUuidFromUrl || "").toString().trim();
-      const urlIsUuid = Boolean(ticketUuidFromUrl);
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const normalizedTicketId = (ticketId ?? "").toString().trim();
+    const ticketUuidFromUrl = uuidRegex.test(normalizedTicketId) ? normalizedTicketId : null;
+    // Se a rota já estiver em UUID, usamos isso como sala atual imediatamente
+    if (ticketUuidFromUrl && !currentRoomIdRef.current) {
+      currentRoomIdRef.current = ticketUuidFromUrl;
+    }
 
-      console.debug("[MessagesList] appMessage", {
-        action: data?.action,
-        evtUuid,
-        evtTicketId,
-        hasUuid,
-        currentRoom: currentRoomIdRef.current,
-        currentTicketId: ticketId,
-        currentUuid,
-        msgId: data?.message?.id,
-      });
+    // Aguarda socket e user.companyId disponíveis
+    if (!socket || typeof socket.on !== "function") {
+      return;
+    }
+    if (!user || !user.companyId) {
+      return;
+    }
 
-      // CRÍTICO: Sempre verificar se a mensagem pertence ao ticket atual
-      // Se não houver UUID, verificar pelo ticketId
-      // Se nenhum dos dois bater, REJEITAR a mensagem
-      let shouldHandle = false;
-      // Preferência: comparar UUID quando disponível (rota em uuid ou sala em uuid)
-      if (hasUuid && currentUuid && String(evtUuid) === String(currentUuid)) {
-        shouldHandle = true;
-      } else if (!urlIsUuid && evtTicketId && String(evtTicketId) === String(ticketId)) {
-        // Compatibilidade: quando a rota ainda é numérica, compara ticketId
-        shouldHandle = true;
+    const companyId = user.companyId;
+
+    const connectEventMessagesList = () => {
+      try {
+        // Prioriza entrar pela sala UUID se já conhecida
+        const candidateFromUrl = ticketUuidFromUrl || "";
+        const roomToJoin = (currentRoomIdRef.current || candidateFromUrl || "").toString().trim();
+        if (!roomToJoin || roomToJoin === "undefined") {
+          console.debug("[MessagesList] skip joinChatBox - invalid ticketId", { ticketId });
+          return;
+        }
+        console.log("[MessagesList] socket connect - joinChatBox", { room: roomToJoin, hasJoinRoom: typeof socket.joinRoom === "function", connected: !!socket.connected });
+        if (typeof socket.joinRoom === "function") {
+          socket.joinRoom(roomToJoin, (err) => {
+            if (err) console.log("[MessagesList] joinChatBox ack error", err);
+            else {
+              console.log("[MessagesList] joinChatBox ok", { room: roomToJoin });
+              if (typeof socket.checkRoom === "function") {
+                socket.checkRoom(roomToJoin, (res) => console.log("[MessagesList] checkRoom after connect join", res));
+              }
+            }
+          });
+        } else {
+          socket.emit("joinChatBox", roomToJoin, (err) => {
+            if (err) console.log("[MessagesList] joinChatBox ack error", err);
+            else {
+              console.log("[MessagesList] joinChatBox ok", { room: roomToJoin });
+              if (typeof socket.checkRoom === "function") {
+                socket.checkRoom(roomToJoin, (res) => console.log("[MessagesList] checkRoom after connect join", res));
+              }
+            }
+          });
+        }
+      } catch (e) {
+        console.debug("[MessagesList] error emitting joinChatBox", e);
       }
+    };
 
-      if (!shouldHandle) {
-        console.debug("[MessagesList] Rejeitando mensagem de outro ticket", {
+    const onAppMessageMessagesList = (data) => {
+      try {
+        const evtUuid = data?.message?.ticket?.uuid || data?.ticket?.uuid;
+        const evtTicketId = data?.message?.ticketId || data?.ticket?.id;
+        const hasUuid = Boolean(evtUuid);
+        const currentUuid = (currentRoomIdRef.current || ticketUuidFromUrl || "").toString().trim();
+        const urlIsUuid = Boolean(ticketUuidFromUrl);
+
+        console.debug("[MessagesList] appMessage", {
+          action: data?.action,
           evtUuid,
           evtTicketId,
+          hasUuid,
           currentRoom: currentRoomIdRef.current,
+          currentTicketId: ticketId,
           currentUuid,
-          ticketId
+          msgId: data?.message?.id,
         });
-        return;
-      }
 
-      if (data.action === "create") {
-        dispatch({ type: "ADD_MESSAGE", payload: data.message });
-        scrollToBottom();
-      }
+        // CRÍTICO: Sempre verificar se a mensagem pertence ao ticket atual
+        // Se não houver UUID, verificar pelo ticketId
+        // Se nenhum dos dois bater, REJEITAR a mensagem
+        let shouldHandle = false;
+        // Preferência: comparar UUID quando disponível (rota em uuid ou sala em uuid)
+        if (hasUuid && currentUuid && String(evtUuid) === String(currentUuid)) {
+          shouldHandle = true;
+        } else if (!urlIsUuid && evtTicketId && String(evtTicketId) === String(ticketId)) {
+          // Compatibilidade: quando a rota ainda é numérica, compara ticketId
+          shouldHandle = true;
+        }
 
-      if (data.action === "update") {
-        dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
-      }
+        if (!shouldHandle) {
+          console.debug("[MessagesList] Rejeitando mensagem de outro ticket", {
+            evtUuid,
+            evtTicketId,
+            currentRoom: currentRoomIdRef.current,
+            currentUuid,
+            ticketId
+          });
+          return;
+        }
 
-      if (data.action === "delete") {
-        dispatch({ type: "DELETE_MESSAGE", payload: data.messageId });
+        if (data.action === "create") {
+          dispatch({ type: "ADD_MESSAGE", payload: data.message });
+          scrollToBottom();
+        }
+
+        if (data.action === "update") {
+          dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
+        }
+
+        if (data.action === "delete") {
+          dispatch({ type: "DELETE_MESSAGE", payload: data.messageId });
+        }
+      } catch (e) {
+        console.debug("[MessagesList] error handling appMessage", e, data);
       }
-    } catch (e) {
-      console.debug("[MessagesList] error handling appMessage", e, data);
-    }
-  };
+    };
 
     socket.on("connect", connectEventMessagesList);
     socket.on(`company-${companyId}-appMessage`, onAppMessageMessagesList);
@@ -1203,7 +1228,7 @@ useEffect(() => {
       if (socket && socket.connected) {
         connectEventMessagesList();
       }
-    } catch {}
+    } catch { }
 
     // Logs auxiliares de conexão
     socket.on("disconnect", (reason) => console.debug("[MessagesList] disconnect", reason));
@@ -1230,7 +1255,7 @@ useEffect(() => {
             });
           }
         }
-      } catch {}
+      } catch { }
 
       socket.off("connect", connectEventMessagesList);
       socket.off(`company-${companyId}-appMessage`, onAppMessageMessagesList);
@@ -1337,8 +1362,8 @@ useEffect(() => {
       );
     } else if (message.mediaType === "image") {
       return (
-        <div 
-          style={{ cursor: "pointer" }} 
+        <div
+          style={{ cursor: "pointer" }}
           onClick={() => handleOpenMediaModal(message)}
         >
           <ModalImageCors imageUrl={message.mediaUrl} />
@@ -1351,7 +1376,7 @@ useEffect(() => {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
           <AudioModal url={message.mediaUrl} contact={getAvatarContactForMessage(message, message?.ticket?.contact)} fromMe={message.fromMe} />
-          
+
           {/* Botão de transcrição */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
             <Button
@@ -1366,13 +1391,13 @@ useEffect(() => {
               {transcription?.loading ? "Transcrevendo..." : transcription?.text ? "Transcrito" : "Transcrever"}
             </Button>
           </div>
-          
+
           {/* Exibir transcrição */}
           {transcriptionText && (
-            <div style={{ 
-              backgroundColor: 'rgba(0,0,0,0.05)', 
-              borderRadius: 4, 
-              padding: '6px 8px', 
+            <div style={{
+              backgroundColor: 'rgba(0,0,0,0.05)',
+              borderRadius: 4,
+              padding: '6px 8px',
               fontSize: 14,
               fontStyle: 'normal',
               width: '100%',
@@ -1381,11 +1406,11 @@ useEffect(() => {
               {transcriptionText}
             </div>
           )}
-          
+
           {/* Exibir erro */}
           {transcription?.error && (
-            <div style={{ 
-              color: '#d32f2f', 
+            <div style={{
+              color: '#d32f2f',
               fontSize: 11,
               padding: '4px 8px'
             }}>
@@ -1463,6 +1488,35 @@ useEffect(() => {
     }
   };
 
+  // Filtra mensagens de reação e agrupa
+  const { filteredMessages, messageReactions } = React.useMemo(() => {
+    const reactions = {};
+    const filtered = [];
+
+    // Safety check
+    if (!messagesList) return { filteredMessages: [], messageReactions: {} };
+
+    messagesList.forEach((msg) => {
+      if (msg.mediaType === "reactionMessage") {
+        // Se for reação, agrupa pelo quotedMsgId (que é o ID da mensagem alvo)
+        if (msg.quotedMsgId) {
+          if (!reactions[msg.quotedMsgId]) {
+            reactions[msg.quotedMsgId] = [];
+          }
+          // Evitar duplicatas da mesma reação do mesmo usuário? 
+          // O WhatsApp substitui, mas aqui vamos apenas listar. O backend deveria tratar unicidade se necessário.
+          // Mas para visualização, geralmente mostra a última ou todas agrupadas.
+          // Vamos adicionar todas para garantir.
+          reactions[msg.quotedMsgId].push(msg);
+        }
+      } else {
+        filtered.push(msg);
+      }
+    });
+
+    return { filteredMessages: filtered, messageReactions: reactions };
+  }, [messagesList]);
+
   const renderMessageAck = (message) => {
     if (message.ack === 0) {
       return <AccessTime fontSize="small" className={classes.ackIcons} />;
@@ -1487,13 +1541,13 @@ useEffect(() => {
           key={`timestamp-${message.id}`}
         >
           <div className={classes.dailyTimestampText}>
-            {today === format(parseISO(messagesList[index].createdAt), "dd/MM/yyyy") ? "HOJE" : format(parseISO(messagesList[index].createdAt), "dd/MM/yyyy")}
+            {today === format(parseISO(filteredMessages[index].createdAt), "dd/MM/yyyy") ? "HOJE" : format(parseISO(filteredMessages[index].createdAt), "dd/MM/yyyy")}
           </div>
         </span>
       );
-    } else if (index < messagesList.length - 1) {
-      let messageDay = parseISO(messagesList[index].createdAt);
-      let previousMessageDay = parseISO(messagesList[index - 1].createdAt);
+    } else if (index < filteredMessages.length - 1) {
+      let messageDay = parseISO(filteredMessages[index].createdAt);
+      let previousMessageDay = parseISO(filteredMessages[index - 1].createdAt);
 
       if (!isSameDay(messageDay, previousMessageDay)) {
         return (
@@ -1502,12 +1556,12 @@ useEffect(() => {
             key={`timestamp-${message.id}`}
           >
             <div className={classes.dailyTimestampText}>
-              {today === format(parseISO(messagesList[index].createdAt), "dd/MM/yyyy") ? "HOJE" : format(parseISO(messagesList[index].createdAt), "dd/MM/yyyy")}
+              {today === format(parseISO(filteredMessages[index].createdAt), "dd/MM/yyyy") ? "HOJE" : format(parseISO(filteredMessages[index].createdAt), "dd/MM/yyyy")}
             </div>
           </span>
         );
       }
-    } else if (index === messagesList.length - 1) {
+    } else if (index === filteredMessages.length - 1) {
       return (
         <div
           key={`ref-${message.id}`}
@@ -1520,7 +1574,7 @@ useEffect(() => {
 
 
   const renderTicketsSeparator = (message, index) => {
-    let lastTicket = messagesList[index - 1]?.ticketId;
+    let lastTicket = filteredMessages[index - 1]?.ticketId;
     let currentTicket = message.ticketId;
 
     if (lastTicket !== currentTicket && lastTicket !== undefined) {
@@ -1570,9 +1624,9 @@ useEffect(() => {
   };
 
   const renderMessageDivider = (message, index) => {
-    if (index < messagesList.length && index > 0) {
-      let messageUser = messagesList[index].fromMe;
-      let previousMessageUser = messagesList[index - 1].fromMe;
+    if (index < filteredMessages.length && index > 0) {
+      let messageUser = filteredMessages[index].fromMe;
+      let previousMessageUser = filteredMessages[index - 1].fromMe;
       if (messageUser !== previousMessageUser) {
         return (
 
@@ -1716,8 +1770,8 @@ useEffect(() => {
   const hasButtonsInDataJson = (message) => {
     if (!message?.dataJson) return false;
     try {
-      const data = typeof message.dataJson === "string" 
-        ? JSON.parse(message.dataJson) 
+      const data = typeof message.dataJson === "string"
+        ? JSON.parse(message.dataJson)
         : message.dataJson;
       return !!(
         data?.message?.buttonsMessage?.buttons?.length ||
@@ -1744,10 +1798,10 @@ useEffect(() => {
   };
 
   const renderMessages = () => {
-    if (!messagesList || messagesList.length === 0) {
+    if (!filteredMessages || filteredMessages.length === 0) {
       return <div>Diga olá para seu novo contato!</div>;
     }
-    const view = messagesList.map((message, index) => {
+    const view = filteredMessages.map((message, index) => {
       if (message.mediaType === "call_log") {
         return (
           <React.Fragment key={message.id}>
@@ -1768,7 +1822,7 @@ useEffect(() => {
       const isLeft = !message.fromMe;
       const isSticker = message.mediaType === "sticker" || message.mediaType === "gif";
       const bubbleClass = clsx(
-        isSticker 
+        isSticker
           ? (isLeft ? classes.messageStickerLeft : classes.messageStickerRight)
           : (isLeft ? classes.messageLeft : (message.isPrivate ? classes.messageRightPrivate : classes.messageRight)),
         { [isLeft ? classes.messageLeftAudio : classes.messageRightAudio]: message.mediaType === "audio" }
@@ -1782,7 +1836,7 @@ useEffect(() => {
           {renderDailyTimestamps(message, index)}
           {renderTicketsSeparator(message, index)}
           {renderMessageDivider(message, index)}
-          <div 
+          <div
             className={clsx(
               classes.messageRowWrapper,
               { [classes.messageRowWrapperSelected]: isMessageSelected }
@@ -1800,84 +1854,93 @@ useEffect(() => {
                 onDoubleClick={(e) => hanldeReplyMessage(e, message)}
               >
                 <IconButton
-              variant="contained"
-              size="small"
-              id="messageActionsButton"
-              disabled={message.isDeleted}
-              className={classes.messageActionsButton}
-              onClick={(e) => handleOpenMessageOptionsMenu(e, message)}
-            >
-              <ExpandMore />
-            </IconButton>
+                  variant="contained"
+                  size="small"
+                  id="messageActionsButton"
+                  disabled={message.isDeleted}
+                  className={classes.messageActionsButton}
+                  onClick={(e) => handleOpenMessageOptionsMenu(e, message)}
+                >
+                  <ExpandMore />
+                </IconButton>
 
-            {(message.mediaUrl || message.mediaType === "locationMessage" || message.mediaType === "contactMessage" || message.mediaType === "template" || message.mediaType === "adMetaPreview") && checkMessageMedia(message)}
+                {/* Reação em bolha sobreposta */}
+                {messageReactions[message.id] && messageReactions[message.id].length > 0 && (
+                  <div className={classes.messageReaction}>
+                    {messageReactions[message.id].map((reaction, rIndex) => (
+                      <span key={rIndex} className={classes.messageReactionSpan}>{reaction.body}</span>
+                    ))}
+                  </div>
+                )}
 
-            <div className={clsx(
-              classes.textContentItem,
-              {
-                [classes.textContentItemDeleted]: message.isDeleted,
-                [classes.textContentItemCompact]: (
-                  // PDFs: compacta quando body == nome do arquivo
-                  (message.mediaType === "application" && /\.pdf($|\?)/i.test(message.mediaUrl || "") &&
-                   (getFileNameFromUrl(message.mediaUrl) || "").trim() === (message.body || "").trim())
-                  ||
-                  // Imagens/Vídeos: compacta quando não há legenda ou quando body == nome do arquivo
-                  ((message.mediaType === "image" || message.mediaType === "video") && (
-                    ((message.body || "").trim() === "") ||
-                    ((getFileNameFromUrl(message.mediaUrl) || "").trim() === (message.body || "").trim())
-                  ))
-                )
-              }
-            )}>
-              {message.quotedMsg && renderQuotedMessage(message)}
-              {message.mediaType !== "adMetaPreview" && (
-                (() => {
-                  const bodyTrim = (message.body || "").trim();
+                {(message.mediaUrl || message.mediaType === "locationMessage" || message.mediaType === "contactMessage" || message.mediaType === "template" || message.mediaType === "adMetaPreview") && checkMessageMedia(message)}
 
-                  // Stickers/GIFs: nunca exibir texto
-                  if (message.mediaType === "sticker" || message.mediaType === "gif") return null;
-
-                  // Remover legendas de mídia (imagem, vídeo, áudio, arquivos) e reações/location/contact
-                  if (
-                    message.mediaType === "image" ||
-                    message.mediaType === "video" ||
-                    message.mediaType === "audio" ||
-                    message.mediaType === "application" ||
-                    message.mediaType === "document" ||
-                    message.mediaType === "reactionMessage" ||
-                    message.mediaType === "locationMessage" ||
-                    message.mediaType === "contactMessage"
-                  ) {
-                    return null;
+                <div className={clsx(
+                  classes.textContentItem,
+                  {
+                    [classes.textContentItemDeleted]: message.isDeleted,
+                    [classes.textContentItemCompact]: (
+                      // PDFs: compacta quando body == nome do arquivo
+                      (message.mediaType === "application" && /\.pdf($|\?)/i.test(message.mediaUrl || "") &&
+                        (getFileNameFromUrl(message.mediaUrl) || "").trim() === (message.body || "").trim())
+                      ||
+                      // Imagens/Vídeos: compacta quando não há legenda ou quando body == nome do arquivo
+                      ((message.mediaType === "image" || message.mediaType === "video") && (
+                        ((message.body || "").trim() === "") ||
+                        ((getFileNameFromUrl(message.mediaUrl) || "").trim() === (message.body || "").trim())
+                      ))
+                    )
                   }
+                )}>
+                  {message.quotedMsg && renderQuotedMessage(message)}
+                  {message.mediaType !== "adMetaPreview" && (
+                    (() => {
+                      const bodyTrim = (message.body || "").trim();
 
-                  // Demais tipos (texto)
-                  return xmlRegex.test(message.body)
-                    ? <span>{formatXml(cleanButtonMarkers(message.body, message))}</span>
-                    : <MarkdownWrapper>{(lgpdDeleteMessage && message.isDeleted) ? "🚫 _Mensagem apagada_ " : cleanButtonMarkers(message.body, message)}</MarkdownWrapper>;
+                      // Stickers/GIFs: nunca exibir texto
+                      if (message.mediaType === "sticker" || message.mediaType === "gif") return null;
 
-                  return null;
-                })()
-              )}
+                      // Remover legendas de mídia (imagem, vídeo, áudio, arquivos) e reações/location/contact
+                      if (
+                        message.mediaType === "image" ||
+                        message.mediaType === "video" ||
+                        message.mediaType === "audio" ||
+                        message.mediaType === "application" ||
+                        message.mediaType === "document" ||
+                        message.mediaType === "reactionMessage" ||
+                        message.mediaType === "locationMessage" ||
+                        message.mediaType === "contactMessage"
+                      ) {
+                        return null;
+                      }
 
-              {/* Renderiza botões interativos se houver dataJson com botões */}
-              <ButtonsPreview message={message} />
+                      // Demais tipos (texto)
+                      return xmlRegex.test(message.body)
+                        ? <span>{formatXml(cleanButtonMarkers(message.body, message))}</span>
+                        : <MarkdownWrapper>{(lgpdDeleteMessage && message.isDeleted) ? "🚫 _Mensagem apagada_ " : cleanButtonMarkers(message.body, message)}</MarkdownWrapper>;
 
-              {message.mediaType === "audio" && (
-                <span className={classes.audioDuration}>
-                  <AudioDurationTag src={message.mediaUrl} />
-                </span>
-              )}
+                      return null;
+                    })()
+                  )}
 
-              <span className={classes.timestamp}>
-                {message.isEdited ? "Editada " + format(parseISO(message.createdAt), "HH:mm") : format(parseISO(message.createdAt), "HH:mm")}
-                {!isLeft && renderMessageAck(message)}
-              </span>
-            </div>
+                  {/* Renderiza botões interativos se houver dataJson com botões */}
+                  <ButtonsPreview message={message} />
+
+                  {message.mediaType === "audio" && (
+                    <span className={classes.audioDuration}>
+                      <AudioDurationTag src={message.mediaUrl} />
+                    </span>
+                  )}
+
+                  <span className={classes.timestamp}>
+                    {message.isEdited ? "Editada " + format(parseISO(message.createdAt), "HH:mm") : format(parseISO(message.createdAt), "HH:mm")}
+                    {!isLeft && renderMessageAck(message)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
-        </React.Fragment>
+        </React.Fragment >
       );
     });
     return view;
