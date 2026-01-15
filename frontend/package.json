@@ -94,6 +94,7 @@
     "recharts": "^2.0.2",
     "socket.io-client": "^4.7.4",
     "styled-components": "^5.3.6",
+    "sweetalert2": "^11.26.17",
     "use-debounce": "^7.0.0",
     "use-sound": "^2.0.1",
     "uuid": "^8.3.2",

@@ -137,12 +137,22 @@ const useStyles = makeStyles(theme => ({
       marginRight: "0px !important",
       display: "flex !important",
       flexDirection: "column !important",
+      backgroundColor: "#f5f5f5 !important", // Força fundo uniforme
+    },
+    // Garante que o header da lane também siga a largura
+    "& header": {
+      width: "350px !important",
+      minWidth: "350px !important",
+      maxWidth: "350px !important",
+      boxSizing: "border-box !important",
     },
     "& section": {
       minWidth: "350px !important",
       width: "350px !important",
+      maxWidth: "350px !important",
       flex: "0 0 350px !important",
       marginRight: "0px !important",
+      boxSizing: "border-box !important",
     },
     // Aproximar visual do /moments: padding interno da lista e scroll vertical dentro da coluna
     "& .react-trello-lane__cards": {
@@ -158,6 +168,7 @@ const useStyles = makeStyles(theme => ({
       display: "flex",
       flexDirection: "column",
       gap: `${theme.spacing(1)}px`,
+      width: "350px !important", // Força largura interna
       "&::-webkit-scrollbar": {
         width: 0,
         height: 0,
@@ -192,7 +203,7 @@ const useStyles = makeStyles(theme => ({
     "& .smooth-dnd-draggable-wrapper": {
       width: "100% !important",
       maxWidth: "100% !important",
-      marginBottom: "6px !important",
+      marginBottom: "0 !important", // Removendo margem extra se houver
     },
     "& .react-trello-card": {
       width: "100% !important",
@@ -201,6 +212,7 @@ const useStyles = makeStyles(theme => ({
       boxShadow: "0 1px 3px rgba(0,0,0,0.08) !important",
       borderRadius: "8px !important",
       background: "#fff !important",
+      minHeight: "100px", // Altura mínima para evitar colapso visual
     },
   },
   actionsBar: {
@@ -269,7 +281,7 @@ const useStyles = makeStyles(theme => ({
 
 const Kanban = () => {
   const classes = useStyles();
-  const theme = useTheme(); 
+  const theme = useTheme();
   const history = useHistory();
   const { user, socket } = useContext(AuthContext);
   const kanbanScrollRef = useRef(null);
@@ -282,10 +294,10 @@ const Kanban = () => {
   const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), "yyyy-MM-dd"));
   const [searchText, setSearchText] = useState("");
-  const [sortBy, setSortBy] = useState("recent"); 
-  const [filterQueues, setFilterQueues] = useState([]); 
-  const [filterUsers, setFilterUsers] = useState([]); 
-  const [filterTags, setFilterTags] = useState([]); 
+  const [sortBy, setSortBy] = useState("recent");
+  const [filterQueues, setFilterQueues] = useState([]);
+  const [filterUsers, setFilterUsers] = useState([]);
+  const [filterTags, setFilterTags] = useState([]);
   const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeAnchor, setRangeAnchor] = useState(null);
   const [range, setRange] = useState({ startDate: parseISO(format(startOfMonth(new Date()), "yyyy-MM-dd")), endDate: parseISO(format(endOfMonth(new Date()), "yyyy-MM-dd")) });
@@ -382,8 +394,8 @@ const Kanban = () => {
 
   const lighten = (hex, amount = 0.85) => {
     if (!hex) return '#f5f5f5';
-    let c = hex.replace('#','');
-    if (c.length === 3) c = c.split('').map(ch=>ch+ch).join('');
+    let c = hex.replace('#', '');
+    if (c.length === 3) c = c.split('').map(ch => ch + ch).join('');
     const num = parseInt(c, 16);
     let r = (num >> 16) & 0xff;
     let g = (num >> 8) & 0xff;
@@ -421,10 +433,10 @@ const Kanban = () => {
     } else if (sortBy === "oldest") {
       filtered = filtered.slice().sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt));
     } else if (sortBy === "unread") {
-      filtered = filtered.slice().sort((a, b) => (Number(b.unreadMessages||0) - Number(a.unreadMessages||0)));
+      filtered = filtered.slice().sort((a, b) => (Number(b.unreadMessages || 0) - Number(a.unreadMessages || 0)));
     } else if (sortBy === "priority") {
-      const p = (u) => { u = Number(u)||0; return u>5?2:(u>0?1:0); };
-      filtered = filtered.slice().sort((a,b) => (p(b.unreadMessages) - p(a.unreadMessages)) || (new Date(b.updatedAt) - new Date(a.updatedAt)));
+      const p = (u) => { u = Number(u) || 0; return u > 5 ? 2 : (u > 0 ? 1 : 0); };
+      filtered = filtered.slice().sort((a, b) => (p(b.unreadMessages) - p(a.unreadMessages)) || (new Date(b.updatedAt) - new Date(a.updatedAt)));
     }
     return filtered;
   };
@@ -456,7 +468,7 @@ const Kanban = () => {
           id: ticket.id.toString(),
           label: "",
           description: (
-            <KanbanCard ticket={ticket} allTags={tags} onMoveRequest={(tagId)=>quickMove(ticket, tagId)} onClick={() => handleCardClick(ticket.uuid)} />
+            <KanbanCard ticket={ticket} allTags={tags} onMoveRequest={(tagId) => quickMove(ticket, tagId)} onClick={() => handleCardClick(ticket.uuid)} />
           ),
           title: "",
           draggable: true,
@@ -482,7 +494,7 @@ const Kanban = () => {
             id: ticket.id.toString(),
             label: "",
             description: (
-              <KanbanCard ticket={ticket} allTags={tags} onMoveRequest={(tagId)=>quickMove(ticket, tagId)} onClick={() => handleCardClick(ticket.uuid)} />
+              <KanbanCard ticket={ticket} allTags={tags} onMoveRequest={(tagId) => quickMove(ticket, tagId)} onClick={() => handleCardClick(ticket.uuid)} />
             ),
             title: "",
             draggable: true,
@@ -492,14 +504,14 @@ const Kanban = () => {
         };
       }),
     ];
-    
+
     try {
       const raw = localStorage.getItem('kanbanHiddenLanes');
       const hidden = raw ? JSON.parse(raw) : [];
       if (Array.isArray(hidden) && hidden.length) {
         lanes = lanes.filter(l => !hidden.includes(String(l.id)));
       }
-    } catch (e) {}
+    } catch (e) { }
 
     setFile({ lanes });
   };
@@ -566,7 +578,7 @@ const Kanban = () => {
     try {
       localStorage.removeItem('kanbanHiddenLanes');
       popularCards(jsonString);
-    } catch (e) {}
+    } catch (e) { }
   };
 
   useEffect(() => {
@@ -584,13 +596,13 @@ const Kanban = () => {
 
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-    } catch (_) {}
+    } catch (_) { }
 
     return () => {
       try {
         document.body.style.cursor = bodyStyleRef.current.cursor || "";
         document.body.style.userSelect = bodyStyleRef.current.userSelect || "";
-      } catch (_) {}
+      } catch (_) { }
     };
   }, []);
 

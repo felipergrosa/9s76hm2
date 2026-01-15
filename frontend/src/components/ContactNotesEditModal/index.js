@@ -1,43 +1,68 @@
-import React, { useState } from 'react';
-import Dialog from '@material-ui/core/Dialog';
-import DialogTitle from '@material-ui/core/DialogTitle';
-import DialogContent from '@material-ui/core/DialogContent';
-import DialogActions from '@material-ui/core/DialogActions';
-import Button from '@material-ui/core/Button';
-import TextField from '@material-ui/core/TextField';
+import React, { useEffect, useRef } from 'react';
+import { custom } from '../../helpers/swalHelper';
+import Swal from 'sweetalert2';
 
+/**
+ * ContactNotesEditModal - Agora usa SweetAlert2 para visual moderno
+ * 
+ * Props:
+ * - open: Se o modal está aberto
+ * - onClose: Callback quando fecha
+ * - note: Nota atual para editar
+ * - onSave: Callback com a nota editada
+ */
 export default function ContactNotesEditModal({ open, onClose, note, onSave }) {
-  const [editedNote, setEditedNote] = useState(note);
+  const hasShownRef = useRef(false);
 
-  const handleSave = () => {
-    onSave(editedNote); // Chama a função onSave com a nota editada
-    onClose(); // Fecha o diálogo de edição
-  };
+  useEffect(() => {
+    const showModal = async () => {
+      if (open && !hasShownRef.current) {
+        hasShownRef.current = true;
 
-  return (
-    <Dialog open={open} onClose={onClose} 
-    maxWidth="xs"
-    fullWidth
-    >
-      <DialogTitle>Edit Note</DialogTitle>
-      <DialogContent>
-        <TextField
-          label="Edit Note"
-          fullWidth
-          multiline
-          rows={4}
-          value={note}
-          onChange={(e) => setEditedNote(e.target.value)}
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} color="primary">
-          Cancel
-        </Button>
-        <Button onClick={handleSave} color="primary">
-          Save
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
+        const result = await custom({
+          title: '📝 Editar Nota',
+          html: `
+            <div style="text-align: left;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #555;">
+                Nota do Contato
+              </label>
+            </div>
+          `,
+          input: 'textarea',
+          inputValue: note || '',
+          inputPlaceholder: 'Digite a nota aqui...',
+          inputAttributes: {
+            'aria-label': 'Nota do contato',
+            style: 'resize: vertical; min-height: 100px; border-radius: 8px;'
+          },
+          showCancelButton: true,
+          confirmButtonText: '💾 Salvar',
+          cancelButtonText: 'Cancelar',
+          confirmButtonColor: '#3085d6',
+          reverseButtons: true,
+          focusConfirm: false,
+          preConfirm: (value) => {
+            return value;
+          }
+        });
+
+        if (result.isConfirmed) {
+          onSave(result.value);
+        }
+        onClose();
+        hasShownRef.current = false;
+      }
+    };
+
+    showModal();
+  }, [open, note, onClose, onSave]);
+
+  // Quando fecha externamente, resetar o ref
+  useEffect(() => {
+    if (!open) {
+      hasShownRef.current = false;
+    }
+  }, [open]);
+
+  return null; // SweetAlert2 gerencia seu próprio DOM
 }

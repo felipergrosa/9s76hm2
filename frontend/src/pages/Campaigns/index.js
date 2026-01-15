@@ -324,11 +324,10 @@ const Campaigns = () => {
         ) : (
           <button
             onClick={() => handlePageChange(page)}
-            className={`flex items-center justify-center px-3 h-8 leading-tight border ${
-              page === pageNumber
+            className={`flex items-center justify-center px-3 h-8 leading-tight border ${page === pageNumber
                 ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
                 : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-            }`}
+              }`}
           >
             {page}
           </button>
@@ -404,138 +403,146 @@ const Campaigns = () => {
       {hasPermission("campaigns.view") ? (
         <>
           <MainHeader>
-            <Grid style={{ width: "99.6%" }} container>
-              <Grid xs={12} sm={8} item>
+            <Grid container alignItems="center" justifyContent="space-between" spacing={2}>
+              <Grid item xs={12} sm={6} md={4}>
                 <Title>{i18n.t("campaigns.title")}</Title>
-                  <Grid spacing={2} container>
-                    <Grid xs={12} sm={6} item>
-                      <TextField
-                        fullWidth
-                        placeholder={i18n.t("campaigns.searchPlaceholder")}
-                        type="search"
-                        value={searchParam}
-                        onChange={handleSearch}
-                        InputProps={{
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <SearchIcon style={{ color: "gray" }} />
-                            </InputAdornment>
-                          ),
-                        }}
-                      />
-                    </Grid>
-                    <Grid xs={12} sm={6} item className={classes.headerActions}>
-                      <Button
-                        fullWidth
-                        variant="contained"
-                        onClick={handleOpenCampaignModal}
-                        color="primary"
-                        style={{ minHeight: 44 }}
-                      >
-                        {i18n.t("campaigns.buttons.add")}
-                      </Button>
-                    </Grid>
+              </Grid>
+              <Grid item xs={12} sm={6} md={8}>
+                <Grid container spacing={2} alignItems="center" justifyContent="flex-end">
+                  <Grid item xs={12} sm={6} md={5}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder={i18n.t("campaigns.searchPlaceholder")}
+                      type="search"
+                      value={searchParam}
+                      onChange={handleSearch}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon style={{ color: "gray" }} />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs="auto">
+                    <Button
+                      variant="contained"
+                      onClick={handleOpenCampaignModal}
+                      color="primary"
+                      size="small"
+                      style={{
+                        minHeight: 36,
+                        paddingLeft: 16,
+                        paddingRight: 16,
+                        whiteSpace: "nowrap"
+                      }}
+                    >
+                      + {i18n.t("campaigns.buttons.add")}
+                    </Button>
                   </Grid>
                 </Grid>
               </Grid>
-            </MainHeader>
-            <Paper
-              className={classes.mainPaper}
-              variant="outlined"
-            >
-              {/* Mobile cards */}
-              <div className={classes.mobileList}>
-                {campaigns.map((campaign) => (
-                  <div key={campaign.id} className={classes.card}>
-                    <div className={classes.cardHeader}>
-                      <div className={classes.cardTitle}>{campaign.name}</div>
-                      <div className={classes.statusPill}>
-                        {formatStatus(campaign.status)}
-                      </div>
-                    </div>
-                    <div className={classes.cardMeta}>
-                      <div>
-                        <div className={classes.metaLabel}>{i18n.t("campaigns.table.contactList")}</div>
-                        <div className={classes.metaValue}>{campaign.contactListId ? campaign.contactList.name : "Não definida"}</div>
-                      </div>
-                      <div>
-                        <div className={classes.metaLabel}>{i18n.t("campaigns.table.whatsapp")}</div>
-                        <div className={classes.metaValue}>{campaign.whatsappId ? campaign.whatsapp.name : "Não definido"}</div>
-                      </div>
-                      <div>
-                        <div className={classes.metaLabel}>{i18n.t("campaigns.table.scheduledAt")}</div>
-                        <div className={classes.metaValue}>{campaign.scheduledAt ? datetimeToClient(campaign.scheduledAt) : "Sem agendamento"}</div>
-                      </div>
-                      <div>
-                        <div className={classes.metaLabel}>{i18n.t("campaigns.table.completedAt")}</div>
-                        <div className={classes.metaValue}>{campaign.completedAt ? datetimeToClient(campaign.completedAt) : "Não concluída"}</div>
-                      </div>
-                      <div>
-                        <div className={classes.metaLabel}>{i18n.t("campaigns.table.confirmation")}</div>
-                        <div className={classes.metaValue}>{campaign.confirmation ? "Habilitada" : "Desabilitada"}</div>
-                      </div>
-                    </div>
-                    <div className={classes.cardActions}>
-                      {campaign.status === "EM_ANDAMENTO" && (
-                        <IconButton
-                          onClick={() => cancelCampaign(campaign)}
-                          title="Pausar Campanha (Em Andamento)"
-                          size="small"
-                          className={classes.actionButton}
-                          style={{ color: '#f44336' }}
-                        >
-                          <PauseCircleOutlineIcon />
-                        </IconButton>
-                      )}
-                      {campaign.status === "CANCELADA" && (
-                        <IconButton
-                          onClick={() => restartCampaign(campaign)}
-                          title="Retomar Campanha (Pausada)"
-                          size="small"
-                          className={classes.actionButton}
-                          style={{ color: '#4caf50' }}
-                        >
-                          <PlayCircleOutlineIcon />
-                        </IconButton>
-                      )}
-                      <IconButton
-                        onClick={() =>
-                          history.push(`/campaign/${campaign.id}/detailed-report`)
-                        }
-                        size="small"
-                        className={classes.actionButton}
-                        title="Relatório Detalhado"
-                      >
-                        <DescriptionIcon />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        className={classes.actionButton}
-                        onClick={() => handleEditCampaign(campaign)}
-                      >
-                        <EditIcon />
-                      </IconButton>
-
-                      <IconButton
-                        size="small"
-                        className={classes.actionButton}
-                        onClick={() => {
-                          setConfirmModalOpen(true);
-                          setDeletingCampaign(campaign);
-                        }}
-                      >
-                        <DeleteOutlineIcon />
-                      </IconButton>
+            </Grid>
+          </MainHeader>
+          <Paper
+            className={classes.mainPaper}
+            variant="outlined"
+          >
+            {/* Mobile cards */}
+            <div className={classes.mobileList}>
+              {campaigns.map((campaign) => (
+                <div key={campaign.id} className={classes.card}>
+                  <div className={classes.cardHeader}>
+                    <div className={classes.cardTitle}>{campaign.name}</div>
+                    <div className={classes.statusPill}>
+                      {formatStatus(campaign.status)}
                     </div>
                   </div>
-                ))}
-                {loading && <TableRowSkeleton columns={1} />}
-              </div>
+                  <div className={classes.cardMeta}>
+                    <div>
+                      <div className={classes.metaLabel}>{i18n.t("campaigns.table.contactList")}</div>
+                      <div className={classes.metaValue}>{campaign.contactListId ? campaign.contactList.name : "Não definida"}</div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>{i18n.t("campaigns.table.whatsapp")}</div>
+                      <div className={classes.metaValue}>{campaign.whatsappId ? campaign.whatsapp.name : "Não definido"}</div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>{i18n.t("campaigns.table.scheduledAt")}</div>
+                      <div className={classes.metaValue}>{campaign.scheduledAt ? datetimeToClient(campaign.scheduledAt) : "Sem agendamento"}</div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>{i18n.t("campaigns.table.completedAt")}</div>
+                      <div className={classes.metaValue}>{campaign.completedAt ? datetimeToClient(campaign.completedAt) : "Não concluída"}</div>
+                    </div>
+                    <div>
+                      <div className={classes.metaLabel}>{i18n.t("campaigns.table.confirmation")}</div>
+                      <div className={classes.metaValue}>{campaign.confirmation ? "Habilitada" : "Desabilitada"}</div>
+                    </div>
+                  </div>
+                  <div className={classes.cardActions}>
+                    {campaign.status === "EM_ANDAMENTO" && (
+                      <IconButton
+                        onClick={() => cancelCampaign(campaign)}
+                        title="Pausar Campanha (Em Andamento)"
+                        size="small"
+                        className={classes.actionButton}
+                        style={{ color: '#f44336' }}
+                      >
+                        <PauseCircleOutlineIcon />
+                      </IconButton>
+                    )}
+                    {campaign.status === "CANCELADA" && (
+                      <IconButton
+                        onClick={() => restartCampaign(campaign)}
+                        title="Retomar Campanha (Pausada)"
+                        size="small"
+                        className={classes.actionButton}
+                        style={{ color: '#4caf50' }}
+                      >
+                        <PlayCircleOutlineIcon />
+                      </IconButton>
+                    )}
+                    <IconButton
+                      onClick={() =>
+                        history.push(`/campaign/${campaign.id}/detailed-report`)
+                      }
+                      size="small"
+                      className={classes.actionButton}
+                      title="Relatório Detalhado"
+                    >
+                      <DescriptionIcon />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      className={classes.actionButton}
+                      onClick={() => handleEditCampaign(campaign)}
+                    >
+                      <EditIcon />
+                    </IconButton>
 
-              {/* Desktop table */}
-              <div className={classes.desktopTableWrapper}>
-                <div className={classes.tableContainer}>
-                  <Table size="small" className={classes.table}>
+                    <IconButton
+                      size="small"
+                      className={classes.actionButton}
+                      onClick={() => {
+                        setConfirmModalOpen(true);
+                        setDeletingCampaign(campaign);
+                      }}
+                    >
+                      <DeleteOutlineIcon />
+                    </IconButton>
+                  </div>
+                </div>
+              ))}
+              {loading && <TableRowSkeleton columns={1} />}
+            </div>
+
+            {/* Desktop table */}
+            <div className={classes.desktopTableWrapper}>
+              <div className={classes.tableContainer}>
+                <Table size="small" className={classes.table}>
                   <TableHead>
                     <TableRow>
                       <TableCell align="center">
@@ -648,71 +655,67 @@ const Campaigns = () => {
                     </>
                   </TableBody>
                 </Table>
-                </div>
               </div>
-            </Paper>
-            {/* Paginação numerada */}
-            <nav className="flex justify-center mt-4" aria-label="Page navigation">
-              <ul className="inline-flex -space-x-px text-sm">
-                <li>
-                  <button
-                    onClick={() => handlePageChange(1)}
-                    disabled={pageNumber === 1}
-                    className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-l-lg ${
-                      pageNumber === 1
-                        ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                        : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+            </div>
+          </Paper>
+          {/* Paginação numerada */}
+          <nav className="flex justify-center mt-4" aria-label="Page navigation">
+            <ul className="inline-flex -space-x-px text-sm">
+              <li>
+                <button
+                  onClick={() => handlePageChange(1)}
+                  disabled={pageNumber === 1}
+                  className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-l-lg ${pageNumber === 1
+                      ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                      : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
                     }`}
-                  >
-                    «
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => handlePageChange(pageNumber - 1)}
-                    disabled={pageNumber === 1}
-                    className={`flex items-center justify-center px-3 h-8 leading-tight border ${
-                      pageNumber === 1
-                        ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                        : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                >
+                  «
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handlePageChange(pageNumber - 1)}
+                  disabled={pageNumber === 1}
+                  className={`flex items-center justify-center px-3 h-8 leading-tight border ${pageNumber === 1
+                      ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                      : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
                     }`}
-                  >
-                    ‹
-                  </button>
-                </li>
-                {renderPageNumbers()}
-                <li>
-                  <button
-                    onClick={() => handlePageChange(pageNumber + 1)}
-                    disabled={pageNumber === totalPages}
-                    className={`flex items-center justify-center px-3 h-8 leading-tight border ${
-                      pageNumber === totalPages
-                        ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                        : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                >
+                  ‹
+                </button>
+              </li>
+              {renderPageNumbers()}
+              <li>
+                <button
+                  onClick={() => handlePageChange(pageNumber + 1)}
+                  disabled={pageNumber === totalPages}
+                  className={`flex items-center justify-center px-3 h-8 leading-tight border ${pageNumber === totalPages
+                      ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                      : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
                     }`}
-                  >
-                    ›
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => handlePageChange(totalPages)}
-                    disabled={pageNumber === totalPages}
-                    className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-r-lg ${
-                      pageNumber === totalPages
-                        ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                        : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                >
+                  ›
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handlePageChange(totalPages)}
+                  disabled={pageNumber === totalPages}
+                  className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-r-lg ${pageNumber === totalPages
+                      ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                      : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
                     }`}
-                  >
-                    »
-                  </button>
-                </li>
-              </ul>
-            </nav>
-          </>
-        ) : (
-          <ForbiddenPage />
-        )}
+                >
+                  »
+                </button>
+              </li>
+            </ul>
+          </nav>
+        </>
+      ) : (
+        <ForbiddenPage />
+      )}
     </MainContainer>
   );
 };

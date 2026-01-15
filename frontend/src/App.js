@@ -99,6 +99,153 @@ const App = () => {
             inputBackground: mode === "light" ? "#FFFFFF" : "#333",
             barraSuperior: mode === "light" ? primaryColorLight : "#666",
           },
+          // Overrides globais para modernizar todos os modais Material-UI
+          overrides: {
+            MuiDialog: {
+              paper: {
+                borderRadius: 16,
+                boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+                // Esconde scrollbar no paper do Dialog
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
+                "&::-webkit-scrollbar": {
+                  display: "none",
+                  width: 0,
+                  height: 0,
+                },
+              },
+              scrollPaper: {
+                // Esconde scrollbar no container de scroll
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
+                "&::-webkit-scrollbar": {
+                  display: "none",
+                  width: 0,
+                  height: 0,
+                },
+              },
+              container: {
+                // Esconde scrollbar no container externo
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
+                "&::-webkit-scrollbar": {
+                  display: "none",
+                  width: 0,
+                  height: 0,
+                },
+              },
+            },
+            MuiDialogTitle: {
+              root: {
+                backgroundColor: mode === "light" ? primaryColorLight : primaryColorDark,
+                color: "#fff",
+                padding: "16px 24px",
+                "& .MuiTypography-root": {
+                  fontWeight: 600,
+                  fontSize: "1.1rem",
+                  color: "#fff",
+                },
+                // Tabs dentro do DialogTitle devem ter texto branco
+                "& .MuiTabs-root": {
+                  "& .MuiTab-root": {
+                    color: "rgba(255, 255, 255, 0.7)",
+                    "&.Mui-selected": {
+                      color: "#fff",
+                    },
+                    "&:hover": {
+                      color: "#fff",
+                    },
+                  },
+                  "& .MuiTabs-indicator": {
+                    backgroundColor: "#fff",
+                  },
+                },
+                // Qualquer texto dentro deve ser branco
+                "& .MuiTab-wrapper": {
+                  color: "inherit",
+                },
+              },
+            },
+            MuiDialogContent: {
+              root: {
+                padding: "20px 24px",
+                // Esconde scrollbar mas mantém funcionalidade de scroll
+                scrollbarWidth: "none", // Firefox
+                msOverflowStyle: "none", // IE/Edge
+                "&::-webkit-scrollbar": {
+                  display: "none", // Chrome/Safari/Opera
+                  width: 0,
+                  height: 0,
+                },
+              },
+              dividers: {
+                borderTop: "none",
+                borderBottom: mode === "light" ? "1px solid #eee" : "1px solid #444",
+              },
+            },
+            MuiDialogActions: {
+              root: {
+                padding: "12px 24px 20px",
+                gap: 8,
+              },
+            },
+            MuiButton: {
+              root: {
+                borderRadius: 8,
+                textTransform: "none",
+                fontWeight: 500,
+                padding: "8px 16px",
+              },
+              containedPrimary: {
+                boxShadow: "none",
+                "&:hover": {
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                },
+              },
+            },
+            // Fix para tabs em modais - garante contraste de cor
+            MuiTabs: {
+              root: {
+                minHeight: 40,
+              },
+              indicator: {
+                backgroundColor: mode === "light" ? primaryColorLight : primaryColorDark,
+                height: 3,
+                borderRadius: 2,
+              },
+            },
+            MuiTab: {
+              root: {
+                textTransform: "none",
+                fontWeight: 500,
+                fontSize: "0.9rem",
+                minHeight: 40,
+                padding: "8px 16px",
+                color: mode === "light" ? "#333" : "#ddd",
+                "&$selected": {
+                  color: mode === "light" ? primaryColorLight : primaryColorDark,
+                  fontWeight: 600,
+                },
+                "&:hover": {
+                  color: mode === "light" ? primaryColorLight : primaryColorDark,
+                  opacity: 1,
+                },
+              },
+              textColorPrimary: {
+                color: mode === "light" ? "#555" : "#ccc",
+                "&$selected": {
+                  color: mode === "light" ? primaryColorLight : primaryColorDark,
+                },
+              },
+              textColorInherit: {
+                color: mode === "light" ? "#333" : "#eee",
+                opacity: 0.8,
+                "&$selected": {
+                  opacity: 1,
+                },
+              },
+            },
+          },
           mode,
           appLogoLight,
           appLogoDark,
@@ -129,7 +276,7 @@ const App = () => {
       e.preventDefault();
       // Armazena o evento para uso posterior
       setDeferredPrompt(e);
-      
+
       // Mostra o prompt de instalação imediatamente
       setTimeout(() => {
         showInstallPrompt();
@@ -150,7 +297,7 @@ const App = () => {
       if (!window.matchMedia('(display-mode: standalone)').matches) {
         // Mostra o prompt de instalação
         deferredPrompt.prompt();
-        
+
         // Espera pela resposta do usuário
         deferredPrompt.userChoice.then((choiceResult) => {
           if (choiceResult.outcome === 'accepted') {
@@ -182,8 +329,8 @@ const App = () => {
     console.log("|=========== handleSaveSetting ==========|")
     console.log("APP START")
     console.log("|========================================|")
-   
-    
+
+
     getPublicSetting("primaryColorLight")
       .then((color) => {
         setPrimaryColorLight(color || "#0000FF");
@@ -267,10 +414,10 @@ const App = () => {
         <ThemeProvider theme={theme}>
           <QueryClientProvider client={queryClient}>
             <ActiveMenuProvider>
-  <div style={{ position: "relative", overflow: "visible", zIndex: 0, minHeight: "100vh" }}>
-    <Routes />
-    <ConnectionLostModal open={waConnLost.open} data={waConnLost.data} onClose={handleCloseWaModal} />
-  </div>
+              <div style={{ position: "relative", overflow: "visible", zIndex: 0, minHeight: "100vh" }}>
+                <Routes />
+                <ConnectionLostModal open={waConnLost.open} data={waConnLost.data} onClose={handleCloseWaModal} />
+              </div>
             </ActiveMenuProvider>
           </QueryClientProvider>
         </ThemeProvider>

@@ -66,6 +66,10 @@ import FunnelStage from "../models/FunnelStage";
 import AITrainingFeedback from "../models/AITrainingFeedback";
 import AITrainingImprovement from "../models/AITrainingImprovement";
 import ContactReleaseRequest from "../models/ContactReleaseRequest";
+import AITestScenario from "../models/AITestScenario";
+import AITestResult from "../models/AITestResult";
+import AIPromptVersion from "../models/AIPromptVersion";
+
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -211,7 +215,10 @@ const models = [
   FunnelStage,
   AITrainingFeedback,
   AITrainingImprovement,
-  ContactReleaseRequest
+  ContactReleaseRequest,
+  AITestScenario,
+  AITestResult,
+  AIPromptVersion
 ];
 
 sequelize.addModels(models);

@@ -1,35 +1,48 @@
-import React from "react";
-import Button from "@material-ui/core/Button";
-import Dialog from "@material-ui/core/Dialog";
-import DialogActions from "@material-ui/core/DialogActions";
-import DialogContent from "@material-ui/core/DialogContent";
-import DialogTitle from "@material-ui/core/DialogTitle";
-import Typography from "@material-ui/core/Typography";
-
+import React, { useEffect, useRef } from "react";
+import { alert } from "../../helpers/swalHelper";
 import { i18n } from "../../translate/i18n";
 
+/**
+ * InformationModal - Agora usa SweetAlert2 para visual moderno
+ * 
+ * Props:
+ * - title: Título do modal
+ * - children: Conteúdo/texto do modal
+ * - open: Se o modal está aberto
+ * - onClose: Callback quando fecha
+ */
 const InformationModal = ({ title, children, open, onClose }) => {
-	return (
-		<Dialog
-			open={open}
-			onClose={() => onClose(false)}
-			aria-labelledby="confirm-dialog"
-		>
-			<DialogTitle id="confirm-dialog">{title}</DialogTitle>
-			<DialogContent dividers>
-				<Typography>{children}</Typography>
-			</DialogContent>
-			<DialogActions>
-				<Button
-					variant="contained"
-					onClick={() => onClose(false)}
-					color="default"
-				>
-					{i18n.t("Fechar")}
-				</Button>
-			</DialogActions>
-		</Dialog>
-	);
+	const hasShownRef = useRef(false);
+
+	useEffect(() => {
+		const showModal = async () => {
+			if (open && !hasShownRef.current) {
+				hasShownRef.current = true;
+
+				await alert({
+					title: title || "ℹ️ Informação",
+					text: typeof children === "string" ? children : "",
+					html: typeof children !== "string" ? `<div style="text-align: center; padding: 10px;">${children}</div>` : null,
+					icon: "info",
+					confirmText: i18n.t("Fechar"),
+				});
+
+				onClose(false);
+				hasShownRef.current = false;
+			}
+		};
+
+		showModal();
+	}, [open, title, children, onClose]);
+
+	// Quando fecha externamente, resetar o ref
+	useEffect(() => {
+		if (!open) {
+			hasShownRef.current = false;
+		}
+	}, [open]);
+
+	return null; // SweetAlert2 gerencia seu próprio DOM
 };
 
 export default InformationModal;

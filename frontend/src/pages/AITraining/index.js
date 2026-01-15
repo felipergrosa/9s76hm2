@@ -16,11 +16,20 @@ import {
   MenuItem,
   Paper,
   Select,
+  Tab,
+  Tabs,
   TextField,
   Typography,
   makeStyles
 } from "@material-ui/core";
 import ExpandMoreIcon from "@material-ui/icons/ExpandMore";
+import PlayArrowIcon from "@material-ui/icons/PlayArrow";
+import EditIcon from "@material-ui/icons/Edit";
+import AssessmentIcon from "@material-ui/icons/Assessment";
+import HistoryIcon from "@material-ui/icons/History";
+import CompareArrowsIcon from "@material-ui/icons/CompareArrows";
+import AccountTreeIcon from "@material-ui/icons/AccountTree";
+import BugReportIcon from "@material-ui/icons/BugReport";
 import { toast } from "react-toastify";
 
 import MainContainer from "../../components/MainContainer";
@@ -29,6 +38,16 @@ import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper"
 import Title from "../../components/Title";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import WhatsAppPreview from "../../components/CampaignModal/WhatsAppPreview";
+
+import {
+  PromptAssistant,
+  TestScenarios,
+  PromptVersioning,
+  TrainingMetricsDashboard,
+  ABTestingComparison,
+  PromptFlowVisualization,
+  ToolCallsHistory
+} from "../../components/AITraining";
 
 import api from "../../services/api";
 import useWhatsApps from "../../hooks/useWhatsApps";
@@ -42,14 +61,21 @@ const useStyles = makeStyles((theme) => ({
     overflowY: "auto",
     ...theme.scrollbarStyles
   },
+  tabsContainer: {
+    marginBottom: theme.spacing(2),
+    borderBottom: `1px solid ${theme.palette.divider}`
+  },
+  tabPanel: {
+    minHeight: "calc(100vh - 280px)"
+  },
   leftPane: {
-    height: "calc(100vh - 220px)",
-    minHeight: 480,
+    height: "calc(100vh - 320px)",
+    minHeight: 400,
     padding: theme.spacing(2)
   },
   rightPane: {
-    height: "calc(100vh - 220px)",
-    minHeight: 480,
+    height: "calc(100vh - 320px)",
+    minHeight: 400,
     padding: theme.spacing(2),
     backgroundColor: theme.mode === "light" ? "#0b1020" : "#05070f",
     color: "#d7e0ff",
@@ -68,31 +94,6 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     flexDirection: "column"
   },
-  mockHeader: {
-    padding: theme.spacing(1.2, 1.5),
-    borderBottom: theme.mode === "light" ? "1px solid rgba(0,0,0,0.08)" : "1px solid rgba(255,255,255,0.08)",
-    backgroundColor: theme.mode === "light" ? "#f7f7f7" : "#111425"
-  },
-  mockBody: {
-    flex: 1,
-    padding: theme.spacing(1.5),
-    backgroundColor: theme.mode === "light" ? "#eaeef5" : "#0c0f1d",
-    overflow: "auto"
-  },
-  mockComposer: {
-    padding: theme.spacing(1),
-    borderTop: theme.mode === "light" ? "1px solid rgba(0,0,0,0.08)" : "1px solid rgba(255,255,255,0.08)",
-    backgroundColor: theme.mode === "light" ? "#f7f7f7" : "#111425"
-  },
-  bubbleCustomer: {
-    alignSelf: "flex-start",
-    padding: theme.spacing(1),
-    borderRadius: 14,
-    backgroundColor: theme.mode === "light" ? "#ffffff" : "#1a2040",
-    color: theme.mode === "light" ? "#111" : "#fff",
-    maxWidth: "85%",
-    marginBottom: theme.spacing(1)
-  },
   bubbleAgent: {
     alignSelf: "flex-end",
     padding: theme.spacing(1),
@@ -106,16 +107,28 @@ const useStyles = makeStyles((theme) => ({
     whiteSpace: "pre-wrap",
     wordBreak: "break-word",
     marginBottom: theme.spacing(0.5)
+  },
+  contextSelector: {
+    padding: theme.spacing(2),
+    marginBottom: theme.spacing(2),
+    backgroundColor: theme.mode === "light" ? "#f5f5f5" : "#1a1a2e",
+    borderRadius: 8
   }
 }));
+
+const TabPanel = ({ children, value, index, ...other }) => (
+  <div role="tabpanel" hidden={value !== index} {...other}>
+    {value === index && <Box p={2}>{children}</Box>}
+  </div>
+);
 
 const AITraining = () => {
   const classes = useStyles();
 
   const { hasPermission } = usePermissions();
-
   const { whatsApps, loading: loadingWhatsApps } = useWhatsApps();
 
+  const [activeTab, setActiveTab] = useState(0);
   const [agents, setAgents] = useState([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
 
@@ -145,6 +158,7 @@ const AITraining = () => {
 
   const [messages, setMessages] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [toolCalls, setToolCalls] = useState([]);
 
   const selectedWhatsapp = useMemo(() => {
     return whatsApps.find((w) => String(w.id) === String(selectedWhatsappId));
@@ -161,7 +175,6 @@ const AITraining = () => {
       }
       setLoadingAgents(false);
     };
-
     loadAgents();
   }, []);
 
@@ -172,25 +185,21 @@ const AITraining = () => {
         setSelectedGroupId("");
         return;
       }
-
       if (String(selectedWhatsapp?.channelType) === "official") {
         setGroups([]);
         setSelectedGroupId("");
         return;
       }
-
       setLoadingGroups(true);
       try {
         const { data } = await api.get(`/wbot/${selectedWhatsappId}/groups`);
-        const nextGroups = Array.isArray(data?.groups) ? data.groups : [];
-        setGroups(nextGroups);
+        setGroups(Array.isArray(data?.groups) ? data.groups : []);
       } catch (err) {
         toast.error("Erro ao carregar grupos da conexão");
         setGroups([]);
       }
       setLoadingGroups(false);
     };
-
     loadGroups();
   }, [selectedWhatsappId, simulate, selectedWhatsapp?.channelType]);
 
@@ -201,6 +210,7 @@ const AITraining = () => {
   const handleClear = () => {
     setMessages([]);
     setLogs([]);
+    setToolCalls([]);
     setSessionId("");
     appendLog("[sandbox] conversa limpa");
   };
@@ -209,19 +219,26 @@ const AITraining = () => {
     if (!agentId) {
       setStages([]);
       setSelectedStageId("");
+      setPromptOverride("");
       return;
     }
-
     setLoadingStages(true);
     try {
       const { data } = await api.get(`/ai-agents/${agentId}/funnel-stages`);
       const nextStages = Array.isArray(data?.stages) ? data.stages : [];
       setStages(nextStages);
-      setSelectedStageId(nextStages[0]?.id ? String(nextStages[0].id) : "");
+      if (nextStages[0]?.id) {
+        setSelectedStageId(String(nextStages[0].id));
+        setPromptOverride(nextStages[0].systemPrompt || "");
+      } else {
+        setSelectedStageId("");
+        setPromptOverride("");
+      }
     } catch (err) {
       toast.error("Erro ao carregar etapas do funil");
       setStages([]);
       setSelectedStageId("");
+      setPromptOverride("");
     } finally {
       setLoadingStages(false);
     }
@@ -254,7 +271,6 @@ const AITraining = () => {
       toast.error("Erro ao aplicar prompt no agente");
     }
   };
-
   const ensureSession = async () => {
     if (sessionId) return sessionId;
 
@@ -296,25 +312,18 @@ const AITraining = () => {
 
     if (sending) return;
 
+
     const text = messageText.trim();
     setMessageText("");
 
     setMessages((prev) => [...prev, { id: `m-${Date.now()}-${Math.random()}`, from: "customer", text }]);
     appendLog(`[input] ${text}`);
-    appendLog(
-      `[context] agente=${selectedAgentId} stage=${selectedStageId} simulate=${simulate} whatsapp=${selectedWhatsappId || "-"} grupo=${selectedGroupId || "-"} to=${toNumber || "-"}`
-    );
-    if (promptOverride.trim()) {
-      appendLog(`[prompt-override] ${promptOverride.trim()}`);
-    }
 
     try {
       setSending(true);
       const sId = await ensureSession();
 
-      const { data } = await api.post(`/ai/sandbox/sessions/${sId}/messages`, {
-        text
-      });
+      const { data } = await api.post(`/ai/sandbox/sessions/${sId}/messages`, { text });
 
       const assistantText = data?.message?.text;
       if (assistantText) {
@@ -322,11 +331,20 @@ const AITraining = () => {
       }
 
       const meta = data?.metadata || {};
-      appendLog(
-        `[ai] provider=${meta.provider || "?"} model=${meta.model || "?"} time=${meta.processingTime || "?"}ms requestId=${meta.requestId || "?"}`
-      );
-      if (meta.systemPrompt) {
-        appendLog("[systemPrompt]" + "\n" + String(meta.systemPrompt));
+      appendLog(`[ai] provider=${meta.provider || "?"} model=${meta.model || "?"} time=${meta.processingTime || "?"}ms`);
+
+      if (meta.toolCalls && Array.isArray(meta.toolCalls)) {
+        const newToolCalls = meta.toolCalls.map((tc, idx) => ({
+          id: `tc-${Date.now()}-${idx}`,
+          name: tc.name,
+          parameters: tc.parameters,
+          result: tc.result,
+          status: tc.error ? "error" : "success",
+          error: tc.error,
+          duration: tc.duration,
+          timestamp: new Date().toISOString()
+        }));
+        setToolCalls((prev) => [...prev, ...newToolCalls]);
       }
 
     } catch (err) {
@@ -348,20 +366,6 @@ const AITraining = () => {
     setRateExplanation("");
   };
 
-  const persistFeedback = async (payload) => {
-    await api.post("/ai/training/feedback", payload);
-  };
-
-  const persistImprovement = async (payload) => {
-    const { data } = await api.post("/ai/training/improvements", payload);
-    return data?.improvement;
-  };
-
-  const applyImprovements = async (payload) => {
-    const { data } = await api.post("/ai/training/improvements/apply", payload);
-    return data;
-  };
-
   const onRateMessage = async ({ messageId, rating }) => {
     if (!sessionId) {
       toast.error("Sessão não encontrada. Envie uma mensagem antes de avaliar.");
@@ -378,7 +382,7 @@ const AITraining = () => {
 
     if (rating === "correct") {
       try {
-        await persistFeedback({
+        await api.post("/ai/training/feedback", {
           agentId: Number(selectedAgentId),
           stageId: Number(selectedStageId),
           sandboxSessionId: String(sessionId),
@@ -409,10 +413,6 @@ const AITraining = () => {
       toast.error("Explique o motivo da correção");
       return;
     }
-    if (!sessionId) {
-      toast.error("Sessão não encontrada");
-      return;
-    }
 
     const idx = messages.findIndex((m) => String(m.id ?? "") === String(rateTargetMessageId));
     if (idx < 0) return;
@@ -421,7 +421,7 @@ const AITraining = () => {
     const customerMsg = idx > 0 ? messages[idx - 1] : null;
 
     try {
-      const feedbackPayload = {
+      const feedbackRes = await api.post("/ai/training/feedback", {
         agentId: Number(selectedAgentId),
         stageId: Number(selectedStageId),
         sandboxSessionId: String(sessionId),
@@ -431,9 +431,7 @@ const AITraining = () => {
         rating: "wrong",
         correctedText: String(rateCorrectedText).trim(),
         explanation: String(rateExplanation).trim()
-      };
-
-      const feedbackRes = await api.post("/ai/training/feedback", feedbackPayload);
+      });
       const feedbackId = feedbackRes?.data?.feedback?.id;
 
       const improvementText = [
@@ -442,9 +440,9 @@ const AITraining = () => {
         `Resposta errada: ${String(assistantMsg?.text || "").trim()}`,
         `Resposta correta: ${String(rateCorrectedText).trim()}`,
         `Motivo/explicação: ${String(rateExplanation).trim()}`
-      ].filter(Boolean).join("\n");
+      ].join("\n");
 
-      await persistImprovement({
+      await api.post("/ai/training/improvements", {
         agentId: Number(selectedAgentId),
         stageId: Number(selectedStageId),
         feedbackId: feedbackId || undefined,
@@ -454,23 +452,18 @@ const AITraining = () => {
       setMessageRatings((prev) => ({ ...prev, [String(rateTargetMessageId)]: "wrong" }));
       setMessages((prev) => [
         ...prev,
-        {
-          id: `m-${Date.now()}-${Math.random()}`,
-          from: "assistant",
-          text: String(rateCorrectedText).trim(),
-          improved: true
-        }
+        { id: `m-${Date.now()}-${Math.random()}`, from: "assistant", text: String(rateCorrectedText).trim(), improved: true }
       ]);
       appendLog(`[rating] errado messageId=${rateTargetMessageId} -> resposta melhorada inserida`);
 
       if (opts?.applyNow) {
         try {
-          const applied = await applyImprovements({
+          const applied = await api.post("/ai/training/improvements/apply", {
             agentId: Number(selectedAgentId),
             stageId: Number(selectedStageId)
           });
-          appendLog(`[improvement] aplicado=${applied?.applied || 0} (prompt consolidado salvo na etapa)`);
-          toast.success("Melhoria aplicada na etapa (prompt consolidado)");
+          appendLog(`[improvement] aplicado=${applied?.data?.applied || 0}`);
+          toast.success("Melhoria aplicada na etapa");
         } catch (e) {
           toast.error("Falha ao aplicar melhoria na etapa");
         }
@@ -482,157 +475,148 @@ const AITraining = () => {
     }
   };
 
+  const handlePromptChange = (newPrompt) => {
+    setPromptOverride(newPrompt);
+  };
+
+  const handleRestoreVersion = (restoredPrompt) => {
+    setPromptOverride(restoredPrompt);
+    toast.success("Versão restaurada no editor");
+  };
+
+  const renderContextSelector = () => (
+    <Paper className={classes.contextSelector} variant="outlined">
+      <Grid container spacing={2} alignItems="center">
+        <Grid item xs={12} md={4}>
+          <FormControl fullWidth variant="outlined" size="small">
+            <InputLabel>Agente</InputLabel>
+            <Select
+              value={selectedAgentId}
+              onChange={async (e) => {
+                const next = e.target.value;
+                setSelectedAgentId(next);
+                setSessionId("");
+                setMessages([]);
+                setLogs([]);
+                setToolCalls([]);
+                await loadStages(next);
+              }}
+              label="Agente"
+              disabled={loadingAgents}
+            >
+              <MenuItem value=""><em>Selecione</em></MenuItem>
+              {agents.map((a) => (
+                <MenuItem key={a.id} value={String(a.id)}>{a.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <FormControl fullWidth variant="outlined" size="small">
+            <InputLabel>Etapa do funil</InputLabel>
+            <Select
+              value={selectedStageId}
+              onChange={(e) => {
+                const stageId = e.target.value;
+                setSelectedStageId(stageId);
+                setSessionId("");
+                const stage = stages.find((s) => String(s.id) === stageId);
+                if (stage) {
+                  setPromptOverride(stage.systemPrompt || "");
+                }
+              }}
+              label="Etapa do funil"
+              disabled={!selectedAgentId || loadingStages}
+            >
+              <MenuItem value=""><em>Selecione</em></MenuItem>
+              {stages.map((s) => (
+                <MenuItem key={s.id} value={String(s.id)}>{s.order} - {s.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <FormControl fullWidth variant="outlined" size="small">
+            <InputLabel>Conexão</InputLabel>
+            <Select
+              value={selectedWhatsappId}
+              onChange={(e) => {
+                setSelectedWhatsappId(e.target.value);
+                setSelectedGroupId("");
+                setToNumber("");
+                setSessionId("");
+              }}
+              label="Conexão"
+              disabled={loadingWhatsApps}
+            >
+              <MenuItem value=""><em>Selecione</em></MenuItem>
+              {whatsApps.map((w) => (
+                <MenuItem key={w.id} value={String(w.id)}>{w.name} ({w.status})</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+      </Grid>
+    </Paper>
+  );
+
   return (
+
     <MainContainer>
       <MainHeader>
         <Title>Training / Sandbox (IA)</Title>
         <MainHeaderButtonsWrapper>
-          <Button variant="outlined" onClick={handleClear}>
-            Limpar
-          </Button>
+          <Button variant="outlined" onClick={handleClear}>Limpar</Button>
         </MainHeaderButtonsWrapper>
       </MainHeader>
 
       <Paper className={classes.mainPaper} variant="outlined">
-        <Grid container spacing={2}>
-          <Grid item xs={12}>
-            <Accordion>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography variant="subtitle2">Ajuda (como usar / FAQ)</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Box display="flex" flexDirection="column" width="100%">
-                  <Typography variant="subtitle2">Campos obrigatórios</Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    Para enviar mensagem no sandbox: Agente, Etapa do funil, Conexão, Grupo e a mensagem.
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    Para "Aplicar no agente": Agente, Etapa do funil e o Prompt preenchido.
-                  </Typography>
+        {renderContextSelector()}
 
-                  <Box mt={1} />
-                  <Typography variant="subtitle2">Como testar (sandbox)</Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    1) Selecione o Agente e a Etapa do funil que você quer testar.
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    2) Selecione a Conexão e o Grupo de destino.
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    3) (Opcional) Escreva um Prompt para usar como override da sessão.
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    4) Envie uma mensagem. A sessão é criada automaticamente no primeiro envio.
-                  </Typography>
+        <Tabs
+          value={activeTab}
+          onChange={(e, v) => setActiveTab(v)}
+          className={classes.tabsContainer}
+          variant="scrollable"
+          scrollButtons="auto"
+          indicatorColor="primary"
+          textColor="primary"
+        >
+          <Tab icon={<PlayArrowIcon />} label="Sandbox" />
+          <Tab icon={<EditIcon />} label="Editor de Prompt" />
+          <Tab icon={<BugReportIcon />} label="Testes" />
+          <Tab icon={<AccountTreeIcon />} label="Fluxograma" />
+          <Tab icon={<HistoryIcon />} label="Versões" />
+          <Tab icon={<CompareArrowsIcon />} label="A/B Testing" />
+          <Tab icon={<AssessmentIcon />} label="Métricas" />
+        </Tabs>
 
-                  <Box mt={1} />
-                  <Typography variant="subtitle2">Override da sessão vs. corrigir o agente</Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    Prompt (override) afeta apenas a sessão atual do sandbox. É útil para iterar rápido sem alterar o agente.
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    Quando estiver bom, use "Aplicar no agente (etapa selecionada)" para salvar o texto como systemPrompt da etapa.
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    Dica: após aplicar no agente, a sessão é resetada para que os próximos testes reflitam o prompt salvo.
-                  </Typography>
+        <TabPanel value={activeTab} index={0} className={classes.tabPanel}>
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Accordion>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="subtitle2">Ajuda (como usar)</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Box display="flex" flexDirection="column" width="100%">
+                    <Typography variant="body2" color="textSecondary">
+                      1) Selecione o Agente e a Etapa do funil que você quer testar.
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      2) (Opcional) Use o Editor de Prompt para ajustar o prompt.
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      3) Envie mensagens para testar. Avalie as respostas com os botões de feedback.
+                    </Typography>
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+            </Grid>
 
-                  <Box mt={1} />
-                  <Typography variant="subtitle2">Logs e troubleshooting</Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    O painel de Logs mostra provider/model e o systemPrompt final utilizado (systemPrompt da etapa + override, se houver).
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    Se mudar Agente/Etapa, uma nova sessão será necessária (o contexto anterior não é reaproveitado).
-                  </Typography>
-                </Box>
-              </AccordionDetails>
-            </Accordion>
-          </Grid>
-
-          <Grid item xs={12}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth variant="outlined" margin="dense">
-                  <InputLabel>Agente</InputLabel>
-                  <Select
-                    value={selectedAgentId}
-                    onChange={async (e) => {
-                      const next = e.target.value;
-                      setSelectedAgentId(next);
-                      setSessionId("");
-                      setMessages([]);
-                      setLogs([]);
-                      await loadStages(next);
-                    }}
-                    label="Agente"
-                    disabled={loadingAgents}
-                  >
-                    <MenuItem value="">
-                      <em>Selecione</em>
-                    </MenuItem>
-                    {agents.map((a) => (
-                      <MenuItem key={a.id} value={String(a.id)}>
-                        {a.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth variant="outlined" margin="dense">
-                  <InputLabel>Etapa do funil</InputLabel>
-                  <Select
-                    value={selectedStageId}
-                    onChange={(e) => {
-                      setSelectedStageId(e.target.value);
-                      setSessionId("");
-                      appendLog(`[funnel] etapa selecionada: ${e.target.value}`);
-                    }}
-                    label="Etapa do funil"
-                    disabled={!selectedAgentId || loadingStages}
-                  >
-                    <MenuItem value="">
-                      <em>Selecione</em>
-                    </MenuItem>
-                    {stages.map((s) => (
-                      <MenuItem key={s.id} value={String(s.id)}>
-                        {s.order} - {s.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth variant="outlined" margin="dense">
-                  <InputLabel>Conexão</InputLabel>
-                  <Select
-                    value={selectedWhatsappId}
-                    onChange={(e) => {
-                      setSelectedWhatsappId(e.target.value);
-                      setSelectedGroupId("");
-                      setToNumber("");
-                      setSessionId("");
-                    }}
-                    label="Conexão"
-                    disabled={loadingWhatsApps}
-                  >
-                    <MenuItem value="">
-                      <em>Selecione</em>
-                    </MenuItem>
-                    {whatsApps.map((w) => (
-                      <MenuItem key={w.id} value={String(w.id)}>
-                        {w.name} ({w.status})
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} md={4}>
-                <Box display="flex" alignItems="center" height="100%">
+            <Grid item xs={12}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
                   <Button
                     variant={simulate ? "contained" : "outlined"}
                     color={simulate ? "primary" : "default"}
@@ -643,138 +627,165 @@ const AITraining = () => {
                   >
                     Simular (não envia)
                   </Button>
-                </Box>
-              </Grid>
-
-              {!simulate && String(selectedWhatsapp?.channelType) === "official" && (
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    variant="outlined"
-                    margin="dense"
-                    label="Número do destinatário (E.164)"
-                    value={toNumber}
-                    onChange={(e) => setToNumber(e.target.value)}
-                    placeholder="5511999999999"
-                  />
                 </Grid>
-              )}
 
-              {!simulate && String(selectedWhatsapp?.channelType) !== "official" && (
-                <Grid item xs={12} md={4}>
-                  <FormControl fullWidth variant="outlined" margin="dense">
-                    <InputLabel>Grupo (destino)</InputLabel>
-                    <Select
-                      value={selectedGroupId}
-                      onChange={(e) => setSelectedGroupId(e.target.value)}
-                      label="Grupo (destino)"
-                      disabled={!selectedWhatsappId || loadingGroups}
-                    >
-                      <MenuItem value="">
-                        <em>Selecione</em>
-                      </MenuItem>
-                      {groups.map((g) => (
-                        <MenuItem key={g.id} value={String(g.id)}>
-                          {g.subject} ({g.participantsCount})
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              )}
+                {!simulate && String(selectedWhatsapp?.channelType) === "official" && (
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      label="Número do destinatário (E.164)"
+                      value={toNumber}
+                      onChange={(e) => setToNumber(e.target.value)}
+                      placeholder="5511999999999"
+                    />
+                  </Grid>
+                )}
 
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  variant="outlined"
-                  margin="dense"
-                  label="Prompt (para aplicar na etapa e/ou usar na sessão)"
-                  value={promptOverride}
-                  onChange={(e) => setPromptOverride(e.target.value)}
-                  multiline
-                  minRows={2}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <Button
-                  color="primary"
-                  variant="outlined"
-                  onClick={handleApplyToAgentStage}
-                  disabled={!selectedAgentId || !selectedStageId || !promptOverride.trim()}
-                >
-                  Aplicar no agente (etapa selecionada)
-                </Button>
+                {!simulate && String(selectedWhatsapp?.channelType) !== "official" && (
+                  <Grid item xs={12} md={4}>
+                    <FormControl fullWidth variant="outlined" size="small">
+                      <InputLabel>Grupo (destino)</InputLabel>
+                      <Select
+                        value={selectedGroupId}
+                        onChange={(e) => setSelectedGroupId(e.target.value)}
+                        label="Grupo (destino)"
+                        disabled={!selectedWhatsappId || loadingGroups}
+                      >
+                        <MenuItem value=""><em>Selecione</em></MenuItem>
+                        {groups.map((g) => (
+                          <MenuItem key={g.id} value={String(g.id)}>{g.subject} ({g.participantsCount})</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                )}
               </Grid>
             </Grid>
-          </Grid>
 
-          <Grid item xs={12} md={6}>
-            <Paper className={classes.leftPane} variant="outlined">
-              <Box display="flex" flexDirection="column" alignItems="center" height="100%">
-                <WhatsAppPreview
-                  messages={messages}
-                  onRateMessage={onRateMessage}
-                  messageRatings={messageRatings}
-                  contactName={
-                    selectedGroupId
-                      ? (groups.find((g) => String(g.id) === String(selectedGroupId))?.subject || "Cliente")
-                      : "Cliente"
-                  }
-                  companyName={selectedWhatsapp ? selectedWhatsapp.name : "Empresa"}
-                />
-
-                <Box mt={2} width="100%">
-                  <Grid container spacing={1} alignItems="center">
-                    <Grid item xs>
-                      <TextField
-                        fullWidth
-                        variant="outlined"
-                        size="small"
-                        placeholder="Mensagem do cliente..."
-                        value={messageText}
-                        onChange={(e) => setMessageText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSendLocal();
-                          }
-                        }}
-                      />
+            <Grid item xs={12} md={6}>
+              <Paper className={classes.leftPane} variant="outlined">
+                <Box display="flex" flexDirection="column" alignItems="center" height="100%">
+                  <WhatsAppPreview
+                    messages={messages}
+                    onRateMessage={onRateMessage}
+                    messageRatings={messageRatings}
+                    contactName={
+                      selectedGroupId
+                        ? (groups.find((g) => String(g.id) === String(selectedGroupId))?.subject || "Cliente")
+                        : "Cliente"
+                    }
+                    companyName={selectedWhatsapp ? selectedWhatsapp.name : "Empresa"}
+                  />
+                  <Box mt={2} width="100%">
+                    <Grid container spacing={1} alignItems="center">
+                      <Grid item xs>
+                        <TextField
+                          fullWidth
+                          variant="outlined"
+                          size="small"
+                          placeholder="Mensagem do cliente..."
+                          value={messageText}
+                          onChange={(e) => setMessageText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              handleSendLocal();
+                            }
+                          }}
+                        />
+                      </Grid>
+                      <Grid item>
+                        <Button color="primary" variant="contained" onClick={handleSendLocal} disabled={sending}>
+                          {sending ? <CircularProgress size={20} /> : "Enviar"}
+                        </Button>
+                      </Grid>
                     </Grid>
-                    <Grid item>
-                      <Button color="primary" variant="contained" onClick={handleSendLocal}>
-                        Enviar
-                      </Button>
-                    </Grid>
-                  </Grid>
+                  </Box>
                 </Box>
-              </Box>
-            </Paper>
-          </Grid>
+              </Paper>
+            </Grid>
 
-          <Grid item xs={12} md={6}>
-            <Paper className={classes.rightPane} variant="outlined">
-              <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
-                <Typography variant="subtitle2" style={{ color: "#d7e0ff" }}>
-                  Logs
-                </Typography>
-                {(loadingAgents || loadingWhatsApps || loadingGroups) && (
-                  <CircularProgress size={16} style={{ color: "#d7e0ff" }} />
+            <Grid item xs={12} md={6}>
+              <Paper className={classes.rightPane} variant="outlined">
+                <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                  <Typography variant="subtitle2" style={{ color: "#d7e0ff" }}>Logs & Tool Calls</Typography>
+                </Box>
+                {logs.length === 0 ? (
+                  <div className={classes.logLine}>Aguardando ações...</div>
+                ) : (
+                  logs.map((l, idx) => (
+                    <div key={idx} className={classes.logLine}>{l}</div>
+                  ))
                 )}
-              </Box>
-              {logs.length === 0 ? (
-                <div className={classes.logLine}>Aguardando ações...</div>
-              ) : (
-                logs.map((l, idx) => (
-                  <div key={idx} className={classes.logLine}>
-                    {l}
-                  </div>
-                ))
-              )}
-            </Paper>
+                {toolCalls.length > 0 && (
+                  <Box mt={2}>
+                    <ToolCallsHistory toolCalls={toolCalls} />
+                  </Box>
+                )}
+              </Paper>
+            </Grid>
           </Grid>
-        </Grid>
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={1} className={classes.tabPanel}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={8}>
+              <PromptAssistant
+                agentId={selectedAgentId}
+                stageId={selectedStageId}
+                initialPrompt={promptOverride}
+                onPromptChange={handlePromptChange}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <PromptFlowVisualization prompt={promptOverride} />
+            </Grid>
+            <Grid item xs={12}>
+              <Button
+                color="primary"
+                variant="contained"
+                onClick={handleApplyToAgentStage}
+                disabled={!selectedAgentId || !selectedStageId || !promptOverride.trim()}
+              >
+                Aplicar no agente (etapa selecionada)
+              </Button>
+            </Grid>
+          </Grid>
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={2} className={classes.tabPanel}>
+          <TestScenarios
+            agentId={selectedAgentId}
+            stageId={selectedStageId}
+            currentPrompt={promptOverride}
+          />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={3} className={classes.tabPanel}>
+          <PromptFlowVisualization prompt={promptOverride} />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={4} className={classes.tabPanel}>
+          <PromptVersioning
+            agentId={selectedAgentId}
+            stageId={selectedStageId}
+            currentPrompt={promptOverride}
+            onRestore={handleRestoreVersion}
+          />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={5} className={classes.tabPanel}>
+          <ABTestingComparison
+            agentId={selectedAgentId}
+            stageId={selectedStageId}
+          />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={6} className={classes.tabPanel}>
+          <TrainingMetricsDashboard agentId={selectedAgentId} />
+        </TabPanel>
       </Paper>
 
       <Dialog open={rateModalOpen} onClose={closeRateModal} fullWidth maxWidth="sm">
@@ -803,7 +814,7 @@ const AITraining = () => {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeRateModal} color="default">Cancelar</Button>
+          <Button onClick={closeRateModal}>Cancelar</Button>
           <Button onClick={() => submitWrongFeedback({ applyNow: false })} color="primary" variant="outlined">Salvar correção</Button>
           <Button onClick={() => submitWrongFeedback({ applyNow: true })} color="primary" variant="contained">Salvar e aplicar na etapa</Button>
         </DialogActions>

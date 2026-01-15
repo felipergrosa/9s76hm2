@@ -1,45 +1,54 @@
-import React from "react";
-import Button from "@material-ui/core/Button";
-import Dialog from "@material-ui/core/Dialog";
-import DialogActions from "@material-ui/core/DialogActions";
-import DialogContent from "@material-ui/core/DialogContent";
-import DialogTitle from "@material-ui/core/DialogTitle";
-import Typography from "@material-ui/core/Typography";
-
+import React, { useEffect, useRef } from "react";
+import { confirm } from "../../helpers/swalHelper";
 import { i18n } from "../../translate/i18n";
 
+/**
+ * ConfirmationModal - Agora usa SweetAlert2 para visual moderno
+ * 
+ * Props:
+ * - title: Título do modal
+ * - children: Conteúdo/texto do modal
+ * - open: Se o modal está aberto
+ * - onClose: Callback quando fecha (recebe false)
+ * - onConfirm: Callback quando confirma
+ */
 const ConfirmationModal = ({ title, children, open, onClose, onConfirm }) => {
-	return (
-		<Dialog
-			open={open}
-			onClose={() => onClose(false)}
-			aria-labelledby="confirm-dialog"
-		>
-			<DialogTitle id="confirm-dialog">{title}</DialogTitle>
-			<DialogContent dividers>
-				<Typography>{children}</Typography>
-			</DialogContent>
-			<DialogActions>
-				<Button
-					variant="contained"
-					onClick={() => onClose(false)}
-					color="default"
-				>
-					{i18n.t("confirmationModal.buttons.cancel")}
-				</Button>
-				<Button
-					variant="contained"
-					onClick={() => {
-						onClose(false);
-						onConfirm();
-					}}
-					color="secondary"
-				>
-					{i18n.t("confirmationModal.buttons.confirm")}
-				</Button>
-			</DialogActions>
-		</Dialog>
-	);
+	const hasShownRef = useRef(false);
+
+	useEffect(() => {
+		const showModal = async () => {
+			if (open && !hasShownRef.current) {
+				hasShownRef.current = true;
+
+				const confirmed = await confirm({
+					title: title || "Confirmar?",
+					text: typeof children === "string" ? children : "",
+					html: typeof children !== "string" ? `<div style="text-align: center; padding: 10px;">${children}</div>` : null,
+					confirmText: i18n.t("confirmationModal.buttons.confirm"),
+					cancelText: i18n.t("confirmationModal.buttons.cancel"),
+					icon: "warning",
+					confirmButtonColor: "#d33",
+				});
+
+				if (confirmed) {
+					onConfirm();
+				}
+				onClose(false);
+				hasShownRef.current = false;
+			}
+		};
+
+		showModal();
+	}, [open, title, children, onClose, onConfirm]);
+
+	// Quando fecha externamente, resetar o ref
+	useEffect(() => {
+		if (!open) {
+			hasShownRef.current = false;
+		}
+	}, [open]);
+
+	return null; // SweetAlert2 gerencia seu próprio DOM
 };
 
 export default ConfirmationModal;
