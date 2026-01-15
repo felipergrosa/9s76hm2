@@ -1266,6 +1266,95 @@ const MessagesList = ({
     };
   }, [ticketId, socket, user?.companyId]);
 
+  // Phase 2: Verificação periódica de conexão e rejoin automático
+  useEffect(() => {
+    if (!socket || !ticketId || ticketId === "undefined") return;
+
+    const checkAndRejoin = () => {
+      const roomId = currentRoomIdRef.current;
+      if (!roomId) return;
+
+      if (!socket.connected) {
+        console.warn("[MessagesList] Socket desconectado, tentando reconectar...");
+        try {
+          socket.connect();
+        } catch (e) {
+          console.error("[MessagesList] Erro ao reconectar socket:", e);
+        }
+        return;
+      }
+
+      // Verificar se ainda estamos na sala correta
+      if (typeof socket.checkRoom === "function") {
+        socket.checkRoom(roomId, (res) => {
+          if (!res?.inRoom) {
+            console.warn("[MessagesList] Não está na sala, fazendo rejoin:", roomId);
+            if (typeof socket.joinRoom === "function") {
+              socket.joinRoom(roomId, (err) => {
+                if (err) console.error("[MessagesList] Falha no rejoin:", err);
+                else console.log("[MessagesList] Rejoin bem-sucedido:", roomId);
+              });
+            } else {
+              socket.emit("joinChatBox", roomId);
+            }
+          }
+        });
+      }
+    };
+
+    // Verificar a cada 10 segundos
+    const interval = setInterval(checkAndRejoin, 10000);
+
+    return () => clearInterval(interval);
+  }, [socket, ticketId]);
+
+  // Phase 6: Polling fallback - buscar mensagens novas via API como segurança
+  const lastMessageIdRef = useRef(null);
+
+  useEffect(() => {
+    if (!ticketId || ticketId === "undefined") return;
+
+    const pollNewMessages = async () => {
+      try {
+        // Só faz polling se temos mensagens carregadas (para comparar)
+        if (filteredMessages.length === 0) return;
+
+        const lastKnownId = lastMessageIdRef.current || filteredMessages[filteredMessages.length - 1]?.id;
+
+        const { data } = await api.get(`/messages/${ticketId}`, {
+          params: { pageNumber: 1, selectedQueues: JSON.stringify(selectedQueuesMessage) }
+        });
+
+        if (data?.messages?.length) {
+          // Verificar se há mensagens novas que não temos
+          const newMessages = data.messages.filter(
+            (msg) => !filteredMessages.some((m) => m.id === msg.id)
+          );
+
+          if (newMessages.length > 0) {
+            console.log(`[MessagesList] Polling encontrou ${newMessages.length} mensagem(s) nova(s)`);
+            newMessages.forEach((msg) => {
+              dispatch({ type: "ADD_MESSAGE", payload: msg });
+            });
+            scrollToBottom();
+          }
+
+          // Atualizar referência do último ID
+          if (data.messages.length > 0) {
+            lastMessageIdRef.current = data.messages[data.messages.length - 1]?.id;
+          }
+        }
+      } catch (err) {
+        console.debug("[MessagesList] Erro no polling:", err);
+      }
+    };
+
+    // Polling a cada 30 segundos como fallback
+    const interval = setInterval(pollNewMessages, 30000);
+
+    return () => clearInterval(interval);
+  }, [ticketId, selectedQueuesMessage, filteredMessages]);
+
   const loadMore = () => {
     if (loadingMore) return;
     setLoadingMore(true);

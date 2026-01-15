@@ -5598,6 +5598,16 @@ const filterMessages = (msg: WAMessage): boolean => {
 const wbotMessageListener = (wbot: Session, companyId: number): void => {
   const wbotUserJid = wbot?.user?.id;
   wbot.ev.on("messages.upsert", async (messageUpsert: ImessageUpsert) => {
+    // Phase 4: Diferenciar tipo de mensagem (notify = tempo real, append = histórico)
+    const upsertType = (messageUpsert as any).type || "unknown";
+    const isRealtime = upsertType === "notify";
+
+    if (isRealtime) {
+      logger.info(`[messages.upsert] REALTIME (notify) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);
+    } else {
+      logger.debug(`[messages.upsert] HISTÓRICO (${upsertType}) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);
+    }
+
     const messages = messageUpsert.messages
       .filter(filterMessages)
       .map(msg => msg);
@@ -5731,13 +5741,21 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
     });
   });
 
-  // wbot.ev.on('message-receipt.update', (events: any) => {
-  //   events.forEach(async (msg: any) => {
-  //     const ack = msg?.receipt?.receiptTimestamp ? 3 : msg?.receipt?.readTimestamp ? 4 : 0;
-  //     if (!ack) return;
-  //     await handleMsgAck(msg, ack);
-  //   });
-  // })
+  // Phase 3: Habilitar message-receipt.update para atualização de read receipts
+  wbot.ev.on('message-receipt.update', (events: any) => {
+    events.forEach(async (msg: any) => {
+      try {
+        // receiptTimestamp = entregue, readTimestamp = lido
+        const ack = msg?.receipt?.readTimestamp ? 4 : msg?.receipt?.receiptTimestamp ? 3 : 0;
+        if (!ack) return;
+        logger.info(`[message-receipt.update] ACK=${ack} para msgId=${msg?.key?.id}`);
+        await handleMsgAck(msg, ack);
+      } catch (err) {
+        logger.error(`[message-receipt.update] Erro: ${err}`);
+      }
+    });
+  });
+
   // wbot.ev.on("presence.update", (events: any) => {
   //   console.log(events)
   // })

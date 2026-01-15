@@ -118,7 +118,7 @@ const CreateMessageService = async ({
         ticket: message.ticket,
         contact: message.ticket.contact
       },
-      true // skipFallback=true para NUNCA fazer broadcast para outros tickets
+      false // Habilitar fallback para garantir entrega mesmo se sala vazia
     );
   }
 
