@@ -147,7 +147,6 @@ routes.post(
   checkPermission("ai-training.view"),
   AIPromptVersionController.createVersion
 );
-
 routes.get(
   "/ai/prompt-versions",
   isAuth,
@@ -177,19 +176,3 @@ routes.get(
 );
 
 export default routes;
-
-routes.post(
-  "/ai/prompt-versions/:versionId/rollback",
-  isAuth,
-  checkPermission("ai-training.view"),
-  AIPromptVersionController.rollbackToVersion
-);
-routes.get(
-  "/ai/prompt-versions/compare",
-  isAuth,
-  checkPermission("ai-training.view"),
-  AIPromptVersionController.compareVersions
-);
-
-export default routes;
-

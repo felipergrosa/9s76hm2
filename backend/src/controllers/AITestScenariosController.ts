@@ -99,7 +99,7 @@ export const runScenario = async (req: Request, res: Response): Promise<Response
     conversationHistory.push({ role: "user", content: conv.customer });
 
     const ai = await AIOrchestrator.processRequest({
-      module: "chat",
+      module: "general",
       mode: "chat",
       companyId,
       userId: userId ? Number(userId) : undefined,
@@ -109,11 +109,11 @@ export const runScenario = async (req: Request, res: Response): Promise<Response
       model: agent.aiModel || undefined,
       temperature: 0.3,
       maxTokens: agent.maxTokens || 1000,
-      conversationHistory,
       metadata: {
         testScenario: true,
         scenarioId: scenario.id,
-        messageIndex: i
+        messageIndex: i,
+        conversationHistory
       }
     });
 
