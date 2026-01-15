@@ -55,7 +55,7 @@ export const getTrainingMetrics = async (
     });
 
     const improvementsApplied = await AITrainingImprovement.count({
-      where: { ...improvementWhere, applied: true }
+      where: { ...improvementWhere, appliedAt: { [Op.ne]: null } }
     });
 
     const testResultWhere: any = { companyId };
