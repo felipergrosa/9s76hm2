@@ -242,11 +242,11 @@ export async function ImportContactsService(
   // Agrupar contatos por número canônico para evitar duplicados no mesmo arquivo
   const contactsByNumber = new Map<string, any>();
   const duplicatesInFile: string[] = [];
-  
+
   for (const c of contacts) {
     const number = `${c.number}`.replace(/\D/g, '');
     if (!number) continue;
-    
+
     if (contactsByNumber.has(number)) {
       // Duplicado encontrado - mesclar dados (priorizar mais completo)
       const existing = contactsByNumber.get(number);
@@ -269,7 +269,7 @@ export async function ImportContactsService(
       contactsByNumber.set(number, c);
     }
   }
-  
+
   // Substituir array original pelos contatos deduplicados
   contacts = Array.from(contactsByNumber.values());
   logger.info(`[ImportContactsService] Deduplicados: ${duplicatesInFile.length}, Total final: ${contacts.length}`);
@@ -301,16 +301,16 @@ export async function ImportContactsService(
 
   for (let rowIndex = 0; rowIndex < contacts.length; rowIndex++) {
     const incoming = contacts[rowIndex];
-    
+
     // === TRATAMENTO DE ERROS INDIVIDUAL ===
     try {
       let number = `${incoming.number}`.replace(/\D/g, '');
-      
-      // Validação básica de número
-      if (!number || number.length < 10) {
-        throw new Error(`Número inválido ou muito curto: ${incoming.number}`);
+
+      // Validação básica de número - mínimo 8 dígitos para aceitar números internacionais
+      if (!number || number.length < 8) {
+        throw new Error(`Número inválido ou muito curto (mín 8 dígitos): ${incoming.number} -> ${number}`);
       }
-      
+
       // Validação/normalização opcional do número
       if (validateNumber) {
         try {
@@ -504,7 +504,7 @@ export async function ImportContactsService(
           p.updated = updatedCount;
           p.tagged = taggedCount;
           importProgressMap.set(progressId, p);
-          
+
           // NOVO: Emitir progresso via Socket.IO a cada 5 contatos (para não sobrecarregar)
           if (p.processed % 5 === 0 || p.processed === p.total) {
             try {
@@ -526,25 +526,25 @@ export async function ImportContactsService(
           }
         }
       }
-      
+
     } catch (error: any) {
       // Registrar erro individual sem parar a importação
       const errorMessage = error?.message || "Erro desconhecido";
       logger.error(`[ImportContactsService] Erro no contato (linha ${rowIndex + 1}): ${errorMessage}`);
-      
+
       errors.push({
         row: rowIndex + 1,
         number: incoming.number || "N/A",
         error: errorMessage
       });
-      
+
       // Atualiza progresso mesmo com erro
       if (progressId) {
         const p = importProgressMap.get(progressId);
         if (p) {
           p.processed += 1;
           importProgressMap.set(progressId, p);
-          
+
           // NOVO: Emitir progresso via Socket.IO mesmo com erro
           if (p.processed % 5 === 0 || p.processed === p.total) {
             try {
@@ -567,7 +567,7 @@ export async function ImportContactsService(
           }
         }
       }
-      
+
       // Continua para o próximo contato
       continue;
     }

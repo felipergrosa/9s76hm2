@@ -1048,89 +1048,17 @@ const TicketsManagerTabs = () => {
           </Grid>
         </Paper>
         <TabPanel value={tab} name="open" className={classes.ticketsWrapper}>
-          <Tabs
-            value={tabOpen}
-            onChange={handleChangeTabOpen}
-            indicatorColor="primary"
-            textColor="primary"
-            variant="fullWidth"
-            scrollButtons={false}
-            style={{ overflow: "visible", paddingTop: 8 }}
-          >
-            {/* ATENDENDO */}
-            <Tab
-              label={
-                <Grid container direction="column" alignItems="center" justifyContent="center">
-                  <Grid item>
-                    <Badge
-                      overlap="rectangular"
-                      classes={{ badge: classes.customBadge }}
-                      badgeContent={openCount}
-                      color="primary"
-                    >
-                      <MessageSharpIcon
-                        style={{
-                          fontSize: 16,
-                        }}
-                      />
-                    </Badge>
-                  </Grid>
-                  <Grid item>
-                    <Typography
-                      style={{
-                        marginTop: 2,
-                        fontSize: 9,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {i18n.t("ticketsList.assignedHeader")}
-                    </Typography>
-                  </Grid>
-                </Grid>
-              }
-              value={"open"}
-              name="open"
-              classes={{ root: classes.tabPanelItem }}
-            />
-
-            {/* AGUARDANDO */}
-            <Tab
-              label={
-                <Grid container direction="column" alignItems="center" justifyContent="center">
-                  <Grid item>
-                    <Badge
-                      overlap="rectangular"
-                      classes={{ badge: classes.customBadge }}
-                      badgeContent={pendingCount}
-                      color="primary"
-                    >
-                      <ClockIcon
-                        style={{
-                          fontSize: 16,
-                        }}
-                      />
-                    </Badge>
-                  </Grid>
-                  <Grid item>
-                    <Typography
-                      style={{
-                        marginTop: 2,
-                        fontSize: 9,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {i18n.t("ticketsList.pendingHeader")}
-                    </Typography>
-                  </Grid>
-                </Grid>
-              }
-              value={"pending"}
-              name="pending"
-              classes={{ root: classes.tabPanelItem }}
-            />
-
-            {/* GRUPOS */}
-            {user.allowGroup && (
+          <div style={{ overflow: "visible", position: "relative", marginTop: 16, zIndex: 10 }}>
+            <Tabs
+              value={tabOpen}
+              onChange={handleChangeTabOpen}
+              indicatorColor="primary"
+              textColor="primary"
+              variant="fullWidth"
+              scrollButtons={false}
+              style={{ overflow: "visible" }}
+            >
+              {/* ATENDENDO */}
               <Tab
                 label={
                   <Grid container direction="column" alignItems="center" justifyContent="center">
@@ -1138,10 +1066,10 @@ const TicketsManagerTabs = () => {
                       <Badge
                         overlap="rectangular"
                         classes={{ badge: classes.customBadge }}
-                        badgeContent={groupingCount}
+                        badgeContent={openCount}
                         color="primary"
                       >
-                        <Group
+                        <MessageSharpIcon
                           style={{
                             fontSize: 16,
                           }}
@@ -1156,89 +1084,163 @@ const TicketsManagerTabs = () => {
                           fontWeight: 600,
                         }}
                       >
-                        {i18n.t("ticketsList.groupingHeader")}
+                        {i18n.t("ticketsList.assignedHeader")}
                       </Typography>
                     </Grid>
                   </Grid>
                 }
-                value={"group"}
-                name="group"
+                value={"open"}
+                name="open"
                 classes={{ root: classes.tabPanelItem }}
               />
-            )}
 
-            {/* BOT */}
-            <Tab
-              label={
-                <Grid container direction="column" alignItems="center" justifyContent="center">
-                  <Grid item>
-                    <Badge
-                      overlap="rectangular"
-                      classes={{ badge: classes.customBadge }}
-                      badgeContent={botCount}
-                      color="primary"
-                    >
-                      <BotIcon
+              {/* AGUARDANDO */}
+              <Tab
+                label={
+                  <Grid container direction="column" alignItems="center" justifyContent="center">
+                    <Grid item>
+                      <Badge
+                        overlap="rectangular"
+                        classes={{ badge: classes.customBadge }}
+                        badgeContent={pendingCount}
+                        color="primary"
+                      >
+                        <ClockIcon
+                          style={{
+                            fontSize: 16,
+                          }}
+                        />
+                      </Badge>
+                    </Grid>
+                    <Grid item>
+                      <Typography
                         style={{
-                          fontSize: 16,
+                          marginTop: 2,
+                          fontSize: 9,
+                          fontWeight: 600,
                         }}
-                      />
-                    </Badge>
+                      >
+                        {i18n.t("ticketsList.pendingHeader")}
+                      </Typography>
+                    </Grid>
                   </Grid>
-                  <Grid item>
-                    <Typography
-                      style={{
-                        marginTop: 2,
-                        fontSize: 9,
-                        fontWeight: 600,
-                      }}
-                    >
-                      BOT
-                    </Typography>
-                  </Grid>
-                </Grid>
-              }
-              value={"bot"}
-              name="bot"
-              classes={{ root: classes.tabPanelItem }}
-            />
+                }
+                value={"pending"}
+                name="pending"
+                classes={{ root: classes.tabPanelItem }}
+              />
 
-            {/* CAMPANHA */}
-            <Tab
-              label={
-                <Grid container direction="column" alignItems="center" justifyContent="center">
-                  <Grid item>
-                    <Badge
-                      overlap="rectangular"
-                      classes={{ badge: classes.customBadge }}
-                      badgeContent={campaignCount}
-                      color="primary"
-                    >
-                      <CampaignIcon
+              {/* GRUPOS */}
+              {user.allowGroup && (
+                <Tab
+                  label={
+                    <Grid container direction="column" alignItems="center" justifyContent="center">
+                      <Grid item>
+                        <Badge
+                          overlap="rectangular"
+                          classes={{ badge: classes.customBadge }}
+                          badgeContent={groupingCount}
+                          color="primary"
+                        >
+                          <Group
+                            style={{
+                              fontSize: 16,
+                            }}
+                          />
+                        </Badge>
+                      </Grid>
+                      <Grid item>
+                        <Typography
+                          style={{
+                            marginTop: 2,
+                            fontSize: 9,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {i18n.t("ticketsList.groupingHeader")}
+                        </Typography>
+                      </Grid>
+                    </Grid>
+                  }
+                  value={"group"}
+                  name="group"
+                  classes={{ root: classes.tabPanelItem }}
+                />
+              )}
+
+              {/* BOT */}
+              <Tab
+                label={
+                  <Grid container direction="column" alignItems="center" justifyContent="center">
+                    <Grid item>
+                      <Badge
+                        overlap="rectangular"
+                        classes={{ badge: classes.customBadge }}
+                        badgeContent={botCount}
+                        color="primary"
+                      >
+                        <BotIcon
+                          style={{
+                            fontSize: 16,
+                          }}
+                        />
+                      </Badge>
+                    </Grid>
+                    <Grid item>
+                      <Typography
                         style={{
-                          fontSize: 16,
+                          marginTop: 2,
+                          fontSize: 9,
+                          fontWeight: 600,
                         }}
-                      />
-                    </Badge>
+                      >
+                        BOT
+                      </Typography>
+                    </Grid>
                   </Grid>
-                  <Grid item>
-                    <Typography
-                      style={{
-                        marginTop: 2,
-                        fontSize: 9,
-                        fontWeight: 600,
-                      }}
-                    >
-                      CAMPANHA
-                    </Typography>
+                }
+                value={"bot"}
+                name="bot"
+                classes={{ root: classes.tabPanelItem }}
+              />
+
+              {/* CAMPANHA */}
+              <Tab
+                label={
+                  <Grid container direction="column" alignItems="center" justifyContent="center">
+                    <Grid item>
+                      <Badge
+                        overlap="rectangular"
+                        classes={{ badge: classes.customBadge }}
+                        badgeContent={campaignCount}
+                        color="primary"
+                      >
+                        <CampaignIcon
+                          style={{
+                            fontSize: 16,
+                          }}
+                        />
+                      </Badge>
+                    </Grid>
+                    <Grid item>
+                      <Typography
+                        style={{
+                          marginTop: 2,
+                          fontSize: 9,
+                          fontWeight: 600,
+                        }}
+                      >
+                        CAMPANHA
+                      </Typography>
+                    </Grid>
                   </Grid>
-                </Grid>
-              }
-              value={"campaign"}
-              name="campaign"
-              classes={{ root: classes.tabPanelItem }}
-            />
-          </Tabs>
+                }
+                value={"campaign"}
+                name="campaign"
+                classes={{ root: classes.tabPanelItem }}
+              />
+            </Tabs>
+          </div>
 
           <Paper className={classes.ticketsWrapper}>
             <TicketsList
