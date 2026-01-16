@@ -54,6 +54,7 @@ interface Request {
   dtUltCompra?: Date | string | null;
   vlUltCompra?: number | string | null;
   bzEmpresa?: string;
+  clientCode?: string;
 }
 
 const shouldReplaceName = (currentName: string | null | undefined, fallbackNumber: string): boolean => {
@@ -100,6 +101,7 @@ const mergeContactData = (contact: Contact, canonicalNumber: string, payload: an
   mergeStringField("contactName");
   mergeStringField("bzEmpresa");
   mergeStringField("cpfCnpj");
+  mergeStringField("clientCode");
 
   mergeDirectField("foundationDate");
   mergeDirectField("dtUltCompra");
@@ -128,34 +130,35 @@ const mergeContactData = (contact: Contact, canonicalNumber: string, payload: an
 };
 
 const CreateContactService = async ({
-                                      name,
-                                      number,
-                                      email = "",
-                                      acceptAudioMessage,
-                                      active,
-                                      companyId,
-                                      extraInfo = [],
-                                      remoteJid = "",
-                                      userId,
-                                      wallets,
+  name,
+  number,
+  email = "",
+  acceptAudioMessage,
+  active,
+  companyId,
+  extraInfo = [],
+  remoteJid = "",
+  userId,
+  wallets,
 
-                                      // Novos campos
-                                      cpfCnpj,
-                                      representativeCode,
-                                      city,
-                                      region,
-                                      instagram,
-                                      situation,
-                                      fantasyName,
-                                      foundationDate,
-                                      creditLimit,
-                                      segment,
-                                      contactName,
-                                      florder,
-                                      dtUltCompra,
-                                      vlUltCompra,
-                                      bzEmpresa,
-                                    }: Request): Promise<Contact> => {
+  // Novos campos
+  cpfCnpj,
+  representativeCode,
+  city,
+  region,
+  instagram,
+  situation,
+  fantasyName,
+  foundationDate,
+  creditLimit,
+  segment,
+  contactName,
+  florder,
+  dtUltCompra,
+  vlUltCompra,
+  bzEmpresa,
+  clientCode,
+}: Request): Promise<Contact> => {
   const { canonical } = safeNormalizePhoneNumber(number);
 
   if (!canonical) {
@@ -372,6 +375,7 @@ const CreateContactService = async ({
     dtUltCompra?: Date | null;
     vlUltCompra?: number | null;
     bzEmpresa?: string | null;
+    clientCode?: string | null;
     canonicalNumber: string;
   } = {
     name: name || '',
@@ -403,6 +407,7 @@ const CreateContactService = async ({
     dtUltCompra: dtUltCompraValue,
     vlUltCompra: vlUltCompraValue,
     bzEmpresa: emptyToNull(bzEmpresa),
+    clientCode: emptyToNull(clientCode),
     canonicalNumber: canonical,
   };
 

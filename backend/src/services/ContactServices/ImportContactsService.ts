@@ -164,6 +164,11 @@ export async function ImportContactsService(
       let fantasyName = "";
       let foundationDate = null;
       let creditLimit = "";
+      let clientCode = "";
+
+      if (has(row, "clientCode") || has(row, "Código do Cliente") || has(row, "codigo") || has(row, "Código")) {
+        clientCode = row["clientCode"] || row["Código do Cliente"] || row["codigo"] || row["Código"];
+      }
 
       if (has(row, "cpfCnpj") || has(row, "CPF/CNPJ") || has(row, "cpf") || has(row, "CPF")) {
         cpfCnpj = row["cpfCnpj"] || row["CPF/CNPJ"] || row["cpf"] || row["CPF"];
@@ -232,6 +237,7 @@ export async function ImportContactsService(
         fantasyName,
         foundationDate,
         creditLimit,
+        clientCode,
         companyId
       };
     });
@@ -379,6 +385,7 @@ export async function ImportContactsService(
         };
 
         keepIfEmpty('cpfCnpj');
+        keepIfEmpty('clientCode');
         keepIfEmpty('representativeCode');
         keepIfEmpty('city');
         keepIfEmpty('instagram');

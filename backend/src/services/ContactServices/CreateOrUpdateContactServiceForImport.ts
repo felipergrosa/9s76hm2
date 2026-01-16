@@ -28,6 +28,7 @@ interface Request {
   foundationDate?: Date;
   segment?: string;
   bzEmpresa?: string;
+  clientCode?: string;
   silentMode?: boolean; // Adicionar a nova propriedade
 }
 
@@ -51,6 +52,7 @@ const CreateOrUpdateContactServiceForImport = async ({
   foundationDate,
   segment,
   bzEmpresa,
+  clientCode,
   silentMode // Adicionar a nova propriedade
 }: Request): Promise<Contact> => {
   const rawString = (rawNumber || "").toString();
@@ -128,7 +130,8 @@ const CreateOrUpdateContactServiceForImport = async ({
     fantasyName,
     foundationDate: finalFoundationDate,
     segment: normalizeSegment(segment),
-    bzEmpresa: normalizeBzEmpresa(bzEmpresa)
+    bzEmpresa: normalizeBzEmpresa(bzEmpresa),
+    clientCode: clientCode || undefined
   };
 
   const io = getIO();

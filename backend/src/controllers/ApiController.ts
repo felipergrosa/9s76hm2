@@ -55,6 +55,12 @@ type MessageData = {
 interface ContactData {
   number: string;
   isGroup: boolean;
+  name?: string;
+  email?: string;
+  cpfCnpj?: string;
+  clientCode?: string;
+  representativeCode?: string;
+  extraInfo?: any[];
 }
 
 const createContact = async (
@@ -63,19 +69,32 @@ const createContact = async (
   newContact: string,
   userId?: number | 0,
   queueId?: number | 0,
-  wbot?: any
+  wbot?: any,
+  contactInfo?: {
+    name?: string;
+    email?: string;
+    cpfCnpj?: string;
+    clientCode?: string;
+    representativeCode?: string;
+    extraInfo?: any[];
+  }
 ) => {
   try {
     // await CheckIsValidContact(newContact, companyId);
     const validNumber: any = await CheckContactNumber(newContact, companyId, newContact.length > 17);
 
     const contactData = {
-      name: "",
+      name: contactInfo?.name || "",
       number: validNumber,
       profilePicUrl: "",
       isGroup: false,
       companyId,
       whatsappId,
+      email: contactInfo?.email,
+      cpfCnpj: contactInfo?.cpfCnpj,
+      clientCode: contactInfo?.clientCode,
+      representativeCode: contactInfo?.representativeCode,
+      extraInfo: contactInfo?.extraInfo,
       remoteJid: validNumber.length > 17 ? `${validNumber}@g.us` : `${validNumber}@s.whatsapp.net`,
       wbot
     };
@@ -331,7 +350,14 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
         })
     }
   } else {
-    const contactAndTicket = await createContact(whatsapp.id, companyId, newContact.number, userId, queueId, wbot);
+    const contactAndTicket = await createContact(whatsapp.id, companyId, newContact.number, userId, queueId, wbot, {
+      name: newContact.name,
+      email: newContact.email,
+      cpfCnpj: newContact.cpfCnpj,
+      clientCode: newContact.clientCode,
+      representativeCode: newContact.representativeCode,
+      extraInfo: newContact.extraInfo
+    });
 
     let sentMessage
 
@@ -512,7 +538,14 @@ export const indexImage = async (req: Request, res: Response): Promise<Response>
     throw new AppError(err.message);
   }
 
-  const contactAndTicket = await createContact(whatsappId, companyId, newContact.number);
+  const contactAndTicket = await createContact(whatsappId, companyId, newContact.number, undefined, undefined, undefined, {
+    name: newContact.name,
+    email: newContact.email,
+    cpfCnpj: newContact.cpfCnpj,
+    clientCode: newContact.clientCode,
+    representativeCode: newContact.representativeCode,
+    extraInfo: newContact.extraInfo
+  });
 
   if (url) {
     await SendWhatsAppMediaImage({ ticket: contactAndTicket, url, caption, msdelay });

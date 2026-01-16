@@ -84,6 +84,7 @@ interface Request {
   foundationDate?: Date;
   creditLimit?: string;
   segment?: string;
+  clientCode?: string;
 }
 
 const downloadProfileImage = async ({
@@ -141,7 +142,8 @@ const CreateOrUpdateContactService = async ({
   fantasyName,
   foundationDate,
   creditLimit,
-  segment
+  segment,
+  clientCode
 }: Request): Promise<Contact> => {
   try {
     let createContact = false;
@@ -216,7 +218,8 @@ const CreateOrUpdateContactService = async ({
       fantasyName: fantasyName || undefined,
       foundationDate: foundationDate || undefined,
       creditLimit: sanitizedCreditLimit,
-      segment: normalizedSegment
+      segment: normalizedSegment,
+      clientCode: clientCode || undefined
     };
 
     const io = getIO();
@@ -227,13 +230,13 @@ const CreateOrUpdateContactService = async ({
       where: isGroup
         ? { number: rawNumberDigits, companyId }
         : {
-            companyId,
-            [Op.or]: [
-              { canonicalNumber: number },
-              { number },
-              remoteJid ? { remoteJid } : {}
-            ]
-          }
+          companyId,
+          [Op.or]: [
+            { canonicalNumber: number },
+            { number },
+            remoteJid ? { remoteJid } : {}
+          ]
+        }
     });
 
     let updateImage = (!contact || contact?.profilePicUrl !== profilePicUrl && profilePicUrl !== "") && wbot || false;
@@ -242,7 +245,7 @@ const CreateOrUpdateContactService = async ({
       // Captura valores anteriores para detectar mudanças
       const oldName = contact.name;
       const oldProfilePicUrl = contact.profilePicUrl;
-      
+
       contact.remoteJid = remoteJid;
       contact.profilePicUrl = profilePicUrl || null;
       contact.isGroup = isGroup;
@@ -261,13 +264,14 @@ const CreateOrUpdateContactService = async ({
       contact.creditLimit = creditLimit !== undefined ? (creditLimit || null) : contact.creditLimit;
       contact.segment = normalizedSegment !== undefined ? (normalizedSegment as any) : (contact as any).segment;
       contact.region = normalizedRegion !== undefined ? (normalizedRegion as any) : (contact as any).region;
+      contact.clientCode = clientCode || contact.clientCode;
 
       if (isNil(contact.whatsappId)) {
         const whatsapp = await Whatsapp.findOne({
           where: { id: whatsappId, companyId }
         });
 
-        
+
 
         if (whatsapp) {
           contact.whatsappId = whatsappId;
@@ -317,7 +321,7 @@ const CreateOrUpdateContactService = async ({
       }
       await contact.update(contactData);
       await contact.reload();
-      
+
       // Marca para emitir update se nome ou avatar mudaram
       if (oldName !== contact.name || oldProfilePicUrl !== contact.profilePicUrl) {
         shouldEmitUpdate = true;

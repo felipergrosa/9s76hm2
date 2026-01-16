@@ -13,7 +13,7 @@ import ContactTag from "../../models/ContactTag";
 import SyncContactWalletsAndPersonalTagsService from "../../services/ContactServices/SyncContactWalletsAndPersonalTagsService";
 
 type IndexQuery = {
-    companyId: number;
+  companyId: number;
 };
 
 export const segments = async (req: Request, res: Response): Promise<Response> => {
@@ -89,25 +89,26 @@ interface ContactData {
   tagIds?: number[];
   segment?: string;
   bzEmpresa?: string;
+  clientCode?: string;
 }
 
-export const show = async (req: Request, res:Response): Promise<Response> => {
-   const { companyId } = req.body as IndexQuery;
-   
-   const contacts = await FindAllContactService({companyId});
+export const show = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.body as IndexQuery;
 
-   return res.json({count:contacts.length, contacts});
+  const contacts = await FindAllContactService({ companyId });
+
+  return res.json({ count: contacts.length, contacts });
 }
 
-export const count = async (req: Request, res:Response): Promise<Response> => {
-    const { companyId } = req.body as IndexQuery;
-    
-    const contacts = await FindAllContactService({companyId});
- 
-    return res.json({count:contacts.length}); 
- }
+export const count = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.body as IndexQuery;
 
- export const sync = async (req: Request, res: Response): Promise<Response> => {
+  const contacts = await FindAllContactService({ companyId });
+
+  return res.json({ count: contacts.length });
+}
+
+export const sync = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.body as IndexQuery;
   const contactData = req.body as ContactData;
 
@@ -150,6 +151,7 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
         return v === '' || v === undefined ? null : v;
       })
       .nullable(),
+    clientCode: Yup.string().nullable(),
     tagIds: Yup.array().of(Yup.number()).nullable(),
   });
 
@@ -198,6 +200,12 @@ export const count = async (req: Request, res:Response): Promise<Response> => {
     } else if (typeof contactData.bzEmpresa === 'string') {
       const e = contactData.bzEmpresa.trim();
       contactData.bzEmpresa = (e === '') ? (null as any) : e;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(contactData, 'clientCode')) {
+    if (typeof contactData.clientCode === 'string' && contactData.clientCode.trim() === '') {
+      contactData.clientCode = null as any;
     }
   }
 

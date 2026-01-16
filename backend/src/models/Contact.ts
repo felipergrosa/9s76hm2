@@ -36,6 +36,13 @@ class Contact extends Model<Contact> {
   @Column
   id: number;
 
+  @Column({
+    type: DataType.STRING(50),
+    allowNull: true,
+    comment: "Código do Cliente - identificador único do cliente no sistema externo"
+  })
+  clientCode: string;
+
   @Column
   name: string;
 
@@ -314,9 +321,9 @@ class Contact extends Model<Contact> {
     setImmediate(async () => {
       try {
         const ApplyTagRulesService = (await import("../services/TagServices/ApplyTagRulesService")).default;
-        await ApplyTagRulesService({ 
+        await ApplyTagRulesService({
           companyId: contact.companyId,
-          contactId: contact.id 
+          contactId: contact.id
         });
       } catch (err) {
         console.error(`[Hook] Erro ao aplicar regras de tags no contato ${contact.id}:`, err);
@@ -331,9 +338,9 @@ class Contact extends Model<Contact> {
     setImmediate(async () => {
       try {
         const ApplyTagRulesService = (await import("../services/TagServices/ApplyTagRulesService")).default;
-        await ApplyTagRulesService({ 
+        await ApplyTagRulesService({
           companyId: contact.companyId,
-          contactId: contact.id 
+          contactId: contact.id
         });
       } catch (err) {
         console.error(`[Hook] Erro ao aplicar regras de tags no contato ${contact.id}:`, err);

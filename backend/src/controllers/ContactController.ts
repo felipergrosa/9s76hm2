@@ -137,6 +137,7 @@ interface ContactData {
   florder?: boolean;
   dtUltCompra?: Date | string | null;
   vlUltCompra?: number | string | null;
+  clientCode?: string;
 }
 
 export const listDuplicates = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
@@ -288,7 +289,7 @@ export const processNormalization = async (req: AuthenticatedRequest, res: Respo
 
 export const importXls = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const { number, name, email, validateContact, tags, cpfCnpj, representativeCode, city, instagram, situation, fantasyName, foundationDate, creditLimit, segment, silentMode } = req.body; // Adicionar silentMode
+  const { number, name, email, validateContact, tags, cpfCnpj, representativeCode, city, instagram, situation, fantasyName, foundationDate, creditLimit, segment, silentMode, clientCode } = req.body; // Adicionar silentMode e clientCode
   const simpleNumber = String(number).replace(/[^\d.-]+/g, '');
   let validNumber = simpleNumber;
 
@@ -319,7 +320,8 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
     fantasyName,
     foundationDate,
     creditLimit: creditLimit ? String(creditLimit) : null,
-    segment
+    segment,
+    clientCode: clientCode ? String(clientCode) : null
     // whatsappId: defaultWhatsapp.id
   };
 
@@ -777,6 +779,7 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
         return v === "" || v === undefined ? null : v;
       })
       .nullable(),
+    clientCode: Yup.string().nullable(),
     representativeCode: Yup.string().nullable(),
     city: Yup.string().nullable(),
     instagram: Yup.string().nullable(),
@@ -880,6 +883,13 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
     } else if (typeof newContact.segment === 'string') {
       const s = newContact.segment.trim();
       newContact.segment = (s === '') ? (null as any) : s;
+    }
+  }
+
+  // Normaliza clientCode: converte vazio/whitespace para null
+  if (Object.prototype.hasOwnProperty.call(newContact, 'clientCode')) {
+    if (typeof newContact.clientCode === "string" && newContact.clientCode.trim() === "") {
+      newContact.clientCode = null as any;
     }
   }
 
@@ -1023,7 +1033,8 @@ export const update = async (
         const v = typeof originalValue === "string" ? originalValue.trim() : originalValue;
         return v === "" || v === undefined ? null : v;
       })
-      .nullable()
+      .nullable(),
+    clientCode: Yup.string().nullable()
   });
 
   try {
@@ -1092,6 +1103,13 @@ export const update = async (
     } else if (typeof contactData.segment === 'string') {
       const s = contactData.segment.trim();
       contactData.segment = (s === '') ? (null as any) : s;
+    }
+  }
+
+  // Normaliza clientCode: converte vazio/whitespace para null
+  if (Object.prototype.hasOwnProperty.call(contactData, 'clientCode')) {
+    if (typeof contactData.clientCode === "string" && contactData.clientCode.trim() === "") {
+      contactData.clientCode = null as any;
     }
   }
 

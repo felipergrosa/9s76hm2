@@ -289,6 +289,11 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading }) =>
                                         <Typography style={{ fontSize: 12 }}>
                                             {hideNum && user.profile === "user" ? formatSerializedId(contact.number).slice(0, -6) + "**-**" + contact.number.slice(-2) : formatSerializedId(contact.number)}
                                         </Typography>
+                                        {contact.clientCode && (
+                                            <Typography style={{ color: "primary", fontSize: 12, fontWeight: "bold" }}>
+                                                {`Código do Cliente: ${contact.clientCode}`}
+                                            </Typography>
+                                        )}
                                         {contact.email && (
                                             <Typography style={{ color: "primary", fontSize: 12 }}>
                                                 <Link href={`mailto:${contact.email}`}>{contact.email}</Link>

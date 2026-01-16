@@ -46,6 +46,7 @@ interface ContactData {
   vlUltCompra?: number | string | null;
   dtUltCompra?: Date | string | null;
   bzEmpresa?: string;
+  clientCode?: string;
 }
 
 interface Request {
@@ -56,11 +57,11 @@ interface Request {
 }
 
 const UpdateContactService = async ({
-                                      contactData,
-                                      contactId,
-                                      companyId,
-                                      userId
-                                    }: Request): Promise<Contact> => {
+  contactData,
+  contactId,
+  companyId,
+  userId
+}: Request): Promise<Contact> => {
   const {
     email,
     name,
@@ -86,7 +87,8 @@ const UpdateContactService = async ({
     florder,
     vlUltCompra,
     dtUltCompra,
-    bzEmpresa
+    bzEmpresa,
+    clientCode
   } = contactData;
 
   const sanitizedCreditLimit = creditLimit !== undefined ? creditLimit : null;
@@ -157,7 +159,7 @@ const UpdateContactService = async ({
       "urlPicture", "florder", "contactName",
       // Adicionar novos campos aos atributos
       "cpfCnpj", "representativeCode", "city", "region", "instagram",
-      "situation", "fantasyName", "foundationDate", "creditLimit", "segment", "dtUltCompra", "vlUltCompra"
+      "situation", "fantasyName", "foundationDate", "creditLimit", "segment", "dtUltCompra", "vlUltCompra", "clientCode"
     ],
     include: ["extraInfo", "tags",
       {
@@ -305,7 +307,7 @@ const UpdateContactService = async ({
     active: active !== undefined ? active : contact.active,
     disableBot: disableBot !== undefined ? disableBot : contact.disableBot,
     remoteJid: remoteJid !== undefined ? remoteJid : contact.remoteJid,
-    
+
     // Novos campos com tratamento para valores vazios
     cpfCnpj: cpfCnpj !== undefined ? emptyToNull(cpfCnpj) : contact.cpfCnpj,
     representativeCode: representativeCode !== undefined ? emptyToNull(representativeCode) : contact.representativeCode,
@@ -321,6 +323,7 @@ const UpdateContactService = async ({
     dtUltCompra: dtUltCompra !== undefined ? lastPurchaseValue : (contact as any).dtUltCompra,
     florder: florder !== undefined ? !!florder : (contact as any).florder,
     bzEmpresa: bzEmpresa !== undefined ? emptyToNull(bzEmpresa) : (contact as any).bzEmpresa,
+    clientCode: clientCode !== undefined ? emptyToNull(clientCode) : contact.clientCode,
     originalNumber: targetNumber || contact.number
   };
 
@@ -356,7 +359,7 @@ const UpdateContactService = async ({
       "urlPicture", "florder", "vlUltCompra", "contactName",
       // Adicionar novos campos aos atributos
       "cpfCnpj", "representativeCode", "city", "region", "instagram",
-      "situation", "fantasyName", "foundationDate", "creditLimit", "segment", "dtUltCompra", "bzEmpresa"
+      "situation", "fantasyName", "foundationDate", "creditLimit", "segment", "dtUltCompra", "bzEmpresa", "clientCode"
     ],
     include: ["extraInfo", "tags",
       {

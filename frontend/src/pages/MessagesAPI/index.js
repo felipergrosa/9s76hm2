@@ -225,7 +225,13 @@ Content-Type: application/json
   "number": "5511999999999",
   "body": "Sua mensagem de texto aqui",
   "userId": "ID do usuário (opcional)",
-  "queueId": "ID da fila (opcional)"
+  "queueId": "ID da fila (opcional)",
+  "contactInfo": {
+    "name": "Nome do Cliente",
+    "email": "cliente@email.com",
+    "clientCode": "COD123",
+    "cpfCnpj": "000.000.000-00"
+  }
 }`}
               </code>
             </pre>
@@ -240,6 +246,10 @@ Content-Type: application/json
                   <Field as={TextField} name="body" label="Mensagem" variant="outlined" required multiline rows={4} className={classes.formField} />
                   <Field as={TextField} name="userId" label="ID do Usuário (Opcional)" variant="outlined" className={classes.formField} />
                   <Field as={TextField} name="queueId" label="ID da Fila (Opcional)" variant="outlined" className={classes.formField} />
+                  <Typography variant="body2" style={{ marginTop: 10, marginBottom: 5 }}>Dados do Contato (Opcional):</Typography>
+                  <Field as={TextField} name="contactInfo.name" label="Nome do Cliente" variant="outlined" className={classes.formField} />
+                  <Field as={TextField} name="contactInfo.clientCode" label="Código do Cliente" variant="outlined" className={classes.formField} />
+                  <Field as={TextField} name="contactInfo.email" label="Email" variant="outlined" className={classes.formField} />
                   <Button type="submit" color="primary" variant="contained" size="large" disabled={isSubmitting} className={classes.submitButton} endIcon={<SendIcon />}>
                     {isSubmitting ? <CircularProgress size={24} /> : 'Enviar'}
                   </Button>
@@ -304,6 +314,7 @@ Content-Type: application/json
 
 {
   "name": "Nome do Contato",
+  "clientCode": "COD123",
   "number": "5511999999999",
   "email": "email@exemplo.com",
   "contactName": "Nome do Responsável",
@@ -330,12 +341,12 @@ Content-Type: application/json
           </Grid>
           <Grid item xs={12} md={6}>
             <Typography variant="h6">Teste de Sincronização</Typography>
-            <Formik 
-              initialValues={{ 
-                token: '', name: '', number: '', email: '', contactName: '', cpfCnpj: '', 
-                representativeCode: '', city: '', region: '', instagram: '', situation: '', 
-                fantasyName: '', foundationDate: '', creditLimit: '', segment: '', florder: false, dtUltCompra: '', disableBot: false, tagIds: '', tags: '' 
-              }} 
+            <Formik
+              initialValues={{
+                token: '', name: '', number: '', email: '', contactName: '', cpfCnpj: '', clientCode: '',
+                representativeCode: '', city: '', region: '', instagram: '', situation: '',
+                fantasyName: '', foundationDate: '', creditLimit: '', segment: '', florder: false, dtUltCompra: '', disableBot: false, tagIds: '', tags: ''
+              }}
               onSubmit={handleSyncContact}
             >
               {({ isSubmitting }) => (
@@ -346,6 +357,7 @@ Content-Type: application/json
                   <Field as={TextField} name="email" label="Email" variant="outlined" className={classes.formField} />
                   <Field as={TextField} name="contactName" label="Nome do Contato (Responsável)" variant="outlined" className={classes.formField} />
                   <Field as={TextField} name="cpfCnpj" label="CPF/CNPJ" variant="outlined" className={classes.formField} />
+                  <Field as={TextField} name="clientCode" label="Código do Cliente" variant="outlined" className={classes.formField} />
                   <Field as={TextField} name="representativeCode" label="Código do Representante" variant="outlined" className={classes.formField} />
                   <Field as={TextField} name="city" label="Cidade" variant="outlined" className={classes.formField} />
                   <Field as={TextField} name="region" label="Região" variant="outlined" className={classes.formField} />

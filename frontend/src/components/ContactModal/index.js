@@ -60,71 +60,73 @@ const useStyles = makeStyles(theme => ({
 }));
 
 const ContactSchema = Yup.object().shape({
-  name: Yup.string()
-    .min(2, "Parâmetros incompletos!")
-    .max(250, "Parâmetros acima do esperado!")
-    .required("Obrigatório"),
-  number: Yup.string()
-    .min(8, "Parâmetros incompletos!")
-    .max(50, "Parâmetros acima do esperado!")
-    .required("Obrigatório"),
-  email: Yup.string().email("E-mail inválido"),
-  contactName: Yup.string().nullable(),
-  florder: Yup.boolean().nullable(),
-  cpfCnpj: Yup.string()
-    .nullable()
-    .test('cpfCnpj-validation', 'CPF/CNPJ inválido', (value) => {
-      if (!value) return true;
-      const cleanValue = value.replace(/\D/g, '');
-      if (cleanValue.length === 11) return isValidCPF(cleanValue);
-      if (cleanValue.length === 14) return isValidCNPJ(cleanValue);
-      return false;
-    }),
-  representativeCode: Yup.string().nullable(),
-  city: Yup.string().nullable(),
-  instagram: Yup.string().nullable(),
-  situation: Yup.string().nullable(),
-  fantasyName: Yup.string().nullable(),
-  foundationDate: Yup.date().nullable(),
-  creditLimit: Yup.string().nullable(),
-  segment: Yup.string().nullable(),
-  dtUltCompra: Yup.date().nullable(),
-  vlUltCompra: Yup.mixed().nullable(),
-  bzEmpresa: Yup.string().nullable(),
-  region: Yup.string().nullable(),
-  wallets: Yup.array().nullable(),
+	clientCode: Yup.string().nullable().max(50, "Máximo 50 caracteres"),
+	name: Yup.string()
+		.min(2, "Parâmetros incompletos!")
+		.max(250, "Parâmetros acima do esperado!")
+		.required("Obrigatório"),
+	number: Yup.string()
+		.min(8, "Parâmetros incompletos!")
+		.max(50, "Parâmetros acima do esperado!")
+		.required("Obrigatório"),
+	email: Yup.string().email("E-mail inválido"),
+	contactName: Yup.string().nullable(),
+	florder: Yup.boolean().nullable(),
+	cpfCnpj: Yup.string()
+		.nullable()
+		.test('cpfCnpj-validation', 'CPF/CNPJ inválido', (value) => {
+			if (!value) return true;
+			const cleanValue = value.replace(/\D/g, '');
+			if (cleanValue.length === 11) return isValidCPF(cleanValue);
+			if (cleanValue.length === 14) return isValidCNPJ(cleanValue);
+			return false;
+		}),
+	representativeCode: Yup.string().nullable(),
+	city: Yup.string().nullable(),
+	instagram: Yup.string().nullable(),
+	situation: Yup.string().nullable(),
+	fantasyName: Yup.string().nullable(),
+	foundationDate: Yup.date().nullable(),
+	creditLimit: Yup.string().nullable(),
+	segment: Yup.string().nullable(),
+	dtUltCompra: Yup.date().nullable(),
+	vlUltCompra: Yup.mixed().nullable(),
+	bzEmpresa: Yup.string().nullable(),
+	region: Yup.string().nullable(),
+	wallets: Yup.array().nullable(),
 });
 
 // Switch personalizado: verde quando ativo (checked), vermelho quando inativo
 const GreenRedSwitch = withStyles({
-  switchBase: {
-    color: '#ef4444', // vermelho quando inativo
-    '&$checked': {
-      color: '#16a34a', // verde quando ativo
-    },
-    '&$checked + $track': {
-      backgroundColor: '#16a34a',
-    },
-  },
-  checked: {},
-  track: {
-    backgroundColor: '#fca5a5', // trilho vermelho claro quando inativo
-  },
+	switchBase: {
+		color: '#ef4444', // vermelho quando inativo
+		'&$checked': {
+			color: '#16a34a', // verde quando ativo
+		},
+		'&$checked + $track': {
+			backgroundColor: '#16a34a',
+		},
+	},
+	checked: {},
+	track: {
+		backgroundColor: '#fca5a5', // trilho vermelho claro quando inativo
+	},
 })(Switch);
 
 const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	const classes = useStyles();
 	const isMounted = useRef(true);
-    const [avatarOpen, setAvatarOpen] = useState(false);
-    const [pendingTags, setPendingTags] = useState([]);
-    const [userOptions, setUserOptions] = useState([]);
-    const [loadingUsers, setLoadingUsers] = useState(false);
-    
-    // Verificar permissão para editar campos do contato
-    const { hasPermission } = usePermissions();
-    const canEditFields = hasPermission("contacts.edit-fields");
+	const [avatarOpen, setAvatarOpen] = useState(false);
+	const [pendingTags, setPendingTags] = useState([]);
+	const [userOptions, setUserOptions] = useState([]);
+	const [loadingUsers, setLoadingUsers] = useState(false);
+
+	// Verificar permissão para editar campos do contato
+	const { hasPermission } = usePermissions();
+	const canEditFields = hasPermission("contacts.edit-fields");
 
 	const initialState = {
+		clientCode: "",
 		name: "",
 		number: "",
 		email: "",
@@ -215,6 +217,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	const handleSaveContact = async values => {
 		const payload = {
 			...values,
+			clientCode: values.clientCode?.trim?.() || values.clientCode || null,
 			disableBot: values.disableBot,
 			representativeCode: values.representativeCode?.trim?.() || values.representativeCode || null,
 			city: values.city?.trim?.() || values.city || null,
@@ -287,6 +290,21 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 						<Form>
 							<DialogContent dividers>
 								<Grid container spacing={2}>
+									<Grid item xs={12} md={6}>
+										<Field
+											as={TextField}
+											label="Código do Cliente"
+											name="clientCode"
+											variant="outlined"
+											margin="dense"
+											fullWidth
+											InputLabelProps={{
+												shrink: true,
+											}}
+											error={touched.clientCode && Boolean(errors.clientCode)}
+											helperText={touched.clientCode && errors.clientCode}
+										/>
+									</Grid>
 									<Grid item xs={12} md={6}>
 										<Field
 											as={TextField}
@@ -373,8 +391,8 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											{({ field, form }) => {
 												const cleanValue = field.value?.replace(/\D/g, '') || '';
 												// Determinar máscara: CPF (11 dígitos) ou CNPJ (14 dígitos)
-												const mask = cleanValue.length > 11 
-													? "99.999.999/9999-99" 
+												const mask = cleanValue.length > 11
+													? "99.999.999/9999-99"
 													: "999.999.999-999";
 												return (
 													<InputMask
@@ -604,15 +622,15 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										</div>
 									</Grid>
 								</Grid>
-                                {/* Linha única: Conexão (esquerda) | Termos LGPD (direita) */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginTop: 8 }}>
-                                    <Typography variant="subtitle1">
-                                        {i18n.t("contactModal.form.whatsapp")} {contact?.whatsapp ? contact?.whatsapp.name : ""}
-                                    </Typography>
-                                    <Typography variant="subtitle1">
-                                        {i18n.t("contactModal.form.termsLGDP")} {contact?.lgpdAcceptedAt ? format(new Date(contact?.lgpdAcceptedAt), "dd/MM/yyyy 'às' HH:mm") : ""}
-                                    </Typography>
-                                </div>
+								{/* Linha única: Conexão (esquerda) | Termos LGPD (direita) */}
+								<div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginTop: 8 }}>
+									<Typography variant="subtitle1">
+										{i18n.t("contactModal.form.whatsapp")} {contact?.whatsapp ? contact?.whatsapp.name : ""}
+									</Typography>
+									<Typography variant="subtitle1">
+										{i18n.t("contactModal.form.termsLGDP")} {contact?.lgpdAcceptedAt ? format(new Date(contact?.lgpdAcceptedAt), "dd/MM/yyyy 'às' HH:mm") : ""}
+									</Typography>
+								</div>
 								<Typography
 									style={{ marginBottom: 8, marginTop: 12 }}
 									variant="subtitle1"
