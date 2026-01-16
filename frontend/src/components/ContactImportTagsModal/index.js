@@ -31,6 +31,8 @@ import { makeStyles } from "@material-ui/core/styles";
 import { toast } from 'react-toastify';
 import toastError from '../../errors/toastError';
 import api from '../../services/api';
+import { custom as swalCustom, success as swalSuccess } from '../../helpers/swalHelper';
+
 
 import { AuthContext } from '../../context/Auth/AuthContext';
 
@@ -761,28 +763,98 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
       };
       const { data } = await api.post('/contacts/import-device-contacts', payload);
 
-      const { created = 0, updated = 0, tagged = 0, failed = 0, skipped = 0 } = data;
+      const { created = 0, updated = 0, tagged = 0, failed = 0, skipped = 0, duplicated = 0 } = data;
+      const total = created + updated + failed + skipped + duplicated;
+      const hasIssues = failed > 0 || skipped > 0 || duplicated > 0;
 
-      let msg = `✅ Importação concluída! Criados: ${created}, Atualizados: ${updated}`;
-      if (skipped > 0) {
-        msg += `, Ignorados: ${skipped}`;
-      }
-      if (failed > 0) {
-        msg += `, ⚠️ Falhas: ${failed}`;
-        toast.warn(msg, { autoClose: 8000 });
-      } else {
-        toast.success(msg);
-      }
+      // Construir HTML detalhado para SweetAlert2
+      const buildResultHtml = () => {
+        let html = '<div style="text-align: left; font-size: 14px;">';
 
-      // Se houver falhas, não fechar automaticamente para permitir que o usuário veja
-      if (failed === 0) {
-        handleCloseModal();
-      }
+        // Estatísticas principais
+        html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">';
+
+        if (created > 0) {
+          html += `<div style="background: #d4edda; padding: 10px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 24px; font-weight: bold; color: #155724;">✅ ${created}</div>
+            <div style="color: #155724; font-size: 12px;">Criados</div>
+          </div>`;
+        }
+
+        if (updated > 0) {
+          html += `<div style="background: #cce5ff; padding: 10px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 24px; font-weight: bold; color: #004085;">🔄 ${updated}</div>
+            <div style="color: #004085; font-size: 12px;">Atualizados</div>
+          </div>`;
+        }
+
+        if (duplicated > 0) {
+          html += `<div style="background: #fff3cd; padding: 10px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 24px; font-weight: bold; color: #856404;">📋 ${duplicated}</div>
+            <div style="color: #856404; font-size: 12px;">Já existiam</div>
+          </div>`;
+        }
+
+        if (skipped > 0) {
+          html += `<div style="background: #e2e3e5; padding: 10px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 24px; font-weight: bold; color: #383d41;">⏭️ ${skipped}</div>
+            <div style="color: #383d41; font-size: 12px;">Ignorados</div>
+          </div>`;
+        }
+
+        if (failed > 0) {
+          html += `<div style="background: #f8d7da; padding: 10px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 24px; font-weight: bold; color: #721c24;">⚠️ ${failed}</div>
+            <div style="color: #721c24; font-size: 12px;">Falhas</div>
+          </div>`;
+        }
+
+        html += '</div>';
+
+        // Explicações das falhas/ignorados
+        if (hasIssues) {
+          html += '<div style="border-top: 1px solid #ddd; padding-top: 12px; margin-top: 8px;">';
+          html += '<div style="font-weight: 600; margin-bottom: 8px;">ℹ️ Entenda os números:</div>';
+          html += '<ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #666;">';
+
+          if (duplicated > 0) {
+            html += '<li style="margin-bottom: 4px;"><strong>Já existiam:</strong> Contatos que já estão cadastrados no sistema com o mesmo número.</li>';
+          }
+
+          if (skipped > 0) {
+            html += '<li style="margin-bottom: 4px;"><strong>Ignorados:</strong> Contatos sem número válido ou grupos que não podem ser importados.</li>';
+          }
+
+          if (failed > 0) {
+            html += '<li style="margin-bottom: 4px;"><strong>Falhas:</strong> Erros de validação (número inválido, formato incorreto) ou conflitos de dados duplicados.</li>';
+          }
+
+          html += '</ul>';
+          html += '</div>';
+        }
+
+        html += '</div>';
+        return html;
+      };
+
+      // Mostrar modal SweetAlert2 com resultado detalhado
+      await swalCustom({
+        title: failed > 0 ? 'Importação Concluída com Avisos' : 'Importação Concluída!',
+        html: buildResultHtml(),
+        icon: failed > 0 ? 'warning' : 'success',
+        confirmButtonText: 'Fechar',
+        confirmButtonColor: failed > 0 ? '#f0ad4e' : '#28a745',
+        width: 450,
+      });
+
+      // Fechar modal principal após confirmar
+      handleCloseModal();
     } catch (error) {
       toastError(error);
     } finally {
       setImporting(false);
     }
+
   };
 
   const handleCloseModal = () => {

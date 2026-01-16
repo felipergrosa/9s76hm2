@@ -57,6 +57,7 @@ const ImportDeviceContactsAutoService = async ({
   let tagged = 0;
   let failed = 0;
   let skipped = 0;
+  let duplicated = 0; // Contatos que já existiam mas receberam tags
   const total = want.length;
 
   // Emitir progresso inicial
@@ -81,13 +82,7 @@ const ImportDeviceContactsAutoService = async ({
       }
 
       let contact = await Contact.findOne({ where: { number, companyId } });
-
-      // Se modo newOnly e contato existe, pular
-      if (importMode === "newOnly" && contact) {
-        skipped++;
-        processed++;
-        continue;
-      }
+      let wasExisting = !!contact;
 
       if (!contact) {
         try {
@@ -95,17 +90,17 @@ const ImportDeviceContactsAutoService = async ({
             number,
             name: (c.name || c.notify || number),
             email: '',
-            companyId
+            companyId,
+            whatsappId // Associar à conexão usada na importação
           } as any);
           created++;
         } catch (error: any) {
           if (error.name === 'SequelizeUniqueConstraintError') {
-            // Contato já existe - buscar e marcar como "updated" (já existia)
+            // Contato já existe - buscar e continuar para aplicar tags
             contact = await Contact.findOne({ where: { number, companyId } });
             if (contact) {
-              // Contato recuperado com sucesso - conta como "skipped" pois já existia
-              // O update do nome será tentado abaixo se necessário
-              logger.info(`[ImportDeviceContacts] Contato ${number} já existe, recuperado com sucesso`);
+              wasExisting = true;
+              logger.info(`[ImportDeviceContacts] Contato ${number} já existe, recuperado para aplicar tags`);
             }
           }
           if (!contact) {
@@ -114,13 +109,28 @@ const ImportDeviceContactsAutoService = async ({
         }
       }
 
+
       if (contact) {
+        // Contar como duplicado se já existia e recebeu tag
+        if (wasExisting && targetTagId) {
+          duplicated++;
+        }
+
         const currentName = (contact.name || '').trim();
         const isNumberName = currentName.replace(/\D/g, '') === number;
         const incomingName = (c.name || c.notify || '').trim();
-        if ((!currentName || isNumberName) && incomingName) {
-          await contact.update({ name: incomingName });
-          updated++;
+
+        // Atualizar nome se estiver vazio ou igual ao número
+        const shouldUpdateName = (!currentName || isNumberName) && incomingName;
+        // Atualizar whatsappId se não estiver definido
+        const shouldUpdateWhatsapp = whatsappId && !contact.whatsappId;
+
+        if (shouldUpdateName || shouldUpdateWhatsapp) {
+          const updateData: any = {};
+          if (shouldUpdateName) updateData.name = incomingName;
+          if (shouldUpdateWhatsapp) updateData.whatsappId = whatsappId;
+          await contact.update(updateData);
+          if (shouldUpdateName || shouldUpdateWhatsapp) updated++;
         }
       }
 
@@ -190,7 +200,7 @@ const ImportDeviceContactsAutoService = async ({
     failed
   });
 
-  return { count: want.length, created, updated, tagged, failed, skipped };
+  return { count: want.length, created, updated, tagged, failed, skipped, duplicated };
 };
 
 export default ImportDeviceContactsAutoService;

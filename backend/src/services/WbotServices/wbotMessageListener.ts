@@ -665,18 +665,21 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   }
 
   const contactRawNumber = contactJid.replace(/\D/g, "");
+  const isLidContact = contactJid.includes("@lid") || remoteJid?.includes("@lid");
 
-  // Validação final: número deve ter tamanho válido
-  if (!looksPhoneLike(contactRawNumber)) {
+  // Validação final: número deve ter tamanho válido OU ser um @lid (que será tratado por verifyContact)
+  if (!looksPhoneLike(contactRawNumber) && !isLidContact) {
     debugLog("[getContactMessage] ERRO FINAL: Número com tamanho inválido", {
       contactJid,
       contactRawNumber,
       length: contactRawNumber.length,
       isGroup,
-      participantJid
+      participantJid,
+      isLidContact
     });
     return null;
   }
+
 
   return isGroup
     ? {

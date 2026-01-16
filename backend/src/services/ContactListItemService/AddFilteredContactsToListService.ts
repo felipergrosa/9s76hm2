@@ -274,6 +274,12 @@ const AddFilteredContactsToListService = async ({
       }
 
       const whereSql = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+
+      // Log detalhado para debug
+      logger.info(`[AddFilteredContacts] Condições aplicadas: ${conds.length} filtros`);
+      logger.info(`[AddFilteredContacts] WHERE SQL: ${whereSql}`);
+      logger.info(`[AddFilteredContacts] Replacements: ${JSON.stringify(repl)}`);
+
       const insertSql = `
         INSERT INTO "ContactListItems"
           ("name","number","canonicalNumber","email","contactListId","companyId","isGroup","createdAt","updatedAt")
@@ -291,6 +297,11 @@ const AddFilteredContactsToListService = async ({
         ${whereSql}
         ON CONFLICT ("contactListId","number") DO NOTHING;
       `;
+
+      // Contar quantos contatos atendem ao filtro para comparação
+      const countSql = `SELECT COUNT(*) as total FROM "Contacts" c ${whereSql}`;
+      const countResult: any = await sequelize.query(countSql, { replacements: repl, type: QueryTypes.SELECT });
+      logger.info(`[AddFilteredContacts] Total de contatos que atendem ao filtro: ${countResult[0]?.total || 0}`);
 
       const before = await ContactListItem.count({ where: { contactListId } });
       await sequelize.query(insertSql, { replacements: repl, type: QueryTypes.INSERT });
