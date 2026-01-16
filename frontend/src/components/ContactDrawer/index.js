@@ -143,7 +143,7 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading }) =>
     // Helper de moeda robusto: aceita "1.234,56", "1234.56", "R$ 1.234,56", etc.
     const formatCurrencyBRL = (val, fallback = null) => {
         if (val == null || val === '') return fallback;
-        const s = String(val).trim().replace(/\s+/g,'').replace(/R\$?/i,'');
+        const s = String(val).trim().replace(/\s+/g, '').replace(/R\$?/i, '');
         let num;
         if (s.includes(',')) {
             const normalized = s.replace(/\./g, '').replace(/,/g, '.');
@@ -260,15 +260,15 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading }) =>
                         {i18n.t("contactDrawer.header")}
                     </Typography>
                 </div>
-                
+
                 {loading ? (
                     <ContactDrawerSkeleton classes={classes} />
                 ) : (
-                        <div className={classes.content}>
-                            <Paper square variant="outlined" className={classes.contactHeader}>
-                                <div onClick={() => avatarImageUrl && setAvatarModalOpen(true)} style={{ cursor: avatarImageUrl ? "pointer" : "default" }}>
-                                    <ContactAvatar contact={contact} style={{ width: 270, height: 270, borderRadius: 10 }} />
-                                </div>
+                    <div className={classes.content}>
+                        <Paper square variant="outlined" className={classes.contactHeader}>
+                            <div onClick={() => avatarImageUrl && setAvatarModalOpen(true)} style={{ cursor: avatarImageUrl ? "pointer" : "default" }}>
+                                <ContactAvatar contact={contact} style={{ width: 270, height: 270, borderRadius: 10 }} />
+                            </div>
                             <CardHeader
                                 onClick={() => { }}
                                 style={{ cursor: "pointer", width: '100%' }}
@@ -289,57 +289,102 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading }) =>
                                         <Typography style={{ fontSize: 12 }}>
                                             {hideNum && user.profile === "user" ? formatSerializedId(contact.number).slice(0, -6) + "**-**" + contact.number.slice(-2) : formatSerializedId(contact.number)}
                                         </Typography>
-                                        <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            <Link href={`mailto:${contact.email}`}>{contact.email}</Link>
-                                        </Typography>
-                                        {contact.contactName && (
-                                          <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {`Nome do Contato: ${contact.contactName}`}
-                                          </Typography>
+                                        {contact.email && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                <Link href={`mailto:${contact.email}`}>{contact.email}</Link>
+                                            </Typography>
                                         )}
-                                        <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {contact.cpfCnpj && `CPF/CNPJ: ${contact.cpfCnpj}`}
-                                        </Typography>
-                                        <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {contact.representativeCode && `Cód. Representante: ${contact.representativeCode}`}
-                                        </Typography>
-                                        <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {contact.city && `Cidade: ${contact.city}`}
-                                        </Typography>
-                                        <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {contact.region && `Região: ${contact.region}`}
-                                        </Typography>
+                                        {contact.contactName && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Nome do Contato: ${contact.contactName}`}
+                                            </Typography>
+                                        )}
+                                        {contact.bzEmpresa && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Empresa: ${contact.bzEmpresa}`}
+                                            </Typography>
+                                        )}
+                                        {contact.cpfCnpj && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`CPF/CNPJ: ${contact.cpfCnpj}`}
+                                            </Typography>
+                                        )}
+                                        {contact.representativeCode && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Cód. Representante: ${contact.representativeCode}`}
+                                            </Typography>
+                                        )}
+                                        {contact.fantasyName && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Nome Fantasia: ${contact.fantasyName}`}
+                                            </Typography>
+                                        )}
+                                        {contact.city && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Cidade: ${contact.city}`}
+                                            </Typography>
+                                        )}
+                                        {contact.region && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Região: ${contact.region}`}
+                                            </Typography>
+                                        )}
+                                        {contact.segment && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Segmento: ${contact.segment}`}
+                                            </Typography>
+                                        )}
+                                        {contact.situation && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Situação: ${contact.situation}`}
+                                            </Typography>
+                                        )}
+                                        {contact.foundationDate && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Data de Fundação: ${new Date(contact.foundationDate).toLocaleDateString()}`}
+                                            </Typography>
+                                        )}
+                                        {contact.creditLimit && contact.creditLimit !== '' && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Limite de Crédito: ${formatCurrencyBRL(contact.creditLimit, '')}`}
+                                            </Typography>
+                                        )}
+                                        {contact.dtUltCompra && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Última Compra: ${new Date(contact.dtUltCompra).toLocaleDateString()}`}
+                                            </Typography>
+                                        )}
+                                        {typeof contact.vlUltCompra !== 'undefined' && contact.vlUltCompra !== null && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Valor Última Compra: ${formatCurrencyBRL(contact.vlUltCompra, '—')}`}
+                                            </Typography>
+                                        )}
+                                        {contact.instagram && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Instagram: ${contact.instagram}`}
+                                            </Typography>
+                                        )}
                                         <Typography style={{ color: "primary", fontSize: 12 }}>
                                             {`Encomenda: ${contact.florder ? 'Sim' : 'Não'}`}
                                         </Typography>
-                                        {contact.dtUltCompra && (
-                                          <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {`Última Compra: ${new Date(contact.dtUltCompra).toLocaleDateString()}`}
-                                          </Typography>
+                                        <Typography style={{ color: "primary", fontSize: 12 }}>
+                                            {`Chatbot: ${contact.disableBot ? 'Desabilitado' : 'Habilitado'}`}
+                                        </Typography>
+                                        {contact.wallets && contact.wallets.length > 0 && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Carteira: ${contact.wallets.map(w => w.name || w.user?.name).filter(Boolean).join(', ')}`}
+                                            </Typography>
                                         )}
-                                        {typeof contact.vlUltCompra !== 'undefined' && contact.vlUltCompra !== null && (
-                                          <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {`Valor Última Compra: ${formatCurrencyBRL(contact.vlUltCompra, '—')}`}
-                                          </Typography>
+                                        {contact.whatsapp && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Conexão: ${contact.whatsapp.name || contact.whatsapp.id}`}
+                                            </Typography>
                                         )}
-                                        <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {contact.instagram && `Instagram: ${contact.instagram}`}
-                                        </Typography>
-                                        <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {contact.fantasyName && `Nome Fantasia: ${contact.fantasyName}`}
-                                        </Typography>
-                                        <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {contact.situation && `Situação: ${contact.situation}`}
-                                        </Typography>
-                                        <Typography style={{ color: "primary", fontSize: 12 }}>
-                                           {contact.segment && `Segmento: ${contact.segment}`}
-                                        </Typography>
-                                        <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {contact.foundationDate && `Data de Fundação: ${new Date(contact.foundationDate).toLocaleDateString()}`}
-                                        </Typography>
-                                        <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {contact.creditLimit && contact.creditLimit !== '' && `Limite de Crédito: ${formatCurrencyBRL(contact.creditLimit, '')}`}
-                                        </Typography>
+                                        {contact.lgpdAcceptedAt && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`LGPD Aceito em: ${new Date(contact.lgpdAcceptedAt).toLocaleDateString()}`}
+                                            </Typography>
+                                        )}
                                     </>
                                 }
                             />
@@ -373,7 +418,7 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading }) =>
                             </div>
                             {(contact.id && openForm) && <ContactForm initialContact={contact} onCancel={() => setOpenForm(false)} />}
                         </Paper>
-                        
+
                         <TagsKanbanContainer ticket={ticket} className={classes.contactTags} />
                         <Paper square variant="outlined" className={classes.contactDetails}>
                             <div
@@ -390,7 +435,7 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading }) =>
                             </div>
                             <Collapse in={notesOpen} timeout="auto" unmountOnExit>
                                 <div style={{ marginTop: 10 }}>
-                                    <ContactNotes ticket={ticket} />
+                                    <ContactNotes ticket={ticket} onClose={handleDrawerClose} />
                                 </div>
                                 <div style={{ marginTop: 12 }}>
                                     <Typography variant="subtitle1">

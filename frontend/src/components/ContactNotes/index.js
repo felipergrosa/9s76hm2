@@ -43,7 +43,7 @@ const NoteSchema = Yup.object().shape({
         .min(2, "Parâmetros incompletos!")
         .required("Required")
 });
-export function ContactNotes({ ticket }) {
+export function ContactNotes({ ticket, onClose }) {
     const { id: ticketId, contactId } = ticket
     const classes = useStyles()
     const [newNote, setNewNote] = useState({ note: "" });
@@ -193,8 +193,9 @@ export function ContactNotes({ ticket }) {
                                     <Grid xs={6} item>
                                         <Button
                                             onClick={() => {
-                                                setNewNote("");
+                                                setNewNote({ note: "" });
                                                 setErrors({});
+                                                if (onClose) onClose();
                                             }}
                                             color="primary"
                                             variant="outlined"
