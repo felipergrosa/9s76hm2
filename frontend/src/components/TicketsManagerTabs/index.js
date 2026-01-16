@@ -123,31 +123,31 @@ const useStyles = makeStyles((theme) => ({
     fontSize: 10,
     marginLeft: 0,
     marginRight: 0,
-    padding: "4px 4px !important",
+    padding: "4x 4px !important",
     paddingTop: "0px !important", // Espaço extra para os badges não serem cortados
     whiteSpace: "nowrap",
-    overflow: "visible", // Permitir que badges vazem FELIPE
+    overflow: "visible", // Permitir que badges vazem
 
     [theme.breakpoints.down("lg")]: {
       fontSize: 9,
-      padding: "4px 2px !important",
-      paddingTop: "8px !important",
+      padding: "4px 4px !important",
+      paddingTop: "0px !important",
       minWidth: 65,
       maxWidth: 85,
     },
 
     [theme.breakpoints.down("md")]: {
       fontSize: 8,
-      padding: "3px 2px !important",
-      paddingTop: "10px !important",
+      padding: "4px 4px !important",
+      paddingTop: "0px !important",
       minWidth: 60,
       maxWidth: 80,
     },
 
     [theme.breakpoints.down("sm")]: {
       fontSize: 7,
-      padding: "3px 2px !important",
-      paddingTop: "10px !important",
+      padding: "4px 4px !important",
+      paddingTop: "0px !important",
       minWidth: "unset", // Remover largura mínima fixa no mobile
       maxWidth: "none", // Remover limite de largura no mobile para fullWidth funcionar
       flexGrow: 1, // Garantir que cresça
@@ -161,7 +161,7 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.mode === "light" ? theme.palette.primary.main : "#FFF",
   },
   tabsBadge: {
-    top: "105%",
+    top: "-65%", // Tooltip aparece ACIMA do ícone
     right: "55%",
     transform: "translate(45%, 0)",
     whiteSpace: "nowrap",
@@ -169,7 +169,7 @@ const useStyles = makeStyles((theme) => ({
     padding: "0 8px",
     backgroundColor: theme.mode === "light" ? theme.palette.primary.main : "#FFF",
     color: theme.mode === "light" ? "#FFF" : theme.palette.primary.main,
-    zIndex: 10, // Garantir que fique sobre outros elementos se necessário
+    zIndex: 1500, // Garantir que fique sobre outros elementos
   },
   ticketOptionsBox: {
     display: "flex",
@@ -226,9 +226,10 @@ const useStyles = makeStyles((theme) => ({
 
   customBadge: {
     right: "-10px",
-    top: "-4px", // Mover 4px para cima para evitar corte
+    top: "-8px", // Mover mais para cima para evitar corte pela div superior
     backgroundColor: "#f44336",
     color: "#fff",
+    zIndex: 1500, // Garantir que fique por cima de qualquer elemento
   },
 
   show: {
@@ -1054,6 +1055,7 @@ const TicketsManagerTabs = () => {
             textColor="primary"
             variant="fullWidth"
             scrollButtons={false}
+            style={{ overflow: "visible", paddingTop: 8 }}
           >
             {/* ATENDENDO */}
             <Tab

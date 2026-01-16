@@ -34,7 +34,7 @@ export const closeTicketsImported = async (whatsappId) => {
   let whatsApp = await Whatsapp.findByPk(whatsappId);
   whatsApp.update({ statusImportMessages: null })
   const io = getIO();
-  io.of(whatsApp.companyId.toString())
+  io.of(`/workspace-${whatsApp.companyId}`)
     .emit(`importMessages-${whatsApp.companyId}`, {
       action: "refresh",
     });
@@ -139,9 +139,17 @@ Mensagem ${i + 1} de ${qtd}
             importRecentMessages: null
           });
 
+          // Emitir conclusão 100% antes do refresh
+          io.of(`/workspace-${whatsApp.companyId}`)
+            .emit(`importMessages-${whatsApp.companyId}`, {
+              action: "update",
+              status: { this: qtd, all: qtd, state: "COMPLETED", date: moment().format("DD/MM/YY HH:mm:ss") }
+            });
 
+          // Pequena pausa para UI processar
+          await new Promise(r => setTimeout(r, 1000));
 
-          io.of(whatsApp.companyId.toString())
+          io.of(`/workspace-${whatsApp.companyId}`)
             .emit(`importMessages-${whatsApp.companyId}`, {
               action: "refresh",
             });

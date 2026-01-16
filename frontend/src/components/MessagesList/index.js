@@ -1954,10 +1954,10 @@ const MessagesList = ({
                   <ExpandMore />
                 </IconButton>
 
-                {/* Reação em bolha sobreposta */}
-                {messageReactions[message.id] && messageReactions[message.id].length > 0 && (
+                {/* Reação em bolha sobreposta - usa wid (ID WhatsApp) para corresponder ao quotedMsgId */}
+                {(messageReactions[message.wid] || messageReactions[message.id]) && (messageReactions[message.wid]?.length > 0 || messageReactions[message.id]?.length > 0) && (
                   <div className={classes.messageReaction}>
-                    {messageReactions[message.id].map((reaction, rIndex) => (
+                    {(messageReactions[message.wid] || messageReactions[message.id] || []).map((reaction, rIndex) => (
                       <span key={rIndex} className={classes.messageReactionSpan}>{reaction.body}</span>
                     ))}
                   </div>

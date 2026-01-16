@@ -94,6 +94,7 @@ const ImportProgressBar = ({ statusImport, onClose }) => {
     const stateLabels = {
         PREPARING: "Preparando importação...",
         IMPORTING: "Importando mensagens...",
+        COMPLETED: "Importação concluída!",
     };
 
     return (

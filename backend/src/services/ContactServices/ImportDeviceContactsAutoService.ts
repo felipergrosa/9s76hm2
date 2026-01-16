@@ -73,6 +73,10 @@ const ImportDeviceContactsAutoService = async ({
 
   let processed = 0;
   for (const c of want) {
+    let contact: Contact | null = null;
+    let wasExisting = false;
+    let tagApplied = false;
+
     try {
       const number = String(c.id || '').split('@')[0];
       if (!number) {
@@ -81,48 +85,45 @@ const ImportDeviceContactsAutoService = async ({
         continue;
       }
 
-      let contact = await Contact.findOne({ where: { number, companyId } });
-      let wasExisting = !!contact;
+      // Primeiro, buscar se já existe
+      contact = await Contact.findOne({ where: { number, companyId } });
+      wasExisting = !!contact;
 
       if (!contact) {
+        // Tentar criar novo contato
         try {
           contact = await Contact.create({
             number,
             name: (c.name || c.notify || number),
             email: '',
             companyId,
-            whatsappId // Associar à conexão usada na importação
+            whatsappId
           } as any);
           created++;
-        } catch (error: any) {
-          if (error.name === 'SequelizeUniqueConstraintError') {
-            // Contato já existe - buscar e continuar para aplicar tags
+        } catch (createError: any) {
+          if (createError.name === 'SequelizeUniqueConstraintError') {
+            // Race condition: contato foi criado entre o findOne e o create
             contact = await Contact.findOne({ where: { number, companyId } });
-            if (contact) {
-              wasExisting = true;
-              logger.info(`[ImportDeviceContacts] Contato ${number} já existe, recuperado para aplicar tags`);
+            wasExisting = true;
+            if (!contact) {
+              // Contato realmente não pode ser recuperado
+              failed++;
+              processed++;
+              continue;
             }
-          }
-          if (!contact) {
-            throw error;
+          } else {
+            throw createError;
           }
         }
       }
 
-
+      // A partir daqui, contact está garantido
       if (contact) {
-        // Contar como duplicado se já existia e recebeu tag
-        if (wasExisting && targetTagId) {
-          duplicated++;
-        }
-
+        // Atualizar nome e whatsappId se necessário
         const currentName = (contact.name || '').trim();
         const isNumberName = currentName.replace(/\D/g, '') === number;
         const incomingName = (c.name || c.notify || '').trim();
-
-        // Atualizar nome se estiver vazio ou igual ao número
         const shouldUpdateName = (!currentName || isNumberName) && incomingName;
-        // Atualizar whatsappId se não estiver definido
         const shouldUpdateWhatsapp = whatsappId && !contact.whatsappId;
 
         if (shouldUpdateName || shouldUpdateWhatsapp) {
@@ -130,47 +131,62 @@ const ImportDeviceContactsAutoService = async ({
           if (shouldUpdateName) updateData.name = incomingName;
           if (shouldUpdateWhatsapp) updateData.whatsappId = whatsappId;
           await contact.update(updateData);
-          if (shouldUpdateName || shouldUpdateWhatsapp) updated++;
-        }
-      }
-
-      const tags = Array.isArray(c.tags) ? c.tags : [];
-      for (const t of tags) {
-        const tagName = (t?.name || '').toString().trim();
-        if (!tagName) continue;
-
-        let tagRow: Tag | null = null;
-        tagRow = await Tag.findOne({ where: { name: tagName, companyId } });
-        if (!tagRow && autoCreateTags) {
-          tagRow = await Tag.create({ name: tagName, color: '#A4CCCC', kanban: 0, companyId } as any);
+          if (!wasExisting) updated++;
         }
 
-        if (tagRow) {
-          await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: tagRow.id } });
-          tagged++;
+        // Aplicar tags do dispositivo
+        const tags = Array.isArray(c.tags) ? c.tags : [];
+        for (const t of tags) {
+          const tagName = (t?.name || '').toString().trim();
+          if (!tagName) continue;
+
+          let tagRow: Tag | null = await Tag.findOne({ where: { name: tagName, companyId } });
+          if (!tagRow && autoCreateTags) {
+            tagRow = await Tag.create({ name: tagName, color: '#A4CCCC', kanban: 0, companyId } as any);
+          }
+
+          if (tagRow) {
+            await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: tagRow.id } });
+            tagged++;
+            tagApplied = true;
+          }
         }
-      }
 
-      if (targetTagId) {
-        await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: targetTagId } });
-        tagged++;
-      }
+        // Aplicar tag alvo
+        if (targetTagId) {
+          try {
+            await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: targetTagId } });
+            tagged++;
+            tagApplied = true;
+          } catch (tagError) {
+            // Ignora erro de tag duplicada, ainda é sucesso
+            logger.warn(`[ImportDeviceContacts] Erro ao aplicar tag ${targetTagId} ao contato ${contact.id}: ${tagError}`);
+          }
+        }
 
-      if (tags.length > 0) {
-        try {
-          await SyncContactWalletsAndPersonalTagsService({
-            companyId,
-            contactId: contact.id,
-            source: "tags"
-          });
-        } catch (err) {
-          logger.warn("[ImportDeviceContactsAutoService] Falha ao sincronizar carteiras e tags pessoais", err);
+        // Contar como duplicado se já existia
+        if (wasExisting) {
+          duplicated++;
+        }
+
+        // Sincronizar carteiras se teve tags
+        if (tags.length > 0 || tagApplied) {
+          try {
+            await SyncContactWalletsAndPersonalTagsService({
+              companyId,
+              contactId: contact.id,
+              source: "tags"
+            });
+          } catch (err) {
+            // Não falha a importação por causa de sync de carteiras
+          }
         }
       }
     } catch (e) {
       logger.warn(`[ImportDeviceContactsAutoService] Falha ao importar/etiquetar contato ${c?.id}: ${e}`);
       failed++;
     }
+
 
     processed++;
 
