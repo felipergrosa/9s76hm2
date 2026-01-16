@@ -19,6 +19,8 @@ import AppError from "../errors/AppError";
 import { ImportContacts } from "../services/ContactListService/ImportContacts";
 import { validateWhatsappContactsQueue } from "../queues";
 import logger from "../utils/logger";
+import FixUnlinkedContactsService from "../services/ContactListItemService/FixUnlinkedContactsService";
+
 
 type IndexQuery = {
   searchParam: string;
@@ -338,3 +340,42 @@ export const validationStats = async (
     throw new AppError(error.message || "Erro ao buscar estatísticas", 500);
   }
 };
+
+/**
+ * Corrige vínculos de contatos não vinculados em uma lista
+ * Atualiza o canonicalNumber dos itens para corresponder ao Contact existente
+ */
+export const fixLinks = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+  const { companyId } = req.user;
+
+  try {
+    logger.info(`[FixLinks] Iniciando correção de vínculos para lista ${id}`);
+
+    const result = await FixUnlinkedContactsService({
+      contactListId: Number(id),
+      companyId: Number(companyId)
+    });
+
+    // Emitir evento para atualizar frontend
+    const io = getIO();
+    await emitToCompanyNamespace(
+      companyId,
+      `company-${companyId}-ContactListItem-${Number(id)}`,
+      { action: "reload" }
+    );
+
+    return res.status(200).json({
+      message: `${result.fixed} vínculos corrigidos, ${result.stillUnlinked} ainda sem vínculo`,
+      ...result
+    });
+
+  } catch (error: any) {
+    logger.error(`[FixLinks] Erro: ${error.message}`);
+    throw new AppError(error.message || "Erro ao corrigir vínculos", 500);
+  }
+};
+

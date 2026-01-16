@@ -84,15 +84,15 @@ const AddFilteredContactsToListService = async ({
     if (!contactListId) {
       throw new Error('ID da lista de contatos não informado');
     }
-    
+
     if (!companyId) {
       throw new Error('ID da empresa não informado');
     }
-    
+
     if (!filters || Object.keys(filters).length === 0) {
       throw new Error('Nenhum filtro informado');
     }
-    
+
     logger.info(`Iniciando adição de contatos filtrados à lista ${contactListId}`);
     logger.info(`Filtros recebidos: ${JSON.stringify(filters)}`);
 
@@ -135,7 +135,7 @@ const AddFilteredContactsToListService = async ({
     // tags: garantir array numérico
     if ((filters as any).tags) {
       try {
-        (filters as any).tags = (Array.isArray((filters as any).tags) ? (filters as any).tags : [ (filters as any).tags ])
+        (filters as any).tags = (Array.isArray((filters as any).tags) ? (filters as any).tags : [(filters as any).tags])
           .map((t: any) => typeof t === "string" ? parseInt(t, 10) : t)
           .filter((t: any) => Number.isInteger(t));
       } catch (e) {
@@ -168,19 +168,21 @@ const AddFilteredContactsToListService = async ({
     // Caminho direto SQL: quando não validamos WhatsApp no ato
     const directSQL = String(process.env.CONTACT_FILTER_DIRECT_SQL || 'true').toLowerCase() === 'true';
     const shouldValidateWhatsappEarly = String(process.env.CONTACT_FILTER_VALIDATE_WHATSAPP || 'false').toLowerCase() === 'true';
-    
+
     if (directSQL && !shouldValidateWhatsappEarly) {
       const conds: string[] = ['c."companyId" = :companyId'];
       const repl: any = { companyId, contactListId };
 
-      // Regra: só inserir contatos com número canônico válido (ou grupos)
-      // canonicalNumber no Contact é preenchido automaticamente no save; se estiver NULL é inválido (ou grupo).
-      conds.push('(c."isGroup" = true OR (c."canonicalNumber" IS NOT NULL AND LENGTH(c."canonicalNumber") BETWEEN 10 AND 16))');
+      // Regra: só inserir contatos com número canônico válido, EXCLUINDO GRUPOS
+      // Grupos não devem aparecer em listas de contatos
+      conds.push('c."isGroup" = false');
+      conds.push('c."canonicalNumber" IS NOT NULL');
+      conds.push('LENGTH(c."canonicalNumber") BETWEEN 10 AND 16');
 
       const addIn = (col: string, arr?: string[]) => {
         if (arr && arr.length > 0) {
-          conds.push(`c.${col} IN (:${col.replace(/\W/g,'_')})`);
-          repl[col.replace(/\W/g,'_')] = arr;
+          conds.push(`c.${col} IN (:${col.replace(/\W/g, '_')})`);
+          repl[col.replace(/\W/g, '_')] = arr;
         }
       };
 
@@ -200,7 +202,7 @@ const AddFilteredContactsToListService = async ({
         if ((filters as any).florder !== undefined && (filters as any).florder !== null) {
           const raw = (filters as any).florder;
           const s = String(raw).trim().toLowerCase();
-          const b = (typeof raw === 'boolean') ? raw : ["true","1","sim","yes"].includes(s) ? true : ["false","0","nao","não","no"].includes(s) ? false : null;
+          const b = (typeof raw === 'boolean') ? raw : ["true", "1", "sim", "yes"].includes(s) ? true : ["false", "0", "nao", "não", "no"].includes(s) ? false : null;
           if (b !== null) {
             repl.florder = b;
             conds.push('c."florder" = :florder');
@@ -232,7 +234,7 @@ const AddFilteredContactsToListService = async ({
         }
 
         if (filters.foundationMonths && filters.foundationMonths.length > 0) {
-          const months = filters.foundationMonths.map(n => Number(n)).filter(n => Number.isInteger(n) && n>=1 && n<=12);
+          const months = filters.foundationMonths.map(n => Number(n)).filter(n => Number.isInteger(n) && n >= 1 && n <= 12);
           if (months.length > 0) {
             conds.push('c."foundationDate" IS NOT NULL');
             conds.push(`EXTRACT(MONTH FROM c."foundationDate") IN (${months.join(',')})`);
@@ -241,9 +243,9 @@ const AddFilteredContactsToListService = async ({
 
         if (filters.minCreditLimit || filters.maxCreditLimit) {
           const parseMoney = (val: string): number => {
-            const raw = String(val).trim().replace(/\s+/g,'').replace(/R\$?/gi,'');
+            const raw = String(val).trim().replace(/\s+/g, '').replace(/R\$?/gi, '');
             let num: number;
-            if (raw.includes(',')) num = parseFloat(raw.replace(/\./g,'').replace(/,/g,'.')); else num = parseFloat(raw);
+            if (raw.includes(',')) num = parseFloat(raw.replace(/\./g, '').replace(/,/g, '.')); else num = parseFloat(raw);
             return isNaN(num) ? 0 : num;
           };
           const hasMin = typeof filters.minCreditLimit !== 'undefined' && filters.minCreditLimit !== '';
@@ -277,12 +279,12 @@ const AddFilteredContactsToListService = async ({
           ("name","number","canonicalNumber","email","contactListId","companyId","isGroup","createdAt","updatedAt")
         SELECT 
           c."name", 
-          CASE WHEN c."isGroup" = true THEN c."number" ELSE c."canonicalNumber" END AS "number",
-          CASE WHEN c."isGroup" = true THEN NULL ELSE c."canonicalNumber" END AS "canonicalNumber",
+          c."canonicalNumber" AS "number",
+          c."canonicalNumber",
           COALESCE(c."email", ''), 
           :contactListId, 
           :companyId, 
-          c."isGroup", 
+          false, 
           NOW(), 
           NOW()
         FROM "Contacts" c
@@ -331,10 +333,10 @@ const AddFilteredContactsToListService = async ({
 
     // Filtro de empresa
     if (filters.bzEmpresa && filters.bzEmpresa.trim()) {
-      whereConditions.push({ 
-        bzEmpresa: { 
-          [Op.iLike]: `%${filters.bzEmpresa.trim()}%` 
-        } 
+      whereConditions.push({
+        bzEmpresa: {
+          [Op.iLike]: `%${filters.bzEmpresa.trim()}%`
+        }
       });
     }
 
@@ -516,9 +518,9 @@ const AddFilteredContactsToListService = async ({
     let contacts = [] as any[];
     const creditFilterActive = Boolean(filters.minCreditLimit || filters.maxCreditLimit);
     const creditLimitNumericAttr = creditFilterActive
-      ? literal(`CAST(CASE WHEN TRIM("creditLimit") = '' THEN NULL WHEN POSITION(',' IN TRIM("creditLimit")) > 0 THEN REPLACE(REPLACE(REPLACE(TRIM(REPLACE("creditLimit", 'R$', '')), '.', ''), ',', '.'), ' ', '') ELSE REPLACE(TRIM(REPLACE("creditLimit", 'R$', '')), ' ', '') END AS NUMERIC)`) 
+      ? literal(`CAST(CASE WHEN TRIM("creditLimit") = '' THEN NULL WHEN POSITION(',' IN TRIM("creditLimit")) > 0 THEN REPLACE(REPLACE(REPLACE(TRIM(REPLACE("creditLimit", 'R$', '')), '.', ''), ',', '.'), ' ', '') ELSE REPLACE(TRIM(REPLACE("creditLimit", 'R$', '')), ' ', '') END AS NUMERIC)`)
       : null;
-    
+
     try {
       logger.info(`WhereConditions finais: ${JSON.stringify(whereConditions)}`);
       if (creditFilterActive) {
@@ -552,20 +554,17 @@ const AddFilteredContactsToListService = async ({
       throw new Error(`Erro ao buscar contatos: ${error.message}`);
     }
 
-    // Caminho rápido: sem deduplicação prévia em memória. O banco resolverá via índice único.
-    type Candidate = { name: string; number: string; email: string; isGroup?: boolean };
+    // Caminho rápido: excluir grupos, apenas contatos válidos
+    type Candidate = { name: string; number: string; email: string };
     const candidates: Candidate[] = contacts.map(c => {
       const name = c?.get ? c.get("name") : (c as any).name;
       const numberRaw = c?.get ? c.get("number") : (c as any).number;
       const emailRaw = c?.get ? c.get("email") : (c as any).email;
       const isGroup = (c as any).isGroup || false;
+
+      // EXCLUIR GRUPOS - grupos não são contatos
       if (isGroup) {
-        return {
-          name: name || "",
-          number: numberRaw ? String(numberRaw).trim() : "",
-          email: emailRaw ? String(emailRaw).trim() : "",
-          isGroup
-        };
+        return null as any;
       }
 
       const { canonical } = safeNormalizePhoneNumber(numberRaw);
@@ -576,8 +575,7 @@ const AddFilteredContactsToListService = async ({
       return {
         name: name || "",
         number: canonical,
-        email: emailRaw ? String(emailRaw).trim() : "",
-        isGroup
+        email: emailRaw ? String(emailRaw).trim() : ""
       };
     }).filter((c: any) => c && c.number && c.name);
 
@@ -594,19 +592,18 @@ const AddFilteredContactsToListService = async ({
       let errors = 0;
       await processWithConcurrency(candidates, validationConcurrency, async cand => {
         try {
-          if (!cand.isGroup) {
-            const { canonical } = safeNormalizePhoneNumber(cand.number);
-            if (!canonical || !isValidCanonicalPhoneNumber(canonical)) {
-              errors++;
-              return;
-            }
-            cand.number = canonical;
+          // Grupos já foram excluídos, então todos os candidatos são contatos válidos
+          const { canonical } = safeNormalizePhoneNumber(cand.number);
+          if (!canonical || !isValidCanonicalPhoneNumber(canonical)) {
+            errors++;
+            return;
           }
+          cand.number = canonical;
 
           // Validar número WhatsApp se habilitado
           if (shouldValidateWhatsappEarly) {
             try {
-              const validatedNumber = await CheckContactNumber(cand.number, companyId, Boolean(cand.isGroup));
+              const validatedNumber = await CheckContactNumber(cand.number, companyId, false);
               if (validatedNumber) {
                 cand.number = validatedNumber;
                 (cand as any).isWhatsappValid = true;
@@ -633,9 +630,8 @@ const AddFilteredContactsToListService = async ({
           }
 
           // Normalizar número para garantir associação correta com Contact
-          const { canonical } = safeNormalizePhoneNumber(cand.number);
-          const canonicalNumber = canonical || cand.number.replace(/\D/g, "");
-          
+          const canonicalNumber = safeNormalizePhoneNumber(cand.number).canonical || cand.number.replace(/\D/g, "");
+
           payload.push({
             contactListId,
             companyId,
@@ -643,7 +639,7 @@ const AddFilteredContactsToListService = async ({
             number: cand.number,
             canonicalNumber,
             email: cand.email,
-            isGroup: cand.isGroup || false,
+            isGroup: false,
             isWhatsappValid: (cand as any).isWhatsappValid
           });
         } catch {
@@ -659,16 +655,14 @@ const AddFilteredContactsToListService = async ({
     } else {
       for (let i = 0; i < candidates.length; i += chunkSize) {
         const slice = candidates.slice(i, i + chunkSize).map(c => {
-          // Normalizar número para garantir associação correta com Contact
-          if (!c.isGroup) {
-            const { canonical } = safeNormalizePhoneNumber(c.number);
-            if (!canonical || !isValidCanonicalPhoneNumber(canonical)) {
-              return null as any;
-            }
-            c.number = canonical;
+          // Grupos já foram excluídos, normalizar número
+          const { canonical } = safeNormalizePhoneNumber(c.number);
+          if (!canonical || !isValidCanonicalPhoneNumber(canonical)) {
+            return null as any;
           }
-          const canonicalNumber = c.isGroup ? null : (safeNormalizePhoneNumber(c.number).canonical || c.number.replace(/\D/g, ""));
-          
+          c.number = canonical;
+          const canonicalNumber = safeNormalizePhoneNumber(c.number).canonical || c.number.replace(/\D/g, "");
+
           return {
             contactListId,
             companyId,
@@ -676,13 +670,14 @@ const AddFilteredContactsToListService = async ({
             number: c.number,
             canonicalNumber,
             email: c.email,
-            isGroup: c.isGroup || false,
+            isGroup: false,
             isWhatsappValid: null
           };
         }).filter((x: any) => x);
         await ContactListItem.bulkCreate(slice as any[], { returning: false, validate: false, individualHooks: false, ignoreDuplicates: true });
       }
     }
+
 
     const countAfter = await ContactListItem.count({ where: { contactListId } });
     const added = Math.max(0, countAfter - countBefore);

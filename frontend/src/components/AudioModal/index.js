@@ -178,10 +178,36 @@ const AudioModal = ({ url, contact, fromMe }) => {
   // Carrega e decodifica áudio para gerar waveform (apenas quando URL muda)
   useEffect(() => {
     let aborted = false;
-    const src = isIOS ? (url || "").replace(".ogg", ".mp3") : url;
+    // Monta lista de URLs para tentar (priorizando mp3 no iOS)
+    const baseUrl = (url || "").replace(/\.(ogg|mp3|m4a|wav)$/i, "");
+    const srcList = isIOS
+      ? [`${baseUrl}.mp3`, `${baseUrl}.ogg`, url]
+      : [url, `${baseUrl}.mp3`];
+
     const load = async () => {
+      let data = null;
+      let loadError = null;
+
+      // Tenta carregar de cada URL até conseguir
+      for (const src of srcList) {
+        if (!src || aborted) continue;
+        try {
+          const resp = await openApi.get(src, { responseType: "arraybuffer", withCredentials: false });
+          data = resp.data;
+          break; // Sucesso, sai do loop
+        } catch (e) {
+          loadError = e;
+          continue; // Tenta próxima URL
+        }
+      }
+
+      if (!data) {
+        console.warn("[AudioModal] Failed to load audio from all sources:", loadError);
+        setWaveError(true);
+        return;
+      }
+
       try {
-        const { data } = await openApi.get(src, { responseType: "arraybuffer", withCredentials: false });
         // Decodifica sem depender de gesto do usuário
         const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
         let buffer;
@@ -336,7 +362,19 @@ const AudioModal = ({ url, contact, fromMe }) => {
     const a = audioRef.current;
     if (!a) return;
     if (a.paused) {
-      a.play();
+      // Tenta reproduzir e trata erros de política de autoplay
+      const playPromise = a.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          // NotAllowedError = política de autoplay do browser
+          // NotSupportedError = formato não suportado
+          console.warn("[AudioModal] play() blocked:", err.name, err.message);
+          // Força fallback para player nativo se o formato não for suportado
+          if (err.name === "NotSupportedError") {
+            setWaveError(true);
+          }
+        });
+      }
     } else {
       a.pause();
     }
@@ -368,7 +406,7 @@ const AudioModal = ({ url, contact, fromMe }) => {
     if (wasPlaying) {
       try {
         a.play();
-      } catch {}
+      } catch { }
     }
   };
 
@@ -380,12 +418,26 @@ const AudioModal = ({ url, contact, fromMe }) => {
   };
 
   const getAudioSource = () => {
-    let sourceUrl = url;
+    // Fornece múltiplas sources para máxima compatibilidade
+    const baseUrl = (url || "").replace(/\.(ogg|mp3|m4a|wav)$/i, "");
+    const ext = (url || "").match(/\.(ogg|mp3|m4a|wav)$/i)?.[1] || "ogg";
+
+    // No iOS, prioriza mp3; caso contrário, usa o formato original primeiro
     if (isIOS) {
-      sourceUrl = (sourceUrl || "").replace(".ogg", ".mp3");
+      return (
+        <>
+          <source src={`${baseUrl}.mp3`} type="audio/mpeg" />
+          <source src={`${baseUrl}.ogg`} type="audio/ogg" />
+          <source src={url} type={`audio/${ext}`} />
+        </>
+      );
     }
     return (
-      <source src={sourceUrl} type={isIOS ? "audio/mp3" : "audio/ogg"} />
+      <>
+        <source src={url} type={`audio/${ext === "mp3" ? "mpeg" : ext}`} />
+        <source src={`${baseUrl}.mp3`} type="audio/mpeg" />
+        <source src={`${baseUrl}.ogg`} type="audio/ogg" />
+      </>
     );
   };
 
@@ -402,7 +454,7 @@ const AudioModal = ({ url, contact, fromMe }) => {
           )}
         </div>
         <div className={classes.player} ref={playerRef}>
-          <audio ref={audioRef} controls>
+          <audio ref={audioRef} controls playsInline webkit-playsinline="true">
             {getAudioSource()}
           </audio>
         </div>
@@ -426,7 +478,7 @@ const AudioModal = ({ url, contact, fromMe }) => {
         </IconButton>
         <span className={classes.time}>{formatTime(currentTime)} </span>
         <canvas ref={canvasRef} className={classes.waveform} onClick={handleWaveformClick} />
-        <audio ref={audioRef} preload="metadata" style={{ display: "none" }}>
+        <audio ref={audioRef} preload="metadata" playsInline webkit-playsinline="true" style={{ display: "none" }}>
           {getAudioSource()}
         </audio>
       </div>
