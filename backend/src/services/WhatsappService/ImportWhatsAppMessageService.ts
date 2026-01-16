@@ -14,6 +14,7 @@ import fs from 'fs';
 import moment from "moment";
 import { addLogs } from "../../helpers/addLogs";
 import logger from "../../utils/logger";
+import Message from "../../models/Message";
 
 
 export const closeTicketsImported = async (whatsappId) => {
@@ -91,8 +92,36 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
     `
     })
 
+    // Pre-filter: Check database for existing messages to avoid reprocessing
+    logger.info(`[Import] Verificando duplicatas para ${messages.length} mensagens...`);
+    const allWids = messages.map(m => m.key.id);
+    const existingWids = new Set<string>();
 
-    const qtd = messages.length;
+    // Chunk checks to avoid too large SQL queries
+    const chunkSize = 1000;
+    for (let i = 0; i < allWids.length; i += chunkSize) {
+      const chunk = allWids.slice(i, i + chunkSize);
+      const existing = await Message.findAll({
+        where: {
+          wid: { [Op.in]: chunk },
+          companyId: whatsApp.companyId
+        },
+        attributes: ['wid']
+      });
+      existing.forEach(m => existingWids.add(m.wid));
+    }
+
+    const messagesToImport = messages.filter(m => !existingWids.has(m.key.id));
+
+    logger.info(`[Import] ${messages.length} total, ${existingWids.size} já existem. Importando ${messagesToImport.length} novas.`);
+
+    addLogs({
+      fileName: `processImportMessagesWppId${whatsappId}.txt`,
+      text: `Total encontrado: ${messages.length}. Já existentes: ${existingWids.size}. Importando: ${messagesToImport.length}`
+    });
+
+
+    const qtd = messagesToImport.length;
     let i = 0;
 
     // Emite estado inicial "PREPARING" para o frontend mostrar loading
@@ -102,19 +131,53 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
         status: { this: 0, all: qtd, state: "PREPARING", date: moment().format("DD/MM/YY HH:mm:ss") }
       });
 
-    logger.info(`[Import] Iniciando importação de ${qtd} mensagens para whatsappId=${whatsappId}`);
+    logger.info(`[Import] Iniciando importação filtrada de ${qtd} mensagens para whatsappId=${whatsappId}`);
+
+    if (qtd === 0) {
+      // Se não há nada para importar, finaliza direto
+      dataMessages[whatsappId] = [];
+
+      if (whatsApp.closedTicketsPostImported) {
+        await closeTicketsImported(whatsappId)
+      }
+
+      await whatsApp.update({
+        statusImportMessages: whatsApp.closedTicketsPostImported ? null : "renderButtonCloseTickets",
+        importOldMessages: null,
+        importRecentMessages: null
+      });
+
+      io.of(`/workspace-${whatsApp.companyId}`)
+        .emit(`importMessages-${whatsApp.companyId}`, {
+          action: "update",
+          status: { this: 0, all: 0, state: "COMPLETED", date: moment().format("DD/MM/YY HH:mm:ss") }
+        });
+
+      io.of(`/workspace-${whatsApp.companyId}`)
+        .emit(`importMessages-${whatsApp.companyId}`, {
+          action: "refresh",
+        });
+
+      return "whatsapps";
+    }
 
     while (i < qtd) {
 
       try {
-        const msg = messages[i]
-        addLogs({
-          fileName: `processImportMessagesWppId${whatsappId}.txt`, text: `
-Mensagem ${i + 1} de ${qtd}
-              `})
+        const msg = messagesToImport[i]
+
+        // Log menos frequente para não floodar disco
+        if (i % 100 === 0) {
+          addLogs({
+            fileName: `processImportMessagesWppId${whatsappId}.txt`, text: `
+  Processando mensagem ${i + 1} de ${qtd}
+                `})
+        }
+
         await handleMessage(msg, wbot, whatsApp.companyId, true);
 
-        if (i % 2 === 0) {
+        // Update progress every 10 messages or last on to reduce socket load
+        if (i % 10 === 0 || i + 1 === qtd) {
           const timestampMsg = Math.floor(msg.messageTimestamp["low"] * 1000)
           io.of(`/workspace-${whatsApp.companyId}`)
             .emit(`importMessages-${whatsApp.companyId}`, {
@@ -123,8 +186,8 @@ Mensagem ${i + 1} de ${qtd}
             });
         }
 
-        // Delay anti-ban: 500ms entre mensagens para evitar detecção de bot
-        await new Promise(r => setTimeout(r, 500));
+        // Delay removido para performance máxima
+        // await new Promise(r => setTimeout(r, 500));
 
 
         if (i + 1 === qtd) {

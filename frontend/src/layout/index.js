@@ -342,6 +342,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
 
   const [volume, setVolume] = useState(localStorage.getItem("volume") || 1);
   const [statusImport, setStatusImport] = useState(null);
+  const [hideImport, setHideImport] = useState(false);
 
   const { dateToClient } = useDate();
   const [profileUrl, setProfileUrl] = useState(null);
@@ -460,9 +461,14 @@ const LoggedInLayout = ({ children, themeToggle }) => {
     const handleImportMessages = (data) => {
       if (data.action === "refresh") {
         setStatusImport(null);
+        setHideImport(false); // Reset para a próxima importação aparecer
       }
       if (data.action === "update") {
         setStatusImport(data.status);
+        // Se for o início, garante que aparece
+        if (data.status?.state === "PREPARING") {
+          setHideImport(false);
+        }
       }
     };
 
@@ -693,10 +699,12 @@ const LoggedInLayout = ({ children, themeToggle }) => {
         </Toolbar>
       </AppBar>
       {/* Barra de progresso flutuante para importação de mensagens */}
-      <ImportProgressBar
-        statusImport={statusImport}
-        onClose={() => setStatusImport(null)}
-      />
+      {!hideImport && (
+        <ImportProgressBar
+          statusImport={statusImport}
+          onClose={() => setHideImport(true)}
+        />
+      )}
 
       <main className={clsx(classes.content, drawerOpen ? classes.contentShift : classes.contentShiftClose)}>
         <div className={classes.appBarSpacer} />
