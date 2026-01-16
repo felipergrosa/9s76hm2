@@ -55,6 +55,9 @@ const useStyles = makeStyles((theme) => ({
   },
   systemTagSelect: {
     minWidth: 200,
+    [theme.breakpoints.down('sm')]: {
+      minWidth: '100%',
+    },
   },
   newTagInput: {
     marginTop: theme.spacing(1),
@@ -76,6 +79,10 @@ const useStyles = makeStyles((theme) => ({
   dialogPaper: {
     borderRadius: 16,
     overflow: 'hidden',
+    [theme.breakpoints.down('sm')]: {
+      margin: theme.spacing(1),
+      maxHeight: 'calc(100% - 16px)',
+    },
   },
   dialogTitle: {
     backgroundColor: theme.palette.primary.main,
@@ -83,6 +90,9 @@ const useStyles = makeStyles((theme) => ({
     borderRadius: '16px 16px 0 0',
     '& h2': {
       fontWeight: 600,
+      [theme.breakpoints.down('sm')]: {
+        fontSize: '1.1rem',
+      },
     },
   },
   actionButton: {
@@ -101,6 +111,10 @@ const useStyles = makeStyles((theme) => ({
     boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
     border: '1px solid #f0f0f0',
     transition: 'box-shadow 0.2s, border-color 0.2s',
+    [theme.breakpoints.down('sm')]: {
+      flexWrap: 'wrap',
+      padding: theme.spacing(1),
+    },
     '&:hover': {
       boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
       borderColor: '#e0e0e0',
@@ -122,6 +136,11 @@ const useStyles = makeStyles((theme) => ({
     color: '#fff',
     marginRight: theme.spacing(1.5),
     flexShrink: 0,
+    [theme.breakpoints.down('sm')]: {
+      width: 36,
+      height: 36,
+      fontSize: 14,
+    },
   },
   contactInfo: {
     flex: 1,
@@ -151,6 +170,10 @@ const useStyles = makeStyles((theme) => ({
     padding: '2px 8px',
     borderRadius: 12,
     marginLeft: theme.spacing(1),
+    [theme.breakpoints.down('sm')]: {
+      marginLeft: 'auto',
+      marginBottom: theme.spacing(0.5),
+    },
   },
   newBadge: {
     backgroundColor: '#e3f2fd',
@@ -175,6 +198,54 @@ const useStyles = makeStyles((theme) => ({
     padding: theme.spacing(1),
     backgroundColor: '#fafafa',
     borderRadius: 8,
+    [theme.breakpoints.down('sm')]: {
+      maxHeight: 300,
+    },
+  },
+  headerControls: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: theme.spacing(1),
+    marginBottom: theme.spacing(2),
+    [theme.breakpoints.down('sm')]: {
+      flexDirection: 'column',
+      width: '100%',
+    },
+  },
+  responsiveFlexHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing(1),
+    [theme.breakpoints.down('sm')]: {
+      flexDirection: 'column',
+      alignItems: 'flex-start',
+      gap: theme.spacing(1),
+    },
+  },
+  selectionOptions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    [theme.breakpoints.down('sm')]: {
+      flexDirection: 'column',
+      width: '100%',
+      '& > *': {
+        width: '100%',
+      },
+    },
+  },
+  tagsContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    maxWidth: 200,
+    [theme.breakpoints.down('sm')]: {
+      maxWidth: '100%',
+      width: '100%',
+      marginTop: theme.spacing(1),
+      marginLeft: theme.spacing(5), // Alinhar com o início do texto após checkbox+avatar
+    },
   },
 }));
 
@@ -967,7 +1038,7 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
             ))}
 
           {!loading && !importing && !importSummary && (
-            <Box display="flex" alignItems="flex-start" gap={1}>
+            <Box className={classes.headerControls}>
               <FormControl fullWidth variant="outlined" margin="dense">
                 <InputLabel id="whatsapp-select-label">Conexão WhatsApp</InputLabel>
                 <Select
@@ -989,30 +1060,31 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                 </Select>
               </FormControl>
 
-              <FormControlLabel
-                style={{ marginTop: 8, whiteSpace: 'nowrap' }}
-                control={
-                  <Checkbox
-                    checked={compatibilityMode}
-                    onChange={(e) => setCompatibilityMode(e.target.checked)}
-                    color="primary"
-                  />
-                }
-                label="Modo compatibilidade"
-              />
+              <Box display="flex" alignItems="center" width={{ xs: '100%', sm: 'auto' }} justifyContent="space-between">
+                <FormControlLabel
+                  style={{ whiteSpace: 'nowrap', margin: 0 }}
+                  control={
+                    <Checkbox
+                      checked={compatibilityMode}
+                      onChange={(e) => setCompatibilityMode(e.target.checked)}
+                      color="primary"
+                    />
+                  }
+                  label="Modo compatibilidade"
+                />
 
-              <Tooltip title="Atualizar tags do aparelho">
-                <span>
-                  <IconButton
-                    onClick={handleRefreshTags}
-                    disabled={!selectedWhatsappId || refreshing || loading}
-                    color="primary"
-                    style={{ marginTop: 8 }}
-                  >
-                    {refreshing ? <CircularProgress size={24} /> : <Refresh />}
-                  </IconButton>
-                </span>
-              </Tooltip>
+                <Tooltip title="Atualizar tags do aparelho">
+                  <span>
+                    <IconButton
+                      onClick={handleRefreshTags}
+                      disabled={!selectedWhatsappId || refreshing || loading}
+                      color="primary"
+                    >
+                      {refreshing ? <CircularProgress size={24} /> : <Refresh />}
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </Box>
             </Box>
           )}
 
@@ -1022,18 +1094,18 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                 Nenhuma tag de WhatsApp foi encontrada para esta conexão. Você pode importar contatos do dispositivo e usar as tags exibidas ao lado de cada contato.
               </Alert>
 
-              <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+              <Box className={classes.responsiveFlexHeader} mb={1}>
                 <Box>
                   <Typography variant="h6">
                     Contatos do Dispositivo
                   </Typography>
                   <Typography variant="caption" color="textSecondary">
-                    Total encontrado: {totalContactsCount} | Carregados: {deviceContacts.length} | Selecionados: {selectedDeviceContacts.size}
+                    Total: {totalContactsCount} | Carregados: {deviceContacts.length} | Selecionados: {selectedDeviceContacts.size}
                   </Typography>
                 </Box>
 
-                <Box display="flex" alignItems="center" gap={1}>
-                  <FormControl variant="outlined" size="small" className={classes.systemTagSelect} style={{ width: 220 }}>
+                <Box className={classes.selectionOptions}>
+                  <FormControl variant="outlined" size="small" className={classes.systemTagSelect}>
                     <InputLabel id="target-tag-label">Aplicar Tag (Sistema)</InputLabel>
                     <Select
                       labelId="target-tag-label"
@@ -1052,7 +1124,7 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                     </Select>
                   </FormControl>
 
-                  <FormControl variant="outlined" size="small" style={{ minWidth: 180 }}>
+                  <FormControl variant="outlined" size="small" className={classes.systemTagSelect}>
                     <InputLabel id="import-mode-label">Modo de Seleção</InputLabel>
                     <Select
                       labelId="import-mode-label"
@@ -1076,6 +1148,17 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                   </FormControl>
                 </Box>
               </Box>
+
+              {/* Alerta informativo sobre modo selecionado */}
+              {importMode !== 'manual' && (
+                <Box mb={2} p={2} style={{ backgroundColor: importMode === 'all' ? '#e3f2fd' : '#fff3e0', borderRadius: 8 }}>
+                  <Typography variant="body2" style={{ color: importMode === 'all' ? '#1565c0' : '#e65100' }}>
+                    {importMode === 'all'
+                      ? `✅ Modo "Todos": Ao clicar em importar, TODOS os ${totalContactsCount} contatos serão processados automaticamente.`
+                      : `🆕 Modo "Somente novos": Ao clicar em importar, apenas contatos que NÃO existem no sistema serão importados.`}
+                  </Typography>
+                </Box>
+              )}
 
               {/* Barra de Busca */}
               <TextField
@@ -1173,7 +1256,7 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                         )}
 
                         {/* Tags */}
-                        <Box display="flex" alignItems="center" flexWrap="wrap" style={{ maxWidth: 200 }}>
+                        <Box className={classes.tagsContainer}>
                           {Array.isArray(c.tags) && c.tags.slice(0, 3).map((t) => (
                             <Chip
                               key={`${c.id}-${t.id}`}
@@ -1245,7 +1328,7 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                                 />
                               }
                               label={
-                                <Box display="flex" alignItems="center">
+                                <Box display="flex" alignItems="center" flexWrap="wrap" style={{ gap: 4 }}>
                                   <Chip
                                     label={`${deviceTag.name}${typeof deviceTag.count === 'number'
                                       ? ` (${deviceTag.count})`
@@ -1262,7 +1345,7 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                                   {mappedLabel && (
                                     <Typography
                                       variant="caption"
-                                      style={{ marginLeft: 8, color: '#555' }}
+                                      style={{ color: '#555' }}
                                     >
                                       {mappedLabel}
                                     </Typography>
@@ -1270,7 +1353,7 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                                   {isUnlabeled && (
                                     <Typography
                                       variant="caption"
-                                      style={{ marginLeft: 8, color: '#666', fontStyle: 'italic' }}
+                                      style={{ color: '#666', fontStyle: 'italic' }}
                                     >
                                       Contatos sem etiquetas no WhatsApp
                                     </Typography>
@@ -1412,9 +1495,9 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                 onClick={handleImport}
                 color="primary"
                 variant="contained"
-                disabled={importing || (selectedDeviceTags.size === 0 && selectedDeviceContacts.size === 0)}
+                disabled={importing || (selectedDeviceTags.size === 0 && selectedDeviceContacts.size === 0 && importMode === 'manual')}
               >
-                {importing ? <CircularProgress size={20} /> : 'Importar Contatos'}
+                {importing ? <CircularProgress size={20} /> : (importMode === 'all' ? `Importar Todos (${totalContactsCount})` : importMode === 'newOnly' ? 'Importar Somente Novos' : 'Importar Contatos')}
               </Button>
             </>
           ) : (

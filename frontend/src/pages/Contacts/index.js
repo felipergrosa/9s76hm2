@@ -69,11 +69,11 @@ import BulkEditContactsModal from "../../components/BulkEditContactsModal";
 import DuplicateContactsModal from "../../components/DuplicateContactsModal";
 
 const CustomTooltipProps = {
-  arrow: true,
-  enterTouchDelay: 0,
-  leaveTouchDelay: 5000,
-  enterDelay: 300,
-  leaveDelay: 100,
+    arrow: true,
+    enterTouchDelay: 0,
+    leaveTouchDelay: 5000,
+    enterDelay: 300,
+    leaveDelay: 100,
 };
 
 const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -132,12 +132,12 @@ const Contacts = () => {
     const location = useLocation();
 
     const { user, socket } = useContext(AuthContext);
-    
+
     // Hook de ordenação para contatos
-    const { 
-        sortField, 
-        sortDirection, 
-        handleSort 
+    const {
+        sortField,
+        sortDirection,
+        handleSort
     } = useContactSort('name', 'asc', user?.id);
 
     const [loading, setLoading] = useState(false);
@@ -152,14 +152,14 @@ const Contacts = () => {
     const [selectedContactId, setSelectedContactId] = useState(null);
     const [contactModalOpen, setContactModalOpen] = useState(false);
     const [filterContactModalOpen, setFilterContactModalOpen] = useState(false); // NOVO ESTADO PARA O MODAL DE FILTRO DE CONTATOS
-    
+
     // Hook de paginação
     const {
-        pageNumber, 
+        pageNumber,
         setPageNumber,
-        contactsPerPage, 
+        contactsPerPage,
         setContactsPerPage,
-        totalContacts, 
+        totalContacts,
         setTotalContacts,
         totalPages,
         handleChangePerPage,
@@ -170,7 +170,7 @@ const Contacts = () => {
     const [importContactModalOpen, setImportContactModalOpen] = useState(false);
     const [deletingContact, setDeletingContact] = useState(null);
     const [ImportContacts, setImportContacts] = useState(null);
-    
+
     const [blockingContact, setBlockingContact] = useState(null);
     const [unBlockingContact, setUnBlockingContact] = useState(null);
     const [confirmOpen, setConfirmOpen] = useState(false);
@@ -457,10 +457,10 @@ const Contacts = () => {
         const fetchContacts = async () => {
             try {
                 const { data } = await api.get("/contacts/", {
-                    params: { 
-                        searchParam: debouncedSearchParam, 
-                        pageNumber, 
-                        limit: contactsPerPage, 
+                    params: {
+                        searchParam: debouncedSearchParam,
+                        pageNumber,
+                        limit: contactsPerPage,
                         isGroup: "false",
                         orderBy: sortField === 'tags' ? 'name' : sortField,
                         order: sortDirection,
@@ -537,14 +537,14 @@ const Contacts = () => {
                 dispatch({ type: "UPDATE_CONTACTS", payload: data.contact });
             }
 
-        if (data.action === "delete") {
-            const contactIdNum = Number(data.contactId);
-            dispatch({ type: "DELETE_CONTACT", payload: contactIdNum });
-            // Remover o contato deletado da lista de selecionados, se estiver lá
-            setSelectedContactIds((prevSelected) =>
-                prevSelected.filter((id) => id !== contactIdNum)
-            );
-        }
+            if (data.action === "delete") {
+                const contactIdNum = Number(data.contactId);
+                dispatch({ type: "DELETE_CONTACT", payload: contactIdNum });
+                // Remover o contato deletado da lista de selecionados, se estiver lá
+                setSelectedContactIds((prevSelected) =>
+                    prevSelected.filter((id) => id !== contactIdNum)
+                );
+            }
         };
         socket.on(`company-${companyId}-contact`, onContactEvent);
 
@@ -645,6 +645,12 @@ const Contacts = () => {
 
     const handleCardLongPressEnd = useCallback(() => {
         // Mantém o modo seleção ativo até o usuário limpar manualmente
+    }, []);
+
+    const handleCancelSelection = useCallback(() => {
+        setIsSelectionMode(false);
+        setSelectedContactIds([]);
+        setIsSelectAllChecked(false);
     }, []);
 
     // Mobile: toque simples durante o modo seleção alterna o item
@@ -838,150 +844,293 @@ const Contacts = () => {
         <div className="flex-1 bg-gray-50 dark:bg-gray-900 min-h-full">
             <MainContainer useWindowScroll>
                 <div className="w-full p-4 md:p-6 lg:p-8 overflow-x-hidden">
-                <LoadingOverlay open={loading} message="Aguarde..." />
-                <NewTicketModal
-                    modalOpen={newTicketModalOpen}
-                    initialContact={contactTicket}
-                    onClose={(ticket) => {
-                        handleCloseOrOpenTicket(ticket);
-                    }}
-                />
-                <ContactModal
-                    open={contactModalOpen}
-                    onClose={handleCloseContactModal}
-                    aria-labelledby="form-dialog-title"
-                    contactId={selectedContactId}
-                ></ContactModal>
+                    <LoadingOverlay open={loading} message="Aguarde..." />
+                    <NewTicketModal
+                        modalOpen={newTicketModalOpen}
+                        initialContact={contactTicket}
+                        onClose={(ticket) => {
+                            handleCloseOrOpenTicket(ticket);
+                        }}
+                    />
+                    <ContactModal
+                        open={contactModalOpen}
+                        onClose={handleCloseContactModal}
+                        aria-labelledby="form-dialog-title"
+                        contactId={selectedContactId}
+                    ></ContactModal>
 
-                <ContactImportWpModal
-                    isOpen={importContactModalOpen}
-                    handleClose={() => setImportContactModalOpen(false)}
-                    onSave={onSave}
-                    onConfirm={handleimportContact}
-                />
-                <ContactImportTagsModal
-                    isOpen={importTagsModalOpen}
-                    handleClose={() => setImportTagsModalOpen(false)}
-                    onImport={handleImportWithTags}
-                />
+                    <ContactImportWpModal
+                        isOpen={importContactModalOpen}
+                        handleClose={() => setImportContactModalOpen(false)}
+                        onSave={onSave}
+                        onConfirm={handleimportContact}
+                    />
+                    <ContactImportTagsModal
+                        isOpen={importTagsModalOpen}
+                        handleClose={() => setImportTagsModalOpen(false)}
+                        onImport={handleImportWithTags}
+                    />
 
-                {/* NOVO MODAL DE FILTRO DE CONTATOS */}
-                <FilterContactModal
-                    isOpen={filterContactModalOpen}
-                    onClose={handleCloseFilterContactModal}
-                    onFiltered={handleApplyFiltersFromModal}
-                    initialFilter={appliedFilters}
-                />
+                    {/* NOVO MODAL DE FILTRO DE CONTATOS */}
+                    <FilterContactModal
+                        isOpen={filterContactModalOpen}
+                        onClose={handleCloseFilterContactModal}
+                        onFiltered={handleApplyFiltersFromModal}
+                        initialFilter={appliedFilters}
+                    />
 
-                <ConfirmationModal
-                    title={
-                        deletingContact
-                            ? `${i18n.t(
-                                "contacts.confirmationModal.deleteTitle"
-                            )} ${deletingContact.name}?`
-                            : blockingContact
-                                ? `Bloquear Contato ${blockingContact.name}?`
-                                : unBlockingContact
-                                    ? `Desbloquear Contato ${unBlockingContact.name}?`
-                                    : ImportContacts
-                                        ? `${i18n.t("contacts.confirmationModal.importTitlte")}`
-                                        : `${i18n.t("contactListItems.confirmationModal.importTitlte")}`
-                    }
-                    onSave={onSave}
-                    isCellPhone={ImportContacts}
-                    open={confirmOpen}
-                    onClose={setConfirmOpen}
-                    onConfirm={(e) =>
-                        deletingContact
-                            ? handleDeleteContact(deletingContact.id)
-                            : blockingContact
-                                ? handleBlockContact(blockingContact.id)
-                                : unBlockingContact
-                                    ? handleUnblockContact(unBlockingContact.id)
-                                    : ImportContacts
-                                        ? handleimportContact()
-                                        : handleImportExcel()
-                    }
-                >
-                    {exportContact
-                        ? `${i18n.t("contacts.confirmationModal.exportContact")}`
-                        : deletingContact
-                            ? `${i18n.t("contacts.confirmationModal.deleteMessage")}`
-                            : blockingContact
-                                ? `${i18n.t("contacts.confirmationModal.blockContact")}`
-                                : unBlockingContact
-                                    ? `${i18n.t("contacts.confirmationModal.unblockContact")}`
-                                    : ImportContacts
-                                        ? `Escolha de qual conexão deseja importar`
-                                        : `${i18n.t("contactListItems.confirmationModal.importMessage")}`}
-                </ConfirmationModal>
+                    <ConfirmationModal
+                        title={
+                            deletingContact
+                                ? `${i18n.t(
+                                    "contacts.confirmationModal.deleteTitle"
+                                )} ${deletingContact.name}?`
+                                : blockingContact
+                                    ? `Bloquear Contato ${blockingContact.name}?`
+                                    : unBlockingContact
+                                        ? `Desbloquear Contato ${unBlockingContact.name}?`
+                                        : ImportContacts
+                                            ? `${i18n.t("contacts.confirmationModal.importTitlte")}`
+                                            : `${i18n.t("contactListItems.confirmationModal.importTitlte")}`
+                        }
+                        onSave={onSave}
+                        isCellPhone={ImportContacts}
+                        open={confirmOpen}
+                        onClose={setConfirmOpen}
+                        onConfirm={(e) =>
+                            deletingContact
+                                ? handleDeleteContact(deletingContact.id)
+                                : blockingContact
+                                    ? handleBlockContact(blockingContact.id)
+                                    : unBlockingContact
+                                        ? handleUnblockContact(unBlockingContact.id)
+                                        : ImportContacts
+                                            ? handleimportContact()
+                                            : handleImportExcel()
+                        }
+                    >
+                        {exportContact
+                            ? `${i18n.t("contacts.confirmationModal.exportContact")}`
+                            : deletingContact
+                                ? `${i18n.t("contacts.confirmationModal.deleteMessage")}`
+                                : blockingContact
+                                    ? `${i18n.t("contacts.confirmationModal.blockContact")}`
+                                    : unBlockingContact
+                                        ? `${i18n.t("contacts.confirmationModal.unblockContact")}`
+                                        : ImportContacts
+                                            ? `Escolha de qual conexão deseja importar`
+                                            : `${i18n.t("contactListItems.confirmationModal.importMessage")}`}
+                    </ConfirmationModal>
 
-                {/* NOVO MODAL DE CONFIRMAÇÃO PARA DELEÇÃO EM MASSA */}
-                <ConfirmationModal
-                    title={`Tem certeza que deseja deletar ${selectedContactIds.length} contatos selecionados?`}
-                    open={confirmDeleteManyOpen}
-                    onClose={() => setConfirmDeleteManyOpen(false)}
-                    onConfirm={handleDeleteSelectedContacts}
-                >
-                    Essa ação é irreversível.
-                </ConfirmationModal>
+                    {/* NOVO MODAL DE CONFIRMAÇÃO PARA DELEÇÃO EM MASSA */}
+                    <ConfirmationModal
+                        title={`Tem certeza que deseja deletar ${selectedContactIds.length} contatos selecionados?`}
+                        open={confirmDeleteManyOpen}
+                        onClose={() => setConfirmDeleteManyOpen(false)}
+                        onConfirm={handleDeleteSelectedContacts}
+                    >
+                        Essa ação é irreversível.
+                    </ConfirmationModal>
 
-                <ConfirmationModal
-                    title={i18n.t("contacts.confirmationModal.importChat")}
-                    open={confirmChatsOpen}
-                    onClose={setConfirmChatsOpen}
-                    onConfirm={(e) => handleimportChats()}
-                >
-                    {i18n.t("contacts.confirmationModal.wantImport")}
-                </ConfirmationModal>
+                    <ConfirmationModal
+                        title={i18n.t("contacts.confirmationModal.importChat")}
+                        open={confirmChatsOpen}
+                        onClose={setConfirmChatsOpen}
+                        onConfirm={(e) => handleimportChats()}
+                    >
+                        {i18n.t("contacts.confirmationModal.wantImport")}
+                    </ConfirmationModal>
 
-                <BulkEditContactsModal
-                    open={bulkEditOpen}
-                    onClose={() => setBulkEditOpen(false)}
-                    selectedContactIds={selectedContactIds}
-                    onSuccess={() => setRefreshTick(prev => prev + 1)}
-                />
+                    <BulkEditContactsModal
+                        open={bulkEditOpen}
+                        onClose={() => setBulkEditOpen(false)}
+                        selectedContactIds={selectedContactIds}
+                        onSuccess={() => setRefreshTick(prev => prev + 1)}
+                    />
 
-                <DuplicateContactsModal
-                    open={duplicateModalOpen}
-                    onClose={() => setDuplicateModalOpen(false)}
-                    onActionCompleted={() => {
-                        setRefreshTick(prev => prev + 1);
-                        setDuplicateModalOpen(false);
-                    }}
-                />
+                    <DuplicateContactsModal
+                        open={duplicateModalOpen}
+                        onClose={() => setDuplicateModalOpen(false)}
+                        onActionCompleted={() => {
+                            setRefreshTick(prev => prev + 1);
+                            setDuplicateModalOpen(false);
+                        }}
+                    />
 
-                {/* Cabeçalho */}
-                <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-                    <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">
-                        {i18n.t("contacts.title")}
-                        <span className="text-lg font-normal text-gray-500 dark:text-gray-400 ml-2">
-                            ({totalContacts})
-                        </span>
-                    </h1>
-                </header>
+                    {/* Cabeçalho */}
+                    <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">
+                            {i18n.t("contacts.title")}
+                            <span className="text-lg font-normal text-gray-500 dark:text-gray-400 ml-2">
+                                ({totalContacts})
+                            </span>
+                        </h1>
+                    </header>
 
-                {/* Barra de Ações e Filtros - Mobile (2 linhas) */}
-                <div className="min-[1200px]:hidden flex flex-col gap-2 w-full max-w-[375px] mx-auto mb-4">
-                    {/* Linha 1: Filtros + Botões */}
-                    <div className="w-full flex items-center gap-2 flex-wrap">
-                        {/* NOVO BOTÃO DE FILTRO (MOBILE) */}
-                        <Tooltip {...CustomTooltipProps} title="Filtrar Contatos">
+                    {/* Barra de Ações e Filtros - Mobile (2 linhas) */}
+                    <div className="min-[1200px]:hidden flex flex-col gap-2 w-full max-w-[375px] mx-auto mb-4">
+                        {/* Linha 1: Filtros + Botões */}
+                        <div className="w-full flex items-center gap-2 flex-wrap">
+                            {/* NOVO BOTÃO DE FILTRO (MOBILE) */}
+                            <Tooltip {...CustomTooltipProps} title="Filtrar Contatos">
+                                <button
+                                    onClick={handleOpenFilterContactModal}
+                                    className={filterButtonClass}
+                                    aria-label="Filtrar Contatos"
+                                >
+                                    <SlidersHorizontal className={filterIconClass} />
+                                </button>
+                            </Tooltip>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <PopupState variant="popover" popupId="contacts-import-export-menu-mobile">
+                                    {(popupState) => (
+                                        <>
+                                            <Tooltip {...CustomTooltipProps} title="Importar/Exportar">
+                                                <button
+                                                    className="shrink-0 w-10 h-10 flex items-center justify-center text-gray-700 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    aria-label="Importar/Exportar"
+                                                    {...bindTrigger(popupState)}
+                                                >
+                                                    <ImportExport fontSize="small" />
+                                                </button>
+                                            </Tooltip>
+                                            <Menu {...bindMenu(popupState)}>
+                                                <MenuItem onClick={() => { setImportTagsModalOpen(true); popupState.close(); }}>
+                                                    <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
+                                                    Importar com Tags
+                                                </MenuItem>
+                                                <MenuItem onClick={() => { setImportContactModalOpen(true) }}>
+                                                    <Backup fontSize="small" color="primary" style={{ marginRight: 10 }} />
+                                                    {i18n.t("contacts.menu.importToExcel")}
+                                                </MenuItem>
+                                            </Menu>
+                                        </>
+                                    )}
+                                </PopupState>
+                                {String(user?.profile || "").toLowerCase() === "admin" && (
+                                    <Tooltip {...CustomTooltipProps} title="Deduplicar contatos">
+                                        <span>
+                                            <button
+                                                onClick={() => setDuplicateModalOpen(true)}
+                                                disabled={loading}
+                                                className="shrink-0 w-10 h-10 flex items-center justify-center text-indigo-600 bg-white dark:bg-gray-800 border border-indigo-500 dark:border-indigo-400 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                aria-label="Gerenciar duplicados"
+                                            >
+                                                <GitMerge className="w-5 h-5" />
+                                            </button>
+                                        </span>
+                                    </Tooltip>
+                                )}
+                                <Tooltip {...CustomTooltipProps} title="Novo Contato">
+                                    <span>
+                                        <button
+                                            onClick={handleOpenContactModal}
+                                            className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            aria-label="Novo Contato"
+                                        >
+                                            <UserPlus className="w-6 h-6" />
+                                        </button>
+                                    </span>
+                                </Tooltip>
+                            </div>
+                        </div>
+
+                        {/* Linha 2: Busca sozinha */}
+                        <div className="relative w-full">
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
+                                value={searchParam}
+                                onChange={handleSearch}
+                                className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            {isSearching && (
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
+                            )}
+                        </div>
+                    </div>
+
+                    {hasActiveFilters && filtersSummary.length > 0 && (
+                        <div className="min-[1200px]:hidden flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mt-1 w-full max-w-[375px] mx-auto">
+                            <SlidersHorizontal className="w-4 h-4 text-green-600" />
+                            {filtersSummary.map((item, index) => (
+                                <span
+                                    key={`${item.label}-${index}`}
+                                    className="px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded dark:bg-green-900/20 dark:text-green-300 dark:border-green-700"
+                                >
+                                    <span className="font-semibold">{item.label}:</span> {item.value}
+                                </span>
+                            ))}
                             <button
-                                onClick={handleOpenFilterContactModal}
-                                className={filterButtonClass}
-                                aria-label="Filtrar Contatos"
+                                type="button"
+                                onClick={handleClearFilters}
+                                className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
                             >
-                                <SlidersHorizontal className={filterIconClass} />
+                                Limpar filtros
                             </button>
-                        </Tooltip>
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <PopupState variant="popover" popupId="contacts-import-export-menu-mobile">
+                        </div>
+                    )}
+
+                    {hasActiveFilters && filtersSummary.length > 0 && (
+                        <div className="hidden min-[1200px]:flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mb-4">
+                            <SlidersHorizontal className="w-4 h-4 text-green-600" />
+                            {filtersSummary.map((item, index) => (
+                                <span
+                                    key={`${item.label}-${index}`}
+                                    className="px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded dark:bg-green-900/20 dark:text-green-300 dark:border-green-700"
+                                >
+                                    <span className="font-semibold">{item.label}:</span> {item.value}
+                                </span>
+                            ))}
+                            <button
+                                type="button"
+                                onClick={handleClearFilters}
+                                className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                            >
+                                Limpar filtros
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Barra de Ações e Filtros - Desktop (1 linha) */}
+                    <div className="hidden min-[1200px]:flex items-center gap-3 flex-nowrap mb-4">
+                        {/* Filtros e Busca (Esquerda) */}
+                        <div className="w-full flex items-center gap-2 flex-1 min-w-0 justify-start">
+                            {/* Busca com largura limitada */}
+                            <div className="relative flex-1 ">
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
+                                    value={searchParam}
+                                    onChange={handleSearch}
+                                    className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                {isSearching && (
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Ações Principais (Direita) */}
+                        <div className="w-full md:w-auto flex flex-row gap-2 flex-none whitespace-nowrap items-center ">
+                            {/* NOVO BOTÃO DE FILTRO (DESKTOP) */}
+                            <Tooltip {...CustomTooltipProps} title="Filtrar Contatos">
+                                <button
+                                    onClick={handleOpenFilterContactModal}
+                                    className={filterButtonClass}
+                                    aria-label="Filtrar Contatos"
+                                >
+                                    <SlidersHorizontal className={filterIconClass} />
+                                </button>
+                            </Tooltip>
+                            <PopupState variant="popover" popupId="contacts-import-export-menu">
                                 {(popupState) => (
                                     <>
                                         <Tooltip {...CustomTooltipProps} title="Importar/Exportar">
                                             <button
-                                                className="shrink-0 w-10 h-10 flex items-center justify-center text-gray-700 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                className="w-10 h-10 flex items-center justify-center text-gray-700 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                 aria-label="Importar/Exportar"
                                                 {...bindTrigger(popupState)}
                                             >
@@ -1001,6 +1150,7 @@ const Contacts = () => {
                                     </>
                                 )}
                             </PopupState>
+
                             <Can
                                 role={user.profile}
                                 perform="contacts-page:deleteContact"
@@ -1010,7 +1160,7 @@ const Contacts = () => {
                                             <button
                                                 onClick={() => setConfirmDeleteManyOpen(true)}
                                                 disabled={loading}
-                                                className="w-10 h-10 flex items-center justify-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                                                className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
                                                 aria-label={`Deletar ${selectedContactIds.length} contato(s)`}
                                             >
                                                 <Trash2 className="w-4 h-4" />
@@ -1020,20 +1170,23 @@ const Contacts = () => {
                                 )}
                                 no={() => null}
                             />
+
                             <Can
                                 role={user.profile}
                                 perform="contacts-page:bulkEdit"
                                 yes={() => (
                                     selectedContactIds.length > 0 ? (
                                         <Tooltip {...CustomTooltipProps} title={`Editar em massa (${selectedContactIds.length})`}>
-                                            <button
-                                                onClick={() => setBulkEditOpen(true)}
-                                                disabled={loading}
-                                                className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                                aria-label={`Editar em massa ${selectedContactIds.length} contato(s)`}
-                                            >
-                                                <Edit className="w-4 h-4" />
-                                            </button>
+                                            <span>
+                                                <button
+                                                    onClick={() => setBulkEditOpen(true)}
+                                                    disabled={loading}
+                                                    className="w-10 h-10 flex items-center justify-center text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                                    aria-label={`Editar em massa ${selectedContactIds.length} contato(s)`}
+                                                >
+                                                    <Edit className="w-4 h-4" />
+                                                </button>
+                                            </span>
                                         </Tooltip>
                                     ) : null
                                 )}
@@ -1067,459 +1220,334 @@ const Contacts = () => {
                         </div>
                     </div>
 
-                    {/* Linha 2: Busca sozinha */}
-                    <div className="relative w-full">
-                        <input
-                            type="text"
-                            placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
-                            value={searchParam}
-                            onChange={handleSearch}
-                            className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        {isSearching && (
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
-                        )}
-                    </div>
-                </div>
-
-                {hasActiveFilters && filtersSummary.length > 0 && (
-                    <div className="min-[1200px]:hidden flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mt-1 w-full max-w-[375px] mx-auto">
-                        <SlidersHorizontal className="w-4 h-4 text-green-600" />
-                        {filtersSummary.map((item, index) => (
-                            <span
-                                key={`${item.label}-${index}`}
-                                className="px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded dark:bg-green-900/20 dark:text-green-300 dark:border-green-700"
-                            >
-                                <span className="font-semibold">{item.label}:</span> {item.value}
-                            </span>
-                        ))}
-                        <button
-                            type="button"
-                            onClick={handleClearFilters}
-                            className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
-                        >
-                            Limpar filtros
-                        </button>
-                    </div>
-                )}
-
-                {hasActiveFilters && filtersSummary.length > 0 && (
-                    <div className="hidden min-[1200px]:flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mb-4">
-                        <SlidersHorizontal className="w-4 h-4 text-green-600" />
-                        {filtersSummary.map((item, index) => (
-                            <span
-                                key={`${item.label}-${index}`}
-                                className="px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded dark:bg-green-900/20 dark:text-green-300 dark:border-green-700"
-                            >
-                                <span className="font-semibold">{item.label}:</span> {item.value}
-                            </span>
-                        ))}
-                        <button
-                            type="button"
-                            onClick={handleClearFilters}
-                            className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
-                        >
-                            Limpar filtros
-                        </button>
-                    </div>
-                )}
-
-                {/* Barra de Ações e Filtros - Desktop (1 linha) */}
-                <div className="hidden min-[1200px]:flex items-center gap-3 flex-nowrap mb-4">
-                    {/* Filtros e Busca (Esquerda) */}
-                    <div className="w-full flex items-center gap-2 flex-1 min-w-0 justify-start">
-                        {/* Busca com largura limitada */}
-                        <div className="relative flex-1 ">
-                            <input
-                                type="text"
-                                placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
-                                value={searchParam}
-                                onChange={handleSearch}
-                                className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                            {isSearching && (
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Ações Principais (Direita) */}
-                    <div className="w-full md:w-auto flex flex-row gap-2 flex-none whitespace-nowrap items-center ">
-                        {/* NOVO BOTÃO DE FILTRO (DESKTOP) */}
-                        <Tooltip {...CustomTooltipProps} title="Filtrar Contatos">
-                            <button
-                                onClick={handleOpenFilterContactModal}
-                                className={filterButtonClass}
-                                aria-label="Filtrar Contatos"
-                            >
-                                <SlidersHorizontal className={filterIconClass} />
-                            </button>
-                        </Tooltip>
-                        <PopupState variant="popover" popupId="contacts-import-export-menu">
-                            {(popupState) => (
-                                <>
-                                    <Tooltip {...CustomTooltipProps} title="Importar/Exportar">
-                                        <button
-                                            className="w-10 h-10 flex items-center justify-center text-gray-700 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            aria-label="Importar/Exportar"
-                                            {...bindTrigger(popupState)}
-                                        >
-                                            <ImportExport fontSize="small" />
-                                        </button>
-                                    </Tooltip>
-                                    <Menu {...bindMenu(popupState)}>
-                                        <MenuItem onClick={() => { setImportTagsModalOpen(true); popupState.close(); }}>
-                                            <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
-                                            Importar com Tags
-                                        </MenuItem>
-                                        <MenuItem onClick={() => { setImportContactModalOpen(true) }}>
-                                            <Backup fontSize="small" color="primary" style={{ marginRight: 10 }} />
-                                            {i18n.t("contacts.menu.importToExcel")}
-                                        </MenuItem>
-                                    </Menu>
-                                </>
-                            )}
-                        </PopupState>
-
-                        <Can
-                            role={user.profile}
-                            perform="contacts-page:deleteContact"
-                            yes={() => (
-                                selectedContactIds.length > 0 ? (
-                                    <Tooltip {...CustomTooltipProps} title={`Deletar (${selectedContactIds.length})`}>
-                                        <button
-                                            onClick={() => setConfirmDeleteManyOpen(true)}
-                                            disabled={loading}
-                                            className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-                                            aria-label={`Deletar ${selectedContactIds.length} contato(s)`}
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </Tooltip>
-                                ) : null
-                            )}
-                            no={() => null}
-                        />
-
-                        <Can
-                            role={user.profile}
-                            perform="contacts-page:bulkEdit"
-                            yes={() => (
-                                selectedContactIds.length > 0 ? (
-                                    <Tooltip {...CustomTooltipProps} title={`Editar em massa (${selectedContactIds.length})`}>
-                                        <span>
-                                            <button
-                                                onClick={() => setBulkEditOpen(true)}
-                                                disabled={loading}
-                                                className="w-10 h-10 flex items-center justify-center text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                                aria-label={`Editar em massa ${selectedContactIds.length} contato(s)`}
-                                            >
-                                                <Edit className="w-4 h-4" />
+                    {/* Tabela de Contatos (Desktop) */}
+                    <div className="hidden min-[1200px]:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
+                        <div className="overflow-x-hidden">
+                            <table className="w-full table-fixed text-sm text-left text-gray-500 dark:text-gray-400">
+                                <thead className="uppercase text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400 tracking-wider">
+                                    <tr>
+                                        <th scope="col" className="w-[48px] p-2 text-center">
+                                            <input type="checkbox"
+                                                checked={isSelectAllChecked}
+                                                onChange={handleSelectAllContacts}
+                                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
+                                        </th>
+                                        <th scope="col" className="pl-14 pr-3 py-2 w-[300px]">
+                                            <button onClick={() => handleSort('name')} className="flex items-center gap-1 select-none font-medium">
+                                                NOME
+                                                <span className="text-[15px] opacity-70">{sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                                             </button>
-                                        </span>
-                                    </Tooltip>
-                                ) : null
-                            )}
-                            no={() => null}
-                        />
-                        {String(user?.profile || "").toLowerCase() === "admin" && (
-                            <Tooltip {...CustomTooltipProps} title="Deduplicar contatos">
-                                <span>
-                                    <button
-                                        onClick={() => setDuplicateModalOpen(true)}
-                                        disabled={loading}
-                                        className="shrink-0 w-10 h-10 flex items-center justify-center text-indigo-600 bg-white dark:bg-gray-800 border border-indigo-500 dark:border-indigo-400 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                        aria-label="Gerenciar duplicados"
-                                    >
-                                        <GitMerge className="w-5 h-5" />
-                                    </button>
-                                </span>
-                            </Tooltip>
-                        )}
-                        <Tooltip {...CustomTooltipProps} title="Novo Contato">
-                            <span>
-                                <button
-                                    onClick={handleOpenContactModal}
-                                    className="shrink-0 w-10 h-10 flex items-center justify-center text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    aria-label="Novo Contato"
-                                >
-                                    <UserPlus className="w-6 h-6" />
-                                </button>
+                                        </th>
+                                        <th scope="col" className="pl-3 pr-3 py-2 w-[167px]">
+                                            <button onClick={() => handleSort('number')} className="flex items-center gap-1 select-none w-full font-medium">
+                                                WHATSAPP
+                                                <span className="text-[15px] opacity-70">{sortField === 'number' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" className="hidden lg:table-cell pl-1 pr-3 py-2 w-[140px]">
+                                            <button onClick={() => handleSort('email')} className="flex items-center gap-1 select-none font-medium">
+                                                EMAIL
+                                                <span className="text-[15px] opacity-70">{sortField === 'email' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" className="pl-3 pr-3 py-2 w-[100px]">
+                                            <button onClick={() => handleSort('city')} className="flex items-center gap-1 select-none font-medium">
+                                                CIDADE/UF
+                                                <span className="text-[15px] opacity-70">{sortField === 'city' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" className="pl-3 pr-3 py-2 text-center w-[50px]">
+                                            <button onClick={() => handleSort('tags')} className="flex items-center justify-center gap-1 w-full select-none font-medium">
+                                                TAGS
+                                                <span className="text-[15px] opacity-70">{sortField === 'tags' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" className="pl-4 pr-3 py-2 text-center w-[80px]">
+                                            <button onClick={() => handleSort('status')} className="flex items-center justify-center gap-1 w-full select-none font-medium">
+                                                STATUS
+                                                <span className="text-[15px] opacity-70">{sortField === 'status' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" className="pl-3 pr-3 py-2 text-center w-[120px] font-medium">AÇÕES</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {!loading && sortedContacts.length === 0 && (
+                                        <tr>
+                                            <td colSpan={8} className="px-6 py-10 text-center text-sm text-gray-500 dark:text-gray-300">
+                                                Nenhum contato encontrado com os filtros selecionados. Tente ajustar os campos.
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {sortedContacts.map((contact, rowIndex) => (
+                                        <ContactRow
+                                            key={contact.id}
+                                            contact={contact}
+                                            selectedContactIds={selectedContactIds}
+                                            onToggleSelect={(id, _i, e) => handleToggleSelectContact(id, rowIndex, e)}
+                                            onEdit={handleEditContact}
+                                            onSendMessage={handleStartNewTicket}
+                                            onDelete={handleShowDeleteConfirm}
+                                            onBlock={handleShowBlockConfirm}
+                                            onUnblock={handleShowUnblockConfirm}
+                                            formatPhoneNumber={formatPhoneNumber}
+                                            CustomTooltipProps={CustomTooltipProps}
+                                            rowIndex={rowIndex}
+                                        />
+                                    ))}
+                                    {loading && <TableRowSkeleton avatar columns={9} />}
+                                </tbody>
+                            </table>
+                        </div>
+                        {/* Paginação da Tabela (Desktop) */}
+                        <nav className="hidden min-[1200px]:flex items-center justify-between p-4" aria-label="Table navigation">
+                            <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+                                Página {" "}
+                                <span className="font-semibold text-gray-900 dark:text-white">{pageNumber}</span>
+                                {" "} de {" "}
+                                <span className="font-semibold text-gray-900 dark:text-white">{totalPages}</span>
+                                {" "} • {" "}
+                                <span className="font-semibold text-gray-900 dark:text-white">{totalContacts}</span> contatos
                             </span>
-                        </Tooltip>
-                    </div>
-                </div>
-
-    {/* Tabela de Contatos (Desktop) */}
-    <div className="hidden min-[1200px]:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-        <div className="overflow-x-hidden">
-            <table className="w-full table-fixed text-sm text-left text-gray-500 dark:text-gray-400">
-                <thead className="uppercase text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400 tracking-wider">
-                    <tr>
-                        <th scope="col" className="w-[48px] p-2 text-center">
-                            <input type="checkbox"
-                                checked={isSelectAllChecked}
-                                onChange={handleSelectAllContacts}
-                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
-                        </th>
-                        <th scope="col" className="pl-14 pr-3 py-2 w-[300px]">
-                            <button onClick={() => handleSort('name')} className="flex items-center gap-1 select-none font-medium">
-                                NOME
-                                <span className="text-[15px] opacity-70">{sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
-                            </button>
-                        </th>
-                        <th scope="col" className="pl-3 pr-3 py-2 w-[167px]">
-                            <button onClick={() => handleSort('number')} className="flex items-center gap-1 select-none w-full font-medium">
-                                WHATSAPP
-                                <span className="text-[15px] opacity-70">{sortField === 'number' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
-                            </button>
-                        </th>
-                        <th scope="col" className="hidden lg:table-cell pl-1 pr-3 py-2 w-[140px]">
-                            <button onClick={() => handleSort('email')} className="flex items-center gap-1 select-none font-medium">
-                                EMAIL
-                                <span className="text-[15px] opacity-70">{sortField === 'email' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
-                            </button>
-                        </th>
-                        <th scope="col" className="pl-3 pr-3 py-2 w-[100px]">
-                            <button onClick={() => handleSort('city')} className="flex items-center gap-1 select-none font-medium">
-                                CIDADE/UF
-                                <span className="text-[15px] opacity-70">{sortField === 'city' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
-                            </button>
-                        </th>
-                        <th scope="col" className="pl-3 pr-3 py-2 text-center w-[50px]">
-                            <button onClick={() => handleSort('tags')} className="flex items-center justify-center gap-1 w-full select-none font-medium">
-                                TAGS
-                                <span className="text-[15px] opacity-70">{sortField === 'tags' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
-                            </button>
-                        </th>
-                        <th scope="col" className="pl-4 pr-3 py-2 text-center w-[80px]">
-                            <button onClick={() => handleSort('status')} className="flex items-center justify-center gap-1 w-full select-none font-medium">
-                                STATUS
-                                <span className="text-[15px] opacity-70">{sortField === 'status' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
-                            </button>
-                        </th>
-                        <th scope="col" className="pl-3 pr-3 py-2 text-center w-[120px] font-medium">AÇÕES</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {!loading && sortedContacts.length === 0 && (
-                        <tr>
-                            <td colSpan={8} className="px-6 py-10 text-center text-sm text-gray-500 dark:text-gray-300">
-                                Nenhum contato encontrado com os filtros selecionados. Tente ajustar os campos.
-                            </td>
-                        </tr>
-                    )}
-                    {sortedContacts.map((contact, rowIndex) => (
-                        <ContactRow 
-                            key={contact.id}
-                            contact={contact}
-                            selectedContactIds={selectedContactIds}
-                            onToggleSelect={(id, _i, e) => handleToggleSelectContact(id, rowIndex, e)}
-                            onEdit={handleEditContact}
-                            onSendMessage={handleStartNewTicket}
-                            onDelete={handleShowDeleteConfirm}
-                            onBlock={handleShowBlockConfirm}
-                            onUnblock={handleShowUnblockConfirm}
-                            formatPhoneNumber={formatPhoneNumber}
-                            CustomTooltipProps={CustomTooltipProps}
-                            rowIndex={rowIndex}
-                        />
-                    ))}
-                    {loading && <TableRowSkeleton avatar columns={9} />}
-                </tbody>
-            </table>
-        </div>
-        {/* Paginação da Tabela (Desktop) */}
-        <nav className="hidden min-[1200px]:flex items-center justify-between p-4" aria-label="Table navigation">
-            <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
-                Página {" "}
-                <span className="font-semibold text-gray-900 dark:text-white">{pageNumber}</span>
-                {" "} de {" "}
-                <span className="font-semibold text-gray-900 dark:text-white">{totalPages}</span>
-                {" "} • {" "}
-                <span className="font-semibold text-gray-900 dark:text-white">{totalContacts}</span> contatos
-            </span>
-            <div className="flex items-center gap-2">
-                <span className="text-sm">Itens por página:</span>
-                <select
-                    value={contactsPerPage}
-                    onChange={(e) => {
-                        setContactsPerPage(Number(e.target.value));
-                        setPageNumber(1);
-                    }}
-                    className="text-sm bg-gray-50 border border-gray-300 rounded-md p-1 dark:bg-gray-700 dark:border-gray-600"
-                >
-                    <option value={5}>5</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                    <option value={500}>500</option>
-                    <option value={1000}>1000</option>
-                </select>
-            </div>
-            <ul className="inline-flex items-center -space-x-px">
-                <li>
-                    <button
-                        onClick={() => handlePageChange(1)}
-                        disabled={pageNumber === 1}
-                        className="flex items-center justify-center px-3 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <ChevronsLeft className="w-5 h-5" />
-                    </button>
-                </li>
-                <li>
-                    <button
-                        onClick={() => handlePageChange(pageNumber - 1)}
-                        disabled={pageNumber === 1}
-                        className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <ChevronLeft className="w-5 h-5" />
-                    </button>
-                </li>
-                {renderPageNumbers().map((page, index) => (
-                    <li key={index}>
-                        <button
-                            onClick={() => handlePageChange(page)}
-                            className={`flex items-center justify-center px-3 h-8 leading-tight border
-                                ${page === pageNumber
-                                    ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
-                                    : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-                                }`}
-                        >
-                            {page}
-                        </button>
-                    </li>
-                ))}
-                <li>
-                    <button
-                        onClick={() => handlePageChange(pageNumber + 1)}
-                        disabled={pageNumber === totalPages}
-                        className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <ChevronRight className="w-5 h-5" />
-                    </button>
-                </li>
-                <li>
-                    <button
-                        onClick={() => handlePageChange(totalPages)}
-                        disabled={pageNumber === totalPages}
-                        className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <ChevronsRight className="w-5 h-5" />
-                    </button>
-                </li>
-            </ul>
-        </nav>
-    </div>
-
-    {/* Lista de Contatos (Mobile) */}
-    <div className="min-[1200px]:hidden flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
-        {!loading && sortedContacts.length === 0 && (
-            <div className="text-center text-sm text-gray-500 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                Nenhum contato encontrado com os filtros selecionados. Tente ajustar os campos.
-            </div>
-        )}
-        {sortedContacts.map((contact) => (
-            <ContactCard
-                key={contact.id}
-                contact={contact}
-                onEdit={handleEditContact}
-                onSendMessage={handleStartNewTicket}
-                onDelete={handleShowDeleteConfirm}
-                onBlock={handleShowBlockConfirm}
-                onUnblock={handleShowUnblockConfirm}
-                formatPhoneNumber={formatPhoneNumber}
-                CustomTooltipProps={CustomTooltipProps}
-                // Mobile: seleção por long-press/arrastar
-                isSelectionMode={isSelectionMode}
-                onLongPressStart={handleCardLongPressStart}
-                onDragSelect={handleCardDragSelect}
-                onLongPressEnd={handleCardLongPressEnd}
-                onTapWhileSelection={handleTapWhileSelection}
-                isSelected={selectedContactIds.includes(contact.id)}
-            />
-        ))}
-    </div>
-                
-    {/* Paginação (Mobile) */}
-                <nav className="min-[1200px]:hidden flex items-center justify-between p-3 mt-2 w-full max-w-[375px] mx-auto" aria-label="Mobile navigation">
-                    <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
-                        Página <span className="font-semibold text-gray-900 dark:text-white">{pageNumber}</span>
-                        {" "} de {" "}
-                        <span className="font-semibold text-gray-900 dark:text-white">{totalPages}</span>
-                        {" "} • {" "}
-                        <span className="font-semibold text-gray-900 dark:text-white">{totalContacts}</span> contatos
-                    </span>
-                    <div className="flex items-center gap-2">
-                        <select
-                            value={contactsPerPage}
-                            onChange={(e) => {
-                                setContactsPerPage(Number(e.target.value));
-                                setPageNumber(1);
-                            }}
-                            className="text-xs bg-gray-50 border border-gray-300 rounded-md p-1 dark:bg-gray-700 dark:border-gray-600"
-                        >
-                            <option value={5}>5</option>
-                            <option value={25}>25</option>
-                            <option value={50}>50</option>
-                            <option value={100}>100</option>
-                        </select>
-                        <ul className="inline-flex items-center -space-x-px">
-                            <li>
-                                <button
-                                    onClick={() => handlePageChange(1)}
-                                    disabled={pageNumber === 1}
-                                    className="flex items-center justify-center px-2 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm">Itens por página:</span>
+                                <select
+                                    value={contactsPerPage}
+                                    onChange={(e) => {
+                                        setContactsPerPage(Number(e.target.value));
+                                        setPageNumber(1);
+                                    }}
+                                    className="text-sm bg-gray-50 border border-gray-300 rounded-md p-1 dark:bg-gray-700 dark:border-gray-600"
                                 >
-                                    <ChevronsLeft className="w-4 h-4" />
-                                </button>
-                            </li>
-                            <li>
-                                <button
-                                    onClick={() => handlePageChange(pageNumber - 1)}
-                                    disabled={pageNumber === 1}
-                                    className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <ChevronLeft className="w-4 h-4" />
-                                </button>
-                            </li>
-                            {renderPageNumbers().map((page, index) => (
-                                <li key={index}>
+                                    <option value={5}>5</option>
+                                    <option value={25}>25</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                    <option value={500}>500</option>
+                                    <option value={1000}>1000</option>
+                                </select>
+                            </div>
+                            <ul className="inline-flex items-center -space-x-px">
+                                <li>
                                     <button
-                                        onClick={() => handlePageChange(page)}
-                                        className={`flex items-center justify-center px-2 h-8 leading-tight border
-                                            ${page === pageNumber
-                                                ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
-                                                : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-                                            }`}
+                                        onClick={() => handlePageChange(1)}
+                                        disabled={pageNumber === 1}
+                                        className="flex items-center justify-center px-3 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        {page}
+                                        <ChevronsLeft className="w-5 h-5" />
                                     </button>
                                 </li>
-                            ))}
-                            <li>
-                                <button
-                                    onClick={() => handlePageChange(pageNumber + 1)}
-                                    disabled={pageNumber === totalPages}
-                                    className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <ChevronRight className="w-4 h-4" />
-                                </button>
-                            </li>
-                            <li>
-                                <button
-                                    onClick={() => handlePageChange(totalPages)}
-                                    disabled={pageNumber === totalPages}
-                                    className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <ChevronsRight className="w-4 h-4" />
-                                </button>
-                            </li>
-                        </ul>
+                                <li>
+                                    <button
+                                        onClick={() => handlePageChange(pageNumber - 1)}
+                                        disabled={pageNumber === 1}
+                                        className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <ChevronLeft className="w-5 h-5" />
+                                    </button>
+                                </li>
+                                {renderPageNumbers().map((page, index) => (
+                                    <li key={index}>
+                                        <button
+                                            onClick={() => handlePageChange(page)}
+                                            className={`flex items-center justify-center px-3 h-8 leading-tight border
+                                ${page === pageNumber
+                                                    ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
+                                                    : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                                                }`}
+                                        >
+                                            {page}
+                                        </button>
+                                    </li>
+                                ))}
+                                <li>
+                                    <button
+                                        onClick={() => handlePageChange(pageNumber + 1)}
+                                        disabled={pageNumber === totalPages}
+                                        className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <ChevronRight className="w-5 h-5" />
+                                    </button>
+                                </li>
+                                <li>
+                                    <button
+                                        onClick={() => handlePageChange(totalPages)}
+                                        disabled={pageNumber === totalPages}
+                                        className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <ChevronsRight className="w-5 h-5" />
+                                    </button>
+                                </li>
+                            </ul>
+                        </nav>
                     </div>
-                </nav>
+
+                    {/* Barra de Controle de Seleção (Mobile) */}
+                    {isSelectionMode && (
+                        <div className="min-[1200px]:hidden sticky top-0 z-50 bg-blue-50 dark:bg-blue-900/40 border-b border-blue-200 dark:border-blue-800 p-2 mb-2 flex items-center justify-between w-full max-w-[375px] mx-auto rounded-b-lg shadow-sm animate-in slide-in-from-top duration-300">
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    id="select-all-mobile"
+                                    checked={isSelectAllChecked}
+                                    onChange={handleSelectAllContacts}
+                                    className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <label htmlFor="select-all-mobile" className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                                    Todos ({totalContacts})
+                                </label>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                {selectedContactIds.length > 0 && (
+                                    <div className="flex items-center gap-2 mr-2 pr-2 border-r border-blue-200 dark:border-blue-800 animate-in fade-in slide-in-from-right duration-500">
+                                        <Can
+                                            role={user.profile}
+                                            perform="contacts-page:deleteContact"
+                                            yes={() => (
+                                                <button
+                                                    onClick={() => setConfirmDeleteManyOpen(true)}
+                                                    className="w-8 h-8 flex items-center justify-center text-white bg-red-500 rounded-full shadow-sm"
+                                                    aria-label="Deletar selecionados"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        />
+                                        <Can
+                                            role={user.profile}
+                                            perform="contacts-page:bulkEdit"
+                                            yes={() => (
+                                                <button
+                                                    onClick={() => setBulkEditOpen(true)}
+                                                    className="w-8 h-8 flex items-center justify-center text-white bg-yellow-500 rounded-full shadow-sm"
+                                                    aria-label="Editar selecionados"
+                                                >
+                                                    <Edit className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        />
+                                    </div>
+                                )}
+                                <span className="text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-800 px-2 py-1 rounded-full">
+                                    {selectedContactIds.length} selecionados
+                                </span>
+                                <button
+                                    onClick={handleCancelSelection}
+                                    className="ml-1 p-1 hover:bg-blue-200 dark:hover:bg-blue-800 rounded-full text-blue-700 dark:text-blue-300 transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Lista de Contatos (Mobile) */}
+                    <div className="min-[1200px]:hidden flex flex-col gap-1.5 mt-3 w-full max-w-[375px] mx-auto">
+                        {!loading && sortedContacts.length === 0 && (
+                            <div className="text-center text-sm text-gray-500 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                                Nenhum contato encontrado com os filtros selecionados. Tente ajustar os campos.
+                            </div>
+                        )}
+                        {sortedContacts.map((contact) => (
+                            <ContactCard
+                                key={contact.id}
+                                contact={contact}
+                                onEdit={handleEditContact}
+                                onSendMessage={handleStartNewTicket}
+                                onDelete={handleShowDeleteConfirm}
+                                onBlock={handleShowBlockConfirm}
+                                onUnblock={handleShowUnblockConfirm}
+                                formatPhoneNumber={formatPhoneNumber}
+                                CustomTooltipProps={CustomTooltipProps}
+                                // Mobile: seleção por long-press/arrastar
+                                isSelectionMode={isSelectionMode}
+                                onLongPressStart={handleCardLongPressStart}
+                                onDragSelect={handleCardDragSelect}
+                                onLongPressEnd={handleCardLongPressEnd}
+                                onTapWhileSelection={handleTapWhileSelection}
+                                isSelected={selectedContactIds.includes(contact.id)}
+                            />
+                        ))}
+                    </div>
+
+                    {/* Paginação (Mobile) */}
+                    <nav className="min-[1200px]:hidden flex items-center justify-between p-3 mt-2 w-full max-w-[375px] mx-auto" aria-label="Mobile navigation">
+                        <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                            Página <span className="font-semibold text-gray-900 dark:text-white">{pageNumber}</span>
+                            {" "} de {" "}
+                            <span className="font-semibold text-gray-900 dark:text-white">{totalPages}</span>
+                            {" "} • {" "}
+                            <span className="font-semibold text-gray-900 dark:text-white">{totalContacts}</span> contatos
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={contactsPerPage}
+                                onChange={(e) => {
+                                    setContactsPerPage(Number(e.target.value));
+                                    setPageNumber(1);
+                                }}
+                                className="text-xs bg-gray-50 border border-gray-300 rounded-md p-1 dark:bg-gray-700 dark:border-gray-600"
+                            >
+                                <option value={5}>5</option>
+                                <option value={25}>25</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                            <ul className="inline-flex items-center -space-x-px">
+                                <li>
+                                    <button
+                                        onClick={() => handlePageChange(1)}
+                                        disabled={pageNumber === 1}
+                                        className="flex items-center justify-center px-2 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <ChevronsLeft className="w-4 h-4" />
+                                    </button>
+                                </li>
+                                <li>
+                                    <button
+                                        onClick={() => handlePageChange(pageNumber - 1)}
+                                        disabled={pageNumber === 1}
+                                        className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                </li>
+                                {renderPageNumbers().map((page, index) => (
+                                    <li key={index}>
+                                        <button
+                                            onClick={() => handlePageChange(page)}
+                                            className={`flex items-center justify-center px-2 h-8 leading-tight border
+                                            ${page === pageNumber
+                                                    ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
+                                                    : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                                                }`}
+                                        >
+                                            {page}
+                                        </button>
+                                    </li>
+                                ))}
+                                <li>
+                                    <button
+                                        onClick={() => handlePageChange(pageNumber + 1)}
+                                        disabled={pageNumber === totalPages}
+                                        className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </li>
+                                <li>
+                                    <button
+                                        onClick={() => handlePageChange(totalPages)}
+                                        disabled={pageNumber === totalPages}
+                                        className="flex items-center justify-center px-2 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <ChevronsRight className="w-4 h-4" />
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                    </nav>
                 </div>
             </MainContainer>
         </div>

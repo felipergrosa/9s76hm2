@@ -1,11 +1,12 @@
 import React, { memo, useRef, useCallback, useState } from "react";
 import { Trash2, Edit, Lock, Unlock, CheckCircle, Ban } from "lucide-react";
 import { WhatsApp } from "@material-ui/icons";
-import { Tooltip } from "@material-ui/core";
+import { Tooltip, Checkbox } from "@material-ui/core";
+import { RadioButtonUnchecked, CheckCircle as CheckCircleIcon } from "@material-ui/icons";
 import LazyContactAvatar from "../LazyContactAvatar";
 
 // Componente de card de contato para versão mobile, memoizado para evitar re-renders
-const ContactCard = memo(({ 
+const ContactCard = memo(({
   contact,
   onEdit,
   onSendMessage,
@@ -63,11 +64,17 @@ const ContactCard = memo(({
       // Toque simples durante modo seleção: alterna seleção
       onTapWhileSelection(contact.id);
     }
-  }, [clearTimer, onLongPressEnd]);
+  }, [clearTimer, onLongPressEnd, contact?.id, isSelectionMode, onTapWhileSelection]);
 
-  const cardClasses = `w-full bg-white dark:bg-gray-800 shadow rounded-lg p-3 flex flex-col gap-3 ${
-    isSelected ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-white dark:ring-offset-gray-900' : ''
-  } ${pressing ? 'scale-[0.99] transition-transform' : ''}`;
+  const handleCheckboxToggle = useCallback((e) => {
+    e.stopPropagation();
+    if (onTapWhileSelection) {
+      onTapWhileSelection(contact.id);
+    }
+  }, [onTapWhileSelection, contact?.id]);
+
+  const cardClasses = `w-full bg-white dark:bg-gray-800 shadow rounded-lg p-3 flex flex-col gap-3 transition-all duration-200 ${isSelected ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-white dark:ring-offset-gray-900 bg-blue-50/30 dark:bg-blue-900/10' : ''
+    } ${pressing ? 'scale-[0.98]' : ''}`;
 
   return (
     <div
@@ -79,8 +86,19 @@ const ContactCard = memo(({
       onTouchCancel={handleTouchEnd}
     >
       <div className="flex items-center gap-3">
+        {/* Checkbox circular Mobile */}
+        {isSelectionMode && (
+          <div className="flex-shrink-0 animate-in fade-in zoom-in duration-200">
+            {isSelected ? (
+              <CheckCircleIcon className="text-blue-600 w-6 h-6" onClick={handleCheckboxToggle} />
+            ) : (
+              <RadioButtonUnchecked className="text-gray-400 w-6 h-6" onClick={handleCheckboxToggle} />
+            )}
+          </div>
+        )}
+
         <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 overflow-hidden flex-shrink-0">
-          <LazyContactAvatar 
+          <LazyContactAvatar
             contact={contact}
             style={{ width: "32px", height: "32px" }}
             className="rounded-full object-cover"
@@ -95,7 +113,7 @@ const ContactCard = memo(({
           </span>
         </div>
       </div>
-      
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1">
           <span className="text-xs text-gray-600 dark:text-gray-300">{formatPhoneNumber(contact.number)}</span>
@@ -109,7 +127,7 @@ const ContactCard = memo(({
             </Tooltip>
           )}
         </div>
-        
+
         {/* Tags */}
         <div className="flex justify-end gap-1">
           {contact.tags && contact.tags.slice(0, 3).map((tag) => (
@@ -129,20 +147,19 @@ const ContactCard = memo(({
           )}
         </div>
       </div>
-      
+
       <div className="flex items-center justify-between">
-        <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${
-          contact.situation === 'Ativo' 
-            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 
-            : contact.situation === 'Inativo' 
-              ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-              : contact.situation === 'Suspenso'
-                ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                : 'bg-gray-300 text-gray-800 dark:bg-gray-600 dark:text-gray-200'
-        }`}>
+        <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${contact.situation === 'Ativo'
+          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+          : contact.situation === 'Inativo'
+            ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+            : contact.situation === 'Suspenso'
+              ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+              : 'bg-gray-300 text-gray-800 dark:bg-gray-600 dark:text-gray-200'
+          }`}>
           {contact.situation || (contact.active ? 'Ativo' : 'Inativo')}
         </span>
-        
+
         {/* Ações */}
         <div className="flex items-center gap-2">
           <Tooltip {...CustomTooltipProps} title="Enviar mensagem pelo WhatsApp">
@@ -156,8 +173,8 @@ const ContactCard = memo(({
             </button>
           </Tooltip>
           <Tooltip {...CustomTooltipProps} title={contact.active ? "Bloquear contato" : "Desbloquear contato"}>
-            <button 
-              onClick={() => contact.active ? onBlock(contact) : onUnblock(contact)} 
+            <button
+              onClick={() => contact.active ? onBlock(contact) : onUnblock(contact)}
               className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
             >
               {contact.active ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}

@@ -100,7 +100,13 @@ const ImportDeviceContactsAutoService = async ({
           created++;
         } catch (error: any) {
           if (error.name === 'SequelizeUniqueConstraintError') {
+            // Contato já existe - buscar e marcar como "updated" (já existia)
             contact = await Contact.findOne({ where: { number, companyId } });
+            if (contact) {
+              // Contato recuperado com sucesso - conta como "skipped" pois já existia
+              // O update do nome será tentado abaixo se necessário
+              logger.info(`[ImportDeviceContacts] Contato ${number} já existe, recuperado com sucesso`);
+            }
           }
           if (!contact) {
             throw error;

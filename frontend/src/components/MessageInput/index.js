@@ -198,6 +198,10 @@ const useStyles = makeStyles((theme) => ({
       },
       '& .MuiInputBase-inputMultiline': {
         maxHeight: 80,
+        fontSize: 16,
+      },
+      '& .MuiInputBase-input': {
+        fontSize: 16,
       },
     }
   },
@@ -214,7 +218,7 @@ const useStyles = makeStyles((theme) => ({
     paddingLeft: 10,
     flex: 1,
     border: "none",
-    
+
 
   },
   messageInputPrivate: {
@@ -582,7 +586,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
     // Datas/horas/saudações
     const now = new Date();
     const pad2 = (n) => String(n).padStart(2, '0');
-    const data = `${pad2(now.getDate())}/${pad2(now.getMonth()+1)}/${now.getFullYear()}`;
+    const data = `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()}`;
     const hora = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
     const dataHora = `${data} ${hora}`;
     const h = now.getHours();
@@ -803,7 +807,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
       try {
         const ev = new Event('composer-ready');
         window.dispatchEvent(ev);
-      } catch {}
+      } catch { }
     };
     // dispara logo após montagem e novamente após um micro-delay
     notifyComposerReady();
@@ -917,35 +921,43 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   const handleCloseVarsMenu = () => setVarsAnchorEl(null);
 
   const varTags = [
-    { group: 'Contato', items: [
-      { label: 'Nome', token: '{nome}' },
-      { label: 'Primeiro nome', token: '{primeiro_nome}' },
-      { label: 'Último nome', token: '{ultimo_nome}' },
-      { label: 'Número/WhatsApp', token: '{numero}' },
-      { label: 'Email', token: '{email}' },
-      { label: 'Cidade', token: '{cidade}' },
-      { label: 'CPF/CNPJ', token: '{cpf_cnpj}' },
-      { label: 'Cód. Representante', token: '{representante}' },
-      { label: 'Segmento', token: '{segmento}' },
-      { label: 'ID Contato', token: '{id_contato}' },
-    ]},
-    { group: 'Atendimento', items: [
-      { label: 'Ticket', token: '{ticket}' },
-      { label: 'Protocolo', token: '{protocolo}' },
-      { label: 'Fila', token: '{fila}' },
-      { label: 'Conexão', token: '{conexao}' },
-      { label: 'Atendente', token: '{atendente}' },
-    ]},
-    { group: 'Empresa', items: [
-      { label: 'Empresa', token: '{empresa}' },
-    ]},
-    { group: 'Data/Hora', items: [
-      { label: 'Data', token: '{data}' },
-      { label: 'Hora', token: '{hora}' },
-      { label: 'Data/Hora', token: '{data_hora}' },
-      { label: 'Período do dia', token: '{periodo_dia}' },
-      { label: 'Saudação', token: '{saudacao}' },
-    ]},
+    {
+      group: 'Contato', items: [
+        { label: 'Nome', token: '{nome}' },
+        { label: 'Primeiro nome', token: '{primeiro_nome}' },
+        { label: 'Último nome', token: '{ultimo_nome}' },
+        { label: 'Número/WhatsApp', token: '{numero}' },
+        { label: 'Email', token: '{email}' },
+        { label: 'Cidade', token: '{cidade}' },
+        { label: 'CPF/CNPJ', token: '{cpf_cnpj}' },
+        { label: 'Cód. Representante', token: '{representante}' },
+        { label: 'Segmento', token: '{segmento}' },
+        { label: 'ID Contato', token: '{id_contato}' },
+      ]
+    },
+    {
+      group: 'Atendimento', items: [
+        { label: 'Ticket', token: '{ticket}' },
+        { label: 'Protocolo', token: '{protocolo}' },
+        { label: 'Fila', token: '{fila}' },
+        { label: 'Conexão', token: '{conexao}' },
+        { label: 'Atendente', token: '{atendente}' },
+      ]
+    },
+    {
+      group: 'Empresa', items: [
+        { label: 'Empresa', token: '{empresa}' },
+      ]
+    },
+    {
+      group: 'Data/Hora', items: [
+        { label: 'Data', token: '{data}' },
+        { label: 'Hora', token: '{hora}' },
+        { label: 'Data/Hora', token: '{data_hora}' },
+        { label: 'Período do dia', token: '{periodo_dia}' },
+        { label: 'Saudação', token: '{saudacao}' },
+      ]
+    },
   ];
 
   const handleAddEmoji = (e) => {
@@ -1301,7 +1313,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
         const anchorId = e?.detail?.anchorId;
         const el = anchorId ? document.getElementById(anchorId) : null;
         setAnchorEl(el || document.body);
-      } catch {}
+      } catch { }
     };
     window.addEventListener('open-attachments-menu', onOpenAttachmentsMenu);
     return () => window.removeEventListener('open-attachments-menu', onOpenAttachmentsMenu);
@@ -1398,7 +1410,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
       <>
         {assistantOpen && (
           <div style={{ width: '100%' }}>
-            <ChatAssistantPanel 
+            <ChatAssistantPanel
               open={assistantOpen}
               inputMessage={inputMessage}
               setInputMessage={setInputMessage}
@@ -1433,18 +1445,18 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
           {showSelectMessageCheckbox && (
             <div className={classes.selectionBar}>
               <div className={classes.selectionBarLeft}>
-                <X 
-                  size={20} 
-                  className={classes.selectionBarCloseIcon} 
+                <X
+                  size={20}
+                  className={classes.selectionBarCloseIcon}
                   onClick={handleCancelMessageSelection}
                 />
                 <span className={classes.selectionBarCount}>
                   {selectedMessages.length} selecionada{selectedMessages.length !== 1 ? 's' : ''}
                 </span>
               </div>
-              <ReplyIcon 
-                size={22} 
-                className={classes.selectionBarForwardIcon} 
+              <ReplyIcon
+                size={22}
+                className={classes.selectionBarForwardIcon}
                 onClick={handleOpenModalForward}
               />
             </div>
@@ -1506,10 +1518,11 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                 component="span"
                 className={classes.invertedFabMenu}
                 onClick={handleOpenMenuClick}
+                tabIndex={-1}
               >
                 <Plus size={18} />
               </Fab>
-              
+
               {/* <IconButton
 				  aria-label="upload"
 				  component="span"
@@ -1527,15 +1540,16 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                     aria-label="send-upload"
                     component="span"
                     onClick={handleChangeSign}
+                    tabIndex={-1}
                   >
                     {signMessage === true ? (
-                    <PenLine size={18} style={{ color: theme.mode === "light" ? theme.palette.primary.main : "#EEE" }} />
-                  ) : (
-                    <PenLine size={18} style={{ color: "grey" }} />
-                  )}
+                      <PenLine size={18} style={{ color: theme.mode === "light" ? theme.palette.primary.main : "#EEE" }} />
+                    ) : (
+                      <PenLine size={18} style={{ color: "grey" }} />
+                    )}
                   </IconButton>
                 </Tooltip>
-            )}
+              )}
             </Hidden>
             {/* Botão + para mobile */}
             <Hidden only={["md", "lg", "xl"]}>
@@ -1545,6 +1559,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                 disabled={disableOption()}
                 onClick={handleOpenMenuClick}
                 style={{ padding: 8 }}
+                tabIndex={-1}
               >
                 <Plus size={18} className={classes.sendMessageIcons} />
               </IconButton>
@@ -1728,6 +1743,13 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                           handleSendMessage();
                         }
                       }}
+                      inputProps={{
+                        inputMode: 'text',
+                        autoComplete: 'off',
+                        autoCorrect: 'off',
+                        autoCapitalize: 'off',
+                        spellCheck: 'false',
+                      }}
                     />
                     {typeBar ? (
                       <ul className={classes.messageQuickAnswersWrapper}>
@@ -1759,6 +1781,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                     aria-label="variables"
                     component="span"
                     onClick={handleOpenVarsMenu}
+                    tabIndex={-1}
                   >
                     <Braces size={18} className={classes.sendMessageIcons} />
                   </IconButton>
@@ -1768,6 +1791,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                     aria-label="flash"
                     component="span"
                     onClick={() => setInputMessage('/')}
+                    tabIndex={-1}
                   >
                     <Zap size={18} className={classes.sendMessageIcons} />
                   </IconButton>
@@ -1801,6 +1825,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       component="span"
                       onClick={showSelectMessageCheckbox ? handleOpenModalForward : handleSendMessage}
                       disabled={loading}
+                      tabIndex={-1}
                     >
                       {showSelectMessageCheckbox ?
                         <ReplyIcon size={18} className={classes.ForwardMessageIcons} /> : <SendIcon size={18} className={classes.sendMessageIcons} />}
@@ -1814,6 +1839,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       fontSize="large"
                       disabled={loading}
                       onClick={handleCancelAudio}
+                      tabIndex={-1}
                     >
                       <X size={18} className={classes.cancelAudioIcon} />
                     </IconButton>
@@ -1837,6 +1863,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       component="span"
                       onClick={handleUploadAudio}
                       disabled={loading}
+                      tabIndex={-1}
                     >
                       <Check size={18} className={classes.sendAudioIcon} />
                     </IconButton>
@@ -1847,6 +1874,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                     component="span"
                     disabled={disableOption()}
                     onClick={handleStartRecording}
+                    tabIndex={-1}
                   >
                     <MicIcon size={18} className={classes.sendMessageIcons} />
                   </IconButton>
