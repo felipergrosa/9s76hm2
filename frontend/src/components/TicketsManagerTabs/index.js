@@ -225,11 +225,19 @@ const useStyles = makeStyles((theme) => ({
   },
 
   customBadge: {
-    right: "-10px",
-    top: "-8px", // Mover mais para cima para evitar corte pela div superior
+    // Badge posicionado no canto INFERIOR direito do ícone (dentro do container)
+    top: "auto",
+    bottom: -2,
+    right: -8,
     backgroundColor: "#f44336",
     color: "#fff",
-    zIndex: 1500, // Garantir que fique por cima de qualquer elemento
+    fontWeight: 600,
+    fontSize: 9,
+    minWidth: 14,
+    height: 14,
+    lineHeight: "14px",
+    padding: "0 3px",
+    borderRadius: 7,
   },
 
   show: {
