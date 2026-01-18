@@ -114,24 +114,42 @@ async function attemptReconnect(whatsapp: Whatsapp): Promise<boolean> {
  */
 async function runHealthCheck(): Promise<void> {
     try {
-        // Buscar todas as conexões que deveriam estar conectadas
+        // Buscar apenas conexões BAILEYS que deveriam estar conectadas
+        // IMPORTANTE: Ignorar API oficial e outros canais que não usam WebSocket do Baileys
         const whatsapps = await Whatsapp.findAll({
             where: {
                 status: "CONNECTED"
             }
         });
 
-        if (whatsapps.length === 0) {
+        // Filtrar apenas conexões Baileys (não oficiais)
+        const baileysConnections = whatsapps.filter(w => {
+            const channelType = (w as any).channelType || "";
+            // Ignorar API oficial, Facebook, Instagram, WebChat
+            const isOfficial = channelType === "official" || channelType === "whatsapp_official";
+            const isFacebook = channelType === "facebook";
+            const isInstagram = channelType === "instagram";
+            const isWebchat = channelType === "webchat";
+
+            if (isOfficial || isFacebook || isInstagram || isWebchat) {
+                logger.debug(`[WhatsAppHealthCheck] Ignorando whatsappId=${w.id} (${w.name}): tipo=${channelType}`);
+                return false;
+            }
+            return true;
+        });
+
+        if (baileysConnections.length === 0) {
+            logger.debug(`[WhatsAppHealthCheck] Nenhuma conexão Baileys ativa para verificar`);
             return;
         }
 
-        logger.info(`[WhatsAppHealthCheck] Verificando ${whatsapps.length} conexão(ões) ativa(s)`);
+        logger.info(`[WhatsAppHealthCheck] Verificando ${baileysConnections.length} conexão(ões) Baileys ativa(s)`);
 
         let healthyCount = 0;
         let unhealthyCount = 0;
         let reconnectedCount = 0;
 
-        for (const whatsapp of whatsapps) {
+        for (const whatsapp of baileysConnections) {
             const { id, name } = whatsapp;
             const check = isSocketHealthy(id);
 

@@ -5722,12 +5722,9 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         );
       }
 
-      let ack;
-      if (message.update.status === 3 && message?.key?.fromMe) {
-        ack = 2;
-      } else {
-        ack = message.update.status;
-      }
+      // ACK status: 0=ERROR, 1=PENDING, 2=SERVER_ACK, 3=DELIVERY_ACK, 4=READ_ACK
+      // Usar o status recebido diretamente para sincronização correta
+      const ack = message.update.status;
 
       if (REDIS_URI_MSG_CONN !== "") {
         BullQueues.add(

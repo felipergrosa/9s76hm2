@@ -87,9 +87,20 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
         await cacheLayer.set(`contacts:${ticket.contactId}:unreads`, "0");
 
         const io = getIO();
+
+        // Emitir evento de atualização do ticket
         io.of(`/workspace-${ticket.companyId}`)
           .emit(`company-${ticket.companyId}-ticket`, {
             action: "updateUnread",
+            ticketId: ticket.id
+          });
+
+        // Emitir evento de atualização de mensagens para sincronização em tempo real
+        // Isso garante que o frontend atualize o status de leitura das mensagens
+        io.of(`/workspace-${ticket.companyId}`)
+          .to(ticket.uuid)
+          .emit(`company-${ticket.companyId}-appMessage`, {
+            action: "updateRead",
             ticketId: ticket.id
           });
 
