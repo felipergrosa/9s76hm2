@@ -55,10 +55,19 @@ function isSocketHealthy(whatsappId: number): { healthy: boolean; reason: string
     }
 }
 
+// Set para controlar reconexões em andamento
+const reconnectingIds = new Set<number>();
+
 /**
- * Verifica se podemos tentar reconectar (respeitando cooldown)
+ * Verifica se podemos tentar reconectar (respeitando cooldown e verificando se já está reconectando)
  */
 function canAttemptReconnect(whatsappId: number): boolean {
+    // Se já está reconectando, não tentar novamente
+    if (reconnectingIds.has(whatsappId)) {
+        logger.debug(`[WhatsAppHealthCheck] whatsappId=${whatsappId} já está em processo de reconexão`);
+        return false;
+    }
+
     const lastAttempt = lastReconnectAttempt.get(whatsappId);
     if (!lastAttempt) return true;
 
@@ -68,9 +77,13 @@ function canAttemptReconnect(whatsappId: number): boolean {
 
 /**
  * Tenta reconectar uma sessão WhatsApp
+ * IMPORTANTE: Só deve ser chamado se canAttemptReconnect retornar true
  */
 async function attemptReconnect(whatsapp: Whatsapp): Promise<boolean> {
     const { id, name, companyId } = whatsapp;
+
+    // Marcar como em processo de reconexão
+    reconnectingIds.add(id);
 
     try {
         // Registrar tentativa
@@ -85,8 +98,8 @@ async function attemptReconnect(whatsapp: Whatsapp): Promise<boolean> {
             // Ignorar erro se sessão já não existe
         }
 
-        // Aguardar um momento antes de reconectar
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Aguardar um momento antes de reconectar (5 segundos para evitar conflitos)
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
         // Iniciar nova sessão
         await StartWhatsAppSession(whatsapp, companyId);
@@ -106,6 +119,9 @@ async function attemptReconnect(whatsapp: Whatsapp): Promise<boolean> {
     } catch (error: any) {
         logger.error(`[WhatsAppHealthCheck] Falha ao reconectar whatsappId=${id}: ${error.message}`);
         return false;
+    } finally {
+        // SEMPRE remover do set de reconexões em andamento
+        reconnectingIds.delete(id);
     }
 }
 
@@ -160,7 +176,10 @@ async function runHealthCheck(): Promise<void> {
                 unhealthyCount++;
                 logger.warn(`[WhatsAppHealthCheck] whatsappId=${id} (${name}): não saudável - ${check.reason}`);
 
-                // Verificar cooldown antes de reconectar
+                // DESABILITADO TEMPORARIAMENTE: Reconexão automática estava causando loops de conflito
+                // O sistema nativo do Baileys (wbot.ts) já tenta reconectar automaticamente
+                // Se necessário, o usuário pode reconectar manualmente via interface
+                /*
                 if (canAttemptReconnect(id)) {
                     const reconnected = await attemptReconnect(whatsapp);
                     if (reconnected) {
@@ -171,6 +190,7 @@ async function runHealthCheck(): Promise<void> {
                     const elapsed = lastAttempt ? Math.round((Date.now() - lastAttempt) / 1000) : 0;
                     logger.info(`[WhatsAppHealthCheck] whatsappId=${id}: aguardando cooldown (última tentativa: ${elapsed}s atrás)`);
                 }
+                */
             }
         }
 
