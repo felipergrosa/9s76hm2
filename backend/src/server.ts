@@ -30,6 +30,7 @@ import Company from "./models/Company";
 import BullQueue from './libs/queue';
 import { initSavedFilterCron } from "./jobs/SavedFilterCronManager";
 import startInactivityTimeoutJob from "./jobs/VerifyInactivityTimeoutJob";
+import startWhatsAppHealthCheckJob from "./jobs/WhatsAppHealthCheckJob";
 
 import { startQueueProcess } from "./queues";
 import tagRulesCron from "./cron/tagRulesCron";
@@ -228,6 +229,9 @@ tagRulesRecentContactsCron(); // Executa a cada 5 minutos (apenas contatos recen
 
 // Inicializa job de verificação de inatividade de tickets
 startInactivityTimeoutJob(); // Verifica a cada 1 minuto
+
+// Inicializa job de health check das conexões WhatsApp
+startWhatsAppHealthCheckJob(); // Verifica a cada 2 minutos e reconecta automaticamente
 
 initIO(server);
 gracefulShutdown(server);

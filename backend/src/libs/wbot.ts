@@ -203,7 +203,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           fireInitQueries: true,
           transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 3000 },
           connectTimeoutMs: 25_000,
-          // keepAliveIntervalMs: 60_000,
+          keepAliveIntervalMs: 30_000, // Keep-alive a cada 30s para manter conexão ativa
           getMessage: msgDB.get,
           // Habilita download de histórico quando importação está ativa
           syncFullHistory: !!whatsapp.importOldMessages,

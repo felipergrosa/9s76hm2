@@ -29,11 +29,11 @@ import Whatsapp from "../../models/Whatsapp";
 export class BaileysAdapter implements IWhatsAppAdapter {
   public readonly whatsappId: number;
   public readonly channelType: "baileys" = "baileys";
-  
+
   private socket: WASocket | null = null;
   private status: ConnectionStatus = "disconnected";
   private phoneNumber: string | null = null;
-  
+
   // Callbacks de eventos
   private messageCallbacks: Array<(message: IWhatsAppMessage) => void> = [];
   private connectionCallbacks: Array<(status: ConnectionStatus) => void> = [];
@@ -50,10 +50,10 @@ export class BaileysAdapter implements IWhatsAppAdapter {
   async initialize(): Promise<void> {
     try {
       logger.info(`[BaileysAdapter] Inicializando para whatsappId=${this.whatsappId}`);
-      
+
       // Usa o socket já inicializado pelo sistema existente
       this.socket = getWbot(this.whatsappId);
-      
+
       if (!this.socket) {
         throw new WhatsAppAdapterError(
           "Socket Baileys não inicializado",
@@ -68,7 +68,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
 
       this.status = "connected";
       logger.info(`[BaileysAdapter] Inicializado com sucesso: ${this.phoneNumber}`);
-      
+
     } catch (error) {
       logger.error(`[BaileysAdapter] Erro ao inicializar: ${error.message}`);
       this.status = "disconnected";
@@ -103,6 +103,55 @@ export class BaileysAdapter implements IWhatsAppAdapter {
   }
 
   /**
+   * Verifica se o WebSocket está realmente conectado e funcionando
+   */
+  private isSocketReady(): boolean {
+    if (!this.socket) return false;
+
+    try {
+      // Verifica se o WebSocket interno está aberto
+      // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+      const ws = (this.socket as any).ws;
+      if (ws && typeof ws.readyState === 'number') {
+        const isOpen = ws.readyState === 1; // WebSocket.OPEN = 1
+        if (!isOpen) {
+          logger.warn(`[BaileysAdapter] WebSocket não está aberto. readyState=${ws.readyState} (0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)`);
+        }
+        return isOpen;
+      }
+
+      // Fallback: verificar se user está definido (indica conexão ativa)
+      return !!this.socket.user;
+    } catch (error) {
+      logger.error(`[BaileysAdapter] Erro ao verificar estado do socket: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Tenta reinicializar o socket se estiver desconectado
+   */
+  private async tryReinitializeSocket(): Promise<boolean> {
+    try {
+      logger.info(`[BaileysAdapter] Tentando reinicializar socket para whatsappId=${this.whatsappId}`);
+
+      // Busca um novo socket do sistema
+      this.socket = getWbot(this.whatsappId);
+
+      if (this.socket && this.isSocketReady()) {
+        logger.info(`[BaileysAdapter] Socket reinicializado com sucesso`);
+        this.status = "connected";
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      logger.error(`[BaileysAdapter] Falha ao reinicializar socket: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
    * Envia mensagem (método principal)
    */
   async sendMessage(options: ISendMessageOptions): Promise<IWhatsAppMessage> {
@@ -113,22 +162,38 @@ export class BaileysAdapter implements IWhatsAppAdapter {
       );
     }
 
+    // Verificar se o WebSocket está realmente aberto
+    if (!this.isSocketReady()) {
+      logger.warn(`[BaileysAdapter] Socket não está pronto, tentando reinicializar...`);
+
+      // Tentar reinicializar
+      const reinitialized = await this.tryReinitializeSocket();
+
+      if (!reinitialized) {
+        this.status = "disconnected";
+        throw new WhatsAppAdapterError(
+          "Conexão WhatsApp fechada. Reconecte o dispositivo.",
+          "CONNECTION_CLOSED"
+        );
+      }
+    }
+
     try {
       const { to, body, mediaType, mediaPath, mediaUrl, caption, quotedMsgId, buttons, listSections, vcard } = options;
       const toJid = this.normalizeRecipientToJid(to);
-      
+
       let content: any;
       let sentMsg: any;
 
       // Mensagem de texto simples
       if (mediaType === "text" || !mediaType) {
         content = { text: body || "" };
-        
+
         // Adicionar quoted se existir
         if (quotedMsgId) {
           content.quoted = { key: { id: quotedMsgId } };
         }
-        
+
         sentMsg = await this.socket.sendMessage(toJid, content);
       }
       // Mensagem com botões
@@ -218,7 +283,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
 
       // Converter para formato normalizado
       return this.convertBaileysToNormalized(sentMsg);
-      
+
     } catch (error) {
       logger.error(`[BaileysAdapter] Erro ao enviar mensagem: ${error.message}`);
       throw new WhatsAppAdapterError(
@@ -330,7 +395,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
    */
   async getProfilePicture(jid: string): Promise<string | null> {
     if (!this.socket) return null;
-    
+
     try {
       const url = await this.socket.profilePictureUrl(jid, "image");
       return url;
@@ -345,7 +410,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
    */
   async getStatus(jid: string): Promise<string | null> {
     if (!this.socket) return null;
-    
+
     try {
       const status: any = await this.socket.fetchStatus(jid);
       return status?.status || status || null;
@@ -360,7 +425,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
    */
   async getProfileInfo(jid: string): Promise<IProfileInfo | null> {
     if (!this.socket) return null;
-    
+
     try {
       const [pictureUrl, status] = await Promise.all([
         this.getProfilePicture(jid),
@@ -418,7 +483,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
    */
   async markAsRead(messageId: string): Promise<void> {
     if (!this.socket) return;
-    
+
     try {
       await this.socket.readMessages([{ id: messageId } as any]);
     } catch (error) {
@@ -434,7 +499,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
     type: "available" | "unavailable" | "composing" | "recording"
   ): Promise<void> {
     if (!this.socket) return;
-    
+
     try {
       await this.socket.sendPresenceUpdate(type, jid);
     } catch (error) {
@@ -455,7 +520,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
   private convertBaileysToNormalized(msg: proto.IWebMessageInfo): IWhatsAppMessage {
     const body = this.extractBodyFromMessage(msg);
     const mediaType = this.extractMediaType(msg);
-    
+
     return {
       id: msg.key.id!,
       from: msg.key.remoteJid!,
