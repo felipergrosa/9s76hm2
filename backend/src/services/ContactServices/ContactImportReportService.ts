@@ -1,4 +1,3 @@
-import { createObjectCsvWriter } from 'csv-writer';
 import path from 'path';
 import fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
@@ -31,53 +30,92 @@ const ContactImportReportService = {
 
         const filePath = path.join(reportsDir, fileName);
 
-        // Configurar CSV writer
-        const csvWriter = createObjectCsvWriter({
-            path: filePath,
-            header: [
-                { id: 'sequenceNumber', title: '#' },
-                { id: 'originalJid', title: 'JID Original' },
-                { id: 'extractedNumber', title: 'Número Extraído' },
-                { id: 'normalizedNumber', title: 'Número Normalizado' },
-                { id: 'canonicalNumber', title: 'Número Canônico' },
-                { id: 'whatsappName', title: 'Nome WhatsApp' },
-                { id: 'status', title: 'Status' },
-                { id: 'action', title: 'Ação Realizada' },
-                { id: 'contactIdInDb', title: 'ID no Banco' },
-                { id: 'nameInDb', title: 'Nome no Banco' },
-                { id: 'searchMethod', title: 'Método de Busca' },
-                { id: 'matchCriteria', title: 'Critério Match' },
-                { id: 'tagsApplied', title: 'Tags Aplicadas' },
-                { id: 'errorMessage', title: 'Erro' },
-                { id: 'timestamp', title: 'Timestamp' },
-            ],
-            encoding: 'utf8',
-            alwaysQuote: true
-        });
+        try {
+            // Tentar importar csv-writer dinamicamente
+            const csvWriterModule = await import('csv-writer');
+            const { createObjectCsvWriter } = csvWriterModule;
 
-        // Preparar dados para CSV
-        const csvRecords = logs.map(log => ({
-            sequenceNumber: log.sequenceNumber,
-            originalJid: log.originalJid,
-            extractedNumber: log.extractedNumber,
-            normalizedNumber: log.normalizedNumber,
-            canonicalNumber: log.canonicalNumber || '',
-            whatsappName: log.whatsappName,
-            status: log.status,
-            action: log.action,
-            contactIdInDb: log.contactIdInDb || '',
-            nameInDb: log.nameInDb || '',
-            searchMethod: log.searchMethod,
-            matchCriteria: log.matchCriteria || '',
-            tagsApplied: log.tagsApplied.join(', '),
-            errorMessage: log.errorMessage || '',
-            timestamp: log.timestamp.toISOString()
-        }));
+            // Configurar CSV writer
+            const csvWriter = createObjectCsvWriter({
+                path: filePath,
+                header: [
+                    { id: 'sequenceNumber', title: '#' },
+                    { id: 'originalJid', title: 'JID Original' },
+                    { id: 'extractedNumber', title: 'Número Extraído' },
+                    { id: 'normalizedNumber', title: 'Número Normalizado' },
+                    { id: 'canonicalNumber', title: 'Número Canônico' },
+                    { id: 'whatsappName', title: 'Nome WhatsApp' },
+                    { id: 'status', title: 'Status' },
+                    { id: 'action', title: 'Ação Realizada' },
+                    { id: 'contactIdInDb', title: 'ID no Banco' },
+                    { id: 'nameInDb', title: 'Nome no Banco' },
+                    { id: 'searchMethod', title: 'Método de Busca' },
+                    { id: 'matchCriteria', title: 'Critério Match' },
+                    { id: 'tagsApplied', title: 'Tags Aplicadas' },
+                    { id: 'errorMessage', title: 'Erro' },
+                    { id: 'timestamp', title: 'Timestamp' },
+                ],
+                encoding: 'utf8',
+                alwaysQuote: true
+            });
 
-        // Escrever CSV
-        await csvWriter.writeRecords(csvRecords);
+            // Preparar dados para CSV
+            const csvRecords = logs.map(log => ({
+                sequenceNumber: log.sequenceNumber,
+                originalJid: log.originalJid,
+                extractedNumber: log.extractedNumber,
+                normalizedNumber: log.normalizedNumber,
+                canonicalNumber: log.canonicalNumber || '',
+                whatsappName: log.whatsappName,
+                status: log.status,
+                action: log.action,
+                contactIdInDb: log.contactIdInDb || '',
+                nameInDb: log.nameInDb || '',
+                searchMethod: log.searchMethod,
+                matchCriteria: log.matchCriteria || '',
+                tagsApplied: log.tagsApplied.join(', '),
+                errorMessage: log.errorMessage || '',
+                timestamp: log.timestamp.toISOString()
+            }));
 
-        logger.info(`[ContactImportReportService] Relatório gerado: ${fileName} (${logs.length} registros)`);
+            // Escrever CSV
+            await csvWriter.writeRecords(csvRecords);
+
+            logger.info(`[ContactImportReportService] Relatório gerado: ${fileName} (${logs.length} registros)`);
+        } catch (error: any) {
+            // Fallback: gerar CSV manualmente se csv-writer não estiver disponível
+            if (error.code === 'MODULE_NOT_FOUND' || error.message?.includes('csv-writer')) {
+                logger.warn('[ContactImportReportService] csv-writer não instalado, gerando CSV manualmente');
+
+                // Criar CSV manualmente
+                const header = '#,JID Original,Número Extraído,Número Normalizado,Número Canônico,Nome WhatsApp,Status,Ação Realizada,ID no Banco,Nome no Banco,Método de Busca,Critério Match,Tags Aplicadas,Erro,Timestamp\n';
+                const rows = logs.map(log => {
+                    const escapeCsv = (str: any) => `"${String(str || '').replace(/"/g, '""')}"`;
+                    return [
+                        log.sequenceNumber,
+                        escapeCsv(log.originalJid),
+                        escapeCsv(log.extractedNumber),
+                        escapeCsv(log.normalizedNumber),
+                        escapeCsv(log.canonicalNumber || ''),
+                        escapeCsv(log.whatsappName),
+                        escapeCsv(log.status),
+                        escapeCsv(log.action),
+                        escapeCsv(log.contactIdInDb || ''),
+                        escapeCsv(log.nameInDb || ''),
+                        escapeCsv(log.searchMethod),
+                        escapeCsv(log.matchCriteria || ''),
+                        escapeCsv(log.tagsApplied.join(', ')),
+                        escapeCsv(log.errorMessage || ''),
+                        escapeCsv(log.timestamp.toISOString())
+                    ].join(',');
+                }).join('\n');
+
+                await fs.writeFile(filePath, header + rows, 'utf8');
+                logger.info(`[ContactImportReportService] Relatório CSV manual gerado: ${fileName} (${logs.length} registros)`);
+            } else {
+                throw error;
+            }
+        }
 
         return {
             reportId,
