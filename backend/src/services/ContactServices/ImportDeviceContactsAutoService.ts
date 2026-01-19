@@ -7,6 +7,8 @@ import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPer
 import { getIO } from "../../libs/socket";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import { Op } from "sequelize";
+import { ImportContactLog } from "../../types/importTypes";
+import ContactImportReportService from "./ContactImportReportService";
 
 interface Params {
   companyId: number;
@@ -15,6 +17,7 @@ interface Params {
   autoCreateTags?: boolean;
   targetTagId?: number;
   importMode?: "all" | "newOnly" | "manual";
+  generateDetailedReport?: boolean; // Toggle para gerar relatório detalhado
 }
 
 const ImportDeviceContactsAutoService = async ({
@@ -23,7 +26,8 @@ const ImportDeviceContactsAutoService = async ({
   selectedJids,
   autoCreateTags = true,
   targetTagId,
-  importMode = "manual"
+  importMode = "manual",
+  generateDetailedReport = false // Por padrão não gera relatório
 }: Params) => {
   const io = getIO();
   const deviceContacts = await GetDeviceContactsService(companyId, whatsappId);
@@ -69,6 +73,9 @@ const ImportDeviceContactsAutoService = async ({
   let skipped = 0;
   let duplicated = 0; // Contatos que já existiam mas receberam tags
   const total = want.length;
+
+  // Array para logs detalhados (apenas se ativado)
+  const importLogs: ImportContactLog[] = [];
 
   // Emitir progresso inicial
   io.to(`company-${companyId}-mainchannel`).emit(`importContacts-${companyId}`, {
@@ -277,7 +284,31 @@ const ImportDeviceContactsAutoService = async ({
   // Log final do resultado
   logger.info(`[ImportDeviceContactsAutoService] RESULTADO FINAL: total=${want.length}, created=${created}, updated=${updated}, tagged=${tagged}, failed=${failed}, skipped=${skipped}, duplicated=${duplicated}`);
 
-  return { count: want.length, created, updated, tagged, failed, skipped, duplicated };
+  // Gerar relatório detalhado se solicitado
+  let reportUrl: string | null = null;
+  if (generateDetailedReport && importLogs.length > 0) {
+    try {
+      const { fileName } = await ContactImportReportService.generate({
+        logs: importLogs,
+        companyId
+      });
+      reportUrl = ContactImportReportService.getDownloadUrl(fileName);
+      logger.info(`[ImportDeviceContactsAutoService] Relatório detalhado gerado: ${reportUrl}`);
+    } catch (error) {
+      logger.error('[ImportDeviceContactsAutoService] Erro ao gerar relatório detalhado:', error);
+    }
+  }
+
+  return {
+    count: want.length,
+    created,
+    updated,
+    tagged,
+    failed,
+    skipped,
+    duplicated,
+    reportUrl // URL do relatório (null se não gerado)
+  };
 };
 
 export default ImportDeviceContactsAutoService;

@@ -23,7 +23,8 @@ import {
   Tooltip,
   Accordion,
   AccordionSummary,
-  AccordionDetails
+  AccordionDetails,
+  Switch
 } from '@material-ui/core';
 import { Refresh, ExpandMore, Search } from "@material-ui/icons";
 import { Alert } from '@material-ui/lab';
@@ -349,6 +350,7 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
   const [searchQuery, setSearchQuery] = useState(''); // Filtro de busca
   const [existingNumbers, setExistingNumbers] = useState(new Set()); // Números já cadastrados
   const [importMode, setImportMode] = useState('manual'); // 'all' | 'newOnly' | 'manual'
+  const [generateDetailedReport, setGenerateDetailedReport] = useState(false); // Toggle de relatório detalhado
 
   const contactsLoadingRef = useRef(false);
   const contactsListRef = useRef(null);
@@ -1623,6 +1625,27 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
         <DialogActions>
           {!importSummary ? (
             <>
+              {/* Toggle para gerar relatório detalhado */}
+              <Box display="flex" alignItems="center" marginRight="auto">
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={generateDetailedReport}
+                      onChange={(e) => setGenerateDetailedReport(e.target.checked)}
+                      color="primary"
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Tooltip title="Gera um arquivo CSV detalhado com o status de cada contato processado">
+                      <Typography variant="body2" style={{ cursor: 'help' }}>
+                        📊 Gerar Relatório Detalhado
+                      </Typography>
+                    </Tooltip>
+                  }
+                />
+              </Box>
+
               <Button onClick={handleCloseModal} disabled={importing}>
                 Cancelar
               </Button>
