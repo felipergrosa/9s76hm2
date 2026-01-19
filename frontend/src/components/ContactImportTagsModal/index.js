@@ -757,6 +757,18 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
 
         html += '</div>';
 
+        // IMPORTANTE: Fechar modal principal ANTES de mostrar swal para evitar sobreposição
+        setImporting(false);
+        if (importPollRef.current) {
+          clearInterval(importPollRef.current);
+          importPollRef.current = null;
+        }
+        setSelectedDeviceTags(new Set());
+        setTagMappings({});
+        setNewTagNames({});
+        setImportSummary(null);
+        handleCloseModal();
+
         // Mostrar modal swal com resultado
         await swalCustom({
           title: hasIssues ? 'Importação Concluída com Avisos' : 'Importação Concluída!',
@@ -767,16 +779,8 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
           width: 450,
         });
 
-        // Limpar estados e fechar modal
-        setSelectedDeviceTags(new Set());
-        setTagMappings({});
-        setNewTagNames({});
-        setImportSummary(null);
-        handleCloseModal();
-
       } catch (error) {
         toastError(error);
-      } finally {
         setImporting(false);
         if (importPollRef.current) {
           clearInterval(importPollRef.current);
@@ -882,6 +886,10 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
       };
 
       // Mostrar modal SweetAlert2 com resultado detalhado
+      // IMPORTANTE: Fechar modal principal ANTES de mostrar swal para evitar sobreposição
+      setImporting(false);
+      handleCloseModal();
+
       await swalCustom({
         title: failed > 0 ? 'Importação Concluída com Avisos' : 'Importação Concluída!',
         html: buildResultHtml(),
@@ -891,11 +899,8 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
         width: 450,
       });
 
-      // Fechar modal principal após confirmar
-      handleCloseModal();
     } catch (error) {
       toastError(error);
-    } finally {
       setImporting(false);
     }
 
