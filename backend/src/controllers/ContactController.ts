@@ -1632,7 +1632,7 @@ export const rebuildDeviceTags = async (req: Request, res: Response): Promise<Re
 // Importa contatos do dispositivo e associa tags por nome (cria tags se necessário)
 export const importDeviceContactsAuto = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const { whatsappId, selectedJids, autoCreateTags, targetTagId, importMode } = req.body as any;
+  const { whatsappId, selectedJids, autoCreateTags, targetTagId, importMode, generateDetailedReport } = req.body as any;
   try {
     const result = await ImportDeviceContactsAutoService({
       companyId,
@@ -1640,7 +1640,8 @@ export const importDeviceContactsAuto = async (req: Request, res: Response): Pro
       selectedJids: Array.isArray(selectedJids) ? selectedJids : undefined,
       autoCreateTags: typeof autoCreateTags === 'boolean' ? autoCreateTags : true,
       targetTagId: targetTagId ? Number(targetTagId) : undefined,
-      importMode: importMode || 'manual'
+      importMode: importMode || 'manual',
+      generateDetailedReport: generateDetailedReport === true // Garante boolean
     });
     return res.status(200).json(result);
   } catch (error: any) {
