@@ -5,6 +5,8 @@ import GetDeviceContactsService from "../WbotServices/GetDeviceContactsService";
 import logger from "../../utils/logger";
 import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 import { getIO } from "../../libs/socket";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { Op } from "sequelize";
 
 interface Params {
   companyId: number;
@@ -87,7 +89,9 @@ const ImportDeviceContactsAutoService = async ({
 
     try {
       const jid = String(c.id || '');
-      const number = jid.split('@')[0];
+      // Normalizar número: extrair do JID e remover caracteres não-dígitos
+      const rawNumber = jid.split('@')[0];
+      const number = rawNumber.replace(/\D/g, ''); // Remove qualquer caractere não-dígito
 
       // Filtrar JIDs especiais que não são contatos válidos
       if (!number) {
@@ -110,8 +114,21 @@ const ImportDeviceContactsAutoService = async ({
         continue;
       }
 
-      // Primeiro, buscar se já existe
-      contact = await Contact.findOne({ where: { number, companyId } });
+      // Normalizar número usando a mesma lógica do modelo Contact
+      const { canonical: canonicalNumber } = safeNormalizePhoneNumber(number);
+      const searchNumber = canonicalNumber || number; // Usa canonical se disponível
+
+      // Primeiro, buscar se já existe (por canonicalNumber OU number original)
+      contact = await Contact.findOne({
+        where: {
+          companyId,
+          [Op.or]: [
+            { number: searchNumber },
+            { canonicalNumber: searchNumber },
+            { number: number }, // Busca também pelo número original
+          ]
+        }
+      });
       wasExisting = !!contact;
 
       if (!contact) {
