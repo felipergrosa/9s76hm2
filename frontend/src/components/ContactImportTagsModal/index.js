@@ -721,15 +721,59 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
           whatsappId: selectedWhatsappId,
           progressId
         });
-        // Guardar sumário para exibir no drawer permanente
-        try {
-          const data = resp?.data || resp;
-          setImportSummary(data || null);
-          // Limpar seleções/mapeamentos após concluir e manter somente o relatório
-          setSelectedDeviceTags(new Set());
-          setTagMappings({});
-          setNewTagNames({});
-        } catch (_) { }
+
+        // Extrair dados do resultado
+        const data = resp?.data || resp;
+        const { created = 0, updated = 0, tagged = 0, failed = 0, total = 0 } = data || {};
+        const hasIssues = failed > 0;
+
+        // Construir HTML para swal
+        let html = '<div style="text-align: center; font-size: 14px;">';
+        html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">';
+
+        if (created > 0) {
+          html += `<div style="background: #d4edda; padding: 10px; border-radius: 8px;">
+            <div style="font-size: 24px; font-weight: bold; color: #155724;">✅ ${created}</div>
+            <div style="color: #155724; font-size: 12px;">Criados</div>
+          </div>`;
+        }
+
+        if (failed > 0) {
+          html += `<div style="background: #f8d7da; padding: 10px; border-radius: 8px;">
+            <div style="font-size: 24px; font-weight: bold; color: #721c24;">⚠️ ${failed}</div>
+            <div style="color: #721c24; font-size: 12px;">Falhas</div>
+          </div>`;
+        }
+
+        html += '</div>';
+
+        if (hasIssues) {
+          html += '<div style="border-top: 1px solid #ddd; padding-top: 12px; margin-top: 8px; text-align: left;">';
+          html += '<div style="font-weight: 600; margin-bottom: 8px;">ℹ️ Entenda os números:</div>';
+          html += '<div style="font-size: 12px; color: #666;">';
+          html += '<strong>Falhas:</strong> Erros de validação (número inválido, formato incorreto) ou conflitos de dados duplicados.';
+          html += '</div></div>';
+        }
+
+        html += '</div>';
+
+        // Mostrar modal swal com resultado
+        await swalCustom({
+          title: hasIssues ? 'Importação Concluída com Avisos' : 'Importação Concluída!',
+          html,
+          icon: hasIssues ? 'warning' : 'success',
+          confirmButtonText: 'Fechar',
+          confirmButtonColor: hasIssues ? '#f0ad4e' : '#28a745',
+          width: 450,
+        });
+
+        // Limpar estados e fechar modal
+        setSelectedDeviceTags(new Set());
+        setTagMappings({});
+        setNewTagNames({});
+        setImportSummary(null);
+        handleCloseModal();
+
       } catch (error) {
         toastError(error);
       } finally {
@@ -1041,21 +1085,35 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                 </Button>
               </Box>
             </Box>
-          ) : importing ? (
-            <Box>
-              <Box mb={1}>
-                <LinearProgress
-                  variant={importProgress && importProgress.total > 0 ? 'determinate' : 'indeterminate'}
-                  value={importProgress && importProgress.total > 0 ? Math.min(100, Math.max(1, Math.floor((importProgress.processed / importProgress.total) * 100))) : 0}
-                />
+          ) : importing ? (() => {
+            const total = importProgress?.total || 0;
+            const processed = importProgress?.processed || 0;
+            const percent = total > 0 ? Math.min(100, Math.max(1, Math.floor((processed / total) * 100))) : 0;
+            const hasRealProgress = total > 0;
+
+            return (
+              <Box>
+                <Box mb={1}>
+                  <LinearProgress
+                    variant={hasRealProgress ? 'determinate' : 'indeterminate'}
+                    value={percent}
+                  />
+                </Box>
+                <Box display="flex" alignItems="center" justifyContent="space-between">
+                  <Typography variant="body2" color="textSecondary">
+                    {hasRealProgress
+                      ? `Importando contatos... ${processed}/${total} (${percent}%)`
+                      : 'Importando contatos... aguarde concluir.'}
+                  </Typography>
+                  {hasRealProgress && (
+                    <Typography variant="caption" color="textSecondary" style={{ marginLeft: 16 }}>
+                      Criados: {importProgress?.created || 0} | Falhas: {importProgress?.failed || 0}
+                    </Typography>
+                  )}
+                </Box>
               </Box>
-              <Typography variant="body2" color="textSecondary">
-                {importProgress && importProgress.total > 0
-                  ? `Importando contatos... ${importProgress.processed}/${importProgress.total} (criados: ${importProgress.created}, atualizados: ${importProgress.updated}${importProgress.skipped > 0 ? `, ignorados: ${importProgress.skipped}` : ''})`
-                  : 'Importando contatos... aguarde concluir.'}
-              </Typography>
-            </Box>
-          ) : (
+            );
+          })() : (
             !importSummary && (
               <Box mb={2} display="flex" alignItems="center" justifyContent="space-between">
                 <Box display="flex" alignItems="center">

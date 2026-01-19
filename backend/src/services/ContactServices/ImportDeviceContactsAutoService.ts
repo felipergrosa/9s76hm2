@@ -34,7 +34,6 @@ const ImportDeviceContactsAutoService = async ({
   // Se modo "newOnly", filtrar apenas contatos que não existem no sistema
   if (importMode === "newOnly") {
     const existingNumbers = new Set<string>();
-    const allNumbers = want.map(c => String(c.id || '').split('@')[0]).filter(Boolean);
 
     // Buscar todos os contatos existentes de uma vez (mais eficiente)
     const existingContacts = await Contact.findAll({
@@ -42,14 +41,23 @@ const ImportDeviceContactsAutoService = async ({
       attributes: ['number'],
       raw: true
     });
-    existingContacts.forEach(c => existingNumbers.add(c.number));
 
-    want = want.filter(c => {
-      const number = String(c.id || '').split('@')[0];
-      return !existingNumbers.has(number);
+    // Normalizar números existentes para comparação consistente
+    existingContacts.forEach(c => {
+      const normalizedNumber = String(c.number || '').replace(/\D/g, '');
+      existingNumbers.add(normalizedNumber);
     });
 
-    logger.info(`[ImportDeviceContacts] Modo newOnly: ${want.length} contatos novos de ${allNumbers.length} total`);
+    const beforeFilterCount = want.length;
+    want = want.filter(c => {
+      // Extrair e normalizar número do JID
+      const rawNumber = String(c.id || '').split('@')[0];
+      const normalizedNumber = rawNumber.replace(/\D/g, '');
+      const exists = existingNumbers.has(normalizedNumber);
+      return !exists;
+    });
+
+    logger.info(`[ImportDeviceContacts] Modo newOnly: ${want.length} contatos novos de ${beforeFilterCount} total (${existingNumbers.size} já existiam no sistema)`);
   }
 
   let created = 0;
@@ -182,9 +190,22 @@ const ImportDeviceContactsAutoService = async ({
           }
         }
       }
-    } catch (e) {
-      logger.warn(`[ImportDeviceContactsAutoService] Falha ao importar/etiquetar contato ${c?.id}: ${e}`);
-      failed++;
+    } catch (e: any) {
+      // Distinguir tipos de erro para melhor diagnóstico
+      const errorMessage = e?.message || String(e);
+      const number = String(c?.id || '').split('@')[0];
+
+      if (e?.name === 'SequelizeUniqueConstraintError') {
+        // Contato duplicado - não contar como falha real
+        logger.info(`[ImportDeviceContactsAutoService] Contato duplicado ignorado: ${number}`);
+        duplicated++;
+      } else if (errorMessage.includes('validation') || errorMessage.includes('constraint')) {
+        logger.warn(`[ImportDeviceContactsAutoService] Erro de validação para ${number}: ${errorMessage}`);
+        failed++;
+      } else {
+        logger.error(`[ImportDeviceContactsAutoService] Erro ao importar contato ${c?.id} (${number}): ${errorMessage}`);
+        failed++;
+      }
     }
 
 
