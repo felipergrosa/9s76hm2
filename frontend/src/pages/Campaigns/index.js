@@ -24,6 +24,7 @@ import EditIcon from "@material-ui/icons/Edit";
 import DescriptionIcon from "@material-ui/icons/Description";
 import PlayCircleOutlineIcon from "@material-ui/icons/PlayCircleOutline";
 import PauseCircleOutlineIcon from "@material-ui/icons/PauseCircleOutline";
+import FileCopyOutlinedIcon from "@material-ui/icons/FileCopyOutlined";
 
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
@@ -325,8 +326,8 @@ const Campaigns = () => {
           <button
             onClick={() => handlePageChange(page)}
             className={`flex items-center justify-center px-3 h-8 leading-tight border ${page === pageNumber
-                ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
-                : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+              ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
+              : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
               }`}
           >
             {page}
@@ -372,6 +373,16 @@ const Campaigns = () => {
       fetchCampaigns();
     } catch (err) {
       toast.error(err.message);
+    }
+  };
+
+  const handleCloneCampaign = async (campaign) => {
+    try {
+      const { data } = await api.post(`/campaigns/${campaign.id}/clone`);
+      toast.success("Campanha clonada com sucesso!");
+      handleEditCampaign(data); // Abre modal para edição da campanha clonada
+    } catch (err) {
+      toastError(err);
     }
   };
 
@@ -519,8 +530,18 @@ const Campaigns = () => {
                       size="small"
                       className={classes.actionButton}
                       onClick={() => handleEditCampaign(campaign)}
+                      title="Editar"
                     >
                       <EditIcon />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      className={classes.actionButton}
+                      onClick={() => handleCloneCampaign(campaign)}
+                      title="Clonar Campanha"
+                      style={{ color: '#2196f3' }}
+                    >
+                      <FileCopyOutlinedIcon />
                     </IconButton>
 
                     <IconButton
@@ -530,6 +551,7 @@ const Campaigns = () => {
                         setConfirmModalOpen(true);
                         setDeletingCampaign(campaign);
                       }}
+                      title="Excluir"
                     >
                       <DeleteOutlineIcon />
                     </IconButton>
@@ -635,8 +657,17 @@ const Campaigns = () => {
                             <IconButton
                               size="small"
                               onClick={() => handleEditCampaign(campaign)}
+                              title="Editar"
                             >
                               <EditIcon />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleCloneCampaign(campaign)}
+                              title="Clonar Campanha"
+                              style={{ color: '#2196f3' }}
+                            >
+                              <FileCopyOutlinedIcon />
                             </IconButton>
 
                             <IconButton
@@ -645,6 +676,7 @@ const Campaigns = () => {
                                 setConfirmModalOpen(true);
                                 setDeletingCampaign(campaign);
                               }}
+                              title="Excluir"
                             >
                               <DeleteOutlineIcon />
                             </IconButton>
@@ -666,8 +698,8 @@ const Campaigns = () => {
                   onClick={() => handlePageChange(1)}
                   disabled={pageNumber === 1}
                   className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-l-lg ${pageNumber === 1
-                      ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                      : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                    ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                    : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
                     }`}
                 >
                   «
@@ -678,8 +710,8 @@ const Campaigns = () => {
                   onClick={() => handlePageChange(pageNumber - 1)}
                   disabled={pageNumber === 1}
                   className={`flex items-center justify-center px-3 h-8 leading-tight border ${pageNumber === 1
-                      ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                      : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                    ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                    : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
                     }`}
                 >
                   ‹
@@ -691,8 +723,8 @@ const Campaigns = () => {
                   onClick={() => handlePageChange(pageNumber + 1)}
                   disabled={pageNumber === totalPages}
                   className={`flex items-center justify-center px-3 h-8 leading-tight border ${pageNumber === totalPages
-                      ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                      : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                    ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                    : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
                     }`}
                 >
                   ›
@@ -703,8 +735,8 @@ const Campaigns = () => {
                   onClick={() => handlePageChange(totalPages)}
                   disabled={pageNumber === totalPages}
                   className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-r-lg ${pageNumber === totalPages
-                      ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                      : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                    ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                    : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
                     }`}
                 >
                   »

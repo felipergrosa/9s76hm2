@@ -25,6 +25,7 @@ import ContactListItem from "../models/ContactListItem";
 import AppError from "../errors/AppError";
 import { CancelService } from "../services/CampaignService/CancelService";
 import { RestartService } from "../services/CampaignService/RestartService";
+import CloneCampaignService from "../services/CampaignService/CloneCampaignService";
 
 type IndexQuery = {
   searchParam: string;
@@ -343,7 +344,7 @@ export const campaignCost = async (
 
   try {
     const cost = await CalculateCampaignCost(+id);
-    
+
     if (!cost) {
       return res.status(200).json({
         message: "Campanha não usa API Oficial. Não há custo.",
@@ -367,6 +368,32 @@ export const monthlyCost = async (
   try {
     const report = await CalculateMonthlyCost(companyId, month);
     return res.status(200).json(report);
+  } catch (err: any) {
+    throw new AppError(err.message);
+  }
+};
+
+/**
+ * Clona uma campanha existente
+ */
+export const clone = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+  const { companyId } = req.user;
+
+  try {
+    const record = await CloneCampaignService(id);
+
+    const io = getIO();
+    io.of(`/workspace-${companyId}`)
+      .emit(`company-${companyId}-campaign`, {
+        action: "create",
+        record
+      });
+
+    return res.status(201).json(record);
   } catch (err: any) {
     throw new AppError(err.message);
   }

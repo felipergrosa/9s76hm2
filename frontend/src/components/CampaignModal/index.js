@@ -558,8 +558,8 @@ const CampaignModal = ({
   useEffect(() => {
     if (availableTemplates.length > 0 && campaign.metaTemplateName && !selectedTemplate) {
       const savedTemplate = availableTemplates.find(
-        t => t.name === campaign.metaTemplateName && 
-             (t.language === campaign.metaTemplateLanguage || !campaign.metaTemplateLanguage)
+        t => t.name === campaign.metaTemplateName &&
+          (t.language === campaign.metaTemplateLanguage || !campaign.metaTemplateLanguage)
       );
       if (savedTemplate) {
         console.log('[CampaignModal] Restaurando template salvo:', savedTemplate.name);
@@ -622,8 +622,8 @@ const CampaignModal = ({
           // Carregar usuários selecionados (múltiplos ou único para compatibilidade)
           if (data?.userIds) {
             try {
-              const userIdsArray = typeof data.userIds === 'string' 
-                ? JSON.parse(data.userIds) 
+              const userIdsArray = typeof data.userIds === 'string'
+                ? JSON.parse(data.userIds)
                 : data.userIds;
               if (Array.isArray(userIdsArray) && userIdsArray.length > 0) {
                 // Buscar dados completos dos usuários
@@ -778,7 +778,7 @@ const CampaignModal = ({
   const handleSaveCampaign = async (values) => {
     try {
       console.log('[CampaignModal] Salvando campanha com metaTemplateVariables:', metaTemplateVariables);
-      
+
       // Primeiro processa os values do Formik
       const processedValues = {};
       Object.entries(values).forEach(([key, value]) => {
@@ -792,8 +792,8 @@ const CampaignModal = ({
       // Depois monta o dataValues com os campos extras (que têm prioridade)
       // Se múltiplos usuários selecionados, envia userIds (array JSON)
       // Se apenas um usuário, envia userId (compatibilidade)
-      const userIds = selectedUsers.length > 0 
-        ? JSON.stringify(selectedUsers.map(u => u.id)) 
+      const userIds = selectedUsers.length > 0
+        ? JSON.stringify(selectedUsers.map(u => u.id))
         : null;
       const userId = selectedUsers.length === 1 ? selectedUsers[0].id : null;
 
@@ -837,6 +837,77 @@ const CampaignModal = ({
     } catch (err) {
       console.log(err);
       toastError(err);
+    }
+  };
+
+  /**
+   * Salva a campanha sem disparar imediatamente
+   * - Se tiver scheduledAt: status = PROGRAMADA (aguarda agendamento)
+   * - Se não tiver scheduledAt: status = INATIVA (parada)
+   */
+  const handleSaveOnly = async (values, setSubmitting) => {
+    try {
+      setSubmitting(true);
+
+      // Primeiro processa os values do Formik
+      const processedValues = {};
+      Object.entries(values).forEach(([key, value]) => {
+        if (key === "scheduledAt" && value !== "" && value !== null) {
+          processedValues[key] = moment(value).format("YYYY-MM-DD HH:mm:ss");
+        } else {
+          processedValues[key] = value === "" ? null : value;
+        }
+      });
+
+      // Define o status baseado no agendamento
+      const hasSchedule = processedValues.scheduledAt && processedValues.scheduledAt !== null;
+      processedValues.status = hasSchedule ? "PROGRAMADA" : "INATIVA";
+
+      const userIds = selectedUsers.length > 0
+        ? JSON.stringify(selectedUsers.map(u => u.id))
+        : null;
+      const userId = selectedUsers.length === 1 ? selectedUsers[0].id : null;
+
+      const dataValues = {
+        ...processedValues,
+        whatsappId: whatsappId,
+        userId,
+        userIds,
+        queueId: selectedQueue || null,
+        dispatchStrategy,
+        allowedWhatsappIds,
+        metaTemplateVariables
+      };
+
+      if (campaignId) {
+        await api.put(`/campaigns/${campaignId}`, dataValues);
+        if (attachment != null) {
+          const formData = new FormData();
+          formData.append("file", attachment);
+          await api.post(`/campaigns/${campaignId}/media-upload`, formData);
+        }
+      } else {
+        const { data } = await api.post("/campaigns", dataValues);
+        if (attachment != null) {
+          const formData = new FormData();
+          formData.append("file", attachment);
+          await api.post(`/campaigns/${data.id}/media-upload`, formData);
+        }
+        if (onSave) {
+          onSave(data);
+        }
+      }
+
+      const msg = hasSchedule
+        ? "Campanha salva e programada para o horário agendado!"
+        : "Campanha salva como inativa.";
+      toast.success(msg);
+      handleClose();
+    } catch (err) {
+      console.log(err);
+      toastError(err);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -1050,7 +1121,7 @@ const CampaignModal = ({
               }, 400);
             }}
           >
-            {({ values, errors, touched, isSubmitting, setFieldValue }) => {
+            {({ values, errors, touched, isSubmitting, setFieldValue, setSubmitting }) => {
               setFieldValueRef.current = setFieldValue;
               formValuesRef.current = values;
               const assistantQueueId = selectedQueue || values.queueId || (selectedUsers.length === 1 && Array.isArray(selectedUsers[0]?.queues) ? selectedUsers[0].queues[0]?.id : null);
@@ -2092,9 +2163,9 @@ const CampaignModal = ({
                                       files={filterItemsBySearch(libraryFiles, librarySearchValue)}
                                       onFolderClick={(folder) => handleLibraryNavigateToFolder(folder)}
                                       onFileClick={(file) => handleChooseFromLibrary(file)}
-                                      onMenuAction={() => {}}
+                                      onMenuAction={() => { }}
                                       selectedItems={[]}
-                                      onSelectItem={() => {}}
+                                      onSelectItem={() => { }}
                                     />
                                   ) : (
                                     <FolderList
@@ -2102,10 +2173,10 @@ const CampaignModal = ({
                                       files={filterItemsBySearch(libraryFiles, librarySearchValue)}
                                       onFolderClick={(folder) => handleLibraryNavigateToFolder(folder)}
                                       onFileClick={(file) => handleChooseFromLibrary(file)}
-                                      onMenuAction={() => {}}
+                                      onMenuAction={() => { }}
                                       selectedItems={[]}
-                                      onSelectItem={() => {}}
-                                      onSelectAll={() => {}}
+                                      onSelectItem={() => { }}
+                                      onSelectAll={() => { }}
                                     />
                                   )}
                                 </>
@@ -2193,23 +2264,40 @@ const CampaignModal = ({
                       {i18n.t("campaigns.dialog.buttons.close")}
                     </Button>
                     {(campaignEditable || campaign.status === "CANCELADA") && (
-                      <Button
-                        type="submit"
-                        color="primary"
-                        disabled={isSubmitting}
-                        variant="contained"
-                        className={classes.btnWrapper}
-                      >
-                        {campaignId
-                          ? `${i18n.t("campaigns.dialog.buttons.edit")}`
-                          : `${i18n.t("campaigns.dialog.buttons.add")}`}
-                        {isSubmitting && (
-                          <CircularProgress
-                            size={24}
-                            className={classes.buttonProgress}
-                          />
-                        )}
-                      </Button>
+                      <>
+                        {/* Botão Salvar - salva sem disparar, aguarda agendamento ou fica inativa */}
+                        <Button
+                          color="default"
+                          disabled={isSubmitting}
+                          variant="outlined"
+                          onClick={() => handleSaveOnly(values, setSubmitting)}
+                          style={{ marginRight: 8 }}
+                        >
+                          Salvar
+                          {isSubmitting && (
+                            <CircularProgress
+                              size={20}
+                              style={{ marginLeft: 8 }}
+                            />
+                          )}
+                        </Button>
+                        {/* Botão Enviar Agora - dispara imediatamente */}
+                        <Button
+                          type="submit"
+                          color="primary"
+                          disabled={isSubmitting}
+                          variant="contained"
+                          className={classes.btnWrapper}
+                        >
+                          Enviar Agora
+                          {isSubmitting && (
+                            <CircularProgress
+                              size={24}
+                              className={classes.buttonProgress}
+                            />
+                          )}
+                        </Button>
+                      </>
                     )}
                   </DialogActions>
                 </Form>
