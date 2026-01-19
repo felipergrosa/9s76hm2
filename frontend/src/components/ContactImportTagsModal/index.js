@@ -809,11 +809,12 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
         selectedJids: importMode === 'manual' ? Array.from(selectedDeviceContacts) : [],
         autoCreateTags: true,
         targetTagId: targetSystemTag,
-        importMode: importMode // 'all' | 'newOnly' | 'manual'
+        importMode: importMode, // 'all' | 'newOnly' | 'manual'
+        generateDetailedReport: generateDetailedReport // Toggle de relatório detalhado
       };
       const { data } = await api.post('/contacts/import-device-contacts', payload);
 
-      const { created = 0, updated = 0, tagged = 0, failed = 0, skipped = 0, duplicated = 0 } = data;
+      const { created = 0, updated = 0, tagged = 0, failed = 0, skipped = 0, duplicated = 0, reportUrl } = data;
       const total = created + updated + failed + skipped + duplicated;
       const hasIssues = failed > 0 || skipped > 0 || duplicated > 0;
 
@@ -860,6 +861,19 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
         }
 
         html += '</div>';
+
+        // Botão de download do relatório se disponível
+        if (reportUrl) {
+          html += `<div style="background: #e7f3ff; padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #2196f3;">
+            <div style="font-weight: 600; color: #1976d2; margin-bottom: 8px;">📊 Relatório Detalhado Disponível</div>
+            <a href="${reportUrl}" download style="display: inline-block; background: #2196f3; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-size: 13px;">
+              📥 Baixar Relatório CSV
+            </a>
+            <div style="margin-top: 8px; font-size: 11px; color: #666;">
+              O arquivo contém detalhes de cada contato processado
+            </div>
+          </div>`;
+        }
 
         // Explicações das falhas/ignorados
         if (hasIssues) {
