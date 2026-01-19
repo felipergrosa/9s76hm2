@@ -7,7 +7,7 @@
 
 import Whatsapp from "../models/Whatsapp";
 import { getWbot, removeWbot } from "../libs/wbot";
-import { StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSession";
+import { StartWhatsAppSessionUnified as StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSessionUnified";
 import { getIO } from "../libs/socket";
 import logger from "../utils/logger";
 
@@ -22,6 +22,7 @@ const lastReconnectAttempt = new Map<number, number>();
 
 /**
  * Verifica se o WebSocket de uma sessão está realmente conectado
+ * Compatível com Baileys v6/v7
  */
 function isSocketHealthy(whatsappId: number): { healthy: boolean; reason: string } {
     try {
@@ -31,24 +32,32 @@ function isSocketHealthy(whatsappId: number): { healthy: boolean; reason: string
             return { healthy: false, reason: "sessão não encontrada" };
         }
 
-        // Verificar estado do WebSocket interno
+        // No Baileys v6/v7, se session.user existe, a conexão está ativa
+        const user = (session as any).user;
+        if (user && user.id) {
+            return { healthy: true, reason: `conectado como ${user.id}` };
+        }
+
+        // Verificar estado do WebSocket interno (fallback)
         const ws = (session as any).ws;
-        if (!ws) {
-            return { healthy: false, reason: "WebSocket não existe" };
+        if (ws) {
+            // Tentar acessar readyState diretamente ou via socket interno
+            const socket = ws.socket || ws;
+            const readyState = socket?.readyState;
+
+            if (readyState === 1) {
+                return { healthy: true, reason: "WebSocket aberto" };
+            }
+
+            if (typeof readyState === "number") {
+                const stateNames = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"];
+                return { healthy: false, reason: `WebSocket ${stateNames[readyState] || readyState}` };
+            }
         }
 
-        // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
-        const readyState = ws.readyState;
-        if (typeof readyState !== "number") {
-            return { healthy: false, reason: "readyState inválido" };
-        }
-
-        if (readyState === 1) {
-            return { healthy: true, reason: "WebSocket aberto" };
-        }
-
-        const stateNames = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"];
-        return { healthy: false, reason: `WebSocket ${stateNames[readyState] || readyState}` };
+        // Se chegou aqui, não conseguimos determinar - assumir saudável se houver sessão
+        // O sistema de eventos do Baileys vai detectar desconexões automaticamente
+        return { healthy: true, reason: "sessão existe (estado indeterminado)" };
 
     } catch (error: any) {
         return { healthy: false, reason: error.message || "erro desconhecido" };

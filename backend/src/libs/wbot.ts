@@ -20,7 +20,7 @@ import { useMultiFileAuthState } from "../helpers/useMultiFileAuthState";
 import { Boom } from "@hapi/boom";
 import AppError from "../errors/AppError";
 import { getIO } from "./socket";
-import { StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSession";
+import { StartWhatsAppSessionUnified as StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSessionUnified";
 import DeleteBaileysService from "../services/BaileysServices/DeleteBaileysService";
 import cacheLayer from "./cache";
 import ImportWhatsAppMessageService from "../services/WhatsappService/ImportWhatsAppMessageService";

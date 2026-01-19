@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { getWbot } from "../libs/wbot";
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
-import { StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSession";
+import { StartWhatsAppSessionUnified as StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSessionUnified";
 import UpdateWhatsAppService from "../services/WhatsappService/UpdateWhatsAppService";
 import DeleteBaileysService from "../services/BaileysServices/DeleteBaileysService";
 import cacheLayer from "../libs/cache";
@@ -31,7 +31,7 @@ const update = async (req: Request, res: Response): Promise<Response> => {
   const whatsapp = await Whatsapp.findOne({ where: { id: whatsappId, companyId } });
 
   await whatsapp.update({ session: "" });
-  
+
   if (whatsapp.channel === "whatsapp") {
     await StartWhatsAppSession(whatsapp, companyId);
   }
