@@ -100,10 +100,38 @@ const ImportDeviceContactsAutoService = async ({
       const rawNumber = jid.split('@')[0];
       const number = rawNumber.replace(/\D/g, ''); // Remove qualquer caractere não-dígito
 
+      // Variáveis para log detalhado
+      let logStatus: 'CREATED' | 'ALREADY_EXISTS' | 'UPDATED' | 'FAILED' | 'SKIPPED' = 'SKIPPED';
+      let logAction = '';
+      let logSearchMethod: 'canonicalNumber' | 'number' | 'both' | 'not_found' | 'special_jid' = 'not_found';
+      let logMatchCriteria = '';
+      let logError: string | null = null;
+      let logTags: string[] = [];
+
       // Filtrar JIDs especiais que não são contatos válidos
       if (!number) {
         skipped++;
         processed++;
+        if (generateDetailedReport) {
+          importLogs.push({
+            sequenceNumber: processed,
+            originalJid: jid,
+            extractedNumber: rawNumber,
+            normalizedNumber: number,
+            canonicalNumber: null,
+            whatsappName: c.name || c.notify || '',
+            status: 'SKIPPED',
+            action: 'Número vazio',
+            contactIdInDb: null,
+            nameInDb: null,
+            searchMethod: 'special_jid',
+            matchCriteria: null,
+            tagsApplied: [],
+            errorMessage: 'JID sem número válido',
+            errorStack: null,
+            timestamp: new Date()
+          });
+        }
         continue;
       }
 
@@ -118,6 +146,26 @@ const ImportDeviceContactsAutoService = async ({
         logger.info(`[ImportDeviceContactsAutoService] Ignorando JID especial: ${jid}`);
         skipped++;
         processed++;
+        if (generateDetailedReport) {
+          importLogs.push({
+            sequenceNumber: processed,
+            originalJid: jid,
+            extractedNumber: rawNumber,
+            normalizedNumber: number,
+            canonicalNumber: null,
+            whatsappName: c.name || c.notify || '',
+            status: 'SKIPPED',
+            action: 'JID especial ignorado',
+            contactIdInDb: null,
+            nameInDb: null,
+            searchMethod: 'special_jid',
+            matchCriteria: number.length < 8 ? 'Número muito curto' : 'Grupo/Broadcast/LID',
+            tagsApplied: [],
+            errorMessage: null,
+            errorStack: null,
+            timestamp: new Date()
+          });
+        }
         continue;
       }
 
@@ -138,6 +186,18 @@ const ImportDeviceContactsAutoService = async ({
       });
       wasExisting = !!contact;
 
+      // Atualizar variáveis de tracking se contato encontrado
+      if (contact) {
+        logSearchMethod = 'both';
+        if (contact.number === searchNumber) {
+          logMatchCriteria = `Match por number: ${searchNumber}`;
+        } else if (contact.canonicalNumber === searchNumber) {
+          logMatchCriteria = `Match por canonicalNumber: ${searchNumber}`;
+        } else {
+          logMatchCriteria = `Match por number original: ${number}`;
+        }
+      }
+
       if (!contact) {
         // Tentar criar novo contato
         try {
@@ -150,6 +210,10 @@ const ImportDeviceContactsAutoService = async ({
             whatsappId
           } as any);
           created++;
+          logStatus = 'CREATED';
+          logAction = 'Contato criado com sucesso';
+          logSearchMethod = 'not_found';
+          logMatchCriteria = 'Novo contato';
           logger.info(`[ImportDeviceContactsAutoService] Contato CRIADO com sucesso: ${number} (total criados até agora: ${created})`);
         } catch (createError: any) {
           if (createError.name === 'SequelizeUniqueConstraintError') {
@@ -218,6 +282,11 @@ const ImportDeviceContactsAutoService = async ({
         // Contar como duplicado se já existia
         if (wasExisting) {
           duplicated++;
+          logStatus = 'ALREADY_EXISTS';
+          logAction = 'Contato já existia no sistema';
+        } else if (created > 0) {
+          logStatus = 'CREATED';
+          logAction = 'Contato criado com sucesso';
         }
 
         // Sincronizar carteiras se teve tags
@@ -232,23 +301,110 @@ const ImportDeviceContactsAutoService = async ({
             // Não falha a importação por causa de sync de carteiras
           }
         }
+
+        // Registrar log detalhado se ativado
+        if (generateDetailedReport) {
+          const { canonical: canonicalNum } = safeNormalizePhoneNumber(number);
+          importLogs.push({
+            sequenceNumber: processed + 1,
+            originalJid: jid,
+            extractedNumber: rawNumber,
+            normalizedNumber: number,
+            canonicalNumber: canonicalNum,
+            whatsappName: c.name || c.notify || '',
+            status: logStatus,
+            action: logAction || (tagApplied ? 'Tag aplicada' : 'Processado'),
+            contactIdInDb: contact.id,
+            nameInDb: contact.name,
+            searchMethod: logSearchMethod,
+            matchCriteria: logMatchCriteria,
+            tagsApplied: logTags,
+            errorMessage: null,
+            errorStack: null,
+            timestamp: new Date()
+          });
+        }
       }
     } catch (e: any) {
       // Distinguir tipos de erro para melhor diagnóstico
       const errorMessage = e?.message || String(e);
-      const number = String(c?.id || '').split('@')[0];
+      const errorNumber = String(c?.id || '').split('@')[0];
+      const errorJid = String(c?.id || '');
 
       if (e?.name === 'SequelizeUniqueConstraintError') {
         // Contato duplicado - não contar como falha real
-        logger.info(`[ImportDeviceContactsAutoService] Contato duplicado ignorado: ${number}`);
+        logger.info(`[ImportDeviceContactsAutoService] Contato duplicado ignorado: ${errorNumber}`);
         duplicated++;
+
+        if (generateDetailedReport) {
+          importLogs.push({
+            sequenceNumber: processed + 1,
+            originalJid: errorJid,
+            extractedNumber: errorNumber,
+            normalizedNumber: errorNumber.replace(/\D/g, ''),
+            canonicalNumber: null,
+            whatsappName: c?.name || c?.notify || '',
+            status: 'ALREADY_EXISTS',
+            action: 'Contato duplicado (constraint)',
+            contactIdInDb: null,
+            nameInDb: null,
+            searchMethod: 'not_found',
+            matchCriteria: 'SequelizeUniqueConstraintError',
+            tagsApplied: [],
+            errorMessage: 'Contato já existe (constraint de unicidade)',
+            errorStack: null,
+            timestamp: new Date()
+          });
+        }
       } else if (errorMessage.includes('validation') || errorMessage.includes('constraint')) {
-        logger.warn(`[ImportDeviceContactsAutoService] Erro de validação para ${number}: ${errorMessage}`);
+        logger.warn(`[ImportDeviceContactsAutoService] Erro de validação para ${errorNumber}: ${errorMessage}`);
         failed++;
+
+        if (generateDetailedReport) {
+          importLogs.push({
+            sequenceNumber: processed + 1,
+            originalJid: errorJid,
+            extractedNumber: errorNumber,
+            normalizedNumber: errorNumber.replace(/\D/g, ''),
+            canonicalNumber: null,
+            whatsappName: c?.name || c?.notify || '',
+            status: 'FAILED',
+            action: 'Erro de validação',
+            contactIdInDb: null,
+            nameInDb: null,
+            searchMethod: 'not_found',
+            matchCriteria: null,
+            tagsApplied: [],
+            errorMessage: errorMessage,
+            errorStack: e?.stack?.slice(0, 300) || null,
+            timestamp: new Date()
+          });
+        }
       } else {
         // Log detalhado para debug - SEMPRE mostrar em produção
-        logger.error(`[ImportDeviceContactsAutoService] FALHA: JID=${c?.id}, numero=${number}, erro=${errorMessage}, stack=${e?.stack?.slice(0, 300)}`);
+        logger.error(`[ImportDeviceContactsAutoService] FALHA: JID=${c?.id}, numero=${errorNumber}, erro=${errorMessage}, stack=${e?.stack?.slice(0, 300)}`);
         failed++;
+
+        if (generateDetailedReport) {
+          importLogs.push({
+            sequenceNumber: processed + 1,
+            originalJid: errorJid,
+            extractedNumber: errorNumber,
+            normalizedNumber: errorNumber.replace(/\D/g, ''),
+            canonicalNumber: null,
+            whatsappName: c?.name || c?.notify || '',
+            status: 'FAILED',
+            action: 'Erro inesperado',
+            contactIdInDb: null,
+            nameInDb: null,
+            searchMethod: 'not_found',
+            matchCriteria: null,
+            tagsApplied: [],
+            errorMessage: errorMessage,
+            errorStack: e?.stack?.slice(0, 300) || null,
+            timestamp: new Date()
+          });
+        }
       }
     }
 
