@@ -720,6 +720,16 @@ const reducer = (state, action) => {
     const filtered = state.filter((m) => m.id !== idToRemove);
     return [...filtered];
   }
+
+  // Marca todas mensagens como lidas (atualiza campo read e ack)
+  if (action.type === "MARK_ALL_READ") {
+    return state.map((msg) => ({
+      ...msg,
+      read: true,
+      // Se não é fromMe, atualiza ack para indicar que foi lido
+      ack: msg.fromMe ? msg.ack : Math.max(msg.ack || 0, 4)
+    }));
+  }
 };
 
 const MessagesList = ({
@@ -1214,6 +1224,11 @@ const MessagesList = ({
 
         if (data.action === "delete") {
           dispatch({ type: "DELETE_MESSAGE", payload: data.messageId });
+        }
+
+        // Evento de marcação de leitura em massa (ex: quando usuário abre a conversa)
+        if (data.action === "updateRead") {
+          dispatch({ type: "MARK_ALL_READ", payload: { ticketId: data.ticketId } });
         }
       } catch (e) {
         console.debug("[MessagesList] error handling appMessage", e, data);

@@ -262,7 +262,7 @@ const useStyles = makeStyles((theme) => ({
     right: theme.spacing(1),
     "& .MuiFab-root": {
       width: "40px",
-      height: "40px",
+      height: "50px",
       marginTop: "4px",
     },
     "& .MuiFab-label": {
@@ -1056,7 +1056,7 @@ const TicketsManagerTabs = () => {
           </Grid>
         </Paper>
         <TabPanel value={tab} name="open" className={classes.ticketsWrapper}>
-          <div style={{ overflow: "visible", position: "relative", marginTop: 16, zIndex: 10 }}>
+          <div style={{ overflow: "visible", position: "relative", zIndex: 10 }}>
             <Tabs
               value={tabOpen}
               onChange={handleChangeTabOpen}

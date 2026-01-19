@@ -89,6 +89,7 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
         const io = getIO();
 
         // Emitir evento de atualização do ticket
+        logger.info(`[SetTicketMessagesAsRead] Emitindo updateUnread para ticketId=${ticket.id}`);
         io.of(`/workspace-${ticket.companyId}`)
           .emit(`company-${ticket.companyId}-ticket`, {
             action: "updateUnread",
@@ -97,6 +98,7 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
 
         // Emitir evento de atualização de mensagens para sincronização em tempo real
         // Isso garante que o frontend atualize o status de leitura das mensagens
+        logger.info(`[SetTicketMessagesAsRead] Emitindo updateRead para ticketId=${ticket.id}, uuid=${ticket.uuid}`);
         io.of(`/workspace-${ticket.companyId}`)
           .to(ticket.uuid)
           .emit(`company-${ticket.companyId}-appMessage`, {
