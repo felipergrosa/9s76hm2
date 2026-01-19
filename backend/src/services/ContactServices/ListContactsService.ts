@@ -49,35 +49,35 @@ interface Response {
 }
 
 const ListContactsService = async ({
-                                     searchParam = "",
-                                     pageNumber = "1",
-                                     companyId,
-                                     tagsIds,
-                                     isGroup,
-                                     userId,
-                                     profile,
-                                     allowedContactTags, // Adicionar a nova propriedade
-                                     limit,
-                                     orderBy,
-                                     order,
-                                     segment,
-                                     dtUltCompraStart,
-                                     dtUltCompraEnd,
-                                     channel,
-                                     representativeCode,
-                                     city,
-                                     situation,
-                                     foundationMonths,
-                                     minCreditLimit,
-                                     maxCreditLimit,
-                                     minVlUltCompra,
-                                     maxVlUltCompra,
-                                     florder,
-                                     bzEmpresa,
-                                     isWhatsappValid,
-                                     walletIds, // Novo: IDs de usuários para filtro de carteira
-                                     whatsappIds // Novo: IDs de conexões WhatsApp
-  }: Request): Promise<Response> => {
+  searchParam = "",
+  pageNumber = "1",
+  companyId,
+  tagsIds,
+  isGroup,
+  userId,
+  profile,
+  allowedContactTags, // Adicionar a nova propriedade
+  limit,
+  orderBy,
+  order,
+  segment,
+  dtUltCompraStart,
+  dtUltCompraEnd,
+  channel,
+  representativeCode,
+  city,
+  situation,
+  foundationMonths,
+  minCreditLimit,
+  maxCreditLimit,
+  minVlUltCompra,
+  maxVlUltCompra,
+  florder,
+  bzEmpresa,
+  isWhatsappValid,
+  walletIds, // Novo: IDs de usuários para filtro de carteira
+  whatsappIds // Novo: IDs de conexões WhatsApp
+}: Request): Promise<Response> => {
   let whereCondition: Filterable["where"] = {};
   const additionalWhere: any[] = [];
 
@@ -416,7 +416,7 @@ const ListContactsService = async ({
     try {
       // Para cada usuário selecionado, obter IDs dos contatos na carteira
       const allWalletContactIds = new Set<number>();
-      
+
       for (const userId of walletIds) {
         const walletResult = await GetUserWalletContactIds(userId, companyId);
         if (walletResult.hasWalletRestriction && walletResult.contactIds.length > 0) {
@@ -424,14 +424,14 @@ const ListContactsService = async ({
           walletResult.contactIds.forEach(id => allWalletContactIds.add(id));
         }
       }
-      
+
       // Se não encontrou nenhum contato nas carteiras selecionadas, retorna lista vazia
       if (allWalletContactIds.size === 0) {
         whereCondition.id = { [Op.in]: [] };
       } else {
         // Converter Set para array
         const walletContactIdsArray = Array.from(allWalletContactIds);
-        
+
         // Combinar com filtro existente de carteira (se houver)
         const currentIdFilter: any = (whereCondition as any).id;
         if (currentIdFilter && currentIdFilter[Op.in]) {
@@ -517,6 +517,7 @@ const ListContactsService = async ({
     ],
     include: [tagsInclude],
     distinct: true,
+    col: "Contact.id", // IMPORTANTE: Especifica qual coluna usar para o DISTINCT count
     limit: pageLimit,
     offset,
     order: [[field, dir]]

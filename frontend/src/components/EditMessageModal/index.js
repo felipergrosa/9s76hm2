@@ -55,12 +55,12 @@ const useStyles = makeStyles((theme) => ({
     paddingTop: 5,
     paddingBottom: 0
   },
-  inputmsg:{
-	  backgroundColor: theme.mode === 'light' ? '#FFF' : '#1c1c1c',
-	  display: "flex",
-      width: "100%",
-      margin: "10px 0px 10px 20px",
-      borderRadius: "10px"
+  inputmsg: {
+    backgroundColor: theme.mode === 'light' ? '#FFF' : '#1c1c1c',
+    display: "flex",
+    width: "100%",
+    margin: "10px 0px 10px 20px",
+    borderRadius: "10px"
   },
   timestamp: {
     fontSize: 11,
@@ -70,16 +70,16 @@ const useStyles = makeStyles((theme) => ({
     color: "#999"
   },
   titleBackground: {
-    color:'#ffff',
-    backgroundColor: "#00796b"  , // Cor de fundo desejada
-    marginLeft:'3px'
+    color: '#ffff',
+    backgroundColor: "#00796b", // Cor de fundo desejada
+    marginLeft: '3px'
   },
   emojiBox: {
     position: "absolute",
     bottom: 63,
     width: 40,
     borderTop: "1px solid #e8e8e8",
-    zIndex:1
+    zIndex: 1
   },
 }));
 
@@ -117,7 +117,7 @@ const EditMessageModal = ({ open, onClose, onSave, message }) => {
   const [inputMessage, setInputMessage] = useState("");
   const emojiOptionsRef = useRef(null);
   const modalRef = useRef(null);
-  
+
   useEffect(() => {
     if (open) {
       setEditedMessage(message?.body);
@@ -125,7 +125,7 @@ const EditMessageModal = ({ open, onClose, onSave, message }) => {
   }, [open, message]);
 
   const handleSave = async (editedMessage) => {
-    if(editedMessage){
+    if (editedMessage) {
       try {
         const messages = {
           read: 1,
@@ -134,13 +134,20 @@ const EditMessageModal = ({ open, onClose, onSave, message }) => {
           body: editedMessage,
           quotedMsg: null,
         };
-        await api.post(`/messages/edit/${message.id}`,messages)
-        onClose(false)
+        await api.post(`/messages/edit/${message.id}`, messages);
+        onClose(false);
       } catch (err) {
-        
+        console.error("Erro ao editar mensagem:", err);
+        // Mostrar erro para o usuário se o toastError estiver disponível
+        if (err.response?.data?.message) {
+          alert(err.response.data.message);
+        } else {
+          alert("Erro ao editar mensagem. Tente novamente.");
+        }
       }
     }
   };
+
 
 
   const setInputValue = (value) => {
@@ -152,18 +159,18 @@ const EditMessageModal = ({ open, onClose, onSave, message }) => {
     if (open) {
       // Calculate the position for EmojiOptions inside the modal
       if (open && modalRef.current && emojiOptionsRef.current) {
-      const modalRect = modalRef.current.getBoundingClientRect();
-      const emojiOptionsRect = emojiOptionsRef.current.getBoundingClientRect();
-      const desiredPosition = {
-        top: emojiOptionsRect.height > modalRect.height
-          ? 0
-          : modalRect.height - emojiOptionsRect.height,
-        left: modalRect.width - emojiOptionsRect.width
-      };
-      emojiOptionsRef.current.style.top = `${desiredPosition.top}px`;
-      emojiOptionsRef.current.style.left = `${desiredPosition.left}px`;
-    }
-  };
+        const modalRect = modalRef.current.getBoundingClientRect();
+        const emojiOptionsRect = emojiOptionsRef.current.getBoundingClientRect();
+        const desiredPosition = {
+          top: emojiOptionsRect.height > modalRect.height
+            ? 0
+            : modalRect.height - emojiOptionsRect.height,
+          left: modalRect.width - emojiOptionsRect.width
+        };
+        emojiOptionsRef.current.style.top = `${desiredPosition.top}px`;
+        emojiOptionsRef.current.style.left = `${desiredPosition.left}px`;
+      }
+    };
   }, [open]);
 
   return (
@@ -179,12 +186,12 @@ const EditMessageModal = ({ open, onClose, onSave, message }) => {
       ref={modalRef}
     >
       <DialogTitle id="edit-message-dialog" className={classes.titleBackground}>
-       <IconButton edge="start" color="inherit" onClick={() => onClose(false)} aria-label="close">
+        <IconButton edge="start" color="inherit" onClick={() => onClose(false)} aria-label="close">
           <CloseIcon />
         </IconButton>
         Editar Mensagem
-        </DialogTitle>
-      <DialogContent style={{ padding: "0px"}}>
+      </DialogTitle>
+      <DialogContent style={{ padding: "0px" }}>
         <Box>
           <Box className={classes.messagesList} >
             <Box
@@ -196,7 +203,7 @@ const EditMessageModal = ({ open, onClose, onSave, message }) => {
               }}
             >
               <Box className={classes.textContentItem}>
-                <Box component="div" style={{ color:  "#212B36" }}>
+                <Box component="div" style={{ color: "#212B36" }}>
                   <MarkdownWrapper>{message?.body}</MarkdownWrapper>
                 </Box>
                 {/* <span className={classes.timestamp}>
@@ -206,7 +213,7 @@ const EditMessageModal = ({ open, onClose, onSave, message }) => {
             </Box>
           </Box>
           <Paper
-		   
+
             component="form"
             style={{
               p: "2px 4px",
@@ -217,7 +224,7 @@ const EditMessageModal = ({ open, onClose, onSave, message }) => {
             }}
           >
             <Box
-			  className={`${classes.inputmsg}`}
+              className={`${classes.inputmsg}`}
             >
               <InputBase
                 style={{ padding: "15px 0px 15px 15px", flex: 1 }}
@@ -228,19 +235,19 @@ const EditMessageModal = ({ open, onClose, onSave, message }) => {
                 onChange={(e) => setEditedMessage(e.target.value)}
                 inputProps={{ "aria-label": "search google maps" }}
               />
-            {/* <EmojiOptions
+              {/* <EmojiOptions
               ref={emojiOptionsRef}
               handleAddEmoji={setInputValue}
               showEmoji={showEmoji}
               setShowEmoji={setShowEmoji}
             /> */}
             </Box>
-            <IconButton color="primary" aria-label="directions"  onClick={() => handleSave(editedMessage)}>
+            <IconButton color="primary" aria-label="directions" onClick={() => handleSave(editedMessage)}>
               <CheckCircleIcon
                 style={{
                   width: "35px",
                   height: "35px",
-                  color:'#00A884'
+                  color: '#00A884'
                 }}
               />
             </IconButton>
