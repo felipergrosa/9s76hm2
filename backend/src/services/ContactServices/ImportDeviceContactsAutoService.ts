@@ -126,6 +126,7 @@ const ImportDeviceContactsAutoService = async ({
             whatsappId
           } as any);
           created++;
+          logger.info(`[ImportDeviceContactsAutoService] Contato CRIADO com sucesso: ${number} (total criados até agora: ${created})`);
         } catch (createError: any) {
           if (createError.name === 'SequelizeUniqueConstraintError') {
             // Race condition: contato foi criado entre o findOne e o create
@@ -255,6 +256,9 @@ const ImportDeviceContactsAutoService = async ({
     skipped,
     failed
   });
+
+  // Log final do resultado
+  logger.info(`[ImportDeviceContactsAutoService] RESULTADO FINAL: total=${want.length}, created=${created}, updated=${updated}, tagged=${tagged}, failed=${failed}, skipped=${skipped}, duplicated=${duplicated}`);
 
   return { count: want.length, created, updated, tagged, failed, skipped, duplicated };
 };
