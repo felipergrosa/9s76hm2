@@ -486,7 +486,14 @@ const ListContactsService = async ({
     required: false
   };
 
-  const { count, rows: contacts } = await Contact.findAndCountAll({
+  // CONTAGEM SEPARADA: Evita inflação causada pelo JOIN com tags
+  // O findAndCountAll com includes conta linhas do JOIN, não contatos únicos
+  const count = await Contact.count({
+    where: finalWhere
+  });
+
+  // BUSCA COM INCLUDES: Retorna contatos com suas tags
+  const contacts = await Contact.findAll({
     where: finalWhere,
     attributes: [
       "id",
@@ -516,7 +523,6 @@ const ListContactsService = async ({
       "validatedAt"
     ],
     include: [tagsInclude],
-    distinct: true,
     limit: pageLimit,
     offset,
     order: [[field, dir]]
