@@ -11,7 +11,7 @@ export const getUnlabeledJids = async (companyId: number, whatsappId?: number): 
   try {
     const chatLabels = getAllChatLabels(defaultWhatsapp.id);
     logger.info(`[getUnlabeledJids] Cache tem ${chatLabels.size} chats com labels`);
-    
+
     // Montar conjunto de todos os JIDs conhecidos
     const allJids = new Set<string>();
     try {
@@ -21,34 +21,34 @@ export const getUnlabeledJids = async (companyId: number, whatsappId?: number): 
       };
       const contacts = parseMaybeJSON((baileysData as any).contacts);
       const chats = parseMaybeJSON((baileysData as any).chats);
-      
+
       if (isArray(contacts)) {
-        contacts.forEach((c: any) => { 
-          if (c?.id && c.id.includes('@') && !c.id.endsWith('@g.us')) allJids.add(String(c.id)); 
+        contacts.forEach((c: any) => {
+          if (c?.id && c.id.includes('@') && !c.id.endsWith('@g.us') && !c.id.endsWith('@lid') && !c.id.includes('@lid')) allJids.add(String(c.id));
         });
         logger.info(`[getUnlabeledJids] Baileys contacts: ${contacts.length}`);
       }
-      
+
       if (isArray(chats)) {
-        chats.forEach((c: any) => { 
-          if (c?.id && c.id.includes('@') && !c.id.endsWith('@g.us')) allJids.add(String(c.id)); 
+        chats.forEach((c: any) => {
+          if (c?.id && c.id.includes('@') && !c.id.endsWith('@g.us') && !c.id.endsWith('@lid') && !c.id.includes('@lid')) allJids.add(String(c.id));
         });
         logger.info(`[getUnlabeledJids] Baileys chats: ${chats.length}`);
       }
     } catch (err: any) {
       logger.warn(`[getUnlabeledJids] Erro ao acessar Baileys: ${err?.message}`);
     }
-    
+
     // Se não veio nada persistido, usar apenas chaves do cache
     if (allJids.size === 0) {
       for (const jid of chatLabels.keys()) {
-        if (jid && jid.includes('@') && !jid.endsWith('@g.us')) allJids.add(String(jid));
+        if (jid && jid.includes('@') && !jid.endsWith('@g.us') && !jid.endsWith('@lid') && !jid.includes('@lid')) allJids.add(String(jid));
       }
       logger.info(`[getUnlabeledJids] Usando apenas cache, ${allJids.size} JIDs`);
     } else {
       logger.info(`[getUnlabeledJids] Total JIDs conhecidos: ${allJids.size}`);
     }
-    
+
     // Verificar quais não têm labels
     for (const jid of allJids) {
       const set = chatLabels.get(jid);
@@ -56,7 +56,7 @@ export const getUnlabeledJids = async (companyId: number, whatsappId?: number): 
         unlabeled.add(jid);
       }
     }
-    
+
     logger.info(`[getUnlabeledJids] Encontrados ${unlabeled.size} contatos sem etiqueta`);
   } catch (err: any) {
     logger.error(`[getUnlabeledJids] Erro geral: ${err?.message}`);
@@ -85,7 +85,7 @@ const GetDeviceContactsService = async (companyId: number, whatsappId?: number) 
           const labelMap = getLabelMap(defaultWhatsapp.id);
           deviceContacts = Object.values(contacts)
             .filter((contact: any) => {
-              return contact.id && !contact.id.endsWith('@g.us') && contact.id.includes('@');
+              return contact.id && !contact.id.endsWith('@g.us') && !contact.id.endsWith('@lid') && !contact.id.includes('@lid') && contact.id.includes('@');
             })
             .map((contact: any) => ({
               id: contact.id,
@@ -102,7 +102,7 @@ const GetDeviceContactsService = async (companyId: number, whatsappId?: number) 
                 }));
               })()
             }));
-          
+
           logger.info(`[GetDeviceContactsService] Encontrados ${deviceContacts.length} contatos via store ativo`);
         }
       } catch (storeError) {
@@ -137,7 +137,7 @@ const GetDeviceContactsService = async (companyId: number, whatsappId?: number) 
         if (isArray(contacts)) {
           deviceContacts = contacts
             .filter((contact: any) => {
-              return contact.id && !contact.id.endsWith('@g.us') && contact.id.includes('@');
+              return contact.id && !contact.id.endsWith('@g.us') && !contact.id.endsWith('@lid') && !contact.id.includes('@lid') && contact.id.includes('@');
             })
             .map((contact: any) => {
               const labelIdsFromCache = getChatLabelIds(defaultWhatsapp.id, contact.id) || [];
@@ -160,7 +160,7 @@ const GetDeviceContactsService = async (companyId: number, whatsappId?: number) 
         if (isArray(chats)) {
           const contactsFromChats = chats
             .filter((chat: any) => {
-              return chat.id && !chat.id.endsWith('@g.us') && chat.id.includes('@');
+              return chat.id && !chat.id.endsWith('@g.us') && !chat.id.endsWith('@lid') && !chat.id.includes('@lid') && chat.id.includes('@');
             })
             .map((chat: any) => {
               // Montar tags com prioridade ao cache de associações
@@ -211,7 +211,7 @@ const GetDeviceContactsService = async (companyId: number, whatsappId?: number) 
         const chatLabels = getAllChatLabels(defaultWhatsapp.id);
         const labelMap = getLabelMap(defaultWhatsapp.id);
         const contactsFromCache: any[] = [];
-        
+
         // Buscar dados do Baileys uma vez só (otimização)
         let baileysContacts: any[] = [];
         let baileysChats: any[] = [];
@@ -228,38 +228,38 @@ const GetDeviceContactsService = async (companyId: number, whatsappId?: number) 
         } catch (err: any) {
           logger.warn(`[GetDeviceContactsService] Erro ao buscar dados Baileys: ${err?.message}`);
         }
-        
+
         // Criar mapas para busca rápida
         const contactsMap = new Map();
         const chatsMap = new Map();
-        
+
         baileysContacts.forEach((c: any) => {
           if (c?.id) contactsMap.set(String(c.id), c);
         });
-        
+
         baileysChats.forEach((c: any) => {
           if (c?.id) chatsMap.set(String(c.id), c);
         });
-        
+
         for (const [jid, set] of chatLabels.entries()) {
-          if (!jid || jid.endsWith('@g.us') || !jid.includes('@')) continue; // apenas 1:1
+          if (!jid || jid.endsWith('@g.us') || jid.endsWith('@lid') || jid.includes('@lid') || !jid.includes('@')) continue; // apenas 1:1, sem grupos/LIDs
           const labelIds = Array.from(set || []);
           const tags = mapLabelIdsToTags(defaultWhatsapp.id, labelIds);
-          
+
           // Resolver nome do contato (prioridade: contact > chat > número)
           const contact = contactsMap.get(jid);
           const chat = chatsMap.get(jid);
-          
+
           const name = contact?.name || chat?.name || '';
           const notify = contact?.notify || chat?.notify || '';
           const pushname = contact?.pushname || chat?.pushname || '';
-          
+
           // Fallback: usar número limpo como nome se não tiver nenhum nome
           const cleanNumber = jid.split('@')[0] || '';
           const displayName = name || notify || pushname || cleanNumber;
-          
+
           logger.debug(`[GetDeviceContactsService] JID: ${jid}, Nome: ${displayName}`);
-          
+
           contactsFromCache.push({
             id: jid,
             name: displayName,
@@ -280,7 +280,7 @@ const GetDeviceContactsService = async (companyId: number, whatsappId?: number) 
     // Se ainda não encontrou contatos, criar contatos de exemplo baseados nas etiquetas conhecidas
     if (deviceContacts.length === 0) {
       logger.info(`[GetDeviceContactsService] Nenhum contato encontrado, criando contatos de exemplo`);
-      
+
       // Buscar contatos já importados no sistema que tenham tags
       const Contact = require("../../models/Contact").default;
       const ContactTag = require("../../models/ContactTag").default;
@@ -319,10 +319,10 @@ const GetDeviceContactsService = async (companyId: number, whatsappId?: number) 
     try {
       logger.info(`[GetDeviceContactsService] Buscando contatos sem etiqueta...`);
       const unlabeledJids = await getUnlabeledJids(companyId, whatsappId);
-      
+
       if (unlabeledJids.size > 0) {
         logger.info(`[GetDeviceContactsService] Encontrados ${unlabeledJids.size} JIDs sem etiqueta`);
-        
+
         // Buscar dados do Baileys para enriquecer os contatos sem etiqueta
         let baileysContacts: any[] = [];
         let baileysChats: any[] = [];
@@ -338,38 +338,38 @@ const GetDeviceContactsService = async (companyId: number, whatsappId?: number) 
         } catch (err: any) {
           logger.warn(`[GetDeviceContactsService] Erro ao buscar dados Baileys para contatos sem etiqueta: ${err?.message}`);
         }
-        
+
         // Criar mapas para busca rápida
         const contactsMap = new Map();
         const chatsMap = new Map();
-        
+
         baileysContacts.forEach((c: any) => {
           if (c?.id) contactsMap.set(String(c.id), c);
         });
-        
+
         baileysChats.forEach((c: any) => {
           if (c?.id) chatsMap.set(String(c.id), c);
         });
-        
+
         // Verificar quais JIDs sem etiqueta já não estão na lista
         const existingJids = new Set(deviceContacts.map((c: any) => String(c.id)));
-        
+
         for (const jid of unlabeledJids) {
           // Se já está na lista (tem outras etiquetas), pular
           if (existingJids.has(String(jid))) continue;
-          
+
           // Resolver nome do contato
           const contact = contactsMap.get(jid);
           const chat = chatsMap.get(jid);
-          
+
           const name = contact?.name || chat?.name || '';
           const notify = contact?.notify || chat?.notify || '';
           const pushname = contact?.pushname || chat?.pushname || '';
-          
+
           // Fallback: usar número limpo como nome
           const cleanNumber = jid.split('@')[0] || '';
           const displayName = name || notify || pushname || cleanNumber;
-          
+
           deviceContacts.push({
             id: jid,
             name: displayName,
@@ -378,7 +378,7 @@ const GetDeviceContactsService = async (companyId: number, whatsappId?: number) 
             tags: [] // Sem etiquetas
           });
         }
-        
+
         logger.info(`[GetDeviceContactsService] Total após incluir sem etiqueta: ${deviceContacts.length}`);
       }
     } catch (unlabeledErr) {

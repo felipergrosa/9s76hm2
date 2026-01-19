@@ -86,8 +86,25 @@ const ImportDeviceContactsAutoService = async ({
     let tagApplied = false;
 
     try {
-      const number = String(c.id || '').split('@')[0];
+      const jid = String(c.id || '');
+      const number = jid.split('@')[0];
+
+      // Filtrar JIDs especiais que não são contatos válidos
       if (!number) {
+        skipped++;
+        processed++;
+        continue;
+      }
+
+      // Ignorar grupos, broadcasts, LIDs e contatos especiais
+      const lowerJid = jid.toLowerCase();
+      if (lowerJid.includes('@g.us') ||
+        lowerJid.includes('@broadcast') ||
+        lowerJid.includes('status@broadcast') ||
+        lowerJid.includes('@lid') ||
+        lowerJid.includes('lid:') ||
+        number.length < 8) { // Números muito curtos não são válidos
+        logger.debug(`[ImportDeviceContactsAutoService] Ignorando JID especial: ${jid}`);
         skipped++;
         processed++;
         continue;
