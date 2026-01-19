@@ -104,7 +104,7 @@ const ImportDeviceContactsAutoService = async ({
         lowerJid.includes('@lid') ||
         lowerJid.includes('lid:') ||
         number.length < 8) { // Números muito curtos não são válidos
-        logger.debug(`[ImportDeviceContactsAutoService] Ignorando JID especial: ${jid}`);
+        logger.info(`[ImportDeviceContactsAutoService] Ignorando JID especial: ${jid}`);
         skipped++;
         processed++;
         continue;
@@ -117,6 +117,7 @@ const ImportDeviceContactsAutoService = async ({
       if (!contact) {
         // Tentar criar novo contato
         try {
+          logger.info(`[ImportDeviceContactsAutoService] Criando contato: number=${number}, name=${c.name || c.notify || number}`);
           contact = await Contact.create({
             number,
             name: (c.name || c.notify || number),
@@ -220,7 +221,8 @@ const ImportDeviceContactsAutoService = async ({
         logger.warn(`[ImportDeviceContactsAutoService] Erro de validação para ${number}: ${errorMessage}`);
         failed++;
       } else {
-        logger.error(`[ImportDeviceContactsAutoService] Erro ao importar contato ${c?.id} (${number}): ${errorMessage}`);
+        // Log detalhado para debug - SEMPRE mostrar em produção
+        logger.error(`[ImportDeviceContactsAutoService] FALHA: JID=${c?.id}, numero=${number}, erro=${errorMessage}, stack=${e?.stack?.slice(0, 300)}`);
         failed++;
       }
     }
