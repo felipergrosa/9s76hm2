@@ -517,7 +517,6 @@ const ListContactsService = async ({
     ],
     include: [tagsInclude],
     distinct: true,
-    col: "Contact.id", // IMPORTANTE: Especifica qual coluna usar para o DISTINCT count
     limit: pageLimit,
     offset,
     order: [[field, dir]]
