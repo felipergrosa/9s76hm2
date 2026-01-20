@@ -16,8 +16,8 @@ import {
 } from "@material-ui/core";
 import {
   Users as Group,
-  Inbox as MoveToInboxIcon,
-  CheckSquare as CheckBoxIcon,
+  Inbox,
+  CheckCheck,
   MessageSquare as MessageSharpIcon,
   Clock as ClockIcon,
   Search as SearchIcon,
@@ -28,9 +28,9 @@ import {
   Megaphone as CampaignIcon,
   Eye as VisibilityIcon,
   EyeOff as VisibilityOffIcon,
-  FilterX as FilterAltOff,
+  Filter as FilterAltOff,
   Filter as FilterAlt,
-  ListChecks as PlaylistAddCheckOutlined,
+  List as PlaylistAddCheckOutlined,
   XCircle as HighlightOff,
 } from "lucide-react";
 import ToggleButton from "@material-ui/lab/ToggleButton";
@@ -927,19 +927,23 @@ const TicketsManagerTabs = () => {
                   }}
                   onClick={() => handleChangeTab(null, "open")}
                 >
-                  <MoveToInboxIcon
-                    style={{
-                      color: isHoveredOpen
-                        ? theme.mode === "light"
-                          ? theme.palette.primary.main
-                          : "#FFF"
-                        : tab === "open"
+                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Inbox
+                      size={20}
+                      strokeWidth={2}
+                      color={
+                        isHoveredOpen
                           ? theme.mode === "light"
                             ? theme.palette.primary.main
                             : "#FFF"
-                          : "#aaa",
-                    }}
-                  />
+                          : tab === "open"
+                            ? theme.mode === "light"
+                              ? theme.palette.primary.main
+                              : "#FFF"
+                            : "#888888"
+                      }
+                    />
+                  </span>
                 </IconButton>
               </Badge>
 
@@ -987,19 +991,23 @@ const TicketsManagerTabs = () => {
                   }}
                   onClick={() => handleChangeTab(null, "closed")}
                 >
-                  <CheckBoxIcon
-                    style={{
-                      color: isHoveredClosed
-                        ? theme.mode === "light"
-                          ? theme.palette.primary.main
-                          : "#FFF"
-                        : tab === "closed"
+                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <CheckCheck
+                      size={20}
+                      strokeWidth={2}
+                      color={
+                        isHoveredClosed
                           ? theme.mode === "light"
                             ? theme.palette.primary.main
                             : "#FFF"
-                          : "#aaa",
-                    }}
-                  />
+                          : tab === "closed"
+                            ? theme.mode === "light"
+                              ? theme.palette.primary.main
+                              : "#FFF"
+                            : "#888888"
+                      }
+                    />
+                  </span>
                 </IconButton>
               </Badge>
               {tab !== "closed" && tab !== "search" && (

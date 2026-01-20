@@ -32,6 +32,7 @@ const useStyles = makeStyles((theme) => ({
     },
     alignItems: "stretch",
     minHeight: 0,
+    minWidth: 0,
     height: "calc(100vh - 100px)", // Ajuste para ocupar altura correta descontando header
     backgroundColor: "transparent",
     border: "none",
@@ -96,9 +97,9 @@ const ChatMoments = () => {
         <Grid container style={{ width: "100%", padding: "0 10px" }} direction="column">
           <Grid item style={{ textAlign: "left" }}>
             <Title>Painel de Atendimentos</Title>
-            <Typography 
-              variant="body1" 
-              color="textSecondary" 
+            <Typography
+              variant="body1"
+              color="textSecondary"
               style={{ marginBottom: 16, marginTop: -10, fontStyle: "italic", textAlign: "left" }}
             >
               Visão geral em tempo real dos atendimentos organizados por categorias (Bot, Campanhas, Pendentes) e filas de usuários.

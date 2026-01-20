@@ -89,7 +89,7 @@ const TicketsQueuesService = async ({
 
   whereCondition = {
     ...whereCondition,
-    status: { [Op.in]: ["open", "pending"] },
+    status: { [Op.in]: ["open", "pending", "campaign"] },
     companyId
   }
 

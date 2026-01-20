@@ -39,7 +39,8 @@ const useStyles = makeStyles((theme) => ({
     gap: theme.spacing(2),
     height: "100%",
     minHeight: 0,
-    width: "max-content", // Permite que o container cresça horizontalmente
+    width: "max-content",
+    minWidth: "100%",
     paddingBottom: theme.spacing(2),
     alignItems: "stretch",
   },
@@ -242,8 +243,8 @@ const MomentsUser = ({ onPanStart }) => {
         return;
       }
 
-      // Campaign Tickets (Imported)
-      if (ticket.imported) {
+      // Campaign Tickets (status campaign)
+      if (ticket.status === "campaign") {
         campaigns.push(ticket);
         return;
       }
