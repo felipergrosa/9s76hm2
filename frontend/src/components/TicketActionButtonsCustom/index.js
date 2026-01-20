@@ -4,7 +4,18 @@ import { useHistory } from "react-router-dom";
 import { Can } from "../Can";
 import { makeStyles } from "@material-ui/core/styles";
 import { IconButton, Menu, Hidden } from "@material-ui/core";
-import { DeviceHubOutlined, History, MoreVert, PictureAsPdf, Replay, SwapHorizOutlined } from "@material-ui/icons";
+import {
+    Waypoints as DeviceHubOutlined,
+    History,
+    MoreVertical as MoreVert,
+    FileText as PictureAsPdf,
+    RotateCcw as Replay,
+    ArrowLeftRight as SwapHorizOutlined,
+    CheckCircle as HighlightOffIcon,
+    Undo2 as UndoIcon,
+    Trash2 as DeleteForeverIcon,
+} from "lucide-react";
+
 import { v4 as uuidv4 } from "uuid";
 
 import { i18n } from "../../translate/i18n";
@@ -26,10 +37,6 @@ import Button from '@material-ui/core/Button';
 import TransferTicketModalCustom from "../TransferTicketModalCustom";
 import AcceptTicketWithouSelectQueue from "../AcceptTicketWithoutQueueModal";
 
-//icones
-import HighlightOffIcon from "@material-ui/icons/HighlightOff";
-import UndoIcon from '@material-ui/icons/Undo';
-
 import ScheduleModal from "../ScheduleModal";
 import MenuItem from "@material-ui/core/MenuItem";
 import { Switch } from "@material-ui/core";
@@ -39,7 +46,6 @@ import useCompanySettings from "../../hooks/useSettings/companySettings";
 import ShowTicketLogModal from "../ShowTicketLogModal";
 import TicketMessagesDialog from "../TicketMessagesDialog";
 import { useTheme } from "@material-ui/styles";
-import DeleteForeverIcon from '@material-ui/icons/DeleteForever';
 
 const useStyles = makeStyles(theme => ({
     actionButtons: {
@@ -420,7 +426,7 @@ const TicketActionButtonsCustom = ({ ticket
                 />
             )}
             <div className={classes.actionButtons}>
-                    <Hidden smDown>
+                <Hidden smDown>
                     {ticket.status === "closed" && (ticket.queueId === null || ticket.queueId === undefined) && (
                         <ButtonWithSpinner
                             loading={loading}

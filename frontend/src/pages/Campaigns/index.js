@@ -15,16 +15,17 @@ import TableCell from "@material-ui/core/TableCell";
 import TableHead from "@material-ui/core/TableHead";
 import TableRow from "@material-ui/core/TableRow";
 import IconButton from "@material-ui/core/IconButton";
-import SearchIcon from "@material-ui/icons/Search";
+import {
+  Search as SearchIcon,
+  Trash2 as DeleteOutlineIcon,
+  Edit as EditIcon,
+  FileText as DescriptionIcon,
+  PlayCircle as PlayCircleOutlineIcon,
+  PauseCircle as PauseCircleOutlineIcon,
+  Copy as FileCopyOutlinedIcon,
+} from "lucide-react";
 import TextField from "@material-ui/core/TextField";
 import InputAdornment from "@material-ui/core/InputAdornment";
-
-import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
-import EditIcon from "@material-ui/icons/Edit";
-import DescriptionIcon from "@material-ui/icons/Description";
-import PlayCircleOutlineIcon from "@material-ui/icons/PlayCircleOutline";
-import PauseCircleOutlineIcon from "@material-ui/icons/PauseCircleOutline";
-import FileCopyOutlinedIcon from "@material-ui/icons/FileCopyOutlined";
 
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";

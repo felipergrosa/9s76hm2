@@ -13,8 +13,7 @@ import Skeleton from "@material-ui/lab/Skeleton";
 import { makeStyles } from "@material-ui/core/styles";
 import { green, grey } from '@material-ui/core/colors';
 
-import CheckCircleIcon from '@material-ui/icons/CheckCircle';
-import ErrorIcon from '@material-ui/icons/Error';
+import { CheckCircle, AlertCircle } from "lucide-react";
 import moment from 'moment';
 
 import Rating from '@material-ui/lab/Rating';
@@ -62,11 +61,11 @@ export default function TableAttendantsStatus(props) {
                 <TableCell align="center">
                     {a.online ?
                         <Tooltip title="Online">
-                            <CheckCircleIcon className={classes.on} />
+                            <CheckCircle className={classes.on} size={20} />
                         </Tooltip>
                         :
                         <Tooltip title="Offline">
-                            <ErrorIcon className={classes.off} />
+                            <AlertCircle className={classes.off} size={20} />
                         </Tooltip>
                     }
                 </TableCell>

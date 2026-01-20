@@ -26,10 +26,14 @@ import {
   Chip,
 } from "@material-ui/core";
 
-import MenuIcon from "@material-ui/icons/Menu";
-import ChevronLeftIcon from "@material-ui/icons/ChevronLeft";
+import {
+  Menu as MenuIcon,
+  ChevronLeft as ChevronLeftIcon,
+  RefreshCw as CachedIcon,
+  Moon as Brightness4Icon,
+  Sun as Brightness7Icon,
+} from "lucide-react";
 // import AccountCircle from "@material-ui/icons/AccountCircle";
-import CachedIcon from "@material-ui/icons/Cached";
 // import whatsappIcon from "../assets/nopicture.png";
 
 import MainListItems from "./MainListItems";
@@ -51,8 +55,6 @@ import { useDate } from "../hooks/useDate";
 import UserLanguageSelector from "../components/UserLanguageSelector";
 
 import ColorModeContext from "./themeContext";
-import Brightness4Icon from "@material-ui/icons/Brightness4";
-import Brightness7Icon from "@material-ui/icons/Brightness7";
 import { getBackendUrl } from "../config";
 import useSettings from "../hooks/useSettings";
 import useVersion from "../hooks/useVersion";

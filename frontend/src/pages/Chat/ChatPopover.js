@@ -8,7 +8,7 @@ import React, {
 import { makeStyles } from "@material-ui/core/styles";
 import toastError from "../../errors/toastError";
 import Popover from "@material-ui/core/Popover";
-import ForumIcon from "@material-ui/icons/Forum";
+import { MessageCircle as ForumIcon } from "lucide-react";
 import {
   Badge,
   IconButton,
@@ -98,7 +98,7 @@ const reducer = (state, action) => {
 export default function ChatPopover() {
   const classes = useStyles();
 
-//   const socketManager = useContext(SocketContext);
+  //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
 
 
@@ -141,7 +141,7 @@ export default function ChatPopover() {
     if (user.companyId) {
 
       const companyId = user.companyId;
-//    const socket = socketManager.GetSocket();
+      //    const socket = socketManager.GetSocket();
 
       const onCompanyChatPopover = (data) => {
         if (data.action === "new-message") {

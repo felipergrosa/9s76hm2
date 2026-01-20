@@ -185,10 +185,8 @@ async function runHealthCheck(): Promise<void> {
                 unhealthyCount++;
                 logger.warn(`[WhatsAppHealthCheck] whatsappId=${id} (${name}): não saudável - ${check.reason}`);
 
-                // DESABILITADO TEMPORARIAMENTE: Reconexão automática estava causando loops de conflito
-                // O sistema nativo do Baileys (wbot.ts) já tenta reconectar automaticamente
-                // Se necessário, o usuário pode reconectar manualmente via interface
-                /*
+                // REABILITADO: Reconexão automática com proteções de cooldown (5 min) e verificação de conflito
+                // As proteções já existem em canAttemptReconnect() e attemptReconnect()
                 if (canAttemptReconnect(id)) {
                     const reconnected = await attemptReconnect(whatsapp);
                     if (reconnected) {
@@ -199,7 +197,6 @@ async function runHealthCheck(): Promise<void> {
                     const elapsed = lastAttempt ? Math.round((Date.now() - lastAttempt) / 1000) : 0;
                     logger.info(`[WhatsAppHealthCheck] whatsappId=${id}: aguardando cooldown (última tentativa: ${elapsed}s atrás)`);
                 }
-                */
             }
         }
 

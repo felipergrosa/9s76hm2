@@ -152,6 +152,46 @@ export class BaileysAdapter implements IWhatsAppAdapter {
   }
 
   /**
+   * Envia mensagem para o socket com retry em caso de falha de conexão
+   */
+  private async sendWithRetry(jid: string, content: any): Promise<proto.WebMessageInfo> {
+    try {
+      if (!this.isSocketReady()) {
+        await this.tryReinitializeSocket();
+      }
+
+      if (!this.socket) {
+        throw new WhatsAppAdapterError("Socket não disponível", "SOCKET_NOT_AVAILABLE");
+      }
+
+      return await this.socket.sendMessage(jid, content);
+    } catch (error) {
+      const isConnectionError = error.message && (
+        error.message.includes("Connection Closed") ||
+        error.message.includes("Socket connection null") ||
+        error.message.includes("closed")
+      );
+
+      if (isConnectionError) {
+        logger.warn(`[BaileysAdapter] Erro de conexão ao enviar. Tentando reiniciar socket e reenviar...`);
+
+        // Aguarda 1s para evitar loop rápido
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Tenta reinicializar forçadamente
+        const reinitialized = await this.tryReinitializeSocket();
+
+        if (reinitialized && this.socket) {
+          logger.info(`[BaileysAdapter] Socket reinicializado. Reenviando mensagem...`);
+          return await this.socket.sendMessage(jid, content);
+        }
+      }
+
+      throw error;
+    }
+  }
+
+  /**
    * Envia mensagem (método principal)
    */
   async sendMessage(options: ISendMessageOptions): Promise<IWhatsAppMessage> {
@@ -194,7 +234,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
           content.quoted = { key: { id: quotedMsgId } };
         }
 
-        sentMsg = await this.socket.sendMessage(toJid, content);
+        sentMsg = await this.sendWithRetry(toJid, content);
       }
       // Mensagem com botões
       else if (buttons && buttons.length > 0) {
@@ -207,7 +247,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
           })),
           headerType: 1
         };
-        sentMsg = await this.socket.sendMessage(toJid, content);
+        sentMsg = await this.sendWithRetry(toJid, content);
       }
       // Mensagem com lista
       else if (listSections && listSections.length > 0) {
@@ -225,7 +265,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
           title: options.listTitle || "",
           footer: ""
         };
-        sentMsg = await this.socket.sendMessage(toJid, content as any);
+        sentMsg = await this.sendWithRetry(toJid, content);
       }
       // vCard (contato)
       else if (vcard) {
@@ -235,7 +275,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
             contacts: [{ vcard }]
           }
         };
-        sentMsg = await this.socket.sendMessage(toJid, content);
+        sentMsg = await this.sendWithRetry(toJid, content);
       }
       // Mensagem com mídia
       else if (mediaPath || mediaUrl) {
@@ -278,7 +318,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
             );
         }
 
-        sentMsg = await this.socket.sendMessage(toJid, content);
+        sentMsg = await this.sendWithRetry(toJid, content);
       }
 
       // Converter para formato normalizado

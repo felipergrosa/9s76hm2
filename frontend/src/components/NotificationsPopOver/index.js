@@ -15,7 +15,7 @@ import ListItemText from "@material-ui/core/ListItemText";
 import ListItemSecondaryAction from "@material-ui/core/ListItemSecondaryAction";
 import { makeStyles } from "@material-ui/core/styles";
 import Badge from "@material-ui/core/Badge";
-import ChatIcon from "@material-ui/icons/Chat";
+import { Bell as ChatIcon } from "lucide-react";
 import Button from "@material-ui/core/Button";
 
 import TicketListItem from "../TicketListItem";

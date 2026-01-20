@@ -1950,6 +1950,46 @@ async function handleDispatchCampaign(job) {
         logger.info(`[DispatchCampaign][Baileys] Ticket #${ticket.id} criado com status "campaign", fila=${campaign.queueId}, userId=${targetUserId} (carteira)`);
       }
 
+      // Verificar se o socket Baileys está REALMENTE aberto antes de enviar
+      // O status no banco pode estar "CONNECTED" mas o WebSocket pode ter caído
+      let isSocketReady = false;
+      try {
+        const ws = (wbot as any).ws;
+        if (ws) {
+          const socket = ws.socket || ws;
+          const readyState = socket?.readyState;
+          isSocketReady = readyState === 1; // WebSocket.OPEN = 1
+          if (!isSocketReady) {
+            const stateNames = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"];
+            logger.warn(`[DispatchCampaign][Baileys] WebSocket não está aberto. readyState=${readyState} (${stateNames[readyState] || "UNKNOWN"}). Reagendando...`);
+          }
+        } else {
+          // Fallback: verificar se user está definido
+          isSocketReady = !!(wbot as any).user;
+        }
+      } catch (e) {
+        logger.warn(`[DispatchCampaign][Baileys] Erro ao verificar estado do socket: ${e?.message}`);
+        isSocketReady = false;
+      }
+
+      // Se socket não está pronto, reagendar com delay ao invés de falhar
+      if (!isSocketReady) {
+        const delayMs = 10000; // 10 segundos para dar tempo de reconectar
+        const nextJob = await campaignQueue.add(
+          "DispatchCampaign",
+          { campaignId, campaignShippingId, contactListItemId: data.contactListItemId, selectedWhatsappId },
+          { delay: delayMs, removeOnComplete: true }
+        );
+        await campaignShipping.update({
+          jobId: String(nextJob.id),
+          status: 'pending',
+          lastError: 'WebSocket não está aberto, reagendando...',
+          lastErrorAt: moment().toDate()
+        });
+        logger.warn(`[DispatchCampaign][Baileys] Socket não pronto. Job reagendado em ${delayMs}ms. Campanha=${campaignId}; Registro=${campaignShippingId}`);
+        return;
+      }
+
       if (whatsapp.status === "CONNECTED") {
         if (campaign.confirmation && campaignShipping.confirmation === null) {
           const confirmationMessage = await wbot.sendMessage(chatId, {

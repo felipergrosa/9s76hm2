@@ -435,11 +435,11 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
               // Restart required: reconectar com delay moderado
               if (isRestartRequired) {
-                logger.info(`[wbot] Restart necessário para ${name}. Reconectando em 5s.`);
+                logger.info(`[wbot] Restart necessário para ${name}. Reconectando em 15s.`);
                 removeWbot(id, false);
                 setTimeout(
                   () => StartWhatsAppSession(whatsapp, whatsapp.companyId),
-                  5000
+                  15000 // Aumentado de 5s para 15s para evitar conflitos
                 );
                 return;
               }
@@ -448,7 +448,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 removeWbot(id, false);
                 setTimeout(
                   () => StartWhatsAppSession(whatsapp, whatsapp.companyId),
-                  2000
+                  10000 // Aumentado de 2s para 10s para evitar conflitos durante envio em massa
                 );
               } else {
                 await whatsapp.update({ status: "PENDING", session: "" });
@@ -472,7 +472,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 removeWbot(id, false);
                 setTimeout(
                   () => StartWhatsAppSession(whatsapp, whatsapp.companyId),
-                  2000
+                  10000 // Aumentado de 2s para 10s para evitar conflitos durante envio em massa
                 );
               }
             }

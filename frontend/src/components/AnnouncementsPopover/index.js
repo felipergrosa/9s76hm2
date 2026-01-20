@@ -2,7 +2,7 @@ import React, { useEffect, useReducer, useState, useContext } from "react";
 import { makeStyles } from "@material-ui/core/styles";
 import toastError from "../../errors/toastError";
 import Popover from "@material-ui/core/Popover";
-import AnnouncementIcon from "@material-ui/icons/Announcement";
+import { Megaphone as AnnouncementIcon } from "lucide-react";
 
 import { i18n } from "../../translate/i18n";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -149,7 +149,7 @@ export default function AnnouncementsPopover() {
   const [invisible, setInvisible] = useState(false);
   const [announcement, setAnnouncement] = useState({});
   const [showAnnouncementDialog, setShowAnnouncementDialog] = useState(false);
-//   const socketManager = useContext(SocketContext);
+  //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
 
 
@@ -170,7 +170,7 @@ export default function AnnouncementsPopover() {
   useEffect(() => {
     if (user.companyId) {
       const companyId = user.companyId;
-//    const socket = socketManager.GetSocket();
+      //    const socket = socketManager.GetSocket();
 
       const onCompanyAnnouncement = (data) => {
         if (data.action === "update" || data.action === "create") {

@@ -3,7 +3,7 @@ import React, { useEffect } from "react";
 import { Card, IconButton } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
 import TicketHeaderSkeleton from "../TicketHeaderSkeleton";
-import ArrowBackIos from "@material-ui/icons/ArrowBackIos";
+import { ChevronLeft as ArrowBackIos } from "lucide-react";
 import { useHistory } from "react-router-dom";
 
 const useStyles = makeStyles(theme => ({
@@ -56,11 +56,11 @@ const TicketHeader = ({ loading, children }) => {
 					square
 					className={classes.ticketHeader}
 				>
-					<IconButton 
-						color="primary" 
-						size="small" 
-						edge="start" 
-						aria-label="voltar" 
+					<IconButton
+						color="primary"
+						size="small"
+						edge="start"
+						aria-label="voltar"
 						onClick={handleBack}
 						style={{ alignSelf: 'flex-start', marginTop: 8 }}
 					>

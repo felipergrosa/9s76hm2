@@ -15,23 +15,25 @@ import {
   Switch,
 } from "@material-ui/core";
 import {
-  Group,
-  MoveToInbox as MoveToInboxIcon,
-  CheckBox as CheckBoxIcon,
-  MessageSharp as MessageSharpIcon,
-  AccessTime as ClockIcon,
+  Users as Group,
+  Inbox as MoveToInboxIcon,
+  CheckSquare as CheckBoxIcon,
+  MessageSquare as MessageSharpIcon,
+  Clock as ClockIcon,
   Search as SearchIcon,
-  Add as AddIcon,
-  TextRotateUp,
-  TextRotationDown,
-  Android as BotIcon,
-} from "@material-ui/icons";
-import CampaignIcon from "@mui/icons-material/Campaign";
-import VisibilityIcon from "@material-ui/icons/Visibility";
-import VisibilityOffIcon from "@material-ui/icons/VisibilityOff";
+  Plus as AddIcon,
+  ArrowUp as TextRotateUp,
+  ArrowDown as TextRotationDown,
+  Bot as BotIcon,
+  Megaphone as CampaignIcon,
+  Eye as VisibilityIcon,
+  EyeOff as VisibilityOffIcon,
+  FilterX as FilterAltOff,
+  Filter as FilterAlt,
+  ListChecks as PlaylistAddCheckOutlined,
+  XCircle as HighlightOff,
+} from "lucide-react";
 import ToggleButton from "@material-ui/lab/ToggleButton";
-
-import { FilterAltOff, FilterAlt, PlaylistAddCheckOutlined, HighlightOff } from "@mui/icons-material";
 
 import NewTicketModal from "../NewTicketModal";
 import BulkProcessTicketsModal from "../BulkProcessTicketsModal";

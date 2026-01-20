@@ -4,19 +4,19 @@ import clsx from "clsx";
 import { useHistory, useParams } from "react-router-dom";
 
 import {
-	ListItem,
-	ListItemText,
-	ListItemAvatar,
-	Typography,
-	Divider,
-	Badge,
-	ListItemSecondaryAction,
-	Dialog,
-	DialogTitle,
-	DialogContent,
-	IconButton,
-	Paper,
-	Tooltip
+    ListItem,
+    ListItemText,
+    ListItemAvatar,
+    Typography,
+    Divider,
+    Badge,
+    ListItemSecondaryAction,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    IconButton,
+    Paper,
+    Tooltip
 } from "@material-ui/core";
 import { makeStyles, useTheme } from "@material-ui/core/styles";
 import { green, grey } from "@material-ui/core/colors";
@@ -33,18 +33,24 @@ import ContactTag from "../ContactTag";
 import ContactAvatar from "../ContactAvatar";
 import { v4 as uuidv4 } from "uuid";
 
-import GroupIcon from '@material-ui/icons/Group';
+import {
+    Users as GroupIcon,
+    Check as Done,
+    XCircle as HighlightOff,
+    RotateCcw as Replay,
+    ArrowLeftRight as SwapHoriz,
+    Eye as VisibilityIcon,
+    X as CloseIcon,
+    MessageSquare as MessageIcon,
+} from "lucide-react";
+
 import ConnectionIcon from "../ConnectionIcon";
 import AcceptTicketWithouSelectQueue from "../AcceptTicketWithoutQueueModal";
 import TransferTicketModalCustom from "../TransferTicketModalCustom";
 import ShowTicketOpen from "../ShowTicketOpenModal";
 import { isNil } from "lodash";
 import { toast } from "react-toastify";
-import { Done, HighlightOff, Replay, SwapHoriz } from "@material-ui/icons";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
-import VisibilityIcon from "@material-ui/icons/Visibility";
-import CloseIcon from "@material-ui/icons/Close";
-import MessageIcon from "@material-ui/icons/Message";
 import { blue } from "@material-ui/core/colors";
 
 const useStyles = makeStyles((theme) => ({
@@ -413,7 +419,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
     const [userTicketOpen, setUserTicketOpen] = useState("");
     const [queueTicketOpen, setQueueTicketOpen] = useState("");
     const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
-    
+
     // New states for the ticket messages
     const [ticketMessages, setTicketMessages] = useState([]);
     const [loadingMessages, setLoadingMessages] = useState(false);
@@ -617,7 +623,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
     // Function to fetch messages for the ticket
     const fetchTicketMessages = async (ticketId) => {
         if (!ticketId) return;
-        
+
         setLoadingMessages(true);
         try {
             const { data } = await api.get(`/messages/${ticketId}`);
@@ -664,10 +670,10 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     ticket={ticket}
                 />
             )}
-            
+
             {/* Improved Message Dialog */}
-            <Dialog 
-                open={openTicketMessageDialog} 
+            <Dialog
+                open={openTicketMessageDialog}
                 onClose={() => setOpenTicketMessageDialog(false)}
                 maxWidth="sm"
                 fullWidth
@@ -676,17 +682,17 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     <Typography variant="h6">
                         Espiando a conversa
                     </Typography>
-                    <IconButton 
-                        aria-label="close" 
-                        className={classes.closeButton} 
+                    <IconButton
+                        aria-label="close"
+                        className={classes.closeButton}
                         onClick={() => setOpenTicketMessageDialog(false)}
                     >
                         <CloseIcon />
                     </IconButton>
                 </DialogTitle>
-                
+
                 <div className={classes.messagesHeader}>
-                    <ContactAvatar 
+                    <ContactAvatar
                         contact={ticket?.contact}
                         className={classes.messageAvatar}
                     />
@@ -699,9 +705,9 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                         </Typography>
                     </div>
                 </div>
-                
+
                 <Divider />
-                
+
                 <DialogContent className={classes.messagesContainer}>
                     {loadingMessages ? (
                         <div className={classes.loadingMessages}>
@@ -716,10 +722,10 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                         </div>
                     ) : (
                         ticketMessages.map((message) => (
-                            <Paper 
-                                key={message.id} 
+                            <Paper
+                                key={message.id}
                                 className={clsx(
-                                    classes.messageItem, 
+                                    classes.messageItem,
                                     message.fromMe ? classes.fromMe : classes.fromThem
                                 )}
                                 elevation={0}
@@ -743,7 +749,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     )}
                 </DialogContent>
             </Dialog>
-            
+
             <ListItem
                 button
                 dense
@@ -810,8 +816,8 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                                 {ticket.lastMessage ? (
                                     <>
                                         {ticket.lastMessage.includes('fb.me') ? (
-                        <MarkdownWrapper>Clique de Anúncio</MarkdownWrapper> //Clique de Anúncio adicionado
-                      ) : ticket.lastMessage.includes('data:image/png;base64') ?
+                                            <MarkdownWrapper>Clique de Anúncio</MarkdownWrapper> //Clique de Anúncio adicionado
+                                        ) : ticket.lastMessage.includes('data:image/png;base64') ?
                                             <MarkdownWrapper>Localização</MarkdownWrapper> :
                                             <> {ticket.lastMessage.includes('BEGIN:VCARD') ?
                                                 <MarkdownWrapper>Contato</MarkdownWrapper> :
@@ -887,8 +893,8 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     )}
 
                 </ListItemSecondaryAction>
-                
-                <div 
+
+                <div
                     className={classes.ticketActionButtons}
                     style={{
                         position: 'absolute',
@@ -902,132 +908,132 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     {/* Aceitar ticket sem fila */}
                     {((ticket.status === "pending" || ticket.status === "bot") && (ticket.queueId === null || ticket.queueId === undefined)) && (
                         <Tooltip title={i18n.t("ticketsList.buttons.accept")}>
-                                <IconButton
-                                    size="small"
-                                    className={classes.actionButton}
-                                    onClick={e => {
-                                        e.stopPropagation();
-                                        handleOpenAcceptTicketWithouSelectQueue();
-                                    }}
-                                    disabled={loading}
-                                >
-                                    <Done fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
-                                </IconButton>
-                            </Tooltip>
-                        )}
-                        
-                        {/* Aceitar ticket com fila */}
-                        {((ticket.status === "pending" || ticket.status === "bot") && ticket.queueId !== null) && (
-                            <Tooltip title={i18n.t("ticketsList.buttons.accept")}>
-                                <IconButton
-                                    size="small"
-                                    className={classes.actionButton}
-                                    onClick={e => {
-                                        e.stopPropagation();
-                                        handleAcepptTicket(ticket.id);
-                                    }}
-                                    disabled={loading}
-                                >
-                                    <Done fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
-                                </IconButton>
-                            </Tooltip>
-                        )}
-                        
-                        {/* Transferir ticket */}
-                        {(ticket.status === "pending" || ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
-                            <Tooltip title={i18n.t("ticketsList.buttons.transfer")}>
-                                <IconButton
-                                    size="small"
-                                    className={classes.actionButton}
-                                    onClick={handleOpenTransferModal}
-                                    disabled={loading}
-                                >
-                                    <SwapHoriz fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
-                                </IconButton>
-                            </Tooltip>
-                        )}
-                        
-                        {/* Espiar conversa */}
-                        {(ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
-                            <Tooltip title="Espiar Conversa">
-                                <IconButton
-                                    size="small"
-                                    className={classes.actionButton}
-                                    onClick={handleOpenMessageDialog}
-                                >
-                                    <VisibilityIcon fontSize="small" style={{ color: blue[700] }} />
-                                </IconButton>
-                            </Tooltip>
-                        )}
-                        
-                        {/* Fechar ticket */}
-                        {(ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
-                            <Tooltip title={i18n.t("ticketsList.buttons.closed")}>
-                                <IconButton
-                                    size="small"
-                                    className={classes.actionButton}
-                                    onClick={e => {
-                                        e.stopPropagation();
-                                        handleCloseTicket(ticket.id);
-                                    }}
-                                    disabled={loading}
-                                >
-                                    <HighlightOff fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
-                                </IconButton>
-                            </Tooltip>
-                        )}
-                        
-                        {/* Ignorar ticket pendente */}
-                        {((ticket.status === "pending" || ticket.status === "lgpd") && (user.userClosePendingTicket === "enabled" || user.profile === "admin")) && (
-                            <Tooltip title={i18n.t("ticketsList.buttons.ignore")}>
-                                <IconButton
-                                    size="small"
-                                    className={classes.actionButton}
-                                    onClick={e => {
-                                        e.stopPropagation();
-                                        handleCloseIgnoreTicket(ticket.id);
-                                    }}
-                                    disabled={loading}
-                                >
-                                    <HighlightOff fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
-                                </IconButton>
-                            </Tooltip>
-                        )}
-                        
-                        {/* Reabrir ticket fechado sem fila */}
-                        {(ticket.status === "closed" && (ticket.queueId === null || ticket.queueId === undefined)) && (
-                            <Tooltip title={i18n.t("ticketsList.buttons.reopen")}>
-                                <IconButton
-                                    size="small"
-                                    className={classes.actionButton}
-                                    onClick={e => {
-                                        e.stopPropagation();
-                                        handleOpenAcceptTicketWithouSelectQueue();
-                                    }}
-                                    disabled={loading}
-                                >
-                                    <Replay fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
-                                </IconButton>
-                            </Tooltip>
-                        )}
-                        
-                        {/* Reabrir ticket fechado com fila */}
-                        {(ticket.status === "closed" && ticket.queueId !== null) && (
-                            <Tooltip title={i18n.t("ticketsList.buttons.reopen")}>
-                                <IconButton
-                                    size="small"
-                                    className={classes.actionButton}
-                                    onClick={e => {
-                                        e.stopPropagation();
-                                        handleAcepptTicket(ticket.id);
-                                    }}
-                                    disabled={loading}
-                                >
-                                    <Replay fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
-                                </IconButton>
-                            </Tooltip>
-                        )}
-                    </div>
+                            <IconButton
+                                size="small"
+                                className={classes.actionButton}
+                                onClick={e => {
+                                    e.stopPropagation();
+                                    handleOpenAcceptTicketWithouSelectQueue();
+                                }}
+                                disabled={loading}
+                            >
+                                <Done fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+
+                    {/* Aceitar ticket com fila */}
+                    {((ticket.status === "pending" || ticket.status === "bot") && ticket.queueId !== null) && (
+                        <Tooltip title={i18n.t("ticketsList.buttons.accept")}>
+                            <IconButton
+                                size="small"
+                                className={classes.actionButton}
+                                onClick={e => {
+                                    e.stopPropagation();
+                                    handleAcepptTicket(ticket.id);
+                                }}
+                                disabled={loading}
+                            >
+                                <Done fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+
+                    {/* Transferir ticket */}
+                    {(ticket.status === "pending" || ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
+                        <Tooltip title={i18n.t("ticketsList.buttons.transfer")}>
+                            <IconButton
+                                size="small"
+                                className={classes.actionButton}
+                                onClick={handleOpenTransferModal}
+                                disabled={loading}
+                            >
+                                <SwapHoriz fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+
+                    {/* Espiar conversa */}
+                    {(ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
+                        <Tooltip title="Espiar Conversa">
+                            <IconButton
+                                size="small"
+                                className={classes.actionButton}
+                                onClick={handleOpenMessageDialog}
+                            >
+                                <VisibilityIcon fontSize="small" style={{ color: blue[700] }} />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+
+                    {/* Fechar ticket */}
+                    {(ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
+                        <Tooltip title={i18n.t("ticketsList.buttons.closed")}>
+                            <IconButton
+                                size="small"
+                                className={classes.actionButton}
+                                onClick={e => {
+                                    e.stopPropagation();
+                                    handleCloseTicket(ticket.id);
+                                }}
+                                disabled={loading}
+                            >
+                                <HighlightOff fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+
+                    {/* Ignorar ticket pendente */}
+                    {((ticket.status === "pending" || ticket.status === "lgpd") && (user.userClosePendingTicket === "enabled" || user.profile === "admin")) && (
+                        <Tooltip title={i18n.t("ticketsList.buttons.ignore")}>
+                            <IconButton
+                                size="small"
+                                className={classes.actionButton}
+                                onClick={e => {
+                                    e.stopPropagation();
+                                    handleCloseIgnoreTicket(ticket.id);
+                                }}
+                                disabled={loading}
+                            >
+                                <HighlightOff fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+
+                    {/* Reabrir ticket fechado sem fila */}
+                    {(ticket.status === "closed" && (ticket.queueId === null || ticket.queueId === undefined)) && (
+                        <Tooltip title={i18n.t("ticketsList.buttons.reopen")}>
+                            <IconButton
+                                size="small"
+                                className={classes.actionButton}
+                                onClick={e => {
+                                    e.stopPropagation();
+                                    handleOpenAcceptTicketWithouSelectQueue();
+                                }}
+                                disabled={loading}
+                            >
+                                <Replay fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+
+                    {/* Reabrir ticket fechado com fila */}
+                    {(ticket.status === "closed" && ticket.queueId !== null) && (
+                        <Tooltip title={i18n.t("ticketsList.buttons.reopen")}>
+                            <IconButton
+                                size="small"
+                                className={classes.actionButton}
+                                onClick={e => {
+                                    e.stopPropagation();
+                                    handleAcepptTicket(ticket.id);
+                                }}
+                                disabled={loading}
+                            >
+                                <Replay fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+                </div>
             </ListItem>
             {/* <Divider variant="inset" component="li" /> */}
         </React.Fragment>

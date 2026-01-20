@@ -2,7 +2,7 @@
 
 import React, { useContext, useState } from "react";
 import { Button, Menu, MenuItem, Tooltip } from "@material-ui/core"; // Adicione Tooltip para acessibilidade
-import LanguageIcon from "@material-ui/icons/Language"; // 1. Importe o ícone do globo
+import { Globe as LanguageIcon } from "lucide-react"; // 1. Importe o ícone do globo
 
 import { i18n } from "../../translate/i18n";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -40,7 +40,7 @@ const UserLanguageSelector = () => {
                 <Button
                     color="inherit"
                     onClick={handleOpenLanguageMenu}
-                    style={{ color: 'white' }}
+
                 >
                     {/* 3. Substitua o texto pelo ícone */}
                     <LanguageIcon />
@@ -61,9 +61,9 @@ const UserLanguageSelector = () => {
                 <MenuItem onClick={() => handleChangeLanguage("es")}>
                     {i18n.t("languages.es")}
                 </MenuItem>
-                 <MenuItem onClick={() => handleChangeLanguage("tr")}>
-                     {i18n.t("languages.tr")}
-                 </MenuItem>
+                <MenuItem onClick={() => handleChangeLanguage("tr")}>
+                    {i18n.t("languages.tr")}
+                </MenuItem>
             </Menu>
         </>
     );

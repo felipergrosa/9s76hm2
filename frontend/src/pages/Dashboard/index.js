@@ -18,16 +18,14 @@ import {
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import {
-  SaveAlt,
-  Groups,
-  FilterList,
-  Clear,
-  Call as CallIcon,
-  HourglassEmpty as HourglassEmptyIcon,
-  CheckCircle as CheckCircleIcon,
-  RecordVoiceOver as RecordVoiceOverIcon,
-  GroupAdd as GroupAddIcon,
-} from "@mui/icons-material";
+  Phone as CallIcon,
+  Hourglass as HourglassEmptyIcon,
+  CheckCircle2 as CheckCircleIcon,
+  Headset as RecordVoiceOverIcon,
+  UserPlus as GroupAddIcon,
+  Users as Groups,
+  Download as SaveAlt,
+} from "lucide-react";
 import * as XLSX from 'xlsx';
 import { toast } from "react-toastify";
 import { isArray, isEmpty } from "lodash";
@@ -281,7 +279,7 @@ const Dashboard = () => {
                         height: 48
                       }}
                     >
-                      <SvgIcon>{card.icon}</SvgIcon>
+                      {card.icon}
                     </Avatar>
                   </Stack>
                 </CardContent>

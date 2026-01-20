@@ -15,39 +15,43 @@ import List from "@material-ui/core/List";
 import Tooltip from "@material-ui/core/Tooltip";
 import Typography from "@material-ui/core/Typography";
 
-import DashboardOutlinedIcon from "@material-ui/icons/DashboardOutlined";
-import WhatsAppIcon from "@material-ui/icons/WhatsApp";
-import SyncAltIcon from "@material-ui/icons/SyncAlt";
-import SettingsOutlinedIcon from "@material-ui/icons/SettingsOutlined";
-import PeopleAltOutlinedIcon from "@material-ui/icons/PeopleAltOutlined";
-import ContactPhoneOutlinedIcon from "@material-ui/icons/ContactPhoneOutlined";
-import AccountTreeOutlinedIcon from "@material-ui/icons/AccountTreeOutlined";
-import FlashOnIcon from "@material-ui/icons/FlashOn";
-import HelpOutlineIcon from "@material-ui/icons/HelpOutline";
-import CodeRoundedIcon from "@material-ui/icons/CodeRounded";
-import ViewKanban from "@mui/icons-material/ViewKanban";
-import Schedule from "@material-ui/icons/Schedule";
-import LocalOfferIcon from "@material-ui/icons/LocalOffer";
-import EventAvailableIcon from "@material-ui/icons/EventAvailable";
-import ExpandLessIcon from "@material-ui/icons/ExpandLess";
-import ExpandMoreIcon from "@material-ui/icons/ExpandMore";
-import PeopleIcon from "@material-ui/icons/People";
-import ListIcon from "@material-ui/icons/ListAlt";
-import AnnouncementIcon from "@material-ui/icons/Announcement";
-import ForumIcon from "@material-ui/icons/Forum";
-import LocalAtmIcon from "@material-ui/icons/LocalAtm";
-import BusinessIcon from "@material-ui/icons/Business";
 import {
-  AllInclusive,
-  AttachFile,
-  Dashboard,
-  Description,
-  DeviceHubOutlined,
-  GridOn,
-  ListAlt,
-  PhonelinkSetup,
-  Memory,
-} from "@material-ui/icons";
+  LayoutDashboard as DashboardOutlinedIcon,
+  MessageCircle as WhatsAppIcon,
+  RefreshCw as SyncAltIcon,
+  Settings as SettingsOutlinedIcon,
+  Users as PeopleAltOutlinedIcon,
+  Contact as ContactPhoneOutlinedIcon,
+  GitBranch as AccountTreeOutlinedIcon,
+  Zap as FlashOnIcon,
+  HelpCircle as HelpOutlineIcon,
+  Code2 as CodeRoundedIcon,
+  CalendarClock as Schedule,
+  Tags as LocalOfferIcon,
+  CalendarCheck as EventAvailableIcon,
+  ChevronUp as ExpandLessIcon,
+  ChevronDown as ExpandMoreIcon,
+  Users as PeopleIcon,
+  List as ListIcon,
+  Megaphone as AnnouncementIcon,
+  MessageSquare as ForumIcon,
+  Banknote as LocalAtmIcon,
+  Building2 as BusinessIcon,
+  Infinity as AllInclusive,
+  Paperclip as AttachFile,
+  LayoutDashboard as Dashboard,
+  FileText as Description,
+  Router as DeviceHubOutlined,
+  Grid3x3 as GridOn,
+  List as ListAlt,
+  Smartphone as PhonelinkSetup,
+  Cpu as Memory,
+  SquareKanban as ViewKanban,
+  Megaphone as Campaign,
+  Workflow as ShapeLine,
+  Webhook as Webhook,
+  Bot as SmartToy,
+} from "lucide-react";
 
 import { WhatsAppsContext } from "../context/WhatsApp/WhatsAppsContext";
 import { AuthContext } from "../context/Auth/AuthContext";
@@ -62,7 +66,6 @@ import toastError from "../errors/toastError";
 import usePlans from "../hooks/usePlans";
 import useVersion from "../hooks/useVersion";
 import { i18n } from "../translate/i18n";
-import { Campaign, ShapeLine, Webhook, SmartToy } from "@mui/icons-material";
 
 import ColorModeContext from "./themeContext";
 
@@ -131,8 +134,10 @@ const useStyles = makeStyles((theme) => ({
       backgroundColor: theme.palette.primary.main,
       color: "#fff",
     },
-    "& .MuiSvgIcon-root": {
+    "& .MuiSvgIcon-root, & .lucide": {
       fontSize: "1.4rem",
+      width: "1.4rem",
+      height: "1.4rem",
     },
   },
 }));
