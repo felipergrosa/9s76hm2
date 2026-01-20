@@ -105,11 +105,11 @@ const ChatMoments = () => {
               Visão geral em tempo real dos atendimentos organizados por categorias (Bot, Campanhas, Pendentes) e filas de usuários.
             </Typography>
           </Grid>
-          <Grid item style={{ width: "100%", height: "calc(100vh - 160px)" }}>
+          <Grid item style={{ width: "100%", height: "calc(100vh - 160px)", overflow: "visible" }}>
             <Paper
               className={classes.mainPaper}
               variant="outlined"
-              style={{ maxWidth: "100%", height: "100%" }}
+              style={{ width: "100%", height: "100%", overflow: "auto" }}
               ref={momentsScrollRef}
             >
               <MomentsUser onPanStart={handlePanStart} />

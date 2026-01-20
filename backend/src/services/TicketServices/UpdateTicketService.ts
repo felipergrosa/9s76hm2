@@ -788,6 +788,7 @@ const UpdateTicketService = async ({
   } catch (err) {
     console.log("erro ao atualizar o ticket", ticketId, "ticketData", ticketData)
     Sentry.captureException(err);
+    throw err; // Relança o erro para que o controller possa tratá-lo adequadamente
   }
 };
 
