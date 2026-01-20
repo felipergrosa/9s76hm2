@@ -66,6 +66,42 @@ const backendUrl = getBackendUrl();
 const drawerWidth = 240;
 
 const useStyles = makeStyles((theme) => ({
+  modernRoot: {
+    backgroundColor: "var(--bg) !important",
+    fontFamily: "'Plus Jakarta Sans', sans-serif !important",
+  },
+  modernAppBar: {
+    background: "rgba(255, 255, 255, 0.45) !important",
+    backdropFilter: "blur(12px) !important",
+    borderBottom: "1px solid var(--border) !important",
+    boxShadow: "none !important",
+    color: "var(--text) !important",
+    "& .MuiToolbar-root": {
+      color: "var(--text) !important",
+    }
+  },
+  modernAppBarDark: {
+    background: "rgba(17, 24, 39, 0.45) !important",
+    backdropFilter: "blur(12px) !important",
+    borderBottom: "1px solid var(--border) !important",
+    boxShadow: "none !important",
+    color: "var(--text) !important",
+    "& .MuiToolbar-root": {
+      color: "var(--text) !important",
+    }
+  },
+  modernDrawer: {
+    background: "var(--sidebar-bg) !important",
+    borderRight: "1px solid var(--border) !important",
+    "& .MuiDrawer-paper": {
+      background: "var(--sidebar-bg) !important",
+      borderRight: "1px solid var(--border) !important",
+    }
+  },
+  modernToolbar: {
+    background: "transparent !important",
+    color: "var(--text) !important",
+  },
   root: {
     display: "flex",
     height: "100vh",
@@ -323,7 +359,6 @@ const SmallAvatar = withStyles((theme) => ({
 }))(Avatar);
 
 const LoggedInLayout = ({ children, themeToggle }) => {
-  const classes = useStyles();
   const [userToken, setUserToken] = useState("disabled");
   const [loadingUserToken, setLoadingUserToken] = useState(false);
   const [userModalOpen, setUserModalOpen] = useState(false);
@@ -338,6 +373,8 @@ const LoggedInLayout = ({ children, themeToggle }) => {
 
   const theme = useTheme();
   const { colorMode } = useContext(ColorModeContext);
+  const { viewMode } = colorMode;
+  const classes = useStyles({ viewMode });
   const greaterThenSm = useMediaQuery(theme.breakpoints.up("sm"));
 
   const [volume, setVolume] = useState(localStorage.getItem("volume") || 1);
@@ -521,14 +558,18 @@ const LoggedInLayout = ({ children, themeToggle }) => {
   }
 
   return (
-    <div className={classes.root}>
+    <div className={clsx(classes.root, viewMode === "modern" && classes.modernRoot)}>
       <Drawer
         variant={drawerVariant}
-        className={drawerOpen ? classes.drawerPaper : classes.drawerPaperClose}
+        className={clsx(
+          drawerOpen ? classes.drawerPaper : classes.drawerPaperClose,
+          viewMode === "modern" && classes.modernDrawer
+        )}
         classes={{
           paper: clsx(
             classes.drawerPaper,
-            !drawerOpen && classes.drawerPaperClose
+            !drawerOpen && classes.drawerPaperClose,
+            viewMode === "modern" && classes.modernDrawer
           ),
         }}
         open={drawerOpen}
@@ -555,15 +596,19 @@ const LoggedInLayout = ({ children, themeToggle }) => {
 
       <AppBar
         position="fixed"
-        className={clsx(classes.appBar, drawerOpen && classes.appBarShift)}
+        className={clsx(
+          classes.appBar,
+          drawerOpen && classes.appBarShift,
+          viewMode === "modern" && (theme.palette.type === "light" ? classes.modernAppBar : classes.modernAppBarDark)
+        )}
         color="primary"
       >
-        <Toolbar variant="dense" className={classes.toolbar}>
+        <Toolbar variant="dense" className={clsx(classes.toolbar, viewMode === "modern" && classes.modernToolbar)}>
           <IconButton
             edge="start"
             variant="contained"
             aria-label="open drawer"
-            style={{ color: "white" }}
+            style={{ color: viewMode === "modern" ? "var(--text)" : "white" }}
             onClick={() => setDrawerOpen(!drawerOpen)}
             className={clsx(drawerOpen && classes.menuButtonHidden)}
           >
@@ -576,6 +621,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
             color="inherit"
             noWrap
             className={classes.title}
+            style={{ color: viewMode === "modern" ? "var(--text)" : "white" }}
           >
             {/* {greaterThenSm && user?.profile === "admin" && getDateAndDifDays(user?.company?.dueDate).difData < 7 ? ( */}
             {greaterThenSm &&
@@ -621,12 +667,12 @@ const LoggedInLayout = ({ children, themeToggle }) => {
           <IconButton
             edge="start"
             onClick={colorMode.toggleColorMode}
-            style={{ padding: greaterThenSm ? 12 : 8 }}
+            style={{ padding: greaterThenSm ? 12 : 8, color: viewMode === "modern" ? "var(--text)" : "white" }}
           >
             {theme.mode === "dark" ? (
-              <Brightness7Icon style={{ color: "white", fontSize: greaterThenSm ? 24 : 20 }} />
+              <Brightness7Icon style={{ fontSize: greaterThenSm ? 24 : 20 }} />
             ) : (
-              <Brightness4Icon style={{ color: "white", fontSize: greaterThenSm ? 24 : 20 }} />
+              <Brightness4Icon style={{ fontSize: greaterThenSm ? 24 : 20 }} />
             )}
           </IconButton>
 
@@ -636,9 +682,9 @@ const LoggedInLayout = ({ children, themeToggle }) => {
             onClick={handleRefreshPage}
             aria-label={i18n.t("mainDrawer.appBar.refresh")}
             color="inherit"
-            style={{ padding: greaterThenSm ? 12 : 8 }}
+            style={{ padding: greaterThenSm ? 12 : 8, color: viewMode === "modern" ? "var(--text)" : "white" }}
           >
-            <CachedIcon style={{ color: "white", fontSize: greaterThenSm ? 24 : 20 }} />
+            <CachedIcon style={{ fontSize: greaterThenSm ? 24 : 20 }} />
           </IconButton>
 
           {/* <DarkMode themeToggle={themeToggle} /> */}

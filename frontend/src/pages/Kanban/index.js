@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
+import React, { useState, useEffect, useContext, useMemo, useRef, useCallback } from "react";
 import { makeStyles, useTheme } from "@material-ui/core/styles";
 import api from "../../services/api";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import Board from 'react-trello';
 import { toast } from "react-toastify";
+import ColorModeContext from "../../layout/themeContext";
 import { i18n } from "../../translate/i18n";
 import { useHistory } from 'react-router-dom';
 import { Facebook, Instagram, WhatsApp, FilterList, Add, Refresh } from "@material-ui/icons";
@@ -291,6 +292,8 @@ const Kanban = () => {
   const [tags, setTags] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [ticketNot, setTicketNot] = useState(0);
+  const { colorMode } = useContext(ColorModeContext);
+  const { viewMode } = colorMode || {};
   const [file, setFile] = useState({ lanes: [] });
   const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), "yyyy-MM-dd"));
@@ -301,7 +304,6 @@ const Kanban = () => {
   const [filterTags, setFilterTags] = useState([]);
   const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeAnchor, setRangeAnchor] = useState(null);
-  const [range, setRange] = useState({ startDate: parseISO(format(startOfMonth(new Date()), "yyyy-MM-dd")), endDate: parseISO(format(endOfMonth(new Date()), "yyyy-MM-dd")) });
   const [filtersModalOpen, setFiltersModalOpen] = useState(false);
 
   // Kanban Pessoal
@@ -329,7 +331,7 @@ const Kanban = () => {
     }
   }, [user]);
 
-  const jsonString = user.queues.map(queue => queue.UserQueue.queueId);
+  const jsonString = useMemo(() => user.queues.map(queue => queue.UserQueue.queueId), [user.queues]);
 
   const queueOptions = useMemo(() => {
     const map = new Map();
@@ -353,22 +355,17 @@ const Kanban = () => {
 
   const tagOptions = useMemo(() => (tags || []).map(t => ({ id: String(t.id), name: t.name })), [tags]);
 
-  useEffect(() => {
-    fetchTags();
-  }, [user, viewingUserId]);
-
-  const fetchTags = async () => {
+  const fetchTags = useCallback(async () => {
     try {
       const response = await api.get("/tag/kanban/", { params: { viewingUserId } });
       const fetchedTags = response.data.lista || [];
       setTags(fetchedTags);
-      fetchTickets();
     } catch (error) {
       console.log(error);
     }
-  };
+  }, [viewingUserId]);
 
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
     try {
       const { data } = await api.get("/ticket/kanban", {
         params: {
@@ -385,7 +382,15 @@ const Kanban = () => {
       setTickets([]);
       return [];
     }
-  };
+  }, [jsonString, startDate, endDate, viewingUserId]);
+
+  useEffect(() => {
+    fetchTags();
+  }, [fetchTags]);
+
+  useEffect(() => {
+    fetchTickets();
+  }, [fetchTickets]);
 
   useEffect(() => {
     const companyId = user.companyId;
@@ -401,40 +406,17 @@ const Kanban = () => {
       socket.off(`company-${companyId}-ticket`, onAppMessage);
       socket.off(`company-${companyId}-appMessage`, onAppMessage);
     };
-  }, [socket, startDate, endDate]);
-
-  const handleSearchClick = () => {
-    fetchTickets();
-  };
-
-  const handleStartDateChange = (event) => {
-    setStartDate(event.target.value);
-  };
-
-  const handleEndDateChange = (event) => {
-    setEndDate(event.target.value);
-  };
+  }, [socket, user.companyId, fetchTickets]);
 
   useEffect(() => {
     fetchTickets();
-  }, [startDate, endDate]);
+  }, [fetchTickets]);
 
-  const lighten = (hex, amount = 0.85) => {
-    if (!hex) return '#f5f5f5';
-    let c = hex.replace('#', '');
-    if (c.length === 3) c = c.split('').map(ch => ch + ch).join('');
-    const num = parseInt(c, 16);
-    let r = (num >> 16) & 0xff;
-    let g = (num >> 8) & 0xff;
-    let b = num & 0xff;
-    r = Math.round(r + (255 - r) * amount);
-    g = Math.round(g + (255 - g) * amount);
-    b = Math.round(b + (255 - b) * amount);
-    const toHex = (v) => v.toString(16).padStart(2, '0');
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-  };
+  const handleCardClick = useCallback((uuid) => {
+    history.push('/tickets/' + uuid);
+  }, [history]);
 
-  const applySearchAndSort = (list) => {
+  const applySearchAndSort = useCallback((list) => {
     let filtered = list;
     if (searchText) {
       const q = searchText.toLowerCase();
@@ -466,21 +448,60 @@ const Kanban = () => {
       filtered = filtered.slice().sort((a, b) => (p(b.unreadMessages) - p(a.unreadMessages)) || (new Date(b.updatedAt) - new Date(a.updatedAt)));
     }
     return filtered;
-  };
+  }, [searchText, filterQueues, filterUsers, filterTags, sortBy]);
 
-  const popularCards = (jsonString, ticketsSource = tickets) => {
-    const filteredTickets = applySearchAndSort((ticketsSource || []).filter(ticket => ticket.tags.length === 0));
+  const handleCardMove = useCallback(async (...args) => {
+    try {
+      // Usar os IDs das tags (+ lane0) para validar os IDs das colunas, evitando dependência do estado 'file'
+      const laneIds = new Set(['lane0', ...tags.map(t => String(t.id))]);
+      let targetLaneId;
+      let cardId;
+
+      if (args.length >= 3 && laneIds.has(String(args[0])) && laneIds.has(String(args[1]))) {
+        targetLaneId = String(args[1]);
+        cardId = String(args[2]);
+      } else if (args.length >= 3 && laneIds.has(String(args[1])) && laneIds.has(String(args[2]))) {
+        cardId = String(args[0]);
+        targetLaneId = String(args[2]);
+      } else {
+        targetLaneId = String(args[1]);
+        cardId = String(args[2]);
+      }
+
+      const ticketId = String(cardId);
+      await api.delete(`/ticket-tags/${ticketId}`);
+      if (String(targetLaneId) !== 'lane0') {
+        await api.put(`/ticket-tags/${ticketId}/${targetLaneId}`);
+      }
+      await fetchTickets();
+    } catch (err) {
+      console.log(err);
+    }
+  }, [tags, fetchTickets]);
+
+  const quickMove = useCallback(async (ticket, targetTagId) => {
+    try {
+      const source = (ticket.tags && ticket.tags[0]?.id) ? String(ticket.tags[0].id) : 'lane0';
+      await handleCardMove(source, String(targetTagId), String(ticket.id));
+    } catch (e) { console.log(e); }
+  }, [handleCardMove]);
+
+  const popularCards = useCallback((ticketsSource = tickets) => {
+    const filteredTickets = applySearchAndSort((ticketsSource || []).filter(ticket => (ticket.tags || []).length === 0));
 
     // Estilo padrão das lanes (colunas)
     const laneStyle = {
-      backgroundColor: "#f5f5f5", // Fundo neutro
-      borderRadius: 8,
-      border: "1px solid rgba(0,0,0,0.12)",
+      backgroundColor: viewMode === "modern" ? "rgba(255, 255, 255, 0.4)" : "#f5f5f5",
+      backdropFilter: viewMode === "modern" ? "blur(10px)" : "none",
+      borderRadius: viewMode === "modern" ? 16 : 8,
+      border: viewMode === "modern" ? "1px solid rgba(255, 255, 255, 0.3)" : "1px solid rgba(0,0,0,0.12)",
       maxHeight: "100%",
       display: "flex",
       flexDirection: "column",
       minWidth: 350,
+      maxWidth: 350,
       width: 350,
+      boxShadow: viewMode === "modern" ? "0 4px 20px rgba(0,0,0,0.05)" : "none",
     };
 
     let lanes = [
@@ -505,7 +526,7 @@ const Kanban = () => {
       },
       ...tags.map(tag => {
         const filteredTickets = applySearchAndSort((ticketsSource || []).filter(ticket => {
-          const tagIds = ticket.tags.map(tag => tag.id);
+          const tagIds = (ticket.tags || []).map(tag => tag.id);
           return tagIds.includes(tag.id);
         }));
 
@@ -541,71 +562,21 @@ const Kanban = () => {
     } catch (e) { }
 
     setFile({ lanes });
-  };
-
-  const handleCardClick = (uuid) => {
-    history.push('/tickets/' + uuid);
-  };
+  }, [tickets, tags, applySearchAndSort, quickMove, handleCardClick, viewMode]);
 
   useEffect(() => {
-    popularCards(jsonString);
-  }, [tags, tickets, searchText, sortBy, filterQueues, filterUsers, filterTags]);
-
-  const handleCardMove = async (...args) => {
-    try {
-      // Compatibilidade: algumas versões do react-trello chamam:
-      // (fromLaneId, toLaneId, cardId, index)
-      // outras chamam:
-      // (cardId, fromLaneId, toLaneId, position, cardDetails)
-      const laneIds = new Set((file?.lanes || []).map(l => String(l.id)));
-      let sourceLaneId;
-      let targetLaneId;
-      let cardId;
-
-      if (args.length >= 3 && laneIds.has(String(args[0])) && laneIds.has(String(args[1]))) {
-        sourceLaneId = String(args[0]);
-        targetLaneId = String(args[1]);
-        cardId = String(args[2]);
-      } else if (args.length >= 3 && laneIds.has(String(args[1])) && laneIds.has(String(args[2]))) {
-        cardId = String(args[0]);
-        sourceLaneId = String(args[1]);
-        targetLaneId = String(args[2]);
-      } else {
-        // fallback (mantém compat com a assinatura antiga)
-        sourceLaneId = String(args[0]);
-        targetLaneId = String(args[1]);
-        cardId = String(args[2]);
-      }
-
-      const ticketId = String(cardId);
-      await api.delete(`/ticket-tags/${ticketId}`);
-      if (String(targetLaneId) !== 'lane0') {
-        await api.put(`/ticket-tags/${ticketId}/${targetLaneId}`);
-      }
-      const updatedTickets = await fetchTickets();
-      popularCards(jsonString, updatedTickets);
-    } catch (err) {
-      console.log(err);
-    }
-  };
-
-  const handleAddConnectionClick = () => {
-    history.push('/tagsKanban');
-  };
-
-  const quickMove = async (ticket, targetTagId) => {
-    try {
-      const source = (ticket.tags && ticket.tags[0]?.id) ? String(ticket.tags[0].id) : 'lane0';
-      await handleCardMove(source, String(targetTagId), String(ticket.id));
-      await fetchTickets();
-    } catch (e) { console.log(e); }
-  };
+    popularCards();
+  }, [popularCards]);
 
   const handleResetHiddenLanes = () => {
     try {
       localStorage.removeItem('kanbanHiddenLanes');
-      popularCards(jsonString);
+      popularCards();
     } catch (e) { }
+  };
+
+  const handleAddConnectionClick = () => {
+    history.push('/tagsKanban');
   };
 
   useEffect(() => {
@@ -634,15 +605,15 @@ const Kanban = () => {
   }, []);
 
   useEffect(() => {
-    const onHiddenChanged = () => popularCards(jsonString);
+    const onHiddenChanged = () => popularCards();
     window.addEventListener('kanban:lanesHiddenChanged', onHiddenChanged);
-    const onPriorityChanged = () => popularCards(jsonString);
+    const onPriorityChanged = () => popularCards();
     window.addEventListener('kanban:priorityChanged', onPriorityChanged);
     return () => {
       window.removeEventListener('kanban:lanesHiddenChanged', onHiddenChanged);
       window.removeEventListener('kanban:priorityChanged', onPriorityChanged);
     };
-  }, [tags, tickets]);
+  }, [popularCards]);
 
   const handlePanStart = (e) => {
     const evt = e?.nativeEvent || e;

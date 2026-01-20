@@ -15,7 +15,7 @@ const useStyles = makeStyles(theme => ({
     border: "1px solid rgba(0, 0, 0, 0.05)",
     transition: "all 0.2s",
     marginBottom: 8,
-    width: "94%",
+    width: "calc(100% - 20px)",
     margin: "8px auto",
     boxSizing: "border-box",
     position: "relative",

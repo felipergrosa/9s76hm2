@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useReducer, useState } from "react";
+import clsx from "clsx";
 import { Link as RouterLink, useLocation } from "react-router-dom";
 import { makeStyles, useTheme } from "@material-ui/core/styles";
 import useHelps from "../hooks/useHelps";
@@ -63,7 +64,40 @@ import useVersion from "../hooks/useVersion";
 import { i18n } from "../translate/i18n";
 import { Campaign, ShapeLine, Webhook, SmartToy } from "@mui/icons-material";
 
+import ColorModeContext from "./themeContext";
+
 const useStyles = makeStyles((theme) => ({
+  modernItem: {
+    margin: "4px 12px",
+    borderRadius: "12px",
+    width: "calc(100% - 24px)",
+    transition: "all 0.3s ease",
+    "&:hover": {
+      backgroundColor: "var(--primary-bg-fade) !important",
+      transform: "translateX(4px)",
+    },
+    "&.active": {
+      backgroundColor: "var(--primary-bg-fade) !important",
+      "& $modernIcon": {
+        color: "var(--primary-color) !important",
+        filter: "drop-shadow(0 0 8px var(--primary-glow))",
+      },
+      "& $modernText": {
+        color: "var(--primary-color) !important",
+        fontWeight: "600 !important",
+      }
+    }
+  },
+  modernIcon: {
+    color: "var(--text-muted) !important",
+    minWidth: "40px !important",
+    transition: "all 0.3s ease",
+  },
+  modernText: {
+    color: "var(--text) !important",
+    fontFamily: "'Plus Jakarta Sans', sans-serif !important",
+    fontSize: "0.875rem !important",
+  },
   listItem: {
     height: "44px",
     width: "auto",
@@ -104,7 +138,7 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 function ListItemLink(props) {
-  const { icon, primary, to, tooltip, showBadge } = props;
+  const { icon, primary, to, tooltip, showBadge, viewMode } = props;
   const classes = useStyles();
   const { activeMenu } = useActiveMenu();
   const location = useLocation();
@@ -127,19 +161,23 @@ function ListItemLink(props) {
   return (
     <ConditionalTooltip tooltipEnabled={!!tooltip}>
       <li>
-        <ListItem button component={renderLink} className={classes.listItem}>
+        <ListItem
+          button
+          component={renderLink}
+          className={clsx(classes.listItem, viewMode === "modern" && classes.modernItem, isActive && "active")}
+        >
           {icon ? (
-            <ListItemIcon>
+            <ListItemIcon className={clsx(viewMode === "modern" && classes.modernIcon)}>
               {showBadge ? (
                 <Badge badgeContent="!" color="error" overlap="circular" className={classes.badge}>
-                  <Avatar className={`${classes.iconHoverActive} ${isActive ? "active" : ""}`}>{icon}</Avatar>
+                  {viewMode === "modern" ? icon : <Avatar className={`${classes.iconHoverActive} ${isActive ? "active" : ""}`}>{icon}</Avatar>}
                 </Badge>
               ) : (
-                <Avatar className={`${classes.iconHoverActive} ${isActive ? "active" : ""}`}>{icon}</Avatar>
+                viewMode === "modern" ? icon : <Avatar className={`${classes.iconHoverActive} ${isActive ? "active" : ""}`}>{icon}</Avatar>
               )}
             </ListItemIcon>
           ) : null}
-          <ListItemText primary={<Typography className={classes.listItemText}>{primary}</Typography>} />
+          <ListItemText primary={<Typography className={clsx(classes.listItemText, viewMode === "modern" && classes.modernText)}>{primary}</Typography>} />
         </ListItem>
       </li>
     </ConditionalTooltip>
@@ -205,6 +243,8 @@ const reducer = (state, action) => {
 const MainListItems = ({ collapsed, drawerClose }) => {
   const theme = useTheme();
   const classes = useStyles();
+  const { colorMode } = useContext(ColorModeContext);
+  const { viewMode } = colorMode;
   const { whatsApps } = useContext(WhatsAppsContext);
   const { user, socket } = useContext(AuthContext);
   const { setActiveMenu } = useActiveMenu();
@@ -413,6 +453,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
             to="/"
             primary="Dashboard"
             icon={<DashboardOutlinedIcon />}
+            viewMode={viewMode}
             tooltip={collapsed}
           />
         )}
@@ -422,6 +463,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
             to="/moments"
             primary={i18n.t("mainDrawer.listItems.chatsTempoReal")}
             icon={<GridOn />}
+            viewMode={viewMode}
             tooltip={collapsed}
           />
         )}
@@ -432,6 +474,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/tickets"
           primary={i18n.t("mainDrawer.listItems.tickets")}
           icon={<WhatsAppIcon />}
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
@@ -441,6 +484,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/quick-messages"
           primary={i18n.t("mainDrawer.listItems.quickMessages")}
           icon={<FlashOnIcon />}
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
@@ -450,6 +494,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/kanban"
           primary={i18n.t("mainDrawer.listItems.kanban")}
           icon={<ViewKanban />}
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
@@ -459,6 +504,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/contacts"
           primary={i18n.t("mainDrawer.listItems.contacts")}
           icon={<ContactPhoneOutlinedIcon />}
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
@@ -468,6 +514,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/schedules"
           primary={i18n.t("mainDrawer.listItems.schedules")}
           icon={<Schedule />}
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
@@ -477,6 +524,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/tags"
           primary={i18n.t("mainDrawer.listItems.tags")}
           icon={<LocalOfferIcon />}
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
@@ -490,6 +538,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
               <ForumIcon />
             </Badge>
           }
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
@@ -505,6 +554,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/helps"
           primary={i18n.t("mainDrawer.listItems.helps")}
           icon={<HelpOutlineIcon />}
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
@@ -526,18 +576,23 @@ const MainListItems = ({ collapsed, drawerClose }) => {
               }}
               onMouseEnter={() => setCampaignHover(true)}
               onMouseLeave={() => setCampaignHover(false)}
+              className={clsx(classes.listItem, viewMode === "modern" && classes.modernItem, (isCampaignRouteActive || openCampaignSubmenu) && "active")}
             >
-              <ListItemIcon>
-                <Avatar
-                  className={`${classes.iconHoverActive} ${isCampaignRouteActive || campaignHover ? "active" : ""
-                    }`}
-                >
+              <ListItemIcon className={clsx(viewMode === "modern" && classes.modernIcon)}>
+                {viewMode === "modern" ? (
                   <EventAvailableIcon />
-                </Avatar>
+                ) : (
+                  <Avatar
+                    className={`${classes.iconHoverActive} ${isCampaignRouteActive || campaignHover ? "active" : ""
+                      }`}
+                  >
+                    <EventAvailableIcon />
+                  </Avatar>
+                )}
               </ListItemIcon>
               <ListItemText
                 primary={
-                  <Typography className={classes.listItemText}>
+                  <Typography className={clsx(classes.listItemText, viewMode === "modern" && classes.modernText)}>
                     {i18n.t("mainDrawer.listItems.campaigns")}
                   </Typography>
                 }
@@ -558,18 +613,21 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                 to="/campaigns"
                 primary={i18n.t("campaigns.subMenus.list")}
                 icon={<ListIcon />}
+                viewMode={viewMode}
                 tooltip={collapsed}
               />
               <ListItemLink
                 to="/contact-lists"
                 primary={i18n.t("campaigns.subMenus.listContacts")}
                 icon={<PeopleIcon />}
+                viewMode={viewMode}
                 tooltip={collapsed}
               />
               <ListItemLink
                 to="/campaigns-config"
                 primary={i18n.t("campaigns.subMenus.settings")}
                 icon={<SettingsOutlinedIcon />}
+                viewMode={viewMode}
                 tooltip={collapsed}
               />
             </List>
@@ -590,18 +648,23 @@ const MainListItems = ({ collapsed, drawerClose }) => {
               }}
               onMouseEnter={() => setFlowHover(true)}
               onMouseLeave={() => setFlowHover(false)}
+              className={clsx(classes.listItem, viewMode === "modern" && classes.modernItem, (isFlowbuilderRouteActive || openFlowSubmenu) && "active")}
             >
-              <ListItemIcon>
-                <Avatar
-                  className={`${classes.iconHoverActive} ${isFlowbuilderRouteActive || flowHover ? "active" : ""
-                    }`}
-                >
+              <ListItemIcon className={clsx(viewMode === "modern" && classes.modernIcon)}>
+                {viewMode === "modern" ? (
                   <Webhook />
-                </Avatar>
+                ) : (
+                  <Avatar
+                    className={`${classes.iconHoverActive} ${isFlowbuilderRouteActive || flowHover ? "active" : ""
+                      }`}
+                  >
+                    <Webhook />
+                  </Avatar>
+                )}
               </ListItemIcon>
               <ListItemText
                 primary={
-                  <Typography className={classes.listItemText}>
+                  <Typography className={clsx(classes.listItemText, viewMode === "modern" && classes.modernText)}>
                     {i18n.t("mainDrawer.listItems.flowbuilder")}
                   </Typography>
                 }
@@ -623,6 +686,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                 to="/phrase-lists"
                 primary={i18n.t("flowbuilder.subMenus.campaign")}
                 icon={<EventAvailableIcon />}
+                viewMode={viewMode}
                 tooltip={collapsed}
               />
 
@@ -630,6 +694,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                 to="/flowbuilders"
                 primary={i18n.t("flowbuilder.subMenus.conversation")}
                 icon={<ShapeLine />}
+                viewMode={viewMode}
                 tooltip={collapsed}
               />
             </List>
@@ -663,6 +728,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/users"
           primary={i18n.t("mainDrawer.listItems.users")}
           icon={<PeopleAltOutlinedIcon />}
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
@@ -673,6 +739,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/queues"
           primary={i18n.t("mainDrawer.listItems.queues")}
           icon={<AccountTreeOutlinedIcon />}
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
@@ -683,6 +750,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/queue-integration"
           primary={i18n.t("mainDrawer.listItems.queueIntegration")}
           icon={<DeviceHubOutlined />}
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
@@ -695,6 +763,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
             primary={i18n.t("mainDrawer.listItems.connections")}
             icon={<SyncAltIcon />}
             showBadge={connectionWarning}
+            viewMode={viewMode}
             tooltip={collapsed}
           />
         )}
@@ -705,6 +774,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/allConnections"
           primary={i18n.t("mainDrawer.listItems.allConnections")}
           icon={<PhonelinkSetup />}
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
@@ -715,6 +785,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/financeiro"
           primary={i18n.t("mainDrawer.listItems.financeiro")}
           icon={<LocalAtmIcon />}
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
@@ -725,6 +796,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/settings"
           primary={i18n.t("mainDrawer.listItems.settings")}
           icon={<SettingsOutlinedIcon />}
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
@@ -742,18 +814,23 @@ const MainListItems = ({ collapsed, drawerClose }) => {
               }}
               onMouseEnter={() => setIaHover(true)}
               onMouseLeave={() => setIaHover(false)}
+              className={clsx(classes.listItem, viewMode === "modern" && classes.modernItem, (isIARouteActive || openIASubmenu) && "active")}
             >
-              <ListItemIcon>
-                <Avatar
-                  className={`${classes.iconHoverActive} ${isIARouteActive || iaHover ? "active" : ""
-                    }`}
-                >
+              <ListItemIcon className={clsx(viewMode === "modern" && classes.modernIcon)}>
+                {viewMode === "modern" ? (
                   <SmartToy />
-                </Avatar>
+                ) : (
+                  <Avatar
+                    className={`${classes.iconHoverActive} ${isIARouteActive || iaHover ? "active" : ""
+                      }`}
+                  >
+                    <SmartToy />
+                  </Avatar>
+                )}
               </ListItemIcon>
               <ListItemText
                 primary={
-                  <Typography className={classes.listItemText}>
+                  <Typography className={clsx(classes.listItemText, viewMode === "modern" && classes.modernText)}>
                     Inteligência Artificial
                   </Typography>
                 }

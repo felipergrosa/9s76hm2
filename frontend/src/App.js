@@ -36,6 +36,7 @@ const App = () => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   // Modal de desconexão do WhatsApp
   const [waConnLost, setWaConnLost] = useState({ open: false, data: null });
+  const [viewMode, setViewMode] = useState("classic");
 
   const colorMode = useMemo(
     () => ({
@@ -52,13 +53,15 @@ const App = () => {
       setAppLogoDark,
       setAppLogoFavicon,
       setAppName,
+      setViewMode,
       appLogoLight,
       appLogoDark,
       appLogoFavicon,
       appName,
       mode,
+      viewMode,
     }),
-    [appLogoLight, appLogoDark, appLogoFavicon, appName, mode]
+    [appLogoLight, appLogoDark, appLogoFavicon, appName, mode, viewMode]
   );
 
   const theme = useMemo(
@@ -374,13 +377,43 @@ const App = () => {
         console.log("!==== Erro ao carregar temas: ====!", error);
         setAppName("Whaticket_Flow");
       });
+
+    getPublicSetting("viewMode")
+      .then((view) => {
+        setViewMode(view || "classic");
+      })
+      .catch((error) => {
+        console.log("Error reading setting viewMode", error);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty("--primaryColor", mode === "light" ? primaryColorLight : primaryColorDark);
-  }, [primaryColorLight, primaryColorDark, mode]);
+    const primaryColor = mode === "light" ? primaryColorLight : primaryColorDark;
+    root.style.setProperty("--primaryColor", primaryColor);
+
+    if (viewMode === "modern") {
+      root.classList.add("modern-ui");
+      // Injeta variáveis CSS para o tema moderno
+      root.style.setProperty("--primary-color", primaryColor);
+
+      // Calcula um glow suave baseado na cor escolhida
+      const hexToRgb = (hex) => {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : null;
+      };
+
+      const rgb = hexToRgb(primaryColor);
+      if (rgb) {
+        root.style.setProperty("--primary-glow", `rgba(${rgb}, 0.15)`);
+        root.style.setProperty("--primary-bg-fade", `rgba(${rgb}, 0.05)`);
+        root.style.setProperty("--primary-color-rgb", rgb);
+      }
+    } else {
+      root.classList.remove("modern-ui");
+    }
+  }, [primaryColorLight, primaryColorDark, mode, viewMode]);
 
   useEffect(() => {
     async function fetchVersionData() {

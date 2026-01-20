@@ -1,0 +1,95 @@
+/* Modern UI - Estilos Base para o tema Deep UI */
+
+.modern-ui {
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --text-muted: #64748b;
+    --sidebar-bg: #ffffff;
+    --sidebar-bg: rgba(255, 255, 255, 0.8);
+}
+
+/* Global Background */
+.modern-ui #root>div>div {
+    background-color: var(--bg) !important;
+    background-image:
+        radial-gradient(at 0% 0%, var(--primary-bg-fade) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, var(--primary-bg-fade) 0px, transparent 50%) !important;
+}
+
+/* Glassmorphism Cards */
+.modern-ui .glass-card,
+.modern-ui .MuiPaper-root,
+.modern-ui .MuiCard-root {
+    background: var(--card) !important;
+    backdrop-filter: blur(12px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07) !important;
+}
+
+/* Sidebar Modernization */
+.modern-ui .MuiDrawer-paper {
+    background: var(--sidebar-bg) !important;
+    backdrop-filter: blur(10px) !important;
+    border-right: 1px solid var(--border) !important;
+}
+
+.modern-ui .MuiListItem-root {
+    margin: 4px 12px !important;
+    border-radius: 12px !important;
+    width: auto !important;
+    transition: all 0.2s ease !important;
+}
+
+.modern-ui .MuiListItem-root.active,
+.modern-ui .MuiListItem-root:hover {
+    background: var(--primary-bg-fade) !important;
+    color: var(--primary-color) !important;
+}
+
+.modern-ui .MuiListItemIcon-root {
+    color: var(--text-muted) !important;
+    min-width: 45px !important;
+}
+
+.modern-ui .MuiListItem-root.active .MuiListItemIcon-root {
+    color: var(--primary-color) !important;
+    filter: drop-shadow(0 0 8px var(--primary-glow)) !important;
+}
+
+/* Header Modernization */
+.modern-ui .MuiAppBar-root {
+    background: rgba(255, 255, 255, 0.6) !important;
+    backdrop-filter: blur(10px) !important;
+    border-bottom: 1px solid var(--border) !important;
+    box-shadow: none !important;
+}
+
+/* Buttons */
+.modern-ui .MuiButton-containedPrimary {
+    background: var(--primary-color) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 4px 14px 0 var(--primary-glow) !important;
+    text-transform: none !important;
+    font-weight: 600 !important;
+}
+
+/* Scrollbar */
+.modern-ui *::-webkit-scrollbar {
+    width: 6px !important;
+    height: 6px !important;
+}
+
+.modern-ui *::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1) !important;
+    border-radius: 10px !important;
+}
+
+/* Dashboard Metric Cards Fix */
+.modern-ui .MuiGrid-root .MuiPaper-root {
+    padding: 20px !important;
+}

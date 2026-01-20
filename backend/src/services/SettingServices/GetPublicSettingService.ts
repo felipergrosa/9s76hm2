@@ -11,13 +11,14 @@ const publicSettingsKeys = [
   "appLogoLight",
   "appLogoDark",
   "appLogoFavicon",
-  "appName"
+  "appName",
+  "viewMode"
 ]
 
 const GetPublicSettingService = async ({
   key
 }: Request): Promise<string | undefined> => {
-  
+
 
   console.log("|======== GetPublicSettingService ========|")
   console.log("key", key)
@@ -26,7 +27,7 @@ const GetPublicSettingService = async ({
   if (!publicSettingsKeys.includes(key)) {
     return null;
   }
-  
+
   const setting = await Setting.findOne({
     where: {
       companyId: 1,

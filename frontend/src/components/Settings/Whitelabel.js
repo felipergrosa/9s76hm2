@@ -13,6 +13,9 @@ import useAuth from "../../hooks/useAuth.js/index.js";
 import {
   IconButton,
   InputAdornment,
+  Select,
+  MenuItem,
+  InputLabel,
 } from "@material-ui/core";
 
 import { Colorize, AttachFile, Delete } from "@material-ui/icons";
@@ -182,9 +185,10 @@ export default function Whitelabel(props) {
       const appLogoDark = settings.find((s) => s.key === "appLogoDark")?.value;
       const appLogoFavicon = settings.find((s) => s.key === "appLogoFavicon")?.value;
       const appName = settings.find((s) => s.key === "appName")?.value;
+      const viewMode = settings.find((s) => s.key === "viewMode")?.value;
 
       setAppName(appName || "");
-      setSettingsLoaded({ ...settingsLoaded, primaryColorLight, primaryColorDark, appLogoLight, appLogoDark, appLogoFavicon, appName });
+      setSettingsLoaded({ ...settingsLoaded, primaryColorLight, primaryColorDark, appLogoLight, appLogoDark, appLogoFavicon, appName, viewMode });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
@@ -341,6 +345,24 @@ export default function Whitelabel(props) {
                       colorMode.setAppName(appName || "Multi100");
                     }}
                   />
+                </FormControl>
+              </Grid>
+              <Grid xs={12} sm={6} md={4} item>
+                <FormControl className={classes.selectContainer} variant="standard">
+                  <InputLabel id="viewmode-label">Estilo Visual</InputLabel>
+                  <Select
+                    labelId="viewmode-label"
+                    id="viewmode-select"
+                    value={settingsLoaded.viewMode || "classic"}
+                    onChange={async (e) => {
+                      const value = e.target.value;
+                      await handleSaveSetting("viewMode", value);
+                      colorMode.setViewMode(value);
+                    }}
+                  >
+                    <MenuItem value="classic">Clássico</MenuItem>
+                    <MenuItem value="modern">Moderno (Deep UI)</MenuItem>
+                  </Select>
                 </FormControl>
               </Grid>
               <Grid xs={12} sm={6} md={4} item>

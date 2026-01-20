@@ -1,17 +1,17 @@
 import React, { useContext, useState, useEffect } from "react";
-import { 
-  Box, 
-  Container, 
-  Typography, 
-  Card, 
-  CardContent, 
-  Avatar, 
-  Button, 
-  IconButton, 
-  Paper, 
-  Stack, 
-  SvgIcon, 
-  Tab, 
+import {
+  Box,
+  Container,
+  Typography,
+  Card,
+  CardContent,
+  Avatar,
+  Button,
+  IconButton,
+  Paper,
+  Stack,
+  SvgIcon,
+  Tab,
   Tabs,
   Divider,
   useTheme
@@ -43,6 +43,7 @@ import Filters from "./Filters";
 import { ChartsDate } from "./ChartsDate";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import { i18n } from "../../translate/i18n";
+import ColorModeContext from "../../layout/themeContext";
 
 const Dashboard = () => {
   const theme = useTheme();
@@ -55,9 +56,11 @@ const Dashboard = () => {
   const [fetchDataFilter, setFetchDataFilter] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
-  
+
   const { find } = useDashboard();
   const { user } = useContext(AuthContext);
+  const { colorMode } = useContext(ColorModeContext);
+  const { viewMode } = colorMode || {};
 
   let newDate = new Date();
   let date = newDate.getDate();
@@ -186,22 +189,27 @@ const Dashboard = () => {
   ];
 
   return (
-    <Box sx={{ backgroundColor: "#f5f7fa", minHeight: "100vh", py: 2 }}>
+    <Box sx={{
+      backgroundColor: viewMode === "modern" ? "transparent" : "#f5f7fa",
+      minHeight: "100vh",
+      py: 2,
+      fontFamily: viewMode === "modern" ? "'Plus Jakarta Sans', sans-serif" : "inherit"
+    }}>
       <Container maxWidth="xl">
         {/* Header with filter button */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-          <Typography variant="h4" fontWeight="bold" color="primary">
+          <Typography variant="h4" fontWeight="bold" color={viewMode === "modern" ? "text.primary" : "primary"}>
             {i18n.t("dashboard.title") || "Dashboard"}
-          </Typography>          
-          
+          </Typography>
+
         </Box>
 
         {/* Filters Section */}
         {showFilter && (
-          <Paper 
-            sx={{ 
-              p: 2, 
-              mb: 3, 
+          <Paper
+            sx={{
+              p: 2,
+              mb: 3,
               borderRadius: 2,
               boxShadow: "0 2px 8px rgba(0,0,0,0.08)"
             }}
@@ -222,15 +230,19 @@ const Dashboard = () => {
         <Grid container spacing={2} sx={{ mb: 3 }}>
           {statCards.map((card, index) => (
             <Grid item xs={12} sm={6} md={4} lg={2} key={index}>
-              <Card 
-                sx={{ 
+              <Card
+                className={viewMode === "modern" ? "glass-card" : ""}
+                sx={{
                   height: "100%",
-                  borderRadius: 2,
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                  borderRadius: viewMode === "modern" ? 4 : 2,
+                  boxShadow: viewMode === "modern" ? "0 8px 32px rgba(0,0,0,0.05)" : "0 2px 8px rgba(0,0,0,0.08)",
                   transition: "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
+                  border: viewMode === "modern" ? "1px solid rgba(255,255,255,0.3)" : "none",
+                  background: viewMode === "modern" ? "rgba(255,255,255,0.7) !important" : "white",
+                  backdropFilter: viewMode === "modern" ? "blur(10px)" : "none",
                   "&:hover": {
                     transform: "translateY(-3px)",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                    boxShadow: viewMode === "modern" ? "0 12px 40px rgba(0,0,0,0.12)" : "0 4px 12px rgba(0,0,0,0.15)"
                   }
                 }}
               >
@@ -242,28 +254,28 @@ const Dashboard = () => {
                     spacing={1}
                   >
                     <Box>
-                      <Typography 
-                        variant="overline" 
-                        sx={{ 
+                      <Typography
+                        variant="overline"
+                        sx={{
                           fontWeight: 600,
                           fontSize: "0.7rem",
-                          color: "text.secondary" 
+                          color: "text.secondary"
                         }}
                       >
                         {card.title}
                       </Typography>
-                      <Typography 
-                        variant="h4" 
-                        sx={{ 
+                      <Typography
+                        variant="h4"
+                        sx={{
                           fontWeight: "bold",
-                          color: "text.primary" 
+                          color: "text.primary"
                         }}
                       >
                         {card.value}
                       </Typography>
                     </Box>
-                    <Avatar 
-                      sx={{ 
+                    <Avatar
+                      sx={{
                         bgcolor: card.color,
                         width: 48,
                         height: 48
@@ -279,13 +291,13 @@ const Dashboard = () => {
         </Grid>
 
         {/* Tabs Navigation */}
-        <Paper sx={{ 
-          mb: 3, 
+        <Paper sx={{
+          mb: 3,
           borderRadius: 2,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.08)" 
+          boxShadow: "0 2px 8px rgba(0,0,0,0.08)"
         }}>
-          <Tabs 
-            value={activeTab} 
+          <Tabs
+            value={activeTab}
             onChange={handleTabChange}
             variant="fullWidth"
             sx={{ borderBottom: 1, borderColor: 'divider' }}
@@ -299,11 +311,14 @@ const Dashboard = () => {
         {/* Tab Panels */}
         {/* Performance Tab */}
         {activeTab === 0 && (
-          <Paper 
-            sx={{ 
-              p: 3, 
-              borderRadius: 2,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.08)"
+          <Paper
+            className={viewMode === "modern" ? "glass-card" : ""}
+            sx={{
+              p: 3,
+              borderRadius: viewMode === "modern" ? 4 : 2,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              background: viewMode === "modern" ? "rgba(255,255,255,0.7) !important" : "white",
+              backdropFilter: viewMode === "modern" ? "blur(10px)" : "none",
             }}
           >
             <Typography variant="h6" fontWeight="bold" gutterBottom>
@@ -316,11 +331,11 @@ const Dashboard = () => {
 
         {/* Assessments Tab - NPS Data */}
         {activeTab === 1 && (
-          <Paper 
-            sx={{ 
-              p: 3, 
+          <Paper
+            sx={{
+              p: 3,
               borderRadius: 2,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.08)" 
+              boxShadow: "0 2px 8px rgba(0,0,0,0.08)"
             }}
           >
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
@@ -329,16 +344,16 @@ const Dashboard = () => {
               </Typography>
             </Box>
             <Divider sx={{ mb: 3 }} />
-            
+
             <Grid container spacing={3}>
               {/* Main NPS Score */}
               <Grid item xs={12} md={3}>
-                <Card 
-                  sx={{ 
+                <Card
+                  sx={{
                     height: "100%",
                     borderRadius: 2,
                     boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-                    bgcolor: "#f8f9fa" 
+                    bgcolor: "#f8f9fa"
                   }}
                 >
                   <CardContent>
@@ -358,12 +373,12 @@ const Dashboard = () => {
 
               {/* Promoters */}
               <Grid item xs={12} md={3}>
-                <Card 
-                  sx={{ 
+                <Card
+                  sx={{
                     height: "100%",
                     borderRadius: 2,
                     boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-                    bgcolor: "#f8f9fa" 
+                    bgcolor: "#f8f9fa"
                   }}
                 >
                   <CardContent>
@@ -379,12 +394,12 @@ const Dashboard = () => {
 
               {/* Neutral */}
               <Grid item xs={12} md={3}>
-                <Card 
-                  sx={{ 
+                <Card
+                  sx={{
                     height: "100%",
                     borderRadius: 2,
                     boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-                    bgcolor: "#f8f9fa" 
+                    bgcolor: "#f8f9fa"
                   }}
                 >
                   <CardContent>
@@ -400,12 +415,12 @@ const Dashboard = () => {
 
               {/* Detractors */}
               <Grid item xs={12} md={3}>
-                <Card 
-                  sx={{ 
+                <Card
+                  sx={{
                     height: "100%",
                     borderRadius: 2,
                     boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-                    bgcolor: "#f8f9fa" 
+                    bgcolor: "#f8f9fa"
                   }}
                 >
                   <CardContent>
@@ -421,11 +436,11 @@ const Dashboard = () => {
 
               {/* Assessment Summary */}
               <Grid item xs={12}>
-                <Card 
-                  sx={{ 
+                <Card
+                  sx={{
                     borderRadius: 2,
                     boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-                    bgcolor: "#f8f9fa" 
+                    bgcolor: "#f8f9fa"
                   }}
                 >
                   <CardContent>
@@ -470,23 +485,23 @@ const Dashboard = () => {
 
         {/* Attendants Tab */}
         {activeTab === 2 && (
-          <Paper 
-            sx={{ 
-              p: 3, 
+          <Paper
+            sx={{
+              p: 3,
               borderRadius: 2,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.08)" 
+              boxShadow: "0 2px 8px rgba(0,0,0,0.08)"
             }}
           >
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
               <Typography variant="h6" fontWeight="bold">
                 {i18n.t("dashboard.tabs.attendants")}
               </Typography>
-              
-              <IconButton 
-                onClick={exportarGridParaExcel} 
+
+              <IconButton
+                onClick={exportarGridParaExcel}
                 color="primary"
                 size="small"
-                sx={{ 
+                sx={{
                   bgcolor: "rgba(53, 152, 220, 0.1)",
                   "&:hover": {
                     bgcolor: "rgba(53, 152, 220, 0.2)"
@@ -500,9 +515,9 @@ const Dashboard = () => {
 
             <div id="grid-attendants">
               {attendants.length > 0 && (
-                <TableAttendantsStatus 
-                  attendants={attendants} 
-                  loading={loading} 
+                <TableAttendantsStatus
+                  attendants={attendants}
+                  loading={loading}
                 />
               )}
             </div>
