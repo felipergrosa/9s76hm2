@@ -13,6 +13,7 @@ interface TagData {
   nextLaneId?: number;
   greetingMessageLane: string;
   rollbackLaneId?: number;
+  userId?: number;
 }
 
 interface Request {
@@ -34,7 +35,8 @@ const UpdateUserService = async ({
     timeLane,
     nextLaneId = null,
     greetingMessageLane,
-    rollbackLaneId = null} = tagData;
+    rollbackLaneId = null,
+    userId } = tagData;
 
   try {
     await schema.validate({ name });
@@ -50,6 +52,7 @@ const UpdateUserService = async ({
     nextLaneId: String(nextLaneId) === "" ? null : nextLaneId,
     greetingMessageLane,
     rollbackLaneId: String(rollbackLaneId) === "" ? null : rollbackLaneId,
+    userId
   });
 
   await tag.reload();

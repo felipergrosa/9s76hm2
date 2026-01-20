@@ -5,20 +5,37 @@ import TicketTag from "../../models/TicketTag";
 
 interface Request {
   companyId: number;
+  userId?: number;
 }
 
 const KanbanListService = async ({
-  companyId
+  companyId,
+  userId
 }: Request): Promise<Tag[]> => {
+
+  let whereCondition: any = {
+    kanban: 1,
+    companyId: companyId,
+  };
+
+  if (userId) {
+    whereCondition = {
+      ...whereCondition,
+      [Op.or]: [
+        { userId: null },
+        { userId }
+      ]
+    };
+  } else {
+    whereCondition.userId = null;
+  }
+
   const tags = await Tag.findAll({
-    where: {
-      kanban: 1,
-      companyId: companyId,
-    },
+    where: whereCondition,
     order: [["id", "ASC"]],
     raw: true,
   });
-  //console.log(tags);
+
   return tags;
 };
 

@@ -12,6 +12,7 @@ interface Request {
   nextLaneId?: number;
   greetingMessageLane?: string;
   rollbackLaneId?: number;
+  userId?: number;
 }
 
 const CreateService = async ({
@@ -22,7 +23,8 @@ const CreateService = async ({
   timeLane = null,
   nextLaneId = null,
   greetingMessageLane = "",
-  rollbackLaneId = null
+  rollbackLaneId = null,
+  userId = null
 }: Request): Promise<Tag> => {
   const schema = Yup.object().shape({
     name: Yup.string().required().min(3)
@@ -35,13 +37,14 @@ const CreateService = async ({
   }
 
   const [tag] = await Tag.findOrCreate({
-    where: { name, color, kanban, companyId },
+    where: { name, color, kanban, companyId, userId },
     defaults: {
       name, color, kanban, companyId,
       timeLane,
       nextLaneId: String(nextLaneId) === "" ? null : nextLaneId,
       greetingMessageLane,
       rollbackLaneId: String(rollbackLaneId) === "" ? null : rollbackLaneId,
+      userId
     }
   });
 

@@ -155,13 +155,13 @@ async function getUserIdByContactTags(
 
     const userPermissionTags: any[] = allAllowedTagIds.size
       ? await Tag.findAll({
-          where: {
-            companyId,
-            id: { [Op.in]: Array.from(allAllowedTagIds) },
-            name: { [Op.like]: '#%' } // Apenas tags que começam com #
-          },
-          attributes: ["id", "name"]
-        })
+        where: {
+          companyId,
+          id: { [Op.in]: Array.from(allAllowedTagIds) },
+          name: { [Op.like]: '#%' } // Apenas tags que começam com #
+        },
+        attributes: ["id", "name"]
+      })
       : [];
 
     const tagById = new Map<number, any>();
@@ -585,21 +585,21 @@ async function getCampaign(id) {
       }
     ]
   });
-  
+
   // DEBUG: Log detalhado para verificar contatos carregados
   if (campaign) {
     const contactListId = campaign.contactListId;
     const contactList = campaign.contactList;
     const contacts = contactList?.contacts;
     const contactCount = contacts?.length || 0;
-    
+
     logger.info(`[getCampaign] Campaign ${id} | contactListId: ${contactListId} | ContactList loaded: ${!!contactList} | Contatos: ${contactCount}`);
-    
+
     // Se não carregou contatos, buscar diretamente para debug
     if (contactCount === 0 && contactListId) {
       const directCount = await ContactListItem.count({ where: { contactListId } });
       logger.warn(`[getCampaign] Campaign ${id} | Contagem direta de ContactListItem: ${directCount}`);
-      
+
       // Se há contatos no banco mas não vieram no include, buscar manualmente
       if (directCount > 0) {
         logger.info(`[getCampaign] Campaign ${id} | Buscando contatos manualmente...`);
@@ -613,12 +613,12 @@ async function getCampaign(id) {
         logger.info(`[getCampaign] Campaign ${id} | Contatos carregados manualmente: ${manualContacts.length}`);
       }
     }
-    
+
     console.log(`[getCampaign] Campaign ${id} metaTemplateVariables:`, JSON.stringify((campaign as any).metaTemplateVariables));
   } else {
     logger.error(`[getCampaign] Campaign ${id} não encontrada!`);
   }
-  
+
   return campaign;
 }
 
@@ -999,26 +999,26 @@ async function getCapBackoffSettings(companyId: number, isOfficialApi: boolean =
       try {
         const v = s.value ? JSON.parse(s.value) : null;
         if (v == null) return;
-        
+
         // Configurações Baileys
         if (s.key === "capHourly") capHourly = Number(v);
         if (s.key === "capDaily") capDaily = Number(v);
         if (s.key === "backoffErrorThreshold") backoffErrorThreshold = Number(v);
         if (s.key === "backoffPauseMinutes") backoffPauseMinutes = Number(v);
-        
+
         // Configurações API Oficial
         if (s.key === "officialApiCapHourly") officialCapHourly = Number(v);
         if (s.key === "officialApiCapDaily") officialCapDaily = Number(v);
-      } catch {}
+      } catch { }
     });
 
     // Retornar caps baseado no tipo de conexão
     if (isOfficialApi) {
-      return { 
-        capHourly: officialCapHourly, 
-        capDaily: officialCapDaily, 
-        backoffErrorThreshold, 
-        backoffPauseMinutes 
+      return {
+        capHourly: officialCapHourly,
+        capDaily: officialCapDaily,
+        backoffErrorThreshold,
+        backoffPauseMinutes
       };
     }
 
@@ -1294,54 +1294,54 @@ async function handleProcessCampaign(job) {
         logger.error(`[ProcessCampaign] Campanha ${id} não tem contactList associada`);
         return;
       }
-      
+
       const contacts = campaign.contactList.contacts || [];
       logger.info(`[ProcessCampaign] Campanha ${id} | ContactList: ${campaign.contactList.id} | Total de contatos: ${contacts.length}`);
-      
+
       if (!isArray(contacts) || contacts.length === 0) {
         logger.warn(`[ProcessCampaign] Campanha ${id} não tem contatos na lista. Verifique se a lista tem contatos válidos.`);
         return;
       }
-      
+
       // Processar contatos da lista
       const contactData = contacts.map(contact => ({
-          contactId: contact.id,
-          campaignId: campaign.id,
-          variables: settings.variables,
-          isGroup: contact.isGroup
-        }));
+        contactId: contact.id,
+        campaignId: campaign.id,
+        variables: settings.variables,
+        isGroup: contact.isGroup
+      }));
 
-        // const baseDelay = job.data.delay || 0;
-        // longerIntervalAfter representa após quantas mensagens aplicar o intervalo maior (contagem)
-        const longerIntervalAfter = settings.longerIntervalAfter;
-        // intervals em milissegundos
-        const greaterIntervalMs = parseToMilliseconds(settings.greaterInterval);
-        const messageIntervalMs = parseToMilliseconds(settings.messageInterval);
-        // mesmos intervals em segundos para incrementar a data base
-        const greaterIntervalSec = settings.greaterInterval;
-        const messageIntervalSec = settings.messageInterval;
+      // const baseDelay = job.data.delay || 0;
+      // longerIntervalAfter representa após quantas mensagens aplicar o intervalo maior (contagem)
+      const longerIntervalAfter = settings.longerIntervalAfter;
+      // intervals em milissegundos
+      const greaterIntervalMs = parseToMilliseconds(settings.greaterInterval);
+      const messageIntervalMs = parseToMilliseconds(settings.messageInterval);
+      // mesmos intervals em segundos para incrementar a data base
+      const greaterIntervalSec = settings.greaterInterval;
+      const messageIntervalSec = settings.messageInterval;
 
-        let baseDelay = campaign.scheduledAt;
+      let baseDelay = campaign.scheduledAt;
 
-        // const isOpen = await checkTime();
-        // const isFds = await checkerWeek();
+      // const isOpen = await checkTime();
+      // const isFds = await checkerWeek();
 
-        const queuePromises = [];
-        for (let i = 0; i < contactData.length; i++) {
-          baseDelay = addSeconds(baseDelay as any, (i > longerIntervalAfter ? greaterIntervalSec : messageIntervalSec) as any);
+      const queuePromises = [];
+      for (let i = 0; i < contactData.length; i++) {
+        baseDelay = addSeconds(baseDelay as any, (i > longerIntervalAfter ? greaterIntervalSec : messageIntervalSec) as any);
 
-          const { contactId, campaignId, variables } = contactData[i];
-          const delay = calculateDelay(i, baseDelay, longerIntervalAfter, greaterIntervalMs, messageIntervalMs);
-          // if (isOpen || !isFds) {
-          const queuePromise = campaignQueue.add(
-            "PrepareContact",
-            { contactId, campaignId, variables, delay },
-            { removeOnComplete: true }
-          );
-          queuePromises.push(queuePromise);
-          logger.info(`Registro enviado pra fila de disparo: Campanha=${campaign.id};Contato=${contacts[i].name};delay=${delay}`);
-        }
-        await Promise.all(queuePromises);
+        const { contactId, campaignId, variables } = contactData[i];
+        const delay = calculateDelay(i, baseDelay, longerIntervalAfter, greaterIntervalMs, messageIntervalMs);
+        // if (isOpen || !isFds) {
+        const queuePromise = campaignQueue.add(
+          "PrepareContact",
+          { contactId, campaignId, variables, delay },
+          { removeOnComplete: true }
+        );
+        queuePromises.push(queuePromise);
+        logger.info(`Registro enviado pra fila de disparo: Campanha=${campaign.id};Contato=${contacts[i].name};delay=${delay}`);
+      }
+      await Promise.all(queuePromises);
     }
   } catch (err: any) {
     Sentry.captureException(err);
@@ -1606,7 +1606,7 @@ async function handleDispatchCampaign(job) {
     // API Oficial também tem caps muito mais altos (Meta permite milhares por dia)
     const caps = await getCapBackoffSettings(campaign.companyId, isOfficial);
     const intervals = await getIntervalSettings(campaign.companyId, isOfficial);
-    
+
     const capDelayMs = await getCapDeferDelayMs(selectedWhatsappId, caps);
     const backoffDelayMs = getBackoffDeferDelayMs(selectedWhatsappId);
     const pacingDelayMs = getPacingDeferDelayMs(selectedWhatsappId, intervals);
@@ -1728,10 +1728,10 @@ async function handleDispatchCampaign(job) {
           let templateBodyText: string = "";
           try {
             const templateDef = await GetTemplateDefinition(selectedWhatsappId, templateName, languageCode);
-            
+
             // Extrair texto do body do template
             templateBodyText = templateDef.body || "";
-            
+
             // Substituir variáveis {{1}}, {{2}}, etc. pelos valores reais
             if (templateComponents && Array.isArray(templateComponents)) {
               const bodyComponent = templateComponents.find((c: any) => c.type === "body");
@@ -1743,7 +1743,7 @@ async function handleDispatchCampaign(job) {
                 });
               }
             }
-            
+
             if (templateDef.headerFormat &&
               ["DOCUMENT", "IMAGE", "VIDEO"].includes(templateDef.headerFormat) &&
               templateDef.headerHandle) {
@@ -1773,10 +1773,10 @@ async function handleDispatchCampaign(job) {
           let targetUserId = campaign.userId || null;
           if ((campaign as any).userIds) {
             try {
-              const userIdsArray = typeof (campaign as any).userIds === 'string' 
-                ? JSON.parse((campaign as any).userIds) 
+              const userIdsArray = typeof (campaign as any).userIds === 'string'
+                ? JSON.parse((campaign as any).userIds)
                 : (campaign as any).userIds;
-              
+
               if (Array.isArray(userIdsArray) && userIdsArray.length > 0) {
                 const matchedUserId = await getUserIdByContactTags(contact.id, userIdsArray, campaign.companyId);
                 if (matchedUserId) {
@@ -1908,10 +1908,10 @@ async function handleDispatchCampaign(job) {
       let targetUserId = campaign.userId || null;
       if ((campaign as any).userIds) {
         try {
-          const userIdsArray = typeof (campaign as any).userIds === 'string' 
-            ? JSON.parse((campaign as any).userIds) 
+          const userIdsArray = typeof (campaign as any).userIds === 'string'
+            ? JSON.parse((campaign as any).userIds)
             : (campaign as any).userIds;
-          
+
           if (Array.isArray(userIdsArray) && userIdsArray.length > 0) {
             const matchedUserId = await getUserIdByContactTags(contact.id, userIdsArray, campaign.companyId);
             if (matchedUserId) {
@@ -2027,6 +2027,17 @@ async function handleDispatchCampaign(job) {
                 await verifyMessage(audioMessage, ticket, contact, null, true, false, true); // isCampaign=true
               }
               const sentMessage = await wbot.sendMessage(chatId, { ...options });
+
+              // FIX: Ensure caption is present in the returned message object so verifyMediaMessage can save it
+              if (sentMessage.message && options.caption) {
+                if (sentMessage.message.videoMessage) {
+                  sentMessage.message.videoMessage.caption = options.caption;
+                } else if (sentMessage.message.imageMessage) {
+                  sentMessage.message.imageMessage.caption = options.caption;
+                } else if (sentMessage.message.documentMessage) {
+                  sentMessage.message.documentMessage.caption = options.caption;
+                }
+              }
 
               await verifyMediaMessage(sentMessage, ticket, ticket.contact, null, false, true, wbot, true); // isCampaign=true
             }

@@ -12,7 +12,8 @@ interface Request {
   pageNumber?: string | number;
   kanban?: number;
   tagId?: number;
-  profile?: string; // Perfil do usuário
+  profile?: string;
+  userId?: number | string;
 }
 
 interface Response {
@@ -27,7 +28,8 @@ const ListService = async ({
   pageNumber = "1",
   kanban = 0,
   tagId = 0,
-  profile = "user"
+  profile = "user",
+  userId
 }: Request): Promise<Response> => {
   let whereCondition: any = {};
 
@@ -54,10 +56,15 @@ const ListService = async ({
     }
 
     // Usuários não-admin veem apenas tags transacionais (sem #)
+    // E apenas tags globais ou suas próprias tags
     if (profile !== "admin") {
       whereCondition = {
         ...whereCondition,
-        name: { [Op.notLike]: "#%" }
+        name: { [Op.notLike]: "#%" },
+        [Op.or]: [
+          { userId: null },
+          { userId: userId }
+        ]
       };
     }
 

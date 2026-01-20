@@ -209,10 +209,11 @@ const useStyles = makeStyles(theme => ({
       width: "100% !important",
       maxWidth: "100% !important",
       margin: "0 !important",
-      boxShadow: "0 1px 3px rgba(0,0,0,0.08) !important",
-      borderRadius: "8px !important",
-      background: "#fff !important",
-      minHeight: "100px", // Altura mínima para evitar colapso visual
+      boxShadow: "none !important", // Remove sombra do container da lib
+      borderRadius: "0 !important", // Remove borda
+      background: "transparent !important", // Fundo transparente
+      minHeight: "auto",
+      border: "none !important",
     },
   },
   actionsBar: {
@@ -303,6 +304,31 @@ const Kanban = () => {
   const [range, setRange] = useState({ startDate: parseISO(format(startOfMonth(new Date()), "yyyy-MM-dd")), endDate: parseISO(format(endOfMonth(new Date()), "yyyy-MM-dd")) });
   const [filtersModalOpen, setFiltersModalOpen] = useState(false);
 
+  // Kanban Pessoal
+  const [viewingUserId, setViewingUserId] = useState(user.id);
+  const [selectableUsers, setSelectableUsers] = useState([]);
+
+  useEffect(() => {
+    if (user.profile === "admin" || (user.managedUserIds && user.managedUserIds.length > 0)) {
+      const fetchUsers = async () => {
+        try {
+          const { data } = await api.get("/users", { params: { pageNumber: 1, pageSize: 1000 } });
+          let allowedUsers = data.users;
+          if (user.profile !== "admin") {
+            const permissions = user.managedUserIds || [];
+            // permissions pode ser array de strings ou ints, converte para int
+            const permissionsInt = permissions.map(p => Number(p));
+            allowedUsers = allowedUsers.filter(u => permissionsInt.includes(u.id));
+          }
+          setSelectableUsers(allowedUsers);
+        } catch (err) {
+          console.error("Erro ao buscar usuários para kanban", err);
+        }
+      };
+      fetchUsers();
+    }
+  }, [user]);
+
   const jsonString = user.queues.map(queue => queue.UserQueue.queueId);
 
   const queueOptions = useMemo(() => {
@@ -329,11 +355,11 @@ const Kanban = () => {
 
   useEffect(() => {
     fetchTags();
-  }, [user]);
+  }, [user, viewingUserId]);
 
   const fetchTags = async () => {
     try {
-      const response = await api.get("/tag/kanban/");
+      const response = await api.get("/tag/kanban/", { params: { viewingUserId } });
       const fetchedTags = response.data.lista || [];
       setTags(fetchedTags);
       fetchTickets();
@@ -349,6 +375,7 @@ const Kanban = () => {
           queueIds: JSON.stringify(jsonString),
           dateStart: startDate,
           dateEnd: endDate,
+          viewingUserId
         }
       });
       setTickets(data.tickets);
@@ -674,6 +701,22 @@ const Kanban = () => {
             onChange={(e) => setSearchText(e.target.value)}
             className={classes.searchInput}
           />
+
+          {(user.profile === "admin" || (user.managedUserIds && user.managedUserIds.length > 0)) && (
+            <FormControl variant="outlined" className={classes.actionButton} style={{ marginRight: 10, minWidth: 150 }}>
+              <Select
+                value={viewingUserId}
+                onChange={(e) => setViewingUserId(e.target.value)}
+                displayEmpty
+                style={{ height: 40 }}
+              >
+                <MenuItem value={user.id}>Meu Workspace</MenuItem>
+                {selectableUsers.map(u => (
+                  <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
 
           <Can role={user.profile} perform="dashboard:view" yes={() => (
             <Tooltip title={i18n.t('kanban.addColumns')}>

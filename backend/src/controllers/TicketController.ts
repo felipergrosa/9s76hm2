@@ -43,6 +43,7 @@ type IndexQuery = {
   isGroup?: string;
   sortTickets?: string;
   searchOnMessages?: string;
+  viewingUserId?: string;
 };
 
 type IndexQueryReport = {
@@ -234,17 +235,45 @@ export const kanban = async (req: Request, res: Response): Promise<Response> => 
   } = req.query as IndexQuery;
 
 
-  // A linha abaixo ainda é necessária para obter o companyId
-  const { companyId } = req.user;
-  const userId = Number(req.user.id);
+
+  const { companyId, profile, id } = req.user;
+  const user = req.user as any;
+  const managedUserIds = user.managedUserIds;
+  const requestUserId = Number(id);
+
+  let targetUserId = requestUserId;
 
   let queueIds: number[] = [];
   let tagsIds: number[] = [];
   let usersIds: number[] = [];
 
-  queueIds = safeParseArray(queueIdsStringified) as number[];
-  tagsIds = safeParseArray(tagIdsStringified) as number[];
-  usersIds = safeParseArray(userIdsStringified) as number[];
+  if (queueIdsStringified) {
+    queueIds = safeParseArray(queueIdsStringified) as number[];
+  }
+  if (tagIdsStringified) {
+    tagsIds = safeParseArray(tagIdsStringified) as number[];
+  }
+  if (userIdsStringified) {
+    usersIds = safeParseArray(userIdsStringified) as number[];
+  }
+
+  // Lógica de permissão para visualizar kanban de outro usuário
+  const { viewingUserId } = req.query as IndexQuery;
+  if (viewingUserId) {
+    const vUserId = Number(viewingUserId);
+    if (profile === "admin") {
+      targetUserId = vUserId;
+    } else {
+      const allowed = managedUserIds ? managedUserIds.map((uid: any) => Number(uid)) : [];
+      if (allowed.includes(vUserId)) {
+        targetUserId = vUserId;
+      } else if (vUserId === requestUserId) {
+        targetUserId = vUserId;
+      } else {
+        throw new AppError("ERR_NO_PERMISSION", 403);
+      }
+    }
+  }
 
   const { tickets, count, hasMore } = await ListTicketsServiceKanban({
     searchParam,
@@ -257,11 +286,10 @@ export const kanban = async (req: Request, res: Response): Promise<Response> => 
     dateEnd,
     updatedAt,
     showAll,
-    userId: String(userId), 
+    userId: String(targetUserId),
     queueIds,
     withUnreadMessages,
     companyId
-
   });
 
   return res.status(200).json({ tickets, count, hasMore });
@@ -370,13 +398,13 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 
   // Verificação de acesso por carteira (inclui supervisor via managedUserIds)
   const walletResult = await GetUserWalletContactIds(Number(userId), Number(companyId));
-  
+
   // Modo EXCLUDE: bloqueia acesso a tickets dos usuários excluídos
   if (walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) {
     const isExcludedUser = walletResult.excludedUserIds.includes(Number(ticket.userId));
     const isOwnTicket = Number(ticket.userId) === Number(userId);
     const isUnassigned = !ticket.userId;
-    
+
     if (isExcludedUser && !isOwnTicket && !isUnassigned) {
       throw new AppError("FORBIDDEN_CONTACT_ACCESS", 403);
     }
@@ -431,13 +459,13 @@ export const showFromUUID = async (
 
   // Verificação de acesso por carteira (inclui supervisor via managedUserIds)
   const walletResult = await GetUserWalletContactIds(Number(userId), Number(companyId));
-  
+
   // Modo EXCLUDE: bloqueia acesso a tickets dos usuários excluídos
   if (walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) {
     const isExcludedUser = walletResult.excludedUserIds.includes(Number(ticket.userId));
     const isOwnTicket = Number(ticket.userId) === Number(userId);
     const isUnassigned = !ticket.userId;
-    
+
     if (isExcludedUser && !isOwnTicket && !isUnassigned) {
       throw new AppError("FORBIDDEN_CONTACT_ACCESS", 403);
     }

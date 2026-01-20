@@ -6,20 +6,34 @@ interface Request {
   companyId: number;
   searchParam?: string;
   kanban?: number;
+  profile?: string;
+  userId?: number | string;
 }
 
 const ListService = async ({
   companyId,
   searchParam,
-  kanban = 0
+  kanban = 0,
+  profile = "user",
+  userId
 }: Request): Promise<Tag[]> => {
-  let whereCondition = {};
+  let whereCondition: any = {};
 
   if (searchParam) {
     whereCondition = {
       [Op.or]: [
         { name: { [Op.like]: `%${searchParam}%` } },
         { color: { [Op.like]: `%${searchParam}%` } }
+      ]
+    };
+  }
+
+  if (profile !== "admin") {
+    whereCondition = {
+      ...whereCondition,
+      [Op.or]: [
+        { userId: null },
+        { userId: userId }
       ]
     };
   }

@@ -16,6 +16,7 @@ import Ticket from "./Ticket";
 import TicketTag from "./TicketTag";
 import Contact from "./Contact";
 import ContactTag from "./ContactTag";
+import User from "./User";
 
 @Table
 class Tag extends Model<Tag> {
@@ -29,6 +30,13 @@ class Tag extends Model<Tag> {
 
   @Column
   color: string;
+
+  @ForeignKey(() => User)
+  @Column
+  userId: number;
+
+  @BelongsTo(() => User)
+  user: User;
 
   @Column
   kanban: number;
@@ -61,9 +69,9 @@ class Tag extends Model<Tag> {
   @Column
   timeLane: number;
 
-	@Column
+  @Column
   nextLaneId: number;
-	
+
   @Column
   greetingMessageLane: string;
 

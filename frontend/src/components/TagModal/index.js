@@ -96,7 +96,23 @@ const TagModal = ({ open, onClose, tagId, kanban }) => {
 	const [applyingRules, setApplyingRules] = useState(false);
 	const [previewOpen, setPreviewOpen] = useState(false);
 	const [previewContacts, setPreviewContacts] = useState([]);
+
 	const [fieldValues, setFieldValues] = useState({});
+	const [users, setUsers] = useState([]);
+
+	useEffect(() => {
+		if (user.profile === "admin") {
+			const fetchUsers = async () => {
+				try {
+					const { data } = await api.get("/users/", { params: { pageNumber: 1, pageSize: 9999 } });
+					setUsers(data.users);
+				} catch (err) {
+					toastError(err);
+				}
+			};
+			fetchUsers();
+		}
+	}, [user]);
 
 	const fetchFieldValues = async fieldName => {
 		if (!fieldName) return;
@@ -125,7 +141,9 @@ const TagModal = ({ open, onClose, tagId, kanban }) => {
 		timeLane: 0,
 		nextLaneId: 0,
 		greetingMessageLane: "",
+
 		rollbackLaneId: 0,
+		userId: null,
 	};
 
 	const [tag, setTag] = useState(initialState);
@@ -501,6 +519,24 @@ const TagModal = ({ open, onClose, tagId, kanban }) => {
 											</div>
 										)}
 									</Grid>
+
+									{user.profile === 'admin' && (
+										<Grid item xs={12} md={12} xl={12}>
+											<FormControl variant="outlined" margin="dense" fullWidth>
+												<InputLabel>Workspace (Dono da Tag)</InputLabel>
+												<Select
+													value={tag.userId || ""}
+													onChange={(e) => setTag(prev => ({ ...prev, userId: e.target.value || null }))}
+													label="Workspace (Dono da Tag)"
+												>
+													<MenuItem value="">Global (Todos)</MenuItem>
+													{users.map(u => (
+														<MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>
+													))}
+												</Select>
+											</FormControl>
+										</Grid>
+									)}
 
 									{kanban === 1 && (
 										<>

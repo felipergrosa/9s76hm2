@@ -11,17 +11,18 @@ const useStyles = makeStyles(theme => ({
   ticketCard: {
     background: theme.palette.background.paper,
     borderRadius: 8,
-    boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
-    border: "1px solid transparent",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.12)", // Sombra restaurada
+    border: "1px solid rgba(0, 0, 0, 0.05)",
     transition: "all 0.2s",
-    marginBottom: 0,
-    width: "100%",
+    marginBottom: 8,
+    width: "94%",
+    margin: "8px auto",
     boxSizing: "border-box",
     position: "relative",
     "&:hover": {
       borderColor: theme.palette.primary.main,
       transform: "translateY(-2px)",
-      boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+      boxShadow: "0 4px 6px rgba(0,0,0,0.1)", // Sombra hover restaurada
     },
   },
   ticketContent: {
@@ -257,12 +258,12 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
           <MoreVertIcon style={{ fontSize: 16 }} />
         </IconButton>
       </Tooltip>
-      
+
       {(user.profile === "admin" || ticket.userId === user.id) && (
         <Tooltip title="Fechar Ticket">
-          <IconButton className={classes.closeBtn} size="small" onClick={(e) => { 
-            e.stopPropagation(); 
-            try { window.dispatchEvent(new CustomEvent('kanban:cardClose', { detail: { id: ticket?.id } })); } catch (err) {} 
+          <IconButton className={classes.closeBtn} size="small" onClick={(e) => {
+            e.stopPropagation();
+            try { window.dispatchEvent(new CustomEvent('kanban:cardClose', { detail: { id: ticket?.id } })); } catch (err) { }
           }}>
             <CloseIcon style={{ fontSize: 16 }} />
           </IconButton>

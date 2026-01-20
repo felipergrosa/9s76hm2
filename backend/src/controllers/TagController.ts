@@ -21,11 +21,12 @@ type IndexQuery = {
   pageNumber?: string | number;
   kanban?: number;
   tagId?: number;
+  viewingUserId?: string;
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { pageNumber, searchParam, kanban, tagId } = req.query as IndexQuery;
-  const { companyId, profile } = req.user;
+  const { companyId, profile, id } = req.user;
 
   const { tags, count, hasMore } = await ListService({
     searchParam,
@@ -33,7 +34,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     companyId,
     kanban,
     tagId,
-    profile
+    profile,
+    userId: id
   });
 
   return res.json({ tags, count, hasMore });
@@ -45,13 +47,16 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     nextLaneId,
     greetingMessageLane,
     rollbackLaneId } = req.body;
-  const { companyId, profile } = req.user;
+  let { userId } = req.body; // Pega userId do body
+  const { companyId, profile, id: requestUserId } = req.user;
 
   // Usuários não-admin só podem criar tags transacionais (sem #)
   if (profile !== "admin") {
     if (name && name.startsWith("#")) {
       throw new AppError("Usuários não-admin só podem criar tags transacionais (sem #)", 403);
     }
+    // Força a tag a ser pessoal se não for admin
+    userId = requestUserId;
   }
 
   const tag = await CreateService({
@@ -62,7 +67,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     timeLane,
     nextLaneId,
     greetingMessageLane,
-    rollbackLaneId
+    rollbackLaneId,
+    userId
   });
 
   const io = getIO();
@@ -75,12 +81,14 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   return res.status(200).json(tag);
 };
 
+// ... (métodos show, update, delete ficam iguais por enquanto, update já aceita userId no service mas controller não processa mudança de dono, ok)
+
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { tagId } = req.params;
 
   const tag = await ShowService(tagId);
 
-  return res.status(200).json(tag);
+  return res.json(tag);
 };
 
 export const update = async (
@@ -95,12 +103,12 @@ export const update = async (
   if (profile !== "admin") {
     // Busca a tag atual
     const currentTag = await ShowService(tagId);
-    
+
     // Não pode editar tag de permissão (#)
     if (currentTag.name && currentTag.name.startsWith("#")) {
       throw new AppError("Usuários não-admin não podem editar tags de permissão (#)", 403);
     }
-    
+
     // Não pode renomear para tag de permissão (#)
     if (tagData.name && tagData.name.startsWith("#")) {
       throw new AppError("Usuários não-admin só podem criar/editar tags transacionais (sem #)", 403);
@@ -129,7 +137,7 @@ export const remove = async (
   // Usuários não-admin só podem deletar tags transacionais (sem #)
   if (profile !== "admin") {
     const currentTag = await ShowService(tagId);
-    
+
     if (currentTag.name && currentTag.name.startsWith("#")) {
       throw new AppError("Usuários não-admin não podem deletar tags de permissão (#)", 403);
     }
@@ -149,17 +157,44 @@ export const remove = async (
 
 export const list = async (req: Request, res: Response): Promise<Response> => {
   const { searchParam, kanban } = req.query as IndexQuery;
-  const { companyId } = req.user;
+  const { companyId, profile, id } = req.user;
 
-  const tags = await SimpleListService({ searchParam, kanban, companyId });
+  const tags = await SimpleListService({ searchParam, kanban, companyId, profile, userId: id });
 
   return res.json(tags);
 };
 
-export const kanban = async (req: Request, res: Response): Promise<Response> => {
-  const { companyId } = req.user;
 
-  const tags = await KanbanListService({ companyId });
+
+export const kanban = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId, profile, id } = req.user;
+  const user = req.user as any;
+  const managedUserIds = user.managedUserIds;
+  const requestUserId = Number(id);
+
+  const { viewingUserId } = req.query as IndexQuery;
+
+  let targetUserId = requestUserId;
+
+  if (viewingUserId) {
+    const vUserId = Number(viewingUserId);
+
+    if (profile === "admin") {
+      targetUserId = vUserId;
+    } else {
+      const allowed = managedUserIds ? managedUserIds.map((uid: any) => Number(uid)) : [];
+
+      if (allowed.includes(vUserId)) {
+        targetUserId = vUserId;
+      } else if (vUserId === requestUserId) {
+        targetUserId = vUserId;
+      } else {
+        throw new AppError("ERR_NO_PERMISSION", 403);
+      }
+    }
+  }
+
+  const tags = await KanbanListService({ companyId, userId: targetUserId });
 
   return res.json({ lista: tags });
 };
