@@ -823,7 +823,7 @@ const messages = {
       },
       transferTicketModal: {
         title: "Transferir Ticket",
-        fieldLabel: "Digite para buscar usuários",
+        fieldLabel: "Selecione o usuário",
         fieldQueueLabel: "Transferir para fila",
         fieldQueuePlaceholder: "Selecione uma fila",
         fieldWhatsapp: "Selecione um whatsapp",

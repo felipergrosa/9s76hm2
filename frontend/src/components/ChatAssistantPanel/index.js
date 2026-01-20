@@ -31,11 +31,11 @@ const LANGS = [
 ];
 
 const useStyles = makeStyles((theme) => ({
-  root: ({ dialogMode }) => ({
+  root: ({ dialogMode, bottom, bottomMobile }) => ({
     position: dialogMode ? 'relative' : 'absolute',
     left: dialogMode ? 'auto' : 16,
     right: dialogMode ? 'auto' : 16,
-    bottom: dialogMode ? 'auto' : 72,
+    bottom: dialogMode ? 'auto' : (bottom || 72),
     zIndex: 200,
     minWidth: dialogMode ? 0 : 320,
     width: dialogMode ? '100%' : 'auto',
@@ -52,7 +52,7 @@ const useStyles = makeStyles((theme) => ({
     [theme.breakpoints.down('sm')]: {
       left: dialogMode ? 'auto' : 8,
       right: dialogMode ? 'auto' : 8,
-      bottom: dialogMode ? 'auto' : 96,
+      bottom: dialogMode ? 'auto' : (bottomMobile || bottom || 96),
       maxWidth: '100%',
       maxHeight: dialogMode ? '100%' : 320,
       padding: dialogMode ? 12 : 8,
@@ -264,8 +264,10 @@ const ChatAssistantPanel = ({
   dialogMode = false,
   disableClickAway = false,
   title,
+  bottom,
+  bottomMobile,
 }) => {
-  const classes = useStyles({ dialogMode });
+  const classes = useStyles({ dialogMode, bottom, bottomMobile });
   const [tab, setTab] = useState(1); // 0=Corretor 1=Aprimorar 2=Tradutor 3=Criar
   const [targetLang, setTargetLang] = useState("pt-BR");
   const [provider, setProvider] = useState(() => {
@@ -310,7 +312,7 @@ const ChatAssistantPanel = ({
       } catch (error) {
         console.error('[ChatAssistant] Erro ao carregar configuração:', error);
         setLockedProvider(false);
-        
+
         // Toast informativo sobre problema de configuração
         if (window.toast && error?.response?.status) {
           const status = error.response.status;
@@ -339,14 +341,14 @@ const ChatAssistantPanel = ({
       setLoading(true);
       setError("");
       setResult("");
-      
+
       // Validação para modo Criar
       if (transformMode === "create" && !inputMessage.trim()) {
         setError("💡 Digite uma instrução para criar a mensagem");
         setLoading(false);
         return;
       }
-      
+
       const payload = {
         mode: transformMode,
         text: inputMessage,
@@ -360,22 +362,22 @@ const ChatAssistantPanel = ({
           presets: presets?.map(p => p.label) || [],
           assistantContext,
           // Mapeia contexto para módulo
-          module: assistantContext === 'ticket' ? 'ticket' : 
-                 assistantContext === 'campaign' ? 'campaign' : 
-                 assistantContext === 'prompt' ? 'prompt' : 'general'
+          module: assistantContext === 'ticket' ? 'ticket' :
+            assistantContext === 'campaign' ? 'campaign' :
+              assistantContext === 'prompt' ? 'prompt' : 'general'
         }
       };
       if (transformMode === "translate") payload.targetLang = targetLang;
-      
+
       console.log('[ChatAssistant] Enviando payload:', payload);
       console.log('[ChatAssistant] Configuração atual:', integrationConfig);
-      
+
       const { data } = await api.post("/ai/transform", payload);
       console.log('[ChatAssistant] Resposta recebida:', data);
       setResult(data?.result || "");
     } catch (err) {
       console.error('[ChatAssistant] Erro na requisição:', err);
-      
+
       // Usa utilitário para tratamento padronizado de erros
       const errorInfo = showAIErrorToast(err, window.toast || console);
       setError(errorInfo.message);
@@ -388,7 +390,7 @@ const ChatAssistantPanel = ({
   useEffect(() => {
     if (!open) return;
     if (!initializing) setInitializing(true);
-    
+
     // Precisa de texto no input para todos os modos
     const txt = (inputMessage || "").trim();
     if (!txt) return;
@@ -402,7 +404,7 @@ const ChatAssistantPanel = ({
 
   // Persistir provedor preferido
   useEffect(() => {
-    try { localStorage.setItem('ai_provider', provider); } catch {}
+    try { localStorage.setItem('ai_provider', provider); } catch { }
   }, [provider]);
 
   // No contexto de campanha, ignoramos bloqueio para permitir troca de provedor
@@ -448,139 +450,139 @@ const ChatAssistantPanel = ({
         </div>
       )}
       <div className={classes.body}>
-          {contextSummary && (
-            <Typography className={classes.contextInfo} variant="caption">
-              {contextSummary}
-            </Typography>
-          )}
+        {contextSummary && (
+          <Typography className={classes.contextInfo} variant="caption">
+            {contextSummary}
+          </Typography>
+        )}
 
-          {presets && presets.length > 0 && (
-            <Box className={classes.presetsRow}>
-              {presets.map((preset) => (
-                <Chip
-                  key={preset.label}
-                  label={preset.label}
-                  size="small"
-                  className={classes.presetChip}
-                  clickable
-                  onClick={() => {
-                    if (typeof setInputMessage === "function") {
-                      setInputMessage(preset.prompt);
-                    }
-                  }}
-                />
+        {presets && presets.length > 0 && (
+          <Box className={classes.presetsRow}>
+            {presets.map((preset) => (
+              <Chip
+                key={preset.label}
+                label={preset.label}
+                size="small"
+                className={classes.presetChip}
+                clickable
+                onClick={() => {
+                  if (typeof setInputMessage === "function") {
+                    setInputMessage(preset.prompt);
+                  }
+                }}
+              />
+            ))}
+          </Box>
+        )}
+
+
+        {/* Seletor de idioma (apenas Tradutor) */}
+        {tab === 2 && (
+          <div style={{ marginBottom: 6 }}>
+            <TextField select size="small" value={targetLang} onChange={(e) => setTargetLang(e.target.value)} style={{ minWidth: 160 }}>
+              {LANGS.map((l) => (
+                <MenuItem key={l.code} value={l.code}>{l.label}</MenuItem>
               ))}
-            </Box>
-          )}
+            </TextField>
+          </div>
+        )}
 
+        {/* Dica para modo Criar */}
+        {tab === 3 && (
+          <div style={{ marginBottom: 8, padding: '8px 12px', background: 'rgba(37, 211, 102, 0.1)', borderRadius: 8, fontSize: 12 }}>
+            💡 <strong>Modo Criar:</strong> Digite uma instrução no campo de mensagem (ex: "mensagem de agradecimento pela parceria")
+          </div>
+        )}
 
-          {/* Seletor de idioma (apenas Tradutor) */}
-          {tab === 2 && (
-            <div style={{ marginBottom: 6 }}>
-              <TextField select size="small" value={targetLang} onChange={(e) => setTargetLang(e.target.value)} style={{ minWidth: 160 }}>
-                {LANGS.map((l) => (
-                  <MenuItem key={l.code} value={l.code}>{l.label}</MenuItem>
-                ))}
-              </TextField>
+        {/* Resultado + ações em linha */}
+        {(!!result || loading || initializing) && (
+          <div className={classes.resultContainer}>
+            <div className={classes.modeIcons}>
+              <Tooltip title="Corretor">
+                <IconButton size="small" onClick={() => setTab(0)} className={tab === 0 ? classes.modeButtonActive : classes.modeButton}>
+                  <SpellcheckIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Aprimorar">
+                <IconButton size="small" onClick={() => setTab(1)} className={tab === 1 ? classes.modeButtonActive : classes.modeButton}>
+                  <TrendingUpIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Tradutor">
+                <IconButton size="small" onClick={() => setTab(2)} className={tab === 2 ? classes.modeButtonActive : classes.modeButton}>
+                  <TranslateIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Criar do zero">
+                <IconButton size="small" onClick={() => setTab(3)} className={tab === 3 ? classes.modeButtonActive : classes.modeButton}>
+                  <BotIcon size={18} />
+                </IconButton>
+              </Tooltip>
             </div>
-          )}
-
-          {/* Dica para modo Criar */}
-          {tab === 3 && (
-            <div style={{ marginBottom: 8, padding: '8px 12px', background: 'rgba(37, 211, 102, 0.1)', borderRadius: 8, fontSize: 12 }}>
-              💡 <strong>Modo Criar:</strong> Digite uma instrução no campo de mensagem (ex: "mensagem de agradecimento pela parceria")
+            <div className={classes.resultBubble} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {loading || initializing ? (
+                <>
+                  <CircularProgress size={16} />
+                  <span style={{ fontSize: 13, opacity: 0.8 }}>Gerando...</span>
+                </>
+              ) : (
+                result
+              )}
             </div>
-          )}
-
-          {/* Resultado + ações em linha */}
-          {(!!result || loading || initializing) && (
-            <div className={classes.resultContainer}>
-              <div className={classes.modeIcons}>
-                <Tooltip title="Corretor">
-                  <IconButton size="small" onClick={() => setTab(0)} className={tab === 0 ? classes.modeButtonActive : classes.modeButton}>
-                    <SpellcheckIcon fontSize="small" />
+            <div className={classes.actionButtons}>
+              {/* Seletor de provedor (sempre visível) */}
+              <Tooltip title={`Selecionar provedor de IA (atual: ${providerLabel})`} placement="top">
+                <span>
+                  <IconButton onClick={openProviderMenu} className={classes.smallIconButton} size="small">
+                    <BotIcon size={16} />
                   </IconButton>
-                </Tooltip>
-                <Tooltip title="Aprimorar">
-                  <IconButton size="small" onClick={() => setTab(1)} className={tab === 1 ? classes.modeButtonActive : classes.modeButton}>
-                    <TrendingUpIcon fontSize="small" />
+                </span>
+              </Tooltip>
+              <Tooltip title="Recarregar" placement="top">
+                <span>
+                  <IconButton onClick={run} disabled={loading || !inputMessage} className={classes.smallIconButton} size="small">
+                    {loading ? <CircularProgress size={16} /> : <AutorenewIcon fontSize="small" />}
                   </IconButton>
-                </Tooltip>
-                <Tooltip title="Tradutor">
-                  <IconButton size="small" onClick={() => setTab(2)} className={tab === 2 ? classes.modeButtonActive : classes.modeButton}>
-                    <TranslateIcon fontSize="small" />
+                </span>
+              </Tooltip>
+              <Tooltip title="Inserir no editor" placement="top">
+                <span>
+                  <IconButton onClick={() => applyToEditor('apply')} disabled={!result || loading} className={classes.smallIconButton} size="small">
+                    <CheckIcon fontSize="small" />
                   </IconButton>
-                </Tooltip>
-                <Tooltip title="Criar do zero">
-                  <IconButton size="small" onClick={() => setTab(3)} className={tab === 3 ? classes.modeButtonActive : classes.modeButton}>
-                    <BotIcon size={18} />
-                  </IconButton>
-                </Tooltip>
-              </div>
-              <div className={classes.resultBubble} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {loading || initializing ? (
-                  <>
-                    <CircularProgress size={16} />
-                    <span style={{ fontSize: 13, opacity: 0.8 }}>Gerando...</span>
-                  </>
-                ) : (
-                  result
-                )}
-              </div>
-              <div className={classes.actionButtons}>
-                {/* Seletor de provedor (sempre visível) */}
-                <Tooltip title={`Selecionar provedor de IA (atual: ${providerLabel})`} placement="top">
-                  <span>
-                    <IconButton onClick={openProviderMenu} className={classes.smallIconButton} size="small">
-                      <BotIcon size={16} />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-                <Tooltip title="Recarregar" placement="top">
-                  <span>
-                    <IconButton onClick={run} disabled={loading || !inputMessage} className={classes.smallIconButton} size="small">
-                      {loading ? <CircularProgress size={16} /> : <AutorenewIcon fontSize="small" />}
-                    </IconButton>
-                  </span>
-                </Tooltip>
-                <Tooltip title="Inserir no editor" placement="top">
-                  <span>
-                    <IconButton onClick={() => applyToEditor('apply')} disabled={!result || loading} className={classes.smallIconButton} size="small">
-                      <CheckIcon fontSize="small" />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </div>
+                </span>
+              </Tooltip>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Popover de seleção de provedor */}
-          <Popover
-            open={Boolean(providerAnchor)}
-            anchorEl={providerAnchor}
-            onClose={closeProviderMenu}
-            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-            transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-          >
-            <div className={classes.providerMenu}>
-              <div
-                onClick={() => !effectiveLocked && handlePickProvider('openai')}
-                className={`${classes.providerChip} ${provider === 'openai' ? classes.providerChipActive : ''}`}
-                style={{ pointerEvents: effectiveLocked ? 'none' : 'auto', opacity: effectiveLocked && provider !== 'openai' ? 0.4 : 1 }}
-              >
-                OA
-              </div>
-              <div
-                onClick={() => !effectiveLocked && handlePickProvider('gemini')}
-                className={`${classes.providerChip} ${provider === 'gemini' ? classes.providerChipActive : ''}`}
-                style={{ pointerEvents: effectiveLocked ? 'none' : 'auto', opacity: effectiveLocked && provider !== 'gemini' ? 0.4 : 1 }}
-              >
-                GE
-              </div>
+        {/* Popover de seleção de provedor */}
+        <Popover
+          open={Boolean(providerAnchor)}
+          anchorEl={providerAnchor}
+          onClose={closeProviderMenu}
+          anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <div className={classes.providerMenu}>
+            <div
+              onClick={() => !effectiveLocked && handlePickProvider('openai')}
+              className={`${classes.providerChip} ${provider === 'openai' ? classes.providerChipActive : ''}`}
+              style={{ pointerEvents: effectiveLocked ? 'none' : 'auto', opacity: effectiveLocked && provider !== 'openai' ? 0.4 : 1 }}
+            >
+              OA
             </div>
-          </Popover>
-        </div>
-      </Paper>
+            <div
+              onClick={() => !effectiveLocked && handlePickProvider('gemini')}
+              className={`${classes.providerChip} ${provider === 'gemini' ? classes.providerChipActive : ''}`}
+              style={{ pointerEvents: effectiveLocked ? 'none' : 'auto', opacity: effectiveLocked && provider !== 'gemini' ? 0.4 : 1 }}
+            >
+              GE
+            </div>
+          </div>
+        </Popover>
+      </div>
+    </Paper>
   );
 
   if (dialogMode || disableClickAway) {

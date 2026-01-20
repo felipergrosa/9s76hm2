@@ -1899,7 +1899,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
               <ScheduleModal
                 open={appointmentModalOpen}
                 onClose={() => setAppointmentModalOpen(false)}
-                ticketId={ticketId}
+                contactId={contactId}
               />
             )}
           </div>

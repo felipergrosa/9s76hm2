@@ -78,19 +78,12 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
       return;
     }
 
-    if (!modalOpen || searchParam.length < 3) {
-      setLoading(false);
-      setSelectedQueue("");
-      return;
-    }
-    const delayDebounceFn = setTimeout(() => {
-      setLoading(true);
+    if (modalOpen) {
       const fetchUsers = async () => {
+        setLoading(true);
         try {
-          const { data } = await api.get("/users/", {
-            params: { searchParam },
-          });
-          setOptions(data.users);
+          const { data } = await api.get("/users/list");
+          setOptions(data);
           setLoading(false);
         } catch (err) {
           setLoading(false);
@@ -99,9 +92,8 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
       };
 
       fetchUsers();
-    }, 500);
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchParam, modalOpen, mode]);
+    }
+  }, [modalOpen, mode]);
 
   const handleMsgTransferChange = (event) => {
     setMsgTransfer(event.target.value);
@@ -126,11 +118,11 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
       } else {
         let data = {};
 
-          data.userId = !selectedUser ? null : selectedUser.id;
-          data.status = !selectedUser ? "pending" : ticket.isGroup ? "group" : "open";
-          data.queueId = selectedQueue;
-          data.msgTransfer = msgTransfer ? msgTransfer : null;
-          data.isTransfered = true;
+        data.userId = !selectedUser ? null : selectedUser.id;
+        data.status = !selectedUser ? "pending" : ticket.isGroup ? "group" : "open";
+        data.queueId = selectedQueue;
+        data.msgTransfer = msgTransfer ? msgTransfer : null;
+        data.isTransfered = true;
 
         await api.put(`/tickets/${ticketid}`, data);
       }
@@ -155,50 +147,41 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
         <Grid container spacing={2}>
           {mode !== "bot" && (
             <Grid item xs={12} sm={6} xl={6}>
-              <Autocomplete
-                fullWidth
-                getOptionLabel={(option) => `${option.name}`}
-                onChange={(e, newValue) => {
-                  setSelectedUser(newValue);
-                  if (newValue != null && Array.isArray(newValue.queues)) {
-                    if (newValue.queues.length === 1) {
-                      setSelectedQueue(newValue.queues[0].id);
-                    }
-                    setQueues(newValue.queues);
+              <FormControl variant="outlined" fullWidth>
+                <InputLabel id="user-selection-label">
+                  {i18n.t("transferTicketModal.fieldLabel")}
+                </InputLabel>
+                <Select
+                  labelId="user-selection-label"
+                  label={i18n.t("transferTicketModal.fieldLabel")}
+                  value={selectedUser?.id || ""}
+                  onChange={(e) => {
+                    const userId = e.target.value;
+                    const user = options.find(u => u.id === userId);
+                    setSelectedUser(user || null);
 
-                  } else {
-                    setQueues(allQueues);
-                    setSelectedQueue("");
-                  }
-                }}
-                options={options}
-                filterOptions={filterOptions}
-                freeSolo
-                autoHighlight
-                noOptionsText={i18n.t("transferTicketModal.noOptions")}
-                loading={loading}
-                renderOption={option => (<span> <UserStatusIcon user={option} /> {option.name}</span>)}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label={i18n.t("transferTicketModal.fieldLabel")}
-                    variant="outlined"
-                    autoFocus
-                    onChange={(e) => setSearchParam(e.target.value)}
-                    InputProps={{
-                      ...params.InputProps,
-                      endAdornment: (
-                        <React.Fragment>
-                          {loading ? (
-                            <CircularProgress color="inherit" size={20} />
-                          ) : null}
-                          {params.InputProps.endAdornment}
-                        </React.Fragment>
-                      ),
-                    }}
-                  />
-                )}
-              />
+                    if (user != null && Array.isArray(user.queues)) {
+                      if (user.queues.length === 1) {
+                        setSelectedQueue(user.queues[0].id);
+                      }
+                      setQueues(user.queues);
+                    } else {
+                      setQueues(allQueues);
+                      setSelectedQueue("");
+                    }
+                  }}
+                  fullWidth
+                >
+                  <MenuItem value="">
+                    <em>Nenhum</em>
+                  </MenuItem>
+                  {options.map((user) => (
+                    <MenuItem key={user.id} value={user.id}>
+                      {user.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
           )}
           <Grid xs={12} sm={mode === "bot" ? 12 : 6} xl={mode === "bot" ? 12 : 6} item >

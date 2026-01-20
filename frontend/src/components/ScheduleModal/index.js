@@ -19,7 +19,7 @@ import { i18n } from "../../translate/i18n";
 
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
-import { Chip, FormControl, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Select, Switch, Typography } from "@material-ui/core";
+import { Chip, FormControl, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Select, Switch, Typography, Tooltip, InputAdornment } from "@material-ui/core";
 import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete";
 import moment from "moment"
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -32,6 +32,8 @@ import MessageVariablesPicker from "../MessageVariablesPicker";
 import useQueues from "../../hooks/useQueues";
 import UserStatusIcon from "../UserModal/statusIcon";
 import { Facebook, Instagram, WhatsApp } from "@material-ui/icons";
+import { Sparkles } from "lucide-react";
+import ChatAssistantPanel from "../ChatAssistantPanel";
 
 const useStyles = makeStyles(theme => ({
 	root: {
@@ -122,6 +124,7 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 	const { findAll: findAllQueues } = useQueues();
 	const [options, setOptions] = useState([]);
 	const [searchParam, setSearchParam] = useState("");
+	const [assistantOpen, setAssistantOpen] = useState(false);
 
 	useEffect(() => {
 		return () => {
@@ -142,17 +145,12 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 	}, []);
 
 	useEffect(() => {
-		if (searchParam.length < 3) {
-			setLoading(false);
-			setSelectedQueue("");
-			return;
-		}
-		const delayDebounceFn = setTimeout(() => {
-			setLoading(true);
+		if (open) {
 			const fetchUsers = async () => {
+				setLoading(true);
 				try {
-					const { data } = await api.get("/users/");
-					setOptions(data.users);
+					const { data } = await api.get("/users/list");
+					setOptions(data);
 					setLoading(false);
 				} catch (err) {
 					setLoading(false);
@@ -161,9 +159,8 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 			};
 
 			fetchUsers();
-		}, 500);
-		return () => clearTimeout(delayDebounceFn);
-	}, [searchParam]);
+		}
+	}, [open]);
 
 	useEffect(() => {
 		api
@@ -176,7 +173,7 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 				}));
 
 				setWhatsapps(mappedWhatsapps);
-				if (mappedWhatsapps.length && mappedWhatsapps?.length === 1){
+				if (mappedWhatsapps.length && mappedWhatsapps?.length === 1) {
 					setSelectedWhatsapps(mappedWhatsapps[0].id)
 				}
 			});
@@ -400,6 +397,18 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 					{({ touched, errors, isSubmitting, values, setFieldValue }) => (
 						<Form>
 							<DialogContent dividers>
+								{/* ASSISTENTE NO TOPO */}
+								<ChatAssistantPanel
+									open={assistantOpen}
+									inputMessage={values.body}
+									setInputMessage={(val) => setFieldValue("body", val)}
+									queueId={selectedQueue}
+									whatsappId={selectedWhatsapps}
+									onClose={() => setAssistantOpen(false)}
+									bottom={495}
+									bottomMobile={450}
+								/>
+
 								<div className={classes.multFieldLine}>
 									<FormControl
 										variant="outlined"
@@ -427,7 +436,7 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 								<div className={classes.multFieldLine}>
 									<Field
 										as={TextField}
-										rows={9}
+										rows={4}
 										multiline={true}
 										label={i18n.t("scheduleModal.form.body")}
 										name="body"
@@ -437,16 +446,32 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 										variant="outlined"
 										margin="dense"
 										fullWidth
+										InputProps={{
+											startAdornment: (
+												<InputAdornment position="start">
+													<Tooltip title="Assistente de Chat">
+														<IconButton
+															size="small"
+															aria-label="assistant"
+															onClick={() => setAssistantOpen(prev => !prev)}
+														>
+															<Sparkles size={18} />
+														</IconButton>
+													</Tooltip>
+												</InputAdornment>
+											),
+										}}
 									/>
 								</div>
-								<Grid item xs={12} md={12} xl={6}>
+								<Grid item xs={12} md={12} xl={12}>
 									<MessageVariablesPicker
 										disabled={isSubmitting}
 										onClick={value => handleClickMsgVar(value, setFieldValue)}
 									/>
 								</Grid>
 								<Grid container spacing={1}>
-									<Grid item xs={12} md={6} xl={6}>
+									{/* LINHA 1: Conexão | Abrir Ticket | Busca Usuários | Transferir para Fila */}
+									<Grid item xs={12} md={3} xl={3}>
 										<FormControl
 											variant="outlined"
 											margin="dense"
@@ -477,7 +502,8 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 											</Field>
 										</FormControl>
 									</Grid>
-									<Grid item xs={12} md={12} xl={6}>
+
+									<Grid item xs={12} md={3} xl={3}>
 										<FormControl
 											variant="outlined"
 											margin="dense"
@@ -505,63 +531,52 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 											</Field>
 										</FormControl>
 									</Grid>
-								</Grid>
-								<Grid spacing={1} container>
-									{/* SELECIONAR USUARIO */}
-									<Grid item xs={12} md={6} xl={6}>
-										<Autocomplete
-											style={{ marginTop: '8px' }}
+
+									<Grid item xs={12} md={3} xl={3}>
+										<FormControl
 											variant="outlined"
 											margin="dense"
-											className={classes.formControl}
-											getOptionLabel={(option) => `${option.name}`}
-											value={selectedUser}
-											size="small"
-											onChange={(e, newValue) => {
-												setSelectedUser(newValue);
-												if (newValue != null && Array.isArray(newValue.queues)) {
-													if (newValue.queues.length === 1) {
-														setSelectedQueue(newValue.queues[0].id);
-													}
-													setQueues(newValue.queues);
-
-												} else {
-													setQueues(allQueues);
-													setSelectedQueue("");
-												}
-											}}
-											options={options}
-											filterOptions={filterOptions}
-											freeSolo
 											fullWidth
-											disabled={values.openTicket === "disabled"}
-											autoHighlight
-											noOptionsText={i18n.t("transferTicketModal.noOptions")}
-											loading={loading}
-											renderOption={option => (<span> <UserStatusIcon user={option} /> {option.name}</span>)}
-											renderInput={(params) => (
-												<TextField
-													{...params}
-													label={i18n.t("transferTicketModal.fieldLabel")}
-													variant="outlined"
-													onChange={(e) => setSearchParam(e.target.value)}
-													InputProps={{
-														...params.InputProps,
-														endAdornment: (
-															<React.Fragment>
-																{loading ? (
-																	<CircularProgress color="inherit" size={20} />
-																) : null}
-																{params.InputProps.endAdornment}
-															</React.Fragment>
-														),
-													}}
-												/>
-											)}
-										/>
+											className={classes.formControl}
+										>
+											<InputLabel id="user-selection-label">
+												{i18n.t("transferTicketModal.fieldLabel")}
+											</InputLabel>
+											<Select
+												labelId="user-selection-label"
+												label={i18n.t("transferTicketModal.fieldLabel")}
+												value={selectedUser?.id || ""}
+												onChange={(e) => {
+													const userId = e.target.value;
+													const user = options.find(u => u.id === userId);
+													setSelectedUser(user || null);
+
+													if (user != null && Array.isArray(user.queues)) {
+														if (user.queues.length === 1) {
+															setSelectedQueue(user.queues[0].id);
+														}
+														setQueues(user.queues);
+													} else {
+														setQueues(allQueues);
+														setSelectedQueue("");
+													}
+												}}
+												fullWidth
+												disabled={values.openTicket === "disabled"}
+											>
+												<MenuItem value="">
+													<em>Nenhum</em>
+												</MenuItem>
+												{options.map((user) => (
+													<MenuItem key={user.id} value={user.id}>
+														{user.name}
+													</MenuItem>
+												))}
+											</Select>
+										</FormControl>
 									</Grid>
 
-									<Grid item xs={12} md={6} xl={6}>
+									<Grid item xs={12} md={3} xl={3}>
 										<FormControl
 											variant="outlined"
 											margin="dense"
@@ -585,9 +600,9 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 											</Select>
 										</FormControl>
 									</Grid>
-								</Grid>
-								<Grid spacing={1} container style={{ marginTop: '-10px' }}>
-									<Grid item xs={12} md={6} xl={6}>
+
+									{/* LINHA 2: Status do Ticket | Data do Agendamento | Enviar Assinatura */}
+									<Grid item xs={12} md={3} xl={3}>
 										<FormControl
 											variant="outlined"
 											margin="dense"
@@ -623,9 +638,6 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 											label={i18n.t("scheduleModal.form.sendAt")}
 											type="datetime-local"
 											name="sendAt"
-											// InputLabelProps={{
-											// 	shrink: true,
-											// }}
 											error={touched.sendAt && Boolean(errors.sendAt)}
 											helperText={touched.sendAt && errors.sendAt}
 											variant="outlined"
@@ -634,7 +646,8 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 											style={{ marginTop: '8px' }}
 										/>
 									</Grid>
-									<Grid item xs={12} md={6} xl={6}>
+
+									<Grid item xs={12} md={3} xl={3} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
 										<FormControlLabel
 											control={
 												<Field
@@ -649,6 +662,7 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 										/>
 									</Grid>
 								</Grid>
+
 								<h3>Recorrência</h3>
 								<p>
 									Você pode escolher enviar a mensagem de forma recorrente e
@@ -657,14 +671,14 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 								</p>
 								<br />
 								<Grid container spacing={1}>
-									<Grid item xs={12} md={4} xl={4}>
+									{/* LINHA 3: Intervalo | Valor do Intervalo | Enviar quantas vezes | Configuração de Dias Úteis */}
+									<Grid item xs={12} md={3} xl={3}>
 										<FormControl size="small" fullWidth variant="outlined">
 											<InputLabel id="demo-simple-select-label">Intervalo</InputLabel>
 											<Select
 												labelId="demo-simple-select-label"
 												id="demo-simple-select"
 												value={intervalo}
-												// name="intervalo"
 												onChange={(e) =>
 													setIntervalo(e.target.value || 1)
 												}
@@ -678,7 +692,7 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 										</FormControl>
 									</Grid>
 
-									<Grid item xs={12} md={4} xl={4}>
+									<Grid item xs={12} md={3} xl={3}>
 										<Field
 											as={TextField}
 											label="Valor do Intervalo"
@@ -690,7 +704,8 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 											fullWidth
 										/>
 									</Grid>
-									<Grid item xs={12} md={4} xl={4}>
+
+									<Grid item xs={12} md={3} xl={3}>
 										<Field
 											as={TextField}
 											label="Enviar quantas vezes"
@@ -704,17 +719,18 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 											fullWidth
 										/>
 									</Grid>
-									<Grid item xs={12} md={12} xl={12}>
+
+									<Grid item xs={12} md={3} xl={3}>
 										<FormControl size="small" fullWidth variant="outlined">
-											<InputLabel id="demo-simple-select-label">Enviar quantas vezes</InputLabel>
+											<InputLabel id="tipo-dias-label">Agendar em dias úteis</InputLabel>
 											<Select
-												labelId="demo-simple-select-label"
-												id="demo-simple-select"
+												labelId="tipo-dias-label"
+												id="tipoDias"
 												value={tipoDias}
 												onChange={(e) =>
 													setTipoDias(e.target.value || 4)
 												}
-												label="Enviar quantas vezes"
+												label="Agendar em dias úteis"
 											>
 												<MenuItem value={4}>Enviar normalmente em dias não úteis</MenuItem>
 												<MenuItem value={5}>Enviar um dia útil antes</MenuItem>

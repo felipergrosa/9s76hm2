@@ -350,6 +350,15 @@ async function handleSendScheduledMessage(job) {
       filePath = path.resolve("public", `company${schedule.companyId}`, schedule.mediaPath);
     }
 
+    let bodyMessage;
+
+    // @ts-ignore: Unreachable code error
+    if (schedule.assinar && !isNil(schedule.userId)) {
+      bodyMessage = `*${schedule?.user?.name}:*\n${schedule.body.trim()}`
+    } else {
+      bodyMessage = schedule.body.trim();
+    }
+
     if (schedule.openTicket === "enabled") {
       let ticket = await Ticket.findOne({
         where: {
@@ -372,14 +381,6 @@ async function handleSendScheduledMessage(job) {
 
       ticket = await ShowTicketService(ticket.id, schedule.companyId);
 
-      let bodyMessage;
-
-      // @ts-ignore: Unreachable code error
-      if (schedule.assinar && !isNil(schedule.userId)) {
-        bodyMessage = `*${schedule?.user?.name}:*\n${schedule.body.trim()}`
-      } else {
-        bodyMessage = schedule.body.trim();
-      }
       const sentMessage = await SendMessage(whatsapp, {
         number: schedule.contact.number,
         body: `\u200e ${formatBody(bodyMessage, ticket)}`,
@@ -394,22 +395,10 @@ async function handleSendScheduledMessage(job) {
       } else {
         await verifyMessage(sentMessage, ticket, ticket.contact, null, true, false);
       }
-      // if (ticket) {
-      //   await UpdateTicketService({
-      //     ticketData: {
-      //       sendFarewellMessage: false,
-      //       status: schedule.statusTicket,
-      //       userId: schedule.ticketUserId || null,
-      //       queueId: schedule.queueId || null
-      //     },
-      //     ticketId: ticket.id,
-      //     companyId: ticket.companyId
-      //   })
-      // }
     } else {
       await SendMessage(whatsapp, {
         number: schedule.contact.number,
-        body: `\u200e ${schedule.body}`,
+        body: `\u200e ${formatBody(bodyMessage)}`,
         mediaPath: filePath,
         companyId: schedule.companyId
       },

@@ -249,7 +249,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
     (async () => {
       try {
         const { data } = await api.get("/library/folders", { params: { companyId } });
-                console.log("📊 Pastas carregadas:", data);
+        console.log("📊 Pastas carregadas:", data);
         setFolders(data.folders || data);
       } catch (err) {
         toastError(err);
@@ -312,16 +312,12 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
   }, []);
 
   useEffect(() => {
-    if (searchParam.length < 3) {
-      setLoading(false);
-      setSelectedQueueOption("");
-      return;
-    }
-    const delayDebounceFn = setTimeout(() => {
+    if (open) {
       const fetchUsers = async () => {
+        setLoading(true);
         try {
-          const { data } = await api.get("/users/");
-          setUserOptions(data.users);
+          const { data } = await api.get("/users/list");
+          setUserOptions(data);
           setLoading(false);
         } catch (err) {
           setLoading(false);
@@ -329,9 +325,8 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
         }
       };
       fetchUsers();
-    }, 500);
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchParam]);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (activeStep) {
@@ -1072,58 +1067,47 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                                                   />
                                                 </Grid>
                                                 <Grid xs={12} md={4} item>
-                                                  <Autocomplete
-                                                    style={{ marginTop: '8px' }}
+                                                  <FormControl
                                                     variant="outlined"
                                                     margin="dense"
-                                                    getOptionLabel={(option) => `${option.name}`}
-                                                    value={queue.chatbots[index].user}
-                                                    onChange={(e, newValue) => {
-                                                      if (newValue != null) {
-                                                        setFieldValue(`chatbots[${index}].optUserId`, newValue.id);
-                                                      } else {
-                                                        setFieldValue(`chatbots[${index}].optUserId`, null);
-                                                      }
-                                                      if (newValue != null && Array.isArray(newValue.queues)) {
-                                                        if (newValue.queues.length === 1) {
-                                                          setSelectedQueueOption(newValue.queues[0].id);
-                                                          setFieldValue(`chatbots[${index}].optQueueId`, newValue.queues[0].id);
-                                                        }
-                                                        setQueues(newValue.queues);
-                                                      } else {
-                                                        setQueues(allQueues);
-                                                        setSelectedQueueOption("");
-                                                      }
-                                                    }}
-                                                    options={userOptions}
-                                                    filterOptions={filterOptions}
-                                                    freeSolo
                                                     fullWidth
-                                                    autoHighlight
-                                                    noOptionsText={i18n.t("transferTicketModal.noOptions")}
-                                                    loading={loading}
-                                                    size="small"
-                                                    renderOption={option => (<span> <UserStatusIcon user={option} /> {option.name}</span>)}
-                                                    renderInput={(params) => (
-                                                      <TextField
-                                                        {...params}
-                                                        label={i18n.t("transferTicketModal.fieldLabel")}
-                                                        variant="outlined"
-                                                        onChange={(e) => setSearchParam(e.target.value)}
-                                                        InputProps={{
-                                                          ...params.InputProps,
-                                                          endAdornment: (
-                                                            <Fragment>
-                                                              {loading ? (
-                                                                <CircularProgress color="inherit" size={20} />
-                                                              ) : null}
-                                                              {params.InputProps.endAdornment}
-                                                            </Fragment>
-                                                          ),
-                                                        }}
-                                                      />
-                                                    )}
-                                                  />
+                                                    className={classes.formControl}
+                                                  >
+                                                    <InputLabel id="user-selection-label">
+                                                      {i18n.t("transferTicketModal.fieldLabel")}
+                                                    </InputLabel>
+                                                    <Select
+                                                      labelId="user-selection-label"
+                                                      label={i18n.t("transferTicketModal.fieldLabel")}
+                                                      value={values?.chatbots?.[index]?.optUserId || ""}
+                                                      onChange={(e) => {
+                                                        const userId = e.target.value;
+                                                        const user = userOptions.find(u => u.id === userId);
+                                                        setFieldValue(`chatbots[${index}].optUserId`, userId || null);
+
+                                                        if (user != null && Array.isArray(user.queues)) {
+                                                          if (user.queues.length === 1) {
+                                                            setSelectedQueueOption(user.queues[0].id);
+                                                            setFieldValue(`chatbots[${index}].optQueueId`, user.queues[0].id);
+                                                          }
+                                                          setQueues(user.queues);
+                                                        } else {
+                                                          setQueues(allQueues);
+                                                          setSelectedQueueOption("");
+                                                        }
+                                                      }}
+                                                      fullWidth
+                                                    >
+                                                      <MenuItem value="">
+                                                        <em>Nenhum</em>
+                                                      </MenuItem>
+                                                      {userOptions.map((user) => (
+                                                        <MenuItem key={user.id} value={user.id}>
+                                                          {user.name}
+                                                        </MenuItem>
+                                                      ))}
+                                                    </Select>
+                                                  </FormControl>
                                                 </Grid>
                                                 <Grid xs={12} md={4} item>
                                                   <FormControl
