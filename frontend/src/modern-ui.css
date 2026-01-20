@@ -39,7 +39,7 @@
 }
 
 .modern-ui .MuiListItem-root {
-    margin: 4px 12px !important;
+    margin: 4px !important;
     border-radius: 12px !important;
     width: auto !important;
     transition: all 0.2s ease !important;
@@ -61,6 +61,25 @@
     filter: drop-shadow(0 0 8px var(--primary-glow)) !important;
 }
 
+/* Sidebar Active Item - Indicador Lateral Colorido */
+.modern-ui .MuiListItem-root.active {
+    position: relative !important;
+    overflow: visible !important;
+}
+
+.modern-ui .MuiListItem-root.active::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 1px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 4px !important;
+    height: 80% !important;
+    background: var(--primary-color) !important;
+    border-radius: 50px 0 0 50px !important;
+    box-shadow: 0 0 12px var(--primary-glow) !important;
+}
+
 /* Header Modernization */
 .modern-ui .MuiAppBar-root {
     background: rgba(255, 255, 255, 0.6) !important;
@@ -69,16 +88,101 @@
     box-shadow: none !important;
 }
 
-/* Buttons */
-.modern-ui .MuiButton-containedPrimary {
-    background: var(--primary-color) !important;
-    border-radius: 10px !important;
-    box-shadow: 0 4px 14px 0 var(--primary-glow) !important;
-    text-transform: none !important;
-    font-weight: 600 !important;
+/* Header Icons - Cores e Hover */
+.modern-ui .MuiAppBar-root .MuiIconButton-root {
+    color: var(--text-muted) !important;
+    transition: all 0.2s ease !important;
 }
 
-/* Scrollbar */
+.modern-ui .MuiAppBar-root .MuiIconButton-root:hover {
+    color: var(--primary-color) !important;
+    background: var(--primary-bg-fade) !important;
+    transform: scale(1.05) !important;
+}
+
+.modern-ui .MuiAppBar-root .MuiIconButton-root:hover svg {
+    filter: drop-shadow(0 0 6px var(--primary-glow)) !important;
+}
+
+/* Header Badge - Notificações */
+.modern-ui .MuiAppBar-root .MuiBadge-badge {
+    background: var(--primary-color) !important;
+    box-shadow: 0 0 8px var(--primary-glow) !important;
+}
+
+/* Header Avatar */
+.modern-ui .MuiAppBar-root .MuiAvatar-root {
+    border: 2px solid transparent !important;
+    transition: all 0.2s ease !important;
+}
+
+.modern-ui .MuiAppBar-root .MuiAvatar-root:hover {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 12px var(--primary-glow) !important;
+}
+
+/* Buttons - Liquid Glass Effect + 3D */
+.modern-ui .MuiButton-containedPrimary {
+    /* Gradiente 3D: claro no topo, escuro embaixo */
+    background: linear-gradient(180deg,
+            color-mix(in srgb, var(--primary-color) 85%, white) 0%,
+            var(--primary-color) 50%,
+            color-mix(in srgb, var(--primary-color) 80%, black) 100%) !important;
+    backdrop-filter: blur(8px) saturate(150%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(150%) !important;
+
+    /* Border - Brilho no topo, escuro embaixo */
+    border: 1px solid transparent !important;
+    border-top-color: rgba(255, 255, 255, 0.35) !important;
+    border-bottom-color: rgba(0, 0, 0, 0.15) !important;
+    border-radius: 12px !important;
+
+    /* Shadow 3D: sombra externa + highlight interno no topo */
+    box-shadow:
+        0 4px 16px var(--primary-glow),
+        0 2px 0 rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.1) !important;
+
+    /* Text - Branco para contraste */
+    color: #ffffff !important;
+    text-transform: none !important;
+    font-weight: 600 !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25) !important;
+
+    /* Sizing */
+    padding: 10px 24px !important;
+
+    /* Transition */
+    transition: all 0.2s ease-out !important;
+}
+
+.modern-ui .MuiButton-containedPrimary:hover {
+    /* Hover: mais claro, levanta */
+    background: linear-gradient(180deg,
+            color-mix(in srgb, var(--primary-color) 75%, white) 0%,
+            color-mix(in srgb, var(--primary-color) 95%, white) 50%,
+            var(--primary-color) 100%) !important;
+    box-shadow:
+        0 6px 24px var(--primary-glow),
+        0 3px 0 rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.08) !important;
+    transform: translateY(-2px) !important;
+}
+
+.modern-ui .MuiButton-containedPrimary:active {
+    /* Active: pressionado, mais escuro */
+    background: linear-gradient(180deg,
+            var(--primary-color) 0%,
+            color-mix(in srgb, var(--primary-color) 85%, black) 100%) !important;
+    transform: translateY(1px) !important;
+    box-shadow:
+        0 1px 4px var(--primary-glow),
+        inset 0 2px 4px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Scrollbar - Geral */
 .modern-ui *::-webkit-scrollbar {
     width: 6px !important;
     height: 6px !important;
@@ -89,7 +193,326 @@
     border-radius: 10px !important;
 }
 
+/* Scrollbar - Sidebar Invisível */
+.modern-ui .MuiDrawer-root,
+.modern-ui .MuiDrawer-root *,
+.modern-ui .MuiDrawer-paper,
+.modern-ui .MuiDrawer-paper *,
+.modern-ui .MuiDrawer-paper>div {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+
+.modern-ui .MuiDrawer-root::-webkit-scrollbar,
+.modern-ui .MuiDrawer-root *::-webkit-scrollbar,
+.modern-ui .MuiDrawer-paper::-webkit-scrollbar,
+.modern-ui .MuiDrawer-paper *::-webkit-scrollbar,
+.modern-ui .MuiDrawer-paper>div::-webkit-scrollbar {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+    background: transparent !important;
+}
+
 /* Dashboard Metric Cards Fix */
 .modern-ui .MuiGrid-root .MuiPaper-root {
-    padding: 20px !important;
+    padding: 0px !important;
+}
+
+/* Dashboard - Largura 100% em Desktop */
+.modern-ui [class*="Dashboard"],
+.modern-ui [class*="Dashboard"]>div {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.modern-ui [class*="Dashboard"] .MuiContainer-root,
+.modern-ui [class*="Dashboard"] .MuiContainer-maxWidthXl,
+.modern-ui [class*="Dashboard"] .MuiContainer-maxWidthLg,
+.modern-ui [class*="Dashboard"] .MuiContainer-maxWidthMd {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+}
+
+.modern-ui [class*="Dashboard"] .MuiGrid-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+}
+
+
+.modern-ui [class*="ticketsWrapper"] {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+
+.modern-ui [class*="ticketsWrapper"]::-webkit-scrollbar,
+.modern-ui [class*="ticketsWrapper"] *::-webkit-scrollbar {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+}
+
+/* TicketsList scroll invisível */
+.modern-ui [class*="ticketsList"],
+.modern-ui [class*="TicketsList"] {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+
+.modern-ui [class*="ticketsList"]::-webkit-scrollbar,
+.modern-ui [class*="TicketsList"]::-webkit-scrollbar {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+}
+
+/* Tickets Page - Remover bordas arredondadas excessivas */
+.modern-ui [class*="ticketsWrapper"] .MuiPaper-root,
+.modern-ui [class*="contactsWrapper"] .MuiPaper-root,
+.modern-ui [class*="chatContainer"] .MuiPaper-root,
+.modern-ui [class*="chatPapper"] .MuiPaper-root,
+.modern-ui [class*="messagesWrapper"] .MuiPaper-root,
+.modern-ui [class*="messageInputWrapper"] {
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: inherit !important;
+}
+
+/* Tickets Page - Containers principais sem bordas arredondadas */
+.modern-ui [class*="ticketsWrapper"],
+.modern-ui [class*="contactsWrapper"],
+.modern-ui [class*="messagesWrapper"],
+.modern-ui [class*="chatPapper"],
+.modern-ui [class*="chatContainer"] {
+    border-radius: 0 !important;
+    border: none !important;
+}
+
+/* Tickets Page - ticketsWrapper ajustes de padding/overflow */
+.modern-ui [class*="ticketsWrapper"] {
+    overflow: visible !important;
+    padding-right: 1.6px !important;
+}
+
+/* Tickets Page - Ajustar margens para não cortar bordas */
+.modern-ui [class*="serachInputWrapper"],
+.modern-ui [class*="ticketOptionsBox"] {
+    margin-right: 3px !important;
+}
+
+/* Tickets Page - Paper outlined sem efeitos glass */
+.modern-ui [class*="ticketsWrapper"] .MuiPaper-outlined,
+.modern-ui [class*="messagesWrapper"] .MuiPaper-outlined,
+.modern-ui [class*="welcomeMsg"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+}
+
+/* Tickets Page - Header/Tabs sem estilo glass */
+.modern-ui [class*="ticketOptionsBox"],
+.modern-ui [class*="serachInputWrapper"],
+.modern-ui [class*="tabsHeader"],
+.modern-ui [class*="ticketsWrapper"] .MuiPaper-elevation0 {
+    border-radius: 8px !important;
+    border: 1px solid #aaa !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+
+/* ChatAssistantPanel - Manter estilo original (fundo branco + box-shadow) */
+.modern-ui .MuiPaper-elevation6[class*="makeStyles-root"] {
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: none !important;
+    border-radius: 12px !important;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18) !important;
+}
+
+/* Emoji Picker - Fundo branco sem efeito glass */
+.modern-ui .emoji-mart,
+.modern-ui .emoji-picker-react {
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Emoji Picker - Search bar clara */
+.modern-ui .emoji-mart-search input,
+.modern-ui .emoji-picker-react input {
+    background: #f5f5f5 !important;
+    border: 1px solid #e0e0e0 !important;
+    color: #333 !important;
+    border-radius: 12px !important;
+}
+
+/* Emoji Picker - Category headers claros */
+.modern-ui .emoji-mart-category-label,
+.modern-ui .emoji-mart-category .emoji-mart-category-label span {
+    background: #f5f5f5 !important;
+    color: #333 !important;
+    border-radius: 12px !important;
+}
+
+/* Emoji Picker - Anchors/tabs claros */
+.modern-ui .emoji-mart-anchors,
+.modern-ui .emoji-mart-bar {
+    background: #fafafa !important;
+    border-bottom: 1px solid #e0e0e0 !important;
+    border-radius: 12px !important;
+}
+
+/* Moments Page - Reset Total para Layout Clássico (Valores Exatos) */
+
+/* Container Principal - Reset */
+.modern-ui [class*="MomentsPage"] [class*="mainPaper"],
+.modern-ui [class*="MomentsPage"] .MuiPaper-root {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-radius: 0 !important;
+    padding: 8px !important;
+    /* theme.spacing(1) */
+}
+
+/* Colunas (Lanes) - Largura Fixa Exata */
+.modern-ui [class*="MomentsUser"] [class*="column"],
+.modern-ui [class*="MomentsUser"]>div>div {
+    width: 350px !important;
+    min-width: 350px !important;
+    max-width: 350px !important;
+    flex: 0 0 350px !important;
+
+    background-color: #f5f5f5 !important;
+    border: 1px solid rgba(0, 0, 0, 0.12) !important;
+    border-radius: 4px !important;
+    /* theme.shape.borderRadius padrão */
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+
+    margin-right: 16px !important;
+    /* theme.spacing(2) */
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Headers das Colunas */
+.modern-ui [class*="MomentsUser"] [class*="columnHeader"] {
+    background-color: #ffffff !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+    border-radius: 4px 4px 0 0 !important;
+    /* Acompanha o radius da coluna */
+    padding: 16px !important;
+    /* theme.spacing(2) */
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+}
+
+/* Lista de Tickets - Scrollbar Invisível */
+.modern-ui [class*="MomentsUser"] [class*="ticketsList"] {
+    scrollbar-width: none !important;
+    padding: 8px !important;
+    /* theme.spacing(1) */
+}
+
+.modern-ui [class*="MomentsUser"] [class*="ticketsList"]::-webkit-scrollbar {
+    display: none !important;
+}
+
+/* Cards de Tickets */
+.modern-ui [class*="MomentsUser"] [class*="ticketCard"] {
+    background-color: #ffffff !important;
+    border: 1px solid transparent !important;
+    border-radius: 8px !important;
+    /* Definido explicitamente no componente original */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
+    backdrop-filter: none !important;
+    margin-bottom: 8px !important;
+    /* theme.spacing(1) */
+    transition: all 0.2s !important;
+}
+
+.modern-ui [class*="MomentsUser"] [class*="ticketCard"]:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Tipografia e Badge Reset */
+.modern-ui [class*="MomentsPage"] .MuiTypography-root {
+    color: inherit !important;
+    text-shadow: none !important;
+}
+
+/* Ajuste específico para badges (contadores) */
+.modern-ui [class*="MomentsUser"] .MuiBadge-badge {
+    height: 20px !important;
+    font-size: 0.75rem !important;
+}
+
+
+
+/* Kanban Page - Manter layout padrão */
+.modern-ui [class*="KanbanPage"] .MuiPaper-root,
+.modern-ui [class*="KanbanPage"] .MuiCard-root,
+.modern-ui [class*="react-trello"] .MuiPaper-root,
+.modern-ui [class*="react-trello"] .MuiCard-root {
+    background: #fff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: 1px solid rgba(0, 0, 0, 0.12) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Kanban - Corrigir Drag-Drop (remover transforms que afetam posicionamento) */
+.modern-ui .react-trello-board,
+.modern-ui .react-trello-lane,
+.modern-ui .smooth-dnd-container {
+    transform: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Ghost do drag - posição correta */
+.modern-ui .smooth-dnd-ghost {
+    transform: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    opacity: 0.95 !important;
+    pointer-events: none !important;
+}
+
+/* Container do Kanban - sem transforms */
+.modern-ui [class*="kanbanContainer"] {
+    transform: none !important;
+    will-change: auto !important;
+}
+
+/* Cards do Kanban durante drag */
+.modern-ui .smooth-dnd-draggable-wrapper {
+    transform: none !important;
+}
+
+/* Placeholders durante o drag */
+.modern-ui .smooth-dnd-drop-preview-constant-class,
+.modern-ui .smooth-dnd-drop-preview-default-class {
+    background-color: rgba(0, 0, 0, 0.05) !important;
+    border: 2px dashed #ccc !important;
+    border-radius: 8px !important;
 }

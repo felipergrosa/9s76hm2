@@ -195,7 +195,7 @@ const Dashboard = () => {
       py: 2,
       fontFamily: viewMode === "modern" ? "'Plus Jakarta Sans', sans-serif" : "inherit"
     }}>
-      <Container maxWidth="xl">
+      <Container maxWidth={false} sx={{ px: 2 }}>
         {/* Header with filter button */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
           <Typography variant="h4" fontWeight="bold" color={viewMode === "modern" ? "text.primary" : "primary"}>
