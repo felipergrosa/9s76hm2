@@ -2005,10 +2005,8 @@ const MessagesList = ({
                       // Stickers/GIFs: nunca exibir texto
                       if (message.mediaType === "sticker" || message.mediaType === "gif") return null;
 
-                      // Remover legendas de mídia (imagem, vídeo, áudio, arquivos) e reações/location/contact
+                      // Remover texto apenas de áudios (que têm player inline), arquivos, e mensagens especiais
                       if (
-                        message.mediaType === "image" ||
-                        message.mediaType === "video" ||
                         message.mediaType === "audio" ||
                         message.mediaType === "application" ||
                         message.mediaType === "document" ||
