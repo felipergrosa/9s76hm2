@@ -196,6 +196,15 @@ const MomentsUser = ({ onPanStart }) => {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Manipulador seguro para iniciar o arrasto apenas no cabeçalho
+  const handleHeaderPointerDown = (e) => {
+    if (e.button !== 0) return;
+    const isInteractive = e.target.closest('button,a,input,textarea,select,[role="button"]');
+    if (isInteractive) return;
+    try { e.preventDefault(); } catch (_) { }
+    if (onPanStart) onPanStart(e);
+  };
+
   useEffect(() => {
     fetchTickets();
   }, []);
@@ -345,8 +354,12 @@ const MomentsUser = ({ onPanStart }) => {
   );
 
   const renderColumn = (title, icon, items, color) => (
-    <Paper className={classes.column} elevation={0} onPointerDown={onPanStart}>
-      <div className={classes.columnHeader} style={{ borderTop: `4px solid ${color}` }}>
+    <Paper className={classes.column} elevation={0}>
+      <div
+        className={classes.columnHeader}
+        style={{ borderTop: `4px solid ${color}` }}
+        onPointerDown={handleHeaderPointerDown}
+      >
         <div className={classes.columnTitle} style={{ color }}>
           {icon}
           {title}
@@ -395,8 +408,12 @@ const MomentsUser = ({ onPanStart }) => {
 
       {/* Colunas de Usuários */}
       {userTickets.map((group) => (
-        <Paper key={group.user.id} className={classes.column} elevation={0} onPointerDown={onPanStart}>
-          <div className={classes.columnHeader} style={{ borderTop: `4px solid ${green[600]}` }}>
+        <Paper key={group.user.id} className={classes.column} elevation={0}>
+          <div
+            className={classes.columnHeader}
+            style={{ borderTop: `4px solid ${green[600]}` }}
+            onPointerDown={handleHeaderPointerDown}
+          >
             <div className={classes.columnTitle}>
               <Avatar
                 src={group.user.profileImage ? `${backendUrl}/public/company${user.companyId}/user/${group.user.profileImage}` : null}

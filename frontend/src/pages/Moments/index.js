@@ -1,4 +1,4 @@
-import React, { useContext, useRef } from "react";
+import React, { useContext, useRef, useEffect } from "react";
 import { makeStyles } from "@material-ui/core/styles";
 
 import MomentsUser from "../../components/MomentsUser";
@@ -61,30 +61,42 @@ const ChatMoments = () => {
   const panRef = useRef({ active: false, startX: 0, scrollLeft: 0 });
 
   const handlePanStart = (e) => {
-    if (!momentsScrollRef.current) return;
-    if (e && e.button != null && e.button !== 0) return;
-
+    const evt = e?.nativeEvent || e;
+    if (evt?.button != null && evt.button !== 0) return;
+    const container = momentsScrollRef.current;
+    if (!container) return;
     panRef.current.active = true;
-    panRef.current.startX = e.clientX;
-    panRef.current.scrollLeft = momentsScrollRef.current.scrollLeft;
-
-    const onMove = (ev) => {
-      if (!panRef.current.active || !momentsScrollRef.current) return;
-      const dx = ev.clientX - panRef.current.startX;
-      momentsScrollRef.current.scrollLeft = panRef.current.scrollLeft - dx;
-    };
-
-    const onUp = () => {
-      panRef.current.active = false;
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("pointerup", onUp);
-      document.removeEventListener("pointercancel", onUp);
-    };
-
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("pointerup", onUp);
-    document.addEventListener("pointercancel", onUp);
+    panRef.current.startX = evt.clientX;
+    panRef.current.scrollLeft = container.scrollLeft;
+    panRef.current.pointerId = evt.pointerId != null ? evt.pointerId : null;
   };
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!panRef.current.active) return;
+      if (panRef.current.pointerId != null && e.pointerId != null && panRef.current.pointerId !== e.pointerId) return;
+      const container = momentsScrollRef.current;
+      if (!container) return;
+      const dx = e.clientX - panRef.current.startX;
+      container.scrollLeft = panRef.current.scrollLeft - dx;
+    };
+
+    const onUp = (e) => {
+      if (!panRef.current.active) return;
+      if (panRef.current.pointerId != null && e?.pointerId != null && panRef.current.pointerId !== e.pointerId) return;
+      panRef.current.active = false;
+      panRef.current.pointerId = null;
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, []);
 
   return (
 
@@ -92,7 +104,7 @@ const ChatMoments = () => {
       <ForbiddenPage />
       :
       <MainHeader>
-        <Grid container style={{ width: "100%", padding: "0 10px" }} direction="column">
+        <Grid container className="moments-wrapper" style={{ width: "100%", padding: "0 10px" }} direction="column">
           <Grid item style={{ textAlign: "left" }}>
             <Title>Painel de Atendimentos</Title>
             <Typography

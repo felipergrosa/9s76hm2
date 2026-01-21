@@ -31,6 +31,60 @@
     box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07) !important;
 }
 
+/* Cards de Relatório - Cores Específicas (Alta Prioridade) */
+.modern-ui [data-card-type="total"] {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: #fff !important;
+    border: none !important;
+}
+
+.modern-ui [data-card-type="delivered"] {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%) !important;
+    color: #fff !important;
+    border: none !important;
+}
+
+.modern-ui [data-card-type="pending"] {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
+    color: #fff !important;
+    border: none !important;
+}
+
+.modern-ui [data-card-type="failed"] {
+    background: linear-gradient(135deg, #fa709a 0%, #fee140 100%) !important;
+    color: #fff !important;
+    border: none !important;
+}
+
+.modern-ui [data-card-type="processing"] {
+    background: linear-gradient(135deg, #2196f3 0%, #21CBF3 100%) !important;
+    color: #fff !important;
+    border: none !important;
+}
+
+.modern-ui [data-card-type="suppressed"] {
+    background: linear-gradient(135deg, #9e9e9e 0%, #BDBDBD 100%) !important;
+    color: #fff !important;
+    border: none !important;
+}
+
+/* Ajuste de Padding Global Solicitado */
+.modern-ui .MuiGrid-root .MuiPaper-root {
+    padding: 10px !important;
+}
+
+/* Preservar backgrounds de cards com gradientes inline (fallback) */
+.modern-ui .MuiCard-root[style*="linear-gradient"],
+.modern-ui .MuiCard-root[style*="background"],
+.modern-ui .MuiPaper-root[style*="linear-gradient"],
+.modern-ui .MuiPaper-root[style*="background-color: rgb"],
+.modern-ui .MuiPaper-root[style*="background-color: #"] {
+    background: unset !important;
+    border: none !important;
+    backdrop-filter: blur(8px) saturate(150%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(150%) !important;
+}
+
 /* Sidebar Modernization */
 .modern-ui .MuiDrawer-paper {
     background: var(--sidebar-bg) !important;
@@ -216,6 +270,11 @@
 
 /* Dashboard Metric Cards Fix */
 .modern-ui .MuiGrid-root .MuiPaper-root {
+    padding: 10px !important;
+}
+
+/* Fix específico para Moments - Remover padding forçado */
+.modern-ui .moments-wrapper .MuiPaper-root {
     padding: 0px !important;
 }
 
@@ -279,7 +338,30 @@
     border-radius: 0 !important;
     border: none !important;
     box-shadow: none !important;
-    background: inherit !important;
+    /* IMPORTANTE: Usar 'unset' para não sobrescrever o background-image definido no JS */
+    background: unset !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Regra específica para o Paper do messageInputWrapper - Cor bege do WhatsApp */
+.modern-ui .MuiPaper-root[class*="messageInputWrapper"],
+.modern-ui .MuiPaper-elevation0[class*="messageInputWrapper"],
+.modern-ui div.MuiPaper-root[class*="messageInputWrapper"] {
+    background: #ECE5DD !important;
+    background-color: #ECE5DD !important;
+    background-image: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Preservar background-image do mainWrapper (container do chat com fundo WhatsApp) */
+.modern-ui .MuiPaper-root[class*="mainWrapper"],
+.modern-ui .MuiPaper-elevation0[class*="mainWrapper"] {
+    background: unset !important;
+    background-color: unset !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
 }
 
 /* Tickets Page - Containers principais sem bordas arredondadas */

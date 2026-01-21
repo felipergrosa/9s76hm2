@@ -77,6 +77,31 @@ const useStyles = makeStyles((theme) => ({
       boxShadow: theme.shadows[8],
     },
   },
+  // Cards coloridos com gradientes e efeito glass
+  cardTotal: {
+    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important",
+    backdropFilter: "blur(8px) saturate(150%)",
+    border: "none !important",
+    color: "#fff",
+  },
+  cardDelivered: {
+    background: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%) !important",
+    backdropFilter: "blur(8px) saturate(150%)",
+    border: "none !important",
+    color: "#fff",
+  },
+  cardPending: {
+    background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important",
+    backdropFilter: "blur(8px) saturate(150%)",
+    border: "none !important",
+    color: "#fff",
+  },
+  cardFailed: {
+    background: "linear-gradient(135deg, #fa709a 0%, #fee140 100%) !important",
+    backdropFilter: "blur(8px) saturate(150%)",
+    border: "none !important",
+    color: "#fff",
+  },
   metricCard: {
     padding: theme.spacing(2),
     borderRadius: theme.spacing(1),
@@ -280,11 +305,11 @@ const CampaignDetailedReport = () => {
 
   // Dados para gráficos
   const pieData = [
-    { name: "Entregues", value: summary.delivered, color: "#4caf50" },
-    { name: "Pendentes", value: summary.pending, color: "#ff9800" },
-    { name: "Falharam", value: summary.failed, color: "#f44336" },
-    { name: "Processando", value: summary.processing, color: "#2196f3" },
-    { name: "Suprimidos", value: summary.suppressed, color: "#9e9e9e" },
+    { name: "Entregues", value: summary.delivered, color: "#4caf50", type: "delivered" },
+    { name: "Pendentes", value: summary.pending, color: "#ff9800", type: "pending" },
+    { name: "Falharam", value: summary.failed, color: "#f44336", type: "failed" },
+    { name: "Processando", value: summary.processing, color: "#2196f3", type: "processing" },
+    { name: "Suprimidos", value: summary.suppressed, color: "#9e9e9e", type: "suppressed" },
   ].filter(item => item.value > 0);
 
   const successRate = summary.total > 0 ? ((summary.delivered / summary.total) * 100).toFixed(1) : 0;
@@ -365,7 +390,7 @@ const CampaignDetailedReport = () => {
     if (campaign.dispatchStrategy === "single" && campaign.whatsapp) {
       return [campaign.whatsapp];
     }
-    
+
     if (campaign.dispatchStrategy === "round_robin" && campaign.allowedWhatsappIds) {
       try {
         const ids = JSON.parse(campaign.allowedWhatsappIds);
@@ -375,7 +400,7 @@ const CampaignDetailedReport = () => {
         return [];
       }
     }
-    
+
     return campaign.whatsapp ? [campaign.whatsapp] : [];
   };
 
@@ -420,7 +445,7 @@ const CampaignDetailedReport = () => {
       <Grid container spacing={2}>
         {/* Card: Total de Contatos */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card className={classes.dashboardCard} style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" }}>
+          <Card className={classes.dashboardCard} data-card-type="total">
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
@@ -439,7 +464,7 @@ const CampaignDetailedReport = () => {
 
         {/* Card: Entregues */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card className={classes.dashboardCard} style={{ background: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)" }}>
+          <Card className={classes.dashboardCard} data-card-type="delivered">
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
@@ -462,7 +487,7 @@ const CampaignDetailedReport = () => {
 
         {/* Card: Pendentes */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card className={classes.dashboardCard} style={{ background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" }}>
+          <Card className={classes.dashboardCard} data-card-type="pending">
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
@@ -481,7 +506,7 @@ const CampaignDetailedReport = () => {
 
         {/* Card: Falharam */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card className={classes.dashboardCard} style={{ background: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)" }}>
+          <Card className={classes.dashboardCard} data-card-type="failed">
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
@@ -618,7 +643,7 @@ const CampaignDetailedReport = () => {
               <Grid container spacing={2}>
                 {pieData.map((item, index) => (
                   <Grid item xs={12} sm={6} md={4} key={index}>
-                    <Paper style={{ padding: 16, backgroundColor: item.color, color: "#fff" }}>
+                    <Paper data-card-type={item.type} style={{ padding: 16 }}>
                       <Typography variant="h4" style={{ fontWeight: "bold" }}>
                         {item.value}
                       </Typography>
@@ -752,7 +777,7 @@ const CampaignDetailedReport = () => {
             Mensagens Configuradas
           </Typography>
         </Box>
-        
+
         {messages.length > 0 ? (
           <Accordion defaultExpanded>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -833,7 +858,7 @@ const CampaignDetailedReport = () => {
       <Typography variant="h5" className={classes.sectionTitle}>
         Detalhes dos Envios
       </Typography>
-      
+
       <Paper className={classes.mainPaper} variant="outlined">
         <Grid container spacing={2} style={{ marginBottom: 16 }} alignItems="flex-end">
           <Grid item xs={12} sm={6}>

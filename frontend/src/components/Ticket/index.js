@@ -74,7 +74,7 @@ const useStyles = makeStyles((theme) => ({
       easing: theme.transitions.easing.sharp,
       duration: theme.transitions.duration.leavingScreen,
     }),
-    
+
   },
 
   mainWrapperShift: {
@@ -117,7 +117,7 @@ const Ticket = () => {
     console.log("======== Ticket ===========")
     console.log(ticket)
     console.log("===========================")
-}, [ticket])
+  }, [ticket])
 
   useEffect(() => {
     setLoading(true);
@@ -134,11 +134,11 @@ const Ticket = () => {
             // setQueueId(data.queueId);
             setTicket(data);
             // Disponibiliza globalmente para header externo
-            try { window.__lastTicket = data; window.__lastContact = data.contact; } catch {}
+            try { window.__lastTicket = data; window.__lastContact = data.contact; } catch { }
             // Notifica topo (HeaderTicketInfo) que o ticket foi carregado
             try {
               window.dispatchEvent(new CustomEvent('ticket-loaded', { detail: { ticket: data, contact: data.contact } }));
-            } catch {}
+            } catch { }
             // Faz join imediato na sala do ticket pelo UUID (se o socket já estiver pronto)
             try {
               const candidate = (data?.uuid || ticketId || "").toString().trim();
@@ -253,7 +253,7 @@ const Ticket = () => {
           try {
             window.__lastTicket = data.ticket; window.__lastContact = contact;
             window.dispatchEvent(new CustomEvent('ticket-loaded', { detail: { ticket: data.ticket, contact } }));
-          } catch {}
+          } catch { }
         }
 
         if (data.action === "delete" && data.ticketId === ticket?.id) {
@@ -272,7 +272,7 @@ const Ticket = () => {
             try {
               window.__lastTicket = ticket; window.__lastContact = next;
               window.dispatchEvent(new CustomEvent('ticket-loaded', { detail: { ticket, contact: next } }));
-            } catch {}
+            } catch { }
             return next;
           });
           // }
@@ -288,7 +288,7 @@ const Ticket = () => {
         if (socket && socket.connected) {
           onConnectTicket();
         }
-      } catch {}
+      } catch { }
 
       return () => {
         try {
@@ -301,7 +301,7 @@ const Ticket = () => {
               else console.debug("[Ticket] joinChatBoxLeave ok", { room: candidate });
             });
           }
-        } catch {}
+        } catch { }
         socket.off("connect", onConnectTicket);
         socket.off(`company-${companyId}-ticket`, onCompanyTicket);
         socket.off(`company-${companyId}-contact`, onCompanyContactTicket);
@@ -356,7 +356,7 @@ const Ticket = () => {
         className={clsx(classes.mainWrapper, {
           [classes.mainWrapperShift]: drawerOpen,
         })}
-        style={{ background: "transparent", boxShadow: "none", border: 0 }}
+        style={{ boxShadow: "none", border: 0 }}
       >
         {!hasExternalHeader && (
           <TicketHeader loading={loading}>
