@@ -200,13 +200,28 @@ async function processIncomingMessage(
   }
 
   // Criar ou atualizar contato
-  const contact = await CreateOrUpdateContactService({
-    name: contactName,
-    number: from,
-    isGroup: false,
-    companyId,
-    whatsappId: whatsapp.id
-  });
+  let contact: Contact | null = null;
+  try {
+    contact = await CreateOrUpdateContactService({
+      name: contactName,
+      number: from,
+      isGroup: false,
+      companyId,
+      whatsappId: whatsapp.id
+    });
+
+    if (!contact) {
+      logger.error(`[WebhookProcessor] CreateOrUpdateContactService retornou null para número ${from}`);
+      return;
+    }
+  } catch (error: any) {
+    logger.error(`[WebhookProcessor] Erro ao criar/atualizar contato ${from}: ${error.message}`);
+    Sentry.captureException(error);
+    return;
+  }
+
+  logger.info(`[WebhookProcessor] Contato criado/atualizado: id=${contact.id}, nome=${contact.name}`);
+
 
   // Buscar settings da empresa
   const CompaniesSettings = (await import("../../models/CompaniesSettings")).default;
@@ -287,7 +302,7 @@ async function processIncomingMessage(
       unreadMessages: (ticket.unreadMessages || 0) + 1
     });
   }
-  
+
   logger.info(`[WebhookProcessor] Ticket ${ticket.id} criado/encontrado: status=${ticket.status}, queueId=${ticket.queueId}, isBot=${ticket.isBot}, unreadMessages=${ticket.unreadMessages}`);
 
   // Extrair corpo da mensagem
@@ -304,7 +319,7 @@ async function processIncomingMessage(
     case "image":
       body = message.image?.caption || "";
       mediaType = "image";
-      
+
       // Baixar mídia da Meta API
       if (message.image?.id) {
         try {
@@ -326,7 +341,7 @@ async function processIncomingMessage(
     case "video":
       body = message.video?.caption || "";
       mediaType = "video";
-      
+
       if (message.video?.id) {
         try {
           mediaUrl = await DownloadOfficialMediaService({
@@ -347,7 +362,7 @@ async function processIncomingMessage(
     case "audio":
       body = "";
       mediaType = "audio";
-      
+
       if (message.audio?.id) {
         try {
           mediaUrl = await DownloadOfficialMediaService({
@@ -368,7 +383,7 @@ async function processIncomingMessage(
     case "document":
       body = message.document?.caption || message.document?.filename || "";
       mediaType = "document";
-      
+
       if (message.document?.id) {
         try {
           mediaUrl = await DownloadOfficialMediaService({
@@ -401,7 +416,7 @@ async function processIncomingMessage(
     case "sticker":
       body = "sticker";
       mediaType = "sticker";
-      
+
       if (message.sticker?.id) {
         try {
           mediaUrl = await DownloadOfficialMediaService({
@@ -426,7 +441,7 @@ async function processIncomingMessage(
       const locationName = message.location?.name || "";
       const locationAddress = message.location?.address || "";
       const description = locationName ? `${locationName}\\n${locationAddress}` : `${lat}, ${lng}`;
-      
+
       // Formato: base64_image | maps_link | description
       const mapsLink = `https://maps.google.com/maps?q=${lat}%2C${lng}&z=17&hl=pt-BR`;
       body = `data:image/png;base64, | ${mapsLink} | ${description}`;
@@ -493,16 +508,16 @@ async function processIncomingMessage(
   // Processar bot/IA se ticket está marcado como bot
   if (ticket.status === "bot" && ticket.queueId && !message.from.includes(whatsapp.wabaPhoneNumberId || "")) {
     logger.info(`[WebhookProcessor] Ticket ${ticket.id} é bot (status: ${ticket.status}, queue: ${ticket.queueId}), processando IA/Prompt...`);
-    
+
     try {
       // Verificar debounce para evitar mensagens duplicadas
       const { canProcessBotMessage } = await import("../../helpers/BotDebounce");
-      
+
       if (!canProcessBotMessage(ticket.id, messageId)) {
         logger.info(`[WebhookProcessor] Mensagem ${messageId} ignorada por debounce (ticket ${ticket.id})`);
         return;
       }
-      
+
       // Importar dinamicamente para evitar circular dependencies
       const { processOfficialBot } = await import("./ProcessOfficialBot");
       await processOfficialBot({

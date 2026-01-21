@@ -108,7 +108,7 @@ const sequelize = new Sequelize(dbConfig.database, dbConfig.username, dbConfig.p
   // Keep-alive e timeouts
   dialectOptions: {
     connectTimeout: parseInt(process.env.DB_CONNECT_TIMEOUT || "10000"),
-    statement_timeout: parseInt(process.env.DB_STATEMENT_TIMEOUT || "30000"),
+    statement_timeout: parseInt(process.env.DB_STATEMENT_TIMEOUT || "90000"),  // 90s para queries pesadas (ex: campanhas)
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,
     ...(dbConfig.dialectOptions || {})

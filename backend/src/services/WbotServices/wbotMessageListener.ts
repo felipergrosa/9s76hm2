@@ -5812,12 +5812,21 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
             try {
               console.log(`[contacts.update] Tentando buscar perfil do usuário: ${contact.id}`);
               const businessProfile = await wbot.getBusinessProfile(contact.id).catch(() => null);
-              if (businessProfile?.description) {
-                finalName = businessProfile.description;
-                console.log(`[contacts.update] Nome do perfil encontrado: ${finalName}`);
-              } else if (businessProfile?.email) {
+
+              if (businessProfile?.email) {
                 finalName = businessProfile.email;
                 console.log(`[contacts.update] Email do perfil encontrado: ${finalName}`);
+              } else if (businessProfile?.description) {
+                // LIMITAR description para evitar mensagens de marketing completas
+                const desc = businessProfile.description.trim();
+                if (desc.length <= 100 && !desc.includes('\n')) {
+                  finalName = desc;
+                  console.log(`[contacts.update] Description do perfil encontrada (curta): ${finalName}`);
+                } else {
+                  // Description muito longa = mensagem de marketing, ignorar
+                  finalName = numero;
+                  console.log(`[contacts.update] Description muito longa (${desc.length} chars), usando número: ${numero}`);
+                }
               } else {
                 finalName = numero;
                 console.log(`[contacts.update] Nenhum nome encontrado, usando número: ${numero}`);
@@ -5826,6 +5835,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
               finalName = numero;
               console.log(`[contacts.update] Erro ao buscar perfil, usando número:`, err);
             }
+
           }
         } else {
           console.log(`[contacts.update] Usando notify da agenda: ${finalName}`);

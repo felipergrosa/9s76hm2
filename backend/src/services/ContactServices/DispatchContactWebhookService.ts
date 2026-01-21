@@ -44,24 +44,65 @@ const DispatchContactWebhookService = async ({
       contact: contact?.toJSON ? contact.toJSON() : contact
     };
 
-    await axios.post(integration.urlN8N, payload, {
-      headers: {
-        "Content-Type": "application/json"
-      },
-      timeout: 15000
-    });
-  } catch (error: any) {
-    const status = error?.response?.status;
-    const data = error?.response?.data;
-    const code = error?.code;
-    const message = error?.message;
+    const maxRetries = 3;
+    let lastError: any = null;
 
-    logger.warn("[DispatchContactWebhookService] Falha ao enviar webhook de contato para n8n", {
-      url: (error?.config && error.config.url) || undefined,
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await axios.post(integration.urlN8N, payload, {
+          headers: {
+            "Content-Type": "application/json"
+          },
+          timeout: 30000 // Aumentado de 15s para 30s
+        });
+
+        // Sucesso - sair do loop
+        if (attempt > 1) {
+          logger.info(`[DispatchContactWebhookService] Webhook enviado com sucesso na tentativa ${attempt}/${maxRetries}`);
+        }
+        return;
+
+      } catch (error: any) {
+        lastError = error;
+
+        // Se for última tentativa ou erro não-retriable, não tentar novamente
+        const isRetriable = !error?.response || error.response.status >= 500 || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT';
+
+        if (attempt < maxRetries && isRetriable) {
+          const backoffMs = attempt * 1000; // 1s, 2s, 3s
+          logger.warn(`[DispatchContactWebhookService] Tentativa ${attempt}/${maxRetries} falhou, aguardando ${backoffMs}ms antes de retry`, {
+            status: error?.response?.status,
+            code: error?.code,
+            message: error?.message
+          });
+          await new Promise(resolve => setTimeout(resolve, backoffMs));
+        } else {
+          break; // Não retriable ou última tentativa
+        }
+      }
+    }
+
+    // Se chegou aqui, todas as tentativas falharam
+    const status = lastError?.response?.status;
+    const data = lastError?.response?.data;
+    const code = lastError?.code;
+    const message = lastError?.message;
+
+    logger.warn("[DispatchContactWebhookService] Falha ao enviar webhook de contato para n8n (todas tentativas falharam)", {
+      url: integration.urlN8N,
+      contactId: contact.id,
+      contactName: contact.name,
+      event,
       status,
       data,
       code,
-      message
+      message,
+      attempts: maxRetries
+    });
+  } catch (error: any) {
+    logger.error("[DispatchContactWebhookService] Erro inesperado ao preparar/enviar webhook", {
+      error: error?.message,
+      contactId: contact?.id
     });
   }
 };

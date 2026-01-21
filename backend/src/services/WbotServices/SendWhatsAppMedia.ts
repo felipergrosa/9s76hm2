@@ -36,8 +36,10 @@ const processAudio = async (audio: string, companyId: string): Promise<string> =
     // Conversão para OGG/Opus (PTT WhatsApp): mono, 16kHz, ~24kbps, VOIP
     const cmd = `${ffmpegPath.path} -y -i ${inputQuoted} -map 0:a:0 -vn -ac 1 -ar 16000 -c:a libopus -b:a 24k -vbr on -compression_level 10 -application voip ${outputQuoted}`;
     exec(cmd, (error, stdout, stderr) => {
-      if (stderr) console.warn('[ffmpeg][processAudio] stderr:', stderr);
-      if (error) return reject(error);
+      if (error) {
+        console.error('[ffmpeg][processAudio] ERROR:', error.message);
+        return reject(error);
+      }
       resolve(outputAudio);
     });
   });
@@ -93,8 +95,10 @@ const processVideo = async (videoPath: string, companyId: string): Promise<strin
     const vf = `scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease`;
     const cmd = `${ffmpegPath.path} -y -i ${inputQuoted} -vf "${vf}" -c:v libx264 -preset veryfast -crf 21 -movflags +faststart -c:a aac -b:a 128k ${outputQuoted}`;
     exec(cmd, (error, stdout, stderr) => {
-      if (stderr) console.warn('[ffmpeg][processVideo] stderr:', stderr);
-      if (error) return reject(error);
+      if (error) {
+        console.error('[ffmpeg][processVideo] ERROR:', error.message);
+        return reject(error);
+      }
       resolve(outputVideo);
     });
   });
@@ -108,8 +112,10 @@ const processAudioFile = async (audio: string, companyId: string): Promise<strin
     const outputQuoted = `"${outputAudio}"`;
     const cmd = `${ffmpegPath.path} -y -i ${inputQuoted} -map 0:a:0 -vn -ac 1 -ar 16000 -c:a libopus -b:a 24k -vbr on -compression_level 10 -application voip ${outputQuoted}`;
     exec(cmd, (error, stdout, stderr) => {
-      if (stderr) console.warn('[ffmpeg][processAudioFile] stderr:', stderr);
-      if (error) return reject(error);
+      if (error) {
+        console.error('[ffmpeg][processAudioFile] ERROR:', error.message);
+        return reject(error);
+      }
       // fs.unlinkSync(audio);
       resolve(outputAudio);
     });
@@ -147,7 +153,7 @@ export const getMessageOptions = async (
         mimetype: "video/mp4"
       };
       if (videoPath !== pathMedia) {
-        try { unlinkSync(videoPath); } catch {}
+        try { unlinkSync(videoPath); } catch { }
       }
     } else if (typeMessage === "audio") {
       const convert = await processAudio(pathMedia, companyId);
@@ -187,7 +193,7 @@ export const getMessageOptions = async (
           mimetype: outMime
         };
         if (output !== pathMedia) {
-          try { unlinkSync(output); } catch {}
+          try { unlinkSync(output); } catch { }
         }
       } else {
         options = {
@@ -240,9 +246,9 @@ const SendWhatsAppMedia = async ({
         contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
       };
       if (videoPath !== pathMedia) {
-        try { unlinkSync(videoPath); } catch {}
+        try { unlinkSync(videoPath); } catch { }
       }
-      bodyTicket = "🎥 Arquivo de vídeo"
+      bodyTicket = bodyMedia || "🎥 Arquivo de vídeo"
     } else if (typeMessage === "audio") {
       const convert = await processAudio(media.path, companyId);
       options = {
@@ -299,7 +305,7 @@ const SendWhatsAppMedia = async ({
           contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
         };
         if (outPath !== pathMedia) {
-          try { unlinkSync(outPath); } catch {}
+          try { unlinkSync(outPath); } catch { }
         }
       }
       bodyTicket = "🖼️ Imagem"
