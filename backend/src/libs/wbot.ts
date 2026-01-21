@@ -59,6 +59,16 @@ const sessions: Session[] = [];
 
 const retriesQrCodeMap = new Map<number, number>();
 
+// ========== CONTROLE DE RECONEXÃO (evita loops e race conditions) ==========
+// Map para rastrear quais whatsappIds estão no processo de reconexão
+const reconnectingWhatsapps = new Map<number, boolean>();
+// Map para contar conflitos consecutivos (para backoff exponencial)
+const conflictCountMap = new Map<number, number>();
+// Constantes de tempo para reconexão
+const BASE_CONFLICT_DELAY = 30_000; // 30 segundos base
+const MAX_CONFLICT_DELAY = 120_000; // 2 minutos máximo
+// ===========================================================================
+
 export default function msg() {
   return {
     get: (key: WAMessageKey) => {
@@ -400,13 +410,33 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
               // Conflito: outra sessão está ativa. NÃO reconectar imediatamente para evitar loop
               if (isConflict) {
-                logger.warn(`[wbot] Conflito de sessão detectado para ${name}. Aguardando 30s antes de tentar reconectar.`);
+                // CORREÇÃO: Verificar se já existe uma tentativa de reconexão em andamento
+                if (reconnectingWhatsapps.get(id)) {
+                  logger.warn(`[wbot] Já existe uma tentativa de reconexão em andamento para ${name} (id=${id}). Ignorando nova tentativa.`);
+                  removeWbot(id, false);
+                  return;
+                }
+
+                // Incrementar contador de conflitos consecutivos
+                const conflictCount = (conflictCountMap.get(id) || 0) + 1;
+                conflictCountMap.set(id, conflictCount);
+
+                // Calcular delay com backoff exponencial: 30s, 60s, 120s (máximo)
+                const delay = Math.min(BASE_CONFLICT_DELAY * Math.pow(2, conflictCount - 1), MAX_CONFLICT_DELAY);
+
+                logger.warn(`[wbot] Conflito de sessão #${conflictCount} para ${name}. Aguardando ${delay / 1000}s antes de tentar reconectar.`);
+
+                // Marcar como "reconectando" para bloquear novas tentativas
+                reconnectingWhatsapps.set(id, true);
                 removeWbot(id, false);
-                // Aguardar mais tempo para evitar loop de conflito
-                setTimeout(
-                  () => StartWhatsAppSession(whatsapp, whatsapp.companyId),
-                  30000 // 30 segundos
-                );
+
+                // Agendar reconexão com delay calculado
+                setTimeout(() => {
+                  // Liberar o mutex antes de tentar reconectar
+                  reconnectingWhatsapps.delete(id);
+                  StartWhatsAppSession(whatsapp, whatsapp.companyId);
+                }, delay);
+
                 return;
               }
 
@@ -435,21 +465,35 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
               // Restart required: reconectar com delay moderado
               if (isRestartRequired) {
+                // Verificar se já está reconectando
+                if (reconnectingWhatsapps.get(id)) {
+                  logger.warn(`[wbot] Já existe uma tentativa de reconexão em andamento para ${name}. Ignorando restart.`);
+                  removeWbot(id, false);
+                  return;
+                }
                 logger.info(`[wbot] Restart necessário para ${name}. Reconectando em 15s.`);
+                reconnectingWhatsapps.set(id, true);
                 removeWbot(id, false);
-                setTimeout(
-                  () => StartWhatsAppSession(whatsapp, whatsapp.companyId),
-                  15000 // Aumentado de 5s para 15s para evitar conflitos
-                );
+                setTimeout(() => {
+                  reconnectingWhatsapps.delete(id);
+                  StartWhatsAppSession(whatsapp, whatsapp.companyId);
+                }, 15000);
                 return;
               }
 
               if (!isLoggedOut) {
+                // Verificar se já está reconectando
+                if (reconnectingWhatsapps.get(id)) {
+                  logger.warn(`[wbot] Já existe uma tentativa de reconexão em andamento para ${name}. Ignorando.`);
+                  removeWbot(id, false);
+                  return;
+                }
+                reconnectingWhatsapps.set(id, true);
                 removeWbot(id, false);
-                setTimeout(
-                  () => StartWhatsAppSession(whatsapp, whatsapp.companyId),
-                  10000 // Aumentado de 2s para 10s para evitar conflitos durante envio em massa
-                );
+                setTimeout(() => {
+                  reconnectingWhatsapps.delete(id);
+                  StartWhatsAppSession(whatsapp, whatsapp.companyId);
+                }, 10000);
               } else {
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
@@ -470,10 +514,14 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     session: whatsapp
                   });
                 removeWbot(id, false);
-                setTimeout(
-                  () => StartWhatsAppSession(whatsapp, whatsapp.companyId),
-                  10000 // Aumentado de 2s para 10s para evitar conflitos durante envio em massa
-                );
+                // Verificar se já está reconectando antes de agendar
+                if (!reconnectingWhatsapps.get(id)) {
+                  reconnectingWhatsapps.set(id, true);
+                  setTimeout(() => {
+                    reconnectingWhatsapps.delete(id);
+                    StartWhatsAppSession(whatsapp, whatsapp.companyId);
+                  }, 10000);
+                }
               }
             }
 
@@ -501,6 +549,11 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 wsocket.id = whatsapp.id;
                 sessions.push(wsocket);
               }
+
+              // CORREÇÃO: Resetar contadores de conflito ao conectar com sucesso
+              conflictCountMap.delete(id);
+              reconnectingWhatsapps.delete(id);
+              logger.info(`[wbot] Conexão estabelecida com sucesso para ${name}. Contadores de conflito resetados.`);
 
               // NOVO: Carregar labels do banco de dados primeiro (recuperação após reinício)
               try {

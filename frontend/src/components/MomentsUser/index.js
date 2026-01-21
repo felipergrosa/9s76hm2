@@ -36,12 +36,15 @@ const backendUrl = getBackendUrl();
 const useStyles = makeStyles((theme) => ({
   root: {
     display: "flex",
+    flexDirection: "row",
+    flexWrap: "nowrap",
     gap: theme.spacing(2),
     height: "100%",
     minHeight: 0,
-    width: "max-content",
+    width: "fit-content", // Crítico: largura baseada no conteúdo
     minWidth: "100%",
     paddingBottom: theme.spacing(2),
+    paddingRight: theme.spacing(2), // Espaço após o último lane
     alignItems: "stretch",
   },
   column: {

@@ -19,24 +19,22 @@ const useStyles = makeStyles((theme) => ({
   },
   mainPaper: {
     display: "flex",
+    flexDirection: "row",
+    flexWrap: "nowrap",
     padding: theme.spacing(1),
     ...theme.scrollbarStyles,
     overflowY: "hidden",
-    overflowX: "auto",
-    scrollbarWidth: "none",
-    msOverflowStyle: "none",
-    "&::-webkit-scrollbar": {
-      width: 0,
-      height: 0,
-      display: "none",
-    },
+    overflowX: "scroll",
+    scrollbarWidth: "thin",
     alignItems: "stretch",
     minHeight: 0,
-    minWidth: 0,
-    height: "calc(100vh - 100px)", // Ajuste para ocupar altura correta descontando header
+    height: "calc(100vh - 100px)",
     backgroundColor: "transparent",
     border: "none",
-    boxShadow: "none"
+    boxShadow: "none",
+    // Crítico para scroll horizontal
+    maxWidth: "100%",
+    width: "100%",
   },
   fixedHeightPaper: {
     padding: theme.spacing(2),
@@ -105,11 +103,10 @@ const ChatMoments = () => {
               Visão geral em tempo real dos atendimentos organizados por categorias (Bot, Campanhas, Pendentes) e filas de usuários.
             </Typography>
           </Grid>
-          <Grid item style={{ width: "100%", height: "calc(100vh - 160px)", overflow: "visible" }}>
+          <Grid item style={{ width: "100%", height: "calc(100vh - 160px)" }}>
             <Paper
               className={classes.mainPaper}
               variant="outlined"
-              style={{ width: "100%", height: "100%", overflow: "auto" }}
               ref={momentsScrollRef}
             >
               <MomentsUser onPanStart={handlePanStart} />
