@@ -68,6 +68,64 @@
     border: none !important;
 }
 
+/* ========== AI Training Flow Visualization - Preservar Cores dos Nodes ========== */
+/* Os nodes do fluxo têm cores específicas definidas via makeStyles que estavam sendo sobrescritas */
+.modern-ui [class*="PromptFlowVisualization"] .MuiPaper-root[class*="startNode"],
+.modern-ui [class*="flowCanvas"] .MuiPaper-root[class*="startNode"] {
+    background-color: #4caf50 !important;
+    background: #4caf50 !important;
+    color: #fff !important;
+    border: none !important;
+    backdrop-filter: none !important;
+}
+
+.modern-ui [class*="PromptFlowVisualization"] .MuiPaper-root[class*="conditionNode"],
+.modern-ui [class*="flowCanvas"] .MuiPaper-root[class*="conditionNode"] {
+    background-color: #ff9800 !important;
+    background: #ff9800 !important;
+    color: #fff !important;
+    border: none !important;
+    backdrop-filter: none !important;
+}
+
+.modern-ui [class*="PromptFlowVisualization"] .MuiPaper-root[class*="actionNode"],
+.modern-ui [class*="flowCanvas"] .MuiPaper-root[class*="actionNode"] {
+    background-color: #2196f3 !important;
+    background: #2196f3 !important;
+    color: #fff !important;
+    border: none !important;
+    backdrop-filter: none !important;
+}
+
+.modern-ui [class*="PromptFlowVisualization"] .MuiPaper-root[class*="instructionNode"],
+.modern-ui [class*="flowCanvas"] .MuiPaper-root[class*="instructionNode"] {
+    background-color: #9c27b0 !important;
+    background: #9c27b0 !important;
+    color: #fff !important;
+    border: none !important;
+    backdrop-filter: none !important;
+}
+
+.modern-ui [class*="PromptFlowVisualization"] .MuiPaper-root[class*="endNode"],
+.modern-ui [class*="flowCanvas"] .MuiPaper-root[class*="endNode"] {
+    background-color: #f44336 !important;
+    background: #f44336 !important;
+    color: #fff !important;
+    border: none !important;
+    backdrop-filter: none !important;
+}
+
+/* Container do Flow - fundo neutro sem glass */
+.modern-ui [class*="PromptFlowVisualization"] [class*="flowContainer"],
+.modern-ui [class*="flowContainer"].MuiPaper-root {
+    background-color: #fafafa !important;
+    background: #fafafa !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* ============================================================================== */
+
 /* Ajuste de Padding Global Solicitado */
 .modern-ui .MuiGrid-root .MuiPaper-root {
     padding: 10px !important;

@@ -7,6 +7,7 @@ import Tag from "../../models/Tag";
 import Ticket from "../../models/Ticket";
 import User from "../../models/User";
 import Whatsapp from "../../models/Whatsapp";
+import logger from "../../utils/logger";
 
 export interface MessageData {
   wid: string;
@@ -36,6 +37,21 @@ const CreateMessageService = async ({
   messageData,
   companyId
 }: Request): Promise<Message> => {
+  // BLINDAGEM: Validação de integridade ticket/contact
+  // Log para debugging de mensagens cruzadas
+  if (messageData.contactId && messageData.ticketId) {
+    const ticketCheck = await Ticket.findByPk(messageData.ticketId, { attributes: ["id", "contactId"] });
+    if (ticketCheck && ticketCheck.contactId !== messageData.contactId) {
+      logger.error("[CreateMessageService] ALERTA DE INTEGRIDADE: ticket.contactId !== messageData.contactId", {
+        ticketId: messageData.ticketId,
+        ticketContactId: ticketCheck.contactId,
+        messageContactId: messageData.contactId,
+        wid: messageData.wid,
+        companyId
+      });
+    }
+  }
+
   await Message.upsert({ ...messageData, companyId });
 
   const message = await Message.findOne({

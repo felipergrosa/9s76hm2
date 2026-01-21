@@ -1044,73 +1044,95 @@ const verifyContact = async (
       }
     }
 
-    // 4. Buscar contato através de mensagens anteriores que tenham este LID no remoteJid
-    // Isso funciona quando o sistema já processou mensagens deste contato antes
+    // 4. SOLUÇÃO ROBUSTA: Tentar resolver LID via store.contacts do Baileys
+    // O Baileys mantém um cache de contatos que pode ter o mapeamento LID → número
     try {
-      const messageWithLid = await Message.findOne({
-        where: {
-          remoteJid: normalizedJid,
-          companyId
-        },
-        include: [{
-          model: Ticket,
-          as: "ticket",
-          attributes: ["contactId"],
-          required: true
-        }],
-        order: [["createdAt", "DESC"]]
-      });
-
-      if (messageWithLid?.ticket?.contactId) {
-        const existingContact = await Contact.findByPk(messageWithLid.ticket.contactId);
-        if (existingContact && !existingContact.remoteJid?.includes("@lid")) {
-          debugLog("[verifyContact] Contato encontrado via mensagem anterior com LID", {
-            contactId: existingContact.id,
-            contactNumber: existingContact.number,
-            lidUsed: normalizedJid
-          });
-          return existingContact;
+      const sock = wbot as any;
+      if (sock.store?.contacts) {
+        const storedContact = sock.store.contacts[normalizedJid] || sock.store.contacts[msgContact.id];
+        if (storedContact) {
+          // Verificar se o contato armazenado tem um número real
+          const storedNumber = storedContact.id?.replace(/\D/g, "") || storedContact.notify?.replace(/\D/g, "");
+          if (storedNumber && storedNumber.length >= 10 && storedNumber.length <= 13) {
+            const existingByStoreNumber = await Contact.findOne({
+              where: { canonicalNumber: storedNumber, companyId, isGroup: false }
+            });
+            if (existingByStoreNumber) {
+              logger.info("[verifyContact] LID resolvido via store.contacts do Baileys", {
+                lid: normalizedJid,
+                resolvedNumber: storedNumber,
+                contactId: existingByStoreNumber.id
+              });
+              return existingByStoreNumber;
+            }
+          }
         }
       }
     } catch (err) {
-      debugLog("[verifyContact] Erro ao buscar contato via mensagens", { err });
+      debugLog("[verifyContact] Erro ao consultar store.contacts", { err });
     }
 
-    // 5. Buscar contato através de tickets que tenham mensagens com este LID
+    // 5. Tentar wbot.onWhatsApp() para obter dados adicionais do contato
+    // Nota: Isso pode não funcionar para todos os LIDs, mas vale tentar
     try {
-      const ticketWithLid = await Ticket.findOne({
-        where: { companyId },
-        include: [{
-          model: Message,
-          as: "messages",
-          where: { remoteJid: normalizedJid },
-          required: true,
-          limit: 1
-        }, {
-          model: Contact,
-          as: "contact",
-          required: true
-        }],
-        order: [["updatedAt", "DESC"]]
-      });
+      const [result] = await wbot.onWhatsApp(normalizedJid);
+      if (result?.exists && result.jid) {
+        const resolvedJid = jidNormalizedUser(result.jid);
+        const resolvedNumber = resolvedJid.replace(/\D/g, "");
 
-      if (ticketWithLid?.contact && !ticketWithLid.contact.remoteJid?.includes("@lid")) {
-        debugLog("[verifyContact] Contato encontrado via ticket com mensagem LID", {
-          contactId: ticketWithLid.contact.id,
-          contactNumber: ticketWithLid.contact.number,
-          ticketId: ticketWithLid.id
-        });
-        return ticketWithLid.contact;
+        if (resolvedNumber && resolvedNumber.length >= 10 && resolvedNumber.length <= 13) {
+          const existingByResolvedNumber = await Contact.findOne({
+            where: { canonicalNumber: resolvedNumber, companyId, isGroup: false }
+          });
+          if (existingByResolvedNumber) {
+            logger.info("[verifyContact] LID resolvido via wbot.onWhatsApp", {
+              lid: normalizedJid,
+              resolvedJid,
+              resolvedNumber,
+              contactId: existingByResolvedNumber.id
+            });
+            // Atualizar o contato com o LID para futuras buscas diretas
+            await existingByResolvedNumber.update({ remoteJid: normalizedJid });
+            return existingByResolvedNumber;
+          }
+        }
       }
     } catch (err) {
-      debugLog("[verifyContact] Erro ao buscar contato via tickets", { err });
+      debugLog("[verifyContact] wbot.onWhatsApp não conseguiu resolver LID", { err, lid: normalizedJid });
     }
 
-    // Se não encontrou por nada, criar contato básico com o LID
-    logger.warn("[verifyContact] Criando contato com JID @lid (sem match de número)", {
+    // 6. Busca por número parcial: extrair os últimos 8-9 dígitos e buscar correspondência
+    // Isso ajuda quando o LID tem um número parcial embutido
+    const partialNumber = cleaned.slice(-9); // Últimos 9 dígitos
+    if (partialNumber.length >= 8) {
+      const existingByPartial = await Contact.findOne({
+        where: {
+          canonicalNumber: { [Op.like]: `%${partialNumber}` },
+          companyId,
+          isGroup: false
+        }
+      });
+      if (existingByPartial) {
+        logger.info("[verifyContact] LID resolvido via busca parcial de número", {
+          lid: normalizedJid,
+          partialNumber,
+          contactId: existingByPartial.id,
+          contactNumber: existingByPartial.number
+        });
+        return existingByPartial;
+      }
+    }
+
+    // Se chegou aqui, nenhuma resolução funcionou - criar novo contato com segurança
+    logger.warn("[verifyContact] BLINDAGEM: LID não resolvido por nenhum método, criando novo contato", {
       normalizedJid,
-      pushName: msgContact.name
+      pushName: msgContact.name,
+      cleaned,
+      companyId,
+      metodosTentados: ["LID direto", "pushName", "número no LID", "store.contacts", "wbot.onWhatsApp", "busca parcial"]
     });
+
+    // Criar contato básico com o LID
     const basicContactData = {
       name: msgContact.name || normalizedJid,
       number: cleaned || normalizedJid,
