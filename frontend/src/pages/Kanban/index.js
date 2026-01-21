@@ -92,7 +92,6 @@ const useStyles = makeStyles(theme => ({
   kanbanContainer: {
     flex: 1,
     padding: "0 10px",
-    paddingRight: 350, // Espaço extra para última coluna aparecer inteira
     overflowX: "auto",
     overflowY: "hidden",
     width: "100%",
@@ -111,11 +110,13 @@ const useStyles = makeStyles(theme => ({
       flexWrap: "nowrap !important",
       alignItems: "flex-start !important",
       height: "100% !important",
-      width: "100% !important",
-      minWidth: "fit-content !important",
+      width: "fit-content !important", // Importante: ajusta ao conteúdo
+      minWidth: "100%",
       minHeight: "0 !important",
       padding: "0 !important",
+      paddingRight: "350px !important", // Espaço para última lane
       backgroundColor: "transparent !important",
+      boxSizing: "content-box !important",
     },
     "& .smooth-dnd-container.horizontal": {
       display: "flex !important",
@@ -123,9 +124,10 @@ const useStyles = makeStyles(theme => ({
       flexWrap: "nowrap !important",
       gap: "6px !important",
       height: "100% !important",
-      width: "100% !important",
-      minWidth: "fit-content !important",
+      width: "fit-content !important", // Ajusta ao conteúdo
+      minWidth: "100%",
       minHeight: "0 !important",
+      paddingRight: "350px !important", // Espaço extra para scroll
     },
     "& .react-trello-lane": {
       minWidth: "350px !important",
@@ -552,6 +554,9 @@ const Kanban = () => {
         };
       }),
     ];
+
+    // Ocultar lanes vazias automaticamente
+    lanes = lanes.filter(l => (l.cards || []).length > 0);
 
     try {
       const raw = localStorage.getItem('kanbanHiddenLanes');
