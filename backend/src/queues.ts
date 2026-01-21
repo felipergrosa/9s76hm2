@@ -558,14 +558,10 @@ async function getCampaign(id) {
       {
         model: ContactList,
         as: "contactList",
-        attributes: ["id", "name"],
-        include: [
-          {
-            model: ContactListItem,
-            as: "contacts",
-            attributes: ["id", "name", "number", "email", "isWhatsappValid", "isGroup"]
-          }
-        ]
+        attributes: ["id", "name"]
+        // IMPORTANTE: NÃO incluir ContactListItem aqui!
+        // Estava carregando 686+ contatos repetidamente causando lentidão extrema
+        // Os contatos são carregados UMA VEZ em handleProcessCampaign (linha 1287)
       },
       {
         model: Whatsapp,
@@ -575,34 +571,8 @@ async function getCampaign(id) {
     ]
   });
 
-  // DEBUG: Log detalhado para verificar contatos carregados
+  // Log apenas para debug de metaTemplateVariables
   if (campaign) {
-    const contactListId = campaign.contactListId;
-    const contactList = campaign.contactList;
-    const contacts = contactList?.contacts;
-    const contactCount = contacts?.length || 0;
-
-    logger.info(`[getCampaign] Campaign ${id} | contactListId: ${contactListId} | ContactList loaded: ${!!contactList} | Contatos: ${contactCount}`);
-
-    // Se não carregou contatos, buscar diretamente para debug
-    if (contactCount === 0 && contactListId) {
-      const directCount = await ContactListItem.count({ where: { contactListId } });
-      logger.warn(`[getCampaign] Campaign ${id} | Contagem direta de ContactListItem: ${directCount}`);
-
-      // Se há contatos no banco mas não vieram no include, buscar manualmente
-      if (directCount > 0) {
-        logger.info(`[getCampaign] Campaign ${id} | Buscando contatos manualmente...`);
-        const manualContacts = await ContactListItem.findAll({
-          where: { contactListId },
-          attributes: ["id", "name", "number", "email", "isWhatsappValid", "isGroup"]
-        });
-        if (campaign.contactList) {
-          campaign.contactList.contacts = manualContacts;
-        }
-        logger.info(`[getCampaign] Campaign ${id} | Contatos carregados manualmente: ${manualContacts.length}`);
-      }
-    }
-
     console.log(`[getCampaign] Campaign ${id} metaTemplateVariables:`, JSON.stringify((campaign as any).metaTemplateVariables));
   } else {
     logger.error(`[getCampaign] Campaign ${id} não encontrada!`);
