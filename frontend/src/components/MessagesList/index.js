@@ -2017,6 +2017,15 @@ const MessagesList = ({
                         return null;
                       }
 
+                      // Para imagens e vídeos: não exibir se o body é apenas o nome do arquivo
+                      if (message.mediaType === "image" || message.mediaType === "video") {
+                        const fileName = getFileNameFromUrl(message.mediaUrl) || "";
+                        // Se body é vazio OU é igual ao nome do arquivo, não exibir
+                        if (!bodyTrim || bodyTrim === fileName.trim()) {
+                          return null;
+                        }
+                      }
+
                       // Demais tipos (texto)
                       return xmlRegex.test(message.body)
                         ? <span>{formatXml(cleanButtonMarkers(message.body, message))}</span>

@@ -21,6 +21,7 @@ import {
 import { getWbot } from "../wbot";
 import logger from "../../utils/logger";
 import Whatsapp from "../../models/Whatsapp";
+import Message from "../../models/Message";
 
 /**
  * Adapter para Baileys (conexão não oficial)
@@ -231,7 +232,37 @@ export class BaileysAdapter implements IWhatsAppAdapter {
 
         // Adicionar quoted se existir
         if (quotedMsgId) {
-          content.quoted = { key: { id: quotedMsgId } };
+          try {
+            // Buscar mensagem original para pegar informações completas do key
+            const quotedMessage = await Message.findOne({
+              where: { wid: quotedMsgId }
+            });
+
+            if (quotedMessage) {
+              content.quoted = {
+                key: {
+                  id: quotedMsgId,
+                  remoteJid: quotedMessage.remoteJid || toJid,
+                  fromMe: quotedMessage.fromMe || false,
+                  participant: quotedMessage.participant || undefined
+                }
+              };
+              logger.debug(`[BaileysAdapter] Quote configurado com sucesso para mensagem ${quotedMsgId}`);
+            } else {
+              // Fallback: usar informações mínimas (pode não funcionar em todos os casos)
+              logger.warn(`[BaileysAdapter] Mensagem citada ${quotedMsgId} não encontrada no banco, usando fallback`);
+              content.quoted = {
+                key: {
+                  id: quotedMsgId,
+                  remoteJid: toJid,
+                  fromMe: false
+                }
+              };
+            }
+          } catch (error) {
+            logger.error(`[BaileysAdapter] Erro ao buscar mensagem citada: ${error.message}`);
+            // Continuar sem quote se der erro
+          }
         }
 
         sentMsg = await this.sendWithRetry(toJid, content);
