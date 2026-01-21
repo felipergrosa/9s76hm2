@@ -11,7 +11,7 @@ const ShowService = async (id: string | number): Promise<Campaign> => {
   const record = await Campaign.findByPk(id, {
     include: [
       { model: CampaignShipping },
-      { model: ContactList, include: [{ model: ContactListItem }] },
+      { model: ContactList, attributes: ["id", "name"] }, // Removido include de ContactListItem
       { model: Whatsapp, attributes: ["id", "name"] },
       { model: User, attributes: ["id", "name"] },
       { model: Queue, attributes: ["id", "name"] },
