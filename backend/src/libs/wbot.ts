@@ -401,6 +401,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   io.of(`/workspace-${companyId}`)
                     .emit("wa-conn-lost", {
                       whatsappId: id,
+                      whatsappName: name, // Nome da conexão para exibição no modal
                       statusCode,
                       reason: lastDisconnect?.error?.message || "Connection closed",
                       qrUrl: `${process.env.FRONTEND_URL || ""}/connections/${id}`

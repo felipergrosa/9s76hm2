@@ -11,11 +11,12 @@ import {
 } from "@material-ui/core";
 
 const ConnectionLostModal = ({ open, data, onClose }) => {
-  const { whatsappId, reason, qrUrl } = data || {};
+  const { whatsappId, whatsappName, reason, qrUrl } = data || {};
 
   const handleReconnect = () => {
     if (qrUrl) {
-      window.open(qrUrl, "_blank", "noopener,noreferrer");
+      // Abre na mesma janela (parent) em vez de nova aba
+      window.location.href = qrUrl;
     }
     onClose?.();
   };
@@ -28,6 +29,11 @@ const ConnectionLostModal = ({ open, data, onClose }) => {
           <Typography variant="body2" gutterBottom>
             A sessão do WhatsApp desconectou.
           </Typography>
+          {whatsappName && (
+            <Typography variant="body2" style={{ fontWeight: 600 }} gutterBottom>
+              Conexão: {whatsappName}
+            </Typography>
+          )}
           {reason && (
             <Typography variant="body2" color="textSecondary" gutterBottom>
               Motivo: {reason}
@@ -42,7 +48,7 @@ const ConnectionLostModal = ({ open, data, onClose }) => {
             <Typography variant="body2">
               Abra a tela de reconexão e leia o QR Code:
               <br />
-              <Link href={qrUrl} target="_blank" rel="noopener noreferrer">
+              <Link href={qrUrl} onClick={(e) => { e.preventDefault(); handleReconnect(); }} style={{ cursor: "pointer" }}>
                 {qrUrl}
               </Link>
             </Typography>
@@ -62,3 +68,4 @@ const ConnectionLostModal = ({ open, data, onClose }) => {
 };
 
 export default ConnectionLostModal;
+

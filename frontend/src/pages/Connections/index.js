@@ -865,6 +865,7 @@ const Connections = () => {
                     <div className={classes.cardHeader}>
                       <div className={classes.cardTitle}>
                         {IconChannel(whatsApp.channel, whatsApp.channelType)}
+                        <span style={{ color: '#888', fontSize: '0.8rem' }}>#{whatsApp.id}</span>
                         {whatsApp.name}
                         {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
                           <Chip
@@ -950,6 +951,7 @@ const Connections = () => {
               <Table size="small">
                 <TableHead>
                   <TableRow>
+                    <TableCell align="center">ID</TableCell>
                     <TableCell align="center">Channel</TableCell>
                     <TableCell align="center">{i18n.t("connections.table.name")}</TableCell>
                     <TableCell align="center">{i18n.t("connections.table.number")}</TableCell>
@@ -974,6 +976,9 @@ const Connections = () => {
                       {whatsApps?.length > 0 &&
                         whatsApps.map((whatsApp) => (
                           <TableRow key={whatsApp.id}>
+                            <TableCell align="center">
+                              <Chip label={`#${whatsApp.id}`} size="small" variant="outlined" />
+                            </TableCell>
                             <TableCell align="center">{IconChannel(whatsApp.channel, whatsApp.channelType)}</TableCell>
                             <TableCell align="center">
                               <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
