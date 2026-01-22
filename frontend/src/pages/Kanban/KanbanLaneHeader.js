@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { makeStyles } from "@material-ui/core/styles";
 import { Typography, IconButton, Tooltip, Chip, Menu, MenuItem, ListItemText } from "@material-ui/core";
 import MoreHorizIcon from "@material-ui/icons/MoreHoriz";
+import DragIndicatorIcon from "@material-ui/icons/DragIndicator";
 import { i18n } from "../../translate/i18n";
 
 const useStyles = makeStyles(theme => ({
@@ -45,18 +46,7 @@ export default function KanbanLaneHeader(props) {
   const classes = useStyles();
   const [anchorEl, setAnchorEl] = useState(null);
 
-  const handlePointerDown = (e) => {
-    if (e.button !== 0) return;
-    // Não iniciar pan quando clicar em elementos interativos
-    try {
-      const isInteractive = e.target.closest('button,a,input,textarea,select,[role="button"]');
-      if (isInteractive) return;
-    } catch (_) {}
-    // Não capturar pointer se o menu estiver aberto
-    if (anchorEl) return;
-    try { e.preventDefault(); } catch (_) {}
-    if (props.onPanStart) props.onPanStart(e);
-  };
+
 
   const handleOpen = (e) => setAnchorEl(e.currentTarget);
   const handleClose = () => setAnchorEl(null);
@@ -71,25 +61,37 @@ export default function KanbanLaneHeader(props) {
         localStorage.setItem(key, JSON.stringify(arr));
         window.dispatchEvent(new CustomEvent('kanban:lanesHiddenChanged'));
       }
-    } catch (e) {}
+    } catch (e) { }
     handleClose();
   };
   const handleManage = () => {
     handleClose();
     try {
       window.location.assign('/tagsKanban');
-    } catch (e) {}
+    } catch (e) { }
   };
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
-    } catch (e) {}
+    } catch (e) { }
     handleClose();
   };
   return (
-    <div className={classes.header} onPointerDown={handlePointerDown}>
+    <div
+      className={classes.header}
+      onPointerDown={(e) => {
+        // Se clicar no handle de drag, não faz pan (o dnd cuida)
+        // Se clicar em botão, não faz pan
+        // Caso contrário, faz pan
+        const isInteractive = e.target.closest('button,a,input,textarea,select,[role="button"]');
+        if (!isInteractive && props.onPanStart) props.onPanStart(e);
+      }}
+    >
       <div className={classes.left}>
-        <Typography variant="subtitle2" style={{ fontWeight: 800, color: color || "#333" }}>{title}</Typography>
+        <div {...props.dragHandleProps} style={{ cursor: 'grab', display: 'flex', alignItems: 'center', marginRight: 4 }}>
+          <DragIndicatorIcon style={{ color: "#999", fontSize: 20 }} />
+        </div>
+        <Typography variant="subtitle2" style={{ fontWeight: 800, color: color || "#333", cursor: "grab" }}>{title}</Typography>
         <Chip size="small" label={label} variant="default" style={{ height: 20, fontSize: "0.7rem", fontWeight: 600 }} />
         {typeof unreadCount === 'number' && unreadCount > 0 && (
           <Chip size="small" color="secondary" label={`${unreadCount}`} style={{ height: 20, fontSize: "0.7rem", marginLeft: 4 }} />
@@ -111,8 +113,8 @@ export default function KanbanLaneHeader(props) {
         onClose={handleClose}
         onClick={(e) => e.stopPropagation()}
         getContentAnchorEl={null}
-        anchorOrigin={{vertical:'bottom', horizontal:'right'}}
-        transformOrigin={{vertical:'top', horizontal:'right'}}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
         <MenuItem onClick={(e) => { e.stopPropagation(); handleHide(); }}><ListItemText primary={i18n.t('kanban.hideColumn')} /></MenuItem>
         <MenuItem onClick={(e) => { e.stopPropagation(); handleManage(); }}><ListItemText primary={i18n.t('kanban.manageColumns')} /></MenuItem>

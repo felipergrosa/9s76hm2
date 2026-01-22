@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useContext } from "react";
 import { makeStyles } from "@material-ui/core/styles";
-import { Typography, Tooltip, Divider, Card, CardActionArea, CardContent, IconButton, Menu, MenuItem, ListItemText, Avatar } from "@material-ui/core";
+import { Typography, Tooltip, Card, CardContent, IconButton, Menu, MenuItem, ListItemText, Avatar } from "@material-ui/core";
 import { Facebook, Instagram, WhatsApp, Close as CloseIcon, MoreVert as MoreVertIcon, ChatBubbleOutline, AttachFile, EventAvailable } from "@material-ui/icons";
 import ContactAvatar from "../../components/ContactAvatar";
 import { i18n } from "../../translate/i18n";
@@ -11,8 +11,8 @@ const useStyles = makeStyles(theme => ({
   ticketCard: {
     background: theme.palette.background.paper,
     borderRadius: 8,
-    boxShadow: "0 1px 3px rgba(0,0,0,0.12)", // Sombra restaurada
-    border: "1px solid rgba(0, 0, 0, 0.05)",
+    border: "1px solid rgba(0, 0, 0, 0.05) !important",
+    boxShadow: "none !important",
     transition: "all 0.2s",
     marginBottom: 8,
     width: "calc(100% - 20px)",
@@ -22,7 +22,6 @@ const useStyles = makeStyles(theme => ({
     "&:hover": {
       borderColor: theme.palette.primary.main,
       transform: "translateY(-2px)",
-      boxShadow: "0 4px 6px rgba(0,0,0,0.1)", // Sombra hover restaurada
     },
   },
   ticketContent: {
@@ -251,7 +250,7 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
     : "?";
 
   return (
-    <Card className={classes.ticketCard} onClick={onClick}>
+    <Card variant="outlined" elevation={0} className={classes.ticketCard} onClick={onClick}>
       {/* Botões de Ação */}
       <Tooltip title="Opções">
         <IconButton className={classes.menuBtn} size="small" onClick={(e) => { e.stopPropagation(); setMenuEl(e.currentTarget); }}>
@@ -275,7 +274,7 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
         <span className={classes.priorityDot} style={{ background: priority.color }} />
       </Tooltip>
 
-      <CardActionArea style={{ paddingTop: 20 }}>
+      <div style={{ paddingTop: 20, cursor: 'pointer' }}>
         <CardContent className={classes.ticketContent}>
           {/* Header: Avatar + Nome + Ticket ID */}
           <div className={classes.ticketHeader}>
@@ -367,7 +366,7 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
             </Tooltip>
           </div>
         </CardContent>
-      </CardActionArea>
+      </div>
 
       {/* Menus Flutuantes Restaurados */}
       <Menu anchorEl={menuEl} open={Boolean(menuEl)} onClose={() => setMenuEl(null)} onClick={(e) => e.stopPropagation()}>

@@ -1,88 +1,32 @@
 import React, { useState, useEffect, useContext, useMemo, useRef, useCallback } from "react";
-import { makeStyles, useTheme } from "@material-ui/core/styles";
+import { makeStyles } from "@material-ui/core/styles";
 import api from "../../services/api";
 import { AuthContext } from "../../context/Auth/AuthContext";
-import Board from 'react-trello';
-import { toast } from "react-toastify";
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import KanbanLane from "./KanbanLane";
+
 import ColorModeContext from "../../layout/themeContext";
 import { i18n } from "../../translate/i18n";
 import { useHistory } from 'react-router-dom';
-import { Facebook, Instagram, WhatsApp, FilterList, Add, Refresh } from "@material-ui/icons";
-import { Badge, Tooltip, Typography, IconButton, TextField, Box, InputBase, Select, MenuItem, Paper, FormControl, InputLabel, Checkbox, ListItemText, Popover } from "@material-ui/core";
-import { DateRangePicker } from 'materialui-daterange-picker';
-import KanbanCard from "./KanbanCard";
-import KanbanLaneHeader from "./KanbanLaneHeader";
-import { format, isSameDay, parseISO, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from "date-fns";
+import { FilterList, Add, Refresh } from "@material-ui/icons";
+import { Tooltip, Typography, IconButton, InputBase, Select, MenuItem, FormControl } from "@material-ui/core";
+
+
+import { format, startOfMonth, endOfMonth } from "date-fns";
 import { Can } from "../../components/Can";
 import KanbanFiltersModal from "./KanbanFiltersModal";
 import Title from "../../components/Title"; // Importando Title
 
 const useStyles = makeStyles(theme => ({
-  '@global': {
-    '.smooth-dnd-ghost': {
-      width: '350px !important',
-      maxWidth: '350px !important',
-      flex: '0 0 350px !important',
-      boxSizing: 'border-box !important',
-    },
-    '.smooth-dnd-ghost > *': {
-      width: '350px !important',
-      maxWidth: '350px !important',
-    },
-    '.smooth-dnd-ghost .react-trello-card': {
-      width: '350px !important',
-      maxWidth: '350px !important',
-    },
-    '.smooth-dnd-ghost .smooth-dnd-draggable-wrapper': {
-      width: '350px !important',
-      maxWidth: '350px !important',
-    },
-    // Ocultar scrollbars do Kanban (Windows/Chrome/Edge) sem perder o scroll
-    '.react-trello-board': {
-      scrollbarWidth: 'none',
-      msOverflowStyle: 'none',
-    },
-    '.react-trello-board::-webkit-scrollbar': {
-      width: '0px !important',
-      height: '0px !important',
-      display: 'none !important',
-    },
-    '.react-trello-lane__cards': {
-      scrollbarWidth: 'none',
-      msOverflowStyle: 'none',
-    },
-    '.react-trello-lane__cards::-webkit-scrollbar': {
-      width: '0px !important',
-      height: '0px !important',
-      display: 'none !important',
-    },
-    '.react-trello-lane__cards *::-webkit-scrollbar': {
-      width: '0px !important',
-      height: '0px !important',
-      display: 'none !important',
-    },
-    '.smooth-dnd-container': {
-      scrollbarWidth: 'none',
-      msOverflowStyle: 'none',
-    },
-    '.smooth-dnd-container::-webkit-scrollbar': {
-      width: '0px !important',
-      height: '0px !important',
-      display: 'none !important',
-    },
-    '.smooth-dnd-container *::-webkit-scrollbar': {
-      width: '0px !important',
-      height: '0px !important',
-      display: 'none !important',
-    },
-  },
   root: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "stretch",
+    display: "grid",
+    gridTemplateRows: "auto 1fr",
+    gridTemplateColumns: "minmax(0, 1fr)",
     height: "100vh",
     padding: theme.spacing(1),
     overflow: "hidden",
+    width: "100%",
+    boxSizing: "border-box",
   },
   headerContainer: {
     padding: "0 10px",
@@ -97,73 +41,18 @@ const useStyles = makeStyles(theme => ({
     overflowX: "auto",
     overflowY: "hidden",
     padding: "0 10px",
-    paddingRight: 360, // Espaço extra no final para última coluna
-    gap: 8,
+    paddingRight: 10,
+    gap: 12,
     height: "100%",
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
     alignItems: "stretch",
-    // Esconder scrollbar mas manter funcionalidade
     scrollbarWidth: "none",
     msOverflowStyle: "none",
     "&::-webkit-scrollbar": {
       display: "none",
-    },
-    // Força react-trello board a ser inline
-    "& .react-trello-board": {
-      display: "flex !important",
-      flexDirection: "row !important",
-      flexWrap: "nowrap !important",
-      gap: "8px !important",
-      height: "100% !important",
-      backgroundColor: "transparent !important",
-      padding: "0 !important",
-      margin: "0 !important",
-      overflow: "visible !important",
-    },
-    // Container horizontal das lanes
-    "& .smooth-dnd-container.horizontal": {
-      display: "flex !important",
-      flexDirection: "row !important",
-      flexWrap: "nowrap !important",
-      gap: "8px !important",
-      height: "100% !important",
-      overflow: "visible !important",
-    },
-    // CRUCIAL: flex-shrink: 0 impede que as colunas encolham
-    "& .react-trello-lane, & section": {
-      flexShrink: "0 !important",
-      width: "350px !important",
-      minWidth: "350px !important",
-      maxWidth: "350px !important",
-      height: "100% !important",
-      display: "flex !important",
-      flexDirection: "column !important",
-      marginRight: "0 !important",
-    },
-    // Header da lane
-    "& header": {
-      width: "100% !important",
-      flexShrink: "0 !important",
-    },
-    // Área de cards dentro da lane
-    "& .react-trello-lane__cards": {
-      flex: "1 1 auto !important",
-      overflowY: "auto !important",
-      overflowX: "hidden !important",
-      padding: "8px !important",
-      scrollbarWidth: "none",
-      "&::-webkit-scrollbar": {
-        display: "none",
-      },
-    },
-    // Cards
-    "& .react-trello-card": {
-      width: "100% !important",
-      background: "transparent !important",
-      boxShadow: "none !important",
-      border: "none !important",
-    },
-    "& .smooth-dnd-draggable-wrapper": {
-      width: "100% !important",
     },
   },
   actionsBar: {
@@ -171,6 +60,9 @@ const useStyles = makeStyles(theme => ({
     alignItems: "center",
     gap: 12,
     flexWrap: "wrap",
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     rowGap: 8,
     padding: 12,
     background: theme.palette.background.paper,
@@ -228,11 +120,19 @@ const useStyles = makeStyles(theme => ({
   dateInput: {
     marginRight: theme.spacing(2),
   },
+  boardWrapper: {
+    gridRow: "2 / 3",
+    width: "100%",
+    height: "100%",
+    overflow: "hidden",
+    display: "flex",
+    position: "relative",
+  },
 }));
 
 const Kanban = () => {
   const classes = useStyles();
-  const theme = useTheme();
+
   const history = useHistory();
   const { user, socket } = useContext(AuthContext);
   const kanbanScrollRef = useRef(null);
@@ -240,7 +140,7 @@ const Kanban = () => {
   const bodyStyleRef = useRef({ cursor: "", userSelect: "" });
   const [tags, setTags] = useState([]);
   const [tickets, setTickets] = useState([]);
-  const [ticketNot, setTicketNot] = useState(0);
+
   const { colorMode } = useContext(ColorModeContext);
   const { viewMode } = colorMode || {};
   const [file, setFile] = useState({ lanes: [] });
@@ -251,8 +151,7 @@ const Kanban = () => {
   const [filterQueues, setFilterQueues] = useState([]);
   const [filterUsers, setFilterUsers] = useState([]);
   const [filterTags, setFilterTags] = useState([]);
-  const [rangeOpen, setRangeOpen] = useState(false);
-  const [rangeAnchor, setRangeAnchor] = useState(null);
+
   const [filtersModalOpen, setFiltersModalOpen] = useState(false);
 
   // Kanban Pessoal
@@ -435,6 +334,28 @@ const Kanban = () => {
     } catch (e) { console.log(e); }
   }, [handleCardMove]);
 
+  const handleDragEnd = useCallback((result) => {
+    const { source, destination, draggableId, type } = result;
+
+    if (type === "COLUMN") {
+      const { source, destination } = result;
+      if (source.index === destination.index) return;
+      // lane0 é fixo no índice 0
+      if (source.index === 0 || destination.index === 0) return;
+
+      const newTags = Array.from(tags);
+      // Ajustar índices (remover 1 por causa da lane0)
+      const [removed] = newTags.splice(source.index - 1, 1);
+      newTags.splice(destination.index - 1, 0, removed);
+
+      setTags(newTags);
+      return;
+    }
+
+    // Chamar handleCardMove com os IDs corretos
+    handleCardMove(source.droppableId, destination.droppableId, draggableId);
+  }, [handleCardMove, tags]);
+
   const popularCards = useCallback((ticketsSource = tickets) => {
     const filteredTickets = applySearchAndSort((ticketsSource || []).filter(ticket => (ticket.tags || []).length === 0));
 
@@ -463,14 +384,7 @@ const Kanban = () => {
         style: { ...laneStyle, borderTop: `4px solid #5C5C5C` }, // Borda colorida no topo
         cards: filteredTickets.map(ticket => ({
           id: ticket.id.toString(),
-          label: "",
-          description: (
-            <KanbanCard ticket={ticket} allTags={tags} onMoveRequest={(tagId) => quickMove(ticket, tagId)} onClick={() => handleCardClick(ticket.uuid)} />
-          ),
-          title: "",
-          draggable: true,
-          href: "/tickets/" + ticket.uuid,
-          style: { background: 'transparent', border: 'none', boxShadow: 'none', padding: 0 },
+          ticket: ticket,
         })),
       },
       ...tags.map(tag => {
@@ -489,14 +403,7 @@ const Kanban = () => {
           style: { ...laneStyle, borderTop: `4px solid ${tag.color}` }, // Borda colorida no topo
           cards: filteredTickets.map(ticket => ({
             id: ticket.id.toString(),
-            label: "",
-            description: (
-              <KanbanCard ticket={ticket} allTags={tags} onMoveRequest={(tagId) => quickMove(ticket, tagId)} onClick={() => handleCardClick(ticket.uuid)} />
-            ),
-            title: "",
-            draggable: true,
-            href: "/tickets/" + ticket.uuid,
-            style: { background: 'transparent', border: 'none', boxShadow: 'none', padding: 0 },
+            ticket: ticket,
           })),
         };
       }),
@@ -511,7 +418,7 @@ const Kanban = () => {
     } catch (e) { }
 
     setFile({ lanes });
-  }, [tickets, tags, applySearchAndSort, quickMove, handleCardClick, viewMode]);
+  }, [tickets, tags, applySearchAndSort, viewMode]);
 
   useEffect(() => {
     popularCards();
@@ -660,30 +567,56 @@ const Kanban = () => {
         </div>
       </div>
 
-      <div className={classes.kanbanContainer} ref={kanbanScrollRef}>
-        {!file || !file.lanes ? (
-          <div style={{ display: 'flex', gap: 12 }}>
-            {[1, 2, 3].map(i => (
-              <div key={i} style={{ width: 350, height: "100%", borderRadius: 8, padding: 8, background: '#f5f5f5' }} />
-            ))}
-          </div>
-        ) : (
-          file.lanes.length === 0 || file.lanes.every(l => (l.cards || []).length === 0) ? (
-            <Typography variant="body2" color="textSecondary">{i18n.t('kanban.empty.noTickets')}</Typography>
-          ) : (
-            <Board
-              data={file}
-              onCardMoveAcrossLanes={handleCardMove}
-              components={{ LaneHeader: (props) => <KanbanLaneHeader {...props} onPanStart={handlePanStart} /> }}
-              customCardLayout
-              hideCardDeleteIcon
-              style={{ backgroundColor: 'transparent', height: '100%', padding: 0, display: 'flex', flexWrap: 'nowrap' }}
-              draggable
-              cardDraggable
-              laneDraggable={false}
-            />
-          )
-        )}
+      <div className={classes.boardWrapper}>
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <Droppable droppableId="board" type="COLUMN" direction="horizontal">
+            {(provided) => (
+              <div
+                className={classes.kanbanContainer}
+                ref={(el) => {
+                  provided.innerRef(el);
+                  kanbanScrollRef.current = el;
+                }}
+                {...provided.droppableProps}
+                onPointerDown={handlePanStart}
+              >
+                {!file || !file.lanes ? (
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    {[1, 2, 3].map(i => (
+                      <div key={i} style={{ width: 350, height: "100%", borderRadius: 8, padding: 8, background: '#f5f5f5' }} />
+                    ))}
+                  </div>
+                ) : file.lanes.length === 0 || file.lanes.every(l => (l.cards || []).length === 0) ? (
+                  <Typography variant="body2" color="textSecondary">{i18n.t('kanban.empty.noTickets')}</Typography>
+                ) : (
+                  <>
+                    {file.lanes.map((lane, index) => (
+                      <Draggable key={lane.id} draggableId={lane.id} index={index} isDragDisabled={index === 0}>
+                        {(provided) => (
+                          <KanbanLane
+                            key={lane.id}
+                            lane={lane}
+                            onCardClick={handleCardClick}
+                            allTags={tags}
+                            onMoveRequest={quickMove}
+
+                            innerRef={provided.innerRef}
+                            draggableProps={provided.draggableProps}
+
+                            dragHandleProps={provided.dragHandleProps}
+                            onPanStart={handlePanStart}
+                          />
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                    <div style={{ minWidth: 250, flexShrink: 0 }} />
+                  </>
+                )}
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
       </div>
 
       <KanbanFiltersModal

@@ -27,7 +27,7 @@ const useStyles = makeStyles((theme) => ({
         maxHeight: "100%",
         overflowY: "scroll",
         ...theme.scrollbarStyles,
-        borderTop: "2px solid rgba(0, 0, 0, 0.12)",
+        borderTop: "1px solid rgba(0, 0, 0, 0.05)",
     },
 
     ticketsListHeader: {
@@ -72,7 +72,7 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 const ticketSortAsc = (a, b) => {
-    
+
     if (a.updatedAt < b.updatedAt) {
         return -1;
     }
@@ -83,7 +83,7 @@ const ticketSortAsc = (a, b) => {
 }
 
 const ticketSortDesc = (a, b) => {
-   
+
     if (a.updatedAt > b.updatedAt) {
         return -1;
     }
@@ -96,7 +96,7 @@ const ticketSortDesc = (a, b) => {
 const reducer = (state, action) => {
     //console.log("action", action, state)
     const sortDir = action.sortDir;
-    
+
     if (action.type === "LOAD_TICKETS") {
         const newTickets = action.payload;
 
