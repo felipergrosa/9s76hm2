@@ -77,12 +77,59 @@ interface PrepareContactData {
   campaignId: number;
   delay: number;
   variables: any[];
+  campaignData?: CampaignData; // Dados serializados da campanha (evita consulta ao banco)
 }
 
 interface DispatchCampaignData {
   campaignId: number;
   campaignShippingId: number;
   contactListItemId: number;
+  selectedWhatsappId?: number;
+  campaignData?: CampaignData; // Dados serializados da campanha (evita consulta ao banco)
+}
+
+// Dados serializáveis da campanha - passados via job para evitar consultas repetidas ao banco
+interface CampaignData {
+  id: number;
+  companyId: number;
+  contactListId: number;
+  whatsappId: number;
+  queueId: number | null;
+  userId: number | null;
+  userIds: string | null;
+  status: string;
+  confirmation: boolean;
+  dispatchStrategy: string | null;
+  allowedWhatsappIds: string | null;
+  statusTicket: string | null;
+  // Mensagens
+  message1: string | null;
+  message2: string | null;
+  message3: string | null;
+  message4: string | null;
+  message5: string | null;
+  confirmationMessage1: string | null;
+  confirmationMessage2: string | null;
+  confirmationMessage3: string | null;
+  confirmationMessage4: string | null;
+  confirmationMessage5: string | null;
+  // Mídia global
+  mediaPath: string | null;
+  mediaName: string | null;
+  // Mídia por mensagem
+  mediaUrl1: string | null;
+  mediaName1: string | null;
+  mediaUrl2: string | null;
+  mediaName2: string | null;
+  mediaUrl3: string | null;
+  mediaName3: string | null;
+  mediaUrl4: string | null;
+  mediaName4: string | null;
+  mediaUrl5: string | null;
+  mediaName5: string | null;
+  // Meta Template (API Oficial)
+  metaTemplateName: string | null;
+  metaTemplateVariables: any;
 }
 
 interface CapBackoffSettings {
@@ -549,9 +596,18 @@ async function handleVerifyCampaigns(job) {
   }
 }
 
+// Cache em memória para campanhas - evita centenas de consultas repetidas ao banco
+const campaignCache: Map<number, { data: any; expiry: number }> = new Map();
+const CAMPAIGN_CACHE_TTL_MS = 60000; // 60 segundos
 
 async function getCampaign(id) {
-  // Primeiro busca a campanha com o whatsapp para verificar o tipo de canal
+  // Verificar cache primeiro
+  const cached = campaignCache.get(id);
+  if (cached && cached.expiry > Date.now()) {
+    return cached.data;
+  }
+
+  // Busca a campanha com o whatsapp para verificar o tipo de canal
   const campaign = await Campaign.findOne({
     where: { id },
     include: [
@@ -561,7 +617,7 @@ async function getCampaign(id) {
         attributes: ["id", "name"]
         // IMPORTANTE: NÃO incluir ContactListItem aqui!
         // Estava carregando 686+ contatos repetidamente causando lentidão extrema
-        // Os contatos são carregados UMA VEZ em handleProcessCampaign (linha 1287)
+        // Os contatos são carregados UMA VEZ em handleProcessCampaign
       },
       {
         model: Whatsapp,
@@ -571,14 +627,65 @@ async function getCampaign(id) {
     ]
   });
 
-  // Log apenas para debug de metaTemplateVariables
+  // Salvar no cache
   if (campaign) {
-    console.log(`[getCampaign] Campaign ${id} metaTemplateVariables:`, JSON.stringify((campaign as any).metaTemplateVariables));
+    campaignCache.set(id, { data: campaign, expiry: Date.now() + CAMPAIGN_CACHE_TTL_MS });
   } else {
     logger.error(`[getCampaign] Campaign ${id} não encontrada!`);
   }
 
   return campaign;
+}
+
+// Função para limpar cache de uma campanha específica (usar quando campanha for atualizada)
+function invalidateCampaignCache(id: number) {
+  campaignCache.delete(id);
+}
+
+// Serializa campanha para passar via job (evita consultas repetidas ao banco)
+function serializeCampaign(campaign: any): CampaignData {
+  return {
+    id: campaign.id,
+    companyId: campaign.companyId,
+    contactListId: campaign.contactListId,
+    whatsappId: campaign.whatsappId,
+    queueId: campaign.queueId,
+    userId: campaign.userId,
+    userIds: campaign.userIds,
+    status: campaign.status,
+    confirmation: campaign.confirmation,
+    dispatchStrategy: campaign.dispatchStrategy,
+    allowedWhatsappIds: campaign.allowedWhatsappIds,
+    statusTicket: campaign.statusTicket,
+    // Mensagens
+    message1: campaign.message1,
+    message2: campaign.message2,
+    message3: campaign.message3,
+    message4: campaign.message4,
+    message5: campaign.message5,
+    confirmationMessage1: campaign.confirmationMessage1,
+    confirmationMessage2: campaign.confirmationMessage2,
+    confirmationMessage3: campaign.confirmationMessage3,
+    confirmationMessage4: campaign.confirmationMessage4,
+    confirmationMessage5: campaign.confirmationMessage5,
+    // Mídia global
+    mediaPath: campaign.mediaPath,
+    mediaName: campaign.mediaName,
+    // Mídia por mensagem
+    mediaUrl1: campaign.mediaUrl1,
+    mediaName1: campaign.mediaName1,
+    mediaUrl2: campaign.mediaUrl2,
+    mediaName2: campaign.mediaName2,
+    mediaUrl3: campaign.mediaUrl3,
+    mediaName3: campaign.mediaName3,
+    mediaUrl4: campaign.mediaUrl4,
+    mediaName4: campaign.mediaName4,
+    mediaUrl5: campaign.mediaUrl5,
+    mediaName5: campaign.mediaName5,
+    // Meta Template (API Oficial)
+    metaTemplateName: campaign.metaTemplateName,
+    metaTemplateVariables: campaign.metaTemplateVariables
+  };
 }
 
 async function getContact(id) {
@@ -1267,6 +1374,10 @@ async function handleProcessCampaign(job) {
         return;
       }
 
+      // OTIMIZAÇÃO: Serializar dados da campanha UMA VEZ para passar via job
+      // Isso elimina centenas de chamadas getCampaign() durante o processamento
+      const campaignData = serializeCampaign(campaign);
+
       // Processar contatos da lista
       const contactData = contacts.map(contact => ({
         contactId: contact.id,
@@ -1299,7 +1410,7 @@ async function handleProcessCampaign(job) {
         // if (isOpen || !isFds) {
         const queuePromise = campaignQueue.add(
           "PrepareContact",
-          { contactId, campaignId, variables, delay },
+          { contactId, campaignId, variables, delay, campaignData }, // Passa campaignData serializado
           { removeOnComplete: true }
         );
         queuePromises.push(queuePromise);
@@ -1362,9 +1473,15 @@ async function pickNextWhatsapp(campaign: any): Promise<number> {
 
 async function handlePrepareContact(job) {
   try {
-    const { contactId, campaignId, delay, variables }: PrepareContactData =
+    const { contactId, campaignId, delay, variables, campaignData }: PrepareContactData =
       job.data;
-    const campaign = await getCampaign(campaignId);
+
+    // OTIMIZAÇÃO: Usar campaignData do job se disponível (evita consulta ao banco)
+    // Fallback para getCampaign se campaignData não estiver presente (jobs antigos)
+    let campaign: any = campaignData;
+    if (!campaign) {
+      campaign = await getCampaign(campaignId);
+    }
 
     // Verificação de segurança: campanha deve existir
     if (!campaign) {
@@ -1482,7 +1599,8 @@ async function handlePrepareContact(job) {
           campaignId: campaign.id,
           campaignShippingId: record.id,
           contactListItemId: contactId,
-          selectedWhatsappId
+          selectedWhatsappId,
+          campaignData // Propaga campaignData para o próximo job
         },
         {
           delay
@@ -1502,8 +1620,24 @@ async function handlePrepareContact(job) {
 async function handleDispatchCampaign(job) {
   try {
     const { data } = job;
-    const { campaignShippingId, campaignId } = data as any;
-    const campaign = await getCampaign(campaignId);
+    const { campaignShippingId, campaignId, campaignData } = data as DispatchCampaignData;
+
+    // OTIMIZAÇÃO: Usar campaignData do job se disponível (evita consulta ao banco)
+    // Mas ainda precisa verificar status atualizado para respeitar pause/cancel
+    let campaign: any = campaignData;
+
+    // Verificar status atualizado da campanha (consulta leve, apenas status)
+    const campaignStatus = await Campaign.findByPk(campaignId, {
+      attributes: ["id", "status"]
+    });
+
+    // Se não tem campaignData, buscar campanha completa (compatibilidade com jobs antigos)
+    if (!campaign) {
+      campaign = await getCampaign(campaignId);
+    } else if (campaignStatus) {
+      // Atualizar status no campaignData para respeitar pause/cancel
+      campaign.status = campaignStatus.status;
+    }
 
     // Se a campanha foi pausada/cancelada/finalizada, não deve continuar tentando enviar.
     if (!campaign || campaign.status !== "EM_ANDAMENTO") {
@@ -1592,7 +1726,7 @@ async function handleDispatchCampaign(job) {
     if (deferMs > 0) {
       const nextJob = await campaignQueue.add(
         "DispatchCampaign",
-        { campaignId, campaignShippingId, contactListItemId: data.contactListItemId, selectedWhatsappId },
+        { campaignId, campaignShippingId, contactListItemId: data.contactListItemId, selectedWhatsappId, campaignData },
         { delay: deferMs, removeOnComplete: true }
       );
       await campaignShipping.update({ jobId: String(nextJob.id) });
@@ -1966,7 +2100,7 @@ async function handleDispatchCampaign(job) {
         const delayMs = 10000; // 10 segundos para dar tempo de reconectar
         const nextJob = await campaignQueue.add(
           "DispatchCampaign",
-          { campaignId, campaignShippingId, contactListItemId: data.contactListItemId, selectedWhatsappId },
+          { campaignId, campaignShippingId, contactListItemId: data.contactListItemId, selectedWhatsappId, campaignData },
           { delay: delayMs, removeOnComplete: true }
         );
         await campaignShipping.update({
@@ -2057,7 +2191,7 @@ async function handleDispatchCampaign(job) {
                 }
               }
 
-              await verifyMediaMessage(sentMessage, ticket, ticket.contact, null, false, true, wbot, true); // isCampaign=true
+              await verifyMediaMessage(sentMessage, ticket, contact, null, false, true, wbot, true); // isCampaign=true
             }
           }
           // Fechar ticket se statusTicket for "closed"
@@ -2121,7 +2255,7 @@ async function handleDispatchCampaign(job) {
         const caps = await getCapBackoffSettings(campaign.companyId, isOfficialForCaps);
         updateBackoffOnError(selectedWhatsappId, caps, err?.message || "");
         const delayMs = getBackoffDeferDelayMs(selectedWhatsappId) || (caps.backoffPauseMinutes * 60 * 1000);
-        const { campaignShippingId, contactListItemId } = job.data as DispatchCampaignData;
+        const { campaignShippingId, contactListItemId, campaignData } = job.data as DispatchCampaignData;
         const record = await CampaignShipping.findByPk(campaignShippingId);
         if (record) {
           const newAttempts = (record.attempts || 0) + 1;
@@ -2143,7 +2277,7 @@ async function handleDispatchCampaign(job) {
 
           const nextJob = await campaignQueue.add(
             "DispatchCampaign",
-            { campaignId: campaign.id, campaignShippingId, contactListItemId, selectedWhatsappId },
+            { campaignId: campaign.id, campaignShippingId, contactListItemId, selectedWhatsappId, campaignData },
             { delay: delayMs, removeOnComplete: true }
           );
 
