@@ -727,17 +727,21 @@ const Kanban = () => {
           file.lanes.length === 0 || file.lanes.every(l => (l.cards || []).length === 0) ? (
             <Typography variant="body2" color="textSecondary">{i18n.t('kanban.empty.noTickets')}</Typography>
           ) : (
-            <Board
-              data={file}
-              onCardMoveAcrossLanes={handleCardMove}
-              components={{ LaneHeader: (props) => <KanbanLaneHeader {...props} onPanStart={handlePanStart} /> }}
-              customCardLayout
-              hideCardDeleteIcon
-              style={{ backgroundColor: 'transparent', height: '100%', padding: 0 }}
-              draggable
-              cardDraggable
-              laneDraggable={false}
-            />
+            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', height: '100%' }}>
+              <Board
+                data={file}
+                onCardMoveAcrossLanes={handleCardMove}
+                components={{ LaneHeader: (props) => <KanbanLaneHeader {...props} onPanStart={handlePanStart} /> }}
+                customCardLayout
+                hideCardDeleteIcon
+                style={{ backgroundColor: 'transparent', height: '100%', padding: 0 }}
+                draggable
+                cardDraggable
+                laneDraggable={false}
+              />
+              {/* Espaçador invisível para permitir scroll completo até a última lane */}
+              <div style={{ minWidth: 350, flexShrink: 0 }} />
+            </div>
           )
         )}
       </div>

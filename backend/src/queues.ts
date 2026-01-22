@@ -1249,12 +1249,17 @@ async function handleProcessCampaign(job) {
     const settings = await getSettings(campaign);
     if (campaign) {
       // Verificação de segurança para contactList
-      if (!campaign.contactList) {
+      if (!campaign.contactList || !campaign.contactListId) {
         logger.error(`[ProcessCampaign] Campanha ${id} não tem contactList associada`);
         return;
       }
 
-      const contacts = campaign.contactList.contacts || [];
+      // IMPORTANTE: Carregar contatos diretamente do banco
+      // (não vem mais via getCampaign para evitar sobrecarga)
+      const contacts = await ContactListItem.findAll({
+        where: { contactListId: campaign.contactListId },
+        attributes: ["id", "name", "number", "email", "isWhatsappValid", "isGroup"]
+      });
       logger.info(`[ProcessCampaign] Campanha ${id} | ContactList: ${campaign.contactList.id} | Total de contatos: ${contacts.length}`);
 
       if (!isArray(contacts) || contacts.length === 0) {
