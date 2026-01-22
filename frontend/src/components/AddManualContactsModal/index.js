@@ -26,7 +26,8 @@ import {
   Phone,
   LocationOn,
   Business,
-  Clear
+  Clear,
+  Close as CloseIcon
 } from "@material-ui/icons";
 import { toast } from "react-toastify";
 import api from "../../services/api";
@@ -108,7 +109,7 @@ const AddManualContactsModal = ({ open, onClose, contactListId, onSuccess }) => 
 
   const fetchContacts = useCallback(async (search = "", page = 1, reset = true) => {
     if (page === 1) setLoading(true);
-    
+
     try {
       const { data } = await api.get("/contacts", {
         params: {
@@ -124,7 +125,7 @@ const AddManualContactsModal = ({ open, onClose, contactListId, onSuccess }) => 
       } else {
         setContacts(prev => [...prev, ...(data.contacts || [])]);
       }
-      
+
       setHasMore(data.hasMore || false);
     } catch (err) {
       console.error("Erro ao buscar contatos:", err);
@@ -333,7 +334,7 @@ const AddManualContactsModal = ({ open, onClose, contactListId, onSuccess }) => 
           <Box className={classes.emptyState}>
             <Person style={{ fontSize: 48, marginBottom: 16 }} />
             <Typography variant="body1">
-              {searchParam 
+              {searchParam
                 ? "Nenhum contato encontrado para esta busca"
                 : "Nenhum contato disponível"
               }
@@ -365,8 +366,8 @@ const AddManualContactsModal = ({ open, onClose, contactListId, onSuccess }) => 
                 >
                   <Avatar className={classes.contactAvatar}>
                     {contact.urlPicture ? (
-                      <img 
-                        src={contact.urlPicture} 
+                      <img
+                        src={contact.urlPicture}
                         alt={contact.name}
                         style={{ width: "100%", height: "100%", objectFit: "cover" }}
                       />
@@ -379,27 +380,27 @@ const AddManualContactsModal = ({ open, onClose, contactListId, onSuccess }) => 
                     <Typography className={classes.contactName}>
                       {contact.name}
                     </Typography>
-                    
+
                     <Box className={classes.contactDetails}>
                       <Box display="flex" alignItems="center">
                         <Phone style={{ fontSize: 14, marginRight: 4 }} />
                         <span>{formatPhoneNumber(contact.number)}</span>
-                        <CheckCircle 
-                          style={{ 
-                            fontSize: 14, 
-                            marginLeft: 4, 
-                            color: "#4caf50" 
-                          }} 
+                        <CheckCircle
+                          style={{
+                            fontSize: 14,
+                            marginLeft: 4,
+                            color: "#4caf50"
+                          }}
                         />
                       </Box>
-                      
+
                       {contact.city && (
                         <Box display="flex" alignItems="center">
                           <LocationOn style={{ fontSize: 14, marginRight: 4 }} />
                           <span>{contact.city}</span>
                         </Box>
                       )}
-                      
+
                       {contact.segment && (
                         <Box display="flex" alignItems="center">
                           <Business style={{ fontSize: 14, marginRight: 4 }} />
@@ -464,7 +465,23 @@ const AddManualContactsModal = ({ open, onClose, contactListId, onSuccess }) => 
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={handleClose} disabled={submitting}>
+        <Button
+          onClick={handleClose}
+          disabled={submitting}
+          variant="contained"
+          startIcon={<CloseIcon />}
+          style={{
+            background: 'linear-gradient(145deg, rgba(150, 150, 150, 0.95), rgba(100, 100, 100, 0.9))',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            color: '#fff',
+            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+            textTransform: 'none',
+            fontWeight: 600,
+            borderRadius: '8px',
+          }}
+        >
           Cancelar
         </Button>
         <Button

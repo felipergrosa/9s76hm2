@@ -831,33 +831,31 @@ const TicketsManagerTabs = () => {
                   <AddIcon className={classes.icon} />
                 </IconButton>
               </Badge>
-              {(tab === 'pending' || (tab === 'open' && tabOpen === 'pending')) && (
-                <Badge
-                  color="primary"
-                  invisible={
-                    !isHoveredBulk ||
-                    isHoveredAll ||
-                    isHoveredNew ||
-                    isHoveredResolve ||
-                    isHoveredOpen ||
-                    isHoveredClosed ||
-                    isHoveredSort
-                  }
-                  badgeContent={i18n.t("tickets.inbox.bulkProcess")}
-                  classes={{ badge: classes.tabsBadge }}
+              <Badge
+                color="primary"
+                invisible={
+                  !isHoveredBulk ||
+                  isHoveredAll ||
+                  isHoveredNew ||
+                  isHoveredResolve ||
+                  isHoveredOpen ||
+                  isHoveredClosed ||
+                  isHoveredSort
+                }
+                badgeContent={i18n.t("tickets.inbox.bulkProcess")}
+                classes={{ badge: classes.tabsBadge }}
+              >
+                <IconButton
+                  onMouseEnter={() => handleHover("bulk")}
+                  onMouseLeave={resetHovers}
+                  className={classes.button}
+                  onClick={() => {
+                    setBulkProcessModalOpen(true);
+                  }}
                 >
-                  <IconButton
-                    onMouseEnter={() => handleHover("bulk")}
-                    onMouseLeave={resetHovers}
-                    className={classes.button}
-                    onClick={() => {
-                      setBulkProcessModalOpen(true);
-                    }}
-                  >
-                    <PlaylistAddCheckOutlined className={classes.icon} />
-                  </IconButton>
-                </Badge>
-              )}
+                  <PlaylistAddCheckOutlined className={classes.icon} />
+                </IconButton>
+              </Badge>
               {user.profile === "admin" && (
                 <Badge
                   color="primary"

@@ -2,6 +2,7 @@ import { FindOptions } from "sequelize/types";
 import Queue from "../../models/Queue";
 import Whatsapp from "../../models/Whatsapp";
 import Prompt from "../../models/Prompt";
+import { getCachedWhatsapps } from "../../helpers/queryCache";
 
 interface Request {
   companyId: number;
@@ -12,28 +13,31 @@ const ListWhatsAppsService = async ({
   session,
   companyId
 }: Request): Promise<Whatsapp[]> => {
-  const options: FindOptions = {
-    where: {
-      companyId
-    },
-    include: [
-      {
-        model: Queue,
-        as: "queues",
-        attributes: ["id", "name", "color", "greetingMessage"]
+  // Usar cache para reduzir queries repetitivas
+  const whatsapps = await getCachedWhatsapps(companyId, async () => {
+    const options: FindOptions = {
+      where: {
+        companyId
       },
-      {
-        model: Prompt,
-        as: "prompt",
-      }
-    ]
-  };
+      include: [
+        {
+          model: Queue,
+          as: "queues",
+          attributes: ["id", "name", "color", "greetingMessage"]
+        },
+        {
+          model: Prompt,
+          as: "prompt",
+        }
+      ]
+    };
 
-  if (session !== undefined && session == 0) {
-    options.attributes = { exclude: ["session"] };
-  }
+    if (session !== undefined && session == 0) {
+      options.attributes = { exclude: ["session"] };
+    }
 
-  const whatsapps = await Whatsapp.findAll(options);
+    return Whatsapp.findAll(options);
+  });
 
   return whatsapps;
 };
@@ -41,3 +45,4 @@ const ListWhatsAppsService = async ({
 
 
 export default ListWhatsAppsService;
+

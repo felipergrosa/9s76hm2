@@ -525,9 +525,9 @@ const ListTicketsService = async ({
 
   // Restrição de carteira: vê tickets de sua carteira + carteiras gerenciadas + atribuídos a ele/gerenciados
   const walletResult = await GetUserWalletContactIds(userId, companyId);
-  
+
   const forceWallet = walletOnly === true || walletOnly === "true";
-  
+
   // Modo EXCLUDE: admin vê tudo EXCETO tickets dos usuários excluídos
   if ((walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) || (forceWallet && walletResult.excludedUserIds?.length)) {
     whereCondition = {
@@ -558,8 +558,8 @@ const ListTicketsService = async ({
     } as any;
   }
 
-  // Limite/paginação: para showAll === "true", retornamos muitos registros para o modal de processamento em massa
-  const limit = showAll === "true" ? 10000 : 40;
+  // Limite/paginação: para showAll === "true", retornamos até 500 registros (otimizado para performance)
+  const limit = showAll === "true" ? 500 : 40;
   const offset = showAll === "true" ? 0 : limit * (+pageNumber - 1);
 
   const { count, rows: tickets } = await Ticket.findAndCountAll({

@@ -23,6 +23,7 @@ import {
   PhoneAndroid as PhoneIcon,
   Person as PersonIcon,
   Assignment as StatusIcon,
+  Close as CloseIcon
 } from "@material-ui/icons";
 import { TagsFilter } from "../TagsFilter";
 import api from "../../services/api";
@@ -402,7 +403,19 @@ const BulkEditContactsModal = ({ open, onClose, selectedContactIds = [], onSucce
               <Button
                 onClick={onClose}
                 disabled={submitting || isSubmitting}
-                className={classes.actionButton}
+                variant="contained"
+                startIcon={<CloseIcon />}
+                style={{
+                  background: 'linear-gradient(145deg, rgba(150, 150, 150, 0.95), rgba(100, 100, 100, 0.9))',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: '#fff',
+                  boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  borderRadius: '8px',
+                }}
               >
                 Cancelar
               </Button>

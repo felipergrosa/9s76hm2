@@ -26,7 +26,7 @@ import {
   AccordionDetails,
   Switch
 } from '@material-ui/core';
-import { Refresh, ExpandMore, Search } from "@material-ui/icons";
+import { Refresh, ExpandMore, Search, Close as CloseIcon } from "@material-ui/icons";
 import { Alert } from '@material-ui/lab';
 import { makeStyles } from "@material-ui/core/styles";
 import { toast } from 'react-toastify';
@@ -1101,7 +1101,23 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                     </Typography>
                   </Box>
                 </Box>
-                <Button size="small" onClick={handleCancelLabels}>
+                <Button
+                  size="small"
+                  onClick={handleCancelLabels}
+                  variant="contained"
+                  startIcon={<CloseIcon />}
+                  style={{
+                    background: 'linear-gradient(145deg, rgba(150, 150, 150, 0.95), rgba(100, 100, 100, 0.9))',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    color: '#fff',
+                    boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderRadius: '8px',
+                  }}
+                >
                   Cancelar
                 </Button>
               </Box>
@@ -1147,7 +1163,25 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                       <Typography variant="caption" color="textSecondary">
                         {Math.max(1, Math.min(100, labelsProgress.percent))}% — {phaseLabel(labelsProgress.phase)}
                       </Typography>
-                      <Button size="small" style={{ marginLeft: 8 }} onClick={handleCancelLabels} disabled={!loading}>
+                      <Button
+                        size="small"
+                        style={{ marginLeft: 8 }}
+                        onClick={handleCancelLabels}
+                        disabled={!loading}
+                        variant="contained"
+                        startIcon={<CloseIcon />}
+                        sx={{
+                          background: 'linear-gradient(145deg, rgba(150, 150, 150, 0.95), rgba(100, 100, 100, 0.9))',
+                          backdropFilter: 'blur(12px)',
+                          WebkitBackdropFilter: 'blur(12px)',
+                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          color: '#fff',
+                          boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          borderRadius: '8px',
+                        }}
+                      >
                         Cancelar
                       </Button>
                     </Box>
@@ -1660,7 +1694,23 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
                 />
               </Box>
 
-              <Button onClick={handleCloseModal} disabled={importing}>
+              <Button
+                onClick={handleCloseModal}
+                disabled={importing}
+                variant="contained"
+                startIcon={<CloseIcon />}
+                style={{
+                  background: 'linear-gradient(145deg, rgba(150, 150, 150, 0.95), rgba(100, 100, 100, 0.9))',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: '#fff',
+                  boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  borderRadius: '8px',
+                }}
+              >
                 Cancelar
               </Button>
               <Button

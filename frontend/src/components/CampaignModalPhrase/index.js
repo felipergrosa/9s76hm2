@@ -17,6 +17,7 @@ import DialogTitle from "@material-ui/core/DialogTitle";
 import CircularProgress from "@material-ui/core/CircularProgress";
 import AttachFileIcon from "@material-ui/icons/AttachFile";
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
+import { Close as CloseIcon } from "@material-ui/icons";
 
 import { i18n } from "../../translate/i18n";
 import moment from "moment";
@@ -98,14 +99,14 @@ const CampaignModalPhrase = ({ open, onClose, FlowCampaignId, onSave, defaultWha
 
   // ✅ Aplica valor inicial da conexão
   useEffect(() => {
-  if (!FlowCampaignId) {
-    const stored = localStorage.getItem("selectedWhatsappId");
-    if (stored) {
-      console.log("Forçando selectedWhatsapp via localStorage:", stored);
-      setSelectedWhatsapp(parseInt(stored));
+    if (!FlowCampaignId) {
+      const stored = localStorage.getItem("selectedWhatsappId");
+      if (stored) {
+        console.log("Forçando selectedWhatsapp via localStorage:", stored);
+        setSelectedWhatsapp(parseInt(stored));
+      }
     }
-  }
-}, [FlowCampaignId]);
+  }, [FlowCampaignId]);
 
 
   const [whatsAppNames, setWhatsAppNames] = useState([]);
@@ -137,9 +138,9 @@ const CampaignModalPhrase = ({ open, onClose, FlowCampaignId, onSave, defaultWha
       if (nameFlow.length > 0) {
         setFlowSelected(nameFlow[0].name);
         if (res.data.details.whatsappId) {
-        console.log("Aplicando whatsappId do banco:", res.data.details.whatsappId);
-        setSelectedWhatsapp(res.data.details.whatsappId);
-     }
+          console.log("Aplicando whatsappId do banco:", res.data.details.whatsappId);
+          setSelectedWhatsapp(res.data.details.whatsappId);
+        }
 
       }
       setLoading(false);
@@ -215,7 +216,7 @@ const CampaignModalPhrase = ({ open, onClose, FlowCampaignId, onSave, defaultWha
       setDataItemError(old => ({ ...old, phrase: true }));
       error++;
     }
-    if(!selectedWhatsapp){
+    if (!selectedWhatsapp) {
       setDataItemError(old => ({ ...old, whatsappId: true }))
     }
 
@@ -417,10 +418,22 @@ const CampaignModalPhrase = ({ open, onClose, FlowCampaignId, onSave, defaultWha
               marginTop={"16px"}
             >
               <Button
-                variant="outlined"
+                variant="contained"
+                startIcon={<CloseIcon />}
                 onClick={() => {
                   onClose();
                   clearErrors();
+                }}
+                style={{
+                  background: 'linear-gradient(145deg, rgba(150, 150, 150, 0.95), rgba(100, 100, 100, 0.9))',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: '#fff',
+                  boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  borderRadius: '8px',
                 }}
               >
                 Cancelar

@@ -40,6 +40,7 @@ import VisibilityIcon from "@material-ui/icons/Visibility";
 import GroupIcon from "@material-ui/icons/Group";
 import DashboardIcon from "@material-ui/icons/Dashboard";
 import AccessTimeIcon from "@material-ui/icons/AccessTime";
+import CloseIcon from "@material-ui/icons/Close";
 
 const backendUrl = getBackendUrl();
 
@@ -176,8 +177,8 @@ const UserModal = ({ open, onClose, userId }) => {
       try {
         const { data } = await api.get(`/users/${userId}`);
         setUser(prevState => {
-          return { 
-            ...prevState, 
+          return {
+            ...prevState,
             ...data,
             permissions: Array.isArray(data.permissions) ? data.permissions : []
           };
@@ -267,6 +268,12 @@ const UserModal = ({ open, onClose, userId }) => {
         maxWidth="sm"
         fullWidth
         scroll="paper"
+        PaperProps={{
+          style: {
+            maxHeight: '90vh',
+            height: '90vh'
+          }
+        }}
       >
         <DialogTitle id="form-dialog-title">
           {userId
@@ -285,7 +292,7 @@ const UserModal = ({ open, onClose, userId }) => {
           }}
         >
           {({ touched, errors, isSubmitting, setFieldValue, values }) => (
-            <Form>
+            <Form style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <Paper className={classes.mainPaper} elevation={1}>
                 <Tabs
                   value={tab}
@@ -300,7 +307,7 @@ const UserModal = ({ open, onClose, userId }) => {
                   <Tab label={i18n.t("userModal.tabs.permissions")} value={"permissions"} />
                 </Tabs>
               </Paper>
-              <Paper className={classes.paper} elevation={0}>
+              <Paper className={classes.paper} elevation={0} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <DialogContent dividers>
                   <TabPanel
                     className={classes.container}
@@ -651,7 +658,7 @@ const UserModal = ({ open, onClose, userId }) => {
                                 {({ field, form }) => {
                                   const selectedIds = field.value || [];
                                   // Filtra para mostrar apenas tags pessoais (começam com # mas NÃO com ##)
-                                  const personalTags = tags.filter(t => 
+                                  const personalTags = tags.filter(t =>
                                     t.name && t.name.startsWith('#') && !t.name.startsWith('##')
                                   );
                                   const selectedObjects = personalTags.filter(t => selectedIds.includes(t.id));
@@ -772,9 +779,20 @@ const UserModal = ({ open, onClose, userId }) => {
               <DialogActions>
                 <Button
                   onClick={handleClose}
-                  color="secondary"
                   disabled={isSubmitting}
-                  variant="outlined"
+                  variant="contained"
+                  startIcon={<CloseIcon />}
+                  style={{
+                    background: 'linear-gradient(145deg, rgba(150, 150, 150, 0.95), rgba(100, 100, 100, 0.9))',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    color: '#fff',
+                    boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderRadius: '8px',
+                  }}
                 >
                   {i18n.t("userModal.buttons.cancel")}
                 </Button>

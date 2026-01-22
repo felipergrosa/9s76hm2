@@ -15,6 +15,7 @@ import DialogTitle from "@material-ui/core/DialogTitle";
 import Typography from "@material-ui/core/Typography";
 import IconButton from "@material-ui/core/IconButton";
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
+import { Close as CloseIcon } from "@material-ui/icons";
 import CircularProgress from "@material-ui/core/CircularProgress";
 import Switch from "@material-ui/core/Switch";
 import withStyles from "@material-ui/core/styles/withStyles";
@@ -258,7 +259,18 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 
 	return (
 		<div className={classes.root}>
-			<Dialog open={open} onClose={handleClose} maxWidth="sm" scroll="paper">
+			<Dialog
+				open={open}
+				onClose={handleClose}
+				maxWidth="sm"
+				scroll="paper"
+				PaperProps={{
+					style: {
+						maxHeight: '90vh',
+						height: '90vh'
+					}
+				}}
+			>
 				<DialogTitle id="form-dialog-title">
 					<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
 						<span>{i18n.t("contactModal.form.mainInfo")} • {contactId ? i18n.t("contactModal.title.edit") : i18n.t("contactModal.title.add")}</span>
@@ -287,7 +299,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 					}}
 				>
 					{({ values, errors, touched, isSubmitting, setFieldValue }) => (
-						<Form>
+						<Form style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
 							<DialogContent dividers>
 								<Grid container spacing={2}>
 									<Grid item xs={12} md={6}>
@@ -695,9 +707,20 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 							<DialogActions>
 								<Button
 									onClick={handleClose}
-									color="secondary"
 									disabled={isSubmitting}
-									variant="outlined"
+									variant="contained"
+									startIcon={<CloseIcon />}
+									style={{
+										background: 'linear-gradient(145deg, rgba(150, 150, 150, 0.95), rgba(100, 100, 100, 0.9))',
+										backdropFilter: 'blur(12px)',
+										WebkitBackdropFilter: 'blur(12px)',
+										border: '1px solid rgba(255, 255, 255, 0.2)',
+										color: '#fff',
+										boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+										textTransform: 'none',
+										fontWeight: 600,
+										borderRadius: '8px',
+									}}
 								>
 									{i18n.t("contactModal.buttons.cancel")}
 								</Button>

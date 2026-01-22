@@ -9,6 +9,7 @@ import DialogTitle from "@material-ui/core/DialogTitle";
 import MenuItem from "@material-ui/core/MenuItem";
 import Select from "@material-ui/core/Select";
 import { Grid } from "@material-ui/core";
+import { Close as CloseIcon } from "@material-ui/icons";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 
@@ -18,7 +19,7 @@ const useStyles = makeStyles((theme) => ({
     minWidth: 300,
   },
   inputFile: {
-    display: 'none',  
+    display: 'none',
   },
   buttonFile: {
     marginBottom: theme.spacing(2),
@@ -28,17 +29,17 @@ const useStyles = makeStyles((theme) => ({
   },
   primaryBar: {
     position: 'absolute',
-    top: 0,                
+    top: 0,
     left: 0,
     right: 0,
-    height: '100%',          
-    backgroundColor: theme.palette.primary.main,  
-    zIndex: 1,              
+    height: '100%',
+    backgroundColor: theme.palette.primary.main,
+    zIndex: 1,
   },
   dialogTitle: {
-    position: 'relative',    
-    zIndex: 2,               
-    color: 'white',          
+    position: 'relative',
+    zIndex: 2,
+    color: 'white',
   },
 }));
 
@@ -213,33 +214,33 @@ const ButtonModal = ({ modalOpen, onClose, ticketId }) => {
   };
 
   const handleUploadPIX = async (title, sendvalue, sendkey_type, sendmerchant_name, sendKey, ticketId) => {
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    // Verifica se o tipo de chave é PHONE e adiciona +55 ao sendKey
-    if (sendkey_type === 'PHONE' && !sendKey.startsWith('+55')) {
-      sendKey = '+55' + sendKey;
-    }
+    try {
+      // Verifica se o tipo de chave é PHONE e adiciona +55 ao sendKey
+      if (sendkey_type === 'PHONE' && !sendKey.startsWith('+55')) {
+        sendKey = '+55' + sendKey;
+      }
 
-    const payload = {
-      title: title,
-      sendvalue: sendvalue,
-      sendkey_type: sendkey_type, 
-      sendmerchant_name: sendmerchant_name,
-      sendKey: sendKey,
-    };
+      const payload = {
+        title: title,
+        sendvalue: sendvalue,
+        sendkey_type: sendkey_type,
+        sendmerchant_name: sendmerchant_name,
+        sendKey: sendKey,
+      };
 
-    if (isMounted.current) {
-      await api.post(`/messages/PIX/${ticketId}`, payload); 
+      if (isMounted.current) {
+        await api.post(`/messages/PIX/${ticketId}`, payload);
+      }
+    } catch (err) {
+      toastError(err);
+    } finally {
+      if (isMounted.current) {
+        setLoading(false);
+      }
     }
-  } catch (err) {
-    toastError(err);
-  } finally {
-    if (isMounted.current) {
-      setLoading(false);
-    }
-  }
-};
+  };
 
 
 
@@ -635,7 +636,22 @@ const ButtonModal = ({ modalOpen, onClose, ticketId }) => {
         {renderContent()}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} color="secondary">
+        <Button
+          onClick={onClose}
+          variant="contained"
+          startIcon={<CloseIcon />}
+          style={{
+            background: 'linear-gradient(145deg, rgba(150, 150, 150, 0.95), rgba(100, 100, 100, 0.9))',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            color: '#fff',
+            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+            textTransform: 'none',
+            fontWeight: 600,
+            borderRadius: '8px',
+          }}
+        >
           Cancelar
         </Button>
         <Button color="primary" onClick={() => createMessage()}>

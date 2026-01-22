@@ -82,7 +82,7 @@ const useStyles = makeStyles((theme) => ({
   },
   filterContainer: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+    gridTemplateColumns: 'repeat(2, 1fr)',
     gap: theme.spacing(2),
     marginBottom: theme.spacing(2),
   },
@@ -164,6 +164,8 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
   const [addNote, setAddNote] = useState('');
   const [selectedQueue, setSelectedQueue] = useState('');
   const [queues, setQueues] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [users, setUsers] = useState([]);
 
   // Progresso
   const [progress, setProgress] = useState(0);
@@ -195,6 +197,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
       loadTags();
       loadQueues();
       loadAIAgents();
+      loadUsers();
     }
   }, [open, filters]);
 
@@ -303,6 +306,16 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
     }
   };
 
+  const loadUsers = async () => {
+    try {
+      const { data } = await api.get('/users');
+      const usersList = Array.isArray(data?.users) ? data.users : (Array.isArray(data) ? data : []);
+      setUsers(usersList);
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error);
+    }
+  };
+
   const handleSelectAll = (event) => {
     if (event.target.checked) {
       setSelectedTickets(tickets.map((t) => t.id));
@@ -352,6 +365,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
         closeTicket,
         addNote: addNote.trim() || undefined,
         queueId: selectedQueue || undefined,
+        userId: selectedUserId || undefined,
       };
 
       setProcessLog((prev) => [
@@ -365,7 +379,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
       console.log('[BulkProcess] Enviando requisição POST...');
       const response = await api.post('/tickets/bulk-process', payload);
       console.log('[BulkProcess] POST concluído, resposta:', response.data);
-      
+
       // Fallback: Se após 5 segundos não recebemos eventos socket, forçar conclusão
       setTimeout(() => {
         console.log('[BulkProcess] Timeout de 5s atingido, verificando estado...');
@@ -393,7 +407,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
           return currentProcessing;
         });
       }, 5000);
-      
+
     } catch (error) {
       console.error('Erro ao processar tickets:', error);
       toast.error('Erro ao processar tickets: ' + (error.response?.data?.error || error.message));
@@ -492,229 +506,249 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
         ) : (
           // Modo de Configuração: Mostrar opções
           <>
-        {/* STEP 1: Seleção de Tickets */}
-        <Accordion defaultExpanded className={classes.accordion}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />} className={classes.accordionSummary}>
-            <Typography variant="subtitle1">
-              <strong>1. Selecionar Tickets</strong>
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Box width="100%">
-              <Box className={classes.filterContainer}>
-                <FormControl variant="outlined" size="small" fullWidth>
-                  <InputLabel>Status</InputLabel>
-                  <Select
-                    value={filters.status}
-                    onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                    label="Status"
-                  >
-                    <MenuItem value="pending">Aguardando</MenuItem>
-                    <MenuItem value="open">Aberto</MenuItem>
-                    <MenuItem value="closed">Fechado</MenuItem>
-                    <MenuItem value="bot">Bot</MenuItem>
-                    <MenuItem value="campaign">Campanha</MenuItem>
-                  </Select>
-                </FormControl>
+            {/* STEP 1: Seleção de Tickets */}
+            <Accordion defaultExpanded className={classes.accordion}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />} className={classes.accordionSummary}>
+                <Typography variant="subtitle1">
+                  <strong>1. Selecionar Tickets</strong>
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Box width="100%">
+                  <Box className={classes.filterContainer}>
+                    <FormControl variant="outlined" size="small" fullWidth>
+                      <InputLabel>Status</InputLabel>
+                      <Select
+                        value={filters.status}
+                        onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                        label="Status"
+                      >
+                        <MenuItem value="pending">Aguardando</MenuItem>
+                        <MenuItem value="open">Aberto</MenuItem>
+                        <MenuItem value="closed">Fechado</MenuItem>
+                        <MenuItem value="bot">Bot</MenuItem>
+                        <MenuItem value="campaign">Campanha</MenuItem>
+                      </Select>
+                    </FormControl>
 
-                <TextField
-                  variant="outlined"
-                  size="small"
-                  label="Buscar"
-                  value={filters.searchParam}
-                  onChange={(e) => setFilters({ ...filters, searchParam: e.target.value })}
-                  fullWidth
-                />
-              </Box>
+                    <TextField
+                      variant="outlined"
+                      size="small"
+                      label="Buscar"
+                      value={filters.searchParam}
+                      onChange={(e) => setFilters({ ...filters, searchParam: e.target.value })}
+                      fullWidth
+                    />
+                  </Box>
 
-              <TableContainer component={Paper} className={classes.tableContainer}>
-                <Table stickyHeader size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={selectedTickets.length === tickets.length && tickets.length > 0}
-                          indeterminate={selectedTickets.length > 0 && selectedTickets.length < tickets.length}
-                          onChange={handleSelectAll}
-                        />
-                      </TableCell>
-                      <TableCell>Contato</TableCell>
-                      <TableCell>Última Mensagem</TableCell>
-                      <TableCell>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {loading ? (
-                      <TableRow>
-                        <TableCell colSpan={4} align="center">
-                          Carregando...
-                        </TableCell>
-                      </TableRow>
-                    ) : tickets.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={4} align="center">
-                          Nenhum ticket encontrado
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      tickets.map((ticket) => (
-                        <TableRow key={ticket.id} hover>
+                  <TableContainer component={Paper} className={classes.tableContainer}>
+                    <Table stickyHeader size="small">
+                      <TableHead>
+                        <TableRow>
                           <TableCell padding="checkbox">
                             <Checkbox
-                              checked={selectedTickets.includes(ticket.id)}
-                              onChange={() => handleSelectTicket(ticket.id)}
+                              checked={selectedTickets.length === tickets.length && tickets.length > 0}
+                              indeterminate={selectedTickets.length > 0 && selectedTickets.length < tickets.length}
+                              onChange={handleSelectAll}
                             />
                           </TableCell>
-                          <TableCell>{ticket.contact?.name || 'Sem nome'}</TableCell>
-                          <TableCell>
-                            {ticket.lastMessage ? ticket.lastMessage.substring(0, 50) + '...' : '-'}
-                          </TableCell>
-                          <TableCell>
-                            <Chip label={ticket.status} size="small" />
-                          </TableCell>
+                          <TableCell>Contato</TableCell>
+                          <TableCell>Última Mensagem</TableCell>
+                          <TableCell>Status</TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-          </AccordionDetails>
-        </Accordion>
+                      </TableHead>
+                      <TableBody>
+                        {loading ? (
+                          <TableRow>
+                            <TableCell colSpan={4} align="center">
+                              Carregando...
+                            </TableCell>
+                          </TableRow>
+                        ) : tickets.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} align="center">
+                              Nenhum ticket encontrado
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          tickets.map((ticket) => (
+                            <TableRow key={ticket.id} hover>
+                              <TableCell padding="checkbox">
+                                <Checkbox
+                                  checked={selectedTickets.includes(ticket.id)}
+                                  onChange={() => handleSelectTicket(ticket.id)}
+                                />
+                              </TableCell>
+                              <TableCell>{ticket.contact?.name || 'Sem nome'}</TableCell>
+                              <TableCell>
+                                {ticket.lastMessage ? ticket.lastMessage.substring(0, 50) + '...' : '-'}
+                              </TableCell>
+                              <TableCell>
+                                <Chip label={ticket.status} size="small" />
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              </AccordionDetails>
+            </Accordion>
 
-        {/* STEP 2: Resposta Automática */}
-        <Accordion className={classes.accordion}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />} className={classes.accordionSummary}>
-            <SendIcon style={{ marginRight: 8 }} />
-            <Typography variant="subtitle1">
-              <strong>2. Resposta Automática</strong>
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Box width="100%">
-              <FormControl component="fieldset">
-                <RadioGroup value={responseType} onChange={(e) => setResponseType(e.target.value)}>
-                  <FormControlLabel value="none" control={<Radio />} label="Não enviar resposta" />
-                  <FormControlLabel value="standard" control={<Radio />} label="Resposta padrão" />
-                  <FormControlLabel value="ai" control={<Radio />} label="Resposta com IA" />
-                </RadioGroup>
-              </FormControl>
+            {/* STEP 2: Resposta Automática */}
+            <Accordion className={classes.accordion}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />} className={classes.accordionSummary}>
+                <SendIcon style={{ marginRight: 8 }} />
+                <Typography variant="subtitle1">
+                  <strong>2. Resposta Automática</strong>
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Box width="100%">
+                  <FormControl component="fieldset">
+                    <RadioGroup value={responseType} onChange={(e) => setResponseType(e.target.value)}>
+                      <FormControlLabel value="none" control={<Radio />} label="Não enviar resposta" />
+                      <FormControlLabel value="standard" control={<Radio />} label="Resposta padrão" />
+                      <FormControlLabel value="ai" control={<Radio />} label="Resposta com IA" />
+                    </RadioGroup>
+                  </FormControl>
 
-              {responseType === 'standard' && (
-                <TextField
-                  variant="outlined"
-                  label="Mensagem"
-                  placeholder="Digite a mensagem padrão..."
-                  fullWidth
-                  multiline
-                  rows={4}
-                  value={responseMessage}
-                  onChange={(e) => setResponseMessage(e.target.value)}
-                  style={{ marginTop: 16 }}
-                />
-              )}
-
-              {responseType === 'ai' && (
-                <FormControl variant="outlined" fullWidth style={{ marginTop: 16 }}>
-                  <InputLabel>Agente IA</InputLabel>
-                  <Select
-                    value={aiAgentId}
-                    onChange={(e) => setAiAgentId(e.target.value)}
-                    label="Agente IA"
-                  >
-                    {aiAgents.map((agent) => (
-                      <MenuItem key={agent.id} value={agent.id}>
-                        {agent.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
-            </Box>
-          </AccordionDetails>
-        </Accordion>
-
-        {/* STEP 3: Catalogação */}
-        <Accordion className={classes.accordion}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />} className={classes.accordionSummary}>
-            <LabelIcon style={{ marginRight: 8 }} />
-            <Typography variant="subtitle1">
-              <strong>3. Catalogação e Organização</strong>
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Box width="100%">
-              <Box className={classes.filterContainer}>
-                <Autocomplete
-                  multiple
-                  options={availableTags}
-                  getOptionLabel={(option) => option.name}
-                  value={selectedTags}
-                  onChange={(_, newValue) => setSelectedTags(newValue)}
-                  renderInput={(params) => (
-                    <TextField {...params} variant="outlined" label="Tags" placeholder="Selecione tags" />
+                  {responseType === 'standard' && (
+                    <TextField
+                      variant="outlined"
+                      label="Mensagem"
+                      placeholder="Digite a mensagem padrão..."
+                      fullWidth
+                      multiline
+                      rows={4}
+                      value={responseMessage}
+                      onChange={(e) => setResponseMessage(e.target.value)}
+                      style={{ marginTop: 16 }}
+                    />
                   )}
-                />
 
-                <FormControl variant="outlined" fullWidth>
-                  <InputLabel>Fila</InputLabel>
-                  <Select
-                    value={selectedQueue}
-                    onChange={(e) => setSelectedQueue(e.target.value)}
-                    label="Fila"
-                  >
-                    <MenuItem value="">
-                      <em>Sem alteração</em>
-                    </MenuItem>
-                    {queues.map((queue) => (
-                      <MenuItem key={queue.id} value={queue.id}>
-                        {queue.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                  {responseType === 'ai' && (
+                    <FormControl variant="outlined" fullWidth style={{ marginTop: 16 }}>
+                      <InputLabel>Agente IA</InputLabel>
+                      <Select
+                        value={aiAgentId}
+                        onChange={(e) => setAiAgentId(e.target.value)}
+                        label="Agente IA"
+                      >
+                        {aiAgents.map((agent) => (
+                          <MenuItem key={agent.id} value={agent.id}>
+                            {agent.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                </Box>
+              </AccordionDetails>
+            </Accordion>
 
-                <FormControl variant="outlined" fullWidth>
-                  <InputLabel>Novo Status</InputLabel>
-                  <Select
-                    value={newStatus}
-                    onChange={(e) => setNewStatus(e.target.value)}
-                    label="Novo Status"
-                  >
-                    <MenuItem value="">
-                      <em>Sem alteração</em>
-                    </MenuItem>
-                    <MenuItem value="pending">Aguardando</MenuItem>
-                    <MenuItem value="open">Aberto</MenuItem>
-                    <MenuItem value="closed">Fechado</MenuItem>
-                    <MenuItem value="bot">Bot</MenuItem>
-                    <MenuItem value="campaign">Campanha</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
+            {/* STEP 3: Catalogação */}
+            <Accordion className={classes.accordion}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />} className={classes.accordionSummary}>
+                <LabelIcon style={{ marginRight: 8 }} />
+                <Typography variant="subtitle1">
+                  <strong>3. Catalogação e Organização</strong>
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Box width="100%">
+                  <Box className={classes.filterContainer}>
+                    {/* Primeira linha: Atribuir Usuário | Fila */}
+                    <FormControl variant="outlined" fullWidth>
+                      <InputLabel>Atribuir a Usuário</InputLabel>
+                      <Select
+                        value={selectedUserId}
+                        onChange={(e) => setSelectedUserId(e.target.value)}
+                        label="Atribuir a Usuário"
+                      >
+                        <MenuItem value="">
+                          <em>Sem alteração</em>
+                        </MenuItem>
+                        {users.map((u) => (
+                          <MenuItem key={u.id} value={u.id}>
+                            {u.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
 
-              <FormControlLabel
-                control={
-                  <Checkbox checked={closeTicket} onChange={(e) => setCloseTicket(e.target.checked)} />
-                }
-                label="Fechar ticket após processar"
-              />
+                    <FormControl variant="outlined" fullWidth>
+                      <InputLabel>Fila</InputLabel>
+                      <Select
+                        value={selectedQueue}
+                        onChange={(e) => setSelectedQueue(e.target.value)}
+                        label="Fila"
+                      >
+                        <MenuItem value="">
+                          <em>Sem alteração</em>
+                        </MenuItem>
+                        {queues.map((queue) => (
+                          <MenuItem key={queue.id} value={queue.id}>
+                            {queue.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
 
-              <TextField
-                variant="outlined"
-                label="Nota Interna (opcional)"
-                placeholder="Adicionar nota interna ao ticket..."
-                fullWidth
-                multiline
-                rows={2}
-                value={addNote}
-                onChange={(e) => setAddNote(e.target.value)}
-                style={{ marginTop: 16 }}
-              />
-            </Box>
-          </AccordionDetails>
-        </Accordion>
-        </>
+                    {/* Segunda linha: Novo Status | Tags */}
+                    <FormControl variant="outlined" fullWidth>
+                      <InputLabel>Novo Status</InputLabel>
+                      <Select
+                        value={newStatus}
+                        onChange={(e) => setNewStatus(e.target.value)}
+                        label="Novo Status"
+                      >
+                        <MenuItem value="">
+                          <em>Sem alteração</em>
+                        </MenuItem>
+                        <MenuItem value="pending">Aguardando</MenuItem>
+                        <MenuItem value="open">Aberto</MenuItem>
+                        <MenuItem value="closed">Fechado</MenuItem>
+                        <MenuItem value="bot">Bot</MenuItem>
+                        <MenuItem value="campaign">Campanha</MenuItem>
+                      </Select>
+                    </FormControl>
+
+                    <Autocomplete
+                      multiple
+                      options={availableTags}
+                      getOptionLabel={(option) => option.name}
+                      value={selectedTags}
+                      onChange={(_, newValue) => setSelectedTags(newValue)}
+                      renderInput={(params) => (
+                        <TextField {...params} variant="outlined" label="Tags" placeholder="Selecione tags" />
+                      )}
+                    />
+                  </Box>
+
+                  <FormControlLabel
+                    control={
+                      <Checkbox checked={closeTicket} onChange={(e) => setCloseTicket(e.target.checked)} />
+                    }
+                    label="Fechar ticket após processar"
+                  />
+
+                  <TextField
+                    variant="outlined"
+                    label="Nota Interna (opcional)"
+                    placeholder="Adicionar nota interna ao ticket..."
+                    fullWidth
+                    multiline
+                    rows={2}
+                    value={addNote}
+                    onChange={(e) => setAddNote(e.target.value)}
+                    style={{ marginTop: 16 }}
+                  />
+                </Box>
+              </AccordionDetails>
+            </Accordion>
+          </>
         )}
       </DialogContent>
 
@@ -729,7 +763,22 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
           </Button>
         ) : (
           <>
-            <Button onClick={handleClose}>
+            <Button
+              onClick={handleClose}
+              variant="contained"
+              startIcon={<CloseIcon />}
+              style={{
+                background: 'linear-gradient(145deg, rgba(150, 150, 150, 0.95), rgba(100, 100, 100, 0.9))',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                color: '#fff',
+                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                textTransform: 'none',
+                fontWeight: 600,
+                borderRadius: '8px',
+              }}
+            >
               Cancelar
             </Button>
             <Button
@@ -738,6 +787,16 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
               onClick={handleProcess}
               disabled={selectedTickets.length === 0}
               startIcon={<SendIcon />}
+              style={{
+                background: 'linear-gradient(145deg, rgba(128, 0, 32, 0.95), rgba(100, 0, 25, 0.9))',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                boxShadow: '0 4px 15px rgba(128, 0, 32, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                textTransform: 'none',
+                fontWeight: 600,
+                borderRadius: '8px',
+              }}
             >
               Processar {selectedTickets.length} Tickets
             </Button>
