@@ -1317,15 +1317,24 @@ function resetBackoffOnSuccess(whatsappId: number) {
 }
 
 async function verifyAndFinalizeCampaign(campaign) {
-  const { companyId, contacts } = campaign.contactList;
+  const companyId = campaign.companyId;
+  const campaignId = campaign.id;
+  const contactListId = campaign.contactListId;
 
-  const count1 = contacts.length;
+  // Busca o total de contatos da lista se não estiver mais na memória (jobs serializados)
+  let totalContacts = 0;
+  if (campaign.contactList && isArray(campaign.contactList.contacts)) {
+    totalContacts = campaign.contactList.contacts.length;
+  } else {
+    totalContacts = await ContactListItem.count({
+      where: { contactListId }
+    });
+  }
 
   // Finalizar quando TODOS os registros estiverem em estado terminal.
-  // Importante para evitar loop infinito quando algum contato falha (ex.: número inválido).
   const terminalCount = await CampaignShipping.count({
     where: {
-      campaignId: campaign.id,
+      campaignId,
       [Op.or]: [
         { deliveredAt: { [Op.ne]: null } },
         { status: { [Op.in]: ["delivered", "failed", "suppressed"] } }
@@ -1333,13 +1342,22 @@ async function verifyAndFinalizeCampaign(campaign) {
     }
   });
 
-  if (count1 === terminalCount) {
-    await campaign.update({ status: "FINALIZADA", completedAt: moment() });
+  if (totalContacts > 0 && totalContacts === terminalCount) {
+    if (typeof campaign.update === "function") {
+      await campaign.update({ status: "FINALIZADA", completedAt: moment() });
+    } else {
+      await Campaign.update(
+        { status: "FINALIZADA", completedAt: moment() },
+        { where: { id: campaignId } }
+      );
+      campaign.status = "FINALIZADA";
+      campaign.completedAt = moment();
+    }
   }
 
   const io = getIO();
-  io.of(`/workspace-${campaign.companyId}`)
-    .emit(`company-${campaign.companyId}-campaign`, {
+  io.of(`/workspace-${companyId}`)
+    .emit(`company-${companyId}-campaign`, {
       action: "update",
       record: campaign
     });
