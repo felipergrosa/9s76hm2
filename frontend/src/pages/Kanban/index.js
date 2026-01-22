@@ -91,132 +91,79 @@ const useStyles = makeStyles(theme => ({
   },
   kanbanContainer: {
     flex: 1,
-    padding: "0 10px",
+    display: "flex",
+    flexDirection: "row",
+    flexWrap: "nowrap",
     overflowX: "auto",
     overflowY: "hidden",
-    width: "100%",
+    padding: "0 10px",
+    paddingRight: 360, // Espaço extra no final para última coluna
+    gap: 8,
     height: "100%",
+    alignItems: "stretch",
+    // Esconder scrollbar mas manter funcionalidade
     scrollbarWidth: "none",
     msOverflowStyle: "none",
     "&::-webkit-scrollbar": {
-      width: 0,
-      height: 0,
       display: "none",
     },
-    // CSS para forçar layout horizontal no react-trello
+    // Força react-trello board a ser inline
     "& .react-trello-board": {
       display: "flex !important",
       flexDirection: "row !important",
       flexWrap: "nowrap !important",
-      alignItems: "flex-start !important",
+      gap: "8px !important",
       height: "100% !important",
-      width: "fit-content !important", // Importante: ajusta ao conteúdo
-      minWidth: "100%",
-      minHeight: "0 !important",
-      padding: "0 !important",
-      paddingRight: "350px !important", // Espaço para última lane
       backgroundColor: "transparent !important",
-      boxSizing: "content-box !important",
+      padding: "0 !important",
+      margin: "0 !important",
+      overflow: "visible !important",
     },
+    // Container horizontal das lanes
     "& .smooth-dnd-container.horizontal": {
       display: "flex !important",
       flexDirection: "row !important",
       flexWrap: "nowrap !important",
-      gap: "6px !important",
+      gap: "8px !important",
       height: "100% !important",
-      width: "fit-content !important", // Ajusta ao conteúdo
-      minWidth: "100%",
-      minHeight: "0 !important",
-      paddingRight: "350px !important", // Espaço extra para scroll
+      overflow: "visible !important",
     },
-    "& .react-trello-lane": {
-      minWidth: "350px !important",
+    // CRUCIAL: flex-shrink: 0 impede que as colunas encolham
+    "& .react-trello-lane, & section": {
+      flexShrink: "0 !important",
       width: "350px !important",
+      minWidth: "350px !important",
       maxWidth: "350px !important",
-      flex: "0 0 350px !important",
       height: "100% !important",
-      maxHeight: "100% !important",
-      minHeight: "0 !important",
-      marginRight: "0px !important",
       display: "flex !important",
       flexDirection: "column !important",
-      backgroundColor: "#f5f5f5 !important", // Força fundo uniforme
+      marginRight: "0 !important",
     },
-    // Garante que o header da lane também siga a largura
+    // Header da lane
     "& header": {
-      width: "350px !important",
-      minWidth: "350px !important",
-      maxWidth: "350px !important",
-      boxSizing: "border-box !important",
+      width: "100% !important",
+      flexShrink: "0 !important",
     },
-    "& section": {
-      minWidth: "350px !important",
-      width: "350px !important",
-      maxWidth: "350px !important",
-      flex: "0 0 350px !important",
-      marginRight: "0px !important",
-      boxSizing: "border-box !important",
-    },
-    // Aproximar visual do /moments: padding interno da lista e scroll vertical dentro da coluna
+    // Área de cards dentro da lane
     "& .react-trello-lane__cards": {
-      padding: `${theme.spacing(1)}px !important`,
-      paddingBottom: `${theme.spacing(2)}px !important`,
-      boxSizing: "border-box !important",
       flex: "1 1 auto !important",
-      minHeight: "0 !important",
       overflowY: "auto !important",
       overflowX: "hidden !important",
+      padding: "8px !important",
       scrollbarWidth: "none",
-      msOverflowStyle: "none",
-      display: "flex",
-      flexDirection: "column",
-      gap: `${theme.spacing(1)}px`,
-      width: "350px !important", // Força largura interna
       "&::-webkit-scrollbar": {
-        width: 0,
-        height: 0,
         display: "none",
       },
     },
-    // Corrige card esticando durante drag (smooth-dnd ghost herda widths grandes)
-    "& .smooth-dnd-ghost": {
-      width: "350px !important",
-      maxWidth: "350px !important",
-      flex: "0 0 350px !important",
-      boxSizing: "border-box !important",
-    },
-    "& .smooth-dnd-ghost > *": {
-      width: "350px !important",
-      maxWidth: "350px !important",
-    },
-    "& .smooth-dnd-dragging": {
-      width: "auto !important",
-      maxWidth: "none !important",
-      flex: "initial !important",
-    },
-    "& .smooth-dnd-ghost .react-trello-card": {
-      width: "350px !important",
-      maxWidth: "350px !important",
-    },
-    "& .smooth-dnd-ghost .smooth-dnd-draggable-wrapper": {
-      width: "350px !important",
-      maxWidth: "350px !important",
-    },
-    // Restaurar largura dos cards (350px)
-    "& .smooth-dnd-draggable-wrapper": {
-      width: "100% !important",
-      maxWidth: "100% !important",
-      marginBottom: "0 !important", // Removendo margem extra se houver
-    },
+    // Cards
     "& .react-trello-card": {
       width: "100% !important",
-      maxWidth: "100% !important",
-      margin: "0 !important",
-      boxShadow: "none !important", // Remove sombra do container da lib
-      borderRadius: "0 !important", // Remove borda
-      background: "transparent !important", // Fundo transparente
-      minHeight: "auto",
+      background: "transparent !important",
+      boxShadow: "none !important",
       border: "none !important",
+    },
+    "& .smooth-dnd-draggable-wrapper": {
+      width: "100% !important",
     },
   },
   actionsBar: {
@@ -727,21 +674,17 @@ const Kanban = () => {
           file.lanes.length === 0 || file.lanes.every(l => (l.cards || []).length === 0) ? (
             <Typography variant="body2" color="textSecondary">{i18n.t('kanban.empty.noTickets')}</Typography>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', height: '100%' }}>
-              <Board
-                data={file}
-                onCardMoveAcrossLanes={handleCardMove}
-                components={{ LaneHeader: (props) => <KanbanLaneHeader {...props} onPanStart={handlePanStart} /> }}
-                customCardLayout
-                hideCardDeleteIcon
-                style={{ backgroundColor: 'transparent', height: '100%', padding: 0 }}
-                draggable
-                cardDraggable
-                laneDraggable={false}
-              />
-              {/* Espaçador invisível para permitir scroll completo até a última lane */}
-              <div style={{ minWidth: 350, flexShrink: 0 }} />
-            </div>
+            <Board
+              data={file}
+              onCardMoveAcrossLanes={handleCardMove}
+              components={{ LaneHeader: (props) => <KanbanLaneHeader {...props} onPanStart={handlePanStart} /> }}
+              customCardLayout
+              hideCardDeleteIcon
+              style={{ backgroundColor: 'transparent', height: '100%', padding: 0, display: 'flex', flexWrap: 'nowrap' }}
+              draggable
+              cardDraggable
+              laneDraggable={false}
+            />
           )
         )}
       </div>

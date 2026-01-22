@@ -1365,12 +1365,26 @@ async function handlePrepareContact(job) {
     const { contactId, campaignId, delay, variables }: PrepareContactData =
       job.data;
     const campaign = await getCampaign(campaignId);
+
+    // Verificação de segurança: campanha deve existir
+    if (!campaign) {
+      logger.error(`[PrepareContact] Campanha ${campaignId} não encontrada, ignorando job.`);
+      return;
+    }
+
     const contact = await getContact(contactId);
+
+    // Verificação de segurança: contato deve existir
+    if (!contact) {
+      logger.error(`[PrepareContact] Contato ${contactId} não encontrado, ignorando job.`);
+      return;
+    }
+
     const campaignShipping: any = {};
     campaignShipping.number = contact.number;
     campaignShipping.contactId = contactId;
     campaignShipping.campaignId = campaignId;
-    const messages = getCampaignValidMessages(campaign);
+    const messages = getCampaignValidMessages(campaign) || [];
 
     if (messages.length >= 0) {
       const radomIndex = randomValue(0, messages.length);
@@ -1396,7 +1410,7 @@ async function handlePrepareContact(job) {
     }
     if (campaign.confirmation) {
       const confirmationMessages =
-        getCampaignValidConfirmationMessages(campaign);
+        getCampaignValidConfirmationMessages(campaign) || [];
       if (confirmationMessages.length) {
         const radomIndex = randomValue(0, confirmationMessages.length);
         let enrichedContact: any = contact;
