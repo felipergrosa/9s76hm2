@@ -502,9 +502,6 @@ const Kanban = () => {
       }),
     ];
 
-    // Ocultar lanes vazias automaticamente
-    lanes = lanes.filter(l => (l.cards || []).length > 0);
-
     try {
       const raw = localStorage.getItem('kanbanHiddenLanes');
       const hidden = raw ? JSON.parse(raw) : [];

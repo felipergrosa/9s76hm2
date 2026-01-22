@@ -382,32 +382,32 @@ const MomentsUser = ({ onPanStart }) => {
 
   return (
     <div className={classes.root}>
-      {/* Coluna Bot */}
-      {renderColumn(
+      {/* Coluna Bot - só exibe se tiver tickets */}
+      {botTickets.length > 0 && renderColumn(
         "Bot / Automático",
         <Android />,
         botTickets,
         blue[600]
       )}
 
-      {/* Coluna Campanhas */}
-      {renderColumn(
+      {/* Coluna Campanhas - só exibe se tiver tickets */}
+      {campaignTickets.length > 0 && renderColumn(
         "Campanhas",
         <Assignment />,
         campaignTickets,
         orange[600]
       )}
 
-      {/* Coluna Pendentes */}
-      {renderColumn(
+      {/* Coluna Pendentes - só exibe se tiver tickets */}
+      {pendingTickets.length > 0 && renderColumn(
         "Pendentes",
         <ReportProblem />,
         pendingTickets,
         red[600]
       )}
 
-      {/* Colunas de Usuários */}
-      {userTickets.map((group) => (
+      {/* Colunas de Usuários - só exibe usuários com tickets */}
+      {userTickets.filter(group => group.tickets.length > 0).map((group) => (
         <Paper key={group.user.id} className={classes.column} elevation={0}>
           <div
             className={classes.columnHeader}
