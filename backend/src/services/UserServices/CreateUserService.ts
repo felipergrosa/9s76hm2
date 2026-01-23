@@ -141,8 +141,6 @@ const CreateUserService = async ({
       allowedContactTags,
       managedUserIds,
       supervisorViewMode,
-      managedUserIds,
-      supervisorViewMode,
       permissions,
       super: superUser
     },
