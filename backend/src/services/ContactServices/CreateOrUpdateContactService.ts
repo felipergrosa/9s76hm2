@@ -160,6 +160,22 @@ const CreateOrUpdateContactService = async ({
       number = canonical || rawNumberDigits || remoteJid || "";
     }
 
+    // VALIDAÇÃO CRÍTICA: Rejeitar IDs internos da Meta/Facebook (> 13 dígitos)
+    // Números brasileiros válidos têm no máximo 13 dígitos (55 + DDD + 9 + 8 dígitos)
+    // IDs da Meta como "247540473708749" têm 15+ dígitos
+    const numberDigitsOnly = (number || "").replace(/\D/g, "");
+    if (!isGroup && numberDigitsOnly.length > 13) {
+      logger.error("[CreateOrUpdateContactService] REJEITADO: Número muito longo (provável ID Meta/Facebook)", {
+        rawNumber,
+        number,
+        length: numberDigitsOnly.length,
+        companyId,
+        isLinkedDevice,
+        remoteJid
+      });
+      return null as any;
+    }
+
     if (!isGroup && !number) {
       logger.warn("[CreateOrUpdateContactService] Número inválido após normalização", {
         rawNumber,

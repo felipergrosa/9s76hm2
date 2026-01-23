@@ -176,6 +176,90 @@ const ProcessWhatsAppWebhook = async (change: WebhookChange): Promise<void> => {
 };
 
 /**
+ * Helper: Processa mensagem quando já temos o contato (usado quando message.from é um ID Meta)
+ */
+async function processMessageWithExistingContact(
+  contact: Contact,
+  message: any,
+  whatsapp: Whatsapp,
+  companyId: number,
+  value: any,
+  messageId: string,
+  timestamp: number
+): Promise<void> {
+  // Buscar settings da empresa
+  const CompaniesSettings = (await import("../../models/CompaniesSettings")).default;
+  const settings = await CompaniesSettings.findOne({
+    where: { companyId }
+  });
+
+  // Encontrar ou criar ticket
+  let ticket = await FindOrCreateTicketService(
+    contact,
+    whatsapp,
+    1,
+    companyId,
+    null,
+    null,
+    undefined,
+    "whatsapp",
+    false,
+    false,
+    settings,
+    false,
+    false
+  );
+
+  // Incrementar contador de mensagens não lidas
+  await ticket.update({
+    unreadMessages: (ticket.unreadMessages || 0) + 1
+  });
+
+  logger.info(`[WebhookProcessor] Ticket ${ticket.id} usado para mensagem de ID Meta (contato=${contact.id})`);
+
+  // Processar corpo da mensagem de forma simplificada
+  let body = "";
+  let mediaType: string | undefined;
+
+  switch (message.type) {
+    case "text":
+      body = message.text?.body || "";
+      mediaType = "conversation";
+      break;
+    default:
+      body = `[${message.type}]`;
+  }
+
+  // Criar mensagem no banco
+  const createdMessage = await CreateMessageService({
+    messageData: {
+      wid: messageId,
+      ticketId: ticket.id,
+      contactId: contact.id,
+      body,
+      fromMe: false,
+      mediaType,
+      read: false,
+      ack: 0
+    },
+    companyId
+  });
+
+  logger.info(`[WebhookProcessor] Mensagem criada via fallback: ${createdMessage.id}`);
+
+  // Emitir evento via Socket.IO
+  const io = getIO();
+  io.of(`/workspace-${companyId}`)
+    .to(ticket.uuid)
+    .emit(`company-${companyId}-appMessage`, {
+      action: "create",
+      message: createdMessage,
+      ticket,
+      contact
+    });
+}
+
+/**
  * Processa mensagem recebida
  */
 async function processIncomingMessage(
@@ -192,30 +276,86 @@ async function processIncomingMessage(
 
   // Extrair nome do contato se disponível
   let contactName = from;
+  let actualPhoneNumber = from;
+
   if (value.contacts && value.contacts.length > 0) {
-    const contactInfo = value.contacts.find((c: any) => c.wa_id === from);
-    if (contactInfo && contactInfo.profile && contactInfo.profile.name) {
-      contactName = contactInfo.profile.name;
+    // Primeiro, tentar encontrar o contato pelo from
+    let contactInfo = value.contacts.find((c: any) => c.wa_id === from);
+
+    // Se não encontrou pelo from, pegar o primeiro contato disponível
+    if (!contactInfo && value.contacts[0]) {
+      contactInfo = value.contacts[0];
+    }
+
+    if (contactInfo) {
+      // Extrair nome do perfil
+      if (contactInfo.profile && contactInfo.profile.name) {
+        contactName = contactInfo.profile.name;
+      }
+
+      // CRÍTICO: Usar wa_id como número real (é o telefone correto!)
+      // O wa_id sempre contém o número de telefone real, mesmo quando message.from é um ID Meta
+      if (contactInfo.wa_id) {
+        const waIdDigits = contactInfo.wa_id.replace(/\D/g, "");
+        // Validar se wa_id parece um número de telefone válido (10-13 dígitos)
+        if (waIdDigits.length >= 10 && waIdDigits.length <= 13) {
+          actualPhoneNumber = contactInfo.wa_id;
+          logger.info(`[WebhookProcessor] Usando wa_id real: ${actualPhoneNumber} (message.from era: ${from})`);
+        }
+      }
     }
   }
 
-  // Criar ou atualizar contato
+  // Verificar se o número ainda é um ID Meta (> 13 dígitos)
+  const phoneDigits = actualPhoneNumber.replace(/\D/g, "");
+  const isMetaId = phoneDigits.length > 13;
+
+  if (isMetaId) {
+    logger.warn(`[WebhookProcessor] Número ${actualPhoneNumber} parece ser ID Meta (${phoneDigits.length} dígitos). Tentando fallback...`);
+
+    // Tentar encontrar contato existente pelo nome
+    const existingByName = await Contact.findOne({
+      where: {
+        name: contactName,
+        companyId,
+        isGroup: false
+      }
+    });
+
+    if (existingByName) {
+      logger.info(`[WebhookProcessor] Contato encontrado pelo nome "${contactName}" (id=${existingByName.id}), evitando duplicata`);
+      // Usar o contato existente diretamente
+      await processMessageWithExistingContact(existingByName, message, whatsapp, companyId, value, messageId, timestamp);
+      return;
+    } else {
+      // Não conseguimos resolver o número real, ignorar mensagem
+      logger.error(`[WebhookProcessor] REJEITADO: Não foi possível resolver número real para ID Meta ${from}. Mensagem ignorada.`, {
+        from,
+        actualPhoneNumber,
+        contactName,
+        phoneDigitsLength: phoneDigits.length
+      });
+      return;
+    }
+  }
+
+  // Criar ou atualizar contato (com número válido)
   let contact: Contact | null = null;
   try {
     contact = await CreateOrUpdateContactService({
       name: contactName,
-      number: from,
+      number: actualPhoneNumber,  // Usar número corrigido!
       isGroup: false,
       companyId,
       whatsappId: whatsapp.id
     });
 
     if (!contact) {
-      logger.error(`[WebhookProcessor] CreateOrUpdateContactService retornou null para número ${from}`);
+      logger.error(`[WebhookProcessor] CreateOrUpdateContactService retornou null para número ${actualPhoneNumber}`);
       return;
     }
   } catch (error: any) {
-    logger.error(`[WebhookProcessor] Erro ao criar/atualizar contato ${from}: ${error.message}`);
+    logger.error(`[WebhookProcessor] Erro ao criar/atualizar contato ${actualPhoneNumber}: ${error.message}`);
     Sentry.captureException(error);
     return;
   }
