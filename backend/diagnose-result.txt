@@ -1,0 +1,76 @@
+============================================================
+📊 RELATÓRIO DE CONTATOS COM IDs META
+============================================================
+
+Total de contatos com IDs Meta: 20
+
+------------------------------------------------------------
+CONTATOS COM TICKETS/MENSAGENS (precisam merge manual):
+------------------------------------------------------------
+  ID: 1902 | "Guirau"
+     Número: 189025906368536 | Tickets: 0 | Msgs: 19
+  ID: 1903 | "Paula Merlo"
+     Número: 127367439745027 | Tickets: 0 | Msgs: 1
+  ID: 1904 | "Gabi Victorino"
+     Número: 255919971664119 | Tickets: 0 | Msgs: 1
+  ID: 1906 | "Wellington"
+     Número: 226980549161145 | Tickets: 0 | Msgs: 2
+  ID: 1907 | "Talita Rossetti"
+     Número: 192264362004602 | Tickets: 0 | Msgs: 1
+  ID: 1909 | "REI DO GRÁFICO"
+     Número: 255417796063486 | Tickets: 0 | Msgs: 1
+  ID: 1910 | "Gerson"
+     Número: 90117171585185 | Tickets: 0 | Msgs: 1
+  ID: 1911 | "Virginia Montone"
+     Número: 128793234669727 | Tickets: 0 | Msgs: 1
+  ID: 1914 | "Mara"
+     Número: 60773955068002 | Tickets: 0 | Msgs: 1
+  ID: 1917 | "Luiz Porto"
+     Número: 72507654705273 | Tickets: 0 | Msgs: 1
+  ID: 1920 | "Marcieri Brucieri"
+     Número: 220456477003800 | Tickets: 0 | Msgs: 1
+  ID: 1922 | "Fernando"
+     Número: 26835039584463 | Tickets: 0 | Msgs: 1
+  ID: 1924 | "Sonia"
+     Número: 21732987519073 | Tickets: 0 | Msgs: 1
+  ID: 1925 | "Edilson Brucieri"
+     Número: 27569646764286 | Tickets: 0 | Msgs: 1
+  ID: 1927 | "Pelé do Motion"
+     Número: 143383624417386 | Tickets: 0 | Msgs: 2
+  ID: 1928 | "Marcela"
+     Número: 74693876920483 | Tickets: 0 | Msgs: 2
+
+------------------------------------------------------------
+CONTATOS ÓRFÃOS (podem ser deletados diretamente):
+------------------------------------------------------------
+  ID: 1901 | "134501783048208" | 134501783048208
+  ID: 1912 | "Fabiano Libaneo" | 212862991655152
+  ID: 1915 | "72546292617220" | 72546292617220
+  ID: 1939 | "Nobre Luminárias
+Fabricamos luminárias d..." | 267439107498000
+
+------------------------------------------------------------
+CONTATOS COM NOME = ID META:
+------------------------------------------------------------
+  ID: 1901 | Nome/Número: 134501783048208 | Tickets: 0 | Msgs: 0
+  ID: 1915 | Nome/Número: 72546292617220 | Tickets: 0 | Msgs: 0
+
+============================================================
+💡 SQL PARA DELETAR ÓRFÃOS:
+============================================================
+DELETE FROM "Contacts" WHERE id IN (1901, 1912, 1915, 1939);
+
+============================================================
+⚠️ CONTATOS QUE PRECISAM ANÁLISE MANUAL:
+============================================================
+Estes contatos têm tickets/mensagens e precisam ser
+mesclados manualmente com o contato correto.
+
+Use este SQL para investigar:
+
+SELECT c.id, c.name, c.number, t.id as ticket_id, t.status
+FROM "Contacts" c
+LEFT JOIN "Tickets" t ON t."contactId" = c.id
+WHERE c.id IN (1902, 1903, 1904, 1906, 1907, 1909, 1910, 1911, 1914, 1917, 1920, 1922, 1924, 1925, 1927, 1928);
+
+[32mINFO[39m [22-01-2026 23:03:35]: [36m✅ Database connected successfully[39m
