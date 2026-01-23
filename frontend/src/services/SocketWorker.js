@@ -2,7 +2,7 @@ import io from "socket.io-client";
 import { getBackendUrl } from "../config";
 
 class SocketWorker {
-  constructor(companyId , userId) {
+  constructor(companyId, userId) {
     if (!SocketWorker.instance) {
       this.companyId = companyId
       this.userId = userId
@@ -12,7 +12,7 @@ class SocketWorker {
       this.joinBuffer = new Set(); // Rooms pendentes de join
       SocketWorker.instance = this;
 
-    } 
+    }
 
     return SocketWorker.instance;
   }
@@ -47,7 +47,7 @@ class SocketWorker {
     const nsUrl = `${backendUrl}/workspace-${this?.companyId}`;
     // Importante: o backend valida namespaces como /workspace-<id> e exige query.token (JWT)
     this.socket = io(nsUrl, {
-      transports: ["polling", "websocket"],
+      transports: ["websocket"],
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,
@@ -64,7 +64,7 @@ class SocketWorker {
         window.__SOCKET_WORKER__ = this;
         window.__SOCKET_IO__ = this.socket;
       }
-    } catch {}
+    } catch { }
 
     this.socket.on("connect", () => {
       console.log("Socket conectado:", { namespace: `workspace-${this?.companyId}`, id: this.socket?.id, hasToken: !!token });
@@ -76,7 +76,7 @@ class SocketWorker {
               if (err) console.log("[SocketWorker] buffered join ack error", { room, err });
               else console.log("[SocketWorker] buffered join ok", { room });
             });
-          } catch (e) {}
+          } catch (e) { }
         });
       } finally {
         this.joinBuffer.clear();
@@ -209,7 +209,7 @@ class SocketWorker {
       if (!this.socket.connected && typeof this.socket.connect === "function") {
         this.socket.connect();
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   forceReconnect() {
