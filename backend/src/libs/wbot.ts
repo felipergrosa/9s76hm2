@@ -168,6 +168,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         return resolve(null as any);
       }
 
+      // declarando wsocket fora do setInterval para ser acessvel
+      let wsocket: Session = null;
       // Intervalo de heartbeat para manter o lock ativo
       let lockHeartbeat: NodeJS.Timeout | null = setInterval(async () => {
         const renewed = await renewWbotLock(whatsapp.id);
@@ -210,7 +212,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         logger.info(`Starting session ${name}`);
         let retriesQrCode = 0;
 
-        let wsocket: Session = null;
+        // wsocket declarado no escopo acima
+
         const { state, saveCreds } = await useMultiFileAuthState(whatsapp);
 
         wsocket = makeWASocket({
