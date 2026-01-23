@@ -6,7 +6,7 @@
  */
 
 import Whatsapp from "../models/Whatsapp";
-import { getWbot, removeWbot } from "../libs/wbot";
+import { getWbot, removeWbot, getWbotIsReconnecting } from "../libs/wbot";
 import { StartWhatsAppSessionUnified as StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSessionUnified";
 import { getIO } from "../libs/socket";
 import logger from "../utils/logger";
@@ -76,6 +76,13 @@ function canAttemptReconnect(whatsappId: number): boolean {
         logger.debug(`[WhatsAppHealthCheck] whatsappId=${whatsappId} já está em processo de reconexão`);
         return false;
     }
+
+    // Verificar se o próprio wbot já está tratando a reconexão (backoff/conflito)
+    if (getWbotIsReconnecting(whatsappId)) {
+        logger.debug(`[WhatsAppHealthCheck] whatsappId=${whatsappId} já está reconectando via wbot (backoff). Ignorando.`);
+        return false;
+    }
+
 
     const lastAttempt = lastReconnectAttempt.get(whatsappId);
     if (!lastAttempt) return true;

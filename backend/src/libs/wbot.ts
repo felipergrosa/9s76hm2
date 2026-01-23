@@ -62,6 +62,12 @@ const retriesQrCodeMap = new Map<number, number>();
 // ========== CONTROLE DE RECONEXÃO (evita loops e race conditions) ==========
 // Map para rastrear quais whatsappIds estão no processo de reconexão
 const reconnectingWhatsapps = new Map<number, boolean>();
+
+// Helper para expor estado de reconexão para outros módulos (ex: HealthCheck)
+export const getWbotIsReconnecting = (whatsappId: number): boolean => {
+  return !!reconnectingWhatsapps.get(whatsappId);
+};
+
 // Map para contar conflitos consecutivos (para backoff exponencial)
 const conflictCountMap = new Map<number, number>();
 // Constantes de tempo para reconexão

@@ -1,4 +1,5 @@
 import { initWASocket } from "../../libs/wbot";
+import { acquireWbotLock, renewWbotLock, releaseWbotLock } from "../../libs/wbotMutex";
 import { WhatsAppFactory } from "../../libs/whatsapp";
 import Whatsapp from "../../models/Whatsapp";
 import { wbotMessageListener } from "./wbotMessageListener";
@@ -54,53 +55,79 @@ export const StartWhatsAppSessionUnified = async (
       // ===== WHATSAPP BUSINESS API OFICIAL =====
       logger.info(`[StartSession] Usando Official API para whatsappId=${whatsapp.id}`);
 
-      // Criar adapter da API oficial
-      const adapter = await WhatsAppFactory.createAdapter(whatsapp);
+      // 1. Tenta adquirir o Lock (Leader Election)
+      const hasLock = await acquireWbotLock(whatsapp.id);
+      if (!hasLock) {
+        logger.info(`[StartSession] Sessão Official ${whatsapp.name} (#${whatsapp.id}) já gerenciada por outra instância. Pulando.`);
+        return;
+      }
 
-      // Inicializar (verifica credenciais e conecta)
-      await adapter.initialize();
-
-      // Registrar callback de conexão
-      adapter.onConnectionUpdate((status) => {
-        logger.info(`[StartSession] Official API status changed: ${status}`);
-
-        // Atualizar status no banco
-        if (status === "connected") {
-          whatsapp.update({ status: "CONNECTED" });
-        } else if (status === "disconnected") {
-          whatsapp.update({ status: "DISCONNECTED" });
+      // Intervalo de heartbeat para manter o lock ativo
+      let lockHeartbeat: NodeJS.Timeout | null = setInterval(async () => {
+        const renewed = await renewWbotLock(whatsapp.id);
+        if (!renewed) {
+          logger.warn(`[StartSession] Perda de lock para sessão Official ${whatsapp.id}.`);
+          // Para API oficial, talvez devêssemos desconectar? 
+          // Mas como é webhook, não tem "conexão" persistente da mesma forma.
+          // Vamos limpar o intervalo e deixar que o novo dono assuma.
+          if (lockHeartbeat) clearInterval(lockHeartbeat);
         }
+      }, 15000); // 15s
 
-        // Emitir evento via Socket.IO
+      try {
+        // Criar adapter da API oficial
+        const adapter = await WhatsAppFactory.createAdapter(whatsapp);
+
+        // Inicializar (verifica credenciais e conecta)
+        await adapter.initialize();
+
+        // Registrar callback de conexão
+        adapter.onConnectionUpdate((status) => {
+          logger.info(`[StartSession] Official API status changed: ${status}`);
+
+          // Atualizar status no banco
+          if (status === "connected") {
+            whatsapp.update({ status: "CONNECTED" });
+          } else if (status === "disconnected") {
+            whatsapp.update({ status: "DISCONNECTED" });
+            if (lockHeartbeat) clearInterval(lockHeartbeat);
+            releaseWbotLock(whatsapp.id);
+          }
+
+          // Emitir evento via Socket.IO
+          io.of(`/workspace-${companyId}`)
+            .emit(`company-${companyId}-whatsappSession`, {
+              action: "update",
+              session: whatsapp
+            });
+        });
+
+        // Registrar callback de mensagens recebidas
+        adapter.onMessage((message) => {
+          logger.debug(`[StartSession] Mensagem recebida via Official API: ${message.id}`);
+          // O processamento da mensagem será feito pelo webhook handler
+        });
+
+        // Atualizar status
+        await whatsapp.update({
+          status: "CONNECTED",
+          number: adapter.getPhoneNumber()
+        });
+
+        logger.info(`[StartSession] Official API conectada: ${adapter.getPhoneNumber()}`);
+
+        // Emitir evento de conexão
         io.of(`/workspace-${companyId}`)
           .emit(`company-${companyId}-whatsappSession`, {
             action: "update",
             session: whatsapp
           });
-      });
 
-      // Registrar callback de mensagens recebidas
-      // Nota: Mensagens da Official API vêm via webhooks, não polling
-      // Este callback é chamado pelo webhook handler
-      adapter.onMessage((message) => {
-        logger.debug(`[StartSession] Mensagem recebida via Official API: ${message.id}`);
-        // O processamento da mensagem será feito pelo webhook handler
-      });
-
-      // Atualizar status
-      await whatsapp.update({
-        status: "CONNECTED",
-        number: adapter.getPhoneNumber()
-      });
-
-      logger.info(`[StartSession] Official API conectada: ${adapter.getPhoneNumber()}`);
-
-      // Emitir evento de conexão
-      io.of(`/workspace-${companyId}`)
-        .emit(`company-${companyId}-whatsappSession`, {
-          action: "update",
-          session: whatsapp
-        });
+      } catch (err) {
+        if (lockHeartbeat) clearInterval(lockHeartbeat);
+        await releaseWbotLock(whatsapp.id);
+        throw err;
+      }
 
     } else {
       throw new Error(`Tipo de canal não suportado: ${channelType}`);
