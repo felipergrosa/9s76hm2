@@ -85,6 +85,7 @@ interface Request {
   creditLimit?: string;
   segment?: string;
   clientCode?: string;
+  checkProfilePic?: boolean; // Novo parametro para evitar rate limit na importação
 }
 
 const downloadProfileImage = async ({
@@ -104,6 +105,8 @@ const downloadProfileImage = async ({
   }
 
   try {
+    // Se não tem URL, não tenta baixar
+    if (!profilePicUrl) return null;
 
     const response = await axios.get(profilePicUrl, {
       responseType: 'arraybuffer'
@@ -113,7 +116,8 @@ const downloadProfileImage = async ({
     fs.writeFileSync(join(folder, filename), response.data);
 
   } catch (error) {
-    console.error(error)
+    console.error("Erro ao baixar profile image:", error?.message);
+    return null; // Retorna null em caso de erro para não sobrescrever
   }
 
   return filename
@@ -143,7 +147,8 @@ const CreateOrUpdateContactService = async ({
   foundationDate,
   creditLimit,
   segment,
-  clientCode
+  clientCode,
+  checkProfilePic = true // Por padrão verifica (comportamento antigo)
 }: Request): Promise<Contact> => {
   try {
     let createContact = false;
@@ -255,7 +260,8 @@ const CreateOrUpdateContactService = async ({
         }
     });
 
-    let updateImage = (!contact || contact?.profilePicUrl !== profilePicUrl && profilePicUrl !== "") && wbot || false;
+    // Só tenta atualizar imagem se checkProfilePic for true
+    let updateImage = checkProfilePic && (!contact || contact?.profilePicUrl !== profilePicUrl && profilePicUrl !== "") && wbot || false;
 
     if (contact) {
       // Captura valores anteriores para detectar mudanças
@@ -302,7 +308,7 @@ const CreateOrUpdateContactService = async ({
         fileName = path.join(folder, oldPath.split('\\').pop());
       }
       // Sempre tenta atualizar imagem se não tem urlPicture ou se arquivo não existe
-      if (!contact.urlPicture || !fs.existsSync(fileName) || contact.profilePicUrl === "") {
+      if (checkProfilePic && (!contact.urlPicture || !fs.existsSync(fileName) || contact.profilePicUrl === "")) {
         if (wbot && ['whatsapp'].includes(channel)) {
           try {
             profilePicUrl = await wbot.profilePictureUrl(remoteJid, "image");
@@ -353,7 +359,11 @@ const CreateOrUpdateContactService = async ({
       }
 
       try {
-        profilePicUrl = await wbot.profilePictureUrl(remoteJid, "image");
+        if (checkProfilePic) {
+          profilePicUrl = await wbot.profilePictureUrl(remoteJid, "image");
+        } else {
+          profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
+        }
       } catch (e) {
         Sentry.captureException(e);
         profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
