@@ -35,6 +35,7 @@ import startWhatsAppHealthCheckJob from "./jobs/WhatsAppHealthCheckJob";
 import { startQueueProcess } from "./queues";
 import tagRulesCron from "./cron/tagRulesCron";
 import tagRulesRecentContactsCron from "./cron/tagRulesRecentContactsCron";
+import { checkOrphanedSessionsCron } from "./cron/checkOrphanedSessionsCron";
 
 const ENV_PROFILE = process.env.APP_ENV || process.env.NODE_ENV || "development";
 const isProduction = ENV_PROFILE === "production";
@@ -232,6 +233,9 @@ startInactivityTimeoutJob(); // Verifica a cada 1 minuto
 
 // Inicializa job de health check das conexões WhatsApp
 startWhatsAppHealthCheckJob(); // Verifica a cada 2 minutos e reconecta automaticamente
+
+// Inicializa cron de verificação de sessões órfãs (HA para Replicas)
+checkOrphanedSessionsCron();
 
 initIO(server);
 gracefulShutdown(server);

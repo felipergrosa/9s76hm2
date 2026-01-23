@@ -153,9 +153,33 @@ export var dataMessages: any = {};
 
 export const msgDB = msg();
 
+
+import { acquireWbotLock, renewWbotLock, releaseWbotLock } from "./wbotMutex";
+
 export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
   return new Promise(async (resolve, reject) => {
     try {
+      // 1. Tenta adquirir o Lock (Leader Election)
+      // Se falhar, significa que outro container já está rodando esta sessão.
+      const hasLock = await acquireWbotLock(whatsapp.id);
+      if (!hasLock) {
+        logger.info(`[Shard] Sessão ${whatsapp.name} (#${whatsapp.id}) já gerenciada por outra instância. Pulando.`);
+        // Resolvemos com null para indicar que não foi iniciada aqui
+        return resolve(null as any);
+      }
+
+      // Intervalo de heartbeat para manter o lock ativo
+      let lockHeartbeat: NodeJS.Timeout | null = setInterval(async () => {
+        const renewed = await renewWbotLock(whatsapp.id);
+        if (!renewed) {
+          logger.warn(`[Shard] Perda de lock para sessão ${whatsapp.id}. Encerrando conexão.`);
+          if (wsocket) {
+            wsocket.end(new Error("Lock lost")); // Força desconexão se perder o lock
+            if (lockHeartbeat) clearInterval(lockHeartbeat);
+          }
+        }
+      }, 15000); // 15s
+
       (async () => {
         const io = getIO();
 
@@ -163,7 +187,11 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           where: { id: whatsapp.id }
         });
 
-        if (!whatsappUpdate) return;
+        if (!whatsappUpdate) {
+          if (lockHeartbeat) clearInterval(lockHeartbeat);
+          await releaseWbotLock(whatsapp.id);
+          return;
+        }
 
         const { id, name, allowGroup, companyId } = whatsappUpdate;
 
@@ -217,6 +245,25 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           getMessage: msgDB.get,
           // Habilita download de histórico quando importação está ativa
           syncFullHistory: !!whatsapp.importOldMessages,
+        });
+
+        // Limpa heartbeat ao fechar
+        wsocket.ev.on("connection.update", async (update) => {
+          const { connection } = update;
+          if (connection === 'close') {
+            if (lockHeartbeat) clearInterval(lockHeartbeat);
+            // Nota: releaselock será chamado se for logout ou invalido,
+            // mas se for reconexão temporária? 
+            // Se reconectar, o INIT é chamado de novo? NÃO. O makeWASocket gerencia reconexão interna?
+            // SIM, Baileys reconecta internamente se reconnection: true (padrão?)
+            // Se baileys reconecta, o initWASocket NÃO é chamado novamente para a mesma instância.
+            // ENTÃO o heartbeat deve continuar se for reconnect.
+            // Mas se connection === close, baileys pode estar tentando reconectar.
+
+            // Se o processo de reconexão do Baileys falhar e ele decidir morrer, aí perdemos o lock.
+            // Vamos manter o Lock se for reconexão temporária.
+            // Se for Logout ou erro fatal, connection.update trata abaixo.
+          }
         });
 
         // Store em memória desabilitada nesta versão; usamos snapshot/persistência via messaging-history.set
@@ -429,6 +476,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
                 // Marcar como "reconectando" para bloquear novas tentativas
                 reconnectingWhatsapps.set(id, true);
+                await releaseWbotLock(id); // Libera o lock para permitir que a reconexão (ou outro nó) assuma
                 removeWbot(id, false);
 
                 // Agendar reconexão com delay calculado
@@ -460,6 +508,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     action: "update",
                     session: whatsapp
                   });
+                await releaseWbotLock(id);
                 removeWbot(id, false);
                 return;
               }
@@ -474,6 +523,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 }
                 logger.info(`[wbot] Restart necessário para ${name}. Reconectando em 15s.`);
                 reconnectingWhatsapps.set(id, true);
+                await releaseWbotLock(id);
                 removeWbot(id, false);
                 setTimeout(() => {
                   reconnectingWhatsapps.delete(id);
@@ -490,6 +540,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   return;
                 }
                 reconnectingWhatsapps.set(id, true);
+                await releaseWbotLock(id);
                 removeWbot(id, false);
                 setTimeout(() => {
                   reconnectingWhatsapps.delete(id);
@@ -514,6 +565,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     action: "update",
                     session: whatsapp
                   });
+                await releaseWbotLock(id);
                 removeWbot(id, false);
                 // Verificar se já está reconectando antes de agendar
                 if (!reconnectingWhatsapps.get(id)) {

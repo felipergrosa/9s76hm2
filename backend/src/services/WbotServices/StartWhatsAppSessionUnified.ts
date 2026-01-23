@@ -16,7 +16,7 @@ export const StartWhatsAppSessionUnified = async (
   companyId: number
 ): Promise<void> => {
   const channelType = whatsapp.channelType || "baileys";
-  
+
   logger.info(`[StartSession] Iniciando ${channelType} para whatsappId=${whatsapp.id}`);
 
   await whatsapp.update({ status: "OPENING" });
@@ -32,38 +32,45 @@ export const StartWhatsAppSessionUnified = async (
     if (channelType === "baileys") {
       // ===== BAILEYS (não oficial) =====
       logger.info(`[StartSession] Usando Baileys para whatsappId=${whatsapp.id}`);
-      
+
       const wbot = await initWASocket(whatsapp);
-      
+
+      // se retornou null, é pq outra instancia pegou o lock
+      if (!wbot) {
+        // Não é erro, é comportamento esperado de sharding
+        // logger.info("[StartSession] Sessão gerenciada por outro nó. (Lock não adquirido)");
+        return;
+      }
+
       if (wbot.id) {
         // Configurar listeners Baileys (código existente)
         wbotMessageListener(wbot, companyId);
         wbotMonitor(wbot, whatsapp, companyId);
-        
+
         logger.info(`[StartSession] Baileys iniciado com sucesso: ${wbot.user?.id}`);
       }
-      
+
     } else if (channelType === "official") {
       // ===== WHATSAPP BUSINESS API OFICIAL =====
       logger.info(`[StartSession] Usando Official API para whatsappId=${whatsapp.id}`);
-      
+
       // Criar adapter da API oficial
       const adapter = await WhatsAppFactory.createAdapter(whatsapp);
-      
+
       // Inicializar (verifica credenciais e conecta)
       await adapter.initialize();
-      
+
       // Registrar callback de conexão
       adapter.onConnectionUpdate((status) => {
         logger.info(`[StartSession] Official API status changed: ${status}`);
-        
+
         // Atualizar status no banco
         if (status === "connected") {
           whatsapp.update({ status: "CONNECTED" });
         } else if (status === "disconnected") {
           whatsapp.update({ status: "DISCONNECTED" });
         }
-        
+
         // Emitir evento via Socket.IO
         io.of(`/workspace-${companyId}`)
           .emit(`company-${companyId}-whatsappSession`, {
@@ -71,7 +78,7 @@ export const StartWhatsAppSessionUnified = async (
             session: whatsapp
           });
       });
-      
+
       // Registrar callback de mensagens recebidas
       // Nota: Mensagens da Official API vêm via webhooks, não polling
       // Este callback é chamado pelo webhook handler
@@ -79,40 +86,40 @@ export const StartWhatsAppSessionUnified = async (
         logger.debug(`[StartSession] Mensagem recebida via Official API: ${message.id}`);
         // O processamento da mensagem será feito pelo webhook handler
       });
-      
+
       // Atualizar status
-      await whatsapp.update({ 
+      await whatsapp.update({
         status: "CONNECTED",
         number: adapter.getPhoneNumber()
       });
-      
+
       logger.info(`[StartSession] Official API conectada: ${adapter.getPhoneNumber()}`);
-      
+
       // Emitir evento de conexão
       io.of(`/workspace-${companyId}`)
         .emit(`company-${companyId}-whatsappSession`, {
           action: "update",
           session: whatsapp
         });
-      
+
     } else {
       throw new Error(`Tipo de canal não suportado: ${channelType}`);
     }
-    
+
   } catch (err: any) {
     Sentry.captureException(err);
     logger.error(`[StartSession] Erro ao iniciar sessão: ${err.message}`);
-    
+
     // Atualizar status de erro
     await whatsapp.update({ status: "DISCONNECTED" });
-    
+
     // Emitir evento de erro
     io.of(`/workspace-${companyId}`)
       .emit(`company-${companyId}-whatsappSession`, {
         action: "update",
         session: whatsapp
       });
-    
+
     throw err;
   }
 };
