@@ -1,0 +1,141 @@
+============================================================
+🔧 SCRIPT AVANÇADO DE LIMPEZA DE CONTATOS META
+============================================================
+Modo: 🔍 DRY-RUN (apenas simulação)
+Empresa: TODAS
+============================================================
+
+🔎 Buscando contatos com IDs Meta...
+
+📊 Encontrados 20 contatos com IDs Meta
+
+
+📋 Contato ID 1901: "134501783048208" (134501783048208)
+   Company: 1, Tickets: 0, Msgs: 0
+   🔍 Nome é ID Meta, buscando contato real por tickets...
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1915: "72546292617220" (72546292617220)
+   Company: 1, Tickets: 0, Msgs: 0
+   🔍 Nome é ID Meta, buscando contato real por tickets...
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1925: "Edilson Brucieri" (27569646764286)
+   Company: 1, Tickets: 0, Msgs: 1
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1912: "Fabiano Libaneo" (212862991655152)
+   Company: 1, Tickets: 0, Msgs: 0
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1922: "Fernando" (26835039584463)
+   Company: 1, Tickets: 0, Msgs: 1
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1904: "Gabi Victorino" (255919971664119)
+   Company: 1, Tickets: 0, Msgs: 1
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1910: "Gerson" (90117171585185)
+   Company: 1, Tickets: 0, Msgs: 1
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1902: "Guirau" (189025906368536)
+   Company: 1, Tickets: 0, Msgs: 19
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1917: "Luiz Porto" (72507654705273)
+   Company: 1, Tickets: 0, Msgs: 1
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1914: "Mara" (60773955068002)
+   Company: 1, Tickets: 0, Msgs: 1
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1928: "Marcela" (74693876920483)
+   Company: 1, Tickets: 0, Msgs: 2
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1920: "Marcieri Brucieri" (220456477003800)
+   Company: 1, Tickets: 0, Msgs: 1
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1939: "Nobre Luminárias
+Fabricamos luminárias de alta eficiência que embelezam e valorizam os ambientes, garantindo conforto visual.
+Atendimento especializado e venda exclusiva para lojistas.
+✨ Clique e conheça nossa linha completa!" (267439107498000)
+   Company: 1, Tickets: 0, Msgs: 0
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1903: "Paula Merlo" (127367439745027)
+   Company: 1, Tickets: 0, Msgs: 1
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1927: "Pelé do Motion" (143383624417386)
+   Company: 1, Tickets: 0, Msgs: 2
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1909: "REI DO GRÁFICO" (255417796063486)
+   Company: 1, Tickets: 0, Msgs: 1
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1924: "Sonia" (21732987519073)
+   Company: 1, Tickets: 0, Msgs: 1
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1907: "Talita Rossetti" (192264362004602)
+   Company: 1, Tickets: 0, Msgs: 1
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1911: "Virginia Montone" (128793234669727)
+   Company: 1, Tickets: 0, Msgs: 1
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+📋 Contato ID 1906: "Wellington" (226980549161145)
+   Company: 1, Tickets: 0, Msgs: 2
+   ⚠️ Nenhum match encontrado - mantido para análise manual
+
+============================================================
+📊 RESUMO FINAL
+============================================================
+Total processados: 20
+Seriam mesclados: 0
+Seriam deletados: 0
+Ignorados (análise manual): 20
+Tickets seriam movidos: 0
+Mensagens seriam movidas: 0
+Erros: 0
+============================================================
+
+⚠️ CONTATOS QUE PRECISAM DE ANÁLISE MANUAL:
+------------------------------------------------------------
+  ID: 1901 | Nome: "134501783048208" | Número: 134501783048208
+  ID: 1915 | Nome: "72546292617220" | Número: 72546292617220
+  ID: 1925 | Nome: "Edilson Brucieri" | Número: 27569646764286
+  ID: 1912 | Nome: "Fabiano Libaneo" | Número: 212862991655152
+  ID: 1922 | Nome: "Fernando" | Número: 26835039584463
+  ID: 1904 | Nome: "Gabi Victorino" | Número: 255919971664119
+  ID: 1910 | Nome: "Gerson" | Número: 90117171585185
+  ID: 1902 | Nome: "Guirau" | Número: 189025906368536
+  ID: 1917 | Nome: "Luiz Porto" | Número: 72507654705273
+  ID: 1914 | Nome: "Mara" | Número: 60773955068002
+  ID: 1928 | Nome: "Marcela" | Número: 74693876920483
+  ID: 1920 | Nome: "Marcieri Brucieri" | Número: 220456477003800
+  ID: 1939 | Nome: "Nobre Luminárias
+Fabricamos luminárias de alta eficiência que embelezam e valorizam os ambientes, garantindo conforto visual.
+Atendimento especializado e venda exclusiva para lojistas.
+✨ Clique e conheça nossa linha completa!" | Número: 267439107498000
+  ID: 1903 | Nome: "Paula Merlo" | Número: 127367439745027
+  ID: 1927 | Nome: "Pelé do Motion" | Número: 143383624417386
+  ID: 1909 | Nome: "REI DO GRÁFICO" | Número: 255417796063486
+  ID: 1924 | Nome: "Sonia" | Número: 21732987519073
+  ID: 1907 | Nome: "Talita Rossetti" | Número: 192264362004602
+  ID: 1911 | Nome: "Virginia Montone" | Número: 128793234669727
+  ID: 1906 | Nome: "Wellington" | Número: 226980549161145
+------------------------------------------------------------
+Estes contatos não puderam ser automaticamente vinculados.
+Você pode usar o seguinte SQL para investigar manualmente:
+  SELECT id, name, number FROM "Contacts" WHERE id IN (1901, 1915, 1925, 1912, 1922, 1904, 1910, 1902, 1917, 1914, 1928, 1920, 1939, 1903, 1927, 1909, 1924, 1907, 1911, 1906)
+
+💡 Para executar de verdade, remova --dry-run
+[32mINFO[39m [22-01-2026 22:33:21]: [36m✅ Database connected successfully[39m
