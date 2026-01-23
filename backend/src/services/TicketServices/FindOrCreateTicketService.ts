@@ -277,7 +277,7 @@ const FindOrCreateTicketService = async (
     // Verificar se conexão tem fila padrão com chatbot OU prompt (IA/RAG) OU AIAgent
     const hasChatbot = firstQueue?.chatbots && firstQueue.chatbots.length > 0;
     const hasPrompt = firstQueue?.prompt && firstQueue.prompt.length > 0;
-    
+
     // Verificar se existe AIAgent ativo vinculado a esta fila
     let hasAIAgent = false;
     if (firstQueue) {
@@ -298,9 +298,9 @@ const FindOrCreateTicketService = async (
         logger.warn(`[FindOrCreateTicket] Erro ao verificar AIAgent: ${err}`);
       }
     }
-    
+
     const hasBotInDefaultQueue = hasChatbot || hasPrompt || hasAIAgent;
-    
+
     // Determinar status inicial:
     // - Se é LGPD: "lgpd"
     // - Se é grupo: "group"
@@ -310,7 +310,7 @@ const FindOrCreateTicketService = async (
     let initialStatus = "pending";
     let initialIsBot = false;
     let initialQueueId = null;
-    
+
     if (!isImported && !isNil(settings?.enableLGPD) && openAsLGPD && !groupContact) {
       initialStatus = "lgpd";
     } else if (groupContact && whatsapp.groupAsTicket !== "enabled") {
@@ -326,7 +326,7 @@ const FindOrCreateTicketService = async (
       initialIsBot = false;
       initialQueueId = firstQueue.id;
     }
-    
+
     const ticketData: any = {
       contactId: groupContact ? groupContact.id : contact.id,
       status: initialStatus,
@@ -345,14 +345,29 @@ const FindOrCreateTicketService = async (
       const wallet: any = contact;
       const wallets = await wallet.getWallets();
       if (wallets && wallets[0]?.id) {
-        ticketData.status = (!isImported && !isNil(settings?.enableLGPD)
-          && openAsLGPD && !groupContact) ? //verifica se lgpd está habilitada e não é grupo e se tem a mensagem e link da política
-          "lgpd" :  //abre como LGPD caso habilitado parâmetro
-          (whatsapp.groupAsTicket === "enabled" || !groupContact) ? // se lgpd estiver desabilitado, verifica se é para tratar ticket como grupo ou se é contato normal
-            "open" : //caso  é para tratar grupo como ticket ou não é grupo, abre como pendente
-            "group"; // se não é para tratar grupo como ticket, vai direto para grupos
 
-        ticketData.userId = wallets[0].id;
+        // Smart Routing: Check if owner is Online
+        const User = (await import("../../models/User")).default;
+        const walletOwner = await User.findByPk(wallets[0].id);
+
+        // Regra de Ouro: Só atribui se estiver ONLINE
+        if (walletOwner && walletOwner.online) {
+          ticketData.status = (!isImported && !isNil(settings?.enableLGPD)
+            && openAsLGPD && !groupContact) ?
+            "lgpd" :
+            (whatsapp.groupAsTicket === "enabled" || !groupContact) ?
+              "open" :
+              "group";
+
+          ticketData.userId = wallets[0].id;
+          logger.info(`[SmartRouting] Ticket assigned to ONLINE wallet owner: ${walletOwner.name} (${walletOwner.id})`);
+        } else {
+          // Se dono estiver Offline/Férias -> Mantém Pending para Supervisor/Admin ver
+          ticketData.status = "pending";
+          ticketData.userId = null;
+          // Mantém fila padrão se houver (já definia acima)
+          logger.info(`[SmartRouting] Wallet owner ${walletOwner?.name} is OFFLINE. Ticket kept PENDING for supervision.`);
+        }
       }
     }
 

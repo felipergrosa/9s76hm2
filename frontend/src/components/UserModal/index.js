@@ -13,6 +13,8 @@ import DialogActions from "@material-ui/core/DialogActions";
 import DialogContent from "@material-ui/core/DialogContent";
 import DialogTitle from "@material-ui/core/DialogTitle";
 import CircularProgress from "@material-ui/core/CircularProgress";
+import Switch from "@material-ui/core/Switch";
+import FormControlLabel from "@material-ui/core/FormControlLabel";
 import Select from "@material-ui/core/Select";
 import InputLabel from "@material-ui/core/InputLabel";
 import MenuItem from "@material-ui/core/MenuItem";
@@ -41,6 +43,7 @@ import GroupIcon from "@material-ui/icons/Group";
 import DashboardIcon from "@material-ui/icons/Dashboard";
 import AccessTimeIcon from "@material-ui/icons/AccessTime";
 import CloseIcon from "@material-ui/icons/Close";
+import HierarchyTutorial from "./HierarchyTutorial";
 
 const backendUrl = getBackendUrl();
 
@@ -136,6 +139,7 @@ const UserModal = ({ open, onClose, userId }) => {
     email: "",
     password: "",
     profile: "user",
+    super: false,
     startWork: "00:00",
     endWork: "23:59",
     farewellMessage: "",
@@ -305,6 +309,7 @@ const UserModal = ({ open, onClose, userId }) => {
                 >
                   <Tab label={i18n.t("userModal.tabs.general")} value={"general"} />
                   <Tab label={i18n.t("userModal.tabs.permissions")} value={"permissions"} />
+                  {loggedInUser.super && <Tab label="Como usar?" value={"tutorial"} />}
                 </Tabs>
               </Paper>
               <Paper className={classes.paper} elevation={0} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -523,7 +528,7 @@ const UserModal = ({ open, onClose, userId }) => {
                       label={i18n.t("userModal.form.farewellMessage")}
                       type="farewellMessage"
                       multiline
-                      rows={4}
+                      rows={2}
                       fullWidth
                       name="farewellMessage"
                       error={touched.farewellMessage && Boolean(errors.farewellMessage)}
@@ -702,6 +707,22 @@ const UserModal = ({ open, onClose, userId }) => {
                           {/* Apenas superadmin pode ver esta opção */}
                           {loggedInUser.super && (
                             <>
+                              <Grid container spacing={1}>
+                                <Grid item xs={12} md={6}>
+                                  <FormControlLabel
+                                    control={
+                                      <Switch
+                                        checked={values.super}
+                                        onChange={(e) => setFieldValue("super", e.target.checked)}
+                                        name="super"
+                                        color="primary"
+                                      />
+                                    }
+                                    label="Super Admin (Acesso Total)"
+                                  />
+                                </Grid>
+                              </Grid>
+
                               <Divider style={{ marginTop: 16, marginBottom: 16 }} />
                               <Typography variant="subtitle2" style={{ marginBottom: 8 }}>
                                 {i18n.t("userModal.form.managedUsers") || "Usuários Gerenciados (Supervisor)"}
@@ -774,6 +795,17 @@ const UserModal = ({ open, onClose, userId }) => {
                       }
                     />
                   </TabPanel>
+
+                  {/* ABA: COMO USAR? (Visível apenas para Super Admin) */}
+                  {loggedInUser.super && (
+                    <TabPanel
+                      className={classes.container}
+                      value={tab}
+                      name={"tutorial"}
+                    >
+                      <HierarchyTutorial />
+                    </TabPanel>
+                  )}
                 </DialogContent>
               </Paper>
               <DialogActions>

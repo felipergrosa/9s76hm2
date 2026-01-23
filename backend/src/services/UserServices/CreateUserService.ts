@@ -31,6 +31,7 @@ interface Request {
   managedUserIds?: number[];
   supervisorViewMode?: "include" | "exclude";
   permissions?: string[];
+  superUser?: boolean;
 }
 
 interface Response {
@@ -64,7 +65,8 @@ const CreateUserService = async ({
   allowedContactTags = [],
   managedUserIds = [],
   supervisorViewMode = "include",
-  permissions = []
+  permissions = [],
+  superUser = false
 }: Request): Promise<Response> => {
   if (companyId !== undefined) {
     const company = await Company.findOne({
@@ -139,7 +141,10 @@ const CreateUserService = async ({
       allowedContactTags,
       managedUserIds,
       supervisorViewMode,
-      permissions
+      managedUserIds,
+      supervisorViewMode,
+      permissions,
+      super: superUser
     },
     { include: ["queues", "company"] }
   );

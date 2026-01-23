@@ -174,6 +174,12 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   }
 
   if (companyUser) {
+    // Apenas Super Admin pode setar Super Admin na criação
+    const { "super": superUser } = req.body;
+    if (superUser && !(req.user as any).super) {
+      throw new AppError("ERR_NO_PERMISSION - ONLY SUPER ADMIN", 403);
+    }
+
     const user = await CreateUserService({
       email,
       password,
@@ -196,7 +202,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       allowRealTime,
       allowConnections,
       allowedContactTags,
-      permissions
+      permissions,
+      superUser
     });
 
     const io = getIO();
@@ -245,8 +252,14 @@ export const update = async (
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
+  // Apenas Super Admin pode setar Super Admin
+  const { "super": superUser } = req.body;
+  if (superUser && !(req.user as any).super) {
+    throw new AppError("ERR_NO_PERMISSION - ONLY SUPER ADMIN", 403);
+  }
+
   const user = await UpdateUserService({
-    userData,
+    userData: { ...userData, super: superUser }, // Pass super explicitly
     userId,
     companyId,
     requestUserId: +requestUserId
@@ -344,7 +357,7 @@ export const mediaUpload = async (
       const oldAbs = path.resolve(publicRoot, buildCompanyBase(companyId), user.profileImage.startsWith("company") ? user.profileImage : path.posix.join("", user.profileImage));
       try {
         if (fs.existsSync(oldAbs)) fs.unlinkSync(oldAbs);
-      } catch {}
+      } catch { }
     }
 
     // Move o arquivo do tmp para o destino final
@@ -355,7 +368,7 @@ export const mediaUpload = async (
     await user.save();
 
     user = await ShowUserService(userId, companyId);
-    
+
     const io = getIO();
     io.of(`/workspace-${companyId}`)
       .emit(`company-${companyId}-user`, {
@@ -493,7 +506,7 @@ export const uploadAvatar = async (req: Request, res: Response): Promise<Respons
       try {
         const oldAbs = path.resolve(publicRoot, buildCompanyBase(companyId), user.profileImage.startsWith("company") ? user.profileImage : path.posix.join("", user.profileImage));
         if (fs.existsSync(oldAbs)) fs.unlinkSync(oldAbs);
-      } catch {}
+      } catch { }
     }
 
     fs.renameSync(file.path, absPath);

@@ -1,0 +1,21 @@
+
+🔎 Investigando Fluxo do Ticket para: Fernanda Rosa (BUSCA AMPLA)
+
+⚙️ Configurações:
+   - DirectTicketsToWallets: NÃO DEFINIDO
+
+👥 Contatos encontrados: 2
+
+   --------------------------------------------------
+   👤 [1863] Fernanda Rosa (5519988401180) - Grupo: false
+      💼 Wallets: (Nenhuma)
+      🎫 Ticket 100 [open]: Dono=SEM DONO, Fila=atendimento lastMsg="Sim sra..."
+
+   --------------------------------------------------
+   👤 [1879] Fernanda Rosa (5519989856401) - Grupo: false
+      💼 Wallets: (Nenhuma)
+      🎫 Ticket 110 [open]: Dono=SEM DONO, Fila=atendimento lastMsg="❤️..."
+
+🆔 IDs de Usuários:
+   - felipe: 3
+[32mINFO[39m [23-01-2026 10:39:48]: [36m✅ Database connected successfully[39m

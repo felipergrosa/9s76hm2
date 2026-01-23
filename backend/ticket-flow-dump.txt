@@ -1,0 +1,16 @@
+
+🔎 Investigando Fluxo do Ticket para: Fernanda Rosa
+
+⚙️ Configurações (Amostra):
+
+👤 Contato encontrado: [1863] Fernanda Rosa (5519988401180)
+
+💼 Carteiras (Wallets) associadas:
+   (Nenhuma carteira)
+
+🎫 Últimos Tickets:
+   - Ticket 100: Status=open, Dono=null (ID: null), Fila=atendimento (ID: 1)
+
+👥 Usuários Verificados:
+   - [3] felipe
+[32mINFO[39m [23-01-2026 10:36:31]: [36m✅ Database connected successfully[39m

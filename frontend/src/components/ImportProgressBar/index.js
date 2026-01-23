@@ -1,5 +1,5 @@
 import React from "react";
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, alpha } from "@material-ui/core/styles";
 import {
     Paper,
     Typography,
@@ -22,11 +22,14 @@ const useStyles = makeStyles((theme) => ({
         zIndex: 1300,
         minWidth: 350,
         maxWidth: 500,
-        padding: theme.spacing(1.5, 2),
-        backgroundColor: theme.palette.primary.main,
+        padding: theme.spacing(2),
+        // Glassmorphism Deep UI
+        background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.85)} 0%, ${alpha(theme.palette.primary.dark, 0.95)} 100%)`,
+        backdropFilter: "blur(12px)",
         color: "#fff",
-        borderRadius: "0 0 12px 12px",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+        borderRadius: 16,
+        border: "1px solid rgba(255, 255, 255, 0.2)",
+        boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.1)", // 3D Effect
         display: "flex",
         flexDirection: "column",
         gap: theme.spacing(1),

@@ -64,7 +64,7 @@ const UpdateUserService = async ({
     profile: Yup.string(),
     password: Yup.string()
   });
-  
+
   const { name, email, password, profile, queueIds } = userData;
 
   try {
@@ -72,7 +72,7 @@ const UpdateUserService = async ({
   } catch (err: any) {
     throw new AppError(err.message);
   }
-  
+
   const dataToUpdate: UserData = {};
 
   if (userData.email) { dataToUpdate.email = userData.email; }
@@ -119,7 +119,7 @@ const UpdateUserService = async ({
   if ((userData as any).hasOwnProperty("supervisorViewMode")) {
     (dataToUpdate as any).supervisorViewMode = (userData as any).supervisorViewMode || "include";
   }
-  
+
   // Lógica especial para a conexão (whatsappId):
   // Só atualiza se o campo for enviado.
   if (userData.whatsappId !== undefined) {
@@ -127,6 +127,11 @@ const UpdateUserService = async ({
     // será convertido para null. Caso contrário, usa o valor recebido.
     // Isso é seguro para o TypeScript e resolve o problema do erro 500.
     dataToUpdate.whatsappId = !userData.whatsappId ? null : userData.whatsappId;
+  }
+
+  // Atualiza super apenas se enviado
+  if ((userData as any).hasOwnProperty("super")) {
+    (dataToUpdate as any).super = (userData as any).super;
   }
 
   await user.update(dataToUpdate);
@@ -146,7 +151,7 @@ const UpdateUserService = async ({
       password
     })
   }
-  
+
   const serializedUser = {
     id: user.id,
     name: user.name,
