@@ -594,6 +594,22 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
     }
 
     // Validar se participant é um número válido
+    // VALIDAÇÃO CRÍTICA: Rejeitar IDs Meta (> 13 dígitos) explicitamente
+    if (participantDigits.length > 13) {
+      debugLog("[getContactMessage] REJEITADO: Participant é um ID Meta (muito longo)", {
+        participantJid,
+        participantDigits,
+        length: participantDigits.length
+      });
+      // Retornar dados do GRUPO como fallback, não do participant inválido
+      return {
+        id: remoteJid,
+        name: msg.pushName || "Participante de Grupo",
+        isGroupParticipant: true,
+        participantName: msg.pushName // Guardar nome para uso futuro
+      };
+    }
+
     if (!looksPhoneLike(participantDigits)) {
       debugLog("[getContactMessage] AVISO: Participant de grupo com formato inválido", {
         participantJid,
@@ -607,13 +623,18 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
         contactJid = `${cleanJid}@s.whatsapp.net`;
         debugLog("[getContactMessage] Número extraído do JID", { contactJid });
       } else {
-        // Número inválido, não processar
-        debugLog("[getContactMessage] ERRO: Impossível extrair número válido do participant", {
+        // Número inválido, retornar dados do grupo como fallback
+        debugLog("[getContactMessage] AVISO: Impossível extrair número válido, usando grupo como fallback", {
           participantJid,
           cleanJid,
           length: cleanJid.length
         });
-        return null;
+        return {
+          id: remoteJid,
+          name: msg.pushName || "Participante de Grupo",
+          isGroupParticipant: true,
+          participantName: msg.pushName
+        };
       }
     } else {
       contactJid = participantJid;

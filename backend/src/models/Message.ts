@@ -64,14 +64,14 @@ class Message extends Model<Message> {
       const origin = be
         ? `${be}${proxyPort ? `:${proxyPort}` : ''}`
         : (fe || devFallback);
-      
+
       // Suporte a formato antigo (contacts/{uuid}/arquivo) e novo (contact{id}/arquivo)
       // Se fileRel já contém / (ex: contact1676/arquivo.jpg), usa direto
       // Se não contém / (ex: arquivo.jpg ou uuid/arquivo.jpg antigo), assume formato novo
       const path = fileRel.includes('/')
         ? fileRel  // Novo formato: contact1676/arquivo.jpg ou UUID antigo
         : `contact${this.contactId}/${fileRel}`;  // Fallback: só nome do arquivo
-      
+
       const base = origin
         ? `${origin}/public/company${this.companyId}/${path}`
         : `/public/company${this.companyId}/${path}`;
@@ -135,7 +135,7 @@ class Message extends Model<Message> {
 
   @BelongsTo(() => Queue)
   queue: Queue;
-  
+
   @Column
   wid: string;
 
@@ -150,6 +150,9 @@ class Message extends Model<Message> {
   @Default(false)
   @Column
   isForwarded: boolean;
+
+  @Column(DataType.STRING)
+  senderName: string; // Nome do remetente em mensagens de grupo
 }
 
 export default Message;

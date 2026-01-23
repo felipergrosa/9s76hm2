@@ -1,0 +1,183 @@
+============================================================
+🔍 INVESTIGAÇÃO DE CONTATOS COM IDs META
+============================================================
+
+Total de contatos Meta com mensagens: 16
+
+------------------------------------------------------------
+📋 ID: 1902 | "Guirau" | 189025906368536
+   Mensagens: 19
+
+   🔶 MATCHES PARCIAIS:
+      → ID 1453: "Gui Franca" (5519998584050)
+      → ID 1588: "Gui Vieira" (5519992650378)
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 122: Contato "Casal Milhas✈️🌍" (120363025851093481) - 19 msgs
+
+------------------------------------------------------------
+📋 ID: 1903 | "Paula Merlo" | 127367439745027
+   Mensagens: 1
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 122: Contato "Casal Milhas✈️🌍" (120363025851093481) - 1 msgs
+
+------------------------------------------------------------
+📋 ID: 1904 | "Gabi Victorino" | 255919971664119
+   Mensagens: 1
+
+   🔶 MATCHES PARCIAIS:
+      → ID 1868: "T Darc" (5519999918415)
+      → ID 1642: "Victor Hugo Bianchi" (5519982330006)
+      → ID 1146: "Gabi Pimentel" (5519982116182)
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 122: Contato "Casal Milhas✈️🌍" (120363025851093481) - 1 msgs
+
+------------------------------------------------------------
+📋 ID: 1906 | "Wellington" | 226980549161145
+   Mensagens: 2
+
+   🔶 MATCHES PARCIAIS:
+      → ID 1868: "T Darc" (5519999918415)
+      → ID 1740: "Wellington Pereira Trefita Aço" (5511981587822)
+      → ID 1644: "Wellington (BA)" (557388751847)
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 128: Contato "Bot Take - Robô De Forex 50" (120363238704190386) - 2 msgs
+
+------------------------------------------------------------
+📋 ID: 1907 | "Talita Rossetti" | 192264362004602
+   Mensagens: 1
+
+   🔶 MATCHES PARCIAIS:
+      → ID 1868: "T Darc" (5519999918415)
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 122: Contato "Casal Milhas✈️🌍" (120363025851093481) - 1 msgs
+
+------------------------------------------------------------
+📋 ID: 1909 | "REI DO GRÁFICO" | 255417796063486
+   Mensagens: 1
+
+   🔶 MATCHES PARCIAIS:
+      → ID 1886: "Fernanda Freitas - Nobre" (5519991537045)
+      → ID 1775: "Renato Rei Do Beirute" (558388150592)
+      → ID 1744: "Diônata Freitas HOTEL HURBANO" (5521997197399)
+      → ID 1811: "Reinaldo Caça Vasamento" (5519987664829)
+      → ID 1682: "Pedreiro Esmeraldo Alves" (5519997217008)
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 129: Contato "RËI DO GRÁFICO EA GRATUITO FBS 1" (120363267090360023) - 1 msgs
+
+------------------------------------------------------------
+📋 ID: 1910 | "Gerson" | 90117171585185
+   Mensagens: 1
+
+   🔶 MATCHES PARCIAIS:
+      → ID 1709: "RS Lava Estofados  Rafael" (5519996606323)
+      → ID 1506: "RS Lava Estofados  Rafael" (5519998212266)
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 101: Contato "Assinantes Adobe |🚀 Pelé do Motion" (120363420151117938) - 1 msgs
+
+------------------------------------------------------------
+📋 ID: 1911 | "Virginia Montone" | 128793234669727
+   Mensagens: 1
+
+   🔶 MATCHES PARCIAIS:
+      → ID 1868: "T Darc" (5519999918415)
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 122: Contato "Casal Milhas✈️🌍" (120363025851093481) - 1 msgs
+
+------------------------------------------------------------
+📋 ID: 1914 | "Mara" | 60773955068002
+   Mensagens: 1
+
+   🔶 MATCHES PARCIAIS:
+      → ID 1211: "Silmara Giorgiano" (5519997653837)
+      → ID 858: "Marcos Câmara Pedal" (5519998144188)
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 122: Contato "Casal Milhas✈️🌍" (120363025851093481) - 1 msgs
+
+------------------------------------------------------------
+📋 ID: 1917 | "Luiz Porto" | 72507654705273
+   Mensagens: 1
+
+   🔶 MATCHES PARCIAIS:
+      → ID 1756: "Luiz P. G. (Workana)" (5516992411822)
+      → ID 1868: "T Darc" (5519999918415)
+      → ID 1643: "Luiza Seguros" (5519997297862)
+      → ID 1822: "Jorge Luiz Marsola" (5519997848806)
+      → ID 1821: "Joao Luiz" (5519998499339)
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 108: Contato "MAMADEIRA TA CHEISS" (55199981373851434512022) - 1 msgs
+
+------------------------------------------------------------
+📋 ID: 1920 | "Marcieri Brucieri" | 220456477003800
+   Mensagens: 1
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 132: Contato "FAMÍLIA BRUCI 🩷🩵💙" (120363140641640274) - 1 msgs
+
+------------------------------------------------------------
+📋 ID: 1922 | "Fernando" | 26835039584463
+   Mensagens: 1
+
+   🔶 MATCHES PARCIAIS:
+      → ID 1145: "Fernando Mineiro Pedal" (553188176373)
+      → ID 994: "Fernando Tremonti - Programador Delphi" (5511987930593)
+      → ID 906: "Fernando Ralha DEV" (5521983610538)
+      → ID 990: "Fernando Ribeiro" (5519997968988)
+      → ID 1035: "Fernando Rossi" (5519996320860)
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 132: Contato "FAMÍLIA BRUCI 🩷🩵💙" (120363140641640274) - 1 msgs
+
+------------------------------------------------------------
+📋 ID: 1924 | "Sonia" | 21732987519073
+   Mensagens: 1
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 132: Contato "FAMÍLIA BRUCI 🩷🩵💙" (120363140641640274) - 1 msgs
+
+------------------------------------------------------------
+📋 ID: 1925 | "Edilson Brucieri" | 27569646764286
+   Mensagens: 1
+
+   🔶 MATCHES PARCIAIS:
+      → ID 1823: "Ed Carlos - Ferro Store" (551935434440)
+      → ID 1802: "Ed Ribeiro Linkdim - Sketchup" (556298096581)
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 132: Contato "FAMÍLIA BRUCI 🩷🩵💙" (120363140641640274) - 1 msgs
+
+------------------------------------------------------------
+📋 ID: 1927 | "Pelé do Motion" | 143383624417386
+   Mensagens: 2
+
+   🔶 MATCHES PARCIAIS:
+      → ID 1868: "T Darc" (5519999918415)
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 101: Contato "Assinantes Adobe |🚀 Pelé do Motion" (120363420151117938) - 2 msgs
+
+------------------------------------------------------------
+📋 ID: 1928 | "Marcela" | 74693876920483
+   Mensagens: 2
+
+   🔶 MATCHES PARCIAIS:
+      → ID 855: "Marcela Brucieri Oliveira" (5519991427027)
+
+   📨 TICKETS COM MENSAGENS DESTE CONTATO:
+      → Ticket 132: Contato "FAMÍLIA BRUCI 🩷🩵💙" (120363140641640274) - 2 msgs
+
+
+============================================================
+💡 COMANDOS SQL PARA MERGE MANUAL:
+============================================================
+
+[32mINFO[39m [22-01-2026 23:10:27]: [36m✅ Database connected successfully[39m

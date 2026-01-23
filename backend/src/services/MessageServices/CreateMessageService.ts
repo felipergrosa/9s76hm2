@@ -27,6 +27,7 @@ export interface MessageData {
   isForwarded?: boolean;
   remoteJid?: string | null;
   isCampaign?: boolean; // Se true, não emite para a sala da conversa (background)
+  senderName?: string; // Nome do remetente em mensagens de grupo
 }
 interface Request {
   messageData: MessageData;

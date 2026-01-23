@@ -1,0 +1,116 @@
+============================================================
+🔧 MIGRAÇÃO: MENSAGENS DE CONTATOS META PARA GRUPOS
+============================================================
+Modo: ⚡ EXECUÇÃO REAL
+============================================================
+
+🔎 Buscando contatos Meta com mensagens em tickets de grupos...
+
+📊 Encontrados 16 registros
+
+📋 16 contatos Meta únicos
+
+
+📋 Contato Meta ID 1902: "Guirau"
+   Número: 189025906368536
+   → Ticket 122 (Casal Milhas✈️🌍): 19 msgs
+   ✅ 19 mensagens migradas para grupo
+   ✅ Contato Meta 1902 deletado
+
+📋 Contato Meta ID 1903: "Paula Merlo"
+   Número: 127367439745027
+   → Ticket 122 (Casal Milhas✈️🌍): 1 msgs
+   ✅ 1 mensagens migradas para grupo
+   ✅ Contato Meta 1903 deletado
+
+📋 Contato Meta ID 1904: "Gabi Victorino"
+   Número: 255919971664119
+   → Ticket 122 (Casal Milhas✈️🌍): 1 msgs
+   ✅ 1 mensagens migradas para grupo
+   ✅ Contato Meta 1904 deletado
+
+📋 Contato Meta ID 1906: "Wellington"
+   Número: 226980549161145
+   → Ticket 128 (Bot Take - Robô De Forex 50): 2 msgs
+   ✅ 2 mensagens migradas para grupo
+   ✅ Contato Meta 1906 deletado
+
+📋 Contato Meta ID 1907: "Talita Rossetti"
+   Número: 192264362004602
+   → Ticket 122 (Casal Milhas✈️🌍): 1 msgs
+   ✅ 1 mensagens migradas para grupo
+   ✅ Contato Meta 1907 deletado
+
+📋 Contato Meta ID 1909: "REI DO GRÁFICO"
+   Número: 255417796063486
+   → Ticket 129 (RËI DO GRÁFICO EA GRATUITO FBS 1): 1 msgs
+   ✅ 1 mensagens migradas para grupo
+   ✅ Contato Meta 1909 deletado
+
+📋 Contato Meta ID 1910: "Gerson"
+   Número: 90117171585185
+   → Ticket 101 (Assinantes Adobe |🚀 Pelé do Motion): 1 msgs
+   ✅ 1 mensagens migradas para grupo
+   ✅ Contato Meta 1910 deletado
+
+📋 Contato Meta ID 1911: "Virginia Montone"
+   Número: 128793234669727
+   → Ticket 122 (Casal Milhas✈️🌍): 1 msgs
+   ✅ 1 mensagens migradas para grupo
+   ✅ Contato Meta 1911 deletado
+
+📋 Contato Meta ID 1914: "Mara"
+   Número: 60773955068002
+   → Ticket 122 (Casal Milhas✈️🌍): 1 msgs
+   ✅ 1 mensagens migradas para grupo
+   ✅ Contato Meta 1914 deletado
+
+📋 Contato Meta ID 1917: "Luiz Porto"
+   Número: 72507654705273
+   → Ticket 108 (MAMADEIRA TA CHEISS): 1 msgs
+   ✅ 1 mensagens migradas para grupo
+   ✅ Contato Meta 1917 deletado
+
+📋 Contato Meta ID 1920: "Marcieri Brucieri"
+   Número: 220456477003800
+   → Ticket 132 (FAMÍLIA BRUCI 🩷🩵💙): 1 msgs
+   ✅ 1 mensagens migradas para grupo
+   ✅ Contato Meta 1920 deletado
+
+📋 Contato Meta ID 1922: "Fernando"
+   Número: 26835039584463
+   → Ticket 132 (FAMÍLIA BRUCI 🩷🩵💙): 1 msgs
+   ✅ 1 mensagens migradas para grupo
+[32mINFO[39m [22-01-2026 23:54:20]: [36m✅ Database connected successfully[39m
+   ✅ Contato Meta 1922 deletado
+
+📋 Contato Meta ID 1924: "Sonia"
+   Número: 21732987519073
+   → Ticket 132 (FAMÍLIA BRUCI 🩷🩵💙): 1 msgs
+   ✅ 1 mensagens migradas para grupo
+   ✅ Contato Meta 1924 deletado
+
+📋 Contato Meta ID 1925: "Edilson Brucieri"
+   Número: 27569646764286
+   → Ticket 132 (FAMÍLIA BRUCI 🩷🩵💙): 1 msgs
+   ✅ 1 mensagens migradas para grupo
+   ✅ Contato Meta 1925 deletado
+
+📋 Contato Meta ID 1927: "Pelé do Motion"
+   Número: 143383624417386
+   → Ticket 101 (Assinantes Adobe |🚀 Pelé do Motion): 2 msgs
+   ✅ 2 mensagens migradas para grupo
+   ✅ Contato Meta 1927 deletado
+
+📋 Contato Meta ID 1928: "Marcela"
+   Número: 74693876920483
+   → Ticket 132 (FAMÍLIA BRUCI 🩷🩵💙): 2 msgs
+   ✅ 2 mensagens migradas para grupo
+   ✅ Contato Meta 1928 deletado
+
+============================================================
+📊 RESUMO
+============================================================
+Mensagens migradas: 019112111111111122
+Contatos deletados: 16
+============================================================
