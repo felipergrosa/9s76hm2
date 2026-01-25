@@ -20,7 +20,6 @@ export const StartWhatsAppSessionUnified = async (
 
   logger.info(`[StartSession] Iniciando ${channelType} para whatsappId=${whatsapp.id}`);
 
-  await whatsapp.update({ status: "OPENING" });
 
   const io = getIO();
   io.of(`/workspace-${companyId}`)
@@ -42,6 +41,8 @@ export const StartWhatsAppSessionUnified = async (
         logger.info(`[StartSession] Sessão Baileys ${whatsapp.name} (#${whatsapp.id}) já gerenciada por outra instância. Pulando.`);
         return;
       }
+
+      await whatsapp.update({ status: "OPENING" });
 
       // Intervalo de heartbeat para manter o lock ativo (CRÍTICO para evitar que o HealthCheck derrube)
       let baileysHeartbeat: NodeJS.Timeout | null = setInterval(async () => {
@@ -93,6 +94,8 @@ export const StartWhatsAppSessionUnified = async (
         logger.info(`[StartSession] Sessão Official ${whatsapp.name} (#${whatsapp.id}) já gerenciada por outra instância. Pulando.`);
         return;
       }
+
+      await whatsapp.update({ status: "OPENING" });
 
       // Intervalo de heartbeat para manter o lock ativo
       let lockHeartbeat: NodeJS.Timeout | null = setInterval(async () => {

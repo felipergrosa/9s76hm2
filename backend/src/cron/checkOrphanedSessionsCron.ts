@@ -11,7 +11,7 @@ export const checkOrphanedSessionsCron = () => {
         try {
             const whatsapps = await Whatsapp.findAll({
                 where: {
-                    status: "CONNECTED",
+                    status: { [Op.or]: ["CONNECTED", "OPENING"] },
                     channel: "whatsapp"
                 }
             });
