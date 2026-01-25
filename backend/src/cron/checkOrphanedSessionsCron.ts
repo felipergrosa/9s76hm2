@@ -35,5 +35,5 @@ export const checkOrphanedSessionsCron = () => {
         } catch (err) {
             logger.error(`[OrphanedCron] Erro: ${err}`);
         }
-    }, 60000);
+    }, 10000); // 10s
 };

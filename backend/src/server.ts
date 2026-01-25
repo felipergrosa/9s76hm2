@@ -26,7 +26,6 @@ app.get('/health', (req, res) => {
 import { initIO } from "./libs/socket";
 import logger from "./utils/logger";
 import { StartAllWhatsAppsSessions } from "./services/WbotServices/StartAllWhatsAppsSessions";
-import { clearSessionLocks } from "./libs/wbotMutex";
 import Company from "./models/Company";
 import BullQueue from './libs/queue';
 import { initSavedFilterCron } from "./jobs/SavedFilterCronManager";
@@ -166,9 +165,6 @@ const server = app.listen(port, async () => {
   });
 
   const allPromises: any[] = [];
-
-  // Limpar locks antigos antes de iniciar QUALQUER sessão no startup
-  await clearSessionLocks();
 
   companies.forEach(c => {
     const promise = StartAllWhatsAppsSessions(c.id).catch(err => {

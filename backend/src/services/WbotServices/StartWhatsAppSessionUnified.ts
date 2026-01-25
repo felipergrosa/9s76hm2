@@ -52,7 +52,7 @@ export const StartWhatsAppSessionUnified = async (
           // O próprio Baileys pode continuar rodando até que o 'Write Fencing' o bloqueie.
           if (baileysHeartbeat) clearInterval(baileysHeartbeat);
         }
-      }, 15000); // 15s
+      }, 7000); // 7s
 
       const wbot = await initWASocket(whatsapp);
 
@@ -104,7 +104,7 @@ export const StartWhatsAppSessionUnified = async (
           // Vamos limpar o intervalo e deixar que o novo dono assuma.
           if (lockHeartbeat) clearInterval(lockHeartbeat);
         }
-      }, 15000); // 15s
+      }, 7000); // 7s
 
       try {
         // Criar adapter da API oficial

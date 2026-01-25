@@ -1,8 +1,8 @@
 import logger from "../utils/logger";
 import cacheLayer from "./cache";
 
-const LOCK_TTL_SECONDS = 45;
-const LOCK_RENEW_INTERVAL_MS = 15000;
+const LOCK_TTL_SECONDS = 20;
+const LOCK_RENEW_INTERVAL_MS = 7000;
 
 export const getLockKey = (whatsappId: number | string) => `wbot:mutex:${whatsappId}`;
 
