@@ -133,7 +133,7 @@ const TicketsCustom = () => {
 			<div className={classes.chatContainer}>
 				<div className={classes.chatPapper}>
 					<div
-						className={classes.contactsWrapper}
+						className={`${classes.contactsWrapper} contacts-wrapper`}
 						style={{ width: ticketsManagerWidth }}
 					>
 						<TicketsManager />
