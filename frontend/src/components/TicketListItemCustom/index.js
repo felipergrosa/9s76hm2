@@ -765,7 +765,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     handleSelectTicket(ticket);
                 }}
                 selected={ticketId && ticketId === ticket.uuid}
-                className={clsx(classes.ticket, {
+                className={clsx(classes.ticket, "ticket-list-item-core", {
                     [classes.pendingTicket]: ticket.status === "pending",
                 })}
                 style={{

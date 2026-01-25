@@ -445,6 +445,7 @@
 
 /* Remover cantos arredondados do Header do Ticket - REFORÇADO */
 .modern-ui [class*="ticketHeader"],
+.modern-ui .ticket-header-core,
 .modern-ui .MuiCard-root[class*="ticketHeader"],
 .modern-ui .MuiPaper-root[class*="ticketHeader"] {
     border-radius: 0 !important;
@@ -477,7 +478,8 @@
 /* FORÇAR LISTA PLANA (FLAT LIST) - REMOVER ESTILO DE CARD/BOLHA DOS ITENS */
 .modern-ui .tickets-list-wrapper .MuiListItem-root,
 .modern-ui .contacts-wrapper .MuiListItem-root,
-.modern-ui .tickets-wrapper .MuiListItem-root {
+.modern-ui .tickets-wrapper .MuiListItem-root,
+.modern-ui .ticket-list-item-core {
     background: transparent !important;
     background-color: transparent !important;
     box-shadow: none !important;

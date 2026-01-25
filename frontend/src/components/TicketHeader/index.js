@@ -54,7 +54,7 @@ const TicketHeader = ({ loading, children }) => {
 			) : (
 				<Card
 					square
-					className={classes.ticketHeader}
+					className={`${classes.ticketHeader} ticket-header-core`}
 				>
 					<IconButton
 						color="primary"
