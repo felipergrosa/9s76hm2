@@ -53,9 +53,9 @@ const useStyles = makeStyles((theme) => ({
 		textAlign: "center",
 	},
 	dragger: {
-		width: "5px",
+		width: "1px",
 		cursor: "ew-resize",
-		padding: "4px 0 0",
+		padding: "0px 0 0",
 		borderTop: "1px solid #ddd",
 		position: "absolute",
 		top: 0,

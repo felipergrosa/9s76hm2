@@ -27,7 +27,6 @@
     backdrop-filter: blur(12px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
     border: 1px solid var(--border) !important;
-    border-radius: 16px !important;
     box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07) !important;
 }
 
@@ -389,12 +388,12 @@
 }
 
 /* Tickets Page - Remover bordas arredondadas excessivas */
-.modern-ui [class*="ticketsWrapper"] .MuiPaper-root,
-.modern-ui [class*="contactsWrapper"] .MuiPaper-root,
-.modern-ui [class*="chatContainer"] .MuiPaper-root,
-.modern-ui [class*="chatPapper"] .MuiPaper-root,
-.modern-ui [class*="messagesWrapper"] .MuiPaper-root,
-.modern-ui [class*="messageInputWrapper"] {
+.modern-ui .tickets-wrapper .MuiPaper-root,
+.modern-ui .contacts-wrapper .MuiPaper-root,
+.modern-ui .chat-container .MuiPaper-root,
+.modern-ui .chat-paper .MuiPaper-root,
+.modern-ui .messages-wrapper .MuiPaper-root,
+.modern-ui .message-input-wrapper {
     border-radius: 0 !important;
     border: none !important;
     box-shadow: none !important;
@@ -424,20 +423,89 @@
     -webkit-backdrop-filter: none !important;
 }
 
-/* Tickets Page - Containers principais sem bordas arredondadas */
-.modern-ui [class*="ticketsWrapper"],
-.modern-ui [class*="contactsWrapper"],
-.modern-ui [class*="messagesWrapper"],
-.modern-ui [class*="chatPapper"],
-.modern-ui [class*="chatContainer"] {
+/* Tickets Page - Containers principais sem bordas arredondadas mas com BORDA */
+.modern-ui .tickets-wrapper,
+.modern-ui .contacts-wrapper,
+.modern-ui .messages-wrapper,
+.modern-ui .chat-paper,
+.modern-ui .chat-container {
     border-radius: 0 !important;
+    border: 1px solid var(--border) !important;
+    /* Restaurar borda do container principal */
+}
+
+/* Chat Container - Ajustes para bordas visíveis */
+.modern-ui .chat-paper,
+.modern-ui .chat-container {
+    overflow: visible !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 0 !important;
+    /* Adicionar um pequeno espaçamento se necessário, mas geralmente o chat ocupa o resto */
+}
+
+/* Remover cantos arredondados do Header do Ticket - REFORÇADO */
+.modern-ui [class*="ticketHeader"],
+.modern-ui .MuiCard-root[class*="ticketHeader"],
+.modern-ui .MuiPaper-root[class*="ticketHeader"] {
+    border-radius: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
     border: none !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.12) !important;
+    box-shadow: none !important;
+}
+
+/* Remover borda duplicada apenas se necessário - mas o container PRECISA de borda */
+.modern-ui .tickets-wrapper,
+.modern-ui .contacts-wrapper {
+    border-top: none !important;
+    /* Opcional: se o header já tiver borda */
+    border-bottom: none !important;
+    border-right: 1px solid var(--border) !important;
+    border-left: 1px solid var(--border) !important;
 }
 
 /* Tickets Page - ticketsWrapper ajustes de padding/overflow */
-.modern-ui [class*="ticketsWrapper"] {
+.modern-ui .tickets-wrapper {
     overflow: visible !important;
-    padding-right: 1.6px !important;
+    padding-right: 0px !important;
+    /* Reset padding para a borda ficar colada */
+}
+
+/* FORÇAR LISTA PLANA (FLAT LIST) - REMOVER ESTILO DE CARD/BOLHA DOS ITENS */
+.modern-ui .tickets-list-wrapper .MuiListItem-root,
+.modern-ui .contacts-wrapper .MuiListItem-root,
+.modern-ui .tickets-wrapper .MuiListItem-root {
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.modern-ui .tickets-list-wrapper .MuiListItem-root:hover,
+.modern-ui .contacts-wrapper .MuiListItem-root:hover,
+.modern-ui .tickets-wrapper .MuiListItem-root:hover {
+    background-color: rgba(0, 0, 0, 0.03) !important;
+    transform: none !important;
+}
+
+.modern-ui .tickets-list-wrapper .MuiListItem-root.Mui-selected,
+.modern-ui .contacts-wrapper .MuiListItem-root.Mui-selected,
+.modern-ui .tickets-wrapper .MuiListItem-root.Mui-selected {
+    background-color: rgba(0, 0, 0, 0.06) !important;
+    border-left: 4px solid var(--primary-color) !important;
+}
+
+/* Remover bolhas dos contatos da lista */
+.modern-ui .contacts-wrapper .MuiListItem-root {
+    padding: 8px 16px !important;
 }
 
 /* Tickets Page - Ajustar margens para não cortar bordas */

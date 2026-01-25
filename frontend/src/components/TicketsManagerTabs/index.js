@@ -640,7 +640,7 @@ const TicketsManagerTabs = () => {
         onClose={() => setBulkProcessModalOpen(false)}
         initialFilters={{ status: tab }}
       />
-      <Paper elevation={0} variant="outlined" className={classes.ticketsWrapper}>
+      <Paper elevation={0} variant="outlined" className={`${classes.ticketsWrapper} tickets-wrapper`}>
         <div className={classes.serachInputWrapper}>
           <SearchIcon className={classes.searchIcon} />
           <InputBase

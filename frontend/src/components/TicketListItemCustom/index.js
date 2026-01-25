@@ -773,7 +773,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     paddingBottom: theme.spacing(2.5), // espaço para os botões no rodapé
                 }}
             >
-                <ListItemAvatar style={{ marginLeft: "-15px" }}>
+                <ListItemAvatar style={{ marginLeft: "-10px" }}>
                     <div className={classes.avatarContainer}>
                         <ContactAvatar
                             contact={ticket?.contact}

@@ -380,10 +380,16 @@ const App = () => {
 
     getPublicSetting("viewMode")
       .then((view) => {
-        setViewMode(view || "modern");
+        // Força o modo moderno se não estiver definido ou se for "classic" para garantir paridade
+        if (!view || view === "classic") {
+          setViewMode("modern");
+        } else {
+          setViewMode(view);
+        }
       })
       .catch((error) => {
         console.log("Error reading setting viewMode", error);
+        setViewMode("modern"); // Fallback seguro
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

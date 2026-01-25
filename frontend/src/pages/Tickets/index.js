@@ -58,23 +58,23 @@ const Chat = () => {
 	const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
 	return (
-		<div className={classes.chatContainer}>
-			<div className={classes.chatPapper}>
+		<div className={`${classes.chatContainer} chat-container`}>
+			<div className={`${classes.chatPapper} chat-paper`}>
 				<Grid container spacing={0}>
 					{/* Em mobile: mostra lista OU ticket. Em desktop: mostra ambos */}
 					{(!isMobile || !ticketId) && (
-						<Grid item xs={isMobile ? 12 : 4} className={classes.contactsWrapper}>
+						<Grid item xs={isMobile ? 12 : 4} className={`${classes.contactsWrapper} contacts-wrapper`}>
 							<TicketsManager />
 						</Grid>
 					)}
 					{(!isMobile || ticketId) && (
-						<Grid item xs={isMobile ? 12 : 8} className={classes.messagessWrapper}>
+						<Grid item xs={isMobile ? 12 : 8} className={`${classes.messagessWrapper} messages-wrapper`}>
 							{ticketId ? (
 								<>
 									<Ticket />
 								</>
 							) : (
-								<Paper square variant="outlined" className={classes.welcomeMsg}>
+								<Paper square variant="outlined" className={`${classes.welcomeMsg} welcome-message`}>
 									<span>
 										<center>
 											<img className={classes.logo} width="50%" alt="" />

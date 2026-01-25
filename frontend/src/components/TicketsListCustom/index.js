@@ -404,7 +404,7 @@ const TicketsListCustom = (props) => {
     }
 
     return (
-        <Paper className={classes.ticketsListWrapper} style={style}>
+        <Paper className={`${classes.ticketsListWrapper} tickets-list-wrapper`} style={style}>
             <Paper
                 square
                 name="closed"
