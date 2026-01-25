@@ -148,6 +148,7 @@
     background: var(--sidebar-bg) !important;
     backdrop-filter: blur(10px) !important;
     border-right: 1px solid var(--border) !important;
+    border-radius: 0 !important;
 }
 
 .modern-ui .MuiListItem-root {
@@ -194,10 +195,11 @@
 
 /* Header Modernization */
 .modern-ui .MuiAppBar-root {
-    background: rgba(255, 255, 255, 0.6) !important;
+    background: linear-gradient(to left, color-mix(in srgb, var(--primary-color) 20%, transparent), rgba(255, 255, 255, 0.1)) !important;
     backdrop-filter: blur(10px) !important;
     border-bottom: 1px solid var(--border) !important;
     box-shadow: none !important;
+    border-radius: 0 !important;
 }
 
 /* Header Icons - Cores e Hover */

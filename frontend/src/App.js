@@ -36,7 +36,7 @@ const App = () => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   // Modal de desconexão do WhatsApp
   const [waConnLost, setWaConnLost] = useState({ open: false, data: null });
-  const [viewMode, setViewMode] = useState("classic");
+  const [viewMode, setViewMode] = useState("modern");
 
   const colorMode = useMemo(
     () => ({
@@ -380,7 +380,7 @@ const App = () => {
 
     getPublicSetting("viewMode")
       .then((view) => {
-        setViewMode(view || "classic");
+        setViewMode(view || "modern");
       })
       .catch((error) => {
         console.log("Error reading setting viewMode", error);
