@@ -104,3 +104,26 @@ export const releaseWbotLock = async (whatsappId: number | string): Promise<void
         logger.error(`[WbotMutex] Erro ao liberar lock: ${err}`);
     }
 };
+
+/**
+ * Verifica se esta instância ainda é a dona do lock.
+ * Útil para "Write Fencing" (impedir escritas de zumbis).
+ */
+export const checkWbotLock = async (whatsappId: number | string): Promise<boolean> => {
+    const key = getLockKey(whatsappId);
+    const redis = cacheLayer.getRedisInstance();
+    if (!redis) return true;
+
+    const ownerId = process.env.HOSTNAME || `instance-${process.pid}`;
+
+    try {
+        const currentOwner = await redis.get(key);
+        // Se não tem dono, ou o dono é outro, retorna false
+        return currentOwner === ownerId;
+    } catch (err) {
+        logger.error(`[WbotMutex] Erro ao checar lock: ${err}`);
+        // Em caso de erro no Redis, por segurança, assumimos false para evitar corrupção
+        return false;
+    }
+};
+

@@ -7,6 +7,7 @@ import {
 import { initAuthCreds } from "@whiskeysockets/baileys";
 import { BufferJSON } from "@whiskeysockets/baileys";
 import cacheLayer from "../libs/cache";
+import { checkWbotLock } from "../libs/wbotMutex";
 import Whatsapp from "../models/Whatsapp";
 import fs from "fs";
 import path from "path";
@@ -30,11 +31,11 @@ export const useMultiFileAuthState = async (
     console.log(
       `[BaileysAuth] driver=${driver} baseDir=${baseDir} whatsappId=${whatsapp.id} companyId=${whatsapp.companyId}`
     );
-  } catch {}
+  } catch { }
 
   const ensureDir = async () => {
     if (driver === "fs") {
-      await fs.promises.mkdir(baseDir, { recursive: true }).catch(() => {});
+      await fs.promises.mkdir(baseDir, { recursive: true }).catch(() => { });
     }
   };
 
@@ -46,7 +47,7 @@ export const useMultiFileAuthState = async (
       .replace(/[<>:\\"/\\|?*]/g, "_") // caracteres inválidos gerais
       .replace(/@/g, "_at_")
       .replace(/::/g, "__");
-    
+
     // Hash MD5 curto (6 chars) do nome original para diferenciar case (ex: "Key" vs "key")
     const hash = crypto.createHash("md5").update(name).digest("hex").slice(0, 6);
     return `${valid}-${hash}`;
@@ -57,6 +58,14 @@ export const useMultiFileAuthState = async (
   const writeData = async (data: any, file: string) => {
     try {
       if (driver === "redis") {
+        // Write Fencing: Antes de escrever, verifica se ainda somos o dono da sessão
+        // Isso impede que réplicas "zumbi" corrompam a sessão de uma instância nova
+        const isOwner = await checkWbotLock(whatsapp.id);
+        if (!isOwner) {
+          console.error(`[BaileysAuth] FENCING: Bloqueando escrita de ZUMBI para whatsappId=${whatsapp.id} (file=${file}). Lock perdido.`);
+          return null;
+        }
+
         await cacheLayer.set(
           `sessions:${whatsapp.id}:${file}`,
           JSON.stringify(data, BufferJSON.replacer)
@@ -97,9 +106,9 @@ export const useMultiFileAuthState = async (
         await cacheLayer.del(`sessions:${whatsapp.id}:${file}`);
       } else {
         const p = fsPathFor(file);
-        await fs.promises.unlink(p).catch(() => {});
+        await fs.promises.unlink(p).catch(() => { });
       }
-    } catch {}
+    } catch { }
   };
 
   const rawStoredCreds = await readData("creds");
