@@ -165,28 +165,11 @@ import { acquireWbotLock, renewWbotLock, releaseWbotLock } from "./wbotMutex";
 export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
   return new Promise(async (resolve, reject) => {
     try {
-      // 1. Tenta adquirir o Lock (Leader Election)
-      // Se falhar, significa que outro container já está rodando esta sessão.
-      const hasLock = await acquireWbotLock(whatsapp.id);
-      if (!hasLock) {
-        logger.info(`[Shard] Sessão ${whatsapp.name} (#${whatsapp.id}) já gerenciada por outra instância. Pulando.`);
-        // Resolvemos com null para indicar que não foi iniciada aqui
-        return resolve(null as any);
-      }
+      // Lock já adquirido pelo StartWhatsAppSessionUnified.ts
+      // Apenas inicializar o socket aqui.
 
       // declarando wsocket fora do setInterval para ser acessvel
       let wsocket: Session = null;
-      // Intervalo de heartbeat para manter o lock ativo
-      let lockHeartbeat: NodeJS.Timeout | null = setInterval(async () => {
-        const renewed = await renewWbotLock(whatsapp.id);
-        if (!renewed) {
-          logger.warn(`[Shard] Perda de lock para sessão ${whatsapp.id}. Encerrando conexão.`);
-          if (wsocket) {
-            wsocket.end(new Error("Lock lost")); // Força desconexão se perder o lock
-            if (lockHeartbeat) clearInterval(lockHeartbeat);
-          }
-        }
-      }, 15000); // 15s
 
       (async () => {
         const io = getIO();
@@ -196,9 +179,15 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         });
 
         if (!whatsappUpdate) {
-          if (lockHeartbeat) clearInterval(lockHeartbeat);
-          await releaseWbotLock(whatsapp.id);
-          return;
+          // O lock será liberado pelo caller (StartWhatsAppSessionUnified) se retornarmos
+          // Mas como estamos dentro de uma Promise async, o caller já pode ter seguido?
+          // Não, o caller está esperando o `await initWASocket`.
+          // Porém, aqui estamos dentro de uma IIFE (async () => {}) dentro da Promise.
+          // Se retornarmos aqui, a Promise externa NUNCA resolve.
+
+          // CORREÇÃO: Devemos dar reject ou resolve(null) aqui.
+          // Como o Unified espera wbot ou null, vamos resolver com null.
+          return resolve(null as any);
         }
 
         const { id, name, allowGroup, companyId } = whatsappUpdate;
@@ -260,7 +249,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         wsocket.ev.on("connection.update", async (update) => {
           const { connection } = update;
           if (connection === 'close') {
-            if (lockHeartbeat) clearInterval(lockHeartbeat);
+            // Nota: lock heartbeat agora gerenciado externamente pelo Unified Service.
+            // wbot.ts não tem mais controle sobre reconexão persistente do lock.
             // Nota: releaselock será chamado se for logout ou invalido,
             // mas se for reconexão temporária? 
             // Se reconectar, o INIT é chamado de novo? NÃO. O makeWASocket gerencia reconexão interna?
