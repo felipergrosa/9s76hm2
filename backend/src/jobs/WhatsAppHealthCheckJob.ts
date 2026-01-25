@@ -7,6 +7,7 @@
 
 import Whatsapp from "../models/Whatsapp";
 import { getWbot, removeWbot, getWbotIsReconnecting } from "../libs/wbot";
+import { getWbotLockOwner, getCurrentInstanceId } from "../libs/wbotMutex";
 import { StartWhatsAppSessionUnified as StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSessionUnified";
 import { getIO } from "../libs/socket";
 import logger from "../utils/logger";
@@ -189,8 +190,18 @@ async function runHealthCheck(): Promise<void> {
                 healthyCount++;
                 logger.debug(`[WhatsAppHealthCheck] whatsappId=${id} (${name}): saudável`);
             } else {
+                // Verificar se a sessão está ativa em OUTRO nó (Sharding)
+                const lockOwner = await getWbotLockOwner(id);
+                const myId = getCurrentInstanceId();
+
+                if (lockOwner && lockOwner !== myId) {
+                    logger.debug(`[WhatsAppHealthCheck] whatsappId=${id} (${name}): saudável (REMOTO em ${lockOwner})`);
+                    healthyCount++; // Conta como saudável pois está rodando no cluster
+                    continue; // Não tenta reconectar
+                }
+
                 unhealthyCount++;
-                logger.warn(`[WhatsAppHealthCheck] whatsappId=${id} (${name}): não saudável - ${check.reason}`);
+                logger.warn(`[WhatsAppHealthCheck] whatsappId=${id} (${name}): não saudável - ${check.reason} (Owner: ${lockOwner || "Nenhum"})`);
 
                 // REABILITADO: Reconexão automática com proteções de cooldown (5 min) e verificação de conflito
                 // As proteções já existem em canAttemptReconnect() e attemptReconnect()

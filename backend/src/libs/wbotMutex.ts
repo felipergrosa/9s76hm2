@@ -6,6 +6,10 @@ const LOCK_RENEW_INTERVAL_MS = 15000;
 
 export const getLockKey = (whatsappId: number | string) => `wbot:mutex:${whatsappId}`;
 
+export const getCurrentInstanceId = (): string => {
+    return process.env.HOSTNAME || `instance-${process.pid}`;
+};
+
 /**
  * Tenta adquirir o lock para controlar a sessão do WhatsApp.
  * Retorna true se conseguiu o lock (é o líder), false se já existe outro dono.
@@ -20,7 +24,7 @@ export const acquireWbotLock = async (whatsappId: number | string): Promise<bool
     }
 
     // Identificador único deste processo/instância
-    const ownerId = process.env.HOSTNAME || `instance-${process.pid}`;
+    const ownerId = getCurrentInstanceId();
 
     try {
         // SET key value NX EX ttl
@@ -124,6 +128,22 @@ export const checkWbotLock = async (whatsappId: number | string): Promise<boolea
         logger.error(`[WbotMutex] Erro ao checar lock: ${err}`);
         // Em caso de erro no Redis, por segurança, assumimos false para evitar corrupção
         return false;
+    }
+};
+
+/**
+ * Retorna o dono atual do lock (se houver).
+ */
+export const getWbotLockOwner = async (whatsappId: number | string): Promise<string | null> => {
+    const key = getLockKey(whatsappId);
+    const redis = cacheLayer.getRedisInstance();
+    if (!redis) return null;
+
+    try {
+        return await redis.get(key);
+    } catch (err) {
+        logger.error(`[WbotMutex] Erro ao obter lock owner: ${err}`);
+        return null;
     }
 };
 
