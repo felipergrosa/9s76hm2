@@ -34,12 +34,32 @@ export const StartWhatsAppSessionUnified = async (
       // ===== BAILEYS (não oficial) =====
       logger.info(`[StartSession] Usando Baileys para whatsappId=${whatsapp.id}`);
 
+      // 1. Tenta adquirir o Lock (Leader Election)
+      // Embora o initWASocket chame o acquireWbotLock, precisamos controlar o heartbeat aqui
+      // Se não conseguirmos o lock aqui, nem tentamos iniciar o socket
+      const hasLock = await acquireWbotLock(whatsapp.id);
+      if (!hasLock) {
+        logger.info(`[StartSession] Sessão Baileys ${whatsapp.name} (#${whatsapp.id}) já gerenciada por outra instância. Pulando.`);
+        return;
+      }
+
+      // Intervalo de heartbeat para manter o lock ativo (CRÍTICO para evitar que o HealthCheck derrube)
+      let baileysHeartbeat: NodeJS.Timeout | null = setInterval(async () => {
+        const renewed = await renewWbotLock(whatsapp.id);
+        if (!renewed) {
+          logger.warn(`[StartSession] Baileys: Perda de lock para whatsappId=${whatsapp.id}.`);
+          // Se perdemos o lock, outra instância assumiu. Devemos parar de renovar.
+          // O próprio Baileys pode continuar rodando até que o 'Write Fencing' o bloqueie.
+          if (baileysHeartbeat) clearInterval(baileysHeartbeat);
+        }
+      }, 15000); // 15s
+
       const wbot = await initWASocket(whatsapp);
 
-      // se retornou null, é pq outra instancia pegou o lock
+      // se retornou null, é pq houve algum erro na inicialização
       if (!wbot) {
-        // Não é erro, é comportamento esperado de sharding
-        // logger.info("[StartSession] Sessão gerenciada por outro nó. (Lock não adquirido)");
+        if (baileysHeartbeat) clearInterval(baileysHeartbeat);
+        await releaseWbotLock(whatsapp.id);
         return;
       }
 
@@ -48,7 +68,19 @@ export const StartWhatsAppSessionUnified = async (
         wbotMessageListener(wbot, companyId);
         wbotMonitor(wbot, whatsapp, companyId);
 
+        // Monitorar fechamento para limpar heartbeat
+        wbot.ev.on("connection.update", (update) => {
+          const { connection } = update;
+          if (connection === "close") {
+            if (baileysHeartbeat) clearInterval(baileysHeartbeat);
+            // O releaseWbotLock será chamado pelo handler de desconexão ou pelo wbot.ts
+          }
+        });
+
         logger.info(`[StartSession] Baileys iniciado com sucesso: ${wbot.user?.id}`);
+      } else {
+        // Casos raros onde wbot é criado mas sem ID (falha parcial)
+        if (baileysHeartbeat) clearInterval(baileysHeartbeat);
       }
 
     } else if (channelType === "official") {
