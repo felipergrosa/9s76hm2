@@ -163,3 +163,17 @@ export const getWbotLockOwner = async (whatsappId: number | string): Promise<str
     }
 };
 
+/**
+ * Limpa todos os locks de sessão do WhatsApp.
+ * DEVE ser usado apenas no startup do servidor em deployments SINGLE INSTANCE.
+ */
+export const clearSessionLocks = async (): Promise<void> => {
+    const pattern = "wbot:mutex:*";
+    try {
+        await cacheLayer.delFromPattern(pattern);
+        logger.info(`[WbotMutex] Todos os locks de sessão ('${pattern}') foram removidos.`);
+    } catch (err) {
+        logger.error(`[WbotMutex] Erro ao limpar locks de sessão: ${err}`);
+    }
+};
+
