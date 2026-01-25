@@ -14,26 +14,42 @@ export const getCurrentInstanceId = (): string => {
  * Tenta adquirir o lock para controlar a sessão do WhatsApp.
  * Retorna true se conseguiu o lock (é o líder), false se já existe outro dono.
  */
+/**
+ * Tenta adquirir o lock para controlar a sessão do WhatsApp.
+ * Suporta reentrância: se já sou o dono, renova e retorna true.
+ */
 export const acquireWbotLock = async (whatsappId: number | string): Promise<boolean> => {
     const key = getLockKey(whatsappId);
     const redis = cacheLayer.getRedisInstance();
 
     if (!redis) {
         logger.warn(`[WbotMutex] Redis indisponível, assumindo lock local para ${whatsappId}`);
-        return true; // Fallback para single instance se sem redis
+        return true;
     }
 
-    // Identificador único deste processo/instância
     const ownerId = getCurrentInstanceId();
 
     try {
-        // SET key value NX EX ttl
-        // NX: Só define se não existir
-        // EX: Expira em X segundos
-        const result = await redis.set(key, ownerId, "NX", "EX", LOCK_TTL_SECONDS);
+        // Lua script para atomicidade e reentrância
+        // 1. Se não existe: SET e retorna 1
+        // 2. Se existe e é meu: RENOVA (expire) e retorna 1
+        // 3. Se existe e não é meu: retorna 0
+        const script = `
+            if redis.call("exists", KEYS[1]) == 0 then
+                redis.call("set", KEYS[1], ARGV[1], "EX", ARGV[2])
+                return 1
+            elseif redis.call("get", KEYS[1]) == ARGV[1] then
+                redis.call("expire", KEYS[1], ARGV[2])
+                return 1
+            else
+                return 0
+            end
+        `;
 
-        if (result === "OK") {
-            logger.info(`[WbotMutex] Lock adquirido para whatsappId=${whatsappId} (owner=${ownerId})`);
+        const result = await redis.eval(script, 1, key, ownerId, LOCK_TTL_SECONDS);
+
+        if (result === 1) {
+            logger.info(`[WbotMutex] Lock adquirido/renovado para whatsappId=${whatsappId} (owner=${ownerId})`);
             return true;
         } else {
             const currentOwner = await redis.get(key);
