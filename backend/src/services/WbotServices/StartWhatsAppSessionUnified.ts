@@ -44,18 +44,27 @@ export const StartWhatsAppSessionUnified = async (
 
       await whatsapp.update({ status: "OPENING" });
 
+      let wbot: any = null;
+
       // Intervalo de heartbeat para manter o lock ativo (CRÍTICO para evitar que o HealthCheck derrube)
       let baileysHeartbeat: NodeJS.Timeout | null = setInterval(async () => {
         const renewed = await renewWbotLock(whatsapp.id);
         if (!renewed) {
-          logger.warn(`[StartSession] Baileys: Perda de lock para whatsappId=${whatsapp.id}.`);
-          // Se perdemos o lock, outra instância assumiu. Devemos parar de renovar.
-          // O próprio Baileys pode continuar rodando até que o 'Write Fencing' o bloqueie.
+          logger.warn(`[StartSession] Baileys: Perda de lock para whatsappId=${whatsapp.id}. Forçando desconexão.`);
+          // Se perdemos o lock, outra instância assumiu ou o Redis expirou.
+          // Devemos matar o socket imediatamente para evitar "Zombie Writes".
+          if (wbot) {
+            try {
+              wbot.end(new Error("Lock lost - Zombie Fencing"));
+            } catch (e) {
+              logger.error(`[StartSession] Erro ao matar wbot sem lock: ${e}`);
+            }
+          }
           if (baileysHeartbeat) clearInterval(baileysHeartbeat);
         }
-      }, 7000); // 7s
+      }, 20000); // 20s (mesmo valor do wbotMutex default, mas aqui hardboded para 20s para garantir)
 
-      const wbot = await initWASocket(whatsapp);
+      wbot = await initWASocket(whatsapp);
 
       // se retornou null, é pq houve algum erro na inicialização
       if (!wbot) {
@@ -69,12 +78,14 @@ export const StartWhatsAppSessionUnified = async (
         wbotMessageListener(wbot, companyId);
         wbotMonitor(wbot, whatsapp, companyId);
 
-        // Monitorar fechamento para limpar heartbeat
-        wbot.ev.on("connection.update", (update) => {
+        // Monitorar fechamento para limpar heartbeat e lock
+        wbot.ev.on("connection.update", (update: any) => {
           const { connection } = update;
           if (connection === "close") {
             if (baileysHeartbeat) clearInterval(baileysHeartbeat);
-            // O releaseWbotLock será chamado pelo handler de desconexão ou pelo wbot.ts
+            // Libera o lock explicitamente ao fechar
+            // Isso permite que o HealthCheck ou retry reinicie mais rápido
+            releaseWbotLock(whatsapp.id);
           }
         });
 
@@ -82,6 +93,7 @@ export const StartWhatsAppSessionUnified = async (
       } else {
         // Casos raros onde wbot é criado mas sem ID (falha parcial)
         if (baileysHeartbeat) clearInterval(baileysHeartbeat);
+        releaseWbotLock(whatsapp.id);
       }
 
     } else if (channelType === "official") {
