@@ -558,6 +558,40 @@ const ListTicketsService = async ({
     } as any;
   }
 
+  // Filtro de Conexões (Apenas não-admins)
+  if (user.profile !== "admin") {
+    const allowedConnectionIds = user.allowedConnectionIds || [];
+    whereCondition = {
+      [Op.and]: [
+        whereCondition,
+        { whatsappId: { [Op.in]: allowedConnectionIds } }
+      ]
+    } as any;
+  }
+
+  // 2. Ghost Mode (Hide Private Users) - Aplicado a TODOS (Strict Mode)
+  // Oculta tickets de usuários marcados como isPrivate, EXCETO se o usuário for o próprio dono.
+  const privateUsers = await User.findAll({
+    where: { isPrivate: true },
+    attributes: ["id"]
+  });
+  const privateUserIds = privateUsers.map(u => u.id);
+
+  if (privateUserIds.length > 0) {
+    whereCondition = {
+      [Op.and]: [
+        whereCondition,
+        {
+          [Op.or]: [
+            { userId: { [Op.notIn]: privateUserIds } }, // Tickets de não-privados
+            { userId: userId }, // Meus tickets (mesmo se eu for privado)
+            { userId: null } // Tickets sem dono
+          ]
+        }
+      ]
+    } as any;
+  }
+
   // Limite/paginação: para showAll === "true", retornamos até 500 registros (otimizado para performance)
   const limit = showAll === "true" ? 500 : 40;
   const offset = showAll === "true" ? 0 : limit * (+pageNumber - 1);

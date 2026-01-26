@@ -11,6 +11,7 @@ interface Request {
   pageNumber?: string | number;
   profile?: string;
   companyId?: number;
+  requestUserId?: number | string;
 }
 
 interface Response {
@@ -22,9 +23,11 @@ interface Response {
 const ListUsersService = async ({
   searchParam = "",
   pageNumber = "1",
-  companyId
+  companyId,
+  profile,
+  requestUserId
 }: Request): Promise<Response> => {
-  const whereCondition = {
+  let whereCondition: any = {
     [Op.or]: [
       {
         "$User.name$": Sequelize.where(
@@ -39,6 +42,20 @@ const ListUsersService = async ({
       [Op.eq]: companyId
     }
   };
+
+  // Implementation of Strict Ghost Mode
+  // Logic: Hide user IF (isPrivate == true AND id != requestUserId)
+  if (requestUserId) {
+    whereCondition = {
+      ...whereCondition,
+      [Op.not]: {
+        [Op.and]: [
+          { isPrivate: true },
+          { id: { [Op.ne]: requestUserId } }
+        ]
+      }
+    };
+  }
 
   const limit = 20;
   const offset = limit * (+pageNumber - 1);

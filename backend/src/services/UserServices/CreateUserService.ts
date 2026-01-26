@@ -31,6 +31,8 @@ interface Request {
   managedUserIds?: number[];
   supervisorViewMode?: "include" | "exclude";
   permissions?: string[];
+  allowedConnectionIds?: number[];
+  isPrivate?: boolean;
   superUser?: boolean;
 }
 
@@ -66,6 +68,8 @@ const CreateUserService = async ({
   managedUserIds = [],
   supervisorViewMode = "include",
   permissions = [],
+  allowedConnectionIds = [],
+  isPrivate = false,
   superUser = false
 }: Request): Promise<Response> => {
   if (companyId !== undefined) {
@@ -142,6 +146,8 @@ const CreateUserService = async ({
       managedUserIds,
       supervisorViewMode,
       permissions,
+      allowedConnectionIds,
+      isPrivate,
       super: superUser
     },
     { include: ["queues", "company"] }

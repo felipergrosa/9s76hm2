@@ -34,6 +34,8 @@ interface UserData {
   allowedContactTags?: number[];
   managedUserIds?: number[];
   permissions?: string[];
+  allowedConnectionIds?: number[];
+  isPrivate?: boolean;
 }
 
 interface Request {
@@ -132,6 +134,18 @@ const UpdateUserService = async ({
   // Atualiza super apenas se enviado
   if ((userData as any).hasOwnProperty("super")) {
     (dataToUpdate as any).super = (userData as any).super;
+  }
+
+  // Atualiza allowedConnectionIds apenas se enviado
+  if (userData.hasOwnProperty("allowedConnectionIds")) {
+    (dataToUpdate as any).allowedConnectionIds = Array.isArray(userData.allowedConnectionIds)
+      ? userData.allowedConnectionIds
+      : [];
+  }
+
+  // Atualiza isPrivate apenas se enviado
+  if (userData.hasOwnProperty("isPrivate")) {
+    (dataToUpdate as any).isPrivate = userData.isPrivate;
   }
 
   await user.update(dataToUpdate);

@@ -47,7 +47,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     searchParam,
     pageNumber,
     companyId,
-    profile
+    profile,
+    requestUserId: +req.user.id
   });
 
   return res.json({ users, count, hasMore });
@@ -79,7 +80,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     allowRealTime,
     allowConnections,
     allowedContactTags,
-    permissions
+    permissions,
+    allowedConnectionIds,
+    isPrivate
   } = req.body;
   let userCompanyId: number | null = null;
 
@@ -203,6 +206,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       allowConnections,
       allowedContactTags,
       permissions,
+      allowedConnectionIds,
+      isPrivate,
       superUser
     });
 
@@ -317,7 +322,8 @@ export const list = async (req: Request, res: Response): Promise<Response> => {
   const { companyId: userCompanyId } = req.user;
 
   const users = await SimpleListService({
-    companyId: companyId ? +companyId : userCompanyId
+    companyId: companyId ? +companyId : userCompanyId,
+    requestUserId: +req.user.id
   });
 
   return res.status(200).json(users);

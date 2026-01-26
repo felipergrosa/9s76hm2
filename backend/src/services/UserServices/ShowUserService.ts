@@ -40,7 +40,9 @@ const ShowUserService = async (id: string | number, companyId: string | number):
         "allowedContactTags",
         "managedUserIds",
         "supervisorViewMode",
-        "permissions"
+        "permissions",
+        "allowedConnectionIds",
+        "isPrivate"
       ],
       include: [
         { model: Queue, as: "queues", attributes: ["id", "name", "color"] },

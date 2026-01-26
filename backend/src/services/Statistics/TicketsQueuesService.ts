@@ -125,14 +125,21 @@ const TicketsQueuesService = async ({
   } else if (walletResult.hasWalletRestriction) {
     const allowedContactIds = walletResult.contactIds;
     const allowedUserIds = [+userId, ...(walletResult.managedUserIds || [])];
+
+    const orConditions: any[] = [
+      { contactId: { [Op.in]: allowedContactIds.length > 0 ? allowedContactIds : [0] } },
+      { userId: { [Op.in]: allowedUserIds.length > 0 ? allowedUserIds : [+userId] } }
+    ];
+
+    if (walletResult.managedUserIds && walletResult.managedUserIds.length > 0) {
+      orConditions.push({ userId: null });
+    }
+
     whereCondition = {
       [Op.and]: [
         whereCondition,
         {
-          [Op.or]: [
-            { contactId: { [Op.in]: allowedContactIds.length > 0 ? allowedContactIds : [0] } },
-            { userId: { [Op.in]: allowedUserIds.length > 0 ? allowedUserIds : [+userId] } }
-          ]
+          [Op.or]: orConditions
         }
       ]
     } as any;

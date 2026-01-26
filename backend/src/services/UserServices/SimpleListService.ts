@@ -1,16 +1,32 @@
+import { Op } from "sequelize";
 import User from "../../models/User";
 import AppError from "../../errors/AppError";
 import Queue from "../../models/Queue";
 
 interface Params {
   companyId: string | number;
+  requestUserId?: number | string;
 }
 
-const SimpleListService = async ({ companyId }: Params): Promise<User[]> => {
+const SimpleListService = async ({ companyId, requestUserId }: Params): Promise<User[]> => {
+  let whereCondition: any = {
+    companyId
+  };
+
+  if (requestUserId) {
+    whereCondition = {
+      ...whereCondition,
+      [Op.not]: {
+        [Op.and]: [
+          { isPrivate: true },
+          { id: { [Op.ne]: requestUserId } }
+        ]
+      }
+    };
+  }
+
   const users = await User.findAll({
-    where: {
-      companyId
-    },
+    where: whereCondition,
     attributes: ["name", "id", "email"],
     include: [
       { model: Queue, as: 'queues' }

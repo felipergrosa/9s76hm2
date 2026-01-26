@@ -23,7 +23,7 @@ interface Request {
   dateEnd?: string;
   updatedAt?: string;
   showAll?: string;
-  userId?: string; 
+  userId?: string;
   withUnreadMessages?: string;
   queueIds: number[];
   tags: number[];
@@ -223,10 +223,47 @@ const ListTicketsServiceKanban = async ({
     companyId
   };
 
+  // Filtro de Hierarquia (Conexões) - Apenas não-admins
+  if (userId) {
+    const user = await ShowUserService(userId, companyId);
+    if (user.profile !== "admin") {
+      const allowedConnectionIds = user.allowedConnectionIds || [];
+      whereCondition = {
+        [Op.and]: [
+          whereCondition,
+          { whatsappId: { [Op.in]: allowedConnectionIds } }
+        ]
+      } as any;
+    }
+
+    // Filtro de Ghost Mode - Aplicado a TODOS (Strict Mode)
+    // Oculta tickets de usuários marcados como isPrivate, EXCETO se o usuário for o próprio dono.
+    const privateUsers = await User.findAll({
+      where: { isPrivate: true },
+      attributes: ["id"]
+    });
+    const privateUserIds = privateUsers.map(u => u.id);
+
+    if (privateUserIds.length > 0) {
+      whereCondition = {
+        [Op.and]: [
+          whereCondition,
+          {
+            [Op.or]: [
+              { userId: { [Op.notIn]: privateUserIds } },
+              { userId: Number(userId) }, // Meus tickets
+              { userId: null }
+            ]
+          }
+        ]
+      } as any;
+    }
+  }
+
   // Restrição de carteira: vê tickets de sua carteira + carteiras gerenciadas + atribuídos a ele/gerenciados
   if (userId) {
     const walletResult = await GetUserWalletContactIds(Number(userId), companyId);
-    
+
     // Modo EXCLUDE: admin vê tudo EXCETO tickets dos usuários excluídos
     if (walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) {
       whereCondition = {
@@ -245,14 +282,21 @@ const ListTicketsServiceKanban = async ({
       const allowedContactIds = walletResult.contactIds;
       // Inclui o próprio userId + IDs dos usuários gerenciados
       const allowedUserIds = [Number(userId), ...walletResult.managedUserIds];
+
+      const orConditions: any[] = [
+        { contactId: { [Op.in]: allowedContactIds.length > 0 ? allowedContactIds : [0] } },
+        { userId: { [Op.in]: allowedUserIds } }
+      ];
+
+      if (walletResult.managedUserIds && walletResult.managedUserIds.length > 0) {
+        orConditions.push({ userId: null });
+      }
+
       whereCondition = {
         [Op.and]: [
           whereCondition,
           {
-            [Op.or]: [
-              { contactId: { [Op.in]: allowedContactIds.length > 0 ? allowedContactIds : [0] } },
-              { userId: { [Op.in]: allowedUserIds } }
-            ]
+            [Op.or]: orConditions
           }
         ]
       } as any;

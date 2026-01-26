@@ -200,6 +200,14 @@ class User extends Model<User> {
   @Column(DataType.ARRAY(DataType.STRING))
   permissions: string[];
 
+  @Default([])
+  @Column(DataType.ARRAY(DataType.INTEGER))
+  allowedConnectionIds: number[];
+
+  @Default(false)
+  @Column(DataType.BOOLEAN)
+  isPrivate: boolean;
+
   @BeforeDestroy
   static async updateChatbotsUsersReferences(user: User) {
     await Chatbot.update({ optUserId: null }, { where: { optUserId: user.id } });

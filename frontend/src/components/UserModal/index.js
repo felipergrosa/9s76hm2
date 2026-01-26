@@ -128,7 +128,9 @@ const UserSchema = Yup.object().shape({
   password: Yup.string().min(5, "Parâmetros incompletos!").max(50, "Parâmetros acima do esperado!"),
   email: Yup.string().email("E-mail inválido").required("Required"),
   allHistoric: Yup.string().nullable(),
-  allowedContactTags: Yup.array().of(Yup.number()).nullable(), // Adicionar validação para allowedContactTags
+  allowedContactTags: Yup.array().of(Yup.number()).nullable(),
+  allowedConnectionIds: Yup.array().of(Yup.number()).nullable(),
+  isPrivate: Yup.boolean().nullable(),
 });
 
 const UserModal = ({ open, onClose, userId }) => {
@@ -156,7 +158,9 @@ const UserModal = ({ open, onClose, userId }) => {
     allowedContactTags: [],
     managedUserIds: [],
     supervisorViewMode: "include",
-    permissions: [], // Inicializar permissions
+    permissions: [],
+    allowedConnectionIds: [],
+    isPrivate: false,
   };
 
   const { user: loggedInUser } = useContext(AuthContext);
@@ -786,6 +790,78 @@ const UserModal = ({ open, onClose, userId }) => {
                                       );
                                     }}
                                   </Field>
+                                </Grid>
+                              </Grid>
+                            </>
+                          )}
+
+                          {/* Seção de Conexões Permitidas (Novo Hierarquia) */}
+                          <Divider style={{ marginTop: 16, marginBottom: 16 }} />
+                          <Typography variant="subtitle2" style={{ marginBottom: 8 }}>
+                            Conexões Permitidas (Apenas estas aparecerão para o usuário)
+                          </Typography>
+                          <Grid container spacing={1}>
+                            <Grid item xs={12}>
+                              <Field name="allowedConnectionIds">
+                                {({ field, form }) => {
+                                  const selectedIds = field.value || [];
+                                  const selectedObjects = whatsApps.filter(w => selectedIds.includes(w.id));
+                                  return (
+                                    <Autocomplete
+                                      multiple
+                                      options={whatsApps}
+                                      value={selectedObjects}
+                                      getOptionLabel={(option) => option?.name || ""}
+                                      onChange={(e, value) => form.setFieldValue("allowedConnectionIds", (value || []).map(v => v.id))}
+                                      loading={loading}
+                                      filterSelectedOptions
+                                      renderTags={(value, getTagProps) =>
+                                        value.map((option, index) => (
+                                          <Chip
+                                            {...getTagProps({ index })}
+                                            key={option.id}
+                                            label={option.name}
+                                            style={{ backgroundColor: "#25D366", color: "#fff" }} // Cor do WhatsApp
+                                          />
+                                        ))
+                                      }
+                                      renderInput={(params) => (
+                                        <TextField
+                                          {...params}
+                                          variant="outlined"
+                                          margin="dense"
+                                          label="Conexões Liberadas"
+                                          placeholder="Selecione..."
+                                          fullWidth
+                                          InputLabelProps={{ shrink: true }}
+                                        />
+                                      )}
+                                    />
+                                  );
+                                }}
+                              </Field>
+                            </Grid>
+                          </Grid>
+
+                          {/* Ghost Mode (Apenas para Admins editando Admins? Ou Admin editando qualquer um?) */}
+                          {/* O plano diz: Super Admin tem opção para não exibir nada seu. */}
+                          {/* Então só aparece se o usuário editado FOR Admin ou Super */}
+                          {(values.profile === 'admin') && (
+                            <>
+                              <Divider style={{ marginTop: 16, marginBottom: 16 }} />
+                              <Grid container spacing={1}>
+                                <Grid item xs={12}>
+                                  <FormControlLabel
+                                    control={
+                                      <Switch
+                                        checked={values.isPrivate}
+                                        onChange={(e) => setFieldValue("isPrivate", e.target.checked)}
+                                        name="isPrivate"
+                                        color="secondary"
+                                      />
+                                    }
+                                    label="Modo Privado (Ghost Mode) - Oculta tickets e usuário de não-admins"
+                                  />
                                 </Grid>
                               </Grid>
                             </>
