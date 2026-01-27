@@ -209,7 +209,17 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
         // wsocket declarado no escopo acima
 
-        const { state, saveCreds } = await useMultiFileAuthState(whatsapp);
+        const { state, saveCreds } = await useMultiFileAuthState(whatsapp, () => {
+          if (wsocket) {
+            logger.error(`[wbot] Zombie detected via Write Fencing. Killing connection for ${name}.`);
+            try {
+              wsocket.ws.close();
+              wsocket.end(new Error("Zombie Fencing - Lock Lost during write"));
+            } catch (e) {
+              logger.error(`[wbot] Error killing zombie connection: ${e}`);
+            }
+          }
+        });
 
         wsocket = makeWASocket({
           version,

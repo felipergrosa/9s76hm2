@@ -14,7 +14,8 @@ import path from "path";
 import * as crypto from "crypto";
 
 export const useMultiFileAuthState = async (
-  whatsapp: Whatsapp
+  whatsapp: Whatsapp,
+  onZombie?: () => void
 ): Promise<{ state: AuthenticationState; saveCreds: () => Promise<void> }> => {
   const driver = (process.env.SESSIONS_DRIVER || "").toLowerCase() || (process.env.REDIS_URI ? "redis" : "fs");
 
@@ -63,6 +64,10 @@ export const useMultiFileAuthState = async (
         const isOwner = await checkWbotLock(whatsapp.id);
         if (!isOwner) {
           console.error(`[BaileysAuth] FENCING: Bloqueando escrita de ZUMBI para whatsappId=${whatsapp.id} (file=${file}). Lock perdido.`);
+          if (onZombie) {
+            console.error(`[BaileysAuth] Executando callback onZombie para matar conexão de whatsappId=${whatsapp.id}`);
+            onZombie();
+          }
           return null;
         }
 
