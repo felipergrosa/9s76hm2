@@ -1,8 +1,14 @@
 import logger from "../utils/logger";
 import cacheLayer from "./cache";
+import * as crypto from "crypto";
 
 const LOCK_TTL_SECONDS = 60;
 const LOCK_RENEW_INTERVAL_MS = 20000;
+
+// Mapa de tokens de sessão: cada chamada a acquireWbotLock gerará um UUID único.
+// Isso garante que sessões antigas (zumbis) no mesmo processo não possam liberar locks
+// que pertencem a sessões mais novas.
+const sessionLockTokens = new Map<number | string, string>();
 
 export const getLockKey = (whatsappId: number | string) => `wbot:mutex:${whatsappId}`;
 
@@ -11,12 +17,16 @@ export const getCurrentInstanceId = (): string => {
 };
 
 /**
- * Tenta adquirir o lock para controlar a sessão do WhatsApp.
- * Retorna true se conseguiu o lock (é o líder), false se já existe outro dono.
+ * Retorna o token de lock atual para uma sessão. Útil para verificação.
  */
+export const getSessionLockToken = (whatsappId: number | string): string | undefined => {
+    return sessionLockTokens.get(whatsappId);
+};
+
 /**
  * Tenta adquirir o lock para controlar a sessão do WhatsApp.
  * Suporta reentrância: se já sou o dono, renova e retorna true.
+ * Gera um novo token de sessão (UUID) para identificar esta aquisição.
  */
 export const acquireWbotLock = async (whatsappId: number | string): Promise<boolean> => {
     const key = getLockKey(whatsappId);
@@ -27,29 +37,43 @@ export const acquireWbotLock = async (whatsappId: number | string): Promise<bool
         return true;
     }
 
-    const ownerId = getCurrentInstanceId();
+    // Gera um novo token único para esta sessão
+    const sessionToken = crypto.randomUUID();
+    const baseId = getCurrentInstanceId();
+    const ownerId = `${baseId}:${sessionToken}`;
 
     try {
-        // Lua script para atomicidade e reentrância
-        // 1. Se não existe: SET e retorna 1
-        // 2. Se existe e é meu: RENOVA (expire) e retorna 1
-        // 3. Se existe e não é meu: retorna 0
+        // Lua script para atomicidade e reentrância.
+        // NOTA: Reentrância agora compara APENAS o prefixo (HOSTNAME).
+        // Se o prefixo bater, ATUALIZA o valor para o novo token e renova o TTL.
+        // Isso garante que novas sessões do mesmo processo "assumam" o controle.
         const script = `
-            if redis.call("exists", KEYS[1]) == 0 then
+            local current = redis.call("get", KEYS[1])
+            if current == nil or current == false then
+                -- Ninguém tem o lock, adquirir
                 redis.call("set", KEYS[1], ARGV[1], "EX", ARGV[2])
                 return 1
-            elseif redis.call("get", KEYS[1]) == ARGV[1] then
-                redis.call("expire", KEYS[1], ARGV[2])
-                return 1
             else
-                return 0
+                -- Alguém tem o lock. Verificar se é do mesmo host (prefixo antes de ':')
+                local currentHost = string.match(current, "^([^:]+)")
+                local myHost = string.match(ARGV[1], "^([^:]+)")
+                if currentHost == myHost then
+                    -- Mesmo host, assumir controle com novo token
+                    redis.call("set", KEYS[1], ARGV[1], "EX", ARGV[2])
+                    return 1
+                else
+                    -- Outro host é o dono
+                    return 0
+                end
             end
         `;
 
         const result = await redis.eval(script, 1, key, ownerId, LOCK_TTL_SECONDS);
 
         if (result === 1) {
-            logger.info(`[WbotMutex] Lock adquirido/renovado para whatsappId=${whatsappId} (owner=${ownerId})`);
+            // Salvar o token para esta sessão
+            sessionLockTokens.set(whatsappId, ownerId);
+            logger.info(`[WbotMutex] Lock adquirido/renovado para whatsappId=${whatsappId} (owner=${baseId})`);
             return true;
         } else {
             const currentOwner = await redis.get(key);
@@ -65,17 +89,21 @@ export const acquireWbotLock = async (whatsappId: number | string): Promise<bool
 /**
  * Renova o lock para manter a sessão ativa.
  * Deve ser chamado periodicamente pelo dono do lock.
+ * USA o token exato que foi gerado em acquireWbotLock.
  */
 export const renewWbotLock = async (whatsappId: number | string): Promise<boolean> => {
     const key = getLockKey(whatsappId);
     const redis = cacheLayer.getRedisInstance();
     if (!redis) return true;
 
-    const ownerId = process.env.HOSTNAME || `instance-${process.pid}`;
+    const ownerId = sessionLockTokens.get(whatsappId);
+    if (!ownerId) {
+        logger.warn(`[WbotMutex] Nenhum token de sessão encontrado para ${whatsappId}. Não é possível renovar.`);
+        return false;
+    }
 
     try {
-        // Script Lua para garantir que só renova se for o dono
-        // Se o valor for ownerId, atualiza EXPIRE. Senão, retorna 0.
+        // Script Lua para garantir que só renova se for o dono EXATO (token completo)
         const script = `
       if redis.call("get", KEYS[1]) == ARGV[1] then
         return redis.call("expire", KEYS[1], ARGV[2])
@@ -87,7 +115,7 @@ export const renewWbotLock = async (whatsappId: number | string): Promise<boolea
         const result = await redis.eval(script, 1, key, ownerId, LOCK_TTL_SECONDS);
 
         if (result === 1) {
-            // logger.debug(`[WbotMutex] Lock renovado para whatsappId=${whatsappId}`);
+            // logger.debug(`[WbotMutex] Lock renovado para whatsappId=${whatsappId}`)
             return true;
         } else {
             logger.warn(`[WbotMutex] Falha ao renovar lock para ${whatsappId}. Talvez tenha expirado ou mudado de dono.`);
@@ -101,16 +129,22 @@ export const renewWbotLock = async (whatsappId: number | string): Promise<boolea
 
 /**
  * Libera o lock explicitamente (no shutdown ou disconnect).
+ * USA o token exato que foi gerado em acquireWbotLock.
+ * Se o token não bate (sessão antiga/zumbi), NÃO libera.
  */
 export const releaseWbotLock = async (whatsappId: number | string): Promise<void> => {
     const key = getLockKey(whatsappId);
     const redis = cacheLayer.getRedisInstance();
     if (!redis) return;
 
-    const ownerId = process.env.HOSTNAME || `instance-${process.pid}`;
+    const ownerId = sessionLockTokens.get(whatsappId);
+    if (!ownerId) {
+        logger.debug(`[WbotMutex] Nenhum token de sessão para ${whatsappId}. Ignorando release (provavelmente sessão antiga).`);
+        return;
+    }
 
     try {
-        // Só deleta se for o dono
+        // Só deleta se for o dono EXATO (token completo)
         const script = `
       if redis.call("get", KEYS[1]) == ARGV[1] then
         return redis.call("del", KEYS[1])
@@ -118,8 +152,13 @@ export const releaseWbotLock = async (whatsappId: number | string): Promise<void
         return 0
       end
     `;
-        await redis.eval(script, 1, key, ownerId);
-        logger.info(`[WbotMutex] Lock liberado para whatsappId=${whatsappId}`);
+        const result = await redis.eval(script, 1, key, ownerId);
+        if (result === 1) {
+            sessionLockTokens.delete(whatsappId);
+            logger.info(`[WbotMutex] Lock liberado para whatsappId=${whatsappId}`);
+        } else {
+            logger.debug(`[WbotMutex] Lock NÃO liberado para ${whatsappId} (token não bateu - outra sessão é dona).`);
+        }
     } catch (err) {
         logger.error(`[WbotMutex] Erro ao liberar lock: ${err}`);
     }
@@ -128,17 +167,22 @@ export const releaseWbotLock = async (whatsappId: number | string): Promise<void
 /**
  * Verifica se esta instância ainda é a dona do lock.
  * Útil para "Write Fencing" (impedir escritas de zumbis).
+ * USA o token exato que foi gerado em acquireWbotLock.
  */
 export const checkWbotLock = async (whatsappId: number | string): Promise<boolean> => {
     const key = getLockKey(whatsappId);
     const redis = cacheLayer.getRedisInstance();
     if (!redis) return true;
 
-    const ownerId = process.env.HOSTNAME || `instance-${process.pid}`;
+    const ownerId = sessionLockTokens.get(whatsappId);
+    if (!ownerId) {
+        // Se não temos token, provavelmente esta sessão não adquiriu o lock
+        return false;
+    }
 
     try {
         const currentOwner = await redis.get(key);
-        // Se não tem dono, ou o dono é outro, retorna false
+        // Só retorna true se o token no Redis bate EXATAMENTE
         return currentOwner === ownerId;
     } catch (err) {
         logger.error(`[WbotMutex] Erro ao checar lock: ${err}`);

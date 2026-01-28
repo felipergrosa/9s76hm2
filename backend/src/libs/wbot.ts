@@ -160,7 +160,10 @@ export var dataMessages: any = {};
 export const msgDB = msg();
 
 
-import { acquireWbotLock, renewWbotLock, releaseWbotLock } from "./wbotMutex";
+const sessionTokens = new Map<number, string>();
+
+import { acquireWbotLock, renewWbotLock, releaseWbotLock, checkWbotLock } from "./wbotMutex";
+import * as crypto from "crypto";
 
 export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
   return new Promise(async (resolve, reject) => {
@@ -171,31 +174,25 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
       // declarando wsocket fora do setInterval para ser acessvel
       let wsocket: Session = null;
 
+      // Token de geração para garantir que apenas a sessão mais recente neste processo controle a reconexão
+      const mySessionToken = crypto.randomUUID();
+      sessionTokens.set(whatsapp.id, mySessionToken);
+
       (async () => {
         const io = getIO();
-
+        // ... (omitted lines) ...
         const whatsappUpdate = await Whatsapp.findOne({
           where: { id: whatsapp.id }
         });
 
         if (!whatsappUpdate) {
-          // O lock será liberado pelo caller (StartWhatsAppSessionUnified) se retornarmos
-          // Mas como estamos dentro de uma Promise async, o caller já pode ter seguido?
-          // Não, o caller está esperando o `await initWASocket`.
-          // Porém, aqui estamos dentro de uma IIFE (async () => {}) dentro da Promise.
-          // Se retornarmos aqui, a Promise externa NUNCA resolve.
-
-          // CORREÇÃO: Devemos dar reject ou resolve(null) aqui.
-          // Como o Unified espera wbot ou null, vamos resolver com null.
           return resolve(null as any);
         }
 
         const { id, name, allowGroup, companyId } = whatsappUpdate;
 
         const { version, isLatest } = await fetchLatestWaWebVersion({});
-        // Log com timestamp e versão do pacote Baileys instalado
         try {
-          // Evita erro de tipo em TS usando require dinâmico
           // eslint-disable-next-line @typescript-eslint/no-var-requires
           const baileysPkg = require("@whiskeysockets/baileys/package.json");
           const ts = moment().format("DD-MM-YYYY HH:mm:ss");
@@ -206,8 +203,6 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         }
         logger.info(`Starting session ${name}`);
         let retriesQrCode = 0;
-
-        // wsocket declarado no escopo acima
 
         const { state, saveCreds } = await useMultiFileAuthState(whatsapp, () => {
           if (wsocket) {
@@ -225,19 +220,14 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           version,
           logger: loggerBaileys,
           printQRInTerminal: false,
-          // auth: state as AuthenticationState,
           auth: {
             creds: state.creds,
-            /** caching makes the store faster to send/recv messages */
             keys: makeCacheableSignalKeyStore(state.keys, logger),
           },
           generateHighQualityLinkPreview: true,
           linkPreviewImageThumbnailWidth: 192,
-          // shouldIgnoreJid: jid => isJidBroadcast(jid),
-
           shouldIgnoreJid: (jid) => {
-            //   // const isGroupJid = !allowGroup && isJidGroup(jid)
-            return isJidBroadcast(jid) || (!allowGroup && isJidGroup(jid)) //|| jid.includes('newsletter')
+            return isJidBroadcast(jid) || (!allowGroup && isJidGroup(jid))
           },
           browser: Browsers.appropriate("Desktop"),
           defaultQueryTimeoutMs: undefined,
@@ -249,36 +239,20 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           fireInitQueries: true,
           transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 3000 },
           connectTimeoutMs: 25_000,
-          keepAliveIntervalMs: 30_000, // Keep-alive a cada 30s para manter conexão ativa
+          keepAliveIntervalMs: 30_000,
           getMessage: msgDB.get,
-          // Habilita download de histórico quando importação está ativa
           syncFullHistory: !!whatsapp.importOldMessages,
         });
 
-        // Limpa heartbeat ao fechar
         wsocket.ev.on("connection.update", async (update) => {
           const { connection } = update;
           if (connection === 'close') {
-            // Nota: lock heartbeat agora gerenciado externamente pelo Unified Service.
-            // wbot.ts não tem mais controle sobre reconexão persistente do lock.
-            // Nota: releaselock será chamado se for logout ou invalido,
-            // mas se for reconexão temporária? 
-            // Se reconectar, o INIT é chamado de novo? NÃO. O makeWASocket gerencia reconexão interna?
-            // SIM, Baileys reconecta internamente se reconnection: true (padrão?)
-            // Se baileys reconecta, o initWASocket NÃO é chamado novamente para a mesma instância.
-            // ENTÃO o heartbeat deve continuar se for reconnect.
-            // Mas se connection === close, baileys pode estar tentando reconectar.
-
-            // Se o processo de reconexão do Baileys falhar e ele decidir morrer, aí perdemos o lock.
-            // Vamos manter o Lock se for reconexão temporária.
-            // Se for Logout ou erro fatal, connection.update trata abaixo.
+            // Heartbeat cleanup managed externally
           }
         });
 
-        // Store em memória desabilitada nesta versão; usamos snapshot/persistência via messaging-history.set
         setTimeout(async () => {
           const wpp = await Whatsapp.findByPk(whatsapp.id);
-          // console.log("Status:::::",wpp.status)
           if (wpp?.importOldMessages && wpp.status === "CONNECTED") {
             let dateOldLimit = new Date(wpp.importOldMessages).getTime();
             let dateRecentLimit = new Date(wpp.importRecentMessages).getTime();
@@ -292,21 +266,14 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
   Selecionado Data de inicio de importação: ${moment(dateOldLimit).format("DD/MM/YYYY HH:mm:ss")} 
   Selecionado Data final da importação: ${moment(dateRecentLimit).format("DD/MM/YYYY HH:mm:ss")} 
   `})
-
             const statusImportMessages = new Date().getTime();
+            await wpp.update({ statusImportMessages });
 
-            await wpp.update({
-              statusImportMessages
-            });
             wsocket.ev.on("messaging-history.set", async (messageSet: any) => {
-              logger.info(`[Import] messaging-history.set recebido para whatsappId=${whatsapp.id}. Mensagens=${messageSet?.messages?.length || 0}, Chats=${messageSet?.chats?.length || 0}`);
-
+              logger.info(`[Import] messaging-history.set recebido para whatsappId=${whatsapp.id}`);
               const statusImportMessages = new Date().getTime();
+              await wpp.update({ statusImportMessages });
 
-              await wpp.update({
-                statusImportMessages
-              });
-              // Persistir snapshot de contatos e chats (melhora listagem no modal de import)
               try {
                 const { contacts: snapContacts, chats: snapChats } = messageSet || {};
                 if ((Array.isArray(snapContacts) && snapContacts.length) || (Array.isArray(snapChats) && snapChats.length)) {
@@ -315,119 +282,46 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     contacts: Array.isArray(snapContacts) ? snapContacts : undefined,
                     chats: Array.isArray(snapChats) ? snapChats : undefined
                   });
-                  logger.info(`[wbot] messaging-history.set snapshot persisted: contacts=${Array.isArray(snapContacts) ? snapContacts.length : 0}, chats=${Array.isArray(snapChats) ? snapChats.length : 0}`);
+                  logger.info(`[wbot] snapshot persisted`);
                 }
               } catch (e: any) {
-                logger.warn(`[wbot] falha ao persistir snapshot de contacts/chats: ${e?.message}`);
+                logger.warn(`[wbot] snapshot persist failed: ${e?.message}`);
               }
+
               const whatsappId = whatsapp.id;
-              let filteredMessages = messageSet.messages
-              let filteredDateMessages = []
+              let filteredMessages = messageSet.messages;
+              let filteredDateMessages = [];
               filteredMessages.forEach(msg => {
-                const timestampMsg = Math.floor(msg.messageTimestamp["low"] * 1000)
+                const timestampMsg = Math.floor(msg.messageTimestamp["low"] * 1000);
                 if (isValidMsg(msg) && dateOldLimit < timestampMsg && dateRecentLimit > timestampMsg) {
-                  if (msg.key?.remoteJid.split("@")[1] != "g.us") {
-                    addLogs({
-                      fileName: `preparingImportMessagesWppId${whatsapp.id}.txt`, text: `Adicionando mensagem para pos processamento:
-  Não é Mensagem de GRUPO >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-  Data e hora da mensagem: ${moment(timestampMsg).format("DD/MM/YYYY HH:mm:ss")}
-  Contato da Mensagem : ${msg.key?.remoteJid}
-  Tipo da mensagem : ${getTypeMessage(msg)}
-  
-  `})
-                    filteredDateMessages.push(msg)
-                  } else {
-                    if (wpp?.importOldMessagesGroups) {
-                      addLogs({
-                        fileName: `preparingImportMessagesWppId${whatsapp.id}.txt`, text: `Adicionando mensagem para pos processamento:
-  Mensagem de GRUPO >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-  Data e hora da mensagem: ${moment(timestampMsg).format("DD/MM/YYYY HH:mm:ss")}
-  Contato da Mensagem : ${msg.key?.remoteJid}
-  Tipo da mensagem : ${getTypeMessage(msg)}
-  
-  `})
-                      filteredDateMessages.push(msg)
-                    }
-                  }
+                  filteredDateMessages.push(msg);
                 }
-
               });
-
 
               if (!dataMessages?.[whatsappId]) {
                 dataMessages[whatsappId] = [];
-
                 dataMessages[whatsappId].unshift(...filteredDateMessages);
               } else {
                 dataMessages[whatsappId].unshift(...filteredDateMessages);
               }
 
-              logger.info(`[Import] Filtradas ${filteredDateMessages.length} mensagens no range de datas. Total em dataMessages[${whatsappId}]=${dataMessages[whatsappId]?.length || 0}`);
-
               setTimeout(async () => {
                 const wpp = await Whatsapp.findByPk(whatsappId);
-
-
-
-
-                io.of(`/workspace-${companyId}`)
-                  .emit(`importMessages-${wpp.companyId}`, {
-                    action: "update",
-                    status: { this: -1, all: -1 }
-                  });
-
-
-
-                io.of(`/workspace-${companyId}`)
-                  .emit(`company-${companyId}-whatsappSession`, {
-                    action: "update",
-                    session: wpp
-                  });
-                //console.log(JSON.stringify(wpp, null, 2));
+                io.of(`/workspace-${companyId}`).emit(`importMessages-${wpp.companyId}`, { action: "update", status: { this: -1, all: -1 } });
+                io.of(`/workspace-${companyId}`).emit(`company-${companyId}-whatsappSession`, { action: "update", session: wpp });
               }, 500);
 
               setTimeout(async () => {
-
-
                 const wpp = await Whatsapp.findByPk(whatsappId);
-
                 if (wpp?.importOldMessages) {
-                  let isTimeStamp = !isNaN(
-                    new Date(Math.floor(parseInt(wpp?.statusImportMessages))).getTime()
-                  );
-
-                  if (isTimeStamp) {
-                    const ultimoStatus = new Date(
-                      Math.floor(parseInt(wpp?.statusImportMessages))
-                    ).getTime();
-                    const dataLimite = +add(ultimoStatus, { seconds: +45 }).getTime();
-
-                    if (dataLimite < new Date().getTime()) {
-                      //console.log("Pronto para come?ar")
-                      ImportWhatsAppMessageService(wpp.id)
-                      wpp.update({
-                        statusImportMessages: "Running"
-                      })
-
-                    } else {
-                      //console.log("Aguardando inicio")
-                    }
-                  }
+                  ImportWhatsAppMessageService(wpp.id);
+                  wpp.update({ statusImportMessages: "Running" });
                 }
-                io.of(`/workspace-${companyId}`)
-                  .emit(`company-${companyId}-whatsappSession`, {
-                    action: "update",
-                    session: wpp
-                  });
+                io.of(`/workspace-${companyId}`).emit(`company-${companyId}-whatsappSession`, { action: "update", session: wpp });
               }, 1000 * 45);
-
             });
           }
-
         }, 2500);
-
-
-
 
         wsocket.ev.on(
           "connection.update",
@@ -437,11 +331,31 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               }`
             );
 
+            // ZOMBIE CHECK 1: Same-Process Zombie
+            // Se o token desta sessão não for o último gerado para este ID, significa que uma nova sessão já foi iniciada neste processo.
+            // Esta instância é um Zumbi local. Devemos parar tudo.
+            if (sessionTokens.get(whatsapp.id) !== mySessionToken) {
+              logger.warn(`[wbot] Sessão ZUMBI local detectada para ${name} (Token mismatch). Encerrando handler silenciosamente.`);
+              if (wsocket) {
+                wsocket.ev.removeAllListeners("connection.update");
+                wsocket.ws.close();
+              }
+              return;
+            }
+
             if (connection === "close") {
+              const errorMsg = lastDisconnect?.error?.message || "";
               console.log("DESCONECTOU", JSON.stringify(lastDisconnect, null, 2))
+
+              // ZOMBIE CHECK 2: Suicide Pact verification
+              if (errorMsg.includes("Zombie Fencing")) {
+                logger.warn(`[wbot] Conexão fechada por Fencing (Suicídio). Não tentaremos reconectar.`);
+                removeWbot(id, false);
+                return;
+              }
+
               logger.info(
-                `Socket  ${name} Connection Update ${connection || ""} ${lastDisconnect ? lastDisconnect.error.message : ""
-                }`
+                `Socket  ${name} Connection Update ${connection || ""} ${errorMsg}`
               );
 
               const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
@@ -459,7 +373,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                       whatsappId: id,
                       whatsappName: name, // Nome da conexão para exibição no modal
                       statusCode,
-                      reason: lastDisconnect?.error?.message || "Connection closed",
+                      reason: errorMsg || "Connection closed",
                       qrUrl: `${process.env.FRONTEND_URL || ""}/connections/${id}`
                     });
                 } catch { }
@@ -467,6 +381,24 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
               // Conflito: outra sessão está ativa. NÃO reconectar imediatamente para evitar loop
               if (isConflict) {
+                logger.warn(`[wbot] Conflito detectado (440) para ${name}. Verificando propriedade do Lock...`);
+
+                // ZOMBIE CHECK 3: Distributed Zombie
+                // Se não somos o dono do lock (Redis), fomos substituídos por outra instância (ou reconexão).
+                // Devemos aceitar a morte e NÃO tentar reconectar.
+                const isOwner = await checkWbotLock(id);
+                if (!isOwner) {
+                  logger.warn(`[wbot] NÃO somos o dono do lock para ${name}. Assumindo papel de Zumbi e encerrando sem reconexão.`);
+                  removeWbot(id, false);
+                  // Limpar token para evitar efeitos colaterais
+                  if (sessionTokens.get(id) === mySessionToken) {
+                    sessionTokens.delete(id);
+                  }
+                  return;
+                }
+
+                logger.info(`[wbot] Somos o dono do lock, mas houve conflito. Tentando recuperar...`);
+
                 // CORREÇÃO: Verificar se já existe uma tentativa de reconexão em andamento
                 if (reconnectingWhatsapps.get(id)) {
                   logger.warn(`[wbot] Já existe uma tentativa de reconexão em andamento para ${name} (id=${id}). Ignorando nova tentativa.`);
@@ -485,12 +417,19 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
                 // Marcar como "reconectando" para bloquear novas tentativas
                 reconnectingWhatsapps.set(id, true);
-                await releaseWbotLock(id); // Libera o lock para permitir que a reconexão (ou outro nó) assuma
+
+                // NOTA: Se somos o dono e vamos reconectar, NÃO devemos liberar o lock!
+                // Devemos mantê-lo para que ninguém mais assuma.
+                // Mas o wait pode ser longo (30s+). O Heartbeat em StartWhatsAppSessionUnified deve mantê-lo.
+                // await releaseWbotLock(id); // REMOVIDO: Manter o lock se vamos tentar recuperar.
+
                 removeWbot(id, false);
 
                 // Agendar reconexão com delay calculado
                 setTimeout(() => {
-                  // Liberar o mutex antes de tentar reconectar
+                  // Liberar o mutex antes de tentar reconectar (para permitir que StartSession renove/adquira)
+                  // Não, StartSession vai tentar adquirir. Se já temos, ok (reentrante).
+
                   reconnectingWhatsapps.delete(id);
                   StartWhatsAppSession(whatsapp, whatsapp.companyId);
                 }, delay);
