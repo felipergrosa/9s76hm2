@@ -289,7 +289,7 @@ const MomentsUser = ({ onPanStart }) => {
     <Card key={ticket.id} className={classes.ticketCard}>
       <CardActionArea
         onClick={() => {
-          if (user.profile === "admin" || ticket.userId === user.id) {
+          if (user.profile === "admin" || user.super || ticket.userId === user.id) {
             history.push(`/tickets/${ticket.uuid}`);
           }
         }}
@@ -317,7 +317,7 @@ const MomentsUser = ({ onPanStart }) => {
                 </div>
               </div>
             </div>
-            {(user.profile === "admin" || ticket.userId === user.id) && (
+            {(user.profile === "admin" || user.super || ticket.userId === user.id) && (
               <Tooltip title="Visualizar">
                 <Visibility className={classes.actionButton} fontSize="small" />
               </Tooltip>

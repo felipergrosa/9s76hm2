@@ -261,7 +261,8 @@ export const kanban = async (req: Request, res: Response): Promise<Response> => 
   const { viewingUserId } = req.query as IndexQuery;
   if (viewingUserId) {
     const vUserId = Number(viewingUserId);
-    if (profile === "admin") {
+    const superUser = (req.user as any).super;
+    if (profile === "admin" || superUser === true) {
       targetUserId = vUserId;
     } else {
       const allowed = managedUserIds ? managedUserIds.map((uid: any) => Number(uid)) : [];

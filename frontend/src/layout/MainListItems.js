@@ -452,7 +452,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
   return (
     <div onClick={drawerClose}>
       {/* BLOCO LEGADO - Apenas itens diretos (Dashboard antigo e Tempo Real) */}
-      {((user.profile === "admin" || user.profile === "super") ||
+      {((user.profile === "admin" || user.super === true) ||
         (user.profile === "user" && user.showDashboard === "enabled")) && (
           <ListItemLink
             to="/"
@@ -462,7 +462,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
             tooltip={collapsed}
           />
         )}
-      {((user.profile === "admin" || user.profile === "super") ||
+      {((user.profile === "admin" || user.super === true) ||
         (user.profile === "user" && user.allowRealTime === "enabled")) && (
           <ListItemLink
             to="/moments"
@@ -761,7 +761,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
       )}
 
       {/* CONEXÕES (Sistema Legado) */}
-      {((user.profile === "admin" || user.profile === "super") ||
+      {((user.profile === "admin" || user.super === true) ||
         (user.profile === "user" && user.allowConnections === "enabled")) && (
           <ListItemLink
             to="/connections"

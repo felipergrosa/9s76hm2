@@ -1,10 +1,11 @@
 import express from "express";
 import isAuth from "../middleware/isAuth";
-import isSuper from "../middleware/isSuper";
+import { checkAdminOrSuper } from "../middleware/checkPermission";
 import { cleanFlowbuilderOrphans } from "../controllers/MaintenanceController";
 
 const maintenanceRoutes = express.Router();
 
-maintenanceRoutes.post("/maintenance/cleanup/flowbuilder", isAuth, isSuper, cleanFlowbuilderOrphans);
+// Migrado de isSuper (legado) para checkAdminOrSuper - mais consistente
+maintenanceRoutes.post("/maintenance/cleanup/flowbuilder", isAuth, checkAdminOrSuper(), cleanFlowbuilderOrphans);
 
 export default maintenanceRoutes;

@@ -49,7 +49,7 @@ const CreateUserService = async ({
   name,
   queueIds = [],
   companyId,
-  profile = "admin",
+  profile = "user",
   startWork,
   endWork,
   whatsappId,

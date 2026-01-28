@@ -1,16 +1,20 @@
 import express from "express";
 import isAuth from "../middleware/isAuth";
+import { checkPermission, checkAdminOrSuper } from "../middleware/checkPermission";
 import * as UserController from "../controllers/UserController";
 import { upload } from "../controllers/UserController";
 
 const userRoutes = express.Router();
 
+// Rotas públicas de listagem
 userRoutes.get("/users", isAuth, UserController.index);
 userRoutes.get("/users/list", isAuth, UserController.list);
-userRoutes.post("/users", isAuth, UserController.store);
-userRoutes.put("/users/:userId", isAuth, UserController.update);
+
+// Rotas que precisam de permissão específica
+userRoutes.post("/users", isAuth, checkPermission("users.create"), UserController.store);
+userRoutes.put("/users/:userId", isAuth, UserController.update); // Validação no controller permite editar próprio perfil
 userRoutes.get("/users/:userId", isAuth, UserController.show);
-userRoutes.delete("/users/:userId", isAuth, UserController.remove);
+userRoutes.delete("/users/:userId", isAuth, checkPermission("users.delete"), UserController.remove);
 userRoutes.post(
   "/users/:userId/media-upload",
   isAuth,

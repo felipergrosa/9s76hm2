@@ -159,12 +159,12 @@ const Kanban = () => {
   const [selectableUsers, setSelectableUsers] = useState([]);
 
   useEffect(() => {
-    if (user.profile === "admin" || (user.managedUserIds && user.managedUserIds.length > 0)) {
+    if (user.profile === "admin" || user.super || (user.managedUserIds && user.managedUserIds.length > 0)) {
       const fetchUsers = async () => {
         try {
           const { data } = await api.get("/users", { params: { pageNumber: 1, pageSize: 1000 } });
           let allowedUsers = data.users;
-          if (user.profile !== "admin") {
+          if (user.profile !== "admin" && !user.super) {
             const permissions = user.managedUserIds || [];
             // permissions pode ser array de strings ou ints, converte para int
             const permissionsInt = permissions.map(p => Number(p));
@@ -529,7 +529,7 @@ const Kanban = () => {
             className={classes.searchInput}
           />
 
-          {(user.profile === "admin" || (user.managedUserIds && user.managedUserIds.length > 0)) && (
+          {(user.profile === "admin" || user.super || (user.managedUserIds && user.managedUserIds.length > 0)) && (
             <FormControl variant="outlined" className={classes.actionButton} style={{ marginRight: 10, minWidth: 150 }}>
               <Select
                 value={viewingUserId}
