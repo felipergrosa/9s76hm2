@@ -471,7 +471,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 }
                 logger.info(`[wbot] Restart necessário para ${name}. Reconectando em 15s.`);
                 reconnectingWhatsapps.set(id, true);
-                await releaseWbotLock(id);
+                // await releaseWbotLock(id); // REMOVIDO: Manter o lock
                 removeWbot(id, false);
                 setTimeout(() => {
                   reconnectingWhatsapps.delete(id);
@@ -488,7 +488,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   return;
                 }
                 reconnectingWhatsapps.set(id, true);
-                await releaseWbotLock(id);
+                // await releaseWbotLock(id); // REMOVIDO: Manter o lock se vamos reconectar para evitar que o Cron assuma
                 removeWbot(id, false);
                 setTimeout(() => {
                   reconnectingWhatsapps.delete(id);
