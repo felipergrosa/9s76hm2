@@ -977,6 +977,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
     if (!e.target.files) {
       return;
     }
+    handleMenuItemClick();
     const selectedMedias = Array.from(e.target.files);
     setMediasUpload(selectedMedias);
     setShowModalMedias(true);
@@ -1576,7 +1577,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
               style={{ zIndex: 1600 }}
             >
               {/* Itens mobile movidos para o final do menu, abaixo de "Botões" */}
-              <MenuItem onClick={handleMenuItemClick}>
+              <MenuItem>
                 <input
                   multiple
                   type="file"
@@ -1602,7 +1603,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                 </Fab>
                 {i18n.t("messageInput.type.cam")}
               </MenuItem>
-              <MenuItem onClick={handleMenuItemClick}>
+              <MenuItem>
                 <input
                   multiple
                   type="file"
