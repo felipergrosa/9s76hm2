@@ -531,6 +531,8 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   const [quickAnswers, setQuickAnswer] = useState([]);
   const [typeBar, setTypeBar] = useState(false);
   const inputRef = useRef();
+  const uploadInputRef = useRef();
+  const uploadDocRef = useRef();
   const [onDragEnter, setOnDragEnter] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const { setReplyingMessage, replyingMessage } = useContext(ReplyMessageContext);
@@ -1442,6 +1444,24 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
           className={classes.messageInputWrapper}
           onDrop={(e) => handleInputDrop(e)}
         >
+          <input
+            multiple
+            type="file"
+            id="upload-img-button"
+            style={{ display: "none" }}
+            ref={uploadInputRef}
+            accept="image/*,video/*,audio/*"
+            onChange={handleChangeMedias}
+          />
+          <input
+            multiple
+            type="file"
+            id="upload-doc-button"
+            style={{ display: "none" }}
+            ref={uploadDocRef}
+            accept="*/*"
+            onChange={handleChangeMedias}
+          />
           {/* Barra de seleção de mensagens (novo estilo WhatsApp) */}
           {showSelectMessageCheckbox && (
             <div className={classes.selectionBar}>
@@ -1577,25 +1597,15 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
               style={{ zIndex: 1600 }}
             >
               {/* Itens mobile movidos para o final do menu, abaixo de "Botões" */}
-              <MenuItem>
-                <input
-                  multiple
-                  type="file"
-                  id="upload-img-button"
-                  accept="image/*, video/*, audio/* "
-                  className={classes.uploadInput}
-                  onChange={handleChangeMedias}
-                />
-                <label htmlFor="upload-img-button">
-                  <Fab
-                    aria-label="upload-img"
-                    component="span"
-                    className={classes.invertedFabMenuMP}
-                  >
-                    <ImageIcon size={18} />
-                  </Fab>
-                  {i18n.t("messageInput.type.imageVideo")}
-                </label>
+              <MenuItem onClick={() => uploadInputRef.current.click()}>
+                <Fab
+                  aria-label="upload-img"
+                  component="span"
+                  className={classes.invertedFabMenuMP}
+                >
+                  <ImageIcon size={18} />
+                </Fab>
+                {i18n.t("messageInput.type.imageVideo")}
               </MenuItem>
               <MenuItem onClick={handleCameraModalOpen}>
                 <Fab className={classes.invertedFabMenuCamera}>
@@ -1603,22 +1613,12 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                 </Fab>
                 {i18n.t("messageInput.type.cam")}
               </MenuItem>
-              <MenuItem>
-                <input
-                  multiple
-                  type="file"
-                  id="upload-doc-button"
-                  accept="application/*, text/*"
-                  className={classes.uploadInput}
-                  onChange={handleChangeMedias}
-                />
-                <label htmlFor="upload-doc-button">
-                  <Fab aria-label="upload-img"
-                    component="span" className={classes.invertedFabMenuDoc}>
-                    <FileText size={18} />
-                  </Fab>
-                  Documento
-                </label>
+              <MenuItem onClick={() => uploadDocRef.current.click()}>
+                <Fab aria-label="upload-img"
+                  component="span" className={classes.invertedFabMenuDoc}>
+                  <FileText size={18} />
+                </Fab>
+                Documento
               </MenuItem>
               <MenuItem onClick={handleSendContactModalOpen}>
                 <Fab className={classes.invertedFabMenuCont}>
