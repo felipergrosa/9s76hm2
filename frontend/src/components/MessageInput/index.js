@@ -1459,7 +1459,6 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
             id="upload-doc-button"
             style={{ display: "none" }}
             ref={uploadDocRef}
-            accept="*/*"
             onChange={handleChangeMedias}
           />
           {/* Barra de seleção de mensagens (novo estilo WhatsApp) */}
