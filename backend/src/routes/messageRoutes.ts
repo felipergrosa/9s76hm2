@@ -21,6 +21,7 @@ messageRoutes.post("/messages/PIX/:ticketId", isAuth, MessageController.sendPIXM
 messageRoutes.post('/messages/:messageId/reactions', isAuth, MessageController.addReaction);
 messageRoutes.post('/message/forward', isAuth, MessageController.forwardMessage);
 messageRoutes.post('/message/forward-external', isAuth, MessageController.forwardToExternalNumber);
+messageRoutes.post('/messages/:ticketId/sync', isAuth, MessageController.syncMessages);
 
 // Rotas genéricas com parâmetros dinâmicos devem vir por último
 messageRoutes.get("/messages/:ticketId", isAuth, MessageController.index);

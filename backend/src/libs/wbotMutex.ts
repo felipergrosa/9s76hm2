@@ -2,7 +2,7 @@ import logger from "../utils/logger";
 import cacheLayer from "./cache";
 import * as crypto from "crypto";
 
-const LOCK_TTL_SECONDS = 60;
+const LOCK_TTL_SECONDS = 180; // 3 minutos para suportar delays de reconexão (até 120s)
 const LOCK_RENEW_INTERVAL_MS = 20000;
 
 // Mapa de tokens de sessão: cada chamada a acquireWbotLock gerará um UUID único.

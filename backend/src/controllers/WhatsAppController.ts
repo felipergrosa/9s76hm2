@@ -82,9 +82,12 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   let whatsapps = await ListWhatsAppsService({ companyId, session });
   const user = await User.findByPk(id);
 
-  if (user && user.profile !== "admin") {
+  // Filtro de Conexões: Super Admin vê tudo, demais respeitam allowedConnectionIds
+  if (user && !user.super) {
     const allowedIds = user.allowedConnectionIds || [];
-    whatsapps = whatsapps.filter(w => allowedIds.includes(w.id));
+    if (allowedIds.length > 0) {
+      whatsapps = whatsapps.filter(w => allowedIds.includes(w.id));
+    }
   }
 
   return res.status(200).json(whatsapps);

@@ -13,17 +13,8 @@ const SimpleListService = async ({ companyId, requestUserId }: Params): Promise<
     companyId
   };
 
-  if (requestUserId) {
-    whereCondition = {
-      ...whereCondition,
-      [Op.not]: {
-        [Op.and]: [
-          { isPrivate: true },
-          { id: { [Op.ne]: requestUserId } }
-        ]
-      }
-    };
-  }
+  // Ghost Mode NÃO filtra lista de usuários
+  // Usuários Ghost devem aparecer em seletores/dropdowns
 
   const users = await User.findAll({
     where: whereCondition,

@@ -10,6 +10,7 @@ import Company from "../../models/Company";
 import QueueIntegrations from "../../models/QueueIntegrations";
 import TicketTag from "../../models/TicketTag";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
+import SyncChatHistoryService from "../MessageServices/SyncChatHistoryService";
 import logger from "../../utils/logger";
 
 // Throttle de atualização de avatar/nome por contato (24h)
@@ -274,6 +275,25 @@ const ShowTicketService = async (
     }
   } catch (e) {
     // Evita falhar a abertura do ticket por erro no refresh de avatar
+  }
+
+  // Sincronizar histórico de mensagens se habilitado na conexão
+  try {
+    if (ticket.whatsappId && ticket.channel === "whatsapp") {
+      // Verificar se a conexão tem sync habilitado
+      const whatsapp = await Whatsapp.findByPk(ticket.whatsappId, {
+        attributes: ["id", "syncOnTicketOpen"]
+      });
+
+      if (whatsapp?.syncOnTicketOpen) {
+        // Executa sync em background (não bloqueia abertura do ticket)
+        SyncChatHistoryService({ ticketId: id, companyId }).catch((err: any) => {
+          logger.warn(`[ShowTicket] Erro ao sincronizar histórico: ${err?.message}`);
+        });
+      }
+    }
+  } catch (e) {
+    // Evita falhar a abertura do ticket por erro no sync
   }
 
   return ticket;

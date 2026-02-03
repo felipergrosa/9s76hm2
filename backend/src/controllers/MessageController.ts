@@ -39,6 +39,7 @@ import { generateWAMessageFromContent, generateWAMessageContent, proto } from "@
 import SendWhatsAppReaction from "../services/WbotServices/SendWhatsAppReaction";
 import TranscribeAudioMessageService from "../services/MessageServices/TranscribeAudioMessageService";
 import ShowMessageService, { GetWhatsAppFromMessage } from "../services/MessageServices/ShowMessageService";
+import SyncChatHistoryService from "../services/MessageServices/SyncChatHistoryService";
 
 type IndexQuery = {
   pageNumber: string;
@@ -1393,5 +1394,31 @@ export const forwardToExternalNumber = async (req: Request, res: Response): Prom
   } catch (error: any) {
     console.error("[forwardToExternalNumber] Erro:", error);
     return res.status(500).json({ error: error.message || "Erro ao encaminhar mensagem" });
+  }
+};
+
+// Sincronização manual de histórico de mensagens
+export const syncMessages = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+
+  try {
+    const result = await SyncChatHistoryService({
+      ticketId,
+      companyId,
+      forceSync: true // Força sync mesmo se throttle ativo
+    });
+
+    return res.status(200).json({
+      success: !result.skipped,
+      synced: result.synced,
+      message: result.reason || `${result.synced} mensagens sincronizadas`
+    });
+  } catch (error: any) {
+    console.error("[syncMessages] Erro:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Erro ao sincronizar mensagens"
+    });
   }
 };

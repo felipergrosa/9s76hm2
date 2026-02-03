@@ -223,17 +223,19 @@ const ListTicketsServiceKanban = async ({
     companyId
   };
 
-  // Filtro de Hierarquia (Conexões) - Apenas não-admins
+  // Filtro de Hierarquia (Conexões): Super Admin vê tudo, demais respeitam allowedConnectionIds
   if (userId) {
     const user = await ShowUserService(userId, companyId);
-    if (user.profile !== "admin") {
+    if (!user.super) {
       const allowedConnectionIds = user.allowedConnectionIds || [];
-      whereCondition = {
-        [Op.and]: [
-          whereCondition,
-          { whatsappId: { [Op.in]: allowedConnectionIds } }
-        ]
-      } as any;
+      if (allowedConnectionIds.length > 0) {
+        whereCondition = {
+          [Op.and]: [
+            whereCondition,
+            { whatsappId: { [Op.in]: allowedConnectionIds } }
+          ]
+        } as any;
+      }
     }
 
     // Filtro de Ghost Mode - Aplicado a TODOS (Strict Mode)

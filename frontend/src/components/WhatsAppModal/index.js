@@ -192,10 +192,11 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
   const [queues, setQueues] = useState([]);
   const [tab, setTab] = useState("general");
   const [enableImportMessage, setEnableImportMessage] = useState(false);
-  const [importOldMessagesGroups, setImportOldMessagesGroups] = useState(false);
   const [closedTicketsPostImported, setClosedTicketsPostImported] = useState(false);
+  const [importOldMessagesGroups, setImportOldMessagesGroups] = useState(false);
   const [importOldMessages, setImportOldMessages] = useState(moment().add(-1, "days").format("YYYY-MM-DDTHH:mm"));
   const [importRecentMessages, setImportRecentMessages] = useState(moment().add(-1, "minutes").format("YYYY-MM-DDTHH:mm"));
+  const [syncOnTicketOpen, setSyncOnTicketOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const [schedulesEnabled, setSchedulesEnabled] = useState(false);
@@ -325,6 +326,10 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
           setClosedTicketsPostImported(data?.closedTicketsPostImported);
           setImportOldMessagesGroups(data?.importOldMessagesGroups);
         }
+        // Sincronização individual
+        if (!isNil(data?.syncOnTicketOpen)) {
+          setSyncOnTicketOpen(data?.syncOnTicketOpen);
+        }
       } catch (err) {
         toastError(err);
       }
@@ -442,6 +447,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
       importRecentMessages: enableImportMessage ? importRecentMessages : null,
       importOldMessagesGroups: importOldMessagesGroups ? importOldMessagesGroups : null,
       closedTicketsPostImported: closedTicketsPostImported ? closedTicketsPostImported : null,
+      syncOnTicketOpen: syncOnTicketOpen,
       token: autoToken ? autoToken : null, schedules,
       promptId: selectedPrompt ? selectedPrompt : null,
       contactTagId: values.contactTagId || null
@@ -877,6 +883,24 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                                 />
                               </>
                             ) : null}
+
+                            {/* Toggle Sync ao abrir ticket */}
+                            <FormControlLabel
+                              style={{ marginRight: 7, color: "gray" }}
+                              label="Sincronizar histórico ao abrir ticket"
+                              labelPlacement="end"
+                              control={
+                                <Switch
+                                  size="medium"
+                                  checked={syncOnTicketOpen}
+                                  onChange={(e) =>
+                                    setSyncOnTicketOpen(e.target.checked)
+                                  }
+                                  name="syncOnTicketOpen"
+                                  color="primary"
+                                />
+                              }
+                            />
                           </div>
 
                           {enableImportMessage ? (
@@ -1398,7 +1422,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                         cliente.
                         <br />
                         <strong>Mensagem por inatividade e tempo de
-                        inatividade:</strong> permitem enviar um aviso automático
+                          inatividade:</strong> permitem enviar um aviso automático
                         avisando o cliente que o atendimento será encerrado caso
                         ele não responda em X minutos.
                       </Typography>

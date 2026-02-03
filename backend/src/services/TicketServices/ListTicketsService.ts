@@ -558,15 +558,17 @@ const ListTicketsService = async ({
     } as any;
   }
 
-  // Filtro de Conexões (Apenas não-admins)
-  if (user.profile !== "admin") {
+  // Filtro de Conexões: Super Admin vê tudo, demais respeitam allowedConnectionIds
+  if (!user.super) {
     const allowedConnectionIds = user.allowedConnectionIds || [];
-    whereCondition = {
-      [Op.and]: [
-        whereCondition,
-        { whatsappId: { [Op.in]: allowedConnectionIds } }
-      ]
-    } as any;
+    if (allowedConnectionIds.length > 0) {
+      whereCondition = {
+        [Op.and]: [
+          whereCondition,
+          { whatsappId: { [Op.in]: allowedConnectionIds } }
+        ]
+      } as any;
+    }
   }
 
   // 2. Ghost Mode (Hide Private Users) - Aplicado a TODOS (Strict Mode)

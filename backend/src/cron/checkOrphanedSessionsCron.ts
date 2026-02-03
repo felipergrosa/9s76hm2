@@ -4,9 +4,10 @@ import logger from "../utils/logger";
 import { StartWhatsAppSessionUnified } from "../services/WbotServices/StartWhatsAppSessionUnified";
 import { getLockKey } from "../libs/wbotMutex";
 import cacheLayer from "../libs/cache";
+import { getWbotIsReconnecting } from "../libs/wbot";
 
 export const checkOrphanedSessionsCron = () => {
-    // Intervalo de verificação: 1 minuto
+    // Intervalo de verificação: 10 segundos
     setInterval(async () => {
         try {
             const whatsapps = await Whatsapp.findAll({
@@ -22,6 +23,13 @@ export const checkOrphanedSessionsCron = () => {
             if (!redis) return; // Se não tem redis, não tem como checar lock
 
             for (const whatsapp of whatsapps) {
+                // CORREÇÃO: Verificar se sessão já está em processo de reconexão
+                // Isso evita race condition onde OrphanedCron tenta assumir durante delay de reconexão
+                if (getWbotIsReconnecting(whatsapp.id)) {
+                    logger.debug(`[OrphanedCron] Sessão ${whatsapp.name} (#${whatsapp.id}) já está reconectando. Pulando.`);
+                    continue;
+                }
+
                 const key = getLockKey(whatsapp.id);
                 const owner = await redis.get(key);
 

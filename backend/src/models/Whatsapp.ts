@@ -231,7 +231,7 @@ class Whatsapp extends Model<Whatsapp> {
   @Default("disabled")
   @Column
   groupAsTicket: string;
-  
+
   @Column
   importOldMessages: Date;
 
@@ -240,12 +240,12 @@ class Whatsapp extends Model<Whatsapp> {
 
   @Column
   statusImportMessages: string;
-  
-  @Column
-  closedTicketsPostImported:boolean;
 
   @Column
-  importOldMessagesGroups:boolean;
+  closedTicketsPostImported: boolean;
+
+  @Column
+  importOldMessagesGroups: boolean;
 
   @Column
   timeCreateNewTicket: number;
@@ -302,6 +302,11 @@ class Whatsapp extends Model<Whatsapp> {
 
   @BelongsTo(() => Tag)
   contactTag: Tag;
+
+  // Sincronização de histórico individual ao abrir ticket
+  @Default(false)
+  @Column
+  syncOnTicketOpen: boolean;
 }
 
 export default Whatsapp;

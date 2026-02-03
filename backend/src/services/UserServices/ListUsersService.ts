@@ -43,19 +43,9 @@ const ListUsersService = async ({
     }
   };
 
-  // Implementation of Strict Ghost Mode
-  // Logic: Hide user IF (isPrivate == true AND id != requestUserId)
-  if (requestUserId) {
-    whereCondition = {
-      ...whereCondition,
-      [Op.not]: {
-        [Op.and]: [
-          { isPrivate: true },
-          { id: { [Op.ne]: requestUserId } }
-        ]
-      }
-    };
-  }
+  // Ghost Mode NÃO filtra lista de usuários
+  // Usuários Ghost devem aparecer em seletores/dropdowns
+  // O Ghost Mode oculta apenas os TICKETS em ListTicketsService/ListTicketsServiceKanban
 
   const limit = 20;
   const offset = limit * (+pageNumber - 1);
