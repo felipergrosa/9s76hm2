@@ -300,6 +300,21 @@ const ListTicketsServiceKanban = async ({
           {
             [Op.or]: orConditions
           }
+
+        ]
+      } as any;
+    } else if (showAll !== "true") {
+      // FALLBACK: Se não tem restrição de carteira e NÃO é admin (showAll!=true),
+      // aplica restrição padrão de usuário: ver apenas os seus ou os sem dono (pendentes)
+      whereCondition = {
+        [Op.and]: [
+          whereCondition,
+          {
+            [Op.or]: [
+              { userId: Number(userId) },
+              { userId: null }
+            ]
+          }
         ]
       } as any;
     }
