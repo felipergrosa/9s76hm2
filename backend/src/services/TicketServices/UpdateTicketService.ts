@@ -396,7 +396,7 @@ const UpdateTicketService = async ({
 
         await newTicketTransfer.reload();
 
-        if (settings.sendMsgTransfTicket === "enabled") {
+        if (settings.sendMsgTransfTicket === "enabled" && settings.transferMessage && settings.transferMessage.trim() !== "") {
           // Mensagem de transferencia da FILA
           if ((oldQueueId !== queueId || oldUserId !== userId) && !isNil(oldQueueId) && !isNil(queueId) && ticket.whatsapp.status === 'CONNECTED') {
 
@@ -534,8 +534,7 @@ const UpdateTicketService = async ({
         return { ticket: newTicketTransfer, oldStatus, oldUserId };
 
       } else {
-
-        if (settings.sendMsgTransfTicket === "enabled") {
+        if (settings.sendMsgTransfTicket === "enabled" && settings.transferMessage && settings.transferMessage.trim() !== "") {
           // Mensagem de transferencia da FILA
           if (oldQueueId !== queueId || oldUserId !== userId && !isNil(oldQueueId) && !isNil(queueId) && ticket.whatsapp.status === 'CONNECTED') {
 
