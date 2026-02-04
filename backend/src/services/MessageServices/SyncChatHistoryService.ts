@@ -110,8 +110,8 @@ const SyncChatHistoryService = async ({
                     } catch { }
                 }
 
-                // Baileys fetchMessageHistory(quantity, cursor.key, cursor.messageTimestamp)
-                messages = await wbot.fetchMessageHistory(messageCount, cursor, timestamp);
+                // Baileys fetchMessageHistory(jid, quantity, cursor.key, cursor.messageTimestamp)
+                messages = await wbot.fetchMessageHistory(jid, messageCount, cursor, timestamp);
                 logger.info(`[SyncChatHistory] Recebidas ${messages?.length || 0} mensagens para ticketId=${ticketId}`);
             } else {
                 // Fallback: tentar chatModify para marcar como lido e forçar sync
