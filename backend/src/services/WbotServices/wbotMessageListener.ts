@@ -5741,8 +5741,7 @@ const filterMessages = (msg: WAMessage): boolean => {
     [
       WAMessageStubType.REVOKE,
       WAMessageStubType.E2E_DEVICE_CHANGED,
-      WAMessageStubType.E2E_IDENTITY_CHANGED,
-      WAMessageStubType.CIPHERTEXT
+      WAMessageStubType.E2E_IDENTITY_CHANGED
     ].includes(msg.messageStubType as number) // Ou use diretamente os valores como WAMessageStubType.GROUP_PARTICIPANT_ADD, etc
   )
     return false;

@@ -43,7 +43,11 @@ const CheckContactNumber = async (
       }
     ];
   } else {
-    numberArray = await wbot.onWhatsApp(`${number}@s.whatsapp.net`);
+    let digits = String(number).replace(/\D/g, "");
+    if (digits.length <= 11) {
+      digits = `55${digits}`;
+    }
+    numberArray = await wbot.onWhatsApp(`${digits}@s.whatsapp.net`);
   }
 
   const isNumberExit = numberArray;
