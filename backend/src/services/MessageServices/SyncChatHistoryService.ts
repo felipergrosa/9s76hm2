@@ -140,6 +140,12 @@ const SyncChatHistoryService = async ({
 
         for (const msg of messages) {
             try {
+                // Validar estrutura básica da mensagem
+                if (!msg || !msg.key || !msg.key.id) {
+                    logger.warn(`[SyncChatHistory] Mensagem com estrutura inválida, pulando. Estrutura: ${JSON.stringify(msg?.key || 'undefined')?.substring(0, 200)}`);
+                    continue;
+                }
+
                 // Verificar se mensagem já existe no banco
                 const existingMsg = await Message.findOne({
                     where: { wid: msg.key.id, companyId }
@@ -158,19 +164,26 @@ const SyncChatHistoryService = async ({
                 const messageType = getTypeMessage(msg);
                 const messageBody = getBodyMessage(msg) || "";
 
+                // Validar timestamp
+                const timestamp = msg.messageTimestamp
+                    ? (typeof msg.messageTimestamp === 'object' && msg.messageTimestamp.low
+                        ? msg.messageTimestamp.low
+                        : Number(msg.messageTimestamp))
+                    : Math.floor(Date.now() / 1000);
+
                 const messageData = {
                     wid: msg.key.id,
                     ticketId: ticket.id,
                     contactId: ticket.contactId,
                     body: messageBody,
-                    fromMe: msg.key.fromMe,
+                    fromMe: msg.key.fromMe || false,
                     mediaType: messageType,
                     read: true,
                     ack: msg.status || 0,
-                    remoteJid: msg.key.remoteJid,
+                    remoteJid: msg.key.remoteJid || ticket.contact?.remoteJid,
                     participant: msg.key.participant || null,
                     dataJson: JSON.stringify(msg),
-                    createdAt: new Date(msg.messageTimestamp * 1000),
+                    createdAt: new Date(timestamp * 1000),
                     updatedAt: new Date(),
                     companyId
                 };
