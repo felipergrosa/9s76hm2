@@ -69,6 +69,7 @@ import ContactReleaseRequest from "../models/ContactReleaseRequest";
 import AITestScenario from "../models/AITestScenario";
 import AITestResult from "../models/AITestResult";
 import AIPromptVersion from "../models/AIPromptVersion";
+import LidMapping from "../models/LidMapping";
 
 
 // eslint-disable-next-line
@@ -218,7 +219,8 @@ const models = [
   ContactReleaseRequest,
   AITestScenario,
   AITestResult,
-  AIPromptVersion
+  AIPromptVersion,
+  LidMapping
 ];
 
 sequelize.addModels(models);

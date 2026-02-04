@@ -655,8 +655,39 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
     // Tentar obter o número real do store/cache do Baileys
     try {
       const sock = wbot as any;
-      // Baileys pode ter o mapeamento LID -> número real no store
-      if (sock.store?.contacts) {
+
+      // 1. PRIORIDADE MÁXIMA: senderPn (campo mais confiável do Baileys)
+      const senderPn = (msg as any).senderPn;
+      if (senderPn) {
+        const senderDigits = senderPn.replace(/\D/g, "");
+        if (looksPhoneLike(senderDigits)) {
+          contactJid = senderPn.includes("@") ? senderPn : `${senderDigits}@s.whatsapp.net`;
+          debugLog("[getContactMessage] LID resolvido via senderPn (MAIS CONFIÁVEL)", {
+            originalLid: remoteJid,
+            senderPn,
+            resolvedJid: contactJid
+          });
+        }
+      }
+
+      // 2. phoneNumber no Contact (presente em alguns contatos)
+      if (contactJid === remoteJid && sock.store?.contacts?.[remoteJid]) {
+        const storedContact = sock.store.contacts[remoteJid];
+        if (storedContact.phoneNumber) {
+          const pnDigits = storedContact.phoneNumber.replace(/\D/g, "");
+          if (looksPhoneLike(pnDigits)) {
+            contactJid = `${pnDigits}@s.whatsapp.net`;
+            debugLog("[getContactMessage] LID resolvido via phoneNumber do Contact", {
+              originalLid: remoteJid,
+              phoneNumber: storedContact.phoneNumber,
+              resolvedJid: contactJid
+            });
+          }
+        }
+      }
+
+      // 3. Baileys pode ter o mapeamento LID -> número real no store
+      if (contactJid === remoteJid && sock.store?.contacts) {
         const lidContact = sock.store.contacts[remoteJid];
         if (lidContact?.id && lidContact.id.includes("@s.whatsapp.net")) {
           contactJid = lidContact.id;
@@ -1026,7 +1057,45 @@ const verifyContact = async (
       cleaned
     });
 
-    // 1. Para JIDs @lid, primeiro buscar por remoteJid (LID) existente
+    // 0. PRIORIDADE MÁXIMA: Consultar tabela LidMappings (cache persistente)
+    // Esta é a fonte mais confiável pois foi preenchida pelo evento lid-mapping.update
+    try {
+      const LidMapping = require("../../models/LidMapping").default;
+      const savedMapping = await LidMapping.findOne({
+        where: { lid: normalizedJid, companyId }
+      });
+
+      if (savedMapping?.phoneNumber) {
+        const existingByMapping = await Contact.findOne({
+          where: {
+            [Op.or]: [
+              { canonicalNumber: savedMapping.phoneNumber },
+              { number: savedMapping.phoneNumber }
+            ],
+            companyId,
+            isGroup: false
+          }
+        });
+
+        if (existingByMapping) {
+          logger.info("[verifyContact] LID resolvido via tabela LidMappings (CACHE PERSISTENTE)", {
+            lid: normalizedJid,
+            phoneNumber: savedMapping.phoneNumber,
+            contactId: existingByMapping.id,
+            contactName: existingByMapping.name
+          });
+          // Atualizar remoteJid do contato para acelerar futuras buscas
+          if (!existingByMapping.remoteJid || existingByMapping.remoteJid !== normalizedJid) {
+            await existingByMapping.update({ remoteJid: normalizedJid });
+          }
+          return existingByMapping;
+        }
+      }
+    } catch (err: any) {
+      debugLog("[verifyContact] Erro ao consultar LidMappings", { err: err?.message });
+    }
+
+    // 1. Para JIDs @lid, buscar por remoteJid (LID) existente
     const existingByLid = await Contact.findOne({
       where: { remoteJid: normalizedJid, companyId }
     });
@@ -1144,28 +1213,20 @@ const verifyContact = async (
       }
     }
 
-    // Se chegou aqui, nenhuma resolução funcionou - criar novo contato com segurança
-    logger.warn("[verifyContact] BLINDAGEM: LID não resolvido por nenhum método, criando novo contato", {
+    // CORREÇÃO CRÍTICA: NÃO criar contato quando LID não resolver
+    // Isso CAUSAVA contatos duplicados (ex: 247540473708749 vs 5519987054278)
+    // Quando o LID não resolve, é melhor descartar a mensagem do que criar duplicata
+    logger.error("[verifyContact] BLOQUEIO: LID não resolvido - NÃO criando contato duplicado", {
       normalizedJid,
       pushName: msgContact.name,
       cleaned,
+      cleanedLength: cleaned.length,
       companyId,
       metodosTentados: ["LID direto", "pushName", "número no LID", "store.contacts", "wbot.onWhatsApp", "busca parcial"]
     });
 
-    // Criar contato básico com o LID
-    const basicContactData = {
-      name: msgContact.name || normalizedJid,
-      number: cleaned || normalizedJid,
-      profilePicUrl: "",
-      isGroup: false,
-      companyId,
-      remoteJid: normalizedJid,
-      whatsappId: wbot.id,
-      wbot
-    };
-    const newContact = await CreateOrUpdateContactService(basicContactData);
-    return newContact;
+    // Retornar null para que a mensagem seja ignorada (melhor que criar duplicata)
+    return null as any;
   }
 
   // VALIDAÇÃO RIGOROSA: só cria contato se não for grupo e o número tiver entre 10 e 13 dígitos

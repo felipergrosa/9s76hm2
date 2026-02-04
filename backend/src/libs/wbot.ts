@@ -594,6 +594,43 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 logger.warn(`[wbot] initial resyncAppState failed: ${e?.message}`);
               }
 
+              // NOVO: Escutar evento lid-mapping.update para persistir mapeamentos LID → Número
+              // Isso resolve o problema de contatos duplicados causado por LIDs
+              try {
+                wsocket.ev.on("lid-mapping.update" as any, async (mappings: any) => {
+                  try {
+                    const LidMapping = require("../models/LidMapping").default;
+                    const mappingsArray = Array.isArray(mappings) ? mappings : [mappings];
+
+                    for (const mapping of mappingsArray) {
+                      const lid = mapping?.lid || mapping?.id;
+                      const pn = mapping?.pn || mapping?.phoneNumber || mapping?.number;
+
+                      if (!lid || !pn) continue;
+
+                      // Extrair apenas dígitos do número
+                      const phoneDigits = pn.replace(/\D/g, "");
+                      if (phoneDigits.length < 10 || phoneDigits.length > 13) continue;
+
+                      // Upsert no banco
+                      await LidMapping.upsert({
+                        lid: lid.includes("@") ? lid : `${lid}@lid`,
+                        phoneNumber: phoneDigits,
+                        companyId,
+                        whatsappId: whatsapp.id
+                      });
+
+                      logger.info(`[wbot] LID mapeado e persistido: ${lid} → ${phoneDigits}`);
+                    }
+                  } catch (err: any) {
+                    logger.warn(`[wbot] Erro ao persistir lid-mapping: ${err?.message}`);
+                  }
+                });
+                logger.info(`[wbot] Evento lid-mapping.update registrado para whatsappId=${whatsapp.id}`);
+              } catch (e: any) {
+                logger.warn(`[wbot] Falha ao registrar lid-mapping.update: ${e?.message}`);
+              }
+
               resolve(wsocket);
             }
 
