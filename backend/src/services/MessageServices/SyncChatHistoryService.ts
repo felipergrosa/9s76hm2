@@ -138,11 +138,18 @@ const SyncChatHistoryService = async ({
         let syncedCount = 0;
         const io = getIO();
 
-        for (const msg of messages) {
+        // Filtrar mensagens válidas (remover undefined/null que podem vir do Baileys)
+        const validMessages = messages.filter(m => m && m.key && m.key.id);
+
+        for (const msg of validMessages) {
             try {
-                // Validar estrutura básica da mensagem
+                // Validar estrutura básica da mensagem (redundância, mas seguro)
                 if (!msg || !msg.key || !msg.key.id) {
-                    logger.warn(`[SyncChatHistory] Mensagem com estrutura inválida, pulando. Estrutura: ${JSON.stringify(msg?.key || 'undefined')?.substring(0, 200)}`);
+                    const debugMsg = JSON.stringify(msg, (key, value) => {
+                        if (key === 'auth') return undefined; // Ocultar dados sensíveis se houver
+                        return value;
+                    }, 2); // Indentação para leitura
+                    logger.warn(`[SyncChatHistory] Mensagem com estrutura inválida, pulando. Dump completo -> ${debugMsg?.substring(0, 1000)}`);
                     continue;
                 }
 
