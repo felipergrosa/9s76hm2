@@ -85,22 +85,33 @@ const SyncChatHistoryService = async ({
             ? `${ticket.contact.number}@g.us`
             : `${ticket.contact.number}@s.whatsapp.net`;
 
-        // 5. Buscar última mensagem do banco para usar como âncora
-        const lastMessage = await Message.findOne({
+        // 5. Buscar mensagem MAIS ANTIGA do banco para usar como âncora
+        // (queremos buscar mensagens ANTERIORES a esta)
+        const oldestMessage = await Message.findOne({
             where: { ticketId: ticket.id },
-            order: [["createdAt", "DESC"]]
+            order: [["createdAt", "ASC"]]
         });
 
         // 6. Chamar fetchMessageHistory do Baileys
         let messages: any[] = [];
         try {
             if (typeof wbot.fetchMessageHistory === "function") {
-                // Usar a última mensagem como âncora se existir
-                const cursor = lastMessage?.dataJson
-                    ? JSON.parse(lastMessage.dataJson)?.key
-                    : undefined;
+                // Usar a mensagem mais antiga como âncora se existir
+                let cursor: any = undefined;
+                let timestamp: number | undefined = undefined;
 
-                messages = await wbot.fetchMessageHistory(messageCount, cursor, undefined);
+                if (oldestMessage?.dataJson) {
+                    try {
+                        const parsed = JSON.parse(oldestMessage.dataJson);
+                        cursor = parsed?.key;
+                        timestamp = parsed?.messageTimestamp
+                            ? Number(parsed.messageTimestamp)
+                            : undefined;
+                    } catch { }
+                }
+
+                // Baileys fetchMessageHistory(quantity, cursor.key, cursor.messageTimestamp)
+                messages = await wbot.fetchMessageHistory(messageCount, cursor, timestamp);
                 logger.info(`[SyncChatHistory] Recebidas ${messages?.length || 0} mensagens para ticketId=${ticketId}`);
             } else {
                 // Fallback: tentar chatModify para marcar como lido e forçar sync

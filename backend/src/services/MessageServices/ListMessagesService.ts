@@ -9,6 +9,8 @@ import isQueueIdHistoryBlocked from "../UserServices/isQueueIdHistoryBlocked";
 import Contact from "../../models/Contact";
 import Queue from "../../models/Queue";
 import Whatsapp from "../../models/Whatsapp";
+import SyncChatHistoryService from "./SyncChatHistoryService";
+import logger from "../../utils/logger";
 
 interface Request {
   ticketId: string;
@@ -166,7 +168,90 @@ const ListMessagesService = async ({
     order: [["createdAt", "DESC"]]
   });
 
-  const hasMore = count > offset + messages.length;
+  let hasMore = count > offset + messages.length;
+
+  // INFINITE SCROLL: Se não há mais mensagens locais e estamos em página > 1,
+  // tenta buscar mais mensagens do WhatsApp
+  if (!hasMore && +pageNumber > 1 && ticket.channel === "whatsapp" && ticket.whatsappId) {
+    try {
+      // Verificar se a conexão suporta sync on-demand
+      const whatsapp = await Whatsapp.findByPk(ticket.whatsappId, {
+        attributes: ["id", "status", "syncOnTicketOpen"]
+      });
+
+      if (whatsapp?.status === "CONNECTED") {
+        logger.info(`[ListMessages] Histórico local esgotou, buscando mais do WhatsApp para ticketId=${ticket.id}`);
+
+        // Chamar sync para buscar mensagens mais antigas
+        const syncResult = await SyncChatHistoryService({
+          ticketId: ticket.id,
+          companyId,
+          messageCount: 50, // Buscar mais mensagens de uma vez
+          forceSync: true   // Ignorar throttle pois é paginação
+        });
+
+        // Se sincronizou novas mensagens, refazer a query
+        if (syncResult.synced > 0) {
+          logger.info(`[ListMessages] Sincronizadas ${syncResult.synced} mensagens, refazendo query`);
+
+          const { count: newCount, rows: newMessages } = await Message.findAndCountAll({
+            where: { ticketId: tickets, companyId },
+            attributes: ["id", "fromMe", "mediaUrl", "body", "mediaType", "ack", "createdAt", "ticketId", "isDeleted", "queueId", "isForwarded", "isEdited", "isPrivate", "companyId", "dataJson", "audioTranscription"],
+            limit,
+            include: [
+              {
+                model: Contact,
+                as: "contact",
+                attributes: ["id", "name", "profilePicUrl", "urlPicture", "updatedAt", "companyId"],
+              },
+              {
+                model: Message,
+                attributes: ["id", "fromMe", "mediaUrl", "body", "mediaType", "companyId", "audioTranscription"],
+                as: "quotedMsg",
+                include: [
+                  {
+                    model: Contact,
+                    as: "contact",
+                    attributes: ["id", "name", "profilePicUrl", "urlPicture", "updatedAt", "companyId"],
+                  }
+                ],
+                required: false
+              },
+              {
+                model: Ticket,
+                required: true,
+                attributes: ["id", "whatsappId", "queueId", "createdAt"],
+                include: [
+                  {
+                    model: Queue,
+                    as: "queue",
+                    attributes: ["id", "name", "color"]
+                  }
+                ],
+              }
+            ],
+            distinct: true,
+            offset,
+            subQuery: false,
+            order: [["createdAt", "DESC"]]
+          });
+
+          // Atualizar hasMore com base nos novos dados
+          hasMore = newCount > offset + newMessages.length;
+
+          return {
+            messages: newMessages.reverse(),
+            ticket,
+            count: newCount,
+            hasMore
+          };
+        }
+      }
+    } catch (syncError: any) {
+      // Não falhar a listagem por erro no sync
+      logger.warn(`[ListMessages] Erro no sync on-demand: ${syncError?.message}`);
+    }
+  }
 
   return {
     messages: messages.reverse(),
