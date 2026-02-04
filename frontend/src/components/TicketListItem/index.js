@@ -69,6 +69,7 @@ const useStyles = makeStyles((theme) => ({
     contactNameWrapper: {
         display: "flex",
         justifyContent: "space-between",
+        paddingRight: 60,
     },
 
     lastMessageTime: {
@@ -248,7 +249,7 @@ const TicketListItem = ({ ticket }) => {
         console.log("=========================================")
     }, [ticket])
 
-    
+
     useEffect(() => {
         return () => {
             isMounted.current = false;

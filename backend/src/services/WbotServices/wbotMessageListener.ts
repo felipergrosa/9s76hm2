@@ -4447,6 +4447,54 @@ const handleMessage = async (
     let bodyMessage = getBodyMessage(msg);
     const msgType = getTypeMessage(msg);
 
+    // TRATAMENTO DE REAÇÕES (ReactionMessage) - Versão compatível com Frontend
+    if (msgType === "reactionMessage") {
+      const reactionContent = msg.message?.reactionMessage?.text;
+      const targetQuotedId = msg.message?.reactionMessage?.key?.id;
+
+      if (!targetQuotedId) return;
+
+      // 1. Verificar se a mensagem alvo existe
+      const targetMessage = await Message.findOne({
+        where: { wid: targetQuotedId, companyId }
+      });
+
+      if (!targetMessage) {
+        logger.warn(`[handleMessage] Reação ignorada: Mensagem alvo ${targetQuotedId} não encontrada no banco.`);
+        return;
+      }
+
+      // 2. Unicidade: Se este usuário já reagiu a esta mensagem, remover a reação antiga
+      const senderJid = msg.key.participant || msg.key.remoteJid;
+      const oldReaction = await Message.findOne({
+        where: {
+          quotedMsgId: targetMessage.id, // ID interno
+          participant: senderJid,
+          mediaType: "reactionMessage",
+          companyId
+        }
+      });
+
+      if (oldReaction) {
+        await oldReaction.destroy();
+        // Emitir delete para limpar a UI antes de criar a nova
+        const io = getIO();
+        io.of(`/workspace-${companyId}`)
+          .to(targetMessage.ticketId.toString())
+          .emit(`company-${companyId}-appMessage`, {
+            action: "delete",
+            messageId: oldReaction.id
+          });
+      }
+
+      // 3. Se reactionContent for vazio, significa que a reação foi removida no WhatsApp
+      if (!reactionContent) {
+        return; // Já destruímos e emitimos o delete acima
+      }
+
+      // 4. Continuar para o fluxo normal de criação (que usará verifyMessage)
+      // Mas vamos injetar os dados necessários para o verifyMessage funcionar perfeitamente
+    }
 
     const hasMedia =
       msg.message?.imageMessage ||

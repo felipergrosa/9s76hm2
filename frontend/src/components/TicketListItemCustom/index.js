@@ -123,6 +123,7 @@ const useStyles = makeStyles((theme) => ({
         fontWeight: "bold",
         color: theme.mode === 'light' ? "black" : "white",
         minWidth: 0,
+        paddingRight: 60,
     },
     contactNameText: {
         flex: 1,
