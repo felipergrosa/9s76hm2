@@ -125,19 +125,40 @@ const CreateMessageService = async ({
   // Se é campanha, NÃO emite nada (evita aparecer na tela do atendente)
   // A mensagem será visível apenas ao abrir o ticket específico
   if (!messageData?.ticketImported) {
-    console.log(`[CreateMessageService] Emitindo mensagem para sala ${message.ticket.uuid}, companyId=${companyId}, msgId=${message.id}`);
-    await emitToCompanyRoom(
-      companyId,
-      message.ticket.uuid,
-      `company-${companyId}-appMessage`,
-      {
-        action: "create",
-        message,
-        ticket: message.ticket,
-        contact: message.ticket.contact
-      },
-      false // Habilitar fallback para garantir entrega mesmo se sala vazia
-    );
+    const roomId = message.ticket.uuid;
+    const eventName = `company-${companyId}-appMessage`;
+    
+    console.log(`[CreateMessageService] Emitindo mensagem para sala ${roomId}, companyId=${companyId}, msgId=${message.id}, ticketId=${message.ticketId}`);
+    
+    // Tentativa com retry para problemas intermitentes
+    const emitWithRetry = async (attempts: number = 3, delayMs: number = 100): Promise<void> => {
+      for (let i = 0; i < attempts; i++) {
+        try {
+          await emitToCompanyRoom(
+            companyId,
+            roomId,
+            eventName,
+            {
+              action: "create",
+              message,
+              ticket: message.ticket,
+              contact: message.ticket.contact
+            },
+            false // Habilitar fallback para garantir entrega mesmo se sala vazia
+          );
+          console.log(`[CreateMessageService] Emissão sucesso na tentativa ${i + 1} para sala ${roomId}`);
+          return;
+        } catch (err) {
+          console.error(`[CreateMessageService] Falha na tentativa ${i + 1} de emissão para sala ${roomId}:`, err);
+          if (i < attempts - 1) {
+            await new Promise(r => setTimeout(r, delayMs * (i + 1)));
+          }
+        }
+      }
+      console.error(`[CreateMessageService] Todas as tentativas de emissão falharam para sala ${roomId}`);
+    };
+    
+    await emitWithRetry();
   }
 
 

@@ -10,6 +10,7 @@ class SocketWorker {
       this.configureSocket();
       this.eventListeners = {}; // Armazena os ouvintes de eventos registrados
       this.joinBuffer = new Set(); // Rooms pendentes de join
+      this.healthCheckInterval = null; // Intervalo de health check
       SocketWorker.instance = this;
 
     }
@@ -210,6 +211,43 @@ class SocketWorker {
         this.socket.connect();
       }
     } catch (e) { }
+  }
+
+  // Inicia health check periódico para verificar se está na sala
+  startHealthCheck(room, intervalMs = 30000) {
+    this.stopHealthCheck();
+    console.log(`[SocketWorker] Iniciando health check para sala ${room} a cada ${intervalMs}ms`);
+    
+    this.healthCheckInterval = setInterval(() => {
+      if (!this.connected) {
+        console.warn(`[SocketWorker] Health check: socket desconectado, tentando reconectar...`);
+        this.connect();
+        return;
+      }
+      
+      this.checkRoom(room, (res) => {
+        if (res?.error) {
+          console.error(`[SocketWorker] Health check erro na sala ${room}:`, res.error);
+        } else if (!res?.present) {
+          console.warn(`[SocketWorker] Health check: não está na sala ${room}, refazendo join...`);
+          this.joinRoom(room, (err) => {
+            if (err) console.error(`[SocketWorker] Health check: erro ao refazer join na sala ${room}:`, err);
+            else console.log(`[SocketWorker] Health check: rejoin bem-sucedido na sala ${room}`);
+          });
+        } else {
+          console.debug(`[SocketWorker] Health check OK na sala ${room}, sockets na sala: ${res.count}`);
+        }
+      });
+    }, intervalMs);
+  }
+
+  // Para o health check
+  stopHealthCheck() {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+      console.log("[SocketWorker] Health check parado");
+    }
   }
 
   forceReconnect() {

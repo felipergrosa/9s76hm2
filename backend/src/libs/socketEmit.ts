@@ -39,19 +39,31 @@ export async function emitToCompanyRoom(
     
     // Log sempre para debug de mensagens
     console.log(
-      `[SOCKET EMIT] event=${event} ns=/workspace-${companyId} room=${room} count=${sockets.length} ids=${ids} skipFallback=${skipFallback}`
+      `[SOCKET EMIT] event=${event} ns=/workspace-${companyId} room=${room} count=${sockets.length} ids=${ids || "nenhum"} fallbackEnabled=${fallbackEnabled}`
     );
 
-    if (sockets.length === 0 && fallbackEnabled) {
-      console.log(`[SOCKET EMIT] fallback namespace broadcast event=${event} ns=/workspace-${companyId} room=${room}`);
-      ns.emit(event, { ...payload, fallback: true, room });
+    if (sockets.length === 0) {
+      console.warn(`[SOCKET EMIT] SALA VAZIA: ns=/workspace-${companyId} room=${room} - Nenhum socket na sala!`);
+      
+      if (fallbackEnabled) {
+        console.log(`[SOCKET EMIT] Executando fallback broadcast para event=${event} ns=/workspace-${companyId}`);
+        ns.emit(event, { ...payload, fallback: true, room });
+      } else {
+        console.warn(`[SOCKET EMIT] Fallback DESABILITADO - mensagem pode não chegar ao destinatário!`);
+      }
     } else {
-      ns.to(room).emit(event, payload);
+      const result = ns.to(room).emit(event, payload);
+      console.log(`[SOCKET EMIT] Emitido para ${sockets.length} sockets na sala ${room}, resultado=${result}`);
     }
   } catch (e) {
-    console.log(`[SOCKET EMIT] erro ao consultar sala ns=/workspace-${companyId} room=${room}: ${e}`);
+    console.error(`[SOCKET EMIT] ERRO ao consultar sala ns=/workspace-${companyId} room=${room}:`, e);
     // Em caso de erro ao consultar sockets, ainda tentamos emitir para a sala
-    ns.to(room).emit(event, payload);
+    try {
+      ns.to(room).emit(event, payload);
+      console.log(`[SOCKET EMIT] Tentativa de emissão após erro para sala ${room}`);
+    } catch (emitErr) {
+      console.error(`[SOCKET EMIT] Falha total na emissão:`, emitErr);
+    }
   }
 }
 

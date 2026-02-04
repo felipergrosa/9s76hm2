@@ -48,6 +48,17 @@ import sendFaceMessage from "../FacebookServices/sendFacebookMessage";
 import moment from "moment";
 import Queue from "../../models/Queue";
 import FindOrCreateATicketTrakingService from "../TicketServices/FindOrCreateATicketTrakingService";
+
+// Mutex global compartilhado para evitar race conditions na criação de tickets
+// Um mutex por companyId para não bloquear mensagens de empresas diferentes
+const ticketMutexes = new Map<number, Mutex>();
+
+function getTicketMutex(companyId: number): Mutex {
+  if (!ticketMutexes.has(companyId)) {
+    ticketMutexes.set(companyId, new Mutex());
+  }
+  return ticketMutexes.get(companyId)!;
+}
 import VerifyCurrentSchedule from "../CompanyService/VerifyCurrentSchedule";
 import Campaign from "../../models/Campaign";
 import QueueAutoFileService from "../QueueServices/QueueAutoFileService";
@@ -4693,9 +4704,12 @@ const handleMessage = async (
       order: [["id", "DESC"]]
     });
 
-    const mutex = new Mutex();
-    // Inclui a busca de ticket aqui, se realmente não achar um ticket, então vai para o findorcreate
+    // Usa mutex global compartilhado para evitar race conditions na criação de tickets
+    const mutex = getTicketMutex(companyId);
+    console.log(`[wbotMessageListener] Processando mensagem para companyId=${companyId}, contactId=${contact.id}, mutex=${mutex ? "ativo" : "inativo"}`);
+    
     let ticket = await mutex.runExclusive(async () => {
+      console.log(`[wbotMessageListener] Dentro do mutex - criando/buscando ticket para contactId=${contact.id}`);
       const result = await FindOrCreateTicketService(
         contact,
         whatsapp,
@@ -4712,6 +4726,7 @@ const handleMessage = async (
         false,
         Boolean(msg?.key?.fromMe)
       );
+      console.log(`[wbotMessageListener] Ticket obtido: id=${result.id}, uuid=${result.uuid}, status=${result.status}`);
       return result;
     });
 

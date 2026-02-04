@@ -1053,6 +1053,10 @@ const MessagesList = ({
                     if (err) console.log("[MessagesList] join after fetch ack error", err);
                     else {
                       console.log("[MessagesList] joined room by uuid after fetch", { room: newRoomId });
+                      // Inicia health check para garantir permanência na sala
+                      if (typeof socket.startHealthCheck === "function") {
+                        socket.startHealthCheck(newRoomId, 20000);
+                      }
                       if (typeof socket.checkRoom === "function") {
                         socket.checkRoom(newRoomId, (res) => console.log("[MessagesList] checkRoom after fetch join", res));
                       }
@@ -1063,6 +1067,10 @@ const MessagesList = ({
                     if (err) console.log("[MessagesList] join after fetch ack error", err);
                     else {
                       console.log("[MessagesList] joined room by uuid after fetch", { room: newRoomId });
+                      // Inicia health check para garantir permanência na sala
+                      if (typeof socket.startHealthCheck === "function") {
+                        socket.startHealthCheck(newRoomId, 20000);
+                      }
                       if (typeof socket.checkRoom === "function") {
                         socket.checkRoom(newRoomId, (res) => console.log("[MessagesList] checkRoom after fetch join", res));
                       }
@@ -1150,6 +1158,10 @@ const MessagesList = ({
             if (err) console.log("[MessagesList] joinChatBox ack error", err);
             else {
               console.log("[MessagesList] joinChatBox ok", { room: roomToJoin });
+              // Inicia health check para garantir permanência na sala
+              if (typeof socket.startHealthCheck === "function") {
+                socket.startHealthCheck(roomToJoin, 20000);
+              }
               if (typeof socket.checkRoom === "function") {
                 socket.checkRoom(roomToJoin, (res) => console.log("[MessagesList] checkRoom after connect join", res));
               }
@@ -1160,6 +1172,10 @@ const MessagesList = ({
             if (err) console.log("[MessagesList] joinChatBox ack error", err);
             else {
               console.log("[MessagesList] joinChatBox ok", { room: roomToJoin });
+              // Inicia health check para garantir permanência na sala
+              if (typeof socket.startHealthCheck === "function") {
+                socket.startHealthCheck(roomToJoin, 20000);
+              }
               if (typeof socket.checkRoom === "function") {
                 socket.checkRoom(roomToJoin, (res) => console.log("[MessagesList] checkRoom after connect join", res));
               }
@@ -1278,6 +1294,10 @@ const MessagesList = ({
       socket.off("reconnect");
       socket.off("reconnect_attempt");
       socket.off("connect_error");
+      // Para o health check ao sair do componente
+      if (typeof socket.stopHealthCheck === "function") {
+        socket.stopHealthCheck();
+      }
     };
   }, [ticketId, socket, user?.companyId]);
 
