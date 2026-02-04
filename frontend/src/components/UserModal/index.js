@@ -722,7 +722,12 @@ const UserModal = ({ open, onClose, userId }) => {
                                         color="primary"
                                       />
                                     }
-                                    label="Super Admin (Acesso Total)"
+                                    label={
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        Super Admin (Acesso Total)
+                                        <span title="Super Admin" style={{ fontSize: '1.2rem' }}>👑</span>
+                                      </div>
+                                    }
                                   />
                                 </Grid>
                               </Grid>

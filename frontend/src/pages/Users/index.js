@@ -287,11 +287,10 @@ const Users = () => {
         ) : (
           <button
             onClick={() => handlePageChange(page)}
-            className={`flex items-center justify-center px-3 h-8 leading-tight border ${
-              page === pageNumber
-                ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
-                : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-            }`}
+            className={`flex items-center justify-center px-3 h-8 leading-tight border ${page === pageNumber
+              ? "text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
+              : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+              }`}
           >
             {page}
           </button>
@@ -396,9 +395,11 @@ const Users = () => {
                 <div key={user.id} className={classes.card}>
                   <div className={classes.cardHeader}>
                     <div className={classes.cardTitle}>
-                      <UserStatusIcon user={user} />
                       {renderProfileImage(user)}
                       <span>{user.name}</span>
+                      {user.super && (
+                        <span title="Super Admin" style={{ fontSize: "1.2rem", marginLeft: "4px" }}>👑</span>
+                      )}
                     </div>
                     <div className={classes.metaValue}>ID #{user.id}</div>
                   </div>
@@ -409,7 +410,10 @@ const Users = () => {
                     </div>
                     <div>
                       <div className={classes.metaLabel}>{i18n.t("users.table.profile")}</div>
-                      <div className={classes.metaValue}>{user.profile}</div>
+                      <div className={classes.metaValue}>
+                        {user.super && <span title="Super Admin" style={{ marginRight: "4px" }}>👑</span>}
+                        {user.profile}
+                      </div>
                     </div>
                     <div>
                       <div className={classes.metaLabel}>{i18n.t("users.table.startWork")}</div>
@@ -480,9 +484,18 @@ const Users = () => {
                             {renderProfileImage(user)}
                           </div>
                         </TableCell>
-                        <TableCell align="center">{user.name}</TableCell>
+                        <TableCell align="center">
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                            {user.name}
+                          </div>
+                        </TableCell>
                         <TableCell align="center">{user.email}</TableCell>
-                        <TableCell align="center">{user.profile}</TableCell>
+                        <TableCell align="center">
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                            {user.super && <span title="Super Admin">👑</span>}
+                            {user.profile}
+                          </div>
+                        </TableCell>
                         <TableCell align="center">{user.startWork}</TableCell>
                         <TableCell align="center">{user.endWork}</TableCell>
                         <TableCell align="center">
@@ -523,11 +536,10 @@ const Users = () => {
                 <button
                   onClick={() => handlePageChange(1)}
                   disabled={pageNumber === 1}
-                  className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-l-lg ${
-                    pageNumber === 1
-                      ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                      : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-                  }`}
+                  className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-l-lg ${pageNumber === 1
+                    ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                    : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                    }`}
                 >
                   «
                 </button>
@@ -536,11 +548,10 @@ const Users = () => {
                 <button
                   onClick={() => handlePageChange(pageNumber - 1)}
                   disabled={pageNumber === 1}
-                  className={`flex items-center justify-center px-3 h-8 leading-tight border ${
-                    pageNumber === 1
-                      ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                      : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-                  }`}
+                  className={`flex items-center justify-center px-3 h-8 leading-tight border ${pageNumber === 1
+                    ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                    : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                    }`}
                 >
                   ‹
                 </button>
@@ -550,11 +561,10 @@ const Users = () => {
                 <button
                   onClick={() => handlePageChange(pageNumber + 1)}
                   disabled={pageNumber === totalPages}
-                  className={`flex items-center justify-center px-3 h-8 leading-tight border ${
-                    pageNumber === totalPages
-                      ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                      : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-                  }`}
+                  className={`flex items-center justify-center px-3 h-8 leading-tight border ${pageNumber === totalPages
+                    ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                    : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                    }`}
                 >
                   ›
                 </button>
@@ -563,11 +573,10 @@ const Users = () => {
                 <button
                   onClick={() => handlePageChange(totalPages)}
                   disabled={pageNumber === totalPages}
-                  className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-r-lg ${
-                    pageNumber === totalPages
-                      ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                      : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-                  }`}
+                  className={`flex items-center justify-center px-3 h-8 leading-tight border rounded-r-lg ${pageNumber === totalPages
+                    ? "text-gray-300 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                    : "text-gray-500 bg-white border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                    }`}
                 >
                   »
                 </button>
