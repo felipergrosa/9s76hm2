@@ -334,52 +334,47 @@ const UpdateContactService = async ({
 
   await contact.update(updateData);
 
-  // Chama o serviço centralizado para atualizar nome/avatar com proteção
-  try {
-    const RefreshContactAvatarService = (await import("./RefreshContactAvatarService")).default;
-    await RefreshContactAvatarService({ contactId: contact.id, companyId });
-  } catch (err) {
-    console.warn("Falha ao atualizar avatar/nome centralizado", err);
-  }
+  // === PERFORMANCE: Operações secundárias vão para background ===
+  // Retorno imediato para o usuário, sync acontece depois
+  const savedContactId = contact.id;
 
-  // Aplica regras de tags automaticamente (forma assíncrona, não bloqueia)
   setImmediate(async () => {
+    // 1. Atualizar avatar/nome
+    try {
+      const RefreshContactAvatarService = (await import("./RefreshContactAvatarService")).default;
+      await RefreshContactAvatarService({ contactId: savedContactId, companyId });
+    } catch (err) {
+      console.warn("[UpdateContactService] Falha ao atualizar avatar/nome (background)", err);
+    }
+
+    // 2. Aplicar regras de tags
     try {
       const ApplyTagRulesService = (await import("../TagServices/ApplyTagRulesService")).default;
-      await ApplyTagRulesService({ companyId, contactId: contact.id });
+      await ApplyTagRulesService({ companyId, contactId: savedContactId });
     } catch (err) {
-      console.warn(`Falha ao aplicar regras de tags no contato ${contact.id}`, err);
+      console.warn(`[UpdateContactService] Falha ao aplicar regras de tags (background)`, err);
+    }
+
+    // 3. Disparar webhook (se configurado)
+    try {
+      // Reload contact para webhook ter dados atualizados
+      const updatedContact = await Contact.findByPk(savedContactId);
+      if (updatedContact) {
+        await DispatchContactWebhookService({
+          companyId,
+          contact: updatedContact,
+          event: "update",
+          source: "update"
+        });
+      }
+    } catch (err) {
+      console.warn("[UpdateContactService] Falha ao disparar webhook (background)", err);
     }
   });
 
-  await contact.reload({
-    attributes: [
-      "id", "name", "number", "channel", "email", "companyId",
-      "acceptAudioMessage", "active", "disableBot", "profilePicUrl", "remoteJid",
-      "urlPicture", "florder", "vlUltCompra", "contactName",
-      // Adicionar novos campos aos atributos
-      "cpfCnpj", "representativeCode", "city", "region", "instagram",
-      "situation", "fantasyName", "foundationDate", "creditLimit", "segment", "dtUltCompra", "bzEmpresa", "clientCode"
-    ],
-    include: ["extraInfo", "tags",
-      {
-        association: "wallets",
-        attributes: ["id", "name"]
-      }]
-  });
-
-  try {
-    await DispatchContactWebhookService({
-      companyId,
-      contact,
-      event: "update",
-      source: "update"
-    });
-  } catch (err) {
-    console.warn("[UpdateContactService] Falha ao disparar webhook de contato (update)", err);
-  }
-
+  // Retorno IMEDIATO - sem reload, sem aguardar operações secundárias
   return contact;
 };
 
 export default UpdateContactService;
+
