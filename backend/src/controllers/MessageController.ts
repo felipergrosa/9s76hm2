@@ -877,6 +877,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
           quotedMsgId: quotedMsg?.id || null,
           ack: 1, // Enviado
           remoteJid: ticket.contact?.remoteJid,
+          dataJson: JSON.stringify(sentMessage),
         };
 
         await CreateMessageService({ messageData, companyId: ticket.companyId });

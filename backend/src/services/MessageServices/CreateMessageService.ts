@@ -26,6 +26,7 @@ export interface MessageData {
   ticketImported?: any;
   isForwarded?: boolean;
   remoteJid?: string | null;
+  dataJson?: string;
   isCampaign?: boolean; // Se true, não emite para a sala da conversa (background)
   senderName?: string; // Nome do remetente em mensagens de grupo
 }

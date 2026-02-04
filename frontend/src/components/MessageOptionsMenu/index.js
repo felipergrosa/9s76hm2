@@ -12,43 +12,43 @@ import { ReplyMessageContext } from "../../context/ReplyingMessage/ReplyingMessa
 import EditMessageModal from "../EditMessageModal";
 import { ForwardMessageContext } from "../../context/ForwarMessage/ForwardMessageContext";
 import ForwardModal from "../../components/ForwardMessageModal";
-import {toast} from "react-toastify";
+import { toast } from "react-toastify";
 import toastError from "../../errors/toastError";
 
 const useStyles = makeStyles((theme) => ({
 	iconButton: {
-	  padding: '4px', // Ajuste o valor conforme necessário
+		padding: '4px', // Ajuste o valor conforme necessário
 	},
 	gridContainer: {
-	  padding: '10px',
-	  justifyContent: 'center',
+		padding: '10px',
+		justifyContent: 'center',
 	},
 	addCircleButton: {
-	  padding: '8px',
-	  fontSize: '2rem', // Aumentar o tamanho do ícone
-	  backgroundColor: 'rgb(242 242 247);',
+		padding: '8px',
+		fontSize: '2rem', // Aumentar o tamanho do ícone
+		backgroundColor: 'rgb(242 242 247);',
 	},
 	popoverContent: {
-	  maxHeight: '300px', // Ajuste conforme necessário
-	  overflowY: 'auto',
-	  '&::-webkit-scrollbar': {
-		width: '0.4em',
-		height: '0.4em',
-	  },
-	  '&::-webkit-scrollbar-thumb': {
-		backgroundColor: 'rgba(0,0,0,.1)',
-		borderRadius: '50px',
-	  },
-	  '&::-webkit-scrollbar-track': {
-		boxShadow: 'inset 0 0 6px rgba(0,0,0,0.00)',
-		webkitBoxShadow: 'inset 0 0 6px rgba(0,0,0,0.00)',
-	  },
+		maxHeight: '300px', // Ajuste conforme necessário
+		overflowY: 'auto',
+		'&::-webkit-scrollbar': {
+			width: '0.4em',
+			height: '0.4em',
+		},
+		'&::-webkit-scrollbar-thumb': {
+			backgroundColor: 'rgba(0,0,0,.1)',
+			borderRadius: '50px',
+		},
+		'&::-webkit-scrollbar-track': {
+			boxShadow: 'inset 0 0 6px rgba(0,0,0,0.00)',
+			webkitBoxShadow: 'inset 0 0 6px rgba(0,0,0,0.00)',
+		},
 	},
 	hideScrollbar: {
-	  maxHeight: '300px',
-	  overflow: 'hidden',
+		maxHeight: '300px',
+		overflow: 'hidden',
 	},
-  }));
+}));
 
 const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 	const classes = useStyles();
@@ -64,7 +64,7 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 		selectedMessages,
 		forwardMessageModalOpen,
 		setForwardMessageModalOpen } = useContext(ForwardMessageContext);
-		
+
 
 	const handleDeleteMessage = async () => {
 		try {
@@ -78,7 +78,7 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 		setReactionAnchorEl(event.currentTarget);
 		handleClose();
 	};
-	
+
 	const closeReactionsMenu = () => {
 		setReactionAnchorEl(null);
 	};
@@ -110,15 +110,15 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 	};
 
 	// Array de emojis
-    const availableReactions = [
+	const availableReactions = [
 		'😀', '😂', '❤️', '👍', '🎉', '😢', '😮', '😡', '👏', '🔥',
-        '🥳', '😎', '🤩', '😜', '🤔', '🙄', '😴', '😇', '🤯', '💩',
-        '🤗', '🤫', '🤭', '🤓', '🤪', '🤥', '🤡', '🤠', '🤢', '🤧',
-        '😷', '🤕', '🤒', '👻', '💀', '☠️', '👽', '👾', '🤖', '🎃',
-        '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾', '🙈',
-        '🙉', '🙊', '🐵', '🐒', '🦍', '🐶', '🐕', '🐩', '🐺', '🦊',
-        '🦝', '🐱', '🐈', '🦁', '🐯', '🐅', '🐆', '🐴', '🐎', '🦄'
-	];	
+		'🥳', '😎', '🤩', '😜', '🤔', '🙄', '😴', '😇', '🤯', '💩',
+		'🤗', '🤫', '🤭', '🤓', '🤪', '🤥', '🤡', '🤠', '🤢', '🤧',
+		'😷', '🤕', '🤒', '👻', '💀', '☠️', '👽', '👾', '🤖', '🎃',
+		'😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾', '🙈',
+		'🙉', '🙊', '🐵', '🐒', '🦍', '🐶', '🐕', '🐩', '🐺', '🦊',
+		'🦝', '🐱', '🐈', '🦁', '🐯', '🐅', '🐆', '🐴', '🐎', '🦄'
+	];
 
 	const handleSetShowSelectCheckbox = () => {
 		setShowSelectMessageCheckbox(!showSelectMessageCheckbox);
@@ -126,11 +126,7 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 	};
 
 	const handleEditMessage = async () => {
-		try {
-			await api.put(`/messages/${message.id}`);
-		} catch (err) {
-			toastError(err);
-		}
+		handleOpenEditMessageModal();
 	}
 
 	const hanldeReplyMessage = () => {
@@ -185,13 +181,13 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 	return (
 		<>
 			<ForwardModal
-			modalOpen={forwardMessageModalOpen}
-			messages={selectedMessages}
-			onClose={(e) => {
-				setForwardMessageModalOpen(false);
-				setShowSelectMessageCheckbox(false);
-			}}
-				/>
+				modalOpen={forwardMessageModalOpen}
+				messages={selectedMessages}
+				onClose={(e) => {
+					setForwardMessageModalOpen(false);
+					setShowSelectMessageCheckbox(false);
+				}}
+			/>
 			<ConfirmationModal
 				title={i18n.t("messageOptionsMenu.confirmationModal.title")}
 				open={confirmationOpen}
@@ -227,16 +223,16 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 					{i18n.t("messageOptionsMenu.forward")}
 				</MenuItem>
 				{(([
-                  "audio",
-                  "image",
-                  "video"
-                ].includes(message?.mediaType)) ||
-                  (message?.mediaType === "application" && message?.mediaUrl)) && (
-                  <MenuItem onClick={handleDownloadMedia}>
-                    <GetApp fontSize="small" style={{ marginRight: 8 }} />
-                    Download
-                  </MenuItem>
-                )}
+					"audio",
+					"image",
+					"video"
+				].includes(message?.mediaType)) ||
+					(message?.mediaType === "application" && message?.mediaUrl)) && (
+						<MenuItem onClick={handleDownloadMedia}>
+							<GetApp fontSize="small" style={{ marginRight: 8 }} />
+							Download
+						</MenuItem>
+					)}
 				{message.fromMe && (
 					<MenuItem onClick={handleOpenEditMessageModal}>
 						{i18n.t("messageOptionsMenu.edit")}
@@ -251,26 +247,26 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 					{i18n.t("messageOptionsMenu.reply")}
 				</MenuItem>
 				<MenuItem onClick={openReactionsMenu}>
-				{i18n.t("messageOptionsMenu.react")}
+					{i18n.t("messageOptionsMenu.react")}
 				</MenuItem>
 			</Menu>
 			<Popover
-					open={Boolean(reactionAnchorEl)}
-					anchorEl={reactionAnchorEl}
-					onClose={closeReactionsMenu}
-					anchorOrigin={{
-						vertical: 'bottom',
-						horizontal: 'right',
-					}}
-					transformOrigin={{
-						vertical: 'top',
-						horizontal: 'right',
-					}}
-					PaperProps={{
-						style: { width: 'auto', maxWidth: '380px', borderRadius: '50px'  }
-					}}
-				>
-					<div className={classes.hideScrollbar}>
+				open={Boolean(reactionAnchorEl)}
+				anchorEl={reactionAnchorEl}
+				onClose={closeReactionsMenu}
+				anchorOrigin={{
+					vertical: 'bottom',
+					horizontal: 'right',
+				}}
+				transformOrigin={{
+					vertical: 'top',
+					horizontal: 'right',
+				}}
+				PaperProps={{
+					style: { width: 'auto', maxWidth: '380px', borderRadius: '50px' }
+				}}
+			>
+				<div className={classes.hideScrollbar}>
 					<Grid container spacing={1} className={classes.gridContainer}>
 						{availableReactions.slice(0, 6).map(reaction => (
 							<Grid item key={reaction}>
@@ -280,30 +276,30 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 							</Grid>
 						))}
 						<Grid item>
-						<IconButton className={classes.addCircleButton} onClick={openMoreReactionsMenu}>
+							<IconButton className={classes.addCircleButton} onClick={openMoreReactionsMenu}>
 								<AddCircleOutlineIcon fontSize="normal" />
 							</IconButton>
 						</Grid>
 					</Grid>
-					</div>
-				</Popover>
-				<Popover
-					open={Boolean(moreAnchorEl)}
-					anchorEl={moreAnchorEl}
-					onClose={closeMoreReactionsMenu}
-					anchorOrigin={{
-						vertical: 'bottom',
-						horizontal: 'center',
-					}}
-					transformOrigin={{
-						vertical: 'top',
-						horizontal: 'center',
-					}}
-					PaperProps={{
-						style: { width: 'auto', maxWidth: '400px', borderRadius: '6px' }
-					}}
-				>
-					<div className={classes.popoverContent}>
+				</div>
+			</Popover>
+			<Popover
+				open={Boolean(moreAnchorEl)}
+				anchorEl={moreAnchorEl}
+				onClose={closeMoreReactionsMenu}
+				anchorOrigin={{
+					vertical: 'bottom',
+					horizontal: 'center',
+				}}
+				transformOrigin={{
+					vertical: 'top',
+					horizontal: 'center',
+				}}
+				PaperProps={{
+					style: { width: 'auto', maxWidth: '400px', borderRadius: '6px' }
+				}}
+			>
+				<div className={classes.popoverContent}>
 					<Grid container spacing={1} className={classes.gridContainer}>
 						{availableReactions.map(reaction => (
 							<Grid item key={reaction}>
@@ -313,19 +309,19 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 							</Grid>
 						))}
 					</Grid>
-					</div>
-				</Popover>
+				</div>
+			</Popover>
 		</>
 	);
 };
 
 MessageOptionsMenu.propTypes = {
-    message: PropTypes.object,
-    menuOpen: PropTypes.bool.isRequired,
-    handleClose: PropTypes.func.isRequired,
-    anchorEl: PropTypes.object,
-    onReaction: PropTypes.func, // Callback opcional chamado após uma reação
-    availableReactions: PropTypes.arrayOf(PropTypes.string) // Lista opcional de reações disponíveis
+	message: PropTypes.object,
+	menuOpen: PropTypes.bool.isRequired,
+	handleClose: PropTypes.func.isRequired,
+	anchorEl: PropTypes.object,
+	onReaction: PropTypes.func, // Callback opcional chamado após uma reação
+	availableReactions: PropTypes.arrayOf(PropTypes.string) // Lista opcional de reações disponíveis
 }
 
 export default MessageOptionsMenu;
