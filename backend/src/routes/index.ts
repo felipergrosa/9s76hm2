@@ -65,6 +65,7 @@ import queueRAGSourceRoutes from "./queueRAGSourceRoutes";
 import templateRoutes from "./templateRoutes";
 import aiModelRoutes from "./aiModelRoutes";
 import contactReleaseRequestRoutes from "./contactReleaseRequestRoutes";
+import mediaRoutes from "./mediaRoutes";
 
 
 const routes = Router();
@@ -145,5 +146,6 @@ routes.use(queueRAGSourceRoutes);
 routes.use(templateRoutes);
 routes.use(aiModelRoutes);
 routes.use(contactReleaseRequestRoutes);
+routes.use("/media", mediaRoutes);
 
 export default routes;

@@ -9,6 +9,7 @@ import Ticket from "../../models/Ticket";
 import User from "../../models/User";
 import Whatsapp from "../../models/Whatsapp";
 import logger from "../../utils/logger";
+import { invalidateTicketMessagesCache } from "./MessageCacheService";
 
 export interface MessageData {
   wid: string;
@@ -111,6 +112,9 @@ const CreateMessageService = async ({
   if (!message) {
     throw new Error("ERR_CREATING_MESSAGE");
   }
+
+  // Invalidar cache de mensagens do ticket (nova mensagem chegou)
+  invalidateTicketMessagesCache(companyId, message.ticketId).catch(() => {});
 
   // Atualizar lastMessage do ticket (para exibir preview na lista)
   // Não atualizar se for mensagem privada

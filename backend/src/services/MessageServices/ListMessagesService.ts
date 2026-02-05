@@ -11,6 +11,7 @@ import Queue from "../../models/Queue";
 import Whatsapp from "../../models/Whatsapp";
 import SyncChatHistoryService from "./SyncChatHistoryService";
 import logger from "../../utils/logger";
+import { getCachedTicketMessages, cacheTicketMessages } from "./MessageCacheService";
 
 interface Request {
   ticketId: string;
@@ -108,6 +109,20 @@ const ListMessagesService = async ({
   const limit = 20;
   const offset = limit * (+pageNumber - 1);
 
+  // Verificar cache apenas para página 1 (mensagens mais recentes)
+  if (+pageNumber === 1) {
+    const cached = await getCachedTicketMessages(companyId, ticket.id, 1);
+    if (cached) {
+      logger.debug(`[ListMessages] Cache HIT para ticket ${ticket.id}`);
+      return {
+        messages: cached.messages as any,
+        ticket,
+        count: cached.count,
+        hasMore: cached.hasMore
+      };
+    }
+  }
+
   const { count, rows: messages } = await Message.findAndCountAll({
     where: { ticketId: tickets, companyId },
     attributes: ["id", "fromMe", "mediaUrl", "body", "mediaType", "ack", "createdAt", "ticketId", "isDeleted", "queueId", "isForwarded", "isEdited", "isPrivate", "companyId", "dataJson", "audioTranscription"],
@@ -169,6 +184,11 @@ const ListMessagesService = async ({
   });
 
   let hasMore = count > offset + messages.length;
+
+  // Armazenar página 1 no cache para acessos futuros
+  if (+pageNumber === 1 && messages.length > 0) {
+    cacheTicketMessages(companyId, ticket.id, 1, messages as any, count, hasMore).catch(() => {});
+  }
 
   // INFINITE SCROLL: Se não há mais mensagens locais e estamos em página > 1,
   // tenta buscar mais mensagens do WhatsApp

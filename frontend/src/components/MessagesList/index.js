@@ -1295,7 +1295,7 @@ const MessagesList = ({
     const onConnectWithRecovery = () => {
       connectEventMessagesList();
       // Aguarda um pouco para garantir que entrou na sala antes de recuperar
-      setTimeout(recoverMissedMessages, 1000);
+      setTimeout(recoverMissedMessages, 1500);
     };
 
     socket.on("connect", onConnectWithRecovery);
@@ -1308,11 +1308,19 @@ const MessagesList = ({
       }
     } catch { }
 
-    // Logs auxiliares de conexão
-    socket.on("disconnect", (reason) => console.debug("[MessagesList] disconnect", reason));
-    socket.on("reconnect", (attempt) => console.debug("[MessagesList] reconnect", attempt));
-    socket.on("reconnect_attempt", (attempt) => console.debug("[MessagesList] reconnect_attempt", attempt));
-    socket.on("connect_error", (err) => console.debug("[MessagesList] connect_error", err?.message || err));
+    // Logs auxiliares de conexão (somente em debug)
+    socket.on("disconnect", (reason) => {
+      // console.debug("[MessagesList] disconnect", reason);
+    });
+    socket.on("reconnect", (attempt) => {
+      // console.debug("[MessagesList] reconnect", attempt);
+    });
+    socket.on("reconnect_attempt", (attempt) => {
+      // console.debug("[MessagesList] reconnect_attempt", attempt);
+    });
+    socket.on("connect_error", (err) => {
+      // console.debug("[MessagesList] connect_error", err?.message || err);
+    });
 
     return () => {
       try {
@@ -1384,8 +1392,8 @@ const MessagesList = ({
       }
     };
 
-    // Verificar a cada 10 segundos
-    const interval = setInterval(checkAndRejoin, 10000);
+    // Verificar a cada 30 segundos (era 10s)
+    const interval = setInterval(checkAndRejoin, 30000);
 
     return () => clearInterval(interval);
   }, [socket, ticketId]);
@@ -1449,17 +1457,17 @@ const MessagesList = ({
         clearInterval(pollIntervalRef.current);
       }
 
-      // Determina intervalo baseado no estado
-      let intervalMs = 30000; // Default: 30s quando socket conectado
+      // Determina intervalo baseado no estado - MAIS CONSERVADOR
+      let intervalMs = 60000; // Default: 60s quando socket conectado
       
       if (!socket?.connected) {
-        intervalMs = 5000; // 5s quando socket desconectado
-        console.log("[MessagesList] Polling adaptativo: 5s (socket desconectado)");
+        intervalMs = 15000; // 15s quando socket desconectado (era 5s)
+        console.log("[MessagesList] Polling adaptativo: 15s (socket desconectado)");
       } else if (consecutiveFailsRef.current > 3) {
-        intervalMs = 60000; // 60s após muitas falhas (backoff)
-        console.log("[MessagesList] Polling adaptativo: 60s (backoff após falhas)");
+        intervalMs = 120000; // 120s após muitas falhas (era 60s)
+        console.log("[MessagesList] Polling adaptativo: 120s (backoff após falhas)");
       } else {
-        console.log("[MessagesList] Polling adaptativo: 30s (socket conectado)");
+        console.log("[MessagesList] Polling adaptativo: 60s (socket conectado)");
       }
 
       pollIntervalRef.current = setInterval(pollNewMessages, intervalMs);
@@ -2289,4 +2297,4 @@ const MessagesList = ({
   );
 };
 
-export default MessagesList;
+export default React.memo(MessagesList);

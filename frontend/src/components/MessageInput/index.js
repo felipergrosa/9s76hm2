@@ -46,6 +46,7 @@ import {
   Braces,
   Paperclip,
   MoreHorizontal,
+  SpellCheck2,
 } from "lucide-react";
 import MicRecorder from "mic-recorder-to-mp3";
 import clsx from "clsx";
@@ -70,6 +71,8 @@ import { OptimisticMessageContext } from "../../context/OptimisticMessage/Optimi
 import ScheduleModal from "../ScheduleModal";
 import { useParams } from "react-router-dom/cjs/react-router-dom.min";
 import ChatAssistantPanel from "../ChatAssistantPanel";
+import useSpellChecker, { autoCorrectText, findMisspelledWords, checkGrammar } from "../../hooks/useSpellChecker";
+import SpellCheckSuggestions from "./SpellCheckSuggestions";
 
 
 const Mp3Recorder = new MicRecorder({ bitRate: 128 });
@@ -219,8 +222,82 @@ const useStyles = makeStyles((theme) => ({
     paddingLeft: 10,
     flex: 1,
     border: "none",
-
-
+    position: 'relative',
+    zIndex: 2,
+    backgroundColor: 'transparent',
+  },
+  // Overlay para sublinhado - deve ter mesmos valores do input
+  spellCheckOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 10,
+    right: 0,
+    bottom: 8,
+    pointerEvents: 'none',
+    zIndex: 10,
+    padding: 0,
+    fontSize: 14,
+    lineHeight: 1.4,
+    whiteSpace: 'pre-wrap',
+    wordWrap: 'break-word',
+    overflow: 'visible',
+    userSelect: 'none',
+    maxHeight: 100,
+  },
+  misspelledWord: {
+    color: 'rgba(0,0,0,0.01)',
+    position: 'relative',
+    display: 'inline-block',
+    pointerEvents: 'auto',
+    cursor: 'pointer',
+    textDecoration: 'underline wavy #ff0000',
+    textDecorationThickness: '1px',
+    textUnderlineOffset: '1px',
+  },
+  grammarError: {
+    color: 'rgba(0, 0, 0, 0)',
+    position: 'relative',
+    display: 'inline-block',
+    pointerEvents: 'auto',
+    cursor: 'pointer',
+    textDecoration: 'underline wavy #0066cc',
+    textDecorationThickness: '1px',
+    textUnderlineOffset: '1px',
+  },
+  normalWord: {
+    color: 'rgba(0,0,0,0.01)',
+  },
+  spellContextMenu: {
+    position: 'fixed',
+    backgroundColor: '#fff',
+    border: '1px solid #ccc',
+    borderRadius: 4,
+    boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+    zIndex: 9999,
+    minWidth: 150,
+    maxWidth: 250,
+    '& ul': {
+      listStyle: 'none',
+      margin: 0,
+      padding: 0,
+    },
+    '& li': {
+      padding: '8px 12px',
+      cursor: 'pointer',
+      fontSize: 14,
+      '&:hover': {
+        backgroundColor: '#f0f0f0',
+      },
+    },
+    '& li.suggestion': {
+      color: '#1976d2',
+      fontWeight: 500,
+    },
+    '& li.divider': {
+      borderTop: '1px solid #eee',
+      padding: 0,
+      margin: '4px 0',
+    },
   },
   messageInputPrivate: {
     paddingLeft: 10,
@@ -553,6 +630,21 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   const [senVcardModalOpen, setSenVcardModalOpen] = useState(false);
   const [showModalMedias, setShowModalMedias] = useState(false);
 
+  // Corretor ortográfico (desabilitado por padrão - muitos falsos positivos)
+  const [spellCheckEnabled, setSpellCheckEnabled] = useState(() => {
+    const saved = localStorage.getItem('spellCheckEnabled');
+    return saved !== null ? JSON.parse(saved) : false;
+  });
+  const { isLoaded: spellCheckLoaded, isFullDictLoaded, suggestions, currentWord, analyzeText, replaceWord } = useSpellChecker(spellCheckEnabled);
+  const [showSpellSuggestions, setShowSpellSuggestions] = useState(false);
+  const [inputCursorPosition, setInputCursorPosition] = useState(0);
+  // Lista de palavras erradas para sublinhado vermelho (ortografia)
+  const [misspelledWords, setMisspelledWords] = useState([]);
+  // Lista de erros gramaticais do LanguageTool
+  const [grammarErrors, setGrammarErrors] = useState([]);
+  // Menu de contexto (right-click) para sugestões
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, word, suggestions, message, type }
+
   const { list: listQuickMessages } = useQuickMessages();
 
 
@@ -857,14 +949,148 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
     return string.charAt(0).toUpperCase() + string.slice(1);
   }
 
+  const handleApplySpellSuggestion = (suggestion) => {
+    const newText = replaceWord(inputMessage, suggestion, currentWord);
+    setInputMessage(newText);
+    setShowSpellSuggestions(false);
+    
+    // Focar no input após aplicar correção
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 0);
+  };
+
+  const handleToggleSpellCheck = () => {
+    const newValue = !spellCheckEnabled;
+    setSpellCheckEnabled(newValue);
+    localStorage.setItem('spellCheckEnabled', JSON.stringify(newValue));
+    if (!newValue) {
+      setShowSpellSuggestions(false);
+    }
+  };
+
   const handleSendLinkVideo = async () => {
     const link = `https://meet.jit.si/${ticketId}`;
     setInputMessage(link);
-  }
+  };
 
   const handleChangeInput = (e) => {
-    setInputMessage(e.target.value);
+    let value = e.target.value;
+    let cursorPos = e.target.selectionStart;
+    
+    // Autocorreção ao digitar espaço (como Word)
+    if (spellCheckEnabled && value.endsWith(' ') && value.length > 1) {
+      const originalLength = value.length;
+      const correctedText = autoCorrectText(value);
+      if (correctedText !== value) {
+        value = correctedText;
+        // Ajustar posição do cursor se o texto mudou de tamanho
+        const diff = correctedText.length - originalLength;
+        cursorPos = cursorPos + diff;
+      }
+    }
+    
+    setInputMessage(value);
+    setInputCursorPosition(cursorPos);
+    
+    // Verificação ortográfica/gramatical apenas via LanguageTool (API)
+    if (spellCheckEnabled) {
+      analyzeText(value, cursorPos);
+      setMisspelledWords([]); // Desabilitado: corretor local estava com dicionário corrompido
+    } else {
+      setMisspelledWords([]);
+      setGrammarErrors([]);
+    }
   };
+
+  // Verificação gramatical com LanguageTool (debounced)
+  const grammarTimeoutRef = useRef(null);
+  useEffect(() => {
+    if (!spellCheckEnabled || !inputMessage || inputMessage.length < 5) {
+      setGrammarErrors([]);
+      return;
+    }
+    
+    // Debounce de 500ms após parar de digitar
+    if (grammarTimeoutRef.current) {
+      clearTimeout(grammarTimeoutRef.current);
+    }
+    
+    grammarTimeoutRef.current = setTimeout(async () => {
+      const errors = await checkGrammar(inputMessage);
+      setGrammarErrors(errors);
+    }, 500);
+    
+    return () => {
+      if (grammarTimeoutRef.current) {
+        clearTimeout(grammarTimeoutRef.current);
+      }
+    };
+  }, [inputMessage, spellCheckEnabled]);
+
+  // Corretor ortográfico local desabilitado (dicionário corrompido)
+  // LanguageTool API faz verificação ortográfica + gramatical
+
+  // Handler para menu de contexto (right-click) em palavra/erro
+  const handleSpellContextMenu = (e, word, wordSuggestions, message = null, errorType = 'spelling') => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      word,
+      suggestions: wordSuggestions || [],
+      message,
+      type: errorType
+    });
+  };
+
+  // Fechar menu de contexto
+  const handleCloseContextMenu = () => {
+    setContextMenu(null);
+  };
+
+  // Aplicar correção do menu de contexto
+  const handleContextMenuCorrection = (correction) => {
+    if (!contextMenu) return;
+    const newText = inputMessage.replace(new RegExp(`\\b${contextMenu.word}\\b`, 'i'), correction);
+    setInputMessage(newText);
+    setContextMenu(null);
+    
+    // Re-verificar texto após correção (remove sublinhado automaticamente)
+    if (spellCheckEnabled) {
+      // Aguarda um tick para o estado atualizar
+      setTimeout(async () => {
+        // Verifica erros gramaticais via LanguageTool
+        if (newText.length >= 5) {
+          const grammarErrs = await checkGrammar(newText);
+          setGrammarErrors(grammarErrs);
+        } else {
+          setGrammarErrors([]);
+        }
+      }, 50);
+    }
+  };
+
+  // Fechar menu de contexto ao clicar fora
+  React.useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [contextMenu]);
+
+  // Atualizar exibição de sugestões quando mudam
+  React.useEffect(() => {
+    if (spellCheckEnabled && spellCheckLoaded && suggestions.length > 0 && currentWord.length >= 2) {
+      setShowSpellSuggestions(true);
+    } else {
+      setShowSpellSuggestions(false);
+    }
+  }, [suggestions, currentWord, spellCheckEnabled, spellCheckLoaded]);
 
   const handlePrivateMessage = (e) => {
     setPrivateMessage(!privateMessage);
@@ -1680,6 +1906,19 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                 </Fab>
                 Botões
               </MenuItem>
+              <Divider />
+              <MenuItem onClick={(e) => { handleMenuItemClick(); handleOpenVarsMenu(e); }}>
+                <Fab className={classes.invertedFabMenuCont}>
+                  <Braces size={18} />
+                </Fab>
+                Variáveis
+              </MenuItem>
+              <MenuItem onClick={() => { handleMenuItemClick(); handleToggleSpellCheck(); }}>
+                <Fab className={classes.invertedFabMenuCont}>
+                  <SpellCheck2 size={18} style={{ color: spellCheckEnabled ? green[500] : undefined }} />
+                </Fab>
+                {spellCheckEnabled ? "Desativar Corretor" : "Ativar Corretor"}
+              </MenuItem>
               {isMobile && (
                 <>
                   <Divider />
@@ -1755,7 +1994,9 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
               )}
               {!privateMessageInputVisible && (
                 <div className={classes.flexItem}>
-                  <div className={classes.messageInputWrapper}>
+                  <div className={classes.messageInputWrapper} style={{ position: 'relative' }}>
+                    {/* Corretor ortográfico nativo do navegador habilitado */}
+                    {/* Overlay customizado removido - causava problemas de alinhamento */}
                     <InputBase
                       inputRef={(input) => {
                         input && input.focus();
@@ -1779,12 +2020,24 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                           handleSendMessage();
                         }
                       }}
+                      onContextMenu={(e) => {
+                        // Verificar se o cursor está sobre uma palavra errada
+                        if (spellCheckEnabled && misspelledWords.length > 0) {
+                          const cursorPos = e.target.selectionStart;
+                          const wordAtCursor = misspelledWords.find(
+                            w => cursorPos >= w.start && cursorPos <= w.end
+                          );
+                          if (wordAtCursor) {
+                            handleSpellContextMenu(e, wordAtCursor.word, wordAtCursor.suggestions);
+                          }
+                        }
+                      }}
                       inputProps={{
                         inputMode: 'text',
                         autoComplete: 'off',
                         autoCorrect: 'off',
                         autoCapitalize: 'off',
-                        spellCheck: 'false',
+                        spellCheck: 'true',
                       }}
                     />
                     {typeBar ? (
@@ -1812,16 +2065,6 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
             </div>
             {!privateMessageInputVisible && (
               <>
-                <Tooltip title="Variáveis">
-                  <IconButton
-                    aria-label="variables"
-                    component="span"
-                    onClick={handleOpenVarsMenu}
-                    tabIndex={-1}
-                  >
-                    <Braces size={18} className={classes.sendMessageIcons} />
-                  </IconButton>
-                </Tooltip>
                 <Tooltip title="Mensagem rápida">
                   <IconButton
                     aria-label="flash"
@@ -1940,6 +2183,62 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
             )}
           </div>
         </Paper>
+        {/* Popup de sugestões - só aparece se tiver mais de 2 opções */}
+        {showSpellSuggestions && spellCheckEnabled && suggestions.length > 2 && (
+          <SpellCheckSuggestions
+            suggestions={suggestions}
+            currentWord={currentWord}
+            onSelect={handleApplySpellSuggestion}
+            onClose={() => setShowSpellSuggestions(false)}
+            isMobile={isMobile}
+          />
+        )}
+        {/* Menu de contexto (right-click) para correção ortográfica/gramatical */}
+        {contextMenu && (
+          <div
+            className={classes.spellContextMenu}
+            style={{ 
+              left: contextMenu.x, 
+              top: contextMenu.y,
+              transform: 'translateY(-100%) translateY(-8px)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ul>
+              {/* Mostrar mensagem de erro gramatical */}
+              {contextMenu.message && (
+                <>
+                  <li style={{ 
+                    color: '#666', 
+                    fontSize: 12, 
+                    backgroundColor: '#f5f5f5',
+                    borderLeft: `3px solid ${contextMenu.type === 'grammar' ? '#0066cc' : '#ff0000'}`
+                  }}>
+                    {contextMenu.message}
+                  </li>
+                  <li className="divider" />
+                </>
+              )}
+              {contextMenu.suggestions.length > 0 ? (
+                contextMenu.suggestions.map((sug, idx) => (
+                  <li
+                    key={idx}
+                    className="suggestion"
+                    onClick={() => handleContextMenuCorrection(sug)}
+                  >
+                    {sug}
+                  </li>
+                ))
+              ) : (
+                <li style={{ color: '#999', fontStyle: 'italic' }}>
+                  Sem sugestões
+                </li>
+              )}
+              <li className="divider" />
+              <li onClick={handleCloseContextMenu}>Ignorar</li>
+            </ul>
+          </div>
+        )}
       </>
     );
   }

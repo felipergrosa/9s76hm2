@@ -48,7 +48,7 @@ class SocketWorker {
     const nsUrl = `${backendUrl}/workspace-${this?.companyId}`;
     // Importante: o backend valida namespaces como /workspace-<id> e exige query.token (JWT)
     this.socket = io(nsUrl, {
-      transports: ["websocket"],
+      transports: ["polling", "websocket"],
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,
@@ -70,22 +70,16 @@ class SocketWorker {
     this.socket.on("connect", () => {
       // Connection State Recovery: verifica se a conexão foi recuperada
       if (this.socket.recovered) {
-        console.log("[SOCKET RECOVERY] ✅ Conexão RECUPERADA - eventos perdidos serão reenviados automaticamente", {
-          namespace: `workspace-${this?.companyId}`,
-          id: this.socket?.id
-        });
-        // Não precisa fazer rejoin - rooms são restauradas automaticamente
+        // Silencioso: conexão recuperada automaticamente
         return;
       }
       
-      console.log("Socket conectado:", { namespace: `workspace-${this?.companyId}`, id: this.socket?.id, hasToken: !!token });
       // Envia joins pendentes
       try {
         this.joinBuffer.forEach((room) => {
           try {
             this.socket.emit("joinChatBox", room, (err) => {
-              if (err) console.log("[SocketWorker] buffered join ack error", { room, err });
-              else console.log("[SocketWorker] buffered join ok", { room });
+              // Silencioso
             });
           } catch (e) { }
         });
@@ -95,7 +89,7 @@ class SocketWorker {
     });
 
     this.socket.on("disconnect", () => {
-      console.log("Desconectado do servidor Socket.IO");
+      // Silencioso
       this.reconnectAfterDelay();
     });
 
@@ -113,10 +107,10 @@ class SocketWorker {
     });
 
     this.socket.on("connect_error", (err) => {
-      console.log("Socket connect_error:", err?.message || err);
+      // Silencioso para evitar spam no console
     });
     this.socket.on("error", (err) => {
-      console.log("Socket error:", err?.message || err);
+      // Silencioso para evitar spam no console
     });
   }
 
@@ -203,10 +197,9 @@ class SocketWorker {
   reconnectAfterDelay() {
     setTimeout(() => {
       if (!this.socket || !this.socket.connected) {
-        console.log("Tentando reconectar após desconexão");
         this.connect();
       }
-    }, 1000);
+    }, 3000); // Aumentado para 3s
   }
 
   // Garante que o socket esteja conectado
