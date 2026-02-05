@@ -5,7 +5,7 @@ import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
 import GetDefaultWhatsAppByUser from "../../helpers/GetDefaultWhatsAppByUser";
 import Ticket from "../../models/Ticket";
 import ShowContactService from "../ContactServices/ShowContactService";
-import { getIO } from "../../libs/socket";
+import { ticketEventBus } from "./TicketEventBus";
 import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
 import Queue from "../../models/Queue";
 import User from "../../models/User";
@@ -31,8 +31,6 @@ const CreateTicketService = async ({
   companyId,
   whatsappId = ""
 }: Request): Promise<Ticket> => {
-
-  const io = getIO();
 
   let whatsapp;
   let defaultWhatsapp
@@ -105,14 +103,8 @@ const CreateTicketService = async ({
     throw new AppError("ERR_CREATING_TICKET");
   }
 
-  io.of(`/workspace-${companyId}`)
-    // .to(ticket.status)
-    // .to("notification")
-    // .to(ticket.id.toString())
-    .emit(`company-${companyId}-ticket`, {
-      action: "update",
-      ticket
-    });
+  // CQRS: Emitir evento via TicketEventBus
+  ticketEventBus.publishTicketCreated(companyId, ticket.id, ticket.uuid, ticket);
 
   await CreateLogTicketService({
     userId,
