@@ -727,15 +727,19 @@ async function processMessageStatus(
     // Buscar ticket para emitir apenas para a sala correta
     const ticket = await Ticket.findByPk(message.ticketId);
     if (ticket) {
-      // Emitir evento via Socket.IO apenas para a sala do ticket específico
-      const io = getIO();
-      io.of(`/workspace-${companyId}`)
-        .to(ticket.uuid)  // CRÍTICO: Emitir apenas para a sala do ticket, não broadcast
-        .emit(`company-${companyId}-appMessage`, {
+      // Usar emitToCompanyRoom com retry para garantir entrega do status
+      const { emitToCompanyRoom } = await import("../../libs/socketEmit");
+      await emitToCompanyRoom(
+        companyId,
+        ticket.uuid,
+        `company-${companyId}-appMessage`,
+        {
           action: "update",
           message,
           ticket
-        });
+        },
+        false // fallback habilitado
+      );
     }
   } else {
     logger.debug(`[WebhookProcessor] Mensagem ${messageId} não encontrada no banco`);

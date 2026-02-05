@@ -15,6 +15,10 @@ import logger from "../utils/logger";
  *
  * Logs de debug controlados por SOCKET_DEBUG === "true".
  */
+
+// Delay entre tentativas de retry (ms)
+const RETRY_DELAYS = [100, 300, 500]; // 100ms, 300ms, 500ms
+
 export async function emitToCompanyRoom(
   companyId: number,
   room: string,
@@ -33,37 +37,50 @@ export async function emitToCompanyRoom(
   const fallbackEnabled = isAppMessageEvent || (!skipFallback && (explicit === "true" || (explicit !== "false" && !isProd)));
   const debug = process.env.SOCKET_DEBUG === "true";
 
-  try {
-    const sockets = await ns.in(room).fetchSockets();
-    const ids = sockets.map(s => s.id).join(",");
-    
-    // Log sempre para debug de mensagens
-    console.log(
-      `[SOCKET EMIT] event=${event} ns=/workspace-${companyId} room=${room} count=${sockets.length} ids=${ids || "nenhum"} fallbackEnabled=${fallbackEnabled}`
-    );
-
-    if (sockets.length === 0) {
-      console.warn(`[SOCKET EMIT] SALA VAZIA: ns=/workspace-${companyId} room=${room} - Nenhum socket na sala!`);
-      
-      if (fallbackEnabled) {
-        console.log(`[SOCKET EMIT] Executando fallback broadcast para event=${event} ns=/workspace-${companyId}`);
-        ns.emit(event, { ...payload, fallback: true, room });
-      } else {
-        console.warn(`[SOCKET EMIT] Fallback DESABILITADO - mensagem pode não chegar ao destinatário!`);
-      }
-    } else {
-      const result = ns.to(room).emit(event, payload);
-      console.log(`[SOCKET EMIT] Emitido para ${sockets.length} sockets na sala ${room}, resultado=${result}`);
-    }
-  } catch (e) {
-    console.error(`[SOCKET EMIT] ERRO ao consultar sala ns=/workspace-${companyId} room=${room}:`, e);
-    // Em caso de erro ao consultar sockets, ainda tentamos emitir para a sala
+  // Função para tentar emitir
+  const tryEmit = async (attempt: number): Promise<boolean> => {
     try {
-      ns.to(room).emit(event, payload);
-      console.log(`[SOCKET EMIT] Tentativa de emissão após erro para sala ${room}`);
-    } catch (emitErr) {
-      console.error(`[SOCKET EMIT] Falha total na emissão:`, emitErr);
+      const sockets = await ns.in(room).fetchSockets();
+      const ids = sockets.map(s => s.id).join(",");
+      
+      if (sockets.length === 0) {
+        if (attempt === 0) {
+          console.warn(`[SOCKET EMIT] SALA VAZIA: ns=/workspace-${companyId} room=${room} - Nenhum socket na sala! Tentando retry...`);
+        }
+        return false;
+      }
+      
+      const result = ns.to(room).emit(event, payload);
+      console.log(`[SOCKET EMIT] Emitido para ${sockets.length} sockets na sala ${room} (tentativa ${attempt + 1}), resultado=${result}`);
+      return true;
+    } catch (e) {
+      console.error(`[SOCKET EMIT] ERRO ao consultar sala (tentativa ${attempt + 1}):`, e);
+      return false;
     }
+  };
+
+  // Tentativa inicial
+  if (await tryEmit(0)) {
+    return;
+  }
+
+  // Retry com delays progressivos
+  for (let i = 0; i < RETRY_DELAYS.length; i++) {
+    await new Promise(r => setTimeout(r, RETRY_DELAYS[i]));
+    
+    if (await tryEmit(i + 1)) {
+      return;
+    }
+  }
+
+  // Todas as tentativas falharam - usar fallback
+  console.warn(`[SOCKET EMIT] Todas as tentativas falharam para sala ${room} após ${RETRY_DELAYS.length + 1} tentativas`);
+  
+  if (fallbackEnabled) {
+    console.log(`[SOCKET EMIT] Executando fallback broadcast para event=${event} ns=/workspace-${companyId}`);
+    ns.emit(event, { ...payload, fallback: true, room });
+  } else {
+    console.warn(`[SOCKET EMIT] Fallback DESABILITADO - mensagem pode não chegar ao destinatário!`);
   }
 }
 

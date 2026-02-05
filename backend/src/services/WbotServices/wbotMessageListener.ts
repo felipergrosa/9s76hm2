@@ -5634,14 +5634,22 @@ const handleMsgAck = async (
       sala: messageToUpdate.ticket.uuid,
       evento: `company-${messageToUpdate.companyId}-appMessage`,
       action: "update",
-      messageId: messageToUpdate.id
+      messageId: messageToUpdate.id,
+      ack: chat
     });
-    io.of(`/workspace-${messageToUpdate.companyId}`)
-      .to(messageToUpdate.ticket.uuid)
-      .emit(`company-${messageToUpdate.companyId}-appMessage`, {
+    
+    // Usar emitToCompanyRoom com retry para garantir entrega
+    const { emitToCompanyRoom } = await import("../../libs/socketEmit");
+    await emitToCompanyRoom(
+      messageToUpdate.companyId,
+      messageToUpdate.ticket.uuid,
+      `company-${messageToUpdate.companyId}-appMessage`,
+      {
         action: "update",
         message: messageToUpdate
-      });
+      },
+      false // fallback habilitado
+    );
   } catch (err) {
     Sentry.captureException(err);
     logger.error(`Error handling message ack. Err: ${err}`);
