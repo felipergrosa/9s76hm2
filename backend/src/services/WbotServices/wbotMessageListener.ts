@@ -5571,85 +5571,22 @@ const handleMsgAck = async (
   chat: number | null | undefined
 ) => {
   await new Promise(r => setTimeout(r, 500));
-  const io = getIO();
 
   try {
-    const messageToUpdate = await Message.findOne({
-      where: {
-        wid: msg.key.id
-      },
-      include: [
-        "contact",
-        {
-          model: Ticket,
-          as: "ticket",
-          include: [
-            {
-              model: Contact,
-              attributes: [
-                "id",
-                "name",
-                "number",
-                "email",
-                "profilePicUrl",
-                "acceptAudioMessage",
-                "active",
-                "urlPicture",
-                "companyId"
-              ],
-              include: ["extraInfo", "tags"]
-            },
-            {
-              model: Queue,
-              attributes: ["id", "name", "color"]
-            },
-            {
-              model: Whatsapp,
-              attributes: ["id", "name", "groupAsTicket"]
-            },
-            {
-              model: User,
-              attributes: ["id", "name"]
-            },
-            {
-              model: Tag,
-              as: "tags",
-              attributes: ["id", "name", "color"]
-            }
-          ]
-        },
-        {
-          model: Message,
-          as: "quotedMsg",
-          include: ["contact"]
-        }
-      ]
-    });
-
-    if (!messageToUpdate || messageToUpdate.ack > chat) return;
-
-    await messageToUpdate.update({ ack: chat });
-    console.log(`[SOCKET] Emitindo appMessage`, {
-      namespace: `/workspace-${messageToUpdate.companyId}`,
-      sala: messageToUpdate.ticket.uuid,
-      evento: `company-${messageToUpdate.companyId}-appMessage`,
-      action: "update",
-      messageId: messageToUpdate.id,
-      ack: chat
-    });
+    // CQRS: Usar MessageCommandService para atualizar ACK
+    // Isso já faz: busca mensagem + valida ack + update DB + emite evento via EventBus
+    const { updateMessageAckByWid } = await import("../MessageServices/MessageCommandService");
+    const wid = msg.key.id;
     
-    // Usar emitToCompanyRoom com retry para garantir entrega
-    const { emitToCompanyRoom } = await import("../../libs/socketEmit");
-    await emitToCompanyRoom(
-      messageToUpdate.companyId,
-      messageToUpdate.ticket.uuid,
-      `company-${messageToUpdate.companyId}-appMessage`,
-      {
-        action: "update",
-        message: messageToUpdate
-      },
-      false // fallback habilitado
-    );
+    if (!wid || chat === null || chat === undefined) {
+      return;
+    }
+
+    const updatedMessage = await updateMessageAckByWid(wid, chat);
+    
+    if (updatedMessage) {
+      console.log(`[handleMsgAck] ACK atualizado via CQRS: msgId=${updatedMessage.id} ack=${chat}`);
+    }
   } catch (err) {
     Sentry.captureException(err);
     logger.error(`Error handling message ack. Err: ${err}`);

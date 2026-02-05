@@ -148,6 +148,16 @@ const EditWhatsAppMessage = async ({
       ]
     });
 
+    // CQRS: Emitir evento de atualização via EventBus
+    const { messageEventBus } = await import("./MessageEventBus");
+    messageEventBus.publishMessageUpdated(
+      ticket.companyId,
+      ticket.id,
+      ticket.uuid,
+      message.id,
+      message
+    );
+
     return { ticket: message.ticket, message };
   } catch (err: any) {
     logger.error(`[EditMessage] Erro ao editar mensagem ${messageId}:`, err);

@@ -6,6 +6,7 @@ import Ticket from "../models/Ticket";
 import logger from "../utils/logger";
 import GetTicketWbot from "./GetTicketWbot";
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
+import { markMessagesAsReadByTicket } from "../services/MessageServices/MessageCommandService";
 
 const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
 
@@ -20,15 +21,8 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
       try {
         // Para conexões oficiais, não há Baileys; apenas atualiza banco/cache e emite evento.
         if (whatsapp.channelType === "official") {
-          await Message.update(
-            { read: true },
-            {
-              where: {
-                ticketId: ticket.id,
-                read: false
-              }
-            }
-          );
+          // CQRS: Usar MessageCommandService para marcar como lidas
+          await markMessagesAsReadByTicket(ticket.id, ticket.uuid, ticket.companyId);
 
           await ticket.update({ unreadMessages: 0 });
           await cacheLayer.set(`contacts:${ticket.contactId}:unreads`, "0");
@@ -72,23 +66,16 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
           }
         }
 
-        // SEMPRE atualiza o banco de dados e emite evento, independente do status do WhatsApp
-        await Message.update(
-          { read: true },
-          {
-            where: {
-              ticketId: ticket.id,
-              read: false
-            }
-          }
-        );
+        // CQRS: Usar MessageCommandService para marcar como lidas
+        // Isso já faz: update no banco + invalida cache + emite evento via EventBus
+        await markMessagesAsReadByTicket(ticket.id, ticket.uuid, ticket.companyId);
 
         await ticket.update({ unreadMessages: 0 });
         await cacheLayer.set(`contacts:${ticket.contactId}:unreads`, "0");
 
         const io = getIO();
 
-        // Emitir evento de atualização do ticket
+        // Emitir evento de atualização do ticket (ainda necessário para updateUnread do ticket)
         logger.info(`[SetTicketMessagesAsRead] Emitindo updateUnread para ticketId=${ticket.id}`);
         io.of(`/workspace-${ticket.companyId}`)
           .emit(`company-${ticket.companyId}-ticket`, {
@@ -96,15 +83,7 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
             ticketId: ticket.id
           });
 
-        // Emitir evento de atualização de mensagens para sincronização em tempo real
-        // Isso garante que o frontend atualize o status de leitura das mensagens
-        logger.info(`[SetTicketMessagesAsRead] Emitindo updateRead para ticketId=${ticket.id}, uuid=${ticket.uuid}`);
-        io.of(`/workspace-${ticket.companyId}`)
-          .to(ticket.uuid)
-          .emit(`company-${ticket.companyId}-appMessage`, {
-            action: "updateRead",
-            ticketId: ticket.id
-          });
+        // Evento updateRead já é emitido pelo MessageCommandService via EventBus
 
       } catch (err) {
         logger.warn(

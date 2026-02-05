@@ -1,80 +1,44 @@
 import Message from "../../models/Message";
-import { getIO } from "../../libs/socket";
-import { emitToCompanyRoom } from "../../libs/socketEmit";
 import Ticket from "../../models/Ticket";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
 import CompaniesSettings from "../../models/CompaniesSettings";
+import { markMessageAsDeletedByWid } from "../MessageServices/MessageCommandService";
 
 const MarkDeleteWhatsAppMessage = async (from: any, timestamp?: any, msgId?: string, companyId?: number): Promise<Message> => {
 
     from = from.replace('@c.us', '').replace('@s.whatsapp.net', '')
 
-    if (msgId) {
-
-        const messages = await Message.findAll({
-            where: {
-                wid: msgId,
-                companyId
-            }
-        });
-
+    if (msgId && companyId) {
         try {
-            const messageToUpdate = await Message.findOne({
-                where: {
-                    wid: messages[0].wid,
-                },
-                include: [
-                    "contact",
-                    {
-                        model: Message,
-                        as: "quotedMsg",
-                        include: ["contact"]
-                    }
-                ]
+            // Verificar configurações LGPD
+            const settings = await CompaniesSettings.findOne({
+                where: { companyId }
             });
 
-            if (messageToUpdate) {
-                const settings = await CompaniesSettings.findOne({
-                    where: {
-                        companyId: companyId
-                    }
-                });
+            // Determinar o corpo da mensagem baseado nas configurações LGPD
+            const newBody = (settings?.lgpdDeleteMessage === "enabled" && settings?.enableLGPD === "enabled")
+                ? "🚫 _Mensagem Apagada_"
+                : undefined;
 
-                const ticket = await Ticket.findOne({
-                    where: {
-                        id: messageToUpdate.ticketId,
-                        companyId
-                    }
-                })
+            // CQRS: Usar MessageCommandService para marcar como deletada
+            // Isso já faz: busca + update + emite evento via EventBus
+            const updatedMessage = await markMessageAsDeletedByWid(msgId, companyId, newBody);
 
-                if (settings?.lgpdDeleteMessage === "enabled" && settings?.enableLGPD === "enabled") {
-
-                    await messageToUpdate.update({ body: "🚫 _Mensagem Apagada_", isDeleted: true });
-
-                } else {
-                    await messageToUpdate.update({ isDeleted: true });
-
-                }
-
-                await UpdateTicketService({ ticketData: { lastMessage: " _Mensagem Apagada_" }, ticketId: ticket.id, companyId })
-
-                const io = getIO();
-                // Emite atualização para a sala do ticket com evento padronizado
+            if (updatedMessage) {
+                // Atualizar lastMessage do ticket
+                const ticket = await Ticket.findByPk(updatedMessage.ticketId);
                 if (ticket) {
-                    await emitToCompanyRoom(
-                        companyId!,
-                        ticket.uuid,
-                        `company-${companyId}-appMessage`,
-                        {
-                            action: "update",
-                            message: messageToUpdate,
-                            ticket
-                        }
-                    );
+                    await UpdateTicketService({ 
+                        ticketData: { lastMessage: " _Mensagem Apagada_" }, 
+                        ticketId: ticket.id, 
+                        companyId 
+                    });
                 }
+                
+                console.log(`[MarkDeleteWhatsAppMessage] Mensagem ${msgId} marcada como deletada via CQRS`);
             }
         } catch (err) {
-            console.log("Erro ao tentar marcar a mensagem com excluída")
+            console.log("Erro ao tentar marcar a mensagem como excluída:", err);
         }
 
         return timestamp;

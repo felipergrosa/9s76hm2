@@ -119,16 +119,14 @@ export const addReaction = async (req: Request, res: Response): Promise<Response
       reactionType: type,
     });
 
-    const io = getIO();
-    await emitToCompanyRoom(
+    // CQRS: Emitir evento de update via EventBus
+    const { messageEventBus } = await import("../services/MessageServices/MessageEventBus");
+    messageEventBus.publishMessageUpdated(
       companyId,
+      ticket.id,
       ticket.uuid,
-      `company-${companyId}-appMessage`,
-      {
-        action: "update",
-        message,
-        ticket,
-      }
+      message.id,
+      message
     );
 
     return res.status(200).json({
@@ -703,19 +701,17 @@ export const transcribeAudioMessage = async (req: Request, res: Response): Promi
       if (msg) {
         await msg.update({ audioTranscription: transcribedText.transcribedText });
 
-        // Emite update em realtime para atualizar UI sem refresh
+        // CQRS: Emite update em realtime via EventBus
         try {
           const ticket = await Ticket.findByPk(msg.ticketId);
           if (ticket) {
-            await emitToCompanyRoom(
+            const { messageEventBus } = await import("../services/MessageServices/MessageEventBus");
+            messageEventBus.publishMessageUpdated(
               companyId,
+              ticket.id,
               ticket.uuid,
-              `company-${companyId}-appMessage`,
-              {
-                action: "update",
-                message: msg,
-                ticket
-              }
+              msg.id,
+              msg
             );
           }
         } catch { }
@@ -1023,34 +1019,33 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
   const { companyId } = req.user;
 
   const message = await DeleteWhatsAppMessage(messageId, companyId);
-  const io = getIO();
 
   if (message.isPrivate) {
+    // Para mensagens privadas, deletar e emitir via CQRS
     await Message.destroy({ where: { id: message.id } });
     const ticket = await Ticket.findByPk(message.ticketId, { include: ["contact"] });
-    await emitToCompanyRoom(
+    
+    // CQRS: Emitir evento de deleção via EventBus
+    const { messageEventBus } = await import("../services/MessageServices/MessageEventBus");
+    messageEventBus.publishMessageDeleted(
       companyId,
+      message.ticketId,
       ticket.uuid,
-      `company-${companyId}-appMessage`,
-      {
-        action: "delete",
-        message,
-        ticket,
-      }
+      message.id
+    );
+  } else {
+    // Para mensagens normais, o DeleteWhatsAppMessage já marca como isDeleted
+    // Emitir evento de update via CQRS
+    const ticket = await Ticket.findByPk(message.ticketId, { include: ["contact"] });
+    const { messageEventBus } = await import("../services/MessageServices/MessageEventBus");
+    messageEventBus.publishMessageUpdated(
+      companyId,
+      message.ticketId,
+      ticket.uuid,
+      message.id,
+      message
     );
   }
-
-  const ticketUpd = await Ticket.findByPk(message.ticketId, { include: ["contact"] });
-  await emitToCompanyRoom(
-    companyId,
-    ticketUpd.uuid,
-    `company-${companyId}-appMessage`,
-    {
-      action: "update",
-      message,
-      ticket: ticketUpd,
-    }
-  );
 
   return res.status(200).json({ message: "Mensagem removida com sucesso" });
 };

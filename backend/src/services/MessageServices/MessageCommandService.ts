@@ -170,7 +170,7 @@ export async function updateMessage(command: UpdateMessageCommand): Promise<Mess
   return message;
 }
 
-// Atualiza ACK de uma mensagem (Command específico)
+// Atualiza ACK de uma mensagem por ID (Command específico)
 export async function updateMessageAck(
   messageId: number,
   companyId: number,
@@ -210,7 +210,56 @@ export async function updateMessageAck(
   return message;
 }
 
-// Marca mensagem como deletada (soft delete)
+// Atualiza ACK de uma mensagem por WID (usado pelo wbotMessageListener)
+export async function updateMessageAckByWid(
+  wid: string,
+  ack: number
+): Promise<Message | null> {
+  const message = await Message.findOne({
+    where: { wid },
+    include: [
+      "contact",
+      {
+        model: Ticket,
+        as: "ticket",
+        include: [
+          { model: Contact, attributes: ["id", "name", "number", "email", "profilePicUrl", "companyId"] },
+          { model: Queue, attributes: ["id", "name", "color"] },
+          { model: Whatsapp, attributes: ["id", "name", "groupAsTicket"] },
+          { model: User, as: "user", attributes: ["id", "name"] },
+          { model: Tag, as: "tags", attributes: ["id", "name", "color"] }
+        ]
+      },
+      { model: Message, as: "quotedMsg", include: ["contact"] }
+    ]
+  });
+
+  if (!message) {
+    return null;
+  }
+
+  // Só atualiza se o novo ACK for maior
+  if (message.ack >= ack) {
+    return message;
+  }
+
+  await message.update({ ack });
+
+  // Publicar evento de ACK com mensagem completa (inclui todos os relacionamentos)
+  messageEventBus.publishAckUpdated(
+    message.companyId,
+    message.ticketId,
+    message.ticket.uuid,
+    message.id,
+    message
+  );
+
+  logger.debug(`[MessageCommandService] ACK atualizado: msgId=${message.id} wid=${wid} ack=${ack}`);
+
+  return message;
+}
+
+// Marca mensagem como deletada (soft delete) por ID
 export async function deleteMessage(
   messageId: number,
   companyId: number
@@ -248,9 +297,96 @@ export async function deleteMessage(
   return true;
 }
 
+// Marca mensagem como deletada por WID (usado pelo MarkDeleteWhatsAppMessage)
+export async function markMessageAsDeletedByWid(
+  wid: string,
+  companyId: number,
+  newBody?: string // Opcional: substituir corpo por mensagem de "apagada"
+): Promise<Message | null> {
+  const message = await Message.findOne({
+    where: { wid, companyId },
+    include: [
+      "contact",
+      {
+        model: Ticket,
+        as: "ticket",
+        attributes: ["id", "uuid"]
+      },
+      { model: Message, as: "quotedMsg", include: ["contact"] }
+    ]
+  });
+
+  if (!message) {
+    return null;
+  }
+
+  // Atualizar mensagem
+  const updateData: any = { isDeleted: true };
+  if (newBody) {
+    updateData.body = newBody;
+  }
+  await message.update(updateData);
+
+  // Invalidar cache
+  invalidateTicketCache(message.ticketId);
+
+  // Publicar evento de update (não delete, pois a mensagem ainda existe com corpo alterado)
+  messageEventBus.publishMessageUpdated(
+    companyId,
+    message.ticketId,
+    message.ticket.uuid,
+    message.id,
+    message
+  );
+
+  logger.debug(`[MessageCommandService] Mensagem ${message.id} marcada como deletada via WID ${wid}`);
+
+  return message;
+}
+
+// Marca todas as mensagens de um ticket como lidas (bulk update)
+export async function markMessagesAsReadByTicket(
+  ticketId: number,
+  ticketUuid: string,
+  companyId: number
+): Promise<number> {
+  const [affectedCount] = await Message.update(
+    { read: true },
+    {
+      where: {
+        ticketId,
+        read: false
+      }
+    }
+  );
+
+  if (affectedCount > 0) {
+    // Invalidar cache
+    invalidateTicketCache(ticketId);
+
+    // Publicar evento de leitura em massa
+    messageEventBus.publish({
+      type: "MESSAGE_UPDATED",
+      companyId,
+      ticketId,
+      ticketUuid,
+      messageId: 0, // 0 indica bulk update
+      payload: { action: "updateRead", ticketId },
+      timestamp: new Date()
+    });
+
+    logger.debug(`[MessageCommandService] ${affectedCount} mensagens marcadas como lidas no ticket ${ticketId}`);
+  }
+
+  return affectedCount;
+}
+
 export default {
   createMessage,
   updateMessage,
   updateMessageAck,
-  deleteMessage
+  updateMessageAckByWid,
+  deleteMessage,
+  markMessageAsDeletedByWid,
+  markMessagesAsReadByTicket
 };

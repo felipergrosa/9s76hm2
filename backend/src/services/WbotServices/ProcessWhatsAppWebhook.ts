@@ -714,33 +714,14 @@ async function processMessageStatus(
       break;
   }
 
-  // Atualizar mensagem no banco
-  const message = await Message.findOne({
-    where: { wid: messageId }
-  });
-
-  if (message) {
-    await message.update({ ack });
-
-    logger.debug(`[WebhookProcessor] Mensagem ${messageId} atualizada para ack=${ack}`);
-
-    // Buscar ticket para emitir apenas para a sala correta
-    const ticket = await Ticket.findByPk(message.ticketId);
-    if (ticket) {
-      // Usar emitToCompanyRoom com retry para garantir entrega do status
-      const { emitToCompanyRoom } = await import("../../libs/socketEmit");
-      await emitToCompanyRoom(
-        companyId,
-        ticket.uuid,
-        `company-${companyId}-appMessage`,
-        {
-          action: "update",
-          message,
-          ticket
-        },
-        false // fallback habilitado
-      );
-    }
+  // CQRS: Usar MessageCommandService para atualizar ACK
+  // Isso já faz: busca mensagem + valida ack + update DB + emite evento via EventBus
+  const { updateMessageAckByWid } = await import("../MessageServices/MessageCommandService");
+  
+  const updatedMessage = await updateMessageAckByWid(messageId, ack);
+  
+  if (updatedMessage) {
+    logger.debug(`[WebhookProcessor] Mensagem ${messageId} atualizada para ack=${ack} via CQRS`);
   } else {
     logger.debug(`[WebhookProcessor] Mensagem ${messageId} não encontrada no banco`);
   }
