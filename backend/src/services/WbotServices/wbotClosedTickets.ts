@@ -13,6 +13,7 @@ import Company from "../../models/Company";
 import logger from "../../utils/logger";
 import { isNil } from "lodash";
 import { sub } from "date-fns";
+import { ticketEventBus } from "../TicketServices/TicketEventBus";
 
 const closeTicket = async (ticket: any, body: string) => {
   await ticket.update({
@@ -141,13 +142,9 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
           whatsappId: ticket.whatsappId,
           userId: ticket.userId,
         });
-        // console.log("emitiu socket 144", ticket.id)
 
-        const io = getIO();
-        io.of(companyId.toString()).emit(`company-${companyId}-ticket`, {
-          action: "delete",
-          ticketId: ticket.id
-        });
+        // CQRS: Emitir evento via TicketEventBus
+        ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
       }
     }
   }
@@ -194,10 +191,8 @@ const handleNPSTickets = async (companyId: number, whatsapp: any) => {
         userId: ticket.userId,
       });
 
-      getIO().of(companyId.toString()).emit(`company-${companyId}-ticket`, {
-        action: "delete",
-        ticketId: ticket.id
-      });
+      // CQRS: Emitir evento via TicketEventBus
+      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
     }));
   }
 };

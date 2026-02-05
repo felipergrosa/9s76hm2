@@ -74,13 +74,15 @@ O CQRS (Command Query Responsibility Segregation) separa operações de **escrit
 | 7 | `MessageController.ts` - transcribe | ✅ | Update → `MessageEventBus.publishMessageUpdated()` |
 | 8 | `EditWhatsAppMessage.ts` | ✅ | Edit → `MessageEventBus.publishMessageUpdated()` |
 
-### 📋 FASE 3 - Futuro (Tickets)
+### ✅ FASE 3 - Tickets (CONCLUÍDO)
 
-| # | Arquivo | Status | O que fazer |
-|---|---------|--------|-------------|
-| 9 | `UpdateTicketService.ts` | ⏳ | Criar `TicketCommandService` |
-| 10 | `CreateTicketService.ts` | ⏳ | Criar `TicketQueryService` |
-| 11 | `wbotClosedTickets.ts` | ⏳ | Usar TicketCommandService |
+| # | Arquivo | Status | O que foi feito |
+|---|---------|--------|-----------------|
+| 9 | `TicketEventBus.ts` | ✅ | Criado EventBus para tickets |
+| 10 | `TicketCommandService.ts` | ✅ | Criado Command Service |
+| 11 | `TicketQueryService.ts` | ✅ | Criado Query Service |
+| 12 | `UpdateTicketService.ts` | ✅ | Migrado para TicketEventBus |
+| 13 | `wbotClosedTickets.ts` | ✅ | Migrado para TicketEventBus |
 
 ---
 

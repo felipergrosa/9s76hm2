@@ -4,6 +4,7 @@ import { Op } from "sequelize";
 import SetTicketMessagesAsRead from "../../helpers/SetTicketMessagesAsRead";
 import { getIO } from "../../libs/socket";
 import Ticket from "../../models/Ticket";
+import { ticketEventBus } from "./TicketEventBus";
 import Queue from "../../models/Queue";
 import ShowTicketService from "./ShowTicketService";
 import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
@@ -119,14 +120,9 @@ const UpdateTicketService = async ({
         status: "closed"
       });
 
-      io.of(`/workspace-${companyId}`)
-        // .to(oldStatus)
-        // .to(ticketId.toString())
-        .emit(`company-${ticket.companyId}-ticket`, {
-          action: "delete",
-          ticketId: ticket.id
-        });
-      console.log(117, "UpdateTicketService")
+      // CQRS: Emitir evento via TicketEventBus
+      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
+      console.log(117, "UpdateTicketService - CQRS")
       return { ticket, oldStatus, oldUserId };
     }
 
@@ -230,15 +226,10 @@ const UpdateTicketService = async ({
             amountUsedBotQueuesNPS: 1
           })
 
-          io.of(`/workspace-${companyId}`)
-            // .to(oldStatus)
-            // .to(ticketId.toString())
-            .emit(`company-${ticket.companyId}-ticket`, {
-              action: "delete",
-              ticketId: ticket.id
-            });
+          // CQRS: Emitir evento via TicketEventBus
+          ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
 
-          console.log(277, "UpdateTicketService")
+          console.log(277, "UpdateTicketService - CQRS")
           return { ticket, oldStatus, oldUserId };
 
         }
@@ -316,14 +307,9 @@ const UpdateTicketService = async ({
         hashFlowId: null,
       });
 
-      io.of(`/workspace-${companyId}`)
-        // .to(oldStatus)
-        // .to(ticketId.toString())
-        .emit(`company-${ticket.companyId}-ticket`, {
-          action: "delete",
-          ticketId: ticket.id
-        });
-      console.log(309, "UpdateTicketService")
+      // CQRS: Emitir evento via TicketEventBus
+      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
+      console.log(309, "UpdateTicketService - CQRS")
       return { ticket, oldStatus, oldUserId };
     }
     let queue
@@ -747,32 +733,17 @@ const UpdateTicketService = async ({
         ticketId,
         type: oldStatus === "pending" ? "open" : "reopen"
       });
-
-    }
+    } // adicionado fechamento do bloco if
 
     await ticketTraking.save();
 
-
     if (ticket.status !== oldStatus || ticket.user?.id !== oldUserId || ticket.queueId !== oldQueueId) {
-      // console.log("emitiu socket 739", ticket.id)
-
-      io.of(`/workspace-${companyId}`)
-        // .to(oldStatus)
-        .emit(`company-${companyId}-ticket`, {
-          action: "delete",
-          ticketId: ticket.id
-        });
+      // CQRS: Emitir evento de delete via TicketEventBus
+      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
     }
-    // console.log("emitiu socket 746", ticket.id)
 
-    io.of(`/workspace-${companyId}`)
-      // .to(ticket.status)
-      // .to("notification")
-      // .to(ticketId.toString())
-      .emit(`company-${companyId}-ticket`, {
-        action: "update",
-        ticket
-      });
+    // CQRS: Emitir evento de update via TicketEventBus
+    ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
 
     // Auto-tag: aplica tag pessoal do novo usuário ao contato quando transferido
     if (userId && oldUserId !== userId && ticket.contactId) {
