@@ -23,6 +23,7 @@ import { TagsContainer } from "../TagsContainer";
 import { isNil } from 'lodash';
 import { EditMessageProvider } from "../../context/EditingMessage/EditingMessageContext";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
+import { OptimisticMessageProvider } from "../../context/OptimisticMessage/OptimisticMessageContext";
 
 const drawerWidth = 320;
 
@@ -374,13 +375,15 @@ const Ticket = () => {
             />
           </TicketHeader>
         )}
-        <ReplyMessageProvider>
-          <ForwardMessageProvider>
-            <EditMessageProvider>
-              {renderMessagesList()}
-            </EditMessageProvider>
-          </ForwardMessageProvider>
-        </ReplyMessageProvider>
+        <OptimisticMessageProvider>
+          <ReplyMessageProvider>
+            <ForwardMessageProvider>
+              <EditMessageProvider>
+                {renderMessagesList()}
+              </EditMessageProvider>
+            </ForwardMessageProvider>
+          </ReplyMessageProvider>
+        </OptimisticMessageProvider>
       </Paper>
 
       <ContactDrawer

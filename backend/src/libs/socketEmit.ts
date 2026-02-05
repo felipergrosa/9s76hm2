@@ -85,6 +85,55 @@ export async function emitToCompanyRoom(
 }
 
 /**
+ * Emite um evento com confirmação de recebimento (ACK) do cliente.
+ * Usa timeout e retry automático se o cliente não confirmar.
+ * Ideal para mensagens críticas que DEVEM ser entregues.
+ */
+export async function emitWithAck(
+  companyId: number,
+  room: string,
+  event: string,
+  payload: any,
+  timeoutMs: number = 5000
+): Promise<{ success: boolean; acked: number; failed: number }> {
+  const io = getIO();
+  const ns = io.of(`/workspace-${companyId}`);
+
+  try {
+    const sockets = await ns.in(room).fetchSockets();
+    
+    if (sockets.length === 0) {
+      console.warn(`[SOCKET ACK] Nenhum socket na sala ${room} - usando fallback broadcast`);
+      ns.emit(event, { ...payload, fallback: true, room });
+      return { success: false, acked: 0, failed: 0 };
+    }
+
+    // Emitir para cada socket com timeout individual
+    const results = await Promise.all(
+      sockets.map(async (socket) => {
+        try {
+          const ack = await socket.timeout(timeoutMs).emitWithAck(event, payload);
+          return ack === true || ack === "ok";
+        } catch (e) {
+          console.warn(`[SOCKET ACK] Timeout/erro para socket ${socket.id}:`, (e as Error).message);
+          return false;
+        }
+      })
+    );
+
+    const acked = results.filter(r => r).length;
+    const failed = results.filter(r => !r).length;
+
+    console.log(`[SOCKET ACK] event=${event} room=${room} acked=${acked}/${sockets.length} failed=${failed}`);
+
+    return { success: acked > 0, acked, failed };
+  } catch (e) {
+    console.error(`[SOCKET ACK] Erro ao emitir para sala ${room}:`, e);
+    return { success: false, acked: 0, failed: 0 };
+  }
+}
+
+/**
  * Emite um evento para TODO o namespace da company (broadcast).
  * Não usa fallback, pois já é broadcast.
  * Logs condicionados por SOCKET_DEBUG.

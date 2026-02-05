@@ -37,6 +37,7 @@ import YouTubePreview from "../ModalYoutubeCors";
 
 import { ReplyMessageContext } from "../../context/ReplyingMessage/ReplyingMessageContext";
 import { ForwardMessageContext } from "../../context/ForwarMessage/ForwardMessageContext";
+import { OptimisticMessageContext } from "../../context/OptimisticMessage/OptimisticMessageContext";
 
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
@@ -762,6 +763,7 @@ const MessagesList = ({
   const { selectedQueuesMessage } = useContext(QueueSelectedContext);
 
   const { user, socket } = useContext(AuthContext);
+  const { getOptimisticMessages, removeOptimisticMessage } = useContext(OptimisticMessageContext);
   // Armazena a sala atual (idealmente ticket.uuid). Antes de sabermos o uuid, usa-se ticketId como fallback.
   const currentRoomIdRef = useRef(null);
 
@@ -1232,6 +1234,13 @@ const MessagesList = ({
         if (data.action === "create") {
           dispatch({ type: "ADD_MESSAGE", payload: data.message });
           scrollToBottom();
+          
+          // Last Event ID: guardar ID da última mensagem recebida
+          if (data.message?.id) {
+            try {
+              localStorage.setItem(`lastMessageId-${ticketId}`, String(data.message.id));
+            } catch (e) { }
+          }
         }
 
         if (data.action === "update") {
@@ -1251,13 +1260,51 @@ const MessagesList = ({
       }
     };
 
-    socket.on("connect", connectEventMessagesList);
+    // Last Event ID: recuperar mensagens perdidas ao reconectar
+    const recoverMissedMessages = () => {
+      try {
+        const lastMessageId = localStorage.getItem(`lastMessageId-${ticketId}`);
+        if (lastMessageId && socket?.connected) {
+          console.log("[MessagesList] Tentando recuperar mensagens perdidas desde ID:", lastMessageId);
+          socket.emit("recoverMissedMessages", { 
+            ticketId: ticketId, 
+            lastMessageId: parseInt(lastMessageId, 10) 
+          }, (result) => {
+            if (result?.success && result?.messages?.length > 0) {
+              console.log(`[MessagesList] Recuperadas ${result.count} mensagens perdidas`);
+              result.messages.forEach((msg) => {
+                dispatch({ type: "ADD_MESSAGE", payload: msg });
+              });
+              scrollToBottom();
+              // Atualizar último ID
+              const lastMsg = result.messages[result.messages.length - 1];
+              if (lastMsg?.id) {
+                localStorage.setItem(`lastMessageId-${ticketId}`, String(lastMsg.id));
+              }
+            } else if (result?.error) {
+              console.warn("[MessagesList] Erro ao recuperar mensagens:", result.error);
+            }
+          });
+        }
+      } catch (e) {
+        console.debug("[MessagesList] Erro ao tentar recuperar mensagens:", e);
+      }
+    };
+
+    // Handler de conexão que também tenta recuperar mensagens perdidas
+    const onConnectWithRecovery = () => {
+      connectEventMessagesList();
+      // Aguarda um pouco para garantir que entrou na sala antes de recuperar
+      setTimeout(recoverMissedMessages, 1000);
+    };
+
+    socket.on("connect", onConnectWithRecovery);
     socket.on(`company-${companyId}-appMessage`, onAppMessageMessagesList);
 
     // Se já estiver conectado, entra na sala imediatamente
     try {
       if (socket && socket.connected) {
-        connectEventMessagesList();
+        onConnectWithRecovery();
       }
     } catch { }
 
@@ -1288,7 +1335,7 @@ const MessagesList = ({
         }
       } catch { }
 
-      socket.off("connect", connectEventMessagesList);
+      socket.off("connect", onConnectWithRecovery);
       socket.off(`company-${companyId}-appMessage`, onAppMessageMessagesList);
       socket.off("disconnect");
       socket.off("reconnect");
@@ -1343,8 +1390,10 @@ const MessagesList = ({
     return () => clearInterval(interval);
   }, [socket, ticketId]);
 
-  // Phase 6: Polling fallback - buscar mensagens novas via API como segurança
+  // Phase 6: Polling Inteligente (Adaptativo) - ajusta frequência baseado no estado da conexão
   const lastMessageIdRef = useRef(null);
+  const pollIntervalRef = useRef(null);
+  const consecutiveFailsRef = useRef(0);
 
   useEffect(() => {
     if (!ticketId || ticketId === "undefined") return;
@@ -1352,7 +1401,6 @@ const MessagesList = ({
     const pollNewMessages = async () => {
       try {
         // Só faz polling se temos mensagens carregadas (para comparar)
-        // Usa messagesList em vez de filteredMessages para evitar erro de referência antes da inicialização
         if (!messagesList || messagesList.length === 0) return;
 
         const lastKnownId = lastMessageIdRef.current || messagesList[messagesList.length - 1]?.id;
@@ -1373,6 +1421,12 @@ const MessagesList = ({
               dispatch({ type: "ADD_MESSAGE", payload: msg });
             });
             scrollToBottom();
+            
+            // Guardar último ID para Last Event ID pattern
+            const lastMsg = newMessages[newMessages.length - 1];
+            if (lastMsg?.id) {
+              localStorage.setItem(`lastMessageId-${ticketId}`, String(lastMsg.id));
+            }
           }
 
           // Atualizar referência do último ID
@@ -1380,16 +1434,62 @@ const MessagesList = ({
             lastMessageIdRef.current = data.messages[data.messages.length - 1]?.id;
           }
         }
+        
+        consecutiveFailsRef.current = 0; // Reset falhas após sucesso
       } catch (err) {
+        consecutiveFailsRef.current++;
         console.debug("[MessagesList] Erro no polling:", err);
       }
     };
 
-    // Polling a cada 30 segundos como fallback
-    const interval = setInterval(pollNewMessages, 30000);
+    // Polling Adaptativo: ajusta intervalo baseado no estado da conexão
+    const setupAdaptivePolling = () => {
+      // Limpa interval anterior
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
 
-    return () => clearInterval(interval);
-  }, [ticketId, selectedQueuesMessage, messagesList]);
+      // Determina intervalo baseado no estado
+      let intervalMs = 30000; // Default: 30s quando socket conectado
+      
+      if (!socket?.connected) {
+        intervalMs = 5000; // 5s quando socket desconectado
+        console.log("[MessagesList] Polling adaptativo: 5s (socket desconectado)");
+      } else if (consecutiveFailsRef.current > 3) {
+        intervalMs = 60000; // 60s após muitas falhas (backoff)
+        console.log("[MessagesList] Polling adaptativo: 60s (backoff após falhas)");
+      } else {
+        console.log("[MessagesList] Polling adaptativo: 30s (socket conectado)");
+      }
+
+      pollIntervalRef.current = setInterval(pollNewMessages, intervalMs);
+    };
+
+    // Setup inicial
+    setupAdaptivePolling();
+
+    // Reconfigura quando estado do socket muda
+    const onConnect = () => {
+      console.log("[MessagesList] Socket reconectado - ajustando polling");
+      setupAdaptivePolling();
+    };
+    
+    const onDisconnect = () => {
+      console.log("[MessagesList] Socket desconectado - aumentando frequência de polling");
+      setupAdaptivePolling();
+    };
+
+    socket?.on("connect", onConnect);
+    socket?.on("disconnect", onDisconnect);
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+      socket?.off("connect", onConnect);
+      socket?.off("disconnect", onDisconnect);
+    };
+  }, [ticketId, selectedQueuesMessage, messagesList, socket]);
 
   const loadMore = () => {
     if (loadingMore) return;
@@ -1613,7 +1713,7 @@ const MessagesList = ({
     }
   };
 
-  // Filtra mensagens de reação e agrupa
+  // Filtra mensagens de reação e agrupa + adiciona mensagens otimísticas
   const { filteredMessages, messageReactions } = React.useMemo(() => {
     const reactions = {};
     const filtered = [];
@@ -1639,8 +1739,20 @@ const MessagesList = ({
       }
     });
 
+    // Adiciona mensagens otimísticas ao final (ainda não confirmadas pelo servidor)
+    const optimisticMsgs = getOptimisticMessages ? getOptimisticMessages(ticketId) : [];
+    if (optimisticMsgs && optimisticMsgs.length > 0) {
+      // Filtra mensagens otimísticas que já foram confirmadas (evita duplicatas)
+      const existingIds = new Set(filtered.map(m => m.id));
+      optimisticMsgs.forEach(optMsg => {
+        if (!existingIds.has(optMsg.id)) {
+          filtered.push(optMsg);
+        }
+      });
+    }
+
     return { filteredMessages: filtered, messageReactions: reactions };
-  }, [messagesList]);
+  }, [messagesList, ticketId, getOptimisticMessages]);
 
   const renderMessageAck = (message) => {
     if (message.ack === 0) {

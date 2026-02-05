@@ -198,6 +198,43 @@ export const initIO = (httpServer: Server): SocketIO => {
       callback?.();
     });
 
+    // Last Event ID Pattern: recupera mensagens perdidas desde o último ID conhecido
+    socket.on("recoverMissedMessages", async (data: { ticketId: string; lastMessageId: number }, callback?: (result: any) => void) => {
+      try {
+        const { ticketId, lastMessageId } = data;
+        if (!ticketId || !lastMessageId) {
+          callback?.({ error: "ticketId e lastMessageId são obrigatórios" });
+          return;
+        }
+
+        // Importação dinâmica para evitar dependência circular
+        const { default: Message } = await import("../models/Message");
+        const { Op } = await import("sequelize");
+
+        // Busca mensagens mais recentes que o último ID conhecido
+        const missedMessages = await Message.findAll({
+          where: {
+            ticketId: ticketId,
+            id: { [Op.gt]: lastMessageId }
+          },
+          order: [["id", "ASC"]],
+          limit: 100, // Limita para evitar sobrecarga
+          include: ["contact"]
+        });
+
+        logger.info(`[SOCKET RECOVERY] Recuperando ${missedMessages.length} mensagens perdidas para ticket ${ticketId} desde ID ${lastMessageId}`);
+
+        callback?.({ 
+          success: true, 
+          messages: missedMessages,
+          count: missedMessages.length 
+        });
+      } catch (e) {
+        logger.error("[SOCKET RECOVERY] Erro ao recuperar mensagens:", e);
+        callback?.({ error: (e as Error).message });
+      }
+    });
+
     socket.on("joinNotification", (callback?: (error?: string) => void) => {
       socket.join("notification");
       logger.info(`Cliente entrou no canal de notificações no namespace ${socket.nsp.name}`);

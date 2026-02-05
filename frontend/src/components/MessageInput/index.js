@@ -66,6 +66,7 @@ import useCompanySettings from "../../hooks/useSettings/companySettings";
 import { ForwardMessageContext } from "../../context/ForwarMessage/ForwardMessageContext";
 import MessageUploadMedias from "../MessageUploadMedias";
 import { EditMessageContext } from "../../context/EditingMessage/EditingMessageContext";
+import { OptimisticMessageContext } from "../../context/OptimisticMessage/OptimisticMessageContext";
 import ScheduleModal from "../ScheduleModal";
 import { useParams } from "react-router-dom/cjs/react-router-dom.min";
 import ChatAssistantPanel from "../ChatAssistantPanel";
@@ -537,6 +538,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   const [anchorEl, setAnchorEl] = useState(null);
   const { setReplyingMessage, replyingMessage } = useContext(ReplyMessageContext);
   const { setEditingMessage, editingMessage } = useContext(EditMessageContext);
+  const { addOptimisticMessage, confirmOptimisticMessage, failOptimisticMessage } = useContext(OptimisticMessageContext);
   const { user } = useContext(AuthContext);
   const [appointmentModalOpen, setAppointmentModalOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -1115,35 +1117,69 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
 
     const sendMessage = expandPlaceholders(inputMessage.trim());
 
+    const messageBody = (signMessage || privateMessage) && !editingMessage
+      ? `*${userName}:*\n${sendMessage}`
+      : sendMessage;
+
     const message = {
       read: 1,
       fromMe: true,
       mediaUrl: "",
-      body: (signMessage || privateMessage) && !editingMessage
-        ? `*${userName}:*\n${sendMessage}`
-        : sendMessage,
+      body: messageBody,
       quotedMsg: replyingMessage,
       isPrivate: privateMessage ? "true" : "false",
     };
 
+    // Optimistic UI: adicionar mensagem imediatamente (só para novas mensagens, não edições)
+    let tempId = null;
+    if (editingMessage === null && addOptimisticMessage) {
+      tempId = addOptimisticMessage(ticketId, {
+        body: messageBody,
+        fromMe: true,
+        read: 1,
+        mediaUrl: "",
+        quotedMsg: replyingMessage,
+        isPrivate: privateMessage,
+        contact: { name: user.name },
+        ticketId: ticketId,
+      });
+      console.log("[OptimisticUI] Mensagem adicionada otimisticamente:", tempId);
+    }
+
+    // Limpar input imediatamente para UX fluida
+    const savedInput = inputMessage;
+    setInputMessage("");
+    setShowEmoji(false);
+    setReplyingMessage(null);
+    setPrivateMessage(false);
+    setPrivateMessageInputVisible(false);
+    handleMenuItemClick();
+
     try {
       if (editingMessage !== null) {
         await api.post(`/messages/edit/${editingMessage.id}`, message);
+        setEditingMessage(null);
       } else {
-        await api.post(`/messages/${ticketId}`, message);
+        const { data } = await api.post(`/messages/${ticketId}`, message);
+        // Confirmar mensagem otimística com a mensagem real do servidor
+        if (tempId && confirmOptimisticMessage && data?.message) {
+          confirmOptimisticMessage(ticketId, tempId, data.message);
+          console.log("[OptimisticUI] Mensagem confirmada pelo servidor:", data.message?.id);
+        }
       }
     } catch (err) {
+      // Marcar mensagem otimística como falha
+      if (tempId && failOptimisticMessage) {
+        failOptimisticMessage(ticketId, tempId, err?.message || "Erro ao enviar");
+        console.error("[OptimisticUI] Falha ao enviar mensagem:", err);
+      }
       toastError(err);
+      // Restaurar input em caso de erro para que usuário possa tentar novamente
+      setInputMessage(savedInput);
     }
 
-    setInputMessage("");
-    setShowEmoji(false);
     setLoading(false);
-    setReplyingMessage(null);
-    setPrivateMessage(false);
     setEditingMessage(null);
-    setPrivateMessageInputVisible(false)
-    handleMenuItemClick();
   };
 
   const handleStartRecording = async () => {

@@ -1,5 +1,6 @@
 import { getIO } from "../../libs/socket";
 import { emitToCompanyRoom } from "../../libs/socketEmit";
+import { emitSocketEvent } from "../../queues/socketEventQueue";
 import Contact from "../../models/Contact";
 import Message from "../../models/Message";
 import Queue from "../../models/Queue";
@@ -127,38 +128,23 @@ const CreateMessageService = async ({
   if (!messageData?.ticketImported) {
     const roomId = message.ticket.uuid;
     const eventName = `company-${companyId}-appMessage`;
+    const payload = {
+      action: "create",
+      message,
+      ticket: message.ticket,
+      contact: message.ticket.contact
+    };
     
     console.log(`[CreateMessageService] Emitindo mensagem para sala ${roomId}, companyId=${companyId}, msgId=${message.id}, ticketId=${message.ticketId}`);
     
-    // Tentativa com retry para problemas intermitentes
-    const emitWithRetry = async (attempts: number = 3, delayMs: number = 100): Promise<void> => {
-      for (let i = 0; i < attempts; i++) {
-        try {
-          await emitToCompanyRoom(
-            companyId,
-            roomId,
-            eventName,
-            {
-              action: "create",
-              message,
-              ticket: message.ticket,
-              contact: message.ticket.contact
-            },
-            false // Habilitar fallback para garantir entrega mesmo se sala vazia
-          );
-          console.log(`[CreateMessageService] Emissão sucesso na tentativa ${i + 1} para sala ${roomId}`);
-          return;
-        } catch (err) {
-          console.error(`[CreateMessageService] Falha na tentativa ${i + 1} de emissão para sala ${roomId}:`, err);
-          if (i < attempts - 1) {
-            await new Promise(r => setTimeout(r, delayMs * (i + 1)));
-          }
-        }
-      }
-      console.error(`[CreateMessageService] Todas as tentativas de emissão falharam para sala ${roomId}`);
-    };
-    
-    await emitWithRetry();
+    // Usa fila persistente se SOCKET_USE_QUEUE=true (mais robusto)
+    // Caso contrário, usa emissão direta com retry
+    try {
+      await emitSocketEvent(companyId, roomId, eventName, payload);
+      console.log(`[CreateMessageService] Emissão sucesso para sala ${roomId}`);
+    } catch (err) {
+      console.error(`[CreateMessageService] Falha na emissão para sala ${roomId}:`, err);
+    }
   }
 
 
