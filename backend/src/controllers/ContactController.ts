@@ -2054,3 +2054,66 @@ export const checkExistingNumbers = async (req: Request, res: Response): Promise
     return res.status(500).json({ error: error.message || "Erro ao verificar contatos existentes" });
   }
 };
+
+// Buscar contatos duplicados (LID vs número real)
+export const findDuplicateLidContacts = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+
+  try {
+    const { FindDuplicateLidContacts } = await import("../services/ContactServices/MergeContactsService");
+    const duplicates = await FindDuplicateLidContacts(companyId);
+
+    return res.status(200).json({
+      success: true,
+      duplicates: duplicates.map(d => ({
+        lidContact: {
+          id: d.lidContact.id,
+          name: d.lidContact.name,
+          number: d.lidContact.number,
+          remoteJid: d.lidContact.remoteJid
+        },
+        realContact: {
+          id: d.realContact.id,
+          name: d.realContact.name,
+          number: d.realContact.number,
+          remoteJid: d.realContact.remoteJid
+        }
+      })),
+      count: duplicates.length
+    });
+  } catch (error: any) {
+    logger.error(`[findDuplicateLidContacts] Erro: ${error.message}`);
+    return res.status(500).json({ error: error.message || "Erro ao buscar duplicados" });
+  }
+};
+
+// Mesclar dois contatos (LID para número real)
+export const mergeContacts = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const { primaryContactId, secondaryContactId } = req.body as { 
+    primaryContactId: number; 
+    secondaryContactId: number; 
+  };
+
+  if (!primaryContactId || !secondaryContactId) {
+    return res.status(400).json({ error: "primaryContactId e secondaryContactId são obrigatórios" });
+  }
+
+  try {
+    const MergeContactsService = (await import("../services/ContactServices/MergeContactsService")).default;
+    const result = await MergeContactsService({
+      primaryContactId,
+      secondaryContactId,
+      companyId
+    });
+
+    if (result.success) {
+      return res.status(200).json(result);
+    } else {
+      return res.status(400).json(result);
+    }
+  } catch (error: any) {
+    logger.error(`[mergeContacts] Erro: ${error.message}`);
+    return res.status(500).json({ error: error.message || "Erro ao mesclar contatos" });
+  }
+};

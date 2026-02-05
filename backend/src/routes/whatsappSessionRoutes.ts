@@ -23,4 +23,11 @@ whatsappSessionRoutes.delete(
   WhatsAppSessionController.remove
 );
 
+// Limpar sessão criptográfica de contato específico (resolve Bad MAC errors)
+whatsappSessionRoutes.post(
+  "/whatsappsession/:whatsappId/clear-contact-session",
+  isAuth,
+  WhatsAppSessionController.clearContactSession
+);
+
 export default whatsappSessionRoutes;
