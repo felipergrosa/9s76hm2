@@ -64,6 +64,15 @@ export const initIO = (httpServer: Server): SocketIO => {
     maxHttpBufferSize: 1e6, // Limita payload a 1MB
     pingTimeout: 20000,
     pingInterval: 25000,
+    
+    // Connection State Recovery: recupera eventos perdidos durante desconexões temporárias
+    // Funciona para desconexões de até 2 minutos (configurable)
+    connectionStateRecovery: {
+      // Guardar estado por 2 minutos após desconexão
+      maxDisconnectionDuration: 2 * 60 * 1000,
+      // Pular middlewares na reconexão bem-sucedida (mais rápido)
+      skipMiddlewares: true,
+    }
   });
 
   // Configura o adapter Redis para suportar múltipliplas instâncias (carregamento dinâmico)
@@ -148,9 +157,16 @@ export const initIO = (httpServer: Server): SocketIO => {
 
   workspaces.on("connection", (socket) => {
     const clientIp = socket.handshake.address;
-    try {
-      logger.info(`[SOCKET] Cliente conectado ao namespace ${socket.nsp.name} (IP: ${clientIp}) query=${JSON.stringify(socket.handshake.query)}`);
-    } catch {}
+    
+    // Connection State Recovery: verifica se a conexão foi recuperada
+    if ((socket as any).recovered) {
+      logger.info(`[SOCKET RECOVERY] ✅ Conexão RECUPERADA - namespace=${socket.nsp.name} socketId=${socket.id} rooms=${Array.from(socket.rooms).join(",")}`);
+      // Eventos perdidos durante a desconexão serão reenviados automaticamente
+    } else {
+      try {
+        logger.info(`[SOCKET] Cliente conectado ao namespace ${socket.nsp.name} (IP: ${clientIp}) query=${JSON.stringify(socket.handshake.query)}`);
+      } catch {}
+    }
 
     // Valida userId
     const userId = socket.handshake.query.userId as string;

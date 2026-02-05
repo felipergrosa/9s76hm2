@@ -68,6 +68,16 @@ class SocketWorker {
     } catch { }
 
     this.socket.on("connect", () => {
+      // Connection State Recovery: verifica se a conexão foi recuperada
+      if (this.socket.recovered) {
+        console.log("[SOCKET RECOVERY] ✅ Conexão RECUPERADA - eventos perdidos serão reenviados automaticamente", {
+          namespace: `workspace-${this?.companyId}`,
+          id: this.socket?.id
+        });
+        // Não precisa fazer rejoin - rooms são restauradas automaticamente
+        return;
+      }
+      
       console.log("Socket conectado:", { namespace: `workspace-${this?.companyId}`, id: this.socket?.id, hasToken: !!token });
       // Envia joins pendentes
       try {
