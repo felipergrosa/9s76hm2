@@ -45,35 +45,54 @@ const editMessageBaileys = async (
 ): Promise<void> => {
   const wbot = await GetTicketWbot(ticket);
 
-  // Validar que temos dataJson
-  if (!message.dataJson) {
-    throw new AppError("Mensagem não possui dados originais (dataJson). Não é possível editar.");
+  // Tentar obter a key do dataJson
+  let msgKey: any = null;
+  
+  if (message.dataJson) {
+    try {
+      const msg = JSON.parse(message.dataJson);
+      if (msg.key && msg.key.id) {
+        msgKey = msg.key;
+      }
+    } catch (e) {
+      logger.warn(`[EditMessage] Falha ao parsear dataJson, tentando reconstruir key`);
+    }
   }
 
-  let msg: any;
-  try {
-    msg = JSON.parse(message.dataJson);
-  } catch (e) {
-    throw new AppError("Falha ao parsear dataJson da mensagem.");
+  // Se não conseguiu obter do dataJson, reconstruir a key
+  if (!msgKey) {
+    // Usar o wid da mensagem como id da key
+    if (!message.wid) {
+      throw new AppError("Mensagem não possui identificador (wid). Não é possível editar.");
+    }
+
+    // Reconstruir a key com os dados disponíveis
+    const remoteJid = message.remoteJid || 
+      (ticket.contact?.remoteJid) ||
+      `${ticket.contact?.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
+
+    msgKey = {
+      remoteJid: remoteJid,
+      fromMe: true, // Só podemos editar mensagens enviadas por nós
+      id: message.wid,
+      participant: message.participant || undefined
+    };
+
+    logger.info(`[EditMessage] Key reconstruída: ${JSON.stringify(msgKey)}`);
   }
 
-  // Validar que temos a key completa
-  if (!msg.key || !msg.key.id) {
-    throw new AppError("Mensagem não possui key válida. Não é possível editar.");
-  }
-
-  // Usar o remoteJid do key (mais confiável que message.remoteJid)
-  const targetJid = msg.key.remoteJid || message.remoteJid;
+  // Usar o remoteJid do key
+  const targetJid = msgKey.remoteJid || message.remoteJid;
 
   if (!targetJid) {
     throw new AppError("Não foi possível determinar o destinatário da mensagem.");
   }
 
-  logger.info(`[EditMessage] Editando mensagem - targetJid: ${targetJid}, keyId: ${msg.key.id}, fromMe: ${msg.key.fromMe}`);
+  logger.info(`[EditMessage] Editando mensagem - targetJid: ${targetJid}, keyId: ${msgKey.id}, fromMe: ${msgKey.fromMe}`);
 
   // Garantir que a key tem fromMe=true (só podemos editar mensagens enviadas por nós)
   const editKey = {
-    ...msg.key,
+    ...msgKey,
     remoteJid: targetJid,
     fromMe: true // Forçar fromMe=true para edição
   };

@@ -21,13 +21,22 @@ const RETRY_DELAYS = [100, 300, 500]; // 100ms, 300ms, 500ms
 
 export async function emitToCompanyRoom(
   companyId: number,
-  room: string,
+  room: string | null,
   event: string,
   payload: any,
   skipFallback: boolean = false // Se true, nunca faz broadcast fallback
 ): Promise<void> {
   const io = getIO();
   const ns = io.of(`/workspace-${companyId}`);
+
+  // Se room é null/undefined/vazio, fazer broadcast direto para todo namespace
+  if (!room) {
+    ns.emit(event, payload);
+    if (process.env.SOCKET_DEBUG === "true") {
+      console.log(`[SOCKET EMIT] Broadcast para namespace /workspace-${companyId}, event=${event}`);
+    }
+    return;
+  }
 
   const explicit = process.env.SOCKET_FALLBACK_NS_BROADCAST;
   const isProd = process.env.NODE_ENV === "production";

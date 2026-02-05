@@ -1018,36 +1018,48 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
   const { messageId } = req.params;
   const { companyId } = req.user;
 
-  const message = await DeleteWhatsAppMessage(messageId, companyId);
+  try {
+    const message = await DeleteWhatsAppMessage(messageId, companyId);
 
-  if (message.isPrivate) {
-    // Para mensagens privadas, deletar e emitir via CQRS
-    await Message.destroy({ where: { id: message.id } });
+    // Buscar ticket com validação
     const ticket = await Ticket.findByPk(message.ticketId, { include: ["contact"] });
-    
-    // CQRS: Emitir evento de deleção via EventBus
-    const { messageEventBus } = await import("../services/MessageServices/MessageEventBus");
-    messageEventBus.publishMessageDeleted(
-      companyId,
-      message.ticketId,
-      ticket.uuid,
-      message.id
-    );
-  } else {
-    // Para mensagens normais, o DeleteWhatsAppMessage já marca como isDeleted
-    // Emitir evento de update via CQRS
-    const ticket = await Ticket.findByPk(message.ticketId, { include: ["contact"] });
-    const { messageEventBus } = await import("../services/MessageServices/MessageEventBus");
-    messageEventBus.publishMessageUpdated(
-      companyId,
-      message.ticketId,
-      ticket.uuid,
-      message.id,
-      message
-    );
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket não encontrado" });
+    }
+
+    if (message.isPrivate) {
+      // Para mensagens privadas, deletar e emitir via CQRS
+      await Message.destroy({ where: { id: message.id } });
+      
+      // CQRS: Emitir evento de deleção via EventBus
+      const { messageEventBus } = await import("../services/MessageServices/MessageEventBus");
+      await messageEventBus.publishMessageDeleted(
+        companyId,
+        message.ticketId,
+        ticket.uuid,
+        message.id
+      );
+    } else {
+      // Para mensagens normais, o DeleteWhatsAppMessage já marca como isDeleted
+      // Emitir evento de update via CQRS
+      const { messageEventBus } = await import("../services/MessageServices/MessageEventBus");
+      await messageEventBus.publishMessageUpdated(
+        companyId,
+        message.ticketId,
+        ticket.uuid,
+        message.id,
+        message
+      );
+    }
+
+    return res.status(200).json({ message: "Mensagem removida com sucesso" });
+  } catch (error: any) {
+    console.error("[remove] Erro ao remover mensagem:", error);
+    if (error instanceof AppError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    return res.status(500).json({ error: "Erro ao remover mensagem" });
   }
-
-  return res.status(200).json({ message: "Mensagem removida com sucesso" });
 };
 
 // Contar mensagens
@@ -1151,6 +1163,11 @@ export const edit = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { ticket, message } = await EditWhatsAppMessage({ messageId, body });
 
+    // Validar que ticket existe antes de emitir eventos
+    if (!ticket || !ticket.uuid) {
+      return res.status(400).json({ error: "Ticket inválido ou sem UUID" });
+    }
+
     const io = getIO();
     io.of(`/workspace-${companyId}`).to(ticket.uuid).emit(`company-${companyId}-appMessage`, {
       action: "update",
@@ -1164,9 +1181,12 @@ export const edit = async (req: Request, res: Response): Promise<Response> => {
     });
 
     return res.status(200).json({ message: "Mensagem editada com sucesso" });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro ao editar mensagem:", error);
-    throw new AppError("Erro ao editar mensagem", 500);
+    if (error instanceof AppError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    return res.status(500).json({ error: "Erro ao editar mensagem" });
   }
 };
 

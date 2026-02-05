@@ -382,45 +382,45 @@
 
 .modern-ui [class*="ticketsList"]::-webkit-scrollbar,
 .modern-ui [class*="TicketsList"]::-webkit-scrollbar {
-    width: 0 !important;
-    height: 0 !important;
-    display: none !important;
+width: 0 !important;
+height: 0 !important;
+display: none !important;
 }
 
-/* Tickets Page - Remover bordas arredondadas excessivas */
-.modern-ui .tickets-wrapper .MuiPaper-root,
-.modern-ui .contacts-wrapper .MuiPaper-root,
-.modern-ui .chat-container .MuiPaper-root,
-.modern-ui .chat-paper .MuiPaper-root,
-.modern-ui .messages-wrapper .MuiPaper-root,
+/* Tickets Page - Remover bordas arredondadas excessivas - MAS MANTER BORDAS DOS WRAPPERS */
+.modern-ui .tickets-wrapper .MuiPaper-root:not([class*="ticketOptionsBox"]):not([class*="serachInputWrapper"]):not([class*="tabsHeader"]),
+.modern-ui .contacts-wrapper .MuiPaper-root:not([class*="ticketOptionsBox"]):not([class*="serachInputWrapper"]):not([class*="tabsHeader"]),
+.modern-ui .chat-container .MuiPaper-root:not([class*="ticketOptionsBox"]):not([class*="serachInputWrapper"]):not([class*="tabsHeader"]),
+.modern-ui .chat-paper .MuiPaper-root:not([class*="ticketOptionsBox"]):not([class*="serachInputWrapper"]):not([class*="tabsHeader"]),
+.modern-ui .messages-wrapper .MuiPaper-root:not([class*="ticketOptionsBox"]):not([class*="serachInputWrapper"]):not([class*="tabsHeader"]),
 .modern-ui .message-input-wrapper {
-    border-radius: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
-    /* IMPORTANTE: Usar 'unset' para não sobrescrever o background-image definido no JS */
-    background: unset !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
+border-radius: 12 !important;
+border: none !important;
+box-shadow: none !important;
+/* IMPORTANTE: Usar 'unset' para não sobrescrever o background-image definido no JS */
+background: unset !important;
+backdrop-filter: none !important;
+-webkit-backdrop-filter: none !important;
 }
 
 /* Regra específica para o Paper do messageInputWrapper - Cor bege do WhatsApp */
 .modern-ui .MuiPaper-root[class*="messageInputWrapper"],
 .modern-ui .MuiPaper-elevation0[class*="messageInputWrapper"],
 .modern-ui div.MuiPaper-root[class*="messageInputWrapper"] {
-    background: #ECE5DD !important;
-    background-color: #ECE5DD !important;
-    background-image: none !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
+background: #ECE5DD !important;
+background-color: #ECE5DD !important;
+background-image: none !important;
+backdrop-filter: none !important;
+-webkit-backdrop-filter: none !important;
 }
 
 /* Preservar background-image do mainWrapper (container do chat com fundo WhatsApp) */
 .modern-ui .MuiPaper-root[class*="mainWrapper"],
 .modern-ui .MuiPaper-elevation0[class*="mainWrapper"] {
-    background: unset !important;
-    background-color: unset !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
+background: unset !important;
+background-color: unset !important;
+backdrop-filter: none !important;
+-webkit-backdrop-filter: none !important;
 }
 
 /* Tickets Page - Containers principais sem bordas arredondadas mas com BORDA */
@@ -429,18 +429,18 @@
 .modern-ui .messages-wrapper,
 .modern-ui .chat-paper,
 .modern-ui .chat-container {
-    border-radius: 0 !important;
-    border: 1px solid var(--border) !important;
-    /* Restaurar borda do container principal */
+border-radius: 0 !important;
+border: 1px solid var(--border) !important;
+/* Restaurar borda do container principal */
 }
 
 /* Chat Container - Ajustes para bordas visíveis */
 .modern-ui .chat-paper,
 .modern-ui .chat-container {
-    overflow: visible !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 0 !important;
-    /* Adicionar um pequeno espaçamento se necessário, mas geralmente o chat ocupa o resto */
+overflow: visible !important;
+border: 1px solid var(--border) !important;
+border-radius: 0 !important;
+/* Adicionar um pequeno espaçamento se necessário, mas geralmente o chat ocupa o resto */
 }
 
 /* Remover cantos arredondados do Header do Ticket - REFORÇADO */
@@ -448,31 +448,31 @@
 .modern-ui .ticket-header-core,
 .modern-ui .MuiCard-root[class*="ticketHeader"],
 .modern-ui .MuiPaper-root[class*="ticketHeader"] {
-    border-radius: 0 !important;
-    border-top-left-radius: 0 !important;
-    border-top-right-radius: 0 !important;
-    border-bottom-left-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-    border: none !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.12) !important;
-    box-shadow: none !important;
+border-radius: 0 !important;
+border-top-left-radius: 0 !important;
+border-top-right-radius: 0 !important;
+border-bottom-left-radius: 0 !important;
+border-bottom-right-radius: 0 !important;
+border: none !important;
+border-bottom: 1px solid rgba(0, 0, 0, 0.12) !important;
+box-shadow: none !important;
 }
 
 /* Remover borda duplicada apenas se necessário - mas o container PRECISA de borda */
 .modern-ui .tickets-wrapper,
 .modern-ui .contacts-wrapper {
-    border-top: none !important;
-    /* Opcional: se o header já tiver borda */
-    border-bottom: none !important;
-    border-right: 1px solid var(--border) !important;
-    border-left: 1px solid var(--border) !important;
+border-top: none !important;
+/* Opcional: se o header já tiver borda */
+border-bottom: none !important;
+border-right: 1px solid var(--border) !important;
+border-left: 1px solid var(--border) !important;
 }
 
 /* Tickets Page - ticketsWrapper ajustes de padding/overflow */
 .modern-ui .tickets-wrapper {
-    overflow: visible !important;
-    padding-right: 0px !important;
-    /* Reset padding para a borda ficar colada */
+overflow: visible !important;
+padding-right: 0px !important;
+/* Reset padding para a borda ficar colada */
 }
 
 /* FORÇAR LISTA PLANA (FLAT LIST) - REMOVER ESTILO DE CARD/BOLHA DOS ITENS */
@@ -480,50 +480,58 @@
 .modern-ui .contacts-wrapper .MuiListItem-root,
 .modern-ui .tickets-wrapper .MuiListItem-root,
 .modern-ui .ticket-list-item-core {
-    background: transparent !important;
-    background-color: transparent !important;
-    box-shadow: none !important;
-    border: none !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
-    border-radius: 0 !important;
-    margin: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
+background: transparent !important;
+background-color: transparent !important;
+box-shadow: none !important;
+border: none !important;
+border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+border-radius: 0 !important;
+margin: 0 !important;
+width: 100% !important;
+max-width: 100% !important;
 }
 
 .modern-ui .tickets-list-wrapper .MuiListItem-root:hover,
 .modern-ui .contacts-wrapper .MuiListItem-root:hover,
 .modern-ui .tickets-wrapper .MuiListItem-root:hover {
-    background-color: rgba(0, 0, 0, 0.03) !important;
-    transform: none !important;
+background-color: rgba(0, 0, 0, 0.03) !important;
+transform: none !important;
 }
 
 .modern-ui .tickets-list-wrapper .MuiListItem-root.Mui-selected,
 .modern-ui .contacts-wrapper .MuiListItem-root.Mui-selected,
 .modern-ui .tickets-wrapper .MuiListItem-root.Mui-selected {
-    background-color: rgba(0, 0, 0, 0.06) !important;
-    border-left: 4px solid var(--primary-color) !important;
+background-color: rgba(0, 0, 0, 0.06) !important;
+border-left: 4px solid var(--primary-color) !important;
 }
 
 /* Remover bolhas dos contatos da lista */
 .modern-ui .contacts-wrapper .MuiListItem-root {
-    padding: 8px 16px !important;
+padding: 8px 16px !important;
 }
 
 /* Tickets Page - Ajustar margens para não cortar bordas */
 .modern-ui [class*="serachInputWrapper"],
 .modern-ui [class*="ticketOptionsBox"] {
-    margin-right: 3px !important;
+margin-right: 3px !important;
 }
 
-/* Tickets Page - Paper outlined sem efeitos glass */
-.modern-ui [class*="ticketsWrapper"] .MuiPaper-outlined,
+/* Tickets Page - Paper outlined sem efeitos glass - EXCETO container principal */
+.modern-ui [class*="ticketsWrapper"] .MuiPaper-outlined:not(.tickets-wrapper):not([class*="ticketsWrapper"]),
 .modern-ui [class*="messagesWrapper"] .MuiPaper-outlined,
 .modern-ui [class*="welcomeMsg"] {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
+backdrop-filter: none !important;
+-webkit-backdrop-filter: none !important;
+border-radius: 0 !important;
+border: none !important;
+}
+
+/* RESTAURAR BORDA DO CONTAINER PRINCIPAL DE TICKETS */
+.modern-ui .tickets-wrapper.MuiPaper-outlined,
+.modern-ui [class*="ticketsWrapper"].MuiPaper-outlined,
+.modern-ui .tickets-wrapper {
+    border: 1px solid var(--border) !important;
     border-radius: 0 !important;
-    border: none !important;
 }
 
 /* Tickets Page - Header/Tabs sem estilo glass */
@@ -531,17 +539,21 @@
 .modern-ui [class*="serachInputWrapper"],
 .modern-ui [class*="tabsHeader"],
 .modern-ui [class*="ticketsWrapper"] .MuiPaper-elevation0 {
-    border-radius: 8px !important;
-    border: 1px solid #aaa !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    box-shadow: none !important;
+border-radius: 8px !important;
+border: 1px solid #aaa !important;
+backdrop-filter: none !important;
+-webkit-backdrop-filter: none !important;
+box-shadow: none !important;
 }
 
 /* ChatAssistantPanel - Manter estilo original (fundo branco + box-shadow) */
 .modern-ui .MuiPaper-elevation6[class*="makeStyles-root"] {
-    background: #ffffff !important;
-    backdrop-filter: none !important;
+background: #ffffff !important;
+backdrop-filter: none !important;
+-webkit-backdrop-filter: none !important;
+border: none !important;
+border-radius: 12px !important;
+box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18) !important;
     -webkit-backdrop-filter: none !important;
     border: none !important;
     border-radius: 12px !important;
@@ -726,5 +738,20 @@
 .modern-ui .smooth-dnd-drop-preview-default-class {
     background-color: rgba(0, 0, 0, 0.05) !important;
     border: 2px dashed #ccc !important;
+    border-radius: 8px !important;
+}
+
+/* ============================================================
+   REGRA FINAL REFORÇADA - Bordas do Header de Tickets
+   Esta regra tem especificidade máxima para garantir que as
+   bordas apareçam corretamente em produção e dev
+   ============================================================ */
+.modern-ui .tickets-wrapper .MuiPaper-root[class*="ticketOptionsBox"],
+.modern-ui .tickets-wrapper .MuiPaper-root[class*="serachInputWrapper"],
+.modern-ui .tickets-wrapper .MuiPaper-root[class*="tabsHeader"],
+.modern-ui [class*="ticketsWrapper"] [class*="ticketOptionsBox"],
+.modern-ui [class*="ticketsWrapper"] [class*="serachInputWrapper"],
+.modern-ui [class*="ticketsWrapper"] [class*="tabsHeader"] {
+    border: 1px solid #aaa !important;
     border-radius: 8px !important;
 }

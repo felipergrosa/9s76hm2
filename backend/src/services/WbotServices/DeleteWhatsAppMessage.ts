@@ -4,6 +4,7 @@ import GetTicketWbot from "../../helpers/GetTicketWbot";
 import GetWbotMessage from "../../helpers/GetWbotMessage";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
+import logger from "../../utils/logger";
 
 const DeleteWhatsAppMessage = async (messageId: string, companyId?: string | number): Promise<Message> => {
   const message = await Message.findOne({
@@ -27,21 +28,62 @@ const DeleteWhatsAppMessage = async (messageId: string, companyId?: string | num
   const { ticket } = message;
 
   if (!message.isPrivate) {
-    const messageToDelete = await GetWbotMessage(ticket, messageId);
-
-    // ALTERAÇÃO PARA BAILEYS 5.0
     try {
       const wbot = await GetTicketWbot(ticket);
-      const menssageDelete = messageToDelete as Message;
+      
+      // Tentar obter a key do dataJson
+      let msgKey: any = null;
+      
+      if (message.dataJson) {
+        try {
+          const parsed = JSON.parse(message.dataJson);
+          if (parsed.key && parsed.key.id) {
+            msgKey = parsed.key;
+          }
+        } catch (e) {
+          logger.warn(`[DeleteMessage] Falha ao parsear dataJson, tentando reconstruir key`);
+        }
+      }
 
-      const jsonStringToParse = JSON.parse(menssageDelete.dataJson)
+      // Se não conseguiu obter do dataJson, reconstruir a key
+      if (!msgKey) {
+        if (!message.wid) {
+          throw new AppError("Mensagem não possui identificador (wid). Não é possível deletar.");
+        }
 
-      await (wbot as WASocket).sendMessage(menssageDelete.remoteJid, {
-        delete: jsonStringToParse.key
-      })
+        // Reconstruir a key com os dados disponíveis
+        const remoteJid = message.remoteJid || 
+          (ticket.contact?.remoteJid) ||
+          `${ticket.contact?.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
 
-    } catch (err) {
-      console.log(err);
+        msgKey = {
+          remoteJid: remoteJid,
+          fromMe: message.fromMe,
+          id: message.wid,
+          participant: message.participant || undefined
+        };
+
+        logger.info(`[DeleteMessage] Key reconstruída: ${JSON.stringify(msgKey)}`);
+      }
+
+      // Garantir que temos remoteJid
+      const targetJid = msgKey.remoteJid || message.remoteJid;
+      if (!targetJid) {
+        throw new AppError("Não foi possível determinar o destinatário da mensagem.");
+      }
+
+      // Atualizar remoteJid na key se necessário
+      msgKey.remoteJid = targetJid;
+
+      logger.info(`[DeleteMessage] Deletando mensagem - targetJid: ${targetJid}, keyId: ${msgKey.id}`);
+
+      await (wbot as WASocket).sendMessage(targetJid, {
+        delete: msgKey
+      });
+
+      logger.info(`[DeleteMessage] Mensagem deletada via Baileys`);
+    } catch (err: any) {
+      logger.error(`[DeleteMessage] Erro ao deletar mensagem:`, err);
       throw new AppError("ERR_DELETE_WAPP_MSG");
     }
   }
