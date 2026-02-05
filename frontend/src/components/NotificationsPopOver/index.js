@@ -57,7 +57,6 @@ const NotificationsPopOver = (volume) => {
   const theme = useTheme();
 
   const history = useHistory();
-  // const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
   const { profile, queues } = user;
 
@@ -76,6 +75,10 @@ const NotificationsPopOver = (volume) => {
   const [showGroupNotification, setShowGroupNotification] = useState(false);
 
   const [, setDesktopNotifications] = useState([]);
+
+  const listenersRegisteredRef = useRef(false);
+  const soundTimeoutRef = useRef(null);
+  const lastSoundTimeRef = useRef(0);
 
   const { tickets } = useTickets({
     withUnreadMessages: "true",
@@ -127,13 +130,7 @@ const NotificationsPopOver = (volume) => {
 
   useEffect(() => {
     const processNotifications = () => {
-      // if (showTicketWithoutQueue) {
       setNotifications(tickets);
-      // } else {
-      // 	const newNotifications = tickets.filter(ticket => ticket.status !== "pending");
-
-      // 	setNotifications(newNotifications);
-      // }
     }
 
     processNotifications();
@@ -145,113 +142,108 @@ const NotificationsPopOver = (volume) => {
 
   useEffect(() => {
     const companyId = user.companyId;
-    // const socket = socketManager.GetSocket();
-    if (user.id) {
-      const queueIds = queues.map((q) => q.id);
-
-      const onConnectNotificationsPopover = () => {
-        socket.emit("joinNotification");
-      }
-
-      const onCompanyTicketNotificationsPopover = (data) => {
-        if (data.action === "updateUnread" || data.action === "delete") {
-          setNotifications(prevState => {
-            const ticketIndex = prevState.findIndex(t => t.id === data.ticketId);
-            if (ticketIndex !== -1) {
-              prevState.splice(ticketIndex, 1);
-              return [...prevState];
-            }
-            return prevState;
-          });
-
-          setDesktopNotifications(prevState => {
-            const notfiticationIndex = prevState.findIndex(
-              n => n.tag === String(data.ticketId)
-            );
-            if (notfiticationIndex !== -1) {
-              prevState[notfiticationIndex].close();
-              prevState.splice(notfiticationIndex, 1);
-              return [...prevState];
-            }
-            return prevState;
-          });
-        }
-      };
-
-      const onCompanyAppMessageNotificationsPopover = (data) => {
-        // if (
-        // 	data.action === "create" && !data.message.fromMe &&
-        // 	(
-        // 		data.ticket.status !== 'pending' &&
-        // 		data.ticket.status !== "lgpd" &&
-        // 		data.ticket.status !== "nps"						
-        // 	) &&
-        // 	(!data.message.read || (data.ticket.status === "pending" && showTicketWithoutQueue && data.ticket.queueId === null) || (data.ticket.status === "pending" && !showTicketWithoutQueue && user?.queues?.some(queue => (queue.id === data.ticket.queueId)))) &&
-        // 	(data.ticket.userId === user?.id || !data.ticket.userId)
-        // ) {
-        // 
-        if (
-          data.action === "create" && !data.message.fromMe &&
-          !data.message.read &&
-          (data.ticket?.userId === user?.id || !data.ticket?.userId) &&
-          (user?.queues?.some(queue => (queue.id === data.ticket.queueId)) ||
-            !data.ticket.queueId && showTicketWithoutQueue === true) &&
-          (!["pending", "lgpd", "nps", "group"].includes(data.ticket?.status) ||
-            (data.ticket?.status === "pending" && showNotificationPending === true) ||
-            (data.ticket?.status === "group" && data.ticket?.whatsapp?.groupAsTicket === "enabled" && showGroupNotification === true))
-        ) {
-          setNotifications(prevState => {
-            const ticketIndex = prevState.findIndex(t => t.id === data.ticket.id);
-            if (ticketIndex !== -1) {
-              prevState[ticketIndex] = data.ticket;
-              return [...prevState];
-            }
-            return [data.ticket, ...prevState];
-          });
-
-          const shouldNotNotificate =
-            (data.message.ticketId === ticketIdRef.current &&
-              document.visibilityState === "visible") ||
-            (data.ticket.userId && data.ticket.userId !== user?.id) ||
-            (data.ticket.isGroup && data.ticket?.whatsapp?.groupAsTicket === "disabled" && showGroupNotification === false);
-
-
-          if (shouldNotNotificate === true) return;
-
-          handleNotifications(data);
-        }
-      }
-
-      const onCompanyContactReleaseRequest = (data) => {
-        if (profile !== "admin") return;
-        if (!data || !data.action) return;
-        if (data.action === "create" && data.record) {
-          setReleaseRequests(prev => {
-            const exists = prev.some(r => r.id === data.record.id);
-            if (exists) {
-              return prev.map(r => r.id === data.record.id ? data.record : r);
-            }
-            return [data.record, ...prev];
-          });
-        }
-        if (data.action === "resolve" && data.record?.id) {
-          setReleaseRequests(prev => prev.filter(r => r.id !== data.record.id));
-        }
-      };
-
-      socket.on("connect", onConnectNotificationsPopover);
-      socket.on(`company-${companyId}-ticket`, onCompanyTicketNotificationsPopover);
-      socket.on(`company-${companyId}-appMessage`, onCompanyAppMessageNotificationsPopover);
-      socket.on(`company-${companyId}-contactReleaseRequest`, onCompanyContactReleaseRequest);
-
-      return () => {
-        socket.off("connect", onConnectNotificationsPopover);
-        socket.off(`company-${companyId}-ticket`, onCompanyTicketNotificationsPopover);
-        socket.off(`company-${companyId}-appMessage`, onCompanyAppMessageNotificationsPopover);
-        socket.off(`company-${companyId}-contactReleaseRequest`, onCompanyContactReleaseRequest);
-      };
+    if (!user.id || listenersRegisteredRef.current) {
+      return;
     }
-  }, [user, profile, queues, showTicketWithoutQueue, socket, showNotificationPending, showGroupNotification]);
+
+    const queueIds = queues.map((q) => q.id);
+
+    const onConnectNotificationsPopover = () => {
+      socket.emit("joinNotification");
+    }
+
+    const onCompanyTicketNotificationsPopover = (data) => {
+      if (data.action === "updateUnread" || data.action === "delete") {
+        setNotifications(prevState => {
+          const ticketIndex = prevState.findIndex(t => t.id === data.ticketId);
+          if (ticketIndex !== -1) {
+            prevState.splice(ticketIndex, 1);
+            return [...prevState];
+          }
+          return prevState;
+        });
+
+        setDesktopNotifications(prevState => {
+          const notfiticationIndex = prevState.findIndex(
+            n => n.tag === String(data.ticketId)
+          );
+          if (notfiticationIndex !== -1) {
+            prevState[notfiticationIndex].close();
+            prevState.splice(notfiticationIndex, 1);
+            return [...prevState];
+          }
+          return prevState;
+        });
+      }
+    };
+
+    const onCompanyAppMessageNotificationsPopover = (data) => {
+      if (
+        data.action === "create" && !data.message.fromMe &&
+        !data.message.read &&
+        (data.ticket?.userId === user?.id || !data.ticket?.userId) &&
+        (user?.queues?.some(queue => (queue.id === data.ticket.queueId)) ||
+          !data.ticket.queueId && showTicketWithoutQueue === true) &&
+        (!["pending", "lgpd", "nps", "group"].includes(data.ticket?.status) ||
+          (data.ticket?.status === "pending" && showNotificationPending === true) ||
+          (data.ticket?.status === "group" && data.ticket?.whatsapp?.groupAsTicket === "enabled" && showGroupNotification === true))
+      ) {
+        setNotifications(prevState => {
+          const ticketIndex = prevState.findIndex(t => t.id === data.ticket.id);
+          if (ticketIndex !== -1) {
+            prevState[ticketIndex] = data.ticket;
+            return [...prevState];
+          }
+          return [data.ticket, ...prevState];
+        });
+
+        const shouldNotNotificate =
+          (data.message.ticketId === ticketIdRef.current &&
+            document.visibilityState === "visible") ||
+          (data.ticket.userId && data.ticket.userId !== user?.id) ||
+          (data.ticket.isGroup && data.ticket?.whatsapp?.groupAsTicket === "disabled" && showGroupNotification === false);
+
+
+        if (shouldNotNotificate === true) return;
+
+        handleNotifications(data);
+      }
+    }
+
+    const onCompanyContactReleaseRequest = (data) => {
+      if (profile !== "admin") return;
+      if (!data || !data.action) return;
+      if (data.action === "create" && data.record) {
+        setReleaseRequests(prev => {
+          const exists = prev.some(r => r.id === data.record.id);
+          if (exists) {
+            return prev.map(r => r.id === data.record.id ? data.record : r);
+          }
+          return [data.record, ...prev];
+        });
+      }
+      if (data.action === "resolve" && data.record?.id) {
+        setReleaseRequests(prev => prev.filter(r => r.id !== data.record.id));
+      }
+    };
+
+    socket.on("connect", onConnectNotificationsPopover);
+    socket.on(`company-${companyId}-ticket`, onCompanyTicketNotificationsPopover);
+    socket.on(`company-${companyId}-appMessage`, onCompanyAppMessageNotificationsPopover);
+    socket.on(`company-${companyId}-contactReleaseRequest`, onCompanyContactReleaseRequest);
+    listenersRegisteredRef.current = true;
+
+    return () => {
+      socket.off("connect", onConnectNotificationsPopover);
+      socket.off(`company-${companyId}-ticket`, onCompanyTicketNotificationsPopover);
+      socket.off(`company-${companyId}-appMessage`, onCompanyAppMessageNotificationsPopover);
+      socket.off(`company-${companyId}-contactReleaseRequest`, onCompanyContactReleaseRequest);
+      listenersRegisteredRef.current = false;
+      if (soundTimeoutRef.current) {
+        clearTimeout(soundTimeoutRef.current);
+      }
+    };
+  }, [user?.id, profile, queues, showTicketWithoutQueue, socket, showNotificationPending, showGroupNotification]);
 
   useEffect(() => {
     const fetchReleaseRequests = async () => {
@@ -302,7 +294,6 @@ const NotificationsPopOver = (volume) => {
       window.focus();
       setTabOpen(ticket.status)
       historyRef.current.push(`/tickets/${ticket.uuid}`);
-      // handleChangeTab(null, ticket.isGroup? "group" : "open");
     };
 
     setDesktopNotifications(prevState => {
@@ -315,7 +306,23 @@ const NotificationsPopOver = (volume) => {
       }
       return [notification, ...prevState];
     });
-    soundAlertRef.current();
+
+    const now = Date.now();
+    const timeSinceLastSound = now - lastSoundTimeRef.current;
+    const MIN_SOUND_INTERVAL = 1000; // Mínimo 1 segundo entre sons
+
+    if (timeSinceLastSound < MIN_SOUND_INTERVAL) {
+      if (soundTimeoutRef.current) {
+        clearTimeout(soundTimeoutRef.current);
+      }
+      soundTimeoutRef.current = setTimeout(() => {
+        soundAlertRef.current();
+        lastSoundTimeRef.current = Date.now();
+      }, MIN_SOUND_INTERVAL - timeSinceLastSound);
+    } else {
+      soundAlertRef.current();
+      lastSoundTimeRef.current = now;
+    }
   };
 
   const handleClick = () => {

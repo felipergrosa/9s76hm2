@@ -303,16 +303,18 @@ const ListTicketsServiceKanban = async ({
 
         ]
       } as any;
-    } else if (showAll !== "true") {
-      // FALLBACK: Se não tem restrição de carteira e NÃO é admin (showAll!=true),
-      // aplica restrição padrão de usuário: ver apenas os seus ou os sem dono (pendentes)
+    } else if (showAll === "true") {
+      // Admin com showAll=true: vê todos os tickets
+      // Não aplica filtro adicional de usuário
+    } else {
+      // FALLBACK: Qualquer usuário (incluindo admin sem showAll) só vê seus tickets ou pendentes
       whereCondition = {
         [Op.and]: [
           whereCondition,
           {
             [Op.or]: [
-              { userId: Number(userId) },
-              { userId: null }
+              { userId: Number(userId) },      // Meus tickets
+              { userId: null }                  // Tickets pendentes (sem dono)
             ]
           }
         ]
