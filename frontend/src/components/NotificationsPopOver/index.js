@@ -76,7 +76,6 @@ const NotificationsPopOver = (volume) => {
 
   const [, setDesktopNotifications] = useState([]);
 
-  const listenersRegisteredRef = useRef(false);
   const soundTimeoutRef = useRef(null);
   const lastSoundTimeRef = useRef(0);
 
@@ -142,11 +141,9 @@ const NotificationsPopOver = (volume) => {
 
   useEffect(() => {
     const companyId = user.companyId;
-    if (!user.id || listenersRegisteredRef.current) {
+    if (!user.id || !socket) {
       return;
     }
-
-    const queueIds = queues.map((q) => q.id);
 
     const onConnectNotificationsPopover = () => {
       socket.emit("joinNotification");
@@ -227,23 +224,27 @@ const NotificationsPopOver = (volume) => {
       }
     };
 
+    // Registrar listeners
     socket.on("connect", onConnectNotificationsPopover);
     socket.on(`company-${companyId}-ticket`, onCompanyTicketNotificationsPopover);
     socket.on(`company-${companyId}-appMessage`, onCompanyAppMessageNotificationsPopover);
     socket.on(`company-${companyId}-contactReleaseRequest`, onCompanyContactReleaseRequest);
-    listenersRegisteredRef.current = true;
+
+    // Emitir join ao montar (caso já esteja conectado)
+    if (socket.connected) {
+      socket.emit("joinNotification");
+    }
 
     return () => {
       socket.off("connect", onConnectNotificationsPopover);
       socket.off(`company-${companyId}-ticket`, onCompanyTicketNotificationsPopover);
       socket.off(`company-${companyId}-appMessage`, onCompanyAppMessageNotificationsPopover);
       socket.off(`company-${companyId}-contactReleaseRequest`, onCompanyContactReleaseRequest);
-      listenersRegisteredRef.current = false;
       if (soundTimeoutRef.current) {
         clearTimeout(soundTimeoutRef.current);
       }
     };
-  }, [user?.id, profile, queues, showTicketWithoutQueue, socket, showNotificationPending, showGroupNotification]);
+  }, [user?.id, user?.companyId, profile, queues, showTicketWithoutQueue, socket, showNotificationPending, showGroupNotification]);
 
   useEffect(() => {
     const fetchReleaseRequests = async () => {

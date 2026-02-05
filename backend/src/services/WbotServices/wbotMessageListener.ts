@@ -1225,10 +1225,9 @@ const verifyContact = async (
       }
     }
 
-    // CORREÇÃO CRÍTICA: NÃO criar contato quando LID não resolver
-    // Isso CAUSAVA contatos duplicados (ex: 247540473708749 vs 5519987054278)
-    // Quando o LID não resolve, é melhor descartar a mensagem do que criar duplicata
-    logger.error("[verifyContact] BLOQUEIO: LID não resolvido - NÃO criando contato duplicado", {
+    // SOLUÇÃO: Criar contato temporário com LID quando não resolver
+    // Isso permite processar a mensagem e o contato será atualizado quando o mapeamento for descoberto
+    logger.warn("[verifyContact] LID não resolvido - criando contato temporário com LID", {
       normalizedJid,
       pushName: msgContact.name,
       cleaned,
@@ -1237,8 +1236,41 @@ const verifyContact = async (
       metodosTentados: ["LID direto", "pushName", "número no LID", "store.contacts", "wbot.onWhatsApp", "busca parcial"]
     });
 
-    // Retornar null para que a mensagem seja ignorada (melhor que criar duplicata)
-    return null as any;
+    // Usar pushName como nome, ou "Contato LID" se não tiver
+    const tempName = msgContact.name || `Contato ${cleaned.slice(-6)}`;
+    
+    // Criar contato com LID como identificador
+    // O número será o próprio LID limpo (será atualizado quando mapeamento for descoberto)
+    // Nota: isLinkedDevice é detectado automaticamente pelo CreateOrUpdateContactService via remoteJid.includes("@lid")
+    const contactData = {
+      name: tempName,
+      number: cleaned, // Usar o LID limpo como número temporário
+      profilePicUrl: "",
+      isGroup: false,
+      companyId,
+      remoteJid: normalizedJid, // O LID completo - detecta isLinkedDevice automaticamente
+      whatsappId: wbot.id,
+      wbot
+    };
+
+    try {
+      const contact = await CreateOrUpdateContactService(contactData);
+      logger.info("[verifyContact] Contato temporário criado com LID", {
+        contactId: contact.id,
+        lid: normalizedJid,
+        name: tempName
+      });
+      return contact;
+    } catch (err: any) {
+      // Se falhar (ex: duplicado), tentar buscar existente
+      logger.warn("[verifyContact] Erro ao criar contato LID, buscando existente", { err: err?.message });
+      const existing = await Contact.findOne({ where: { remoteJid: normalizedJid, companyId } });
+      if (existing) return existing;
+      
+      // Se ainda não encontrar, retornar null como último recurso
+      logger.error("[verifyContact] Falha total ao processar LID", { normalizedJid, err: err?.message });
+      return null as any;
+    }
   }
 
   // VALIDAÇÃO RIGOROSA: só cria contato se não for grupo e o número tiver entre 10 e 13 dígitos

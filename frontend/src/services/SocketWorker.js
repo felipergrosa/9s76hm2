@@ -10,6 +10,7 @@ class SocketWorker {
       this.configureSocket();
       this.eventListeners = {}; // Armazena os ouvintes de eventos registrados
       this.joinBuffer = new Set(); // Rooms pendentes de join
+      this.activeRooms = new Set(); // Salas ativas que devem ser re-unidas após reconexão
       this.healthCheckInterval = null; // Intervalo de health check
       SocketWorker.instance = this;
 
@@ -68,18 +69,28 @@ class SocketWorker {
     } catch { }
 
     this.socket.on("connect", () => {
-      // Connection State Recovery: verifica se a conexão foi recuperada
-      if (this.socket.recovered) {
-        // Silencioso: conexão recuperada automaticamente
-        return;
-      }
+      console.log("[SocketWorker] Socket conectado, refazendo joins...");
       
-      // Envia joins pendentes
+      // Sempre refaz joins das salas ativas após qualquer conexão
+      // (mesmo recovered, pois o servidor pode ter perdido o estado)
       try {
+        // Primeiro, refaz join das salas ativas
+        this.activeRooms.forEach((room) => {
+          try {
+            this.socket.emit("joinChatBox", room, (err) => {
+              if (err) console.warn(`[SocketWorker] Erro ao refazer join na sala ${room}:`, err);
+              else console.debug(`[SocketWorker] Rejoin bem-sucedido na sala ${room}`);
+            });
+          } catch (e) { }
+        });
+        
+        // Depois, processa o buffer de joins pendentes
         this.joinBuffer.forEach((room) => {
           try {
             this.socket.emit("joinChatBox", room, (err) => {
-              // Silencioso
+              if (!err) {
+                this.activeRooms.add(room); // Adiciona às salas ativas
+              }
             });
           } catch (e) { }
         });
@@ -132,13 +143,24 @@ class SocketWorker {
     this.socket.emit(event, ...args);
   }
 
-  // Join de sala com buffer automático
+  // Join de sala com buffer automático e registro de salas ativas
   joinRoom(room, cb) {
     try {
       const normalized = (room || "").toString().trim();
       if (!normalized || normalized === "undefined") return cb?.("invalid room");
+      
+      // Sempre adiciona às salas ativas para rejoin após reconexão
+      this.activeRooms.add(normalized);
+      
       if (this.connected) {
-        this.socket.emit("joinChatBox", normalized, cb);
+        this.socket.emit("joinChatBox", normalized, (err) => {
+          if (err) {
+            console.warn(`[SocketWorker] Erro ao entrar na sala ${normalized}:`, err);
+          } else {
+            console.debug(`[SocketWorker] Entrou na sala ${normalized}`);
+          }
+          cb?.(err);
+        });
       } else {
         this.joinBuffer.add(normalized);
         cb?.();
@@ -148,16 +170,19 @@ class SocketWorker {
     }
   }
 
-  // Leave de sala com segurança
+  // Leave de sala com segurança e remoção do registro
   leaveRoom(room, cb) {
     try {
       const normalized = (room || "").toString().trim();
       if (!normalized || normalized === "undefined") return cb?.("invalid room");
+      
+      // Remove das salas ativas
+      this.activeRooms.delete(normalized);
+      this.joinBuffer.delete(normalized);
+      
       if (this.connected) {
         this.socket.emit("joinChatBoxLeave", normalized, cb);
       } else {
-        // Se desconectado, apenas remove do buffer
-        this.joinBuffer.delete(normalized);
         cb?.();
       }
     } catch (e) {
