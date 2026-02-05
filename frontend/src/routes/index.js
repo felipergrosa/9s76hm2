@@ -1,81 +1,117 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, lazy, Suspense } from "react";
 import { BrowserRouter, Switch } from "react-router-dom";
 
 import LoggedInLayout from "../layout";
-import Dashboard from "../pages/Dashboard";
-import TicketResponsiveContainer from "../pages/TicketResponsiveContainer";
-import Signup from "../pages/Signup";
-import Login from "../pages/Login";
-import Connections from "../pages/Connections";
-import SettingsCustom from "../pages/SettingsCustom";
-import Financeiro from "../pages/Financeiro";
-import Users from "../pages/Users";
-import Contacts from "../pages/Contacts";
-import ContactImportPage from "../pages/Contacts/import";
-import ChatMoments from "../pages/Moments"
-import Queues from "../pages/Queues";
-import Tags from "../pages/Tags";
-import MessagesAPI from "../pages/MessagesAPI";
-import Helps from "../pages/Helps";
-import AITutorial from "../pages/Helps/AITutorial";
-import BotTutorial from "../pages/Helps/BotTutorial";
-import DashboardTutorial from "../pages/Helps/DashboardTutorial";
-import AtendimentosTutorial from "../pages/Helps/AtendimentosTutorial";
-import RespostasRapidasTutorial from "../pages/Helps/RespostasRapidasTutorial";
-import KanbanTutorial from "../pages/Helps/KanbanTutorial";
-import ContatosTutorial from "../pages/Helps/ContatosTutorial";
-import AgendamentosTutorial from "../pages/Helps/AgendamentosTutorial";
-import TagsTutorial from "../pages/Helps/TagsTutorial";
-import ChatInternoTutorial from "../pages/Helps/ChatInternoTutorial";
-import CampanhasTutorial from "../pages/Helps/CampanhasTutorial";
-import FlowBuilderTutorial from "../pages/Helps/FlowBuilderTutorial";
-import FilaChatbotTutorial from "../pages/Helps/FilaChatbotTutorial";
-import PromptsIATutorial from "../pages/Helps/PromptsIATutorial";
-import UsuariosTutorial from "../pages/Helps/UsuariosTutorial";
-import ConfiguracoesTutorial from "../pages/Helps/ConfiguracoesTutorial";
-import ConexoesWhatsAppTutorial from "../pages/Helps/ConexoesWhatsAppTutorial";
-import IntegracoesTutorial from "../pages/Helps/IntegracoesTutorial";
-import APITutorial from "../pages/Helps/APITutorial";
-import ArquivosChatbotTutorial from "../pages/Helps/ArquivosChatbotTutorial";
-import ListasContatosTutorial from "../pages/Helps/ListasContatosTutorial";
-import RelatoriosTutorial from "../pages/Helps/RelatoriosTutorial";
-import FinanceiroTutorial from "../pages/Helps/FinanceiroTutorial";
-import FacebookTutorial from "../pages/Helps/FacebookTutorial";
-import InstagramTutorial from "../pages/Helps/InstagramTutorial";
-import WebChatTutorial from "../pages/Helps/WebChatTutorial";
-import ContactLists from "../pages/ContactLists";
-import ContactListItems from "../pages/ContactListItems";
-import Companies from "../pages/Companies";
-import QuickMessages from "../pages/QuickMessages";
 import { AuthProvider } from "../context/Auth/AuthContext";
 import { TicketsContextProvider } from "../context/Tickets/TicketsContext";
 import { WhatsAppsProvider } from "../context/WhatsApp/WhatsAppsContext";
 import Route from "./Route";
-import Schedules from "../pages/Schedules";
-import Campaigns from "../pages/Campaigns";
-import CampaignsConfig from "../pages/CampaignsConfig";
-import CampaignDetailedReport from "../pages/CampaignDetailedReport";
-import Annoucements from "../pages/Annoucements";
-import Chat from "../pages/Chat";
-import AllConnections from "../pages/AllConnections";
-import Reports from "../pages/Reports";
-import { FlowBuilderConfig } from "../pages/FlowBuilderConfig";
-// import Integrations from '../pages/Integrations';
-// import GoogleCalendarComponent from '../pages/Integrations/components/GoogleCalendarComponent';
-import FlowBuilder from "../pages/FlowBuilder";
-import FlowDefault from "../pages/FlowDefault"
-import CampaignsPhrase from "../pages/CampaignsPhrase";
-import Subscription from "../pages/Subscription";
-import QueueIntegration from "../pages/QueueIntegration";
-import LibraryManager from "../pages/LibraryManager";
-import ToDoList from "../pages/ToDoList";
-import Kanban from "../pages/Kanban";
-import TagsKanban from "../pages/TagsKanban";
-import ForgotPassword from "../pages/ForgetPassWord";
-import ResetPassword from "../pages/ResetPassword";
-import AISettings from "../components/AISettings";
-import AIAgents from "../pages/AIAgents";
-import AITraining from "../pages/AITraining";
+
+// Componente de loading para lazy loading
+const PageLoader = () => (
+  <div style={{ 
+    display: 'flex', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    height: '100vh',
+    backgroundColor: 'var(--bg, #f5f5f5)'
+  }}>
+    <div style={{
+      width: '40px',
+      height: '40px',
+      border: '3px solid #e0e0e0',
+      borderTop: '3px solid var(--primary, #065183)',
+      borderRadius: '50%',
+      animation: 'spin 1s linear infinite'
+    }} />
+    <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+  </div>
+);
+
+// LAZY LOADING: Páginas carregadas sob demanda (reduz bundle inicial em ~80%)
+// Páginas principais (mais acessadas - prefetch)
+const Dashboard = lazy(() => import("../pages/Dashboard"));
+const TicketResponsiveContainer = lazy(() => import("../pages/TicketResponsiveContainer"));
+const Contacts = lazy(() => import("../pages/Contacts"));
+const Chat = lazy(() => import("../pages/Chat"));
+
+// Páginas de autenticação (carregadas primeiro)
+const Login = lazy(() => import("../pages/Login"));
+const Signup = lazy(() => import("../pages/Signup"));
+const ForgotPassword = lazy(() => import("../pages/ForgetPassWord"));
+const ResetPassword = lazy(() => import("../pages/ResetPassword"));
+
+// Páginas secundárias
+const Connections = lazy(() => import("../pages/Connections"));
+const SettingsCustom = lazy(() => import("../pages/SettingsCustom"));
+const Financeiro = lazy(() => import("../pages/Financeiro"));
+const Users = lazy(() => import("../pages/Users"));
+const ContactImportPage = lazy(() => import("../pages/Contacts/import"));
+const ChatMoments = lazy(() => import("../pages/Moments"));
+const Queues = lazy(() => import("../pages/Queues"));
+const Tags = lazy(() => import("../pages/Tags"));
+const MessagesAPI = lazy(() => import("../pages/MessagesAPI"));
+const QuickMessages = lazy(() => import("../pages/QuickMessages"));
+const Schedules = lazy(() => import("../pages/Schedules"));
+const Annoucements = lazy(() => import("../pages/Annoucements"));
+const AllConnections = lazy(() => import("../pages/AllConnections"));
+const Reports = lazy(() => import("../pages/Reports"));
+const QueueIntegration = lazy(() => import("../pages/QueueIntegration"));
+const LibraryManager = lazy(() => import("../pages/LibraryManager"));
+const ToDoList = lazy(() => import("../pages/ToDoList"));
+const Kanban = lazy(() => import("../pages/Kanban"));
+const TagsKanban = lazy(() => import("../pages/TagsKanban"));
+const Companies = lazy(() => import("../pages/Companies"));
+
+// Campanhas
+const Campaigns = lazy(() => import("../pages/Campaigns"));
+const CampaignsConfig = lazy(() => import("../pages/CampaignsConfig"));
+const CampaignDetailedReport = lazy(() => import("../pages/CampaignDetailedReport"));
+const CampaignsPhrase = lazy(() => import("../pages/CampaignsPhrase"));
+const ContactLists = lazy(() => import("../pages/ContactLists"));
+const ContactListItems = lazy(() => import("../pages/ContactListItems"));
+
+// FlowBuilder (pesado - sempre lazy)
+const FlowBuilder = lazy(() => import("../pages/FlowBuilder"));
+const FlowBuilderConfig = lazy(() => import("../pages/FlowBuilderConfig").then(m => ({ default: m.FlowBuilderConfig })));
+const FlowDefault = lazy(() => import("../pages/FlowDefault"));
+
+// IA
+const AISettings = lazy(() => import("../components/AISettings"));
+const AIAgents = lazy(() => import("../pages/AIAgents"));
+const AITraining = lazy(() => import("../pages/AITraining"));
+
+// Tutoriais (raramente acessados - sempre lazy)
+const Helps = lazy(() => import("../pages/Helps"));
+const AITutorial = lazy(() => import("../pages/Helps/AITutorial"));
+const BotTutorial = lazy(() => import("../pages/Helps/BotTutorial"));
+const DashboardTutorial = lazy(() => import("../pages/Helps/DashboardTutorial"));
+const AtendimentosTutorial = lazy(() => import("../pages/Helps/AtendimentosTutorial"));
+const RespostasRapidasTutorial = lazy(() => import("../pages/Helps/RespostasRapidasTutorial"));
+const KanbanTutorial = lazy(() => import("../pages/Helps/KanbanTutorial"));
+const ContatosTutorial = lazy(() => import("../pages/Helps/ContatosTutorial"));
+const AgendamentosTutorial = lazy(() => import("../pages/Helps/AgendamentosTutorial"));
+const TagsTutorial = lazy(() => import("../pages/Helps/TagsTutorial"));
+const ChatInternoTutorial = lazy(() => import("../pages/Helps/ChatInternoTutorial"));
+const CampanhasTutorial = lazy(() => import("../pages/Helps/CampanhasTutorial"));
+const FlowBuilderTutorial = lazy(() => import("../pages/Helps/FlowBuilderTutorial"));
+const FilaChatbotTutorial = lazy(() => import("../pages/Helps/FilaChatbotTutorial"));
+const PromptsIATutorial = lazy(() => import("../pages/Helps/PromptsIATutorial"));
+const UsuariosTutorial = lazy(() => import("../pages/Helps/UsuariosTutorial"));
+const ConfiguracoesTutorial = lazy(() => import("../pages/Helps/ConfiguracoesTutorial"));
+const ConexoesWhatsAppTutorial = lazy(() => import("../pages/Helps/ConexoesWhatsAppTutorial"));
+const IntegracoesTutorial = lazy(() => import("../pages/Helps/IntegracoesTutorial"));
+const APITutorial = lazy(() => import("../pages/Helps/APITutorial"));
+const ArquivosChatbotTutorial = lazy(() => import("../pages/Helps/ArquivosChatbotTutorial"));
+const ListasContatosTutorial = lazy(() => import("../pages/Helps/ListasContatosTutorial"));
+const RelatoriosTutorial = lazy(() => import("../pages/Helps/RelatoriosTutorial"));
+const FinanceiroTutorial = lazy(() => import("../pages/Helps/FinanceiroTutorial"));
+const FacebookTutorial = lazy(() => import("../pages/Helps/FacebookTutorial"));
+const InstagramTutorial = lazy(() => import("../pages/Helps/InstagramTutorial"));
+const WebChatTutorial = lazy(() => import("../pages/Helps/WebChatTutorial"));
+
+// Outros
+const Subscription = lazy(() => import("../pages/Subscription"));
 
 
 const Routes = () => {
@@ -92,13 +128,14 @@ const Routes = () => {
     <BrowserRouter>
       <AuthProvider>
         <TicketsContextProvider>
-          <Switch>
-            <Route exact path="/login" component={Login} />
-            <Route exact path="/signup" component={Signup} />
-            <Route exact path="/forgot-password" component={ForgotPassword} />
-            <Route exact path="/reset-password" component={ResetPassword} />
-            <WhatsAppsProvider>
-              <LoggedInLayout>
+          <Suspense fallback={<PageLoader />}>
+            <Switch>
+              <Route exact path="/login" component={Login} />
+              <Route exact path="/signup" component={Signup} />
+              <Route exact path="/forgot-password" component={ForgotPassword} />
+              <Route exact path="/reset-password" component={ResetPassword} />
+              <WhatsAppsProvider>
+                <LoggedInLayout>
                 <Route exact path="/financeiro" component={Financeiro} isPrivate />
 
                 <Route exact path="/companies" component={Companies} isPrivate />
@@ -183,7 +220,8 @@ const Routes = () => {
                 )}
               </LoggedInLayout>
             </WhatsAppsProvider>
-          </Switch>
+            </Switch>
+          </Suspense>
         </TicketsContextProvider>
       </AuthProvider>
     </BrowserRouter>
