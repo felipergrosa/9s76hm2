@@ -143,7 +143,14 @@ const Ticket = () => {
             // Faz join imediato na sala do ticket pelo UUID (se o socket já estiver pronto)
             try {
               const candidate = (data?.uuid || ticketId || "").toString().trim();
-              if (candidate && candidate !== "undefined" && socket && typeof socket.emit === "function") {
+              if (candidate && candidate !== "undefined" && socket && typeof socket.joinRoom === "function") {
+                // Usa joinRoom que tem buffer automático para quando desconectado
+                socket.joinRoom(candidate, (err) => {
+                  if (err) console.debug("[Ticket] immediate joinRoom error", err);
+                  else console.debug("[Ticket] immediate joinRoom ok", { room: candidate });
+                });
+              } else if (candidate && candidate !== "undefined" && socket && typeof socket.emit === "function") {
+                // Fallback para emit direto se joinRoom não existir
                 socket.emit("joinChatBox", candidate, (err) => {
                   if (err) console.debug("[Ticket] immediate joinChatBox ack error", err);
                   else console.debug("[Ticket] immediate joinChatBox ok", { room: candidate });
@@ -235,15 +242,24 @@ const Ticket = () => {
           // Usa imediatamente o UUID presente na URL como fallback, para evitar janela sem sala
           const candidate = (ticket?.uuid || ticketId || "").toString().trim();
           if (!candidate || candidate === "undefined") {
-            console.debug("[Ticket] skip joinChatBox - invalid id", { uuid: ticket?.uuid, ticketId });
+            console.debug("[Ticket] skip joinRoom - invalid id", { uuid: ticket?.uuid, ticketId });
             return;
           }
-          socket.emit("joinChatBox", candidate, (err) => {
-            if (err) console.debug("[Ticket] joinChatBox ack error", err);
-            else console.debug("[Ticket] joinChatBox ok", { room: candidate });
-          });
+          // Usa joinRoom que tem buffer automático
+          if (socket && typeof socket.joinRoom === "function") {
+            socket.joinRoom(candidate, (err) => {
+              if (err) console.debug("[Ticket] joinRoom ack error", err);
+              else console.debug("[Ticket] joinRoom ok", { room: candidate });
+            });
+          } else if (socket && typeof socket.emit === "function") {
+            // Fallback
+            socket.emit("joinChatBox", candidate, (err) => {
+              if (err) console.debug("[Ticket] joinChatBox ack error", err);
+              else console.debug("[Ticket] joinChatBox ok", { room: candidate });
+            });
+          }
         } catch (e) {
-          console.debug("[Ticket] error emitting joinChatBox", e);
+          console.debug("[Ticket] error emitting joinRoom", e);
         }
       }
 
@@ -295,8 +311,13 @@ const Ticket = () => {
         try {
           const candidate = (ticket?.uuid || ticketId || "").toString().trim();
           if (!candidate || candidate === "undefined") {
-            console.debug("[Ticket] skip joinChatBoxLeave - invalid id", { uuid: ticket?.uuid, ticketId });
-          } else {
+            console.debug("[Ticket] skip joinRoomLeave - invalid id", { uuid: ticket?.uuid, ticketId });
+          } else if (socket && typeof socket.leaveRoom === "function") {
+            socket.leaveRoom(candidate, (err) => {
+              if (err) console.debug("[Ticket] leaveRoom ack error", err);
+              else console.debug("[Ticket] leaveRoom ok", { room: candidate });
+            });
+          } else if (socket && typeof socket.emit === "function") {
             socket.emit("joinChatBoxLeave", candidate, (err) => {
               if (err) console.debug("[Ticket] joinChatBoxLeave ack error", err);
               else console.debug("[Ticket] joinChatBoxLeave ok", { room: candidate });

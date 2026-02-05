@@ -40,6 +40,7 @@ import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketServi
 import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
 import { debounce } from "../../helpers/Debounce";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
+import { ticketEventBus } from "../TicketServices/TicketEventBus";
 import formatBody from "../../helpers/Mustache";
 import TicketTraking from "../../models/TicketTraking";
 import UserRating from "../../models/UserRating";
@@ -1584,22 +1585,9 @@ export const verifyMediaMessage = async (
         ]
       });
 
-      io.of(`/workspace-${companyId}`)
-        // .to("closed")
-        .emit(`company-${companyId}-ticket`, {
-          action: "delete",
-          ticket,
-          ticketId: ticket.id
-        });
-      // console.log("emitiu socket 902", ticket.id)
-      io.of(`/workspace-${companyId}`)
-        // .to(ticket.status)
-        //   .to(ticket.id.toString())
-        .emit(`company-${companyId}-ticket`, {
-          action: "update",
-          ticket,
-          ticketId: ticket.id
-        });
+      // CQRS: Emitir eventos via TicketEventBus
+      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
+      ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
     }
 
     return newMessage;
@@ -3788,22 +3776,9 @@ export const handleRating = async (
     type: "closed"
   });
 
-  io.of(`/workspace-${companyId}`)
-    // .to("open")
-    .emit(`company-${companyId}-ticket`, {
-      action: "delete",
-      ticket,
-      ticketId: ticket.id
-    });
-
-  io.of(`/workspace-${companyId}`)
-    // .to(ticket.status)
-    // .to(ticket.id.toString())
-    .emit(`company-${companyId}-ticket`, {
-      action: "update",
-      ticket,
-      ticketId: ticket.id
-    });
+  // CQRS: Emitir eventos via TicketEventBus
+  ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
+  ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
 };
 
 const sanitizeName = (name: string): string => {
@@ -3960,17 +3935,9 @@ const flowbuilderIntegration = async (
       companyId
     });
 
-    io.of(`/workspace-${companyId}`).emit(`company-${companyId}-ticket`, {
-      action: "delete",
-      ticket,
-      ticketId: ticket.id
-    });
-
-    io.to(ticket.status).emit(`company-${companyId}-ticket`, {
-      action: "update",
-      ticket,
-      ticketId: ticket.id
-    });
+    // CQRS: Emitir eventos via TicketEventBus
+    ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
+    ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
   }
 
   if (msg.key.fromMe) {
@@ -4847,21 +4814,8 @@ const handleMessage = async (
             message: messageToUpdate
           });
 
-        console.log(`[SOCKET] Emitindo ticket`, {
-          namespace: String(companyId),
-          sala: ticket.status,
-          evento: `company-${companyId}-ticket`,
-          action: "update",
-          ticketId: ticket.id
-        });
-        io.of(`/workspace-${companyId}`)
-          // .to(ticket.status)
-          // .to("notification")
-          // .to(String(ticket.id))
-          .emit(`company-${companyId}-ticket`, {
-            action: "update",
-            ticket
-          });
+        // CQRS: Emitir evento via TicketEventBus
+        ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
       } catch (err) {
         Sentry.captureException(err);
         logger.error(`Error handling message ack. Err: ${err}`);
