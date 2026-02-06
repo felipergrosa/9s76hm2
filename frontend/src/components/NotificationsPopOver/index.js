@@ -279,6 +279,13 @@ const NotificationsPopOver = (volume) => {
   const handleNotifications = data => {
     const { message, contact, ticket } = data;
 
+    // Debug: verificar se notificação está sendo chamada
+    console.log('[Notifications] handleNotifications chamado', {
+      ticketId: ticket.id,
+      volume: volume,
+      hasSound: !!soundAlertRef.current
+    });
+
     const options = {
       body: `${message.body} - ${format(new Date(), "HH:mm")}`,
       icon: contact.urlPicture ? `${getBackendUrl()}${contact.urlPicture}` : null,
@@ -312,15 +319,20 @@ const NotificationsPopOver = (volume) => {
     const timeSinceLastSound = now - lastSoundTimeRef.current;
     const MIN_SOUND_INTERVAL = 1000; // Mínimo 1 segundo entre sons
 
+    // Debug: verificar condições do som
+    console.log('[Notifications] Som - volume:', volume, 'timeSinceLastSound:', timeSinceLastSound);
+
     if (timeSinceLastSound < MIN_SOUND_INTERVAL) {
       if (soundTimeoutRef.current) {
         clearTimeout(soundTimeoutRef.current);
       }
       soundTimeoutRef.current = setTimeout(() => {
+        console.log('[Notifications] Tocando som (delayed)');
         soundAlertRef.current();
         lastSoundTimeRef.current = Date.now();
       }, MIN_SOUND_INTERVAL - timeSinceLastSound);
     } else {
+      console.log('[Notifications] Tocando som imediatamente');
       soundAlertRef.current();
       lastSoundTimeRef.current = now;
     }

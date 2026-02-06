@@ -6,25 +6,21 @@ import clsx from "clsx";
 // import SoftPhone from "react-softphone";
 // import { WebSocketInterface } from "jssip";
 
-import {
-  makeStyles,
-  Drawer,
-  AppBar,
-  Toolbar,
-  List,
-  Typography,
-  Divider,
-  MenuItem,
-  IconButton,
-  Menu,
-  useTheme,
-  useMediaQuery,
-  Avatar,
-  // FormControl,
-  Badge,
-  withStyles,
-  Chip,
-} from "@material-ui/core";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
+import useMediaQuery from "@material-ui/core/useMediaQuery";
+import Drawer from "@material-ui/core/Drawer";
+import AppBar from "@material-ui/core/AppBar";
+import Toolbar from "@material-ui/core/Toolbar";
+import List from "@material-ui/core/List";
+import Typography from "@material-ui/core/Typography";
+import Divider from "@material-ui/core/Divider";
+import MenuItem from "@material-ui/core/MenuItem";
+import IconButton from "@material-ui/core/IconButton";
+import Menu from "@material-ui/core/Menu";
+import Avatar from "@material-ui/core/Avatar";
+import Badge from "@material-ui/core/Badge";
+import withStyles from "@material-ui/core/styles/withStyles";
+import Chip from "@material-ui/core/Chip";
 
 import {
   Menu as MenuIcon,
@@ -380,7 +376,10 @@ const LoggedInLayout = ({ children, themeToggle }) => {
   const classes = useStyles({ viewMode });
   const greaterThenSm = useMediaQuery(theme.breakpoints.up("sm"));
 
-  const [volume, setVolume] = useState(localStorage.getItem("volume") || 1);
+  const [volume, setVolume] = useState(() => {
+    const savedVolume = localStorage.getItem("volume");
+    return savedVolume !== null ? parseFloat(savedVolume) : 1;
+  });
   const [statusImport, setStatusImport] = useState(null);
   const [hideImport, setHideImport] = useState(false);
 

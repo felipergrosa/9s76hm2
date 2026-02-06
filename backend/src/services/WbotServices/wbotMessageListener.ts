@@ -48,6 +48,55 @@ import SendWhatsAppMessage from "./SendWhatsAppMessage";
 import sendFaceMessage from "../FacebookServices/sendFacebookMessage";
 import moment from "moment";
 import Queue from "../../models/Queue";
+
+// =============================================================================
+// LOCK POR JID - Evita condição de corrida na criação de contatos
+// =============================================================================
+// Mapa de locks por JID para garantir que apenas uma thread por vez
+// possa criar contato para o mesmo JID
+const jidLocks = new Map<string, Promise<void>>();
+
+/**
+ * Adquire um lock para um JID específico
+ * Retorna uma função para liberar o lock
+ */
+const acquireJidLock = async (jid: string): Promise<() => void> => {
+  const normalizedJid = jidNormalizedUser(jid);
+  
+  // Aguardar lock existente
+  while (jidLocks.has(normalizedJid)) {
+    try {
+      await jidLocks.get(normalizedJid);
+    } catch (e) {
+      // Ignora erros de locks anteriores
+    }
+  }
+  
+  // Criar novo lock
+  let releaseLock: () => void;
+  const lockPromise = new Promise<void>((resolve) => {
+    releaseLock = () => {
+      jidLocks.delete(normalizedJid);
+      resolve();
+    };
+  });
+  
+  jidLocks.set(normalizedJid, lockPromise);
+  
+  return releaseLock!;
+};
+
+/**
+ * Executa uma função com lock por JID
+ */
+const withJidLock = async <T>(jid: string, fn: () => Promise<T>): Promise<T> => {
+  const release = await acquireJidLock(jid);
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+};
 import FindOrCreateATicketTrakingService from "../TicketServices/FindOrCreateATicketTrakingService";
 
 // Mutex global compartilhado para evitar race conditions na criação de tickets
@@ -1291,38 +1340,56 @@ const verifyContact = async (
     // Usar pushName como nome, ou "Contato LID" se não tiver
     const tempName = msgContact.name || `Contato ${cleaned.slice(-6)}`;
     
-    // Criar contato com LID como identificador
-    // O número será o próprio LID limpo (será atualizado quando mapeamento for descoberto)
-    // Nota: isLinkedDevice é detectado automaticamente pelo CreateOrUpdateContactService via remoteJid.includes("@lid")
-    const contactData = {
-      name: tempName,
-      number: cleaned, // Usar o LID limpo como número temporário
-      profilePicUrl: "",
-      isGroup: false,
-      companyId,
-      remoteJid: normalizedJid, // O LID completo - detecta isLinkedDevice automaticamente
-      whatsappId: wbot.id,
-      wbot
-    };
-
-    try {
-      const contact = await CreateOrUpdateContactService(contactData);
-      logger.info("[verifyContact] Contato temporário criado com LID", {
-        contactId: contact.id,
-        lid: normalizedJid,
-        name: tempName
+    // =================================================================
+    // LOCK POR JID - Evita condição de corrida na criação de contatos
+    // =================================================================
+    return await withJidLock(normalizedJid, async () => {
+      // Verificar novamente se contato foi criado enquanto aguardava o lock
+      const existingAfterLock = await Contact.findOne({
+        where: { remoteJid: normalizedJid, companyId }
       });
-      return contact;
-    } catch (err: any) {
-      // Se falhar (ex: duplicado), tentar buscar existente
-      logger.warn("[verifyContact] Erro ao criar contato LID, buscando existente", { err: err?.message });
-      const existing = await Contact.findOne({ where: { remoteJid: normalizedJid, companyId } });
-      if (existing) return existing;
       
-      // Se ainda não encontrar, retornar null como último recurso
-      logger.error("[verifyContact] Falha total ao processar LID", { normalizedJid, err: err?.message });
-      return null as any;
-    }
+      if (existingAfterLock) {
+        logger.info("[verifyContact] Contato encontrado após adquirir lock", {
+          contactId: existingAfterLock.id,
+          lid: normalizedJid
+        });
+        return existingAfterLock;
+      }
+      
+      // Criar contato com LID como identificador
+      // O número será o próprio LID limpo (será atualizado quando mapeamento for descoberto)
+      // Nota: isLinkedDevice é detectado automaticamente pelo CreateOrUpdateContactService via remoteJid.includes("@lid")
+      const contactData = {
+        name: tempName,
+        number: cleaned, // Usar o LID limpo como número temporário
+        profilePicUrl: "",
+        isGroup: false,
+        companyId,
+        remoteJid: normalizedJid, // O LID completo - detecta isLinkedDevice automaticamente
+        whatsappId: wbot.id,
+        wbot
+      };
+
+      try {
+        const contact = await CreateOrUpdateContactService(contactData);
+        logger.info("[verifyContact] Contato temporário criado com LID", {
+          contactId: contact.id,
+          lid: normalizedJid,
+          name: tempName
+        });
+        return contact;
+      } catch (err: any) {
+        // Se falhar (ex: duplicado), tentar buscar existente
+        logger.warn("[verifyContact] Erro ao criar contato LID, buscando existente", { err: err?.message });
+        const existing = await Contact.findOne({ where: { remoteJid: normalizedJid, companyId } });
+        if (existing) return existing;
+        
+        // Se ainda não encontrar, retornar null como último recurso
+        logger.error("[verifyContact] Falha total ao processar LID", { normalizedJid, err: err?.message });
+        return null as any;
+      }
+    });
   }
 
   // VALIDAÇÃO RIGOROSA: só cria contato se não for grupo e o número tiver entre 10 e 13 dígitos

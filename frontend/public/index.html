@@ -12,6 +12,9 @@
 	<link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
 	<link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
 	<link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+	<!-- Prefetch para páginas principais -->
+	<link rel="prefetch" href="/static/js/main.chunk.js" as="script" />
+	<link rel="prefetch" href="/static/js/0.chunk.js" as="script" />
 	<meta name="theme-color" content="#000000" />
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
 	<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -37,6 +40,7 @@
 			border-radius: 50%;
 			animation: spin 1s linear infinite;
 			margin-bottom: 1rem;
+			will-change: transform;
 		}
 
 		@keyframes spin {
