@@ -113,7 +113,7 @@ import VerifyCurrentSchedule from "../CompanyService/VerifyCurrentSchedule";
 import Campaign from "../../models/Campaign";
 import QueueAutoFileService from "../QueueServices/QueueAutoFileService";
 import CampaignShipping from "../../models/CampaignShipping";
-import { Op } from "sequelize";
+import { Op, fn, col, where as seqWhere } from "sequelize";
 import { campaignQueue, parseToMilliseconds, randomValue } from "../../queues";
 import User from "../../models/User";
 import { sayChatbot } from "./ChatBotListener";
@@ -778,9 +778,79 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   // CORREÇÃO: Para mensagens fromMe=true com LID, tentar resolver o número real
   // O WhatsApp às vezes usa LID ao invés do número real quando enviamos pelo celular
   if (msg.key.fromMe && isLid && !isGroup) {
+    // Log detalhado para debug de mensagens fromMe com LID
+    logger.info("[getContactMessage] Mensagem fromMe=true com LID - tentando resolver", {
+      remoteJid,
+      remoteJidAlt: (msg.key as any).remoteJidAlt,
+      participantAlt: (msg.key as any).participantAlt,
+      senderPn: (msg as any).senderPn,
+      pushName: msg.pushName,
+      verifiedBizName: (msg as any).verifiedBizName,
+      messageKeys: Object.keys(msg.key || {}),
+      messageTopLevelKeys: Object.keys(msg || {}).filter(k => !['message', 'key'].includes(k))
+    });
+
     // Tentar obter o número real do store/cache do Baileys
     try {
       const sock = wbot as any;
+
+      // 0. PRIORIDADE MÁXIMA: Usar signalRepository.lidMapping.getPNForLID() do Baileys
+      const lidStore = sock.signalRepository?.lidMapping;
+      if (lidStore?.getPNForLID) {
+        const lidId = remoteJid.replace("@lid", "");
+        try {
+          const resolvedPN = await lidStore.getPNForLID(lidId);
+          if (resolvedPN) {
+            const pnDigits = resolvedPN.replace(/\D/g, "");
+            if (looksPhoneLike(pnDigits)) {
+              contactJid = resolvedPN.includes("@") ? resolvedPN : `${pnDigits}@s.whatsapp.net`;
+              logger.info("[getContactMessage] LID resolvido via signalRepository.lidMapping.getPNForLID", {
+                originalLid: remoteJid,
+                resolvedPN,
+                resolvedJid: contactJid
+              });
+              
+              // Salvar mapeamento para uso futuro
+              try {
+                const LidMapping = require("../../models/LidMapping").default;
+                const companyId = sock.companyId || 1;
+                await LidMapping.upsert({
+                  lid: remoteJid,
+                  phoneNumber: pnDigits,
+                  companyId,
+                  whatsappId: wbot.id
+                });
+              } catch (e) {}
+            }
+          }
+        } catch (e) {
+          debugLog("[getContactMessage] Erro ao usar getPNForLID", { err: (e as any)?.message });
+        }
+      }
+
+      // 0.5. Consultar tabela LidMappings (cache persistente)
+      if (contactJid === remoteJid) {
+        try {
+          const LidMapping = require("../../models/LidMapping").default;
+          const companyId = sock.companyId || 1;
+          const savedMapping = await LidMapping.findOne({
+            where: { lid: remoteJid, companyId }
+          });
+          if (savedMapping?.phoneNumber) {
+            const pnDigits = savedMapping.phoneNumber.replace(/\D/g, "");
+            if (looksPhoneLike(pnDigits)) {
+              contactJid = `${pnDigits}@s.whatsapp.net`;
+              logger.info("[getContactMessage] LID resolvido via tabela LidMappings", {
+                originalLid: remoteJid,
+                phoneNumber: savedMapping.phoneNumber,
+                resolvedJid: contactJid
+              });
+            }
+          }
+        } catch (e) {
+          debugLog("[getContactMessage] Erro ao consultar LidMappings", { err: (e as any)?.message });
+        }
+      }
 
       // 1. PRIORIDADE MÁXIMA: senderPn (campo mais confiável do Baileys)
       const senderPn = (msg as any).senderPn;
