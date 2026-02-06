@@ -24,6 +24,16 @@ api.interceptors.response.use(
 					text: "Você não tem permissão para realizar esta ação ou acessar este recurso.",
 					confirmButtonColor: "#d33",
 					confirmButtonText: "OK",
+					customClass: {
+						container: 'swal-permission-modal'
+					},
+					didOpen: () => {
+						// Garante que o modal fique na frente de outros elementos
+						const modal = document.querySelector('.swal2-container');
+						if (modal) {
+							modal.style.zIndex = '99999';
+						}
+					}
 				}).then(() => {
 					isPermissionModalOpen = false;
 				});

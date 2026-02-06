@@ -79,6 +79,8 @@ import ShowContactImportLogService from "../services/ContactServices/ShowContact
 import GetImportJobStatusService from "../services/ContactServices/GetImportJobStatusService";
 import { v4 as uuidv4 } from "uuid";
 import { createAuditLog, AuditActions, AuditEntities } from "../helpers/AuditLogger";
+import { hasPermission } from "../helpers/PermissionAdapter";
+import User from "../models/User";
 
 type IndexQuery = {
   searchParam: string;
@@ -1114,6 +1116,29 @@ export const update = async (
   }
 
   const oldContact = await ShowContactService(contactId, companyId, Number(req.user.id));
+
+  // Verificar permissões para campos sensíveis
+  const user = await User.findByPk(req.user.id);
+  if (user) {
+    // Se usuário não tem permissão para editar tags, remove do body
+    if (!hasPermission(user, "contacts.edit-tags")) {
+      delete (contactData as any).tags;
+      delete (contactData as any).tagIds;
+      logger.info(`[Contacts.update] Usuário ${req.user.id} tentou alterar tags sem permissão. Tags removidas do payload.`);
+    }
+    
+    // Se usuário não tem permissão para editar wallets, remove do body
+    if (!hasPermission(user, "contacts.edit-wallets")) {
+      delete (contactData as any).wallets;
+      logger.info(`[Contacts.update] Usuário ${req.user.id} tentou alterar wallets sem permissão. Wallets removidas do payload.`);
+    }
+    
+    // Se usuário não tem permissão para editar representative, remove do body
+    if (!hasPermission(user, "contacts.edit-representative")) {
+      delete (contactData as any).representativeCode;
+      logger.info(`[Contacts.update] Usuário ${req.user.id} tentou alterar representativeCode sem permissão. Campo removido do payload.`);
+    }
+  }
 
   if (oldContact.number != contactData.number && oldContact.channel == "whatsapp") {
     const isGroup = oldContact && oldContact.remoteJid ? oldContact.remoteJid.endsWith("@g.us") : oldContact.isGroup;

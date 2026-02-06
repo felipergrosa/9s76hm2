@@ -125,6 +125,9 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	// Verificar permissão para editar campos do contato
 	const { hasPermission } = usePermissions();
 	const canEditFields = hasPermission("contacts.edit-fields");
+	const canEditTags = hasPermission("contacts-page:editTags");
+	const canEditWallets = hasPermission("contacts-page:editWallets");
+	const canEditRepresentative = hasPermission("contacts-page:editRepresentative");
 
 	const initialState = {
 		clientCode: "",
@@ -447,7 +450,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 												shrink: true,
 											}}
 											fullWidth
-											disabled={!canEditFields}
+											disabled={!canEditRepresentative}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -570,7 +573,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											variant="outlined"
 											margin="dense"
 											fullWidth
-											disabled={!canEditFields || loadingUsers}
+											disabled={!canEditWallets || loadingUsers}
 										>
 											<InputLabel id="wallets-label">Carteira (responsáveis)</InputLabel>
 											<Select
@@ -599,10 +602,19 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										</FormControl>
 									</Grid>
 									<Grid item xs={12} md={6}>
-										{contact?.id ? (
-											<TagsContainer contact={contact} />
+										{canEditTags ? (
+											contact?.id ? (
+												<TagsContainer contact={contact} />
+											) : (
+												<TagsContainer contact={{}} pendingTags={pendingTags} onPendingChange={setPendingTags} />
+											)
 										) : (
-											<TagsContainer contact={{}} pendingTags={pendingTags} onPendingChange={setPendingTags} />
+											<div style={{ padding: '8px 0', color: '#666', fontSize: '14px' }}>
+												<strong>Tags:</strong> {contact?.tags?.map(t => t.name).join(', ') || 'Nenhuma tag'}
+												<Typography variant="caption" display="block" style={{ color: '#999', marginTop: 4 }}>
+													Você não tem permissão para editar tags
+												</Typography>
+											</div>
 										)}
 									</Grid>
 									<Grid item xs={12} md={6}>

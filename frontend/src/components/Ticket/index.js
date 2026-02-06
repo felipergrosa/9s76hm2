@@ -143,23 +143,45 @@ const Ticket = () => {
             // Faz join imediato na sala do ticket pelo UUID (se o socket já estiver pronto)
             try {
               const candidate = (data?.uuid || ticketId || "").toString().trim();
+              console.log("=== [Ticket] JOIN IMEDIATO ===");
+              console.log("[Ticket] UUID do ticket:", data?.uuid);
+              console.log("[Ticket] ticketId da URL:", ticketId);
+              console.log("[Ticket] Candidate (room):", candidate);
+              console.log("[Ticket] Socket existe?", !!socket);
+              console.log("[Ticket] Socket.joinRoom existe?", socket && typeof socket.joinRoom === "function");
+              console.log("[Ticket] Socket conectado?", socket?.connected);
+              
               if (candidate && candidate !== "undefined" && socket && typeof socket.joinRoom === "function") {
+                console.log("[Ticket] Chamando socket.joinRoom para:", candidate);
                 // Usa joinRoom que tem buffer automático para quando desconectado
                 socket.joinRoom(candidate, (err) => {
-                  if (err) console.debug("[Ticket] immediate joinRoom error", err);
-                  else console.debug("[Ticket] immediate joinRoom ok", { room: candidate });
+                  if (err) {
+                    console.error("[Ticket] ❌ ERRO no immediate joinRoom:", err);
+                  } else {
+                    console.log("[Ticket] ✓ immediate joinRoom OK para sala:", candidate);
+                  }
                 });
               } else if (candidate && candidate !== "undefined" && socket && typeof socket.emit === "function") {
+                console.warn("[Ticket] joinRoom não disponível, usando emit direto");
                 // Fallback para emit direto se joinRoom não existir
                 socket.emit("joinChatBox", candidate, (err) => {
-                  if (err) console.debug("[Ticket] immediate joinChatBox ack error", err);
-                  else console.debug("[Ticket] immediate joinChatBox ok", { room: candidate });
+                  if (err) {
+                    console.error("[Ticket] ❌ ERRO no immediate joinChatBox:", err);
+                  } else {
+                    console.log("[Ticket] ✓ immediate joinChatBox OK para sala:", candidate);
+                  }
                 });
               } else {
-                console.debug("[Ticket] immediate join skipped - invalid id or socket not ready", { uuid: data?.uuid, ticketId, hasSocket: !!socket });
+                console.error("[Ticket] ⚠️ PULOU join imediato - socket não pronto ou ID inválido", { 
+                  uuid: data?.uuid, 
+                  ticketId, 
+                  hasSocket: !!socket,
+                  hasJoinRoom: socket && typeof socket.joinRoom === "function",
+                  connected: socket?.connected
+                });
               }
             } catch (e) {
-              console.debug("[Ticket] immediate join error", e);
+              console.error("[Ticket] ❌ EXCEÇÃO no join imediato:", e);
             }
             if (["pending", "open", "group"].includes(data.status)) {
               setTabOpen(data.status);
@@ -239,27 +261,44 @@ const Ticket = () => {
     if (user.companyId) {
       const onConnectTicket = () => {
         try {
+          console.log("=== [Ticket] onConnectTicket DISPARADO ===");
           // Usa imediatamente o UUID presente na URL como fallback, para evitar janela sem sala
           const candidate = (ticket?.uuid || ticketId || "").toString().trim();
+          console.log("[Ticket] onConnectTicket - UUID do ticket:", ticket?.uuid);
+          console.log("[Ticket] onConnectTicket - ticketId da URL:", ticketId);
+          console.log("[Ticket] onConnectTicket - Candidate (room):", candidate);
+          
           if (!candidate || candidate === "undefined") {
-            console.debug("[Ticket] skip joinRoom - invalid id", { uuid: ticket?.uuid, ticketId });
+            console.error("[Ticket] ⚠️ onConnectTicket - PULOU join por ID inválido", { uuid: ticket?.uuid, ticketId });
             return;
           }
+          
+          console.log("[Ticket] onConnectTicket - Socket existe?", !!socket);
+          console.log("[Ticket] onConnectTicket - Socket.joinRoom existe?", socket && typeof socket.joinRoom === "function");
+          
           // Usa joinRoom que tem buffer automático
           if (socket && typeof socket.joinRoom === "function") {
+            console.log("[Ticket] onConnectTicket - Chamando socket.joinRoom para:", candidate);
             socket.joinRoom(candidate, (err) => {
-              if (err) console.debug("[Ticket] joinRoom ack error", err);
-              else console.debug("[Ticket] joinRoom ok", { room: candidate });
+              if (err) {
+                console.error("[Ticket] ❌ onConnectTicket - ERRO joinRoom:", err);
+              } else {
+                console.log("[Ticket] ✓ onConnectTicket - joinRoom OK para sala:", candidate);
+              }
             });
           } else if (socket && typeof socket.emit === "function") {
+            console.warn("[Ticket] onConnectTicket - joinRoom não disponível, usando emit direto");
             // Fallback
             socket.emit("joinChatBox", candidate, (err) => {
-              if (err) console.debug("[Ticket] joinChatBox ack error", err);
-              else console.debug("[Ticket] joinChatBox ok", { room: candidate });
+              if (err) {
+                console.error("[Ticket] ❌ onConnectTicket - ERRO joinChatBox:", err);
+              } else {
+                console.log("[Ticket] ✓ onConnectTicket - joinChatBox OK para sala:", candidate);
+              }
             });
           }
         } catch (e) {
-          console.debug("[Ticket] error emitting joinRoom", e);
+          console.error("[Ticket] ❌ onConnectTicket - EXCEÇÃO:", e);
         }
       }
 
@@ -302,10 +341,17 @@ const Ticket = () => {
 
       // Se já estiver conectado, entra na sala imediatamente
       try {
+        console.log("[Ticket] Verificando se socket já está conectado...");
+        console.log("[Ticket] Socket conectado?", socket?.connected);
         if (socket && socket.connected) {
+          console.log("[Ticket] ✓ Socket JÁ CONECTADO, chamando onConnectTicket imediatamente");
           onConnectTicket();
+        } else {
+          console.warn("[Ticket] ⚠️ Socket NÃO conectado, aguardando evento 'connect'");
         }
-      } catch { }
+      } catch (e) {
+        console.error("[Ticket] ❌ Erro ao verificar conexão do socket:", e);
+      }
 
       return () => {
         try {

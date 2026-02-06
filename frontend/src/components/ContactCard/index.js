@@ -4,6 +4,7 @@ import { WhatsApp } from "@material-ui/icons";
 import { Tooltip, Checkbox } from "@material-ui/core";
 import { RadioButtonUnchecked, CheckCircle as CheckCircleIcon } from "@material-ui/icons";
 import LazyContactAvatar from "../LazyContactAvatar";
+import { Can } from "../Can";
 
 // Componente de card de contato para versão mobile, memoizado para evitar re-renders
 const ContactCard = memo(({
@@ -22,6 +23,7 @@ const ContactCard = memo(({
   onLongPressEnd,
   onTapWhileSelection,
   isSelected = false,
+  userProfile
 }) => {
   const longPressTimerRef = useRef(null);
   const longPressTriggeredRef = useRef(false);
@@ -167,24 +169,33 @@ const ContactCard = memo(({
               <WhatsApp className="w-4 h-4" />
             </button>
           </Tooltip>
-          <Tooltip {...CustomTooltipProps} title="Editar contato">
-            <button onClick={() => onEdit(contact.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-              <Edit className="w-4 h-4" />
-            </button>
-          </Tooltip>
-          <Tooltip {...CustomTooltipProps} title={contact.active ? "Bloquear contato" : "Desbloquear contato"}>
-            <button
-              onClick={() => contact.active ? onBlock(contact) : onUnblock(contact)}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            >
-              {contact.active ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-            </button>
-          </Tooltip>
-          <Tooltip {...CustomTooltipProps} title="Deletar contato">
-            <button onClick={() => onDelete(contact)} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </Tooltip>
+          <Can
+            role={userProfile}
+            perform="contacts-page:deleteContact"
+            yes={() => (
+              <>
+                <Tooltip {...CustomTooltipProps} title="Editar contato">
+                  <button onClick={() => onEdit(contact.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                    <Edit className="w-4 h-4" />
+                  </button>
+                </Tooltip>
+                <Tooltip {...CustomTooltipProps} title={contact.active ? "Bloquear contato" : "Desbloquear contato"}>
+                  <button
+                    onClick={() => contact.active ? onBlock(contact) : onUnblock(contact)}
+                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                  >
+                    {contact.active ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                  </button>
+                </Tooltip>
+                <Tooltip {...CustomTooltipProps} title="Deletar contato">
+                  <button onClick={() => onDelete(contact)} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </Tooltip>
+              </>
+            )}
+            no={() => null}
+          />
         </div>
       </div>
     </div>

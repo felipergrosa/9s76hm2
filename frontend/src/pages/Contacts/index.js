@@ -1293,6 +1293,7 @@ const Contacts = () => {
                                             formatPhoneNumber={formatPhoneNumber}
                                             CustomTooltipProps={CustomTooltipProps}
                                             rowIndex={rowIndex}
+                                            userProfile={user.profile}
                                         />
                                     ))}
                                     {loading && <TableRowSkeleton avatar columns={9} />}
@@ -1467,6 +1468,7 @@ const Contacts = () => {
                                 onLongPressEnd={handleCardLongPressEnd}
                                 onTapWhileSelection={handleTapWhileSelection}
                                 isSelected={selectedContactIds.includes(contact.id)}
+                                userProfile={user.profile}
                             />
                         ))}
                     </div>
