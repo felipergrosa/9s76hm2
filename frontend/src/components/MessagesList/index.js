@@ -1759,6 +1759,9 @@ const MessagesList = ({
       });
     }
 
+    // Ordena mensagens por createdAt para garantir ordem cronológica correta
+    filtered.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
     return { filteredMessages: filtered, messageReactions: reactions };
   }, [messagesList, ticketId, getOptimisticMessages]);
 
