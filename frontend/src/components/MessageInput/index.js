@@ -630,10 +630,10 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   const [senVcardModalOpen, setSenVcardModalOpen] = useState(false);
   const [showModalMedias, setShowModalMedias] = useState(false);
 
-  // Corretor ortográfico (desabilitado por padrão - muitos falsos positivos)
+  // Corretor ortográfico (HABILITADO por padrão - correção automática de acentuação)
   const [spellCheckEnabled, setSpellCheckEnabled] = useState(() => {
     const saved = localStorage.getItem('spellCheckEnabled');
-    return saved !== null ? JSON.parse(saved) : false;
+    return saved !== null ? JSON.parse(saved) : true; // ALTERADO: true por padrão
   });
   const { isLoaded: spellCheckLoaded, isFullDictLoaded, suggestions, currentWord, analyzeText, replaceWord } = useSpellChecker(spellCheckEnabled);
   const [showSpellSuggestions, setShowSpellSuggestions] = useState(false);
@@ -980,8 +980,11 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
     let value = e.target.value;
     let cursorPos = e.target.selectionStart;
     
-    // Autocorreção ao digitar espaço (como Word)
-    if (spellCheckEnabled && value.endsWith(' ') && value.length > 1) {
+    // Autocorreção ao digitar espaço OU pontuação (.,;:!?)
+    const lastChar = value.slice(-1);
+    const triggerChars = [' ', '.', ',', ';', ':', '!', '?', '\n'];
+    
+    if (spellCheckEnabled && value.length > 1 && triggerChars.includes(lastChar)) {
       const originalLength = value.length;
       const correctedText = autoCorrectText(value);
       if (correctedText !== value) {

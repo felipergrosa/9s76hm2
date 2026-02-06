@@ -268,7 +268,49 @@ const TicketsListCustom = (props) => {
     }, [tickets]);
 
     useEffect(() => {
+        // Verifica se o contato do ticket está na carteira do usuário (baseado em tags pessoais)
+        const isInUserWallet = (ticket) => {
+            // Admin sem restrição de carteira vê tudo
+            if (user?.profile === 'admin' && (!user?.allowedContactTags || user?.allowedContactTags?.length === 0)) {
+                return true;
+            }
+            
+            // Se showAll está ativo, mostrar todos
+            if (showAll) {
+                return true;
+            }
+            
+            // Se o ticket está atribuído ao usuário, sempre mostrar
+            if (ticket?.userId === user?.id) {
+                return true;
+            }
+            
+            // Se não há restrição de tags, mostrar baseado apenas em userId/queueId
+            if (!user?.allowedContactTags || user?.allowedContactTags?.length === 0) {
+                return true;
+            }
+            
+            // Verificar se o contato tem alguma tag pessoal permitida
+            const contactTags = ticket?.contact?.tags || [];
+            if (contactTags.length === 0) {
+                // Contato sem tags: só mostrar se atribuído ao usuário ou pending sem atribuição
+                return !ticket?.userId || ticket?.userId === user?.id;
+            }
+            
+            // Verificar se alguma tag do contato está nas tags permitidas do usuário
+            const userTagIds = user?.allowedContactTags || [];
+            const hasAllowedTag = contactTags.some(tag => userTagIds.includes(tag.id));
+            
+            return hasAllowedTag;
+        };
+
         const shouldUpdateTicket = ticket => {
+            // Primeiro verifica carteira
+            if (!isInUserWallet(ticket)) {
+                return false;
+            }
+            
+            // Depois verifica userId e queueId
             return (!ticket?.userId || ticket?.userId === user?.id || showAll) &&
                 ((!ticket?.queueId && showTicketWithoutQueue) || selectedQueueIds.indexOf(ticket?.queueId) > -1)
             // (!blockNonDefaultConnections || (ticket.status == 'group' && ignoreUserConnectionForGroups) || !user?.whatsappId || ticket.whatsappId == user?.whatsappId);

@@ -144,6 +144,7 @@ import {
 import typebotListener from "../TypebotServices/typebotListener";
 import Tag from "../../models/Tag";
 import TicketTag from "../../models/TicketTag";
+import ContactTag from "../../models/ContactTag";
 import pino from "pino";
 import BullQueues from "../../libs/queue";
 import { Transform } from "stream";
@@ -1541,6 +1542,68 @@ const verifyContact = async (
           lid: normalizedJid,
           name: tempName
         });
+
+        // =================================================================
+        // HERANÇA DE TAGS PESSOAIS - Copia tags do contato original se existir
+        // Isso garante que o contato LID fique na mesma carteira
+        // =================================================================
+        try {
+          // Buscar tickets existentes na mesma conexão para encontrar contato com tags
+          const existingTicket = await Ticket.findOne({
+            where: {
+              whatsappId: wbot.id,
+              companyId,
+              contactId: { [Op.ne]: contact.id } // Diferente do contato LID
+            },
+            include: [{
+              model: Contact,
+              as: "contact",
+              where: { isGroup: false },
+              include: [{
+                model: Tag,
+                as: "tags",
+                where: {
+                  name: {
+                    [Op.and]: [
+                      { [Op.like]: "#%" },      // Tags pessoais começam com #
+                      { [Op.notLike]: "##%" }   // Mas não ## (tags globais)
+                    ]
+                  }
+                },
+                required: true
+              }]
+            }],
+            order: [["updatedAt", "DESC"]]
+          });
+
+          if (existingTicket?.contact?.tags?.length > 0) {
+            const personalTags = existingTicket.contact.tags;
+            
+            // Copiar tags pessoais para o contato LID
+            for (const tag of personalTags) {
+              await ContactTag.findOrCreate({
+                where: {
+                  contactId: contact.id,
+                  tagId: tag.id
+                },
+                defaults: {
+                  contactId: contact.id,
+                  tagId: tag.id
+                }
+              });
+            }
+            
+            logger.info("[verifyContact] Tags pessoais herdadas para contato LID", {
+              lidContactId: contact.id,
+              originalContactId: existingTicket.contact.id,
+              tagsHerdadas: personalTags.map(t => t.name)
+            });
+          }
+        } catch (tagErr: any) {
+          // Erro na herança de tags não deve bloquear o fluxo
+          logger.warn("[verifyContact] Erro ao herdar tags pessoais", { err: tagErr?.message });
+        }
+
         return contact;
       } catch (err: any) {
         // Se falhar (ex: duplicado), tentar buscar existente

@@ -30,6 +30,7 @@ import { TagsContainer } from "../TagsContainer";
 import InputMask from "react-input-mask";
 import { isValidCPF, isValidCNPJ } from "../../utils/validators";
 import usePermissions from "../../hooks/usePermissions";
+import { autoCorrectText } from "../../hooks/useSpellChecker";
 // import AsyncSelect from "../AsyncSelect";
 
 const useStyles = makeStyles(theme => ({
@@ -121,6 +122,15 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	const [pendingTags, setPendingTags] = useState([]);
 	const [userOptions, setUserOptions] = useState([]);
 	const [loadingUsers, setLoadingUsers] = useState(false);
+
+	// Função auxiliar para correção automática de acentuação
+	const handleAutoCorrect = (setFieldValue, fieldName, value) => {
+		if (!value || typeof value !== 'string') return;
+		const corrected = autoCorrectText(value);
+		if (corrected !== value) {
+			setFieldValue(fieldName, corrected);
+		}
+	};
 
 	// Verificar permissão para editar campos do contato
 	const { hasPermission } = usePermissions();
@@ -318,6 +328,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											}}
 											error={touched.clientCode && Boolean(errors.clientCode)}
 											helperText={touched.clientCode && errors.clientCode}
+											onBlur={() => handleAutoCorrect(setFieldValue, 'clientCode', values.clientCode)}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -334,6 +345,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											InputLabelProps={{
 												shrink: true,
 											}}
+											onBlur={() => handleAutoCorrect(setFieldValue, 'name', values.name)}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -347,6 +359,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											InputLabelProps={{
 												shrink: true,
 											}}
+											onBlur={() => handleAutoCorrect(setFieldValue, 'bzEmpresa', values.bzEmpresa)}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -399,6 +412,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 												shrink: true,
 											}}
 											fullWidth
+											onBlur={() => handleAutoCorrect(setFieldValue, 'contactName', values.contactName)}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -465,6 +479,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											}}
 											fullWidth
 											disabled={!canEditFields}
+											onBlur={() => handleAutoCorrect(setFieldValue, 'fantasyName', values.fantasyName)}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -479,6 +494,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											}}
 											fullWidth
 											disabled={!canEditFields}
+											onBlur={() => handleAutoCorrect(setFieldValue, 'city', values.city)}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -493,6 +509,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											}}
 											fullWidth
 											disabled={!canEditFields}
+											onBlur={() => handleAutoCorrect(setFieldValue, 'region', values.region)}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -537,6 +554,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											margin="dense"
 											disabled={!canEditFields}
 											fullWidth
+											onBlur={() => handleAutoCorrect(setFieldValue, 'segment', values.segment)}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -566,6 +584,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											}}
 											fullWidth
 											disabled={!canEditFields}
+											onBlur={() => handleAutoCorrect(setFieldValue, 'instagram', values.instagram)}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
