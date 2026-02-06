@@ -75,9 +75,10 @@ contactRoutes.post("/contacts/test-create-label", isAuth, ContactController.test
 contactRoutes.post("/contacts/normalize-numbers", isAuth, ContactController.normalizeNumbers);
 contactRoutes.post("/contacts/check-existing", isAuth, ContactController.checkExistingNumbers);
 
-// ========== ROTAS DE MESCLAGEM DE CONTATOS DUPLICADOS (LID) ==========
-contactRoutes.get("/contacts/duplicates-lid", isAuth, ContactController.findDuplicateLidContacts);
-contactRoutes.post("/contacts/merge", isAuth, ContactController.mergeContacts);
+// ========== ROTAS DE GERENCIAMENTO DE CONTATOS LID ==========
+contactRoutes.get("/contacts/lid-list", isAuth, ContactController.listLidContacts);
+contactRoutes.post("/contacts/lid-resolve/:contactId", isAuth, ContactController.resolveLid);
+contactRoutes.post("/contacts/lid-resolve-batch", isAuth, ContactController.resolveLidBatch);
 
 // ========== ROTAS DE IMPORTAÇÃO ASSÍNCRONA ==========
 contactRoutes.post("/contacts/import-async", isAuth, upload.single("file"), ContactController.importContactsAsync);

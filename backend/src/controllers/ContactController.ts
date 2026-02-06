@@ -67,6 +67,12 @@ import GetDeviceTagsService from "../services/WbotServices/GetDeviceTagsService"
 import GetDeviceLabelsService from "../services/WbotServices/GetDeviceLabelsService";
 import ShowBaileysService from "../services/BaileysServices/ShowBaileysService";
 import { getLabels, getAllChatLabels } from "../libs/labelCache";
+import { 
+  isLid, 
+  resolveLidToRealNumber, 
+  mergeDuplicateLidContacts,
+  findAndMergeLidDuplicates 
+} from "../services/ContactServices/ResolveLidToRealNumber";
 import ForceAppStateSyncService from "../services/WbotServices/ForceAppStateSyncService";
 import { getWbot } from "../libs/wbot";
 import GetDeviceContactsService from "../services/WbotServices/GetDeviceContactsService";
@@ -1582,6 +1588,122 @@ export const bulkRefreshAvatars = async (req: AuthenticatedRequest, res: Respons
     return res.status(200).json({ message: "Avatares atualizados com sucesso" });
   } catch (error) {
     return res.status(500).json({ error: "Erro ao atualizar avatares" });
+  }
+};
+
+export const listLidContacts = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+
+  try {
+    const lidContacts = await Contact.findAll({
+      where: {
+        companyId,
+        number: {
+          [Op.like]: "%@lid"
+        }
+      },
+      attributes: ["id", "number", "name", "createdAt"],
+      order: [["createdAt", "DESC"]]
+    });
+
+    return res.status(200).json({
+      count: lidContacts.length,
+      contacts: lidContacts
+    });
+  } catch (error) {
+    logger.error("[listLidContacts] Erro:", error);
+    return res.status(500).json({ error: "Erro ao listar contatos LID" });
+  }
+};
+
+export const resolveLid = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { contactId } = req.params;
+  const { companyId } = req.user;
+  const { whatsappId } = req.body;
+
+  try {
+    const contact = await Contact.findOne({
+      where: { id: contactId, companyId }
+    });
+
+    if (!contact) {
+      throw new AppError("Contato não encontrado", 404);
+    }
+
+    if (!isLid(contact.number)) {
+      return res.status(400).json({ error: "Contato não é um LID" });
+    }
+
+    const resolution = await resolveLidToRealNumber(contact.number, whatsappId);
+
+    if (resolution.success && resolution.realNumber) {
+      const realContact = await Contact.findOne({
+        where: {
+          companyId,
+          [Op.or]: [
+            { number: resolution.realNumber },
+            { number: `${resolution.realNumber}@s.whatsapp.net` }
+          ]
+        }
+      });
+
+      if (realContact) {
+        const merged = await mergeDuplicateLidContacts(companyId, contact.id, realContact.id);
+        
+        return res.status(200).json({
+          success: true,
+          merged: true,
+          realContact: {
+            id: realContact.id,
+            name: realContact.name,
+            number: realContact.number
+          }
+        });
+      } else {
+        await contact.update({ number: resolution.realNumber });
+        
+        return res.status(200).json({
+          success: true,
+          merged: false,
+          updated: true,
+          contact: {
+            id: contact.id,
+            name: contact.name,
+            number: resolution.realNumber
+          }
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: false,
+      error: resolution.error
+    });
+  } catch (error) {
+    logger.error("[resolveLid] Erro:", error);
+    return res.status(500).json({ error: error.message || "Erro ao resolver LID" });
+  }
+};
+
+export const resolveLidBatch = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const { whatsappId } = req.body;
+
+  if (!whatsappId) {
+    throw new AppError("whatsappId é obrigatório", 400);
+  }
+
+  try {
+    const processedCount = await findAndMergeLidDuplicates(companyId, whatsappId);
+
+    return res.status(200).json({
+      success: true,
+      processedCount,
+      message: `${processedCount} contatos LID processados`
+    });
+  } catch (error) {
+    logger.error("[resolveLidBatch] Erro:", error);
+    return res.status(500).json({ error: error.message || "Erro ao processar LIDs em lote" });
   }
 };
 

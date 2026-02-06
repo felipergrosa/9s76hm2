@@ -125,9 +125,9 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	// Verificar permissão para editar campos do contato
 	const { hasPermission } = usePermissions();
 	const canEditFields = hasPermission("contacts.edit-fields");
-	const canEditTags = hasPermission("contacts-page:editTags");
-	const canEditWallets = hasPermission("contacts-page:editWallets");
-	const canEditRepresentative = hasPermission("contacts-page:editRepresentative");
+	const canEditTags = hasPermission("contacts.edit-tags");
+	const canEditWallets = hasPermission("contacts.edit-wallets");
+	const canEditRepresentative = hasPermission("contacts.edit-representative");
 
 	const initialState = {
 		clientCode: "",
