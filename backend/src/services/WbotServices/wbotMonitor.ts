@@ -412,101 +412,113 @@ const wbotMonitor = async (
 
     // =================================================================
     // EVENTO LID-MAPPING.UPDATE - Mapeamento LID ↔ PN do Baileys v7
-    // Captura novos mapeamentos de LID para número de telefone
+    // Fluxo simplificado: salva mapeamento + reconcilia contatos PENDING_
     // =================================================================
     wbot.ev.on("lid-mapping.update" as any, async (update: any) => {
       try {
-        if (!update?.mapping) {
-          logger.debug("[wbotMonitor] lid-mapping.update sem mapping", { update });
-          return;
-        }
+        if (!update?.mapping) return;
 
         const LidMapping = require("../../models/LidMapping").default;
         const Contact = require("../../models/Contact").default;
+        const Ticket = require("../../models/Ticket").default;
+        const Message = require("../../models/Message").default;
+        const { Op } = require("sequelize");
         let savedCount = 0;
-        let mergedCount = 0;
+        let reconciledCount = 0;
 
         for (const [lid, pn] of Object.entries(update.mapping)) {
           if (!lid || !pn) continue;
 
           const lidJid = lid.includes("@lid") ? lid : `${lid}@lid`;
-          const pnJid = (pn as string).includes("@s.whatsapp.net") 
-            ? (pn as string) 
-            : `${pn}@s.whatsapp.net`;
           const phoneNumber = (pn as string).replace(/\D/g, "");
 
-          // 1. Salvar mapeamento no banco
+          // 1. Salvar mapeamento verificado
           try {
             await LidMapping.upsert({
               lid: lidJid,
               phoneNumber,
               companyId,
-              whatsappId: whatsapp.id
+              whatsappId: whatsapp.id,
+              verified: true
             });
             savedCount++;
-            logger.info("[wbotMonitor] LID mapping salvo", { lidJid, phoneNumber });
           } catch (e: any) {
             logger.warn("[wbotMonitor] Erro ao salvar LID mapping", { e: e?.message });
           }
 
-          // 2. Tentar mesclar contato LID com contato real
+          // 2. Reconciliar contatos PENDING_ ou com lidJid
           try {
-            const lidContact = await Contact.findOne({
+            // Buscar contato pendente por lidJid
+            const pendingContact = await Contact.findOne({
               where: {
-                remoteJid: lidJid,
                 companyId,
-                isGroup: false
+                isGroup: false,
+                [Op.or]: [
+                  { lidJid: lidJid },
+                  { number: `PENDING_${lidJid}` },
+                  { remoteJid: lidJid }
+                ]
               }
             });
 
-            if (lidContact) {
-              const realContact = await Contact.findOne({
-                where: {
-                  [require("sequelize").Op.or]: [
-                    { canonicalNumber: phoneNumber },
-                    { number: phoneNumber }
-                  ],
-                  companyId,
-                  isGroup: false,
-                  id: { [require("sequelize").Op.ne]: lidContact.id }
-                }
-              });
+            if (!pendingContact) continue;
 
-              if (realContact) {
-                // Mesclar contatos usando serviço dedicado
-                const ContactMergeService = require("../ContactServices/ContactMergeService").default;
-                const result = await ContactMergeService.mergeContacts(
-                  lidContact.id,
-                  realContact.id,
-                  companyId
-                );
-                if (result?.success) {
-                  mergedCount++;
-                  logger.info("[wbotMonitor] Contatos mesclados via lid-mapping.update", {
-                    lidContactId: lidContact.id,
-                    realContactId: realContact.id,
-                    lidJid,
-                    phoneNumber
-                  });
-                }
-              } else {
-                // Atualizar contato LID com número real
-                await lidContact.update({
-                  number: phoneNumber,
-                  canonicalNumber: phoneNumber
-                });
-                logger.info("[wbotMonitor] Contato LID atualizado com número real", {
-                  contactId: lidContact.id,
-                  lidJid,
-                  phoneNumber
-                });
+            // Verificar se já existe contato real com esse número
+            const realContact = await Contact.findOne({
+              where: {
+                companyId,
+                isGroup: false,
+                [Op.or]: [
+                  { canonicalNumber: phoneNumber },
+                  { number: phoneNumber }
+                ],
+                id: { [Op.ne]: pendingContact.id }
               }
+            });
+
+            if (realContact) {
+              // MERGE: transferir tickets e mensagens do pendente para o real
+              await Ticket.update(
+                { contactId: realContact.id },
+                { where: { contactId: pendingContact.id } }
+              );
+              await Message.update(
+                { contactId: realContact.id },
+                { where: { contactId: pendingContact.id } }
+              );
+              // Atualizar lidJid do contato real
+              if (!realContact.lidJid) {
+                await realContact.update({ lidJid: lidJid });
+              }
+              // Remover contato fantasma
+              await pendingContact.destroy();
+              reconciledCount++;
+              logger.info("[wbotMonitor] Contato PENDING_ mesclado com contato real", {
+                pendingId: pendingContact.id,
+                realId: realContact.id,
+                lidJid,
+                phoneNumber
+              });
+            } else {
+              // PROMOVER: transformar contato pendente em real
+              await pendingContact.update({
+                number: phoneNumber,
+                canonicalNumber: phoneNumber,
+                remoteJid: `${phoneNumber}@s.whatsapp.net`,
+                lidJid: lidJid
+              });
+              reconciledCount++;
+              logger.info("[wbotMonitor] Contato PENDING_ promovido a real", {
+                contactId: pendingContact.id,
+                lidJid,
+                phoneNumber
+              });
             }
           } catch (mergeErr: any) {
-            logger.warn("[wbotMonitor] Erro ao mesclar contato LID", { 
-              lidJid, 
-              phoneNumber, 
-              err: mergeErr?.message 
+            logger.warn("[wbotMonitor] Erro ao reconciliar contato LID", {
+              lidJid,
+              phoneNumber,
+              err: mergeErr?.message
             });
           }
         }
@@ -514,7 +526,7 @@ const wbotMonitor = async (
         logger.info("[wbotMonitor] lid-mapping.update processado", {
           total: Object.keys(update.mapping).length,
           saved: savedCount,
-          merged: mergedCount
+          reconciled: reconciledCount
         });
       } catch (err: any) {
         logger.error("[wbotMonitor] Erro no lid-mapping.update handler", { err: err?.message });

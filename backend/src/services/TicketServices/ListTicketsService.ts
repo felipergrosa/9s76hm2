@@ -230,10 +230,20 @@ const ListTicketsService = async ({
 
   // Não sobrescrever o filtro específico de campanha definido acima
   if (status && status !== "search" && status !== "campaign") {
-    whereCondition = {
-      ...whereCondition,
-      status: showAll === "true" && status === "pending" ? { [Op.or]: [status, "lgpd"] } : status
-    };
+    // Para grupos, não sobrescrever o whereCondition que já tem filtros específicos (whatsappId)
+    // Nas linhas 132-145 já foi definido o whereCondition para grupos com whatsappId
+    if (status === "group") {
+      // Preservar o whereCondition existente e apenas garantir que status seja "group"
+      whereCondition = {
+        ...whereCondition,
+        status: "group"
+      };
+    } else {
+      whereCondition = {
+        ...whereCondition,
+        status: showAll === "true" && status === "pending" ? { [Op.or]: [status, "lgpd"] } : status
+      };
+    }
   }
 
 

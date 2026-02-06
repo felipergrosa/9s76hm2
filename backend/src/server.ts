@@ -242,5 +242,16 @@ checkOrphanedSessionsCron();
 import { startVerifyContactsJob } from "./jobs/VerifyContactsJob";
 startVerifyContactsJob();
 
+// Job de reconciliação de contatos PENDING_ (LIDs não resolvidos)
+// Roda a cada 60 segundos para resolver contatos cujo mapeamento LID→PN foi descoberto
+import { reconcileAllCompanies } from "./services/ContactResolution/ReconcilePendingContactsJob";
+setInterval(async () => {
+  try {
+    await reconcileAllCompanies();
+  } catch (err) {
+    console.error("[ReconcileJob] Erro no intervalo:", err);
+  }
+}, 60_000);
+
 initIO(server);
 gracefulShutdown(server);

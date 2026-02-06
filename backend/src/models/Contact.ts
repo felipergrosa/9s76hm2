@@ -233,6 +233,13 @@ class Contact extends Model<Contact> {
   @Column
   remoteJid: string;
 
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: true,
+    comment: "LID completo do WhatsApp (ex: 247540473708749@lid). Índice de lookup, nunca identificador primário."
+  })
+  lidJid: string;
+
   @Column
   lgpdAcceptedAt: Date;
 

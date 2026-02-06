@@ -37,6 +37,7 @@ import logger from "../../utils/logger";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
+import { resolveMessageContact, resolveGroupContact } from "../ContactResolution/ContactResolverService";
 import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
 import { debounce } from "../../helpers/Debounce";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
@@ -1528,152 +1529,17 @@ const verifyContact = async (
       debugLog("[verifyContact] Erro ao buscar contato por número LID", { err: err?.message });
     }
 
-    // 8. ESTRATÉGIA CRÍTICA PARA MENSAGENS fromMe: Buscar ticket recente na mesma conexão
-    // Quando enviamos mensagem pelo celular, o remoteJid vem como LID do destinatário.
-    // Se existe um ticket MUITO recente (últimos 2 minutos) na mesma conexão,
-    // provavelmente é o mesmo chat e podemos usar o contato desse ticket.
-    // NOTA: Para fromMe, o pushName é do REMETENTE, não do destinatário, então não usar para filtrar
-    try {
-      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
-      
-      // Buscar tickets abertos/pendentes recentes na mesma conexão
-      // Usar janela curta (2 min) para reduzir falsos positivos
-      const recentTickets = await Ticket.findAll({
-        where: {
-          whatsappId: wbot.id,
-          companyId,
-          updatedAt: { [Op.gte]: twoMinutesAgo },
-          status: { [Op.in]: ["open", "pending"] }
-        },
-        include: [{
-          model: Contact,
-          as: "contact",
-          where: { isGroup: false },
-          required: true
-        }],
-        order: [["updatedAt", "DESC"]],
-        limit: 5 // Limitar para evitar queries pesadas
-      });
-
-      // Filtrar apenas contatos com número válido (não-LID)
-      for (const ticket of recentTickets) {
-        if (!ticket.contact) continue;
-        
-        const contactNumber = ticket.contact.number?.replace(/\D/g, "") || "";
-        const isValidNumber = contactNumber.length >= 10 && contactNumber.length <= 13;
-        
-        // Também verificar se o número não contém "lid"
-        const isNotLid = !ticket.contact.number?.toLowerCase().includes("lid") &&
-                         !ticket.contact.remoteJid?.includes("@lid");
-        
-        if (isValidNumber && isNotLid) {
-          // Encontramos um ticket recente com contato válido!
-          // Atualizar remoteJid do contato existente para incluir o LID
-          if (ticket.contact.remoteJid !== normalizedJid) {
-            await ticket.contact.update({ remoteJid: normalizedJid });
-          }
-          
-          // Persistir mapeamento LID → número para uso futuro
-          try {
-            const LidMapping = require("../../models/LidMapping").default;
-            await LidMapping.upsert({
-              lid: normalizedJid,
-              phoneNumber: ticket.contact.number,
-              companyId,
-              whatsappId: wbot.id,
-              source: "recent_ticket_match",
-              confidence: 0.85
-            });
-          } catch (e) { /* ignore */ }
-          
-          logger.info("[verifyContact] LID resolvido via ticket recente na mesma conexão", {
-            lid: normalizedJid,
-            contactId: ticket.contact.id,
-            contactNumber: ticket.contact.number,
-            contactName: ticket.contact.name,
-            ticketId: ticket.id,
-            ticketStatus: ticket.status,
-            ticketsAnalisados: recentTickets.length
-          });
-          
-          return ticket.contact;
-        }
-      }
-      
-      // Se não encontrou por tickets, registrar debug
-      if (recentTickets.length > 0) {
-        debugLog("[verifyContact] Tickets recentes encontrados mas nenhum com contato válido", {
-          ticketsCount: recentTickets.length,
-          tickets: recentTickets.map(t => ({
-            id: t.id,
-            contactNumber: t.contact?.number,
-            contactName: t.contact?.name
-          }))
-        });
-      } else {
-        // Se não encontrou nenhum ticket, esperar 500ms e tentar novamente
-        // Isso ajuda quando a mensagem fromMe chega quase ao mesmo tempo que a mensagem recebida
-        debugLog("[verifyContact] Nenhum ticket recente, aguardando 500ms para retry...");
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Tentar novamente após a espera
-        const retryTickets = await Ticket.findAll({
-          where: {
-            whatsappId: wbot.id,
-            companyId,
-            updatedAt: { [Op.gte]: twoMinutesAgo },
-            status: { [Op.in]: ["open", "pending"] }
-          },
-          include: [{
-            model: Contact,
-            as: "contact",
-            where: { isGroup: false },
-            required: true
-          }],
-          order: [["updatedAt", "DESC"]],
-          limit: 3
-        });
-        
-        for (const ticket of retryTickets) {
-          if (!ticket.contact) continue;
-          
-          const contactNumber = ticket.contact.number?.replace(/\D/g, "") || "";
-          const isValidNumber = contactNumber.length >= 10 && contactNumber.length <= 13;
-          const isNotLid = !ticket.contact.number?.toLowerCase().includes("lid") &&
-                           !ticket.contact.remoteJid?.includes("@lid");
-          
-          if (isValidNumber && isNotLid) {
-            if (ticket.contact.remoteJid !== normalizedJid) {
-              await ticket.contact.update({ remoteJid: normalizedJid });
-            }
-            
-            try {
-              const LidMapping = require("../../models/LidMapping").default;
-              await LidMapping.upsert({
-                lid: normalizedJid,
-                phoneNumber: ticket.contact.number,
-                companyId,
-                whatsappId: wbot.id,
-                source: "recent_ticket_retry",
-                confidence: 0.8
-              });
-            } catch (e) { /* ignore */ }
-            
-            logger.info("[verifyContact] LID resolvido via ticket recente (RETRY após 500ms)", {
-              lid: normalizedJid,
-              contactId: ticket.contact.id,
-              contactNumber: ticket.contact.number,
-              contactName: ticket.contact.name,
-              ticketId: ticket.id
-            });
-            
-            return ticket.contact;
-          }
-        }
-      }
-    } catch (err: any) {
-      debugLog("[verifyContact] Erro ao buscar ticket recente", { err: err?.message });
-    }
+    // 8. ESTRATÉGIA DE TICKET RECENTE - DESATIVADA
+    // Esta estratégia foi desativada porque estava causando associações erradas.
+    // Quando não conseguia resolver o LID, o sistema pegava QUALQUER ticket recente
+    // e associava a mensagem ao contato errado.
+    // 
+    // Em vez disso, vamos criar um contato temporário com o LID e deixar
+    // o evento lid-mapping.update atualizar quando o mapeamento for descoberto.
+    debugLog("[verifyContact] Estratégia de ticket recente DESATIVADA - evita associações erradas", {
+      lid: normalizedJid,
+      pushName: msgContact.name
+    });
 
     // SOLUÇÃO: Criar contato temporário com LID quando não resolver
     // Isso permite processar a mensagem e o contato será atualizado quando o mapeamento for descoberto
@@ -4981,7 +4847,6 @@ const handleMessage = async (
   }
 
   try {
-    let msgContact: IMe;
     let groupContact: Contact | undefined;
     let queueId: number = null;
     let tagsId: number = null;
@@ -5089,7 +4954,6 @@ const handleMessage = async (
     if (msg.key.fromMe) {
       if (/\u200e/.test(bodyMessage)) return;
 
-
       if (
         !hasMedia &&
         msgType !== "conversation" &&
@@ -5103,9 +4967,6 @@ const handleMessage = async (
         msgType !== "hydratedContentText"
       )
         return;
-      msgContact = await getContactMessage(msg, wbot);
-    } else {
-      msgContact = await getContactMessage(msg, wbot);
     }
 
     const isGroup = msg.key.remoteJid?.endsWith("@g.us");
@@ -5122,39 +4983,20 @@ const handleMessage = async (
     // NOVA FUNCIONALIDADE: Verificar se captura automática de contatos de grupos está habilitada
     const autoCaptureGroupContacts = settings?.autoCaptureGroupContacts === "enabled";
 
+    // ═══════════════════════════════════════════════════════════════
+    // NOVO FLUXO: ContactResolverService (3 camadas limpas)
+    // Substitui getContactMessage + verifyContact (~800 linhas)
+    // ═══════════════════════════════════════════════════════════════
+
     if (isGroup) {
-      const groupJid = msg.key.remoteJid;
-      let groupSubject = getFallbackGroupName(groupJid);
-
-      const cachedMetadata = getGroupMetadataFromCache(groupJid);
-      if (cachedMetadata) {
-        groupSubject = cachedMetadata.subject || groupSubject;
-      } else if (!shouldBackoffGroupMetadata(groupJid)) {
-        try {
-          const grupoMeta = await wbot.groupMetadata(groupJid);
-          groupSubject = grupoMeta?.subject || groupSubject;
-          setGroupMetadataCache(groupJid, groupSubject);
-        } catch (error) {
-          if (isRateLimitError(error)) {
-            registerGroupMetadataBackoff(groupJid);
-            logger.warn(
-              { err: error, groupJid },
-              "[wbotMessageListener] groupMetadata rate limited, utilizando fallback"
-            );
-          } else {
-            logger.error(
-              { err: error, groupJid },
-              "[wbotMessageListener] Falha ao buscar groupMetadata"
-            );
-          }
-        }
+      // Resolver contato do grupo (o grupo em si)
+      try {
+        groupContact = await resolveGroupContact(msg, wbot, companyId);
+      } catch (error) {
+        logger.error({ err: error, groupJid: msg.key.remoteJid },
+          "[wbotMessageListener] Falha ao resolver contato do grupo");
+        return;
       }
-
-      const msgGroupContact = {
-        id: groupJid,
-        name: groupSubject
-      };
-      groupContact = await verifyContact(msgGroupContact, wbot, companyId, userId);
     }
 
     // CONTROLE DE CAPTURA AUTOMÁTICA DE CONTATOS DE GRUPOS
@@ -5162,13 +5004,11 @@ const handleMessage = async (
 
     if (isGroup && !autoCaptureGroupContacts) {
       // Se captura automática está DESABILITADA, apenas buscar contato existente
-      // NÃO criar novo contato automaticamente
       const participantJid = msg.participant || msg.key.participant;
       if (participantJid) {
         const normalizedParticipantJid = jidNormalizedUser(participantJid);
         const participantNumber = normalizedParticipantJid.replace(/\D/g, "");
 
-        // Buscar apenas se já existe
         contact = await Contact.findOne({
           where: {
             companyId,
@@ -5177,20 +5017,14 @@ const handleMessage = async (
         });
 
         if (!contact) {
-          logger.info("[handleMessage] Captura automática de contatos de grupos DESABILITADA. Participante não cadastrado, ignorando mensagem.", {
+          logger.info("[handleMessage] Captura automática DESABILITADA. Participante não cadastrado, ignorando.", {
             participantJid,
             participantNumber,
             groupJid: msg.key.remoteJid,
             companyId
           });
-          return; // Não processar mensagem de participante não cadastrado
+          return;
         }
-
-        logger.info("[handleMessage] Participante de grupo já cadastrado, processando mensagem.", {
-          contactId: contact.id,
-          contactNumber: contact.number,
-          groupJid: msg.key.remoteJid
-        });
       } else {
         logger.warn("[handleMessage] Mensagem de grupo sem participant, ignorando.", {
           groupJid: msg.key.remoteJid
@@ -5198,15 +5032,21 @@ const handleMessage = async (
         return;
       }
     } else {
-      // Captura automática HABILITADA ou não é grupo: comportamento normal
-      contact = await verifyContact(msgContact, wbot, companyId);
+      // ═══════════════════════════════════════════════════════════
+      // RESOLUÇÃO UNIFICADA via ContactResolverService
+      // Camada 1: Extração (pura, sem I/O)
+      // Camada 2: Resolução (busca por canonical → lidJid → LidMapping)
+      // Camada 3: Criação (só se resolução retorna null, com PENDING_ para LIDs)
+      // ═══════════════════════════════════════════════════════════
+      const resolution = await resolveMessageContact(msg, wbot, companyId);
+      contact = resolution?.contact || null;
 
       // Validação de segurança: se contact for null, interrompe processamento
       if (!contact) {
-        logger.error('[handleMessage] ERROR: verifyContact retornou null', {
-          msgContactId: msgContact?.id,
+        logger.error('[handleMessage] ERROR: resolveMessageContact retornou null', {
+          remoteJid: msg.key.remoteJid,
           isGroup,
-          autoCaptureGroupContacts
+          isFromMe: msg.key.fromMe
         });
         return;
       }
@@ -6169,9 +6009,8 @@ const verifyCampaignMessageAndCloseTicket = async (
   const isCampaign = /\u200c/.test(body);
 
   if (message.key.fromMe && isCampaign) {
-    let msgContact: IMe;
-    msgContact = await getContactMessage(message, wbot);
-    const contact = await verifyContact(msgContact, wbot, companyId);
+    const campaignResolution = await resolveMessageContact(message, wbot, companyId);
+    const contact = campaignResolution?.contact;
 
     const messageRecord = await Message.findOne({
       where: {

@@ -52,7 +52,7 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
-const NotificationsPopOver = (volume) => {
+const NotificationsPopOver = ({ volume = 1 }) => {
   const classes = useStyles();
   const theme = useTheme();
 
