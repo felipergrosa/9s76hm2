@@ -85,7 +85,7 @@ const NotificationsPopOver = (volume) => {
     showAll: user.allTicket === "enable" ? "true" : "false"
   });
 
-  const [play] = useSound(alertSound, volume);
+  const [play] = useSound(alertSound, { volume });
   const soundAlertRef = useRef();
 
   const historyRef = useRef(history);

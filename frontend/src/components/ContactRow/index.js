@@ -118,7 +118,7 @@ const ContactRow = memo(({
         <div className="flex items-center justify-center gap-1.5">
           <Tooltip {...CustomTooltipProps} title="Enviar mensagem pelo WhatsApp">
             <button onClick={() => onSendMessage(contact)} className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300">
-              <WhatsApp className="w-4 h-4" />
+              <WhatsApp className="w-6 h-6" />
             </button>
           </Tooltip>
           <Tooltip {...CustomTooltipProps} title="Editar contato">
