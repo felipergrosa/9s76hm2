@@ -68,6 +68,54 @@ module.exports = {
         }
       ];
 
+      // Otimização de code splitting para reduzir bundle principal
+      if (process.env.NODE_ENV === 'production') {
+        webpackConfig.optimization = {
+          ...webpackConfig.optimization,
+          splitChunks: {
+            chunks: 'all',
+            maxInitialRequests: 25,
+            minSize: 20000,
+            cacheGroups: {
+              // Vendors principais (React, Material-UI)
+              vendor: {
+                test: /[\\/]node_modules[\\/](react|react-dom|react-router|@material-ui|@mui)[\\/]/,
+                name: 'vendor',
+                chunks: 'all',
+                priority: 20,
+              },
+              // Bibliotecas pesadas separadas
+              charts: {
+                test: /[\\/]node_modules[\\/](chart\.js|recharts|react-chartjs)[\\/]/,
+                name: 'charts',
+                chunks: 'all',
+                priority: 15,
+              },
+              pdf: {
+                test: /[\\/]node_modules[\\/](react-pdf|pdfjs-dist|html2pdf)[\\/]/,
+                name: 'pdf',
+                chunks: 'all',
+                priority: 15,
+              },
+              editor: {
+                test: /[\\/]node_modules[\\/](draft-js|react-draft|draftjs)[\\/]/,
+                name: 'editor',
+                chunks: 'all',
+                priority: 15,
+              },
+              // Resto dos node_modules
+              commons: {
+                test: /[\\/]node_modules[\\/]/,
+                name: 'commons',
+                chunks: 'all',
+                priority: 10,
+                reuseExistingChunk: true,
+              },
+            },
+          },
+        };
+      }
+
       return webpackConfig;
     }
   }

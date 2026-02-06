@@ -4,17 +4,18 @@
 <head>
 	<!-- <title></title> -->
 	<!-- <title>%REACT_APP_NAME_SYSTEM%</title> -->
+	<meta name="theme-color" content="#000000" />
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+	<!-- Preconnect para fontes (melhora LCP) -->
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<!-- Fontes com display=swap para não bloquear renderização -->
 	<link rel="stylesheet"
-		href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" />
+		href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" />
 	<link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
 	<link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
 	<link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-	<meta name="theme-color" content="#000000" />
-	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
-	<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-	<meta http-equiv="Pragma" content="no-cache">
-	<meta http-equiv="Expires" content="0">
-	<script src="https://cdn.tailwindcss.com"></script>
+	<!-- TailwindCSS removido do CDN - já compilado no build -->
 	<style>
 		#splash-screen {
 			position: fixed;
