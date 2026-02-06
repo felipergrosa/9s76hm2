@@ -113,7 +113,7 @@ import VerifyCurrentSchedule from "../CompanyService/VerifyCurrentSchedule";
 import Campaign from "../../models/Campaign";
 import QueueAutoFileService from "../QueueServices/QueueAutoFileService";
 import CampaignShipping from "../../models/CampaignShipping";
-import { Op, fn, col, where as seqWhere } from "sequelize";
+import { Op } from "sequelize";
 import { campaignQueue, parseToMilliseconds, randomValue } from "../../queues";
 import User from "../../models/User";
 import { sayChatbot } from "./ChatBotListener";
@@ -1461,6 +1461,34 @@ const verifyContact = async (
       }
     }
 
+    // 7. ÚLTIMA VERIFICAÇÃO: Buscar contato existente pelo número LID (pode já ter sido criado antes)
+    // Se já existe um contato com esse número LID, reutilizá-lo ao invés de criar duplicado
+    try {
+      const existingByLidNumber = await Contact.findOne({
+        where: {
+          number: cleaned,
+          companyId,
+          isGroup: false
+        }
+      });
+
+      if (existingByLidNumber) {
+        // Atualizar remoteJid se não estiver preenchido
+        if (!existingByLidNumber.remoteJid) {
+          await existingByLidNumber.update({ remoteJid: normalizedJid });
+        }
+        logger.info("[verifyContact] LID - usando contato existente pelo número", {
+          lid: normalizedJid,
+          contactId: existingByLidNumber.id,
+          contactNumber: existingByLidNumber.number,
+          contactName: existingByLidNumber.name
+        });
+        return existingByLidNumber;
+      }
+    } catch (err: any) {
+      debugLog("[verifyContact] Erro ao buscar contato por número LID", { err: err?.message });
+    }
+
     // SOLUÇÃO: Criar contato temporário com LID quando não resolver
     // Isso permite processar a mensagem e o contato será atualizado quando o mapeamento for descoberto
     logger.warn("[verifyContact] LID não resolvido - criando contato temporário com LID", {
@@ -1469,7 +1497,7 @@ const verifyContact = async (
       cleaned,
       cleanedLength: cleaned.length,
       companyId,
-      metodosTentados: ["LID direto", "pushName", "número no LID", "store.contacts", "wbot.onWhatsApp", "busca parcial"]
+      metodosTentados: ["LID direto", "pushName", "número no LID", "store.contacts", "wbot.onWhatsApp", "busca parcial", "tickets existentes"]
     });
 
     // Usar pushName como nome, ou "Contato LID" se não tiver
