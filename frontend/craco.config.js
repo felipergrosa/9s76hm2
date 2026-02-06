@@ -1,6 +1,14 @@
 const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
 
 module.exports = {
+  babel: {
+    plugins: [
+      // Remove console.log em produção para melhor performance
+      ...(process.env.NODE_ENV === 'production' 
+        ? [['transform-remove-console', { exclude: ['error', 'warn'] }]] 
+        : [])
+    ]
+  },
   style: {
     postcss: {
       plugins: [

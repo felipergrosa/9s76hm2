@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, lazy, Suspense } from 'react';
 import {
     Button,
     Dialog,
@@ -9,15 +9,16 @@ import {
     TextField,
     Card,
     CardContent,
+    CircularProgress,
 } from '@mui/material';
 import { Cancel, Search, Send, SkipNext, SkipPrevious } from '@material-ui/icons';
 import AudioModal from '../AudioModal';
-import { Document, Page, pdfjs } from 'react-pdf';
 import { makeStyles } from "@material-ui/core/styles";
 import { grey } from '@material-ui/core/colors';
 import { InputAdornment, InputBase } from '@material-ui/core';
 
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+// Lazy load react-pdf apenas quando necessário (PDFs são menos comuns)
+const PDFPreview = lazy(() => import('./PDFPreview'));
 
 const useStyles = makeStyles((theme) => ({
     root: {
@@ -48,7 +49,6 @@ const MessageUploadMedias = ({ isOpen, files, onClose, onSend, onCancelSelection
     const classes = useStyles();
     const [currentIndex, setCurrentIndex] = useState(0);
     const [captions, setCaptions] = useState(files.map(() => ''));
-    const [numPages, setNumPages] = React.useState(null);
     const [componentMounted, setComponentMounted] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
     const [firstTyping, setFirstTyping] = useState(false);
@@ -57,10 +57,6 @@ const MessageUploadMedias = ({ isOpen, files, onClose, onSend, onCancelSelection
         setFirstTyping(true);
         setComponentMounted(true);
     }, []);
-
-    const onDocumentLoadSuccess = ({ numPages }) => {
-        setNumPages(numPages);
-    };
 
     const handleClose = () => {
         onClose();
@@ -148,35 +144,13 @@ const MessageUploadMedias = ({ isOpen, files, onClose, onSend, onCancelSelection
                 );
             } else if (currentFile.type === 'application/pdf') {
                 return (
-                    <>
-                        <div
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                height: '400px'
-                            }}
-                            className={classes.modal}
-
-                        >
-                            <Document file={URL.createObjectURL(currentFile)} onLoadSuccess={onDocumentLoadSuccess} >
-                                <Page pageNumber={1}
-                                    width={200}
-                                    height={300}
-                                />
-                            </Document>
+                    <Suspense fallback={
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px' }}>
+                            <CircularProgress />
                         </div>
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                        }}
-                            className={classes.modal}
-
-                        >
-                            <Typography variant="h6">{currentFile.name}</Typography>
-                        </div>
-                    </>
+                    }>
+                        <PDFPreview file={currentFile} className={classes.modal} />
+                    </Suspense>
                 );
             } else if (currentFile.type.startsWith('video')) {
                 return (

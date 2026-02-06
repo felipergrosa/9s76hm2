@@ -127,6 +127,7 @@
   },
   "devDependencies": {
     "@craco/craco": "^7.1.0",
+    "babel-plugin-transform-remove-console": "^6.9.4",
     "@types/adm-zip": "^0.5.5",
     "autoprefixer": "^10.4.21",
     "node-polyfill-webpack-plugin": "^4.1.0",
