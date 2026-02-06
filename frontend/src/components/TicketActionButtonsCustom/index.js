@@ -363,10 +363,17 @@ const TicketActionButtonsCustom = ({ ticket
                 userId: user?.id,
             });
             if (otherTicket.data.id !== ticket.id) {
-                if (otherTicket.data.userId !== user?.id) {
+                // Verificar se posso acessar: meu ticket ou de usuário que gerencio
+                const managedIds = (user?.managedUserIds || []).map(id => Number(id));
+                const canAccess = otherTicket.data.userId === user?.id || 
+                                  user?.profile === "admin" || 
+                                  user?.super ||
+                                  managedIds.includes(Number(otherTicket.data.userId));
+                
+                if (!canAccess) {
                     setOpenAlert(true)
-                    setUserTicketOpen(otherTicket.data.user.name)
-                    setQueueTicketOpen(otherTicket.data.queue.name)
+                    setUserTicketOpen(otherTicket.data.user?.name || "")
+                    setQueueTicketOpen(otherTicket.data.queue?.name || "")
                     setTabOpen(otherTicket.isGroup ? "group" : "open")
                 } else {
                     setLoading(false);

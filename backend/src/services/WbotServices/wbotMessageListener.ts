@@ -1490,6 +1490,153 @@ const verifyContact = async (
       debugLog("[verifyContact] Erro ao buscar contato por número LID", { err: err?.message });
     }
 
+    // 8. ESTRATÉGIA CRÍTICA PARA MENSAGENS fromMe: Buscar ticket recente na mesma conexão
+    // Quando enviamos mensagem pelo celular, o remoteJid vem como LID do destinatário.
+    // Se existe um ticket MUITO recente (últimos 2 minutos) na mesma conexão,
+    // provavelmente é o mesmo chat e podemos usar o contato desse ticket.
+    // NOTA: Para fromMe, o pushName é do REMETENTE, não do destinatário, então não usar para filtrar
+    try {
+      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+      
+      // Buscar tickets abertos/pendentes recentes na mesma conexão
+      // Usar janela curta (2 min) para reduzir falsos positivos
+      const recentTickets = await Ticket.findAll({
+        where: {
+          whatsappId: wbot.id,
+          companyId,
+          updatedAt: { [Op.gte]: twoMinutesAgo },
+          status: { [Op.in]: ["open", "pending"] }
+        },
+        include: [{
+          model: Contact,
+          as: "contact",
+          where: { isGroup: false },
+          required: true
+        }],
+        order: [["updatedAt", "DESC"]],
+        limit: 5 // Limitar para evitar queries pesadas
+      });
+
+      // Filtrar apenas contatos com número válido (não-LID)
+      for (const ticket of recentTickets) {
+        if (!ticket.contact) continue;
+        
+        const contactNumber = ticket.contact.number?.replace(/\D/g, "") || "";
+        const isValidNumber = contactNumber.length >= 10 && contactNumber.length <= 13;
+        
+        // Também verificar se o número não contém "lid"
+        const isNotLid = !ticket.contact.number?.toLowerCase().includes("lid") &&
+                         !ticket.contact.remoteJid?.includes("@lid");
+        
+        if (isValidNumber && isNotLid) {
+          // Encontramos um ticket recente com contato válido!
+          // Atualizar remoteJid do contato existente para incluir o LID
+          if (ticket.contact.remoteJid !== normalizedJid) {
+            await ticket.contact.update({ remoteJid: normalizedJid });
+          }
+          
+          // Persistir mapeamento LID → número para uso futuro
+          try {
+            const LidMapping = require("../../models/LidMapping").default;
+            await LidMapping.upsert({
+              lid: normalizedJid,
+              phoneNumber: ticket.contact.number,
+              companyId,
+              whatsappId: wbot.id,
+              source: "recent_ticket_match",
+              confidence: 0.85
+            });
+          } catch (e) { /* ignore */ }
+          
+          logger.info("[verifyContact] LID resolvido via ticket recente na mesma conexão", {
+            lid: normalizedJid,
+            contactId: ticket.contact.id,
+            contactNumber: ticket.contact.number,
+            contactName: ticket.contact.name,
+            ticketId: ticket.id,
+            ticketStatus: ticket.status,
+            ticketsAnalisados: recentTickets.length
+          });
+          
+          return ticket.contact;
+        }
+      }
+      
+      // Se não encontrou por tickets, registrar debug
+      if (recentTickets.length > 0) {
+        debugLog("[verifyContact] Tickets recentes encontrados mas nenhum com contato válido", {
+          ticketsCount: recentTickets.length,
+          tickets: recentTickets.map(t => ({
+            id: t.id,
+            contactNumber: t.contact?.number,
+            contactName: t.contact?.name
+          }))
+        });
+      } else {
+        // Se não encontrou nenhum ticket, esperar 500ms e tentar novamente
+        // Isso ajuda quando a mensagem fromMe chega quase ao mesmo tempo que a mensagem recebida
+        debugLog("[verifyContact] Nenhum ticket recente, aguardando 500ms para retry...");
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Tentar novamente após a espera
+        const retryTickets = await Ticket.findAll({
+          where: {
+            whatsappId: wbot.id,
+            companyId,
+            updatedAt: { [Op.gte]: twoMinutesAgo },
+            status: { [Op.in]: ["open", "pending"] }
+          },
+          include: [{
+            model: Contact,
+            as: "contact",
+            where: { isGroup: false },
+            required: true
+          }],
+          order: [["updatedAt", "DESC"]],
+          limit: 3
+        });
+        
+        for (const ticket of retryTickets) {
+          if (!ticket.contact) continue;
+          
+          const contactNumber = ticket.contact.number?.replace(/\D/g, "") || "";
+          const isValidNumber = contactNumber.length >= 10 && contactNumber.length <= 13;
+          const isNotLid = !ticket.contact.number?.toLowerCase().includes("lid") &&
+                           !ticket.contact.remoteJid?.includes("@lid");
+          
+          if (isValidNumber && isNotLid) {
+            if (ticket.contact.remoteJid !== normalizedJid) {
+              await ticket.contact.update({ remoteJid: normalizedJid });
+            }
+            
+            try {
+              const LidMapping = require("../../models/LidMapping").default;
+              await LidMapping.upsert({
+                lid: normalizedJid,
+                phoneNumber: ticket.contact.number,
+                companyId,
+                whatsappId: wbot.id,
+                source: "recent_ticket_retry",
+                confidence: 0.8
+              });
+            } catch (e) { /* ignore */ }
+            
+            logger.info("[verifyContact] LID resolvido via ticket recente (RETRY após 500ms)", {
+              lid: normalizedJid,
+              contactId: ticket.contact.id,
+              contactNumber: ticket.contact.number,
+              contactName: ticket.contact.name,
+              ticketId: ticket.id
+            });
+            
+            return ticket.contact;
+          }
+        }
+      }
+    } catch (err: any) {
+      debugLog("[verifyContact] Erro ao buscar ticket recente", { err: err?.message });
+    }
+
     // SOLUÇÃO: Criar contato temporário com LID quando não resolver
     // Isso permite processar a mensagem e o contato será atualizado quando o mapeamento for descoberto
     logger.warn("[verifyContact] LID não resolvido - criando contato temporário com LID", {
@@ -1498,7 +1645,7 @@ const verifyContact = async (
       cleaned,
       cleanedLength: cleaned.length,
       companyId,
-      metodosTentados: ["LID direto", "pushName", "número no LID", "store.contacts", "wbot.onWhatsApp", "busca parcial", "tickets existentes"]
+      metodosTentados: ["LID direto", "pushName", "número no LID", "store.contacts", "wbot.onWhatsApp", "busca parcial", "tickets existentes", "ticket recente por conexão/nome"]
     });
 
     // Usar pushName como nome, ou "Contato LID" se não tiver

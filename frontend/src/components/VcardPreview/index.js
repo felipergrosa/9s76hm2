@@ -144,7 +144,14 @@ const VcardPreview = ({ contact, numbers, queueId, whatsappId }) => {
                 // Compatibilidade com backend antigo: error como JSON string com dados do ticket
                 if (typeof errorField === "string" && errorField.trim().startsWith("{")) {
                     const ticket = JSON.parse(errorField);
-                    if (ticket.userId !== user?.id) {
+                    // Verificar se posso acessar: meu ticket ou de usuário que gerencio
+                    const managedIds = (user?.managedUserIds || []).map(id => Number(id));
+                    const canAccess = ticket.userId === user?.id || 
+                                      user?.profile === "admin" || 
+                                      user?.super ||
+                                      managedIds.includes(Number(ticket.userId));
+                    
+                    if (!canAccess) {
                         setOpenAlert(true);
                         setUserTicketOpen(ticket?.user?.name);
                         setQueueTicketOpen(ticket?.queue?.name);

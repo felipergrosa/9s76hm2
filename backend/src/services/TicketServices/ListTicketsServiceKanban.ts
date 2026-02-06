@@ -322,6 +322,23 @@ const ListTicketsServiceKanban = async ({
     }
   }
 
+  // REGRA PRINCIPAL: Ticket em atendimento (open/group com userId) só pode ser visto pelo atendente
+  // Independente de ser admin, supervisor ou estar na carteira
+  if (userId) {
+    whereCondition = {
+      [Op.and]: [
+        whereCondition,
+        {
+          [Op.or]: [
+            { userId: Number(userId) }, // Meus tickets (sempre vejo os meus)
+            { userId: null }, // Tickets sem atribuição (pendentes)
+            { status: { [Op.notIn]: ["open", "group"] } } // Tickets fechados/outros (qualquer um pode ver)
+          ]
+        }
+      ]
+    } as any;
+  }
+
   const { count, rows: tickets } = await Ticket.findAndCountAll({
     where: whereCondition,
     include: includeCondition,

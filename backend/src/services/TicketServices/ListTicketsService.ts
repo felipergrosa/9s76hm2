@@ -594,6 +594,21 @@ const ListTicketsService = async ({
     } as any;
   }
 
+  // 3. REGRA PRINCIPAL: Ticket em atendimento (open/group com userId) só pode ser visto pelo atendente
+  // Independente de ser admin, supervisor ou estar na carteira
+  whereCondition = {
+    [Op.and]: [
+      whereCondition,
+      {
+        [Op.or]: [
+          { userId: userId }, // Meus tickets (sempre vejo os meus)
+          { userId: null }, // Tickets sem atribuição (pendentes)
+          { status: { [Op.notIn]: ["open", "group"] } } // Tickets fechados/outros (qualquer um pode ver)
+        ]
+      }
+    ]
+  } as any;
+
   // Limite/paginação: para showAll === "true", retornamos até 500 registros (otimizado para performance)
   const limit = showAll === "true" ? 500 : 40;
   const offset = showAll === "true" ? 0 : limit * (+pageNumber - 1);

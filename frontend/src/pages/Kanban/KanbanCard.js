@@ -258,7 +258,8 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
         </IconButton>
       </Tooltip>
 
-      {(user.profile === "admin" || ticket.userId === user.id) && (
+      {/* Só o atendente pode fechar o ticket - ou se não tiver atendente (pendente) */}
+      {(ticket.userId === user.id || !ticket.userId) && (
         <Tooltip title="Fechar Ticket">
           <IconButton className={classes.closeBtn} size="small" onClick={(e) => {
             e.stopPropagation();

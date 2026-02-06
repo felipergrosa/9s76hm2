@@ -285,11 +285,40 @@ const MomentsUser = ({ onPanStart }) => {
     };
   }, [tickets]);
 
+  // REGRA PRINCIPAL: Ticket em atendimento só pode ser visto/acessado pelo atendente
+  const canAccessTicket = (ticket) => {
+    // Se ticket está em atendimento (open/group) E tem userId atribuído
+    // SOMENTE o atendente pode ver - independente de ser admin/supervisor/carteira
+    const isBeingAttended = (ticket?.status === "open" || ticket?.status === "group") && ticket?.userId;
+    
+    if (isBeingAttended) {
+      // Só o próprio atendente pode ver/acessar
+      return ticket?.userId === user.id;
+    }
+    
+    // Tickets pendentes/fechados: admin/super podem ver
+    if (user.profile === "admin" || user.super) return true;
+    
+    // Ticket sem dono (pendente) - verificar carteira
+    if (!ticket.userId) {
+      // Se não tenho restrição de carteira, posso ver pendentes
+      if (!user.allowedContactTags || user.allowedContactTags.length === 0) return true;
+      
+      // Verificar se contato tem tag da minha carteira
+      const contactTags = ticket.contact?.tags || [];
+      if (contactTags.length === 0) return true; // Sem tags = todos veem
+      
+      return contactTags.some(tag => user.allowedContactTags.includes(tag.id));
+    }
+    
+    return false;
+  };
+
   const renderTicketCard = (ticket) => (
     <Card key={ticket.id} className={classes.ticketCard}>
       <CardActionArea
         onClick={() => {
-          if (user.profile === "admin" || user.super || ticket.userId === user.id) {
+          if (canAccessTicket(ticket)) {
             history.push(`/tickets/${ticket.uuid}`);
           }
         }}
@@ -317,7 +346,7 @@ const MomentsUser = ({ onPanStart }) => {
                 </div>
               </div>
             </div>
-            {(user.profile === "admin" || user.super || ticket.userId === user.id) && (
+            {canAccessTicket(ticket) && (
               <Tooltip title="Visualizar">
                 <Visibility className={classes.actionButton} fontSize="small" />
               </Tooltip>
