@@ -238,5 +238,9 @@ startWhatsAppHealthCheckJob(); // Verifica a cada 2 minutos e reconecta automati
 // Inicializa cron de verificação de sessões órfãs (HA para Replicas)
 checkOrphanedSessionsCron();
 
+// Inicializa job de verificação de contatos e grupos (diário às 03:00)
+import { startVerifyContactsJob } from "./jobs/VerifyContactsJob";
+startVerifyContactsJob();
+
 initIO(server);
 gracefulShutdown(server);

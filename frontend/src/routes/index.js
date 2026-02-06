@@ -33,6 +33,7 @@ const PageLoader = () => (
 const Dashboard = lazy(() => import("../pages/Dashboard"));
 const TicketResponsiveContainer = lazy(() => import("../pages/TicketResponsiveContainer"));
 const Contacts = lazy(() => import("../pages/Contacts"));
+const Groups = lazy(() => import("../pages/Groups"));
 const Chat = lazy(() => import("../pages/Chat"));
 
 // Páginas de autenticação (carregadas primeiro)
@@ -148,6 +149,7 @@ const Routes = () => {
                 <Route exact path="/tags" component={Tags} isPrivate />
                 <Route exact path="/contacts" component={Contacts} isPrivate />
                 <Route exact path="/contacts/import" component={ContactImportPage} isPrivate />
+                <Route exact path="/groups" component={Groups} isPrivate />
                 <Route exact path="/helps" component={Helps} isPrivate />
                 <Route exact path="/helps/ai-tutorial" component={AITutorial} isPrivate />
                 <Route exact path="/helps/bot-tutorial" component={BotTutorial} isPrivate />

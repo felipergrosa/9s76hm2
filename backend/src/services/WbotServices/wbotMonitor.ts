@@ -410,6 +410,118 @@ const wbotMonitor = async (
       }
     });
 
+    // =================================================================
+    // EVENTO LID-MAPPING.UPDATE - Mapeamento LID ↔ PN do Baileys v7
+    // Captura novos mapeamentos de LID para número de telefone
+    // =================================================================
+    wbot.ev.on("lid-mapping.update" as any, async (update: any) => {
+      try {
+        if (!update?.mapping) {
+          logger.debug("[wbotMonitor] lid-mapping.update sem mapping", { update });
+          return;
+        }
+
+        const LidMapping = require("../../models/LidMapping").default;
+        const Contact = require("../../models/Contact").default;
+        let savedCount = 0;
+        let mergedCount = 0;
+
+        for (const [lid, pn] of Object.entries(update.mapping)) {
+          if (!lid || !pn) continue;
+
+          const lidJid = lid.includes("@lid") ? lid : `${lid}@lid`;
+          const pnJid = (pn as string).includes("@s.whatsapp.net") 
+            ? (pn as string) 
+            : `${pn}@s.whatsapp.net`;
+          const phoneNumber = (pn as string).replace(/\D/g, "");
+
+          // 1. Salvar mapeamento no banco
+          try {
+            await LidMapping.upsert({
+              lid: lidJid,
+              phoneNumber,
+              companyId,
+              whatsappId: whatsapp.id
+            });
+            savedCount++;
+            logger.info("[wbotMonitor] LID mapping salvo", { lidJid, phoneNumber });
+          } catch (e: any) {
+            logger.warn("[wbotMonitor] Erro ao salvar LID mapping", { e: e?.message });
+          }
+
+          // 2. Tentar mesclar contato LID com contato real
+          try {
+            const lidContact = await Contact.findOne({
+              where: {
+                remoteJid: lidJid,
+                companyId,
+                isGroup: false
+              }
+            });
+
+            if (lidContact) {
+              const realContact = await Contact.findOne({
+                where: {
+                  [require("sequelize").Op.or]: [
+                    { canonicalNumber: phoneNumber },
+                    { number: phoneNumber }
+                  ],
+                  companyId,
+                  isGroup: false,
+                  id: { [require("sequelize").Op.ne]: lidContact.id }
+                }
+              });
+
+              if (realContact) {
+                // Mesclar contatos usando serviço dedicado
+                const ContactMergeService = require("../ContactServices/ContactMergeService").default;
+                const result = await ContactMergeService.mergeContacts(
+                  lidContact.id,
+                  realContact.id,
+                  companyId
+                );
+                if (result?.success) {
+                  mergedCount++;
+                  logger.info("[wbotMonitor] Contatos mesclados via lid-mapping.update", {
+                    lidContactId: lidContact.id,
+                    realContactId: realContact.id,
+                    lidJid,
+                    phoneNumber
+                  });
+                }
+              } else {
+                // Atualizar contato LID com número real
+                await lidContact.update({
+                  number: phoneNumber,
+                  canonicalNumber: phoneNumber
+                });
+                logger.info("[wbotMonitor] Contato LID atualizado com número real", {
+                  contactId: lidContact.id,
+                  lidJid,
+                  phoneNumber
+                });
+              }
+            }
+          } catch (mergeErr: any) {
+            logger.warn("[wbotMonitor] Erro ao mesclar contato LID", { 
+              lidJid, 
+              phoneNumber, 
+              err: mergeErr?.message 
+            });
+          }
+        }
+
+        logger.info("[wbotMonitor] lid-mapping.update processado", {
+          total: Object.keys(update.mapping).length,
+          saved: savedCount,
+          merged: mergedCount
+        });
+      } catch (err: any) {
+        logger.error("[wbotMonitor] Erro no lid-mapping.update handler", { err: err?.message });
+        Sentry.captureException(err);
+      }
+    });
+
   } catch (err) {
     logger.error(`Error in wbotMonitor: ${err.message}`);
     Sentry.captureException(err);

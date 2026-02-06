@@ -161,6 +161,23 @@ const CreateOrUpdateContactService = async ({
 
     // Para LID, não bloquear pela canonical: usa rawNumberDigits ou remoteJid como fallback
     let number = isGroup ? rawNumberDigits : canonical;
+
+    // =================================================================
+    // VALIDAÇÃO ROBUSTA DE GRUPOS: Garantir que grupos tenham @g.us
+    // =================================================================
+    if (isGroup) {
+      // Garantir que número de grupo tenha @g.us
+      if (!number.includes("@g.us")) {
+        // Remover qualquer sufixo existente e adicionar @g.us
+        const cleanGroupNumber = number.replace(/@.*$/, "");
+        number = `${cleanGroupNumber}@g.us`;
+        logger.info("[CreateOrUpdateContactService] Grupo corrigido: adicionado @g.us", {
+          original: rawNumberDigits,
+          corrected: number,
+          companyId
+        });
+      }
+    }
     if (!isGroup && isLinkedDevice) {
       number = canonical || rawNumberDigits || remoteJid || "";
     }

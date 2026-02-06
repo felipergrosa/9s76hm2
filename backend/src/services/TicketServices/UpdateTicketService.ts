@@ -697,9 +697,8 @@ const UpdateTicketService = async ({
     ticketTraking.queuedAt = moment().toDate();
     ticketTraking.queueId = queueId;
 
-    await ticket.reload();
-
-    // ticket = await ShowTicketService(ticket.id, companyId)
+    // Recarrega ticket com todas as associações para emitir evento Socket.IO completo
+    ticket = await ShowTicketService(ticket.id, companyId);
 
     if (status !== undefined && ["pending"].indexOf(status) > -1) {
       //ticket voltou para fila

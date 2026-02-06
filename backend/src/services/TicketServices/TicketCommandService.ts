@@ -112,7 +112,16 @@ export async function updateTicket(
 
   // Aplicar updates
   await ticket.update(updates);
-  await ticket.reload();
+  
+  // Recarrega com associações para emitir evento Socket.IO completo
+  await ticket.reload({
+    include: [
+      { model: Contact, as: "contact" },
+      { model: Whatsapp, as: "whatsapp" },
+      { model: User, as: "user" },
+      { model: Queue, as: "queue" }
+    ]
+  });
 
   // Invalidar cache
   invalidateTicketCache(ticketId);
@@ -176,7 +185,15 @@ export async function closeTicket(
     hashFlowId: null
   });
 
-  await ticket.reload();
+  // Recarrega com associações para emitir evento Socket.IO completo
+  await ticket.reload({
+    include: [
+      { model: Contact, as: "contact" },
+      { model: Whatsapp, as: "whatsapp" },
+      { model: User, as: "user" },
+      { model: Queue, as: "queue" }
+    ]
+  });
 
   // Invalidar cache
   invalidateTicketCache(ticketId);

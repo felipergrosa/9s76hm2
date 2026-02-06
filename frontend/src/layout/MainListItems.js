@@ -514,6 +514,16 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
+      {hasPermission("contacts.view") && (
+        <ListItemLink
+          to="/groups"
+          primary="Grupos"
+          icon={<PeopleIcon />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
       {showSchedules && hasPermission("schedules.view") && (
         <ListItemLink
           to="/schedules"

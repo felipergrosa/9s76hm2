@@ -638,6 +638,71 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   const participantDigits = participantJid ? participantJid.replace(/\D/g, "") : "";
   const isLid = remoteJid?.includes("@lid");
 
+  // =================================================================
+  // BAILEYS v7: Usar remoteJidAlt e participantAlt quando disponíveis
+  // Esses campos fornecem o JID alternativo (PN se LID, ou LID se PN)
+  // =================================================================
+  const remoteJidAlt = (msg.key as any).remoteJidAlt;
+  const participantAlt = (msg.key as any).participantAlt;
+
+  // Se temos remoteJidAlt com PN válido e o remoteJid é LID, usar o Alt
+  if (isLid && remoteJidAlt && remoteJidAlt.includes("@s.whatsapp.net")) {
+    const altDigits = remoteJidAlt.replace(/\D/g, "");
+    if (altDigits.length >= 10 && altDigits.length <= 13) {
+      debugLog("[getContactMessage] Usando remoteJidAlt (PN) ao invés de LID", {
+        originalLid: remoteJid,
+        remoteJidAlt,
+        altDigits
+      });
+      
+      // Salvar mapeamento LID → PN para uso futuro
+      try {
+        const LidMapping = require("../../models/LidMapping").default;
+        const companyId = (wbot as any).companyId || 1;
+        await LidMapping.upsert({
+          lid: remoteJid,
+          phoneNumber: altDigits,
+          companyId,
+          whatsappId: wbot.id
+        });
+      } catch (e) {
+        // Ignorar erros de persistência
+      }
+      
+      return {
+        id: remoteJidAlt,
+        name: msg.pushName || altDigits,
+        lidJid: remoteJid // Guardar LID original para referência
+      };
+    }
+  }
+
+  // Se temos participantAlt com PN válido e o participant é LID, usar o Alt
+  if (participantJid?.includes("@lid") && participantAlt && participantAlt.includes("@s.whatsapp.net")) {
+    const altDigits = participantAlt.replace(/\D/g, "");
+    if (altDigits.length >= 10 && altDigits.length <= 13) {
+      debugLog("[getContactMessage] Usando participantAlt (PN) ao invés de LID", {
+        originalLid: participantJid,
+        participantAlt,
+        altDigits
+      });
+      
+      // Salvar mapeamento LID → PN para uso futuro
+      try {
+        const LidMapping = require("../../models/LidMapping").default;
+        const companyId = (wbot as any).companyId || 1;
+        await LidMapping.upsert({
+          lid: participantJid,
+          phoneNumber: altDigits,
+          companyId,
+          whatsappId: wbot.id
+        });
+      } catch (e) {
+        // Ignorar erros de persistência
+      }
+    }
+  }
+
   const looksPhoneLike = (digits: string) => digits.length >= 10 && digits.length <= 13;
 
   // CORREÇÃO CRÍTICA: Para mensagens de GRUPOS, sempre usar participant
@@ -3926,6 +3991,9 @@ export const handleRating = async (
     ticketId: ticket.id,
     type: "closed"
   });
+
+  // Recarrega ticket com associações para emitir evento Socket.IO completo
+  ticket = await ShowTicketService(ticket.id, companyId);
 
   // CQRS: Emitir eventos via TicketEventBus
   ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
