@@ -10,11 +10,12 @@ import FormHelperText from "@material-ui/core/FormHelperText";
 import useSettings from "../../hooks/useSettings";
 
 import { makeStyles } from "@material-ui/core/styles";
-import { grey, blue } from "@material-ui/core/colors";
+import { grey, blue, orange } from "@material-ui/core/colors";
 
-import { Tab, Tabs, TextField } from "@material-ui/core";
+import { Tab, Tabs, TextField, Tooltip } from "@material-ui/core";
 import { i18n } from "../../translate/i18n";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
+import logger from "../../utils/logger";
 
 const useStyles = makeStyles((theme) => ({
   container: {
@@ -150,6 +151,9 @@ export default function Options(props) {
 
   const [showNotificationPending, setShowNotificationPending] = useState(false);
   const [loadingShowNotificationPending, setLoadingShowNotificationPending] = useState(false);
+
+  // Console Logs para debug em produção
+  const [enableConsoleLogs, setEnableConsoleLogs] = useState(() => logger.isEnabled());
 
   const { update: updateUserCreation, getAll } = useSettings();
 
@@ -907,6 +911,39 @@ export default function Options(props) {
             </FormHelperText>
           </FormControl>
         </Grid>
+
+        {/* CONSOLE LOGS PARA DEBUG EM PRODUÇÃO - Apenas Super Admin */}
+        {isSuper() && (
+          <Grid xs={12} sm={6} md={4} item>
+            <Tooltip title="Habilita console.log em produção para debug. Use com cuidado - pode afetar performance.">
+              <FormControl className={classes.selectContainer}>
+                <InputLabel id="enableConsoleLogs-label" style={{ color: enableConsoleLogs ? orange[700] : 'inherit' }}>
+                  🔧 Console Logs (Debug)
+                </InputLabel>
+                <Select
+                  labelId="enableConsoleLogs-label"
+                  value={enableConsoleLogs}
+                  onChange={(e) => {
+                    const newValue = e.target.value;
+                    setEnableConsoleLogs(newValue);
+                    logger.setEnabled(newValue);
+                  }}
+                  style={{ color: enableConsoleLogs ? orange[700] : 'inherit' }}
+                >
+                  <MenuItem value={false}>
+                    {i18n.t("settings.settings.options.disabled")}
+                  </MenuItem>
+                  <MenuItem value={true} style={{ color: orange[700] }}>
+                    ⚠️ Habilitado (Debug)
+                  </MenuItem>
+                </Select>
+                <FormHelperText style={{ color: enableConsoleLogs ? orange[700] : 'inherit' }}>
+                  {enableConsoleLogs ? "⚠️ Logs ativos - pode afetar performance" : "Logs desabilitados em produção"}
+                </FormHelperText>
+              </FormControl>
+            </Tooltip>
+          </Grid>
+        )}
       </Grid>
       <br></br>
       {/*-----------------LGPD-----------------*/}
