@@ -59,10 +59,9 @@ export function extractMessageIdentifiers(
     altJid = (key as any).remoteJidAlt || null;
   }
 
-  // Se fromMe, usar o JID do próprio usuário
-  if (isFromMe && !isGroup) {
-    primaryJid = jidNormalizedUser((wbot as WASocket).user?.id || "");
-  }
+  // Se fromMe, manter remoteJid como destinatário (correção crítica)
+  // O remoteJid contém o JID da pessoa que RECEBEU a mensagem
+  // NÃO devemos usar o JID do remetente (nós mesmos)
 
   // Normalizar primaryJid
   if (primaryJid) {
