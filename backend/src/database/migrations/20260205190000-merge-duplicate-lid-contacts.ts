@@ -18,8 +18,9 @@ module.exports = {
       console.log("[Migration] Iniciando mesclagem de contatos duplicados LID...");
 
       // 1. Buscar contatos com LID que podem ter duplicados
+      // Usando fuzzy matching no nome para encontrar mais casos
       const [lidContacts] = await queryInterface.sequelize.query(`
-        SELECT 
+        SELECT DISTINCT ON (c1.id)
           c1.id as lid_id,
           c1.name as lid_name,
           c1.number as lid_number,
@@ -38,15 +39,17 @@ module.exports = {
           AND c1."remoteJid" LIKE '%@lid'
           AND (c2."remoteJid" NOT LIKE '%@lid' OR c2."remoteJid" IS NULL)
           AND (
-            -- Mesmo nome (case insensitive)
-            LOWER(TRIM(c1.name)) = LOWER(TRIM(c2.name))
-            -- Ou número do LID contém parte do número real
-            OR c2.number LIKE '%' || RIGHT(c1.number, 8) || '%'
+            -- Mesmo nome (case insensitive, ignorando espaços extras)
+            LOWER(REGEXP_REPLACE(TRIM(c1.name), '\\s+', ' ', 'g')) = LOWER(REGEXP_REPLACE(TRIM(c2.name), '\\s+', ' ', 'g'))
+            -- Ou nome contém partes (para nomes compostos)
+            OR LOWER(c1.name) LIKE LOWER('%' || c2.name || '%')
+            OR LOWER(c2.name) LIKE LOWER('%' || c1.name || '%')
           )
         WHERE c1.name IS NOT NULL 
-          AND c1.name != ''
+          AND TRIM(c1.name) != ''
           AND c1.name !~ '^[0-9]+$'
-        ORDER BY c1."companyId", c1.id
+          AND LENGTH(TRIM(c1.name)) > 3
+        ORDER BY c1.id, c2.id
       `, { transaction });
 
       if (!lidContacts || (lidContacts as any[]).length === 0) {

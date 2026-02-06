@@ -373,6 +373,72 @@ const CreateOrUpdateContactService = async ({
       {
         const incomingName = (name || "").trim();
         const effectiveName = incomingName && incomingName !== number ? incomingName : number;
+        
+        // =================================================================
+        // PROTEÇÃO CONTRA DUPLICAÇÃO DE LIDs
+        // Antes de criar novo contato, verificar se existe LID com mesmo nome
+        // Se existir, mesclar automaticamente
+        // =================================================================
+        let lidContactToMerge: Contact | null = null;
+        
+        if (!isGroup && effectiveName && effectiveName !== number) {
+          // Buscar contato LID com mesmo nome
+          lidContactToMerge = await Contact.findOne({
+            where: {
+              companyId,
+              name: effectiveName,
+              remoteJid: { [Op.like]: '%@lid' },
+              isGroup: false
+            }
+          });
+          
+          if (lidContactToMerge) {
+            logger.info({
+              message: "[CreateOrUpdateContactService] LID duplicado detectado - mesclando automaticamente",
+              lidContactId: lidContactToMerge.id,
+              lidRemoteJid: lidContactToMerge.remoteJid,
+              newContactName: effectiveName,
+              newContactNumber: number,
+              companyId
+            });
+            
+            // Importar serviço de mesclagem dinamicamente
+            try {
+              const MergeContactsService = (await import("./MergeContactsService")).default;
+              await MergeContactsService({
+                primaryContactId: lidContactToMerge.id,
+                secondaryContactId: lidContactToMerge.id, // Mesmo ID - apenas atualizar
+                companyId
+              });
+              
+              // Retornar o contato LID existente (agora atualizado)
+              await lidContactToMerge.update({
+                number,
+                canonicalNumber: number,
+                remoteJid: newRemoteJid,
+                profilePicUrl: profilePicUrl || null,
+                whatsappId
+              });
+              await lidContactToMerge.reload();
+              
+              logger.info({
+                message: "[CreateOrUpdateContactService] LID atualizado com número real",
+                contactId: lidContactToMerge.id,
+                newNumber: number,
+                newRemoteJid
+              });
+              
+              return lidContactToMerge;
+            } catch (mergeError) {
+              logger.warn({
+                message: "[CreateOrUpdateContactService] Erro ao mesclar LID, continuando com criação normal",
+                error: mergeError.message
+              });
+            }
+          }
+        }
+        
+        // Criação normal (se não houve mesclagem)
         try {
           contact = await Contact.create({
             ...contactData,

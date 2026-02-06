@@ -1069,8 +1069,60 @@ const verifyContact = async (
       cleaned
     });
 
-    // 0. PRIORIDADE MÁXIMA: Consultar tabela LidMappings (cache persistente)
-    // Esta é a fonte mais confiável pois foi preenchida pelo evento lid-mapping.update
+    // 0. PRIORIDADE MÁXIMA: Usar signalRepository.lidMapping.getPNForLID() do Baileys v7
+    // Esta é a função OFICIAL do Baileys para resolver LID → Número de Telefone
+    try {
+      const lidStore = (wbot as any).signalRepository?.lidMapping;
+      if (lidStore?.getPNForLID) {
+        const lidId = normalizedJid.replace("@lid", "");
+        const resolvedPN = await lidStore.getPNForLID(lidId);
+        
+        if (resolvedPN) {
+          const phoneNumber = resolvedPN.replace(/\D/g, "");
+          logger.info("[verifyContact] LID resolvido via Baileys signalRepository.lidMapping.getPNForLID", {
+            lid: normalizedJid,
+            resolvedPN,
+            phoneNumber
+          });
+          
+          // Buscar contato existente pelo número resolvido
+          const existingByPN = await Contact.findOne({
+            where: {
+              [Op.or]: [
+                { canonicalNumber: phoneNumber },
+                { number: phoneNumber }
+              ],
+              companyId,
+              isGroup: false
+            }
+          });
+          
+          if (existingByPN) {
+            // Atualizar remoteJid para futuras buscas diretas
+            if (!existingByPN.remoteJid || existingByPN.remoteJid !== normalizedJid) {
+              await existingByPN.update({ remoteJid: normalizedJid });
+            }
+            return existingByPN;
+          }
+          
+          // Persistir mapeamento para uso futuro
+          try {
+            const LidMapping = require("../../models/LidMapping").default;
+            await LidMapping.upsert({
+              lid: normalizedJid,
+              phoneNumber,
+              companyId,
+              whatsappId: wbot.id
+            });
+          } catch (e) {}
+        }
+      }
+    } catch (err: any) {
+      debugLog("[verifyContact] Erro ao usar signalRepository.lidMapping", { err: err?.message });
+    }
+
+    // 0.5. Consultar tabela LidMappings (cache persistente)
+    // Fallback caso a função do Baileys não funcione
     try {
       const LidMapping = require("../../models/LidMapping").default;
       const savedMapping = await LidMapping.findOne({
