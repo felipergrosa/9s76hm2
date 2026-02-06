@@ -2,21 +2,21 @@
 <html lang="pt">
 
 <head>
-	<!-- <title></title> -->
-	<!-- <title>%REACT_APP_NAME_SYSTEM%</title> -->
-	<meta name="theme-color" content="#000000" />
-	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
-	<!-- Preconnect para fontes (melhora LCP) -->
-	<link rel="preconnect" href="https://fonts.googleapis.com" />
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-	<!-- Fontes com display=swap para não bloquear renderização -->
+	<meta charset="utf-8">
+	<title>Whaticket</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="stylesheet"
-		href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" />
+		href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+		media="print" onload="this.media='all'" />
 	<link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
 	<link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
 	<link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-	<!-- TailwindCSS CDN necessário para classes inline no HTML -->
-	<script src="https://cdn.tailwindcss.com"></script>
+	<meta name="theme-color" content="#000000" />
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+	<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+	<meta http-equiv="Pragma" content="no-cache">
+	<meta http-equiv="Expires" content="0">
 	<style>
 		#splash-screen {
 			position: fixed;
@@ -87,6 +87,7 @@
 	<div id="root"></div>
 	<noscript>Você precisa habilitar o JavaScript para executar este app.</noscript>
 
+	<script src="https://cdn.tailwindcss.com" defer></script>
 	<script>
 		let progress = 0;
 		const progressBar = document.getElementById('progress-bar');

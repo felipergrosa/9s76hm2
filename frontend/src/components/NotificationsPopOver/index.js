@@ -281,7 +281,7 @@ const NotificationsPopOver = (volume) => {
 
     const options = {
       body: `${message.body} - ${format(new Date(), "HH:mm")}`,
-      icon: contact.urlPicture ? `${getBackendUrl()}${contact.urlPicture}` : `${getBackendUrl()}/nopicture.png`,
+      icon: contact.urlPicture ? `${getBackendUrl()}${contact.urlPicture}` : null,
       tag: ticket.id,
       renotify: true,
     };

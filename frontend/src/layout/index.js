@@ -46,6 +46,7 @@ import BackdropLoading from "../components/BackdropLoading";
 import { i18n } from "../translate/i18n";
 import toastError from "../errors/toastError";
 import AnnouncementsPopover from "../components/AnnouncementsPopover";
+import AvatarFallback from "../components/AvatarFallback";
 
 import logo from "../assets/logo.png";
 import logoDark from "../assets/logo-black.png";
@@ -464,9 +465,11 @@ const LoggedInLayout = ({ children, themeToggle }) => {
       //    const socket = socketManager.GetSocket();
 
       const ImageUrl = user.profileImage;
-      if (ImageUrl !== undefined && ImageUrl !== null)
+      if (ImageUrl !== undefined && ImageUrl !== null) {
         setProfileUrl(`${backendUrl}/public/company${user.companyId}/${ImageUrl}`);
-      else setProfileUrl(`${process.env.FRONTEND_URL}/nopicture.png`);
+      } else {
+        setProfileUrl(null); // Deixa null para AvatarFallback mostrar iniciais
+      }
 
       const onCompanyAuthLayout = (data) => {
         if (data.user.id === +userId) {
@@ -707,10 +710,11 @@ const LoggedInLayout = ({ children, themeToggle }) => {
               variant="dot"
               onClick={handleMenu}
             >
-              <Avatar
-                alt="Multi100"
+              <AvatarFallback
+                alt={user.name}
                 className={classes.avatar2}
                 src={profileUrl}
+                name={user.name}
               />
             </StyledBadge>
 

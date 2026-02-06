@@ -22,7 +22,6 @@ import { AccountCircle } from "@material-ui/icons";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
-import whatsappIcon from '../../assets/nopicture.png'
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n"; // Já importado, ótimo!
 import UserModal from "../../components/UserModal";
@@ -34,6 +33,7 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import { Avatar } from "@material-ui/core";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import usePermissions from "../../hooks/usePermissions";
+import AvatarFallback from "../../components/AvatarFallback";
 
 const backendUrl = getBackendUrl();
 
@@ -300,27 +300,17 @@ const Users = () => {
   };
 
   const renderProfileImage = (user) => {
-    if (user.id === loggedInUser.id) {
-      return (
-        <Avatar
-          src={`${backendUrl}/public/company${user.companyId}/user/${profileImage ? profileImage : whatsappIcon}`}
-          alt={user.name}
-          className={classes.userAvatar}
-        />
-      )
-    }
-    if (user.id !== loggedInUser.id) {
-      return (
-        <Avatar
-          src={user.profileImage ? `${backendUrl}/public/company${user.companyId}/user/${user.profileImage}` : whatsappIcon}
-          alt={user.name}
-          className={classes.userAvatar}
-        />
-      )
-    }
+    const imageUrl = user.id === loggedInUser.id
+      ? (profileImage ? `${backendUrl}/public/company${user.companyId}/user/${profileImage}` : null)
+      : (user.profileImage ? `${backendUrl}/public/company${user.companyId}/user/${user.profileImage}` : null);
+    
     return (
-      <AccountCircle />
-    )
+      <AvatarFallback
+        src={imageUrl}
+        name={user.name}
+        className={classes.userAvatar}
+      />
+    );
   };
 
   return (

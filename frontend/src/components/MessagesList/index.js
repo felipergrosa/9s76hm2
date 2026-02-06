@@ -862,7 +862,7 @@ const MessagesList = ({
         const imageName = user?.profileImage;
         const url = imageName
           ? `${backendUrl}/public/company${companyId}/${imageName}`
-          : `${process.env.FRONTEND_URL}/nopicture.png`;
+          : null; // Retorna null para AvatarFallback mostrar iniciais
         return { name: user?.name, urlPicture: url };
       }
 
