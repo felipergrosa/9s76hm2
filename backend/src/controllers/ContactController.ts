@@ -86,6 +86,7 @@ import GetImportJobStatusService from "../services/ContactServices/GetImportJobS
 import { v4 as uuidv4 } from "uuid";
 import { createAuditLog, AuditActions, AuditEntities } from "../helpers/AuditLogger";
 import { hasPermission } from "../helpers/PermissionAdapter";
+import ListGroupsService from "../services/ContactServices/ListGroupsService";
 import User from "../models/User";
 
 type IndexQuery = {
@@ -2262,5 +2263,77 @@ export const mergeContacts = async (req: Request, res: Response): Promise<Respon
   } catch (error: any) {
     logger.error(`[mergeContacts] Erro: ${error.message}`);
     return res.status(500).json({ error: error.message || "Erro ao mesclar contatos" });
+  }
+};
+
+/**
+ * Listar grupos WhatsApp com controle de permissões por conexão
+ * REGRAS:
+ * - Superadmin/Supervisor isPrivate=true: só vê grupos de suas conexões permitidas
+ * - Superadmin/Supervisor isPrivate=false: vê todos os grupos
+ * - Usuário comum: só vê grupos de sua conexão primária + conexões permitidas
+ */
+export const groups = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { searchParam, pageNumber, limit } = req.query as {
+    searchParam: string;
+    pageNumber: string;
+    limit: string;
+  };
+  
+  const { id: userId, companyId, profile } = req.user;
+
+  try {
+    // Buscar usuário logado com permissões de conexão
+    const user = await User.findByPk(userId, {
+      attributes: [
+        "id",
+        "profile",
+        "whatsappId",
+        "allowedConnectionIds",
+        "isPrivate",
+        "super"
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado" });
+    }
+
+    // Determinar permissões
+    const userProfile = user.profile || "user";
+    const isPrivate = user.isPrivate || false;
+    const whatsappId = user.whatsappId;
+    const allowedConnectionIds = user.allowedConnectionIds || [];
+
+    logger.info({
+      userId,
+      companyId,
+      profile: userProfile,
+      isPrivate,
+      whatsappId,
+      allowedConnectionIds: allowedConnectionIds.length
+    }, "[ContactController.groups] Listando grupos");
+
+    const result = await ListGroupsService({
+      searchParam,
+      pageNumber,
+      companyId,
+      userId: Number(userId),
+      userProfile,
+      allowedConnectionIds,
+      whatsappId: whatsappId || undefined,
+      isPrivate,
+      limit
+    });
+
+    return res.json(result);
+  } catch (error: any) {
+    logger.error(`[ContactController.groups] Erro: ${error.message}`);
+    return res.status(500).json({ 
+      error: error.message || "Erro ao listar grupos",
+      groups: [],
+      count: 0,
+      hasMore: false
+    });
   }
 };

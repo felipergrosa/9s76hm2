@@ -15,7 +15,11 @@ const upload = multer(uploadConfig);
 contactRoutes.post("/contacts/import", isAuth, ImportPhoneContactsController.store);
 
 contactRoutes.post("/contactsImport", isAuth, ContactController.importXls);
-contactRoutes.get("/contacts/import-progress", isAuth, ContactController.importProgress); // Compatibilidade: retorna progresso da importação síncrona
+contactRoutes.get("/contacts/import-progress", isAuth, ContactController.importProgress);
+
+// Rota específica para listar grupos WhatsApp com controle de permissões
+contactRoutes.get("/groups", isAuth, ContactController.groups);
+
 contactRoutes.get("/contacts", isAuth, ContactController.index);
 contactRoutes.get("/contacts/duplicates", isAuth, ContactController.listDuplicates);
 contactRoutes.get("/contacts/pending-normalization", isAuth, ContactController.listPendingNormalization);

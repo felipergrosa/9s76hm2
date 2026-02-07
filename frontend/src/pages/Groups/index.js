@@ -64,18 +64,19 @@ const Groups = () => {
 
         const fetchGroups = async () => {
             try {
-                const { data } = await api.get("/contacts/", {
+                // Usar nova API /groups que respeita permissões de conexão
+                const { data } = await api.get("/groups", {
                     params: {
                         searchParam: debouncedSearchParam,
                         pageNumber,
                         limit: groupsPerPage,
-                        isGroup: "true", // Filtrar apenas grupos
                     },
                 });
 
                 if (currentId !== requestIdRef.current) return;
 
-                dispatch({ type: "SET_GROUPS", payload: data.contacts });
+                // A nova API retorna { groups, count, hasMore }
+                dispatch({ type: "SET_GROUPS", payload: data.groups || [] });
                 setHasMore(data.hasMore);
                 setTotalGroups(data.count);
             } catch (err) {
