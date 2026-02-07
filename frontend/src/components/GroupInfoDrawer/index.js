@@ -47,7 +47,7 @@ import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { toast } from "react-toastify";
 
-const drawerWidth = 360;
+const drawerWidth = 320;
 
 const useStyles = makeStyles((theme) => ({
   drawer: {

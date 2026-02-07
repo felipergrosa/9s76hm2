@@ -1,7 +1,9 @@
+import { Op } from "sequelize";
 import { getWbot } from "../../libs/wbot";
 import Contact from "../../models/Contact";
 import Whatsapp from "../../models/Whatsapp";
 import logger from "../../utils/logger";
+import { normalizePhoneNumber } from "../../utils/phone";
 
 interface GroupParticipant {
   id: string; // JID do participante (ex: 5511999999999@s.whatsapp.net)
@@ -94,11 +96,15 @@ const GetGroupParticipantsService = async ({
 
   for (const p of groupMetadata.participants || []) {
     const participantJid = p.id;
-    const participantNumber = participantJid.replace(/\D/g, "").replace(/@.*/, "");
+    const rawNumber = participantJid.split("@")[0].replace(/\D/g, "");
     const isAdmin = p.admin === "admin" || p.admin === "superadmin";
     const isSuperAdmin = p.admin === "superadmin";
 
-    // Tentar buscar contato existente no sistema
+    // Normalizar número para busca consistente
+    const { canonical } = normalizePhoneNumber(rawNumber);
+    const participantNumber = canonical || rawNumber;
+
+    // Tentar buscar contato existente no sistema (por canonicalNumber ou number)
     let contactRecord: Contact | null = null;
     let contactName = participantNumber;
     let profilePicUrl: string | undefined;
@@ -108,7 +114,11 @@ const GetGroupParticipantsService = async ({
         where: {
           companyId,
           isGroup: false,
-          number: participantNumber
+          [Op.or]: [
+            { canonicalNumber: participantNumber },
+            { number: participantNumber },
+            ...(rawNumber !== participantNumber ? [{ number: rawNumber }, { canonicalNumber: rawNumber }] : [])
+          ]
         }
       });
 

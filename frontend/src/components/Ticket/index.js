@@ -493,21 +493,23 @@ const Ticket = () => {
         </OptimisticMessageProvider>
       </Paper>
 
-      {ticket?.isGroup ? (
-        <GroupInfoDrawer
-          open={drawerOpen}
-          handleDrawerClose={handleDrawerClose}
-          contact={contact}
-          ticket={ticket}
-        />
-      ) : (
-        <ContactDrawer
-          open={drawerOpen}
-          handleDrawerClose={handleDrawerClose}
-          contact={contact}
-          loading={loading}
-          ticket={ticket}
-        />
+      {drawerOpen && (
+        ticket?.isGroup ? (
+          <GroupInfoDrawer
+            open={drawerOpen}
+            handleDrawerClose={handleDrawerClose}
+            contact={contact}
+            ticket={ticket}
+          />
+        ) : (
+          <ContactDrawer
+            open={drawerOpen}
+            handleDrawerClose={handleDrawerClose}
+            contact={contact}
+            loading={loading}
+            ticket={ticket}
+          />
+        )
       )}
 
     </div>

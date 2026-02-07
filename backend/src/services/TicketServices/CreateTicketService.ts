@@ -55,6 +55,31 @@ const CreateTicketService = async ({
 
   const { isGroup } = await ShowContactService(contactId, companyId);
 
+  // Para GRUPOS: reutilizar ticket existente (nunca criar duplicatas)
+  if (isGroup) {
+    const existingGroupTicket = await Ticket.findOne({
+      where: {
+        contactId,
+        companyId,
+        whatsappId: defaultWhatsapp.id,
+        isGroup: true
+      },
+      order: [["id", "DESC"]]
+    });
+
+    if (existingGroupTicket) {
+      // Se está fechado, reabrir como "group"
+      if (existingGroupTicket.status === "closed") {
+        await existingGroupTicket.update({
+          status: "group",
+          userId: userIdNumber
+        });
+      }
+      const reopened = await ShowTicketService(existingGroupTicket.id, companyId);
+      return reopened;
+    }
+  }
+
   // Lógica inteligente de bot: prioriza chatbot, fallback para RAG, desabilita se não tiver nenhum
   let shouldEnableBot = true;  // Default: bot ativo
 

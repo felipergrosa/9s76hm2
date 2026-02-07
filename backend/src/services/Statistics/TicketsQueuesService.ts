@@ -160,16 +160,13 @@ const TicketsQueuesService = async ({
   }
 
   // REGRA PRINCIPAL: Ticket em atendimento (open/group com userId) só pode ser visto pelo atendente
-  // OU por supervisores que gerenciam esse atendente, OU por admin/superadmin (showAll)
-  
+  // OU por supervisores que gerenciam esse atendente (modo "include"), OU por admin/superadmin (showAll)
   // Se showAll=true (admin/superadmin), não aplica restrição de userId na regra principal
   if (showAll !== "true") {
-    // Buscar usuário para verificar se é supervisor
-    const currentUser = await User.findByPk(+userId, {
-      attributes: ["id", "managedUserIds"]
-    });
-    const userManagedIds = (currentUser as any)?.managedUserIds || [];
-    const isSupervisor = Array.isArray(userManagedIds) && userManagedIds.length > 0;
+    // Usar walletResult que já tem a lógica correta de supervisorViewMode
+    const supervisorViewMode = walletResult.supervisorViewMode || "include";
+    const managedUserIds = walletResult.managedUserIds || [];
+    const isSupervisor = supervisorViewMode === "include" && managedUserIds.length > 0;
 
     let userOrConditions: any[] = [
       { userId: +userId }, // Meus tickets (sempre vejo os meus)
@@ -177,9 +174,10 @@ const TicketsQueuesService = async ({
       { status: { [Op.notIn]: ["open", "group"] } } // Tickets fechados/outros (qualquer um pode ver)
     ];
 
-    // Se for supervisor, também vê tickets dos supervisionados
+    // Se for supervisor no modo "include", também vê tickets dos supervisionados
+    // No modo "exclude", os usuários já estão filtrados por excludedUserIds nas linhas 111-124
     if (isSupervisor) {
-      const managedIds = userManagedIds.map((id: any) => Number(id));
+      const managedIds = managedUserIds.map((id: any) => Number(id));
       userOrConditions.push({ userId: { [Op.in]: managedIds } });
     }
 
