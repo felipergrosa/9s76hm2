@@ -81,6 +81,20 @@ export async function resolveMessageContact(
   const { contact: existingContact, pnFromMapping } = await resolveContact(ids, companyId);
 
   if (existingContact) {
+    if (ids.lidJid && ids.pnDigits) {
+      try {
+        await LidMapping.upsert({
+          lid: ids.lidJid,
+          phoneNumber: ids.pnDigits,
+          companyId,
+          whatsappId: wbot.id,
+          verified: false
+        });
+      } catch (err: any) {
+        logger.warn({ err: err?.message }, "[ContactResolver] Falha ao persistir LidMapping (contato existente)");
+      }
+    }
+
     // Atualizar pushName se necessário (sem sobrescrever nome personalizado)
     if (ids.pushName && existingContact.name !== ids.pushName) {
       const currentName = (existingContact.name || "").trim();
@@ -371,6 +385,58 @@ async function resolveLidToPN(
     }
   } catch (err: any) {
     logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Erro ao usar signalRepository.lidMapping");
+  }
+
+  // Estratégia B2: authState.keys.get('lid-mapping', [lidId]) — ler do KeyStore persistido
+  // Útil quando o Baileys persistiu o mapping mas o socket não expõe signalRepository
+  try {
+    const lidId = lidJid.replace("@lid", "");
+    const authKeys = (wbot as any).authState?.keys;
+    if (authKeys?.get) {
+      const data = await authKeys.get("lid-mapping", [lidId]);
+      const raw = data?.[lidId];
+
+      const tryExtract = (v: any): string | null => {
+        if (!v) return null;
+        if (typeof v === "string") return v;
+        const jid = String(v?.jid || v?.pnJid || v?.pn || v?.phoneNumber || v?.number || "");
+        return jid || null;
+      };
+
+      const resolved = tryExtract(raw);
+      if (resolved) {
+        const digits = resolved.replace(/\D/g, "");
+        if (digits.length >= 10 && digits.length <= 13) {
+          const pnJid = resolved.includes("@") ? jidNormalizedUser(resolved) : `${digits}@s.whatsapp.net`;
+          ids.pnJid = pnJid;
+          ids.pnDigits = digits;
+          const { canonical } = safeNormalizePhoneNumber(digits);
+          ids.pnCanonical = canonical;
+
+          logger.info({
+            lidJid,
+            pnJid: ids.pnJid,
+            strategy: "authState.keys.lid-mapping"
+          }, "[resolveLidToPN] LID→PN via authState.keys.get('lid-mapping')");
+
+          try {
+            await LidMapping.upsert({
+              lid: lidJid,
+              phoneNumber: digits,
+              companyId,
+              whatsappId: wbot.id,
+              verified: true
+            });
+          } catch {
+            // Não bloquear fluxo
+          }
+
+          return;
+        }
+      }
+    }
+  } catch (err: any) {
+    logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Erro ao consultar authState.keys lid-mapping");
   }
 
   // Estratégia C: wbot.onWhatsApp() — consulta direta ao WhatsApp

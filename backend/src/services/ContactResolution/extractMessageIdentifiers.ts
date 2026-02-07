@@ -94,11 +94,13 @@ export function extractMessageIdentifiers(
       try {
         const signalRepo = (wbot as any).authState?.keys?.signalRepository;
         if (signalRepo?.getPNForLID) {
-          const pn = signalRepo.getPNForLID(primaryJid);
+          const lidId = String(primaryJid || "").replace("@lid", "");
+          const pn = signalRepo.getPNForLID(primaryJid) || signalRepo.getPNForLID(lidId);
           if (pn) {
-            const pnDigits = pn.replace(/\D/g, "");
+            const pnDigits = String(pn).replace(/\D/g, "");
             if (pnDigits.length >= 10 && pnDigits.length <= 13) {
-              pnJid = jidNormalizedUser(pn);
+              const pnJidCandidate = String(pn).includes("@") ? String(pn) : `${pnDigits}@s.whatsapp.net`;
+              pnJid = jidNormalizedUser(pnJidCandidate);
               logger.info({ lidJid: primaryJid, pnJid, strategy: "signalRepository" }, "[extractIdentifiers] LID→PN via signalRepository");
             }
           }
@@ -136,20 +138,42 @@ export function extractMessageIdentifiers(
     if (!pnJid) {
       try {
         const sock = wbot as any;
+        const looksPhoneLike = (digits: string) => digits.length >= 10 && digits.length <= 13;
+
+        // 5.1) Lookup direto por chave (quando o store usa o LID como chave)
         if (sock.store?.contacts?.[primaryJid]) {
           const storedContact = sock.store.contacts[primaryJid];
-          // phoneNumber no Contact armazenado
           if (storedContact.phoneNumber) {
             const pnDigits = storedContact.phoneNumber.replace(/\D/g, "");
-            if (pnDigits.length >= 10 && pnDigits.length <= 13) {
+            if (looksPhoneLike(pnDigits)) {
               pnJid = `${pnDigits}@s.whatsapp.net`;
               logger.info({ lidJid: primaryJid, pnJid, strategy: "store.phoneNumber" }, "[extractIdentifiers] LID→PN via store.phoneNumber");
             }
           }
-          // id pode ser o PN real
           if (!pnJid && storedContact.id?.includes("@s.whatsapp.net")) {
             pnJid = storedContact.id;
             logger.info({ lidJid: primaryJid, pnJid, strategy: "store.id" }, "[extractIdentifiers] LID→PN via store.id");
+          }
+        }
+
+        // 5.2) Varredura: store.contacts costuma ter chave PN e um campo `lid` associado
+        if (!pnJid && sock.store?.contacts && typeof sock.store.contacts === "object") {
+          const lidId = primaryJid.replace("@lid", "");
+          for (const [jid, contactData] of Object.entries(sock.store.contacts)) {
+            const c: any = contactData as any;
+            const contactLid = String(c?.lid || c?.lidId || c?.lidJid || "");
+            if (!contactLid) continue;
+            if (contactLid === lidId || contactLid === primaryJid) {
+              const pnCandidate = String(jid);
+              if (pnCandidate.includes("@s.whatsapp.net")) {
+                const digits = pnCandidate.replace(/\D/g, "");
+                if (looksPhoneLike(digits)) {
+                  pnJid = pnCandidate;
+                  logger.info({ lidJid: primaryJid, pnJid, strategy: "store.scan.lid" }, "[extractIdentifiers] LID→PN via store.contacts (scan)");
+                  break;
+                }
+              }
+            }
           }
         }
       } catch {
