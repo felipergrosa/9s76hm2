@@ -22,9 +22,7 @@ import {
   Tooltip,
   Typography,
   CircularProgress,
-  Divider,
-  FormControlLabel,
-  Switch
+  Divider
 } from "@material-ui/core";
 import {
   Edit,
@@ -33,6 +31,10 @@ import {
   SignalCellularConnectedNoInternet0Bar,
   SignalCellular4Bar,
   CropFree,
+  Replay,
+  Autorenew,
+  DeleteSweep,
+  PowerSettingsNew,
   DeleteOutline,
   Facebook,
   Instagram,
@@ -127,7 +129,7 @@ const WhatsAppModalCompany = ({
   const { user, socket } = useContext(AuthContext);
   const { list } = useCompanies();
   const [loadingComp, setLoadingComp] = useState(false);
-  const [clearAuthOnNewQr, setClearAuthOnNewQr] = useState(false);
+  const [clearAuthById, setClearAuthById] = useState({});
   const { whatsApps, loading } = useContext(WhatsAppsContext);
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
   const [companies, setCompanies] = useState([]);
@@ -191,8 +193,9 @@ const WhatsAppModalCompany = ({
 
   const handleRequestNewQrCode = async whatsAppId => {
     try {
-      await api.put(`/whatsappsession/${whatsAppId}`, { clearAuth: clearAuthOnNewQr });
-      setClearAuthOnNewQr(false);
+      const clearAuth = !!clearAuthById?.[whatsAppId];
+      await api.put(`/whatsappsession/${whatsAppId}`, { clearAuth });
+      setClearAuthById(prev => ({ ...prev, [whatsAppId]: false }));
     } catch (err) {
       toastError(err);
     }
@@ -313,70 +316,99 @@ const WhatsAppModalCompany = ({
     return (
       <>
         {whatsApp.status === "qrcode" && isBaileys && (
-          <Button
-            size="small"
-            variant="contained"
-            color="primary"
-            onClick={() => handleOpenQrModal(whatsApp)}
-          >
-            {i18n.t("connections.buttons.qrcode")}
-          </Button>
+          <Tooltip title={i18n.t("connections.buttons.qrcode")}>
+            <span>
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => handleOpenQrModal(whatsApp)}
+              >
+                <CropFree />
+              </IconButton>
+            </span>
+          </Tooltip>
         )}
         {whatsApp.status === "DISCONNECTED" && (
           <>
-            <Button
-              size="small"
-              variant="outlined"
-              color="primary"
-              onClick={() => handleStartWhatsAppSession(whatsApp.id)}
-            >
-              {isBaileys
-                ? i18n.t("connections.buttons.tryAgain")
-                : "Recarregar Conexão"}
-            </Button>{" "}
-            {isBaileys && (
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="secondary"
-                  onClick={() => handleRequestNewQrCode(whatsApp.id)}
-                >
-                  {i18n.t("connections.buttons.newQr")}
-                </Button>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      size="small"
-                      color="secondary"
-                      checked={clearAuthOnNewQr}
-                      onChange={(e) => setClearAuthOnNewQr(e.target.checked)}
-                    />
-                  }
-                  label="Limpar sessão"
-                />
-              </Stack>
-            )}
+            <Stack direction="row" spacing={0.5} alignItems="center" style={{ flexWrap: "wrap" }}>
+              <Tooltip title={isBaileys ? i18n.t("connections.buttons.tryAgain") : "Recarregar Conexão"}>
+                <span>
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    onClick={() => handleStartWhatsAppSession(whatsApp.id)}
+                  >
+                    <Replay />
+                  </IconButton>
+                </span>
+              </Tooltip>
+
+              {isBaileys && (
+                <>
+                  <Tooltip title={i18n.t("connections.buttons.newQr")}>
+                    <span>
+                      <IconButton
+                        size="small"
+                        color="secondary"
+                        onClick={() => handleRequestNewQrCode(whatsApp.id)}
+                      >
+                        <Autorenew />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+
+                  <Tooltip
+                    title={
+                      clearAuthById?.[whatsApp.id]
+                        ? "Limpar sessão: ATIVO"
+                        : "Limpar sessão: inativo"
+                    }
+                  >
+                    <span>
+                      <IconButton
+                        size="small"
+                        color={clearAuthById?.[whatsApp.id] ? "secondary" : "default"}
+                        onClick={() =>
+                          setClearAuthById(prev => ({
+                            ...prev,
+                            [whatsApp.id]: !prev?.[whatsApp.id]
+                          }))
+                        }
+                      >
+                        <DeleteSweep />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </>
+              )}
+            </Stack>
           </>
         )}
         {(whatsApp.status === "CONNECTED" ||
           whatsApp.status === "PAIRING" ||
           whatsApp.status === "TIMEOUT") && (
-            <Button
-              size="small"
-              variant="outlined"
-              color="secondary"
-              onClick={() => {
-                handleOpenConfirmationModal("disconnect", whatsApp.id);
-              }}
-            >
-              {i18n.t("connections.buttons.disconnect")}
-            </Button>
+            <Tooltip title={i18n.t("connections.buttons.disconnect")}>
+              <span>
+                <IconButton
+                  size="small"
+                  color="secondary"
+                  onClick={() => {
+                    handleOpenConfirmationModal("disconnect", whatsApp.id);
+                  }}
+                >
+                  <PowerSettingsNew />
+                </IconButton>
+              </span>
+            </Tooltip>
           )}
         {whatsApp.status === "OPENING" && (
-          <Button size="small" variant="outlined" disabled color="default">
-            {i18n.t("connections.buttons.connecting")}
-          </Button>
+          <Tooltip title={i18n.t("connections.buttons.connecting")}>
+            <span>
+              <IconButton size="small" disabled>
+                <Autorenew />
+              </IconButton>
+            </span>
+          </Tooltip>
         )}
       </>
     );

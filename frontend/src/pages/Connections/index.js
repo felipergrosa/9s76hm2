@@ -6,7 +6,6 @@ import { add, format, parseISO } from "date-fns";
 import Menu from "@material-ui/core/Menu";
 import MenuItem from "@material-ui/core/MenuItem";
 import PopupState, { bindTrigger, bindMenu } from "material-ui-popup-state";
-// import { SocketContext } from "../../context/Socket/SocketContext";
 import { makeStyles, useTheme } from "@material-ui/core/styles";
 import useMediaQuery from "@material-ui/core/useMediaQuery";
 import { green } from "@material-ui/core/colors";
@@ -23,8 +22,6 @@ import {
   Typography,
   CircularProgress,
   Box,
-  FormControlLabel,
-  Switch,
   Card,
   CardContent,
   Chip,
@@ -43,6 +40,10 @@ import {
   Instagram,
   WhatsApp,
   MoreVert,
+  Replay,
+  Autorenew,
+  DeleteSweep,
+  PowerSettingsNew,
   Chat as WebChatIcon,
 } from "@material-ui/icons";
 
@@ -245,9 +246,8 @@ const Connections = () => {
   };
   const [confirmModalInfo, setConfirmModalInfo] = useState(confirmationModalInitialState);
   const [planConfig, setPlanConfig] = useState(false);
-  const [clearAuthOnNewQr, setClearAuthOnNewQr] = useState(false);
+  const [clearAuthById, setClearAuthById] = useState({});
 
-  //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
 
   const companyId = user.companyId;
@@ -301,7 +301,6 @@ const Connections = () => {
   };
 
   useEffect(() => {
-    // const socket = socketManager.GetSocket();
     socket.on(`importMessages-${user.companyId}`, (data) => {
       if (data.action === "refresh") {
         setStatusImport([]);
@@ -327,8 +326,9 @@ const Connections = () => {
 
   const handleRequestNewQrCode = async (whatsAppId) => {
     try {
-      await api.put(`/whatsappsession/${whatsAppId}`, { clearAuth: clearAuthOnNewQr });
-      setClearAuthOnNewQr(false);
+      const clearAuth = !!clearAuthById?.[whatsAppId];
+      await api.put(`/whatsappsession/${whatsAppId}`, { clearAuth });
+      setClearAuthById(prev => ({ ...prev, [whatsAppId]: false }));
     } catch (err) {
       toastError(err);
     }
@@ -433,17 +433,19 @@ const Connections = () => {
   const renderImportButton = (whatsApp) => {
     if (whatsApp?.statusImportMessages === "renderButtonCloseTickets") {
       return (
-        <Button
-          style={{ marginLeft: 12 }}
-          size="small"
-          variant="outlined"
-          color="primary"
-          onClick={() => {
-            handleOpenConfirmationModal("closedImported", whatsApp.id);
-          }}
-        >
-          {i18n.t("connections.buttons.closedImported")}
-        </Button>
+        <Tooltip title={i18n.t("connections.buttons.closedImported")}>
+          <span>
+            <IconButton
+              size="small"
+              color="primary"
+              onClick={() => {
+                handleOpenConfirmationModal("closedImported", whatsApp.id);
+              }}
+            >
+              <CheckCircle />
+            </IconButton>
+          </span>
+        </Tooltip>
       );
     }
 
@@ -460,21 +462,13 @@ const Connections = () => {
         if (dataLimite > new Date().getTime()) {
           return (
             <>
-              <Button
-                disabled
-                style={{ marginLeft: 12 }}
-                size="small"
-                endIcon={
-                  <CircularProgress
-                    size={12}
-                    className={classes.buttonProgress}
-                  />
-                }
-                variant="outlined"
-                color="primary"
-              >
-                {i18n.t("connections.buttons.preparing")}
-              </Button>
+              <Tooltip title={i18n.t("connections.buttons.preparing")}>
+                <span>
+                  <IconButton size="small" disabled>
+                    <CircularProgress size={18} className={classes.buttonProgress} />
+                  </IconButton>
+                </span>
+              </Tooltip>
             </>
           );
         }
@@ -492,14 +486,17 @@ const Connections = () => {
             role={user.profile === "user" && user.allowConnections === "enabled" ? "admin" : user.profile}
             perform="connections-page:addConnection"
             yes={() => (
-              <Button
-                size="small"
-                variant="contained"
-                color="primary"
-                onClick={() => handleOpenQrModal(whatsApp)}
-              >
-                {i18n.t("connections.buttons.qrcode")}
-              </Button>
+              <Tooltip title={i18n.t("connections.buttons.qrcode")}>
+                <span>
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    onClick={() => handleOpenQrModal(whatsApp)}
+                  >
+                    <CropFree />
+                  </IconButton>
+                </span>
+              </Tooltip>
             )}
           />
         )}
@@ -509,39 +506,60 @@ const Connections = () => {
             perform="connections-page:addConnection"
             yes={() => (
               <>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="primary"
-                  onClick={() => handleStartWhatsAppSession(whatsApp.id)}
-                >
-                  {isBaileys
-                    ? i18n.t("connections.buttons.tryAgain")
-                    : "Recarregar Conexão"}
-                </Button>{" "}
-                {isBaileys && (
-                  <Box display="flex" alignItems="center" style={{ gap: 8 }}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="secondary"
-                      onClick={() => handleRequestNewQrCode(whatsApp.id)}
-                    >
-                      {i18n.t("connections.buttons.newQr")}
-                    </Button>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          size="small"
-                          color="secondary"
-                          checked={clearAuthOnNewQr}
-                          onChange={(e) => setClearAuthOnNewQr(e.target.checked)}
-                        />
-                      }
-                      label="Limpar sessão"
-                    />
-                  </Box>
-                )}
+                <Box display="flex" alignItems="center" style={{ gap: 4, flexWrap: "wrap" }}>
+                  <Tooltip
+                    title={isBaileys ? i18n.t("connections.buttons.tryAgain") : "Recarregar Conexão"}
+                  >
+                    <span>
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={() => handleStartWhatsAppSession(whatsApp.id)}
+                      >
+                        <Replay />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+
+                  {isBaileys && (
+                    <>
+                      <Tooltip title={i18n.t("connections.buttons.newQr")}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            color="secondary"
+                            onClick={() => handleRequestNewQrCode(whatsApp.id)}
+                          >
+                            <Autorenew />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+
+                      <Tooltip
+                        title={
+                          clearAuthById?.[whatsApp.id]
+                            ? "Limpar sessão: ATIVO"
+                            : "Limpar sessão: inativo"
+                        }
+                      >
+                        <span>
+                          <IconButton
+                            size="small"
+                            color={clearAuthById?.[whatsApp.id] ? "secondary" : "default"}
+                            onClick={() =>
+                              setClearAuthById(prev => ({
+                                ...prev,
+                                [whatsApp.id]: !prev?.[whatsApp.id]
+                              }))
+                            }
+                          >
+                            <DeleteSweep />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </>
+                  )}
+                </Box>
               </>
             )}
           />
@@ -554,16 +572,19 @@ const Connections = () => {
               perform="connections-page:addConnection"
               yes={() => (
                 <>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="secondary"
-                    onClick={() => {
-                      handleOpenConfirmationModal("disconnect", whatsApp.id);
-                    }}
-                  >
-                    {i18n.t("connections.buttons.disconnect")}
-                  </Button>
+                  <Tooltip title={i18n.t("connections.buttons.disconnect")}>
+                    <span>
+                      <IconButton
+                        size="small"
+                        color="secondary"
+                        onClick={() => {
+                          handleOpenConfirmationModal("disconnect", whatsApp.id);
+                        }}
+                      >
+                        <PowerSettingsNew />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
 
                   {renderImportButton(whatsApp)}
                 </>
@@ -571,9 +592,13 @@ const Connections = () => {
             />
           )}
         {whatsApp.status === "OPENING" && (
-          <Button size="small" variant="outlined" disabled color="default">
-            {i18n.t("connections.buttons.connecting")}
-          </Button>
+          <Tooltip title={i18n.t("connections.buttons.connecting")}>
+            <span>
+              <IconButton size="small" disabled>
+                <Autorenew />
+              </IconButton>
+            </span>
+          </Tooltip>
         )}
       </>
     );
