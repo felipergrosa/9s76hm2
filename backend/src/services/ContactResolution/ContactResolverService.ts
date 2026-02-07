@@ -368,8 +368,7 @@ async function resolveLidToPN(
       const recentTicket = await Ticket.findOne({
         where: {
           companyId,
-          whatsappId: wbot.id,
-          status: { [Op.in]: ["open", "pending"] }
+          whatsappId: wbot.id
         },
         include: [{
           model: Contact,
@@ -389,8 +388,7 @@ async function resolveLidToPN(
         const fallbackTickets = await Ticket.findAll({
           where: {
             companyId,
-            whatsappId: wbot.id,
-            status: { [Op.in]: ["open", "pending"] }
+            whatsappId: wbot.id
           },
           include: [{
             model: Contact,
