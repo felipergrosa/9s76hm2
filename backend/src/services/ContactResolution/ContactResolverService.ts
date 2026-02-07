@@ -1,10 +1,11 @@
-import { proto, WASocket } from "@whiskeysockets/baileys";
+import { proto, WASocket, jidNormalizedUser } from "@whiskeysockets/baileys";
 import Contact from "../../models/Contact";
 import LidMapping from "../../models/LidMapping";
 import logger from "../../utils/logger";
 import { extractMessageIdentifiers, ExtractedIdentifiers } from "./extractMessageIdentifiers";
-import { resolveContact, ResolveResult } from "./resolveContact";
+import { resolveContact } from "./resolveContact";
 import { createContact } from "./createContact";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 /**
  * ContactResolverService — Orquestrador das 3 camadas de resolução de contato.
@@ -41,6 +42,11 @@ export async function resolveMessageContact(
 ): Promise<ContactResolutionResult> {
   // ─── CAMADA 1: Extração (pura, sem I/O) ───
   const ids = extractMessageIdentifiers(msg, wbot);
+
+  // ─── CAMADA 1.5: Resolução async LID→PN (quando extração não conseguiu) ───
+  if (ids.lidJid && !ids.pnJid) {
+    await resolveLidToPN(ids, wbot, companyId);
+  }
 
   // ─── CAMADA 2: Resolução (busca, sem criação) ───
   const { contact: existingContact, pnFromMapping } = await resolveContact(ids, companyId);
@@ -172,6 +178,176 @@ export async function resolveGroupContact(
   });
 
   return groupContact;
+}
+
+/**
+ * Resolução async LID→PN.
+ * Chamada quando extractMessageIdentifiers retorna lidJid mas sem pnJid.
+ * Tenta:
+ *   1. LidMapping no banco
+ *   2. wbot.onWhatsApp() (chamada ao WhatsApp — resolve LID para número real)
+ *
+ * Muta o objeto `ids` preenchendo pnJid/pnDigits/pnCanonical se resolver.
+ */
+async function resolveLidToPN(
+  ids: ExtractedIdentifiers,
+  wbot: Session,
+  companyId: number
+): Promise<void> {
+  const lidJid = ids.lidJid!;
+
+  // Estratégia A: LidMapping no banco
+  try {
+    const mapping = await LidMapping.findOne({
+      where: { lid: lidJid, companyId }
+    });
+    if (mapping?.phoneNumber) {
+      const digits = mapping.phoneNumber.replace(/\D/g, "");
+      if (digits.length >= 10 && digits.length <= 13) {
+        ids.pnJid = `${digits}@s.whatsapp.net`;
+        ids.pnDigits = digits;
+        const { canonical } = safeNormalizePhoneNumber(digits);
+        ids.pnCanonical = canonical;
+        logger.info({
+          lidJid,
+          pnJid: ids.pnJid,
+          strategy: "LidMapping-async"
+        }, "[resolveLidToPN] LID→PN via LidMapping");
+        return;
+      }
+    }
+  } catch (err: any) {
+    logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Erro ao consultar LidMapping");
+  }
+
+  // Estratégia B: signalRepository.lidMapping.getPNForLID() — API oficial do Baileys v7 (async)
+  try {
+    const sock = wbot as any;
+    const lidStore = sock.signalRepository?.lidMapping;
+    if (lidStore?.getPNForLID) {
+      const lidId = lidJid.replace("@lid", "");
+      const resolvedPN = await lidStore.getPNForLID(lidId);
+      if (resolvedPN) {
+        const digits = resolvedPN.replace(/\D/g, "");
+        if (digits.length >= 10 && digits.length <= 13) {
+          const pnJid = resolvedPN.includes("@") ? jidNormalizedUser(resolvedPN) : `${digits}@s.whatsapp.net`;
+          ids.pnJid = pnJid;
+          ids.pnDigits = digits;
+          const { canonical } = safeNormalizePhoneNumber(digits);
+          ids.pnCanonical = canonical;
+
+          logger.info({
+            lidJid,
+            pnJid: ids.pnJid,
+            strategy: "signalRepository.lidMapping"
+          }, "[resolveLidToPN] LID→PN via signalRepository.lidMapping.getPNForLID()");
+
+          // Persistir mapeamento para futuras consultas
+          try {
+            await LidMapping.upsert({
+              lid: lidJid,
+              phoneNumber: digits,
+              companyId,
+              whatsappId: wbot.id,
+              verified: true
+            });
+          } catch {
+            // Não bloquear fluxo
+          }
+
+          return;
+        }
+      }
+    }
+  } catch (err: any) {
+    logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Erro ao usar signalRepository.lidMapping");
+  }
+
+  // Estratégia C: wbot.onWhatsApp() — consulta direta ao WhatsApp
+  try {
+    const results = await (wbot as any).onWhatsApp(lidJid);
+
+    if (results && results.length > 0) {
+      const result = results[0];
+      // result.jid deve ser o PN real (@s.whatsapp.net)
+      if (result.jid && result.jid.includes("@s.whatsapp.net")) {
+        const pnJid = jidNormalizedUser(result.jid);
+        const digits = pnJid.replace(/\D/g, "");
+        if (digits.length >= 10 && digits.length <= 13) {
+          ids.pnJid = pnJid;
+          ids.pnDigits = digits;
+          const { canonical } = safeNormalizePhoneNumber(digits);
+          ids.pnCanonical = canonical;
+
+          logger.info({
+            lidJid,
+            pnJid: ids.pnJid,
+            strategy: "onWhatsApp"
+          }, "[resolveLidToPN] LID→PN via wbot.onWhatsApp()");
+
+          // Persistir mapeamento para futuras consultas
+          try {
+            await LidMapping.upsert({
+              lid: lidJid,
+              phoneNumber: digits,
+              companyId,
+              whatsappId: wbot.id,
+              verified: true
+            });
+          } catch {
+            // Não bloquear fluxo
+          }
+
+          return;
+        }
+      }
+    }
+
+    logger.info({
+      lidJid,
+      resultsCount: results?.length || 0,
+      firstResult: results?.[0] ? { jid: results[0].jid, exists: results[0].exists } : null
+    }, "[resolveLidToPN] wbot.onWhatsApp() não retornou PN válido");
+  } catch (err: any) {
+    logger.warn({
+      err: err?.message,
+      lidJid
+    }, "[resolveLidToPN] Erro ao chamar wbot.onWhatsApp()");
+  }
+
+  // Estratégia D: buscar contato existente pelo lidJid no banco
+  // (pode ter sido criado anteriormente com número real)
+  try {
+    const existingContact = await Contact.findOne({
+      where: {
+        companyId,
+        lidJid,
+        isGroup: false
+      }
+    });
+
+    if (existingContact && existingContact.number && !existingContact.number.startsWith("PENDING_")) {
+      const digits = existingContact.number.replace(/\D/g, "");
+      if (digits.length >= 10 && digits.length <= 13) {
+        ids.pnJid = `${digits}@s.whatsapp.net`;
+        ids.pnDigits = digits;
+        const { canonical } = safeNormalizePhoneNumber(digits);
+        ids.pnCanonical = canonical;
+
+        logger.info({
+          lidJid,
+          pnJid: ids.pnJid,
+          contactId: existingContact.id,
+          strategy: "existing-contact-lidJid"
+        }, "[resolveLidToPN] LID→PN via contato existente com lidJid");
+        return;
+      }
+    }
+  } catch (err: any) {
+    logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Erro ao buscar contato por lidJid");
+  }
+
+  logger.warn({ lidJid }, "[resolveLidToPN] Todas as estratégias falharam — contato será PENDING_");
 }
 
 export default {
