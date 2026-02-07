@@ -54,6 +54,7 @@ const ShowTicketUUIDService = async (uuid: string,
           "disableBot",
           "urlPicture",
           "companyId",
+          "isGroup",
           // Campos adicionais que o frontend precisa exibir
           "cpfCnpj",
           "representativeCode",

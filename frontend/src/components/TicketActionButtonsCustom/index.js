@@ -454,7 +454,7 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                             {i18n.t("messagesList.header.buttons.reopen")}
                         </ButtonWithSpinner>
                     )}
-                    {(ticket.status === "open" || ticket.status === "group") && (
+                    {(ticket.status === "open" || ticket.status === "group") && !ticket.isGroup && (
                         <>
                             <IconButton className={classes.bottomButtonVisibilityIcon}>
                                 <Tooltip title={i18n.t("messagesList.header.buttons.resolve")}>
@@ -556,7 +556,7 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                     open={menuOpen}
                     onClose={handleCloseMenu}
                 >
-                    {(ticket.status === "open" || ticket.status === "group") && (
+                    {(ticket.status === "open" || ticket.status === "group") && !ticket.isGroup && (
                         <>
                             <MenuItem onClick={() => { handleCloseMenu(); handleClickOpen(); }}>
                                 <HighlightOffIcon style={{ color: '#e53935', marginRight: 10 }} />

@@ -855,9 +855,12 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                                     </Badge>
                                 ) : null}
 
-                                <Badge style={{ backgroundColor: ticket.queue?.color || "#7c7c7c" }} className={classes.connectionTag}>
-                                    {ticket.queueId ? ticket.queue?.name.toUpperCase() : ticket.status === "lgpd" ? "LGPD" : "SEM FILA"}
-                                </Badge>
+                                {/* Badge de fila - não exibe para grupos */}
+                                {!ticket.isGroup && (
+                                    <Badge style={{ backgroundColor: ticket.queue?.color || "#7c7c7c" }} className={classes.connectionTag}>
+                                        {ticket.queueId ? ticket.queue?.name.toUpperCase() : ticket.status === "lgpd" ? "LGPD" : "SEM FILA"}
+                                    </Badge>
+                                )}
 
                                 {ticket?.user && (
                                     <Badge style={{ backgroundColor: "#000000" }} className={classes.connectionTag}>
@@ -947,8 +950,8 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                         </Tooltip>
                     )}
 
-                    {/* Transferir ticket */}
-                    {(ticket.status === "pending" || ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
+                    {/* Transferir ticket - não disponível para grupos */}
+                    {!ticket.isGroup && (ticket.status === "pending" || ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
                         <Tooltip title={i18n.t("ticketsList.buttons.transfer")}>
                             <IconButton
                                 size="small"
@@ -961,8 +964,8 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                         </Tooltip>
                     )}
 
-                    {/* Espiar conversa */}
-                    {(ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
+                    {/* Espiar conversa - não disponível para grupos */}
+                    {!ticket.isGroup && (ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
                         <Tooltip title="Espiar Conversa">
                             <IconButton
                                 size="small"

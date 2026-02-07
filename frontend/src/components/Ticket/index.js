@@ -226,6 +226,13 @@ const Ticket = () => {
     };
   }, []);
 
+  // Fecha drawer automaticamente quando ticket de grupo está fechado
+  useEffect(() => {
+    if (ticket?.isGroup && ticket?.status === "closed" && drawerOpen) {
+      setDrawerOpen(false);
+    }
+  }, [ticket?.isGroup, ticket?.status, drawerOpen]);
+
   // Escuta ativação do header externo (TicketsAdvanced) para evitar cabeçalho duplicado
   useEffect(() => {
     const handleExternalHeaderToggle = (e) => {
@@ -390,8 +397,12 @@ const Ticket = () => {
   }, []);
 
   const handleDrawerToggle = useCallback(() => {
+    // Não permitir abrir drawer se ticket de grupo estiver fechado
+    if (ticket?.isGroup && ticket?.status === "closed") {
+      return;
+    }
     setDrawerOpen(prev => !prev);
-  }, []);
+  }, [ticket?.isGroup, ticket?.status]);
 
   const renderMessagesList = () => {
     return (

@@ -141,7 +141,7 @@ const ListTicketsService = async ({
 
       whereCondition = {
         companyId,
-        queueId: { [Op.or]: [queueIds, null] },
+        // Grupos não filtram por fila - devem aparecer independente de queueId
         // Se não é super/admin sem restrição, filtra por conexões
         ...(uniqueConnIds.length > 0 && !user.super && user.profile !== "admin"
           ? { whatsappId: { [Op.in]: uniqueConnIds } }
@@ -218,7 +218,8 @@ const ListTicketsService = async ({
     showAll === "true" &&
     (user.profile === "admin" || user.allUserChat === "enabled") &&
     status !== "search" &&
-    status !== "campaign"
+    status !== "campaign" &&
+    status !== "group" // Grupos têm filtro próprio definido acima, não sobrescrever
   ) {
 
     if (user.allHistoric === "enabled" && showTicketWithoutQueue) {
