@@ -55,17 +55,44 @@ const FindOrCreateTicketService = async (
 
   const DirectTicketsToWallets = settings?.DirectTicketsToWallets;
 
-  let ticket = await Ticket.findOne({
-    where: {
-      status: {
-        [Op.or]: ["open", "pending", "group", "nps", "lgpd", "bot", "campaign"]
+  // Para GRUPOS: buscar ticket mais recente independente de status (incluindo closed)
+  // Isso garante que um grupo WhatsApp = um único ticket para sempre
+  let ticket: Ticket | null = null;
+
+  if (groupContact) {
+    ticket = await Ticket.findOne({
+      where: {
+        contactId: groupContact.id,
+        companyId,
+        whatsappId: whatsapp.id
       },
-      contactId: groupContact ? groupContact.id : contact.id,
-      companyId,
-      whatsappId: whatsapp.id
-    },
-    order: [["id", "DESC"]]
-  });
+      order: [["id", "DESC"]]
+    });
+
+    // Se encontrou ticket fechado, reabrir como "group"
+    if (ticket && ticket.status === "closed") {
+      logger.info(`[FindOrCreateTicket] Reabrindo ticket de grupo ${ticket.id} (estava closed)`);
+      await ticket.update({
+        status: "group",
+        unreadMessages,
+      });
+      ticket = await ShowTicketService(ticket.id, companyId);
+      return ticket;
+    }
+  } else {
+    // Para contatos individuais: buscar apenas tickets com status ativo
+    ticket = await Ticket.findOne({
+      where: {
+        status: {
+          [Op.or]: ["open", "pending", "group", "nps", "lgpd", "bot", "campaign"]
+        },
+        contactId: contact.id,
+        companyId,
+        whatsappId: whatsapp.id
+      },
+      order: [["id", "DESC"]]
+    });
+  }
 
   if (ticket) {
     if (isCampaign) {
@@ -195,7 +222,8 @@ const FindOrCreateTicketService = async (
 
   const timeCreateNewTicket = whatsapp.timeCreateNewTicket;
 
-  if (!ticket && timeCreateNewTicket !== 0) {
+  // timeCreateNewTicket NÃO se aplica a grupos — grupos sempre reutilizam o mesmo ticket
+  if (!ticket && !groupContact && timeCreateNewTicket !== 0) {
 
     // @ts-ignore: Unreachable code error
     if (timeCreateNewTicket !== 0 && timeCreateNewTicket !== "0") {
