@@ -59,9 +59,8 @@ export function extractMessageIdentifiers(
     altJid = (key as any).remoteJidAlt || null;
   }
 
-  // Se fromMe, manter remoteJid como destinatário (correção crítica)
-  // O remoteJid contém o JID da pessoa que RECEBEU a mensagem
-  // NÃO devemos usar o JID do remetente (nós mesmos)
+  // Para DMs: remoteJid é o DESTINATÁRIO (contato com quem estamos conversando)
+  // Nunca substituir pelo JID do próprio usuário (remetente)
 
   // Normalizar primaryJid
   if (primaryJid) {
@@ -86,6 +85,7 @@ export function extractMessageIdentifiers(
       const altDigits = altJid.replace(/\D/g, "");
       if (altDigits.length >= 10 && altDigits.length <= 13) {
         pnJid = jidNormalizedUser(altJid);
+        logger.info({ lidJid: primaryJid, pnJid, strategy: "altJid" }, "[extractIdentifiers] LID→PN via altJid");
       }
     }
 
@@ -99,6 +99,7 @@ export function extractMessageIdentifiers(
             const pnDigits = pn.replace(/\D/g, "");
             if (pnDigits.length >= 10 && pnDigits.length <= 13) {
               pnJid = jidNormalizedUser(pn);
+              logger.info({ lidJid: primaryJid, pnJid, strategy: "signalRepository" }, "[extractIdentifiers] LID→PN via signalRepository");
             }
           }
         }
@@ -114,7 +115,54 @@ export function extractMessageIdentifiers(
         const spDigits = senderPn.replace(/\D/g, "");
         if (spDigits.length >= 10 && spDigits.length <= 13) {
           pnJid = senderPn.includes("@") ? jidNormalizedUser(senderPn) : `${spDigits}@s.whatsapp.net`;
+          logger.info({ lidJid: primaryJid, pnJid, strategy: "senderPn" }, "[extractIdentifiers] LID→PN via senderPn");
         }
+      }
+    }
+
+    // Estratégia 4: participantPn do Baileys v7 (campo presente em grupos e DMs com LID)
+    if (!pnJid) {
+      const participantPn = (key as any).participantPn;
+      if (participantPn && participantPn.includes("@s.whatsapp.net")) {
+        const ppDigits = participantPn.replace(/\D/g, "");
+        if (ppDigits.length >= 10 && ppDigits.length <= 13) {
+          pnJid = jidNormalizedUser(participantPn);
+          logger.info({ lidJid: primaryJid, pnJid, strategy: "participantPn" }, "[extractIdentifiers] LID→PN via participantPn");
+        }
+      }
+    }
+
+    // Estratégia 5: store.contacts do Baileys (cache in-memory)
+    if (!pnJid) {
+      try {
+        const sock = wbot as any;
+        if (sock.store?.contacts?.[primaryJid]) {
+          const storedContact = sock.store.contacts[primaryJid];
+          // phoneNumber no Contact armazenado
+          if (storedContact.phoneNumber) {
+            const pnDigits = storedContact.phoneNumber.replace(/\D/g, "");
+            if (pnDigits.length >= 10 && pnDigits.length <= 13) {
+              pnJid = `${pnDigits}@s.whatsapp.net`;
+              logger.info({ lidJid: primaryJid, pnJid, strategy: "store.phoneNumber" }, "[extractIdentifiers] LID→PN via store.phoneNumber");
+            }
+          }
+          // id pode ser o PN real
+          if (!pnJid && storedContact.id?.includes("@s.whatsapp.net")) {
+            pnJid = storedContact.id;
+            logger.info({ lidJid: primaryJid, pnJid, strategy: "store.id" }, "[extractIdentifiers] LID→PN via store.id");
+          }
+        }
+      } catch {
+        // store não disponível
+      }
+    }
+
+    // Estratégia 6: pushName contendo número válido (último recurso, como no código antigo)
+    if (!pnJid && msg.pushName) {
+      const pushNameDigits = (msg.pushName || "").replace(/\D/g, "");
+      if (pushNameDigits.length >= 10 && pushNameDigits.length <= 13) {
+        pnJid = `${pushNameDigits}@s.whatsapp.net`;
+        logger.info({ lidJid: primaryJid, pnJid, pushName: msg.pushName, strategy: "pushName" }, "[extractIdentifiers] LID→PN via pushName");
       }
     }
   } else if (isPn) {
@@ -143,7 +191,12 @@ export function extractMessageIdentifiers(
     groupJid: isGroup ? remoteJid : null
   };
 
-  logger.debug({ ...result, msgId: key.id }, "[extractMessageIdentifiers] Identificadores extraídos");
+  // Log info quando envolve LID (para diagnóstico), debug para mensagens normais
+  if (isLid) {
+    logger.info({ ...result, msgId: key.id, remoteJid }, "[extractMessageIdentifiers] Identificadores extraídos (LID)");
+  } else {
+    logger.debug({ ...result, msgId: key.id }, "[extractMessageIdentifiers] Identificadores extraídos");
+  }
 
   return result;
 }
