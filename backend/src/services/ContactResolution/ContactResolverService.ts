@@ -523,114 +523,16 @@ async function resolveLidToPN(
     logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Erro ao buscar contato por lidJid");
   }
 
-  // Estratégia E: Para mensagens fromMe, buscar ticket recente na mesma conexão
-  // Cruza com pushName para encontrar o contato correto
-  if (ids.isFromMe && wbot.id) {
-    try {
-      // Construir filtro do contato: sempre excluir PENDING_ e grupos
-      const contactWhere: any = {
-        isGroup: false,
-        number: { [Op.notLike]: "PENDING_%" }
-      };
-
-      // Se temos pushName, filtrar por nome para evitar match errado
-      if (ids.pushName && ids.pushName.trim().length > 2) {
-        contactWhere.name = ids.pushName.trim();
-      }
-
-      const recentTicket = await Ticket.findOne({
-        where: {
-          companyId,
-          whatsappId: wbot.id
-        },
-        include: [{
-          model: Contact,
-          as: "contact",
-          where: contactWhere,
-          required: true
-        }],
-        order: [["updatedAt", "DESC"]]
-      });
-
-      let resolvedContact: Contact | null = recentTicket?.contact || null;
-      let resolvedTicketId = recentTicket?.id;
-
-      // Fallback: se não encontrou com filtro de nome, tentar sem filtro
-      // MAS apenas se houver exatamente 1 ticket aberto (evita ambiguidade)
-      if (!resolvedContact && ids.pushName && ids.pushName.trim().length > 2) {
-        const fallbackTickets = await Ticket.findAll({
-          where: {
-            companyId,
-            whatsappId: wbot.id
-          },
-          include: [{
-            model: Contact,
-            as: "contact",
-            where: {
-              isGroup: false,
-              number: { [Op.notLike]: "PENDING_%" }
-            },
-            required: true
-          }],
-          order: [["updatedAt", "DESC"]],
-          limit: 2
-        });
-
-        if (fallbackTickets.length === 1 && fallbackTickets[0]?.contact) {
-          resolvedContact = fallbackTickets[0].contact;
-          resolvedTicketId = fallbackTickets[0].id;
-          logger.info({
-            lidJid,
-            contactName: resolvedContact.name,
-            pushName: ids.pushName,
-            strategy: "recent-ticket-fromMe-single"
-          }, "[resolveLidToPN] Único ticket aberto na conexão — usando como fallback");
-        }
-      }
-
-      if (resolvedContact) {
-        const digits = (resolvedContact.number || "").replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 13) {
-          ids.pnJid = `${digits}@s.whatsapp.net`;
-          ids.pnDigits = digits;
-          const { canonical } = safeNormalizePhoneNumber(digits);
-          ids.pnCanonical = canonical;
-
-          logger.info({
-            lidJid,
-            pnJid: ids.pnJid,
-            contactId: resolvedContact.id,
-            contactName: resolvedContact.name,
-            ticketId: resolvedTicketId,
-            strategy: "recent-ticket-fromMe"
-          }, "[resolveLidToPN] LID→PN via ticket recente (fromMe)");
-
-          // Persistir mapeamento e atualizar lidJid do contato
-          try {
-            await LidMapping.upsert({
-              lid: lidJid,
-              phoneNumber: digits,
-              companyId,
-              whatsappId: wbot.id,
-              verified: false
-            });
-            if (!resolvedContact.lidJid) {
-              await resolvedContact.update({ lidJid });
-            }
-          } catch {
-            // Não bloquear fluxo
-          }
-
-          return;
-        }
-      }
-    } catch (err: any) {
-      logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Erro na estratégia de ticket recente");
-    }
-  }
+  // NOTA: Estratégia E removida - busca por ticket recente estava retornando
+  // contato do operador (remetente) ao invés do cliente (destinatário).
+  // Para mensagens fromMe, agora usamos apenas:
+  // 1. resolveFromSentWid (atalho determinístico via Message.wid)
+  // 2. Busca por lidJid (strategy D acima)
+  // 3. Criação de PENDING_ com pushName correto (destinatário)
 
   // Estratégia F: Buscar contato pelo pushName (último recurso)
   // Usa busca parcial com LIKE para maior chance de match
+  // IMPORTANTE: pushName em mensagens fromMe é o nome do DESTINATÁRIO (cliente)
   if (ids.pushName && ids.pushName.trim().length > 2) {
     try {
       const pushNameClean = ids.pushName.trim();
