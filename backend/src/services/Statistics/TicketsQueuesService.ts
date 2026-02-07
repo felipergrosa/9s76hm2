@@ -160,19 +160,38 @@ const TicketsQueuesService = async ({
   }
 
   // REGRA PRINCIPAL: Ticket em atendimento (open/group com userId) só pode ser visto pelo atendente
-  // Independente de ser admin, supervisor ou estar na carteira
-  whereCondition = {
-    [Op.and]: [
-      whereCondition,
-      {
-        [Op.or]: [
-          { userId: +userId }, // Meus tickets (sempre vejo os meus)
-          { userId: null }, // Tickets sem atribuição (pendentes)
-          { status: { [Op.notIn]: ["open", "group"] } } // Tickets fechados/outros (qualquer um pode ver)
-        ]
-      }
-    ]
-  } as any;
+  // OU por supervisores que gerenciam esse atendente, OU por admin/superadmin (showAll)
+  
+  // Se showAll=true (admin/superadmin), não aplica restrição de userId na regra principal
+  if (showAll !== "true") {
+    // Buscar usuário para verificar se é supervisor
+    const currentUser = await User.findByPk(+userId, {
+      attributes: ["id", "managedUserIds"]
+    });
+    const userManagedIds = (currentUser as any)?.managedUserIds || [];
+    const isSupervisor = Array.isArray(userManagedIds) && userManagedIds.length > 0;
+
+    let userOrConditions: any[] = [
+      { userId: +userId }, // Meus tickets (sempre vejo os meus)
+      { userId: null }, // Tickets sem atribuição (pendentes)
+      { status: { [Op.notIn]: ["open", "group"] } } // Tickets fechados/outros (qualquer um pode ver)
+    ];
+
+    // Se for supervisor, também vê tickets dos supervisionados
+    if (isSupervisor) {
+      const managedIds = userManagedIds.map((id: any) => Number(id));
+      userOrConditions.push({ userId: { [Op.in]: managedIds } });
+    }
+
+    whereCondition = {
+      [Op.and]: [
+        whereCondition,
+        {
+          [Op.or]: userOrConditions
+        }
+      ]
+    } as any;
+  }
 
   const { count, rows: tickets } = await Ticket.findAndCountAll({
     where: whereCondition,
