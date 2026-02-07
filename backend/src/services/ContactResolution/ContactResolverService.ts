@@ -1,5 +1,7 @@
 import { proto, WASocket, jidNormalizedUser } from "@whiskeysockets/baileys";
+import { Op } from "sequelize";
 import Contact from "../../models/Contact";
+import Ticket from "../../models/Ticket";
 import LidMapping from "../../models/LidMapping";
 import logger from "../../utils/logger";
 import { extractMessageIdentifiers, ExtractedIdentifiers } from "./extractMessageIdentifiers";
@@ -45,7 +47,7 @@ export async function resolveMessageContact(
 
   // ─── CAMADA 1.5: Resolução async LID→PN (quando extração não conseguiu) ───
   if (ids.lidJid && !ids.pnJid) {
-    await resolveLidToPN(ids, wbot, companyId);
+    await resolveLidToPN(ids, wbot, companyId, msg);
   }
 
   // ─── CAMADA 2: Resolução (busca, sem criação) ───
@@ -192,7 +194,8 @@ export async function resolveGroupContact(
 async function resolveLidToPN(
   ids: ExtractedIdentifiers,
   wbot: Session,
-  companyId: number
+  companyId: number,
+  msg?: proto.IWebMessageInfo
 ): Promise<void> {
   const lidJid = ids.lidJid!;
 
@@ -347,7 +350,169 @@ async function resolveLidToPN(
     logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Erro ao buscar contato por lidJid");
   }
 
-  logger.warn({ lidJid }, "[resolveLidToPN] Todas as estratégias falharam — contato será PENDING_");
+  // Estratégia E: Para mensagens fromMe, buscar ticket recente na mesma conexão
+  // Cruza com pushName para encontrar o contato correto
+  if (ids.isFromMe && wbot.id) {
+    try {
+      // Construir filtro do contato: sempre excluir PENDING_ e grupos
+      const contactWhere: any = {
+        isGroup: false,
+        number: { [Op.notLike]: "PENDING_%" }
+      };
+
+      // Se temos pushName, filtrar por nome para evitar match errado
+      if (ids.pushName && ids.pushName.trim().length > 2) {
+        contactWhere.name = ids.pushName.trim();
+      }
+
+      const recentTicket = await Ticket.findOne({
+        where: {
+          companyId,
+          whatsappId: wbot.id,
+          status: { [Op.in]: ["open", "pending"] }
+        },
+        include: [{
+          model: Contact,
+          as: "contact",
+          where: contactWhere,
+          required: true
+        }],
+        order: [["updatedAt", "DESC"]]
+      });
+
+      let resolvedContact: Contact | null = recentTicket?.contact || null;
+      let resolvedTicketId = recentTicket?.id;
+
+      // Fallback: se não encontrou com filtro de nome, tentar sem filtro
+      // MAS apenas se houver exatamente 1 ticket aberto (evita ambiguidade)
+      if (!resolvedContact && ids.pushName && ids.pushName.trim().length > 2) {
+        const fallbackTickets = await Ticket.findAll({
+          where: {
+            companyId,
+            whatsappId: wbot.id,
+            status: { [Op.in]: ["open", "pending"] }
+          },
+          include: [{
+            model: Contact,
+            as: "contact",
+            where: {
+              isGroup: false,
+              number: { [Op.notLike]: "PENDING_%" }
+            },
+            required: true
+          }],
+          order: [["updatedAt", "DESC"]],
+          limit: 2
+        });
+
+        if (fallbackTickets.length === 1 && fallbackTickets[0]?.contact) {
+          resolvedContact = fallbackTickets[0].contact;
+          resolvedTicketId = fallbackTickets[0].id;
+          logger.info({
+            lidJid,
+            contactName: resolvedContact.name,
+            pushName: ids.pushName,
+            strategy: "recent-ticket-fromMe-single"
+          }, "[resolveLidToPN] Único ticket aberto na conexão — usando como fallback");
+        }
+      }
+
+      if (resolvedContact) {
+        const digits = (resolvedContact.number || "").replace(/\D/g, "");
+        if (digits.length >= 10 && digits.length <= 13) {
+          ids.pnJid = `${digits}@s.whatsapp.net`;
+          ids.pnDigits = digits;
+          const { canonical } = safeNormalizePhoneNumber(digits);
+          ids.pnCanonical = canonical;
+
+          logger.info({
+            lidJid,
+            pnJid: ids.pnJid,
+            contactId: resolvedContact.id,
+            contactName: resolvedContact.name,
+            ticketId: resolvedTicketId,
+            strategy: "recent-ticket-fromMe"
+          }, "[resolveLidToPN] LID→PN via ticket recente (fromMe)");
+
+          // Persistir mapeamento e atualizar lidJid do contato
+          try {
+            await LidMapping.upsert({
+              lid: lidJid,
+              phoneNumber: digits,
+              companyId,
+              whatsappId: wbot.id,
+              verified: false
+            });
+            if (!resolvedContact.lidJid) {
+              await resolvedContact.update({ lidJid });
+            }
+          } catch {
+            // Não bloquear fluxo
+          }
+
+          return;
+        }
+      }
+    } catch (err: any) {
+      logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Erro na estratégia de ticket recente");
+    }
+  }
+
+  // Estratégia F: Buscar contato pelo pushName exato (último recurso)
+  // pushName é o nome do destinatário — pode encontrar contato existente
+  if (ids.pushName && ids.pushName.trim().length > 2) {
+    try {
+      const contactByName = await Contact.findOne({
+        where: {
+          companyId,
+          name: ids.pushName.trim(),
+          isGroup: false,
+          number: { [Op.notLike]: "PENDING_%" }
+        },
+        order: [["updatedAt", "DESC"]]
+      });
+
+      if (contactByName) {
+        const digits = (contactByName.number || "").replace(/\D/g, "");
+        if (digits.length >= 10 && digits.length <= 13) {
+          ids.pnJid = `${digits}@s.whatsapp.net`;
+          ids.pnDigits = digits;
+          const { canonical } = safeNormalizePhoneNumber(digits);
+          ids.pnCanonical = canonical;
+
+          logger.info({
+            lidJid,
+            pnJid: ids.pnJid,
+            contactId: contactByName.id,
+            contactName: contactByName.name,
+            strategy: "pushName-match"
+          }, "[resolveLidToPN] LID→PN via pushName");
+
+          // Persistir mapeamento e atualizar lidJid do contato
+          try {
+            await LidMapping.upsert({
+              lid: lidJid,
+              phoneNumber: digits,
+              companyId,
+              whatsappId: wbot.id,
+              verified: false
+            });
+            if (!contactByName.lidJid) {
+              await contactByName.update({ lidJid });
+            }
+          } catch {
+            // Não bloquear fluxo
+          }
+
+          return;
+        }
+      }
+    } catch (err: any) {
+      logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Erro na estratégia pushName");
+    }
+  }
+
+  logger.warn({ lidJid, isFromMe: ids.isFromMe, pushName: ids.pushName }, "[resolveLidToPN] Todas as estratégias falharam — contato será PENDING_");
 }
 
 export default {
