@@ -3,6 +3,7 @@ import Contact from "../../models/Contact";
 import ContactTag from "../../models/ContactTag";
 import Tag from "../../models/Tag";
 import User from "../../models/User";
+import Whatsapp from "../../models/Whatsapp";
 
 interface Request {
   searchParam?: string;
@@ -104,13 +105,19 @@ const ListGroupsService = async ({
     ],
     include: [
       {
+        model: Whatsapp,
+        as: "whatsapp",
+        attributes: ["id", "name", "status", "number"],
+        required: false
+      },
+      {
         model: ContactTag,
         as: "contactTags",
         attributes: ["tagId"],
         include: [
           {
             model: Tag,
-            as: "tag",
+            as: "tags",
             attributes: ["id", "name", "color"]
           }
         ],

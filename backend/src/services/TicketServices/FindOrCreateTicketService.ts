@@ -219,7 +219,8 @@ const FindOrCreateTicketService = async (
 
     if (ticket && ticket.status !== "nps") {
       await ticket.update({
-        status: "pending",
+        // Grupos SEMPRE mantêm status "group" ao reabrir
+        status: ticket.isGroup ? "group" : "pending",
         unreadMessages,
         companyId,
         // queueId: timeCreateNewTicket === 0 ? null : ticket.queueId
@@ -313,7 +314,8 @@ const FindOrCreateTicketService = async (
 
     if (!isImported && !isNil(settings?.enableLGPD) && openAsLGPD && !groupContact) {
       initialStatus = "lgpd";
-    } else if (groupContact && whatsapp.groupAsTicket !== "enabled") {
+    } else if (groupContact) {
+      // Grupos SEMPRE vão para a aba "grupo", independente do groupAsTicket
       initialStatus = "group";
     } else if (!groupContact && hasBotInDefaultQueue && !isFromMe) {
       // Conexão tem fila padrão COM bot: inicia como bot (vale para clientes novos E campanhas)
@@ -351,13 +353,15 @@ const FindOrCreateTicketService = async (
         const walletOwner = await User.findByPk(wallets[0].id);
 
         // Regra de Ouro: Só atribui se estiver ONLINE
-        if (walletOwner && walletOwner.online) {
+        // Grupos SEMPRE mantêm status "group" - Smart Routing não sobrescreve
+        if (groupContact) {
+          ticketData.status = "group";
+          ticketData.userId = wallets[0].id;
+          logger.info(`[SmartRouting] Grupo mantém status "group", atribuído a wallet owner: ${walletOwner?.name}`);
+        } else if (walletOwner && walletOwner.online) {
           ticketData.status = (!isImported && !isNil(settings?.enableLGPD)
-            && openAsLGPD && !groupContact) ?
-            "lgpd" :
-            (whatsapp.groupAsTicket === "enabled" || !groupContact) ?
-              "open" :
-              "group";
+            && openAsLGPD) ?
+            "lgpd" : "open";
 
           ticketData.userId = wallets[0].id;
           logger.info(`[SmartRouting] Ticket assigned to ONLINE wallet owner: ${walletOwner.name} (${walletOwner.id})`);
@@ -365,7 +369,6 @@ const FindOrCreateTicketService = async (
           // Se dono estiver Offline/Férias -> Mantém Pending para Supervisor/Admin ver
           ticketData.status = "pending";
           ticketData.userId = null;
-          // Mantém fila padrão se houver (já definia acima)
           logger.info(`[SmartRouting] Wallet owner ${walletOwner?.name} is OFFLINE. Ticket kept PENDING for supervision.`);
         }
       }

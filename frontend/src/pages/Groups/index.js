@@ -1,47 +1,32 @@
-import React, { useState, useEffect, useReducer, useContext, useRef, useCallback } from "react";
-import { toast } from "react-toastify";
+import React, { useState, useEffect, useMemo, useContext, useRef } from "react";
 import { useHistory } from "react-router-dom";
 import {
     Search,
     Users,
     MessageSquare,
-    ChevronLeft,
-    ChevronRight,
-    ChevronsLeft,
-    ChevronsRight,
     RefreshCw,
+    Eye,
+    Wifi,
+    WifiOff,
 } from "lucide-react";
 import api from "../../services/api";
-import { i18n } from "../../translate/i18n";
 import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
-import { Can } from "../../components/Can";
 import useDebounce from "../../hooks/useDebounce";
-import TableRowSkeleton from "../../components/TableRowSkeleton";
 import ContactAvatar from "../../components/ContactAvatar";
 
-const reducer = (state, action) => {
-    if (action.type === "SET_GROUPS") {
-        return [...action.payload];
-    }
-    if (action.type === "UPDATE_GROUP") {
-        const group = action.payload;
-        const idx = state.findIndex((g) => g.id === group.id);
-        if (idx !== -1) {
-            state[idx] = group;
-            return [...state];
-        }
-        return [group, ...state];
-    }
-    if (action.type === "DELETE_GROUP") {
-        return state.filter((g) => g.id !== action.payload);
-    }
-    if (action.type === "RESET") {
-        return [];
-    }
-    return state;
-};
+// Cores para os headers das lanes (cicla entre elas)
+const LANE_COLORS = [
+    { bg: "#00a884", text: "#fff" },    // verde WhatsApp
+    { bg: "#5b5ea6", text: "#fff" },    // roxo
+    { bg: "#e67e22", text: "#fff" },    // laranja
+    { bg: "#2980b9", text: "#fff" },    // azul
+    { bg: "#c0392b", text: "#fff" },    // vermelho
+    { bg: "#16a085", text: "#fff" },    // teal
+    { bg: "#8e44ad", text: "#fff" },    // violeta
+    { bg: "#d35400", text: "#fff" },    // dark orange
+];
 
 const Groups = () => {
     const history = useHistory();
@@ -50,35 +35,29 @@ const Groups = () => {
     const [loading, setLoading] = useState(false);
     const [searchParam, setSearchParam] = useState("");
     const debouncedSearchParam = useDebounce(searchParam, 400);
-    const [groups, dispatch] = useReducer(reducer, []);
-    const [pageNumber, setPageNumber] = useState(1);
-    const [hasMore, setHasMore] = useState(false);
+    const [groups, setGroups] = useState([]);
     const [totalGroups, setTotalGroups] = useState(0);
-    const [groupsPerPage] = useState(20);
     const requestIdRef = useRef(0);
 
-    // Buscar grupos
+    // Buscar todos os grupos (sem paginação, agrupamos no frontend)
     useEffect(() => {
         setLoading(true);
         const currentId = ++requestIdRef.current;
 
         const fetchGroups = async () => {
             try {
-                // Usar nova API /groups que respeita permissões de conexão
                 const { data } = await api.get("/groups", {
                     params: {
                         searchParam: debouncedSearchParam,
-                        pageNumber,
-                        limit: groupsPerPage,
+                        pageNumber: 1,
+                        limit: 500, // Trazer todos para agrupar por conexão
                     },
                 });
 
                 if (currentId !== requestIdRef.current) return;
 
-                // A nova API retorna { groups, count, hasMore }
-                dispatch({ type: "SET_GROUPS", payload: data.groups || [] });
-                setHasMore(data.hasMore);
-                setTotalGroups(data.count);
+                setGroups(data.groups || []);
+                setTotalGroups(data.count || 0);
             } catch (err) {
                 toastError(err);
             } finally {
@@ -87,20 +66,63 @@ const Groups = () => {
         };
 
         fetchGroups();
-    }, [debouncedSearchParam, pageNumber, groupsPerPage]);
+    }, [debouncedSearchParam]);
 
-    // Resetar página quando busca muda
-    useEffect(() => {
-        setPageNumber(1);
-    }, [searchParam]);
+    // Agrupar grupos por conexão (whatsappId)
+    const lanes = useMemo(() => {
+        const map = {};
+
+        groups.forEach((group) => {
+            const wId = group.whatsappId || 0;
+            if (!map[wId]) {
+                map[wId] = {
+                    whatsappId: wId,
+                    whatsappName: group.whatsapp?.name || "Sem conexão",
+                    whatsappNumber: group.whatsapp?.number || "",
+                    whatsappStatus: group.whatsapp?.status || "DISCONNECTED",
+                    groups: [],
+                };
+            }
+            map[wId].groups.push(group);
+        });
+
+        // Ordenar lanes pelo nome da conexão
+        return Object.values(map).sort((a, b) =>
+            a.whatsappName.localeCompare(b.whatsappName)
+        );
+    }, [groups]);
 
     const handleSearch = (event) => {
         setSearchParam(event.target.value.toLowerCase());
     };
 
     const handleRefresh = () => {
-        dispatch({ type: "RESET" });
-        setPageNumber(1);
+        setGroups([]);
+        setTotalGroups(0);
+        // Forçar re-fetch
+        requestIdRef.current++;
+        const currentId = ++requestIdRef.current;
+        setLoading(true);
+
+        const fetchGroups = async () => {
+            try {
+                const { data } = await api.get("/groups", {
+                    params: {
+                        searchParam: debouncedSearchParam,
+                        pageNumber: 1,
+                        limit: 500,
+                    },
+                });
+                if (currentId !== requestIdRef.current) return;
+                setGroups(data.groups || []);
+                setTotalGroups(data.count || 0);
+            } catch (err) {
+                toastError(err);
+            } finally {
+                if (currentId === requestIdRef.current) setLoading(false);
+            }
+        };
+        fetchGroups();
     };
 
     const handleOpenTicket = async (groupId) => {
@@ -108,7 +130,7 @@ const Groups = () => {
             const { data: ticket } = await api.post("/tickets", {
                 contactId: groupId,
                 userId: user?.id,
-                status: "open",
+                status: "group",
             });
             history.push(`/tickets/${ticket.uuid}`);
         } catch (err) {
@@ -116,161 +138,304 @@ const Groups = () => {
         }
     };
 
-    // Paginação
-    const totalPages = Math.ceil(totalGroups / groupsPerPage);
-    const handleFirstPage = () => setPageNumber(1);
-    const handlePrevPage = () => setPageNumber((prev) => Math.max(prev - 1, 1));
-    const handleNextPage = () => setPageNumber((prev) => Math.min(prev + 1, totalPages));
-    const handleLastPage = () => setPageNumber(totalPages);
+    const canViewGroups = user.allowGroup || user.profile === "admin" || user.super;
+
+    const isConnected = (status) =>
+        status === "CONNECTED" || status === "qrcode" || status === "OPENING";
 
     return (
         <MainContainer>
-            <Can
-                role={user.profile}
-                perform="contacts-page:view"
-                yes={() => (
-                    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
-                        {/* Header */}
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 gap-4">
-                            <div className="flex items-center gap-3">
-                                <Users className="w-6 h-6 text-blue-600" />
-                                <h1 className="text-xl font-semibold text-gray-800 dark:text-white">
-                                    Grupos do WhatsApp
-                                </h1>
-                                <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full">
-                                    {totalGroups} grupos
-                                </span>
-                            </div>
-
-                            <div className="flex items-center gap-2 w-full sm:w-auto">
-                                {/* Busca */}
-                                <div className="relative flex-1 sm:w-64">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar grupos..."
-                                        value={searchParam}
-                                        onChange={handleSearch}
-                                        className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-
-                                {/* Refresh */}
-                                <button
-                                    onClick={handleRefresh}
-                                    className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                    title="Atualizar lista"
-                                >
-                                    <RefreshCw className="w-5 h-5" />
-                                </button>
-                            </div>
+            {canViewGroups ? (
+                <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    height: "100%",
+                    backgroundColor: "#f0f2f5",
+                }}>
+                    {/* Header */}
+                    <div style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "12px 16px",
+                        backgroundColor: "#fff",
+                        borderBottom: "1px solid #e0e0e0",
+                        flexWrap: "wrap",
+                        gap: 8,
+                    }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <Users size={22} color="#00a884" />
+                            <span style={{ fontSize: 18, fontWeight: 600, color: "#111b21" }}>
+                                Grupos do WhatsApp
+                            </span>
+                            <span style={{
+                                padding: "2px 10px",
+                                fontSize: 12,
+                                fontWeight: 500,
+                                backgroundColor: "#e8f5e9",
+                                color: "#2e7d32",
+                                borderRadius: 12,
+                            }}>
+                                {totalGroups} grupos
+                            </span>
                         </div>
 
-                        {/* Lista de Grupos */}
-                        <div className="flex-1 overflow-auto p-4">
-                            {loading ? (
-                                <div className="space-y-2">
-                                    {[...Array(5)].map((_, i) => (
-                                        <TableRowSkeleton key={i} columns={3} />
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ position: "relative" }}>
+                                <Search
+                                    size={16}
+                                    color="#8696a0"
+                                    style={{
+                                        position: "absolute",
+                                        left: 10,
+                                        top: "50%",
+                                        transform: "translateY(-50%)",
+                                    }}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar grupos..."
+                                    value={searchParam}
+                                    onChange={handleSearch}
+                                    style={{
+                                        width: 240,
+                                        height: 36,
+                                        paddingLeft: 34,
+                                        paddingRight: 12,
+                                        fontSize: 13,
+                                        border: "1px solid #d1d5db",
+                                        borderRadius: 8,
+                                        outline: "none",
+                                        backgroundColor: "#fff",
+                                    }}
+                                />
+                            </div>
+                            <button
+                                onClick={handleRefresh}
+                                title="Atualizar lista"
+                                style={{
+                                    padding: 8,
+                                    border: "none",
+                                    background: "transparent",
+                                    cursor: "pointer",
+                                    borderRadius: 8,
+                                    display: "flex",
+                                    alignItems: "center",
+                                }}
+                            >
+                                <RefreshCw size={18} color="#667781" />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Kanban Lanes */}
+                    <div style={{
+                        flex: 1,
+                        overflowX: "auto",
+                        overflowY: "hidden",
+                        padding: 16,
+                        display: "flex",
+                        gap: 16,
+                        alignItems: "flex-start",
+                    }}>
+                        {loading ? (
+                            // Skeleton de lanes
+                            [...Array(3)].map((_, i) => (
+                                <div key={i} style={{
+                                    minWidth: 320,
+                                    maxWidth: 320,
+                                    backgroundColor: "#fff",
+                                    borderRadius: 12,
+                                    boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                                    overflow: "hidden",
+                                }}>
+                                    <div style={{
+                                        height: 48,
+                                        backgroundColor: "#e0e0e0",
+                                        borderRadius: "12px 12px 0 0",
+                                        animation: "pulse 1.5s infinite",
+                                    }} />
+                                    {[...Array(4)].map((_, j) => (
+                                        <div key={j} style={{
+                                            margin: "8px 12px",
+                                            height: 72,
+                                            backgroundColor: "#f5f5f5",
+                                            borderRadius: 8,
+                                            animation: "pulse 1.5s infinite",
+                                        }} />
                                     ))}
                                 </div>
-                            ) : groups.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-64 text-gray-500">
-                                    <Users className="w-16 h-16 mb-4 text-gray-300" />
-                                    <p className="text-lg font-medium">Nenhum grupo encontrado</p>
-                                    <p className="text-sm">
-                                        {searchParam
-                                            ? "Tente uma busca diferente"
-                                            : "Os grupos do WhatsApp aparecerão aqui"}
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                                    {groups.map((group) => (
-                                        <div
-                                            key={group.id}
-                                            className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
-                                        >
-                                            <div className="flex items-start gap-3">
-                                                <ContactAvatar contact={group} size={48} />
-                                                <div className="flex-1 min-w-0">
-                                                    <h3 className="font-medium text-gray-900 dark:text-white truncate">
-                                                        {group.name || "Grupo sem nome"}
-                                                    </h3>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                                        {group.number}
-                                                    </p>
-                                                    <p className="text-xs text-gray-400 mt-1">
-                                                        Criado em:{" "}
-                                                        {new Date(group.createdAt).toLocaleDateString("pt-BR")}
-                                                    </p>
-                                                </div>
+                            ))
+                        ) : lanes.length === 0 ? (
+                            <div style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                width: "100%",
+                                padding: 40,
+                                color: "#8696a0",
+                            }}>
+                                <Users size={48} color="#d1d5db" style={{ marginBottom: 12 }} />
+                                <p style={{ fontSize: 16, fontWeight: 500 }}>Nenhum grupo encontrado</p>
+                                <p style={{ fontSize: 13 }}>
+                                    {searchParam
+                                        ? "Tente uma busca diferente"
+                                        : "Os grupos do WhatsApp aparecerão aqui"}
+                                </p>
+                            </div>
+                        ) : (
+                            lanes.map((lane, laneIdx) => {
+                                const color = LANE_COLORS[laneIdx % LANE_COLORS.length];
+                                return (
+                                    <div key={lane.whatsappId} style={{
+                                        minWidth: 320,
+                                        maxWidth: 320,
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        maxHeight: "100%",
+                                        backgroundColor: "#fff",
+                                        borderRadius: 12,
+                                        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                                        overflow: "hidden",
+                                        flexShrink: 0,
+                                    }}>
+                                        {/* Header da lane */}
+                                        <div style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "space-between",
+                                            padding: "10px 14px",
+                                            backgroundColor: color.bg,
+                                            color: color.text,
+                                        }}>
+                                            <div style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 8,
+                                                flex: 1,
+                                                minWidth: 0,
+                                            }}>
+                                                {isConnected(lane.whatsappStatus) ? (
+                                                    <Wifi size={16} />
+                                                ) : (
+                                                    <WifiOff size={16} style={{ opacity: 0.7 }} />
+                                                )}
+                                                <span style={{
+                                                    fontWeight: 600,
+                                                    fontSize: 14,
+                                                    overflow: "hidden",
+                                                    textOverflow: "ellipsis",
+                                                    whiteSpace: "nowrap",
+                                                }}>
+                                                    {lane.whatsappName}
+                                                </span>
+                                                {lane.whatsappNumber && (
+                                                    <span style={{
+                                                        fontSize: 11,
+                                                        opacity: 0.8,
+                                                        whiteSpace: "nowrap",
+                                                    }}>
+                                                        {lane.whatsappNumber}
+                                                    </span>
+                                                )}
                                             </div>
-
-                                            <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-2">
-                                                <button
-                                                    onClick={() => handleOpenTicket(group.id)}
-                                                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                                                >
-                                                    <MessageSquare className="w-4 h-4" />
-                                                    Abrir Conversa
-                                                </button>
-                                            </div>
+                                            <span style={{
+                                                backgroundColor: "rgba(255,255,255,0.25)",
+                                                padding: "2px 8px",
+                                                borderRadius: 10,
+                                                fontSize: 12,
+                                                fontWeight: 600,
+                                                whiteSpace: "nowrap",
+                                            }}>
+                                                {lane.groups.length}
+                                            </span>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
 
-                        {/* Paginação */}
-                        {totalPages > 1 && (
-                            <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                                <div className="text-sm text-gray-600 dark:text-gray-400">
-                                    Página {pageNumber} de {totalPages} ({totalGroups} grupos)
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <button
-                                        onClick={handleFirstPage}
-                                        disabled={pageNumber === 1}
-                                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        <ChevronsLeft className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={handlePrevPage}
-                                        disabled={pageNumber === 1}
-                                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        <ChevronLeft className="w-4 h-4" />
-                                    </button>
-                                    <span className="px-3 py-1 text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-lg">
-                                        {pageNumber}
-                                    </span>
-                                    <button
-                                        onClick={handleNextPage}
-                                        disabled={pageNumber === totalPages}
-                                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        <ChevronRight className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={handleLastPage}
-                                        disabled={pageNumber === totalPages}
-                                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        <ChevronsRight className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
+                                        {/* Lista de grupos na lane */}
+                                        <div style={{
+                                            flex: 1,
+                                            overflowY: "auto",
+                                            padding: "8px 8px 12px",
+                                        }}>
+                                            {lane.groups.map((group) => (
+                                                <div
+                                                    key={group.id}
+                                                    style={{
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        gap: 10,
+                                                        padding: "10px 10px",
+                                                        marginBottom: 6,
+                                                        borderRadius: 8,
+                                                        border: "1px solid #f0f0f0",
+                                                        backgroundColor: "#fafafa",
+                                                        cursor: "pointer",
+                                                        transition: "all 0.15s",
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.currentTarget.style.backgroundColor = "#f0f7f4";
+                                                        e.currentTarget.style.borderColor = "#c8e6c9";
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.backgroundColor = "#fafafa";
+                                                        e.currentTarget.style.borderColor = "#f0f0f0";
+                                                    }}
+                                                    onClick={() => handleOpenTicket(group.id)}
+                                                >
+                                                    <ContactAvatar contact={group} size={40} />
+                                                    <div style={{
+                                                        flex: 1,
+                                                        minWidth: 0,
+                                                        overflow: "hidden",
+                                                    }}>
+                                                        <div style={{
+                                                            fontWeight: 500,
+                                                            fontSize: 13,
+                                                            color: "#111b21",
+                                                            overflow: "hidden",
+                                                            textOverflow: "ellipsis",
+                                                            whiteSpace: "nowrap",
+                                                        }}>
+                                                            {group.name || "Grupo sem nome"}
+                                                        </div>
+                                                        <div style={{
+                                                            fontSize: 11,
+                                                            color: "#8696a0",
+                                                            overflow: "hidden",
+                                                            textOverflow: "ellipsis",
+                                                            whiteSpace: "nowrap",
+                                                        }}>
+                                                            {group.number}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        gap: 4,
+                                                    }}>
+                                                        <Eye size={14} color="#8696a0" />
+                                                        <MessageSquare size={14} color="#00a884" />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })
                         )}
                     </div>
-                )}
-                no={() => (
-                    <div className="flex items-center justify-center h-full">
-                        <p className="text-gray-500">Você não tem permissão para visualizar grupos.</p>
-                    </div>
-                )}
-            />
+                </div>
+            ) : (
+                <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: "100%",
+                }}>
+                    <p style={{ color: "#8696a0" }}>Você não tem permissão para visualizar grupos.</p>
+                </div>
+            )}
         </MainContainer>
     );
 };
