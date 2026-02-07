@@ -104,10 +104,21 @@ const GetGroupParticipantsService = async ({
     const { canonical } = normalizePhoneNumber(rawNumber);
     const participantNumber = canonical || rawNumber;
 
+    // Validar se é um número brasileiro válido (não um ID Meta)
+    // Números válidos BR: começam com 55 e têm 12-13 dígitos
+    const isValidBrNumber = participantNumber.startsWith("55") && 
+                            participantNumber.length >= 12 && 
+                            participantNumber.length <= 13;
+
     // Tentar buscar contato existente no sistema (por canonicalNumber ou number)
     let contactRecord: Contact | null = null;
-    let contactName = participantNumber;
+    let contactName = isValidBrNumber ? participantNumber : "Participante";
     let profilePicUrl: string | undefined;
+
+    // Se não é número válido, tentar usar pushName do WhatsApp
+    if (!isValidBrNumber && p.name) {
+      contactName = p.name;
+    }
 
     try {
       contactRecord = await Contact.findOne({
@@ -123,7 +134,7 @@ const GetGroupParticipantsService = async ({
       });
 
       if (contactRecord) {
-        contactName = contactRecord.name || participantNumber;
+        contactName = contactRecord.name || contactName;
         profilePicUrl = contactRecord.profilePicUrl || undefined;
       }
     } catch {

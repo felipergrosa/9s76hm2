@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext, useCallback } from "react";
+import clsx from "clsx";
 import {
   Drawer,
   makeStyles,
@@ -53,17 +54,20 @@ const useStyles = makeStyles((theme) => ({
   drawer: {
     width: drawerWidth,
     flexShrink: 0,
+    '&$drawerClosed': {
+      visibility: 'hidden',
+      width: 0,
+    },
   },
+  drawerClosed: {},
   drawerPaper: {
     width: drawerWidth,
     display: "flex",
     borderTop: "1px solid rgba(0, 0, 0, 0.12)",
     borderRight: "1px solid rgba(0, 0, 0, 0.12)",
     borderBottom: "1px solid rgba(0, 0, 0, 0.12)",
-    borderTopRightRadius: 0,
-    borderBottomRightRadius: 0,
-    position: "relative",
-    height: "100%",
+    borderTopRightRadius: 4,
+    borderBottomRightRadius: 4,
   },
   header: {
     display: "flex",
@@ -461,7 +465,7 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
   return (
     <>
       <Drawer
-        className={classes.drawer}
+        className={clsx(classes.drawer, !open && classes.drawerClosed)}
         variant="persistent"
         anchor="right"
         open={open}

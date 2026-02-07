@@ -612,7 +612,8 @@ const ListTicketsService = async ({
     } as any;
   }
 
-  // 3. REGRA PRINCIPAL: Ticket em atendimento (open/group com userId) só pode ser visto pelo atendente
+  // 3. REGRA PRINCIPAL: Ticket em atendimento (open com userId) só pode ser visto pelo atendente
+  // Grupos (status=group) são excluídos - visibilidade de grupos controlada por allowGroup
   // Independente de ser admin, supervisor ou estar na carteira
   whereCondition = {
     [Op.and]: [
@@ -621,7 +622,7 @@ const ListTicketsService = async ({
         [Op.or]: [
           { userId: userId }, // Meus tickets (sempre vejo os meus)
           { userId: null }, // Tickets sem atribuição (pendentes)
-          { status: { [Op.notIn]: ["open", "group"] } } // Tickets fechados/outros (qualquer um pode ver)
+          { status: { [Op.notIn]: ["open"] } } // Tickets group/closed/outros (qualquer um pode ver se permitido)
         ]
       }
     ]
