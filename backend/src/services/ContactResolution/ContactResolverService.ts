@@ -629,19 +629,49 @@ async function resolveLidToPN(
     }
   }
 
-  // Estratégia F: Buscar contato pelo pushName exato (último recurso)
-  // pushName é o nome do destinatário — pode encontrar contato existente
+  // Estratégia F: Buscar contato pelo pushName (último recurso)
+  // Usa busca parcial com LIKE para maior chance de match
   if (ids.pushName && ids.pushName.trim().length > 2) {
     try {
-      const contactByName = await Contact.findOne({
+      const pushNameClean = ids.pushName.trim();
+      
+      // Tentativa 1: match exato
+      let contactByName = await Contact.findOne({
         where: {
           companyId,
-          name: ids.pushName.trim(),
+          name: pushNameClean,
           isGroup: false,
           number: { [Op.notLike]: "PENDING_%" }
         },
         order: [["updatedAt", "DESC"]]
       });
+
+      // Tentativa 2: busca parcial com LIKE (se não achou exato)
+      if (!contactByName) {
+        contactByName = await Contact.findOne({
+          where: {
+            companyId,
+            name: { [Op.like]: `%${pushNameClean}%` },
+            isGroup: false,
+            number: { [Op.notLike]: "PENDING_%" }
+          },
+          order: [["updatedAt", "DESC"]]
+        });
+      }
+
+      // Tentativa 3: busca por parte do nome (primeiras 10 letras)
+      if (!contactByName && pushNameClean.length > 5) {
+        const namePrefix = pushNameClean.substring(0, 10);
+        contactByName = await Contact.findOne({
+          where: {
+            companyId,
+            name: { [Op.like]: `%${namePrefix}%` },
+            isGroup: false,
+            number: { [Op.notLike]: "PENDING_%" }
+          },
+          order: [["updatedAt", "DESC"]]
+        });
+      }
 
       if (contactByName) {
         const digits = (contactByName.number || "").replace(/\D/g, "");
