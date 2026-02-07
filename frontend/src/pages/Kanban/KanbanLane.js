@@ -91,7 +91,7 @@ export default function KanbanLane({ lane, onCardClick, allTags, onMoveRequest, 
                                         <KanbanCard
                                             ticket={card.ticket}
                                             allTags={allTags}
-                                            onClick={() => onCardClick(card.ticket?.uuid)}
+                                            onClick={() => onCardClick(card.ticket)}
                                             onMoveRequest={(tagId) => onMoveRequest && onMoveRequest(card.ticket, tagId)}
                                         />
                                     </div>

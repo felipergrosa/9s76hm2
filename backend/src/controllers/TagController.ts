@@ -170,6 +170,7 @@ export const kanban = async (req: Request, res: Response): Promise<Response> => 
   const { companyId, profile, id } = req.user;
   const user = req.user as any;
   const managedUserIds = user.managedUserIds;
+  const isSuper = user.super;
   const requestUserId = Number(id);
 
   const { viewingUserId } = req.query as IndexQuery;
@@ -179,7 +180,7 @@ export const kanban = async (req: Request, res: Response): Promise<Response> => 
   if (viewingUserId) {
     const vUserId = Number(viewingUserId);
 
-    if (profile === "admin") {
+    if (profile === "admin" || isSuper === true) {
       targetUserId = vUserId;
     } else {
       const allowed = managedUserIds ? managedUserIds.map((uid: any) => Number(uid)) : [];
@@ -194,7 +195,13 @@ export const kanban = async (req: Request, res: Response): Promise<Response> => 
     }
   }
 
-  const tags = await KanbanListService({ companyId, userId: targetUserId });
+  const tags = await KanbanListService({ 
+    companyId, 
+    userId: targetUserId,
+    profile,
+    super: isSuper,
+    managedUserIds: managedUserIds ? managedUserIds.map((uid: any) => Number(uid)) : []
+  });
 
   return res.json({ lista: tags });
 };

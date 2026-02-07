@@ -12,6 +12,12 @@ import {
   CardActionArea,
   Divider,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button,
 } from "@material-ui/core";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import api from "../../services/api";
@@ -196,6 +202,11 @@ const MomentsUser = ({ onPanStart }) => {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Estados para modal de confirmação de transferência
+  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [isTransferring, setIsTransferring] = useState(false);
+
   // Manipulador seguro para iniciar o arrasto apenas no cabeçalho
   const handleHeaderPointerDown = (e) => {
     if (e.button !== 0) return;
@@ -286,18 +297,27 @@ const MomentsUser = ({ onPanStart }) => {
   }, [tickets]);
 
   // REGRA PRINCIPAL: Ticket em atendimento só pode ser visto/acessado pelo atendente
+  // OU por supervisores que gerenciam esse atendente
   const canAccessTicket = (ticket) => {
+    // Admin e Superadmin sempre podem ver
+    if (user.profile === "admin" || user.super) return true;
+    
+    // Verificar se é supervisor do usuário do ticket
+    const isSupervisorOfTicketOwner = user.managedUserIds && 
+      user.managedUserIds.length > 0 && 
+      ticket?.userId && 
+      user.managedUserIds.some(id => Number(id) === Number(ticket.userId));
+    
+    if (isSupervisorOfTicketOwner) return true;
+    
     // Se ticket está em atendimento (open/group) E tem userId atribuído
-    // SOMENTE o atendente pode ver - independente de ser admin/supervisor/carteira
+    // SOMENTE o atendente ou supervisor pode ver
     const isBeingAttended = (ticket?.status === "open" || ticket?.status === "group") && ticket?.userId;
     
     if (isBeingAttended) {
-      // Só o próprio atendente pode ver/acessar
+      // Só o próprio atendente pode ver/acessar (se não for supervisor)
       return ticket?.userId === user.id;
     }
-    
-    // Tickets pendentes/fechados: admin/super podem ver
-    if (user.profile === "admin" || user.super) return true;
     
     // Ticket sem dono (pendente) - verificar carteira
     if (!ticket.userId) {
@@ -314,14 +334,70 @@ const MomentsUser = ({ onPanStart }) => {
     return false;
   };
 
+  // Verificar se deve mostrar modal de confirmação (ticket de outro usuário)
+  const shouldShowConfirmModal = (ticket) => {
+    const ticketUserId = ticket?.userId;
+    const currentUserId = user.id;
+    
+    // Se não tem dono ou é meu ticket, não mostra modal
+    if (!ticketUserId || Number(ticketUserId) === Number(currentUserId)) {
+      return false;
+    }
+    
+    // Se sou admin/super/supervisor do dono, mostra modal
+    const isAdmin = user.profile === "admin";
+    const isSuper = user.super === true;
+    const isSupervisor = user.managedUserIds && 
+      user.managedUserIds.length > 0 && 
+      user.managedUserIds.some(id => Number(id) === Number(ticketUserId));
+    
+    return isAdmin || isSuper || isSupervisor;
+  };
+
+  // Handler para clique no ticket
+  const handleTicketClick = (ticket) => {
+    if (shouldShowConfirmModal(ticket)) {
+      setSelectedTicket(ticket);
+      setConfirmModalOpen(true);
+    } else if (canAccessTicket(ticket)) {
+      history.push(`/tickets/${ticket.uuid}`);
+    }
+  };
+
+  // Confirmar transferência do ticket
+  const handleConfirmTransfer = async () => {
+    if (!selectedTicket) return;
+    
+    setIsTransferring(true);
+    try {
+      // Transferir o ticket para o usuário atual
+      await api.put(`/tickets/${selectedTicket.id}`, {
+        userId: user.id,
+        status: "open"
+      });
+      
+      // Fechar modal e navegar para o ticket
+      setConfirmModalOpen(false);
+      history.push(`/tickets/${selectedTicket.uuid}`);
+      setSelectedTicket(null);
+    } catch (err) {
+      console.error("Erro ao transferir ticket:", err);
+      toastError("Erro ao assumir o ticket. Tente novamente.");
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  // Cancelar transferência
+  const handleCancelTransfer = () => {
+    setConfirmModalOpen(false);
+    setSelectedTicket(null);
+  };
+
   const renderTicketCard = (ticket) => (
     <Card key={ticket.id} className={classes.ticketCard}>
       <CardActionArea
-        onClick={() => {
-          if (canAccessTicket(ticket)) {
-            history.push(`/tickets/${ticket.uuid}`);
-          }
-        }}
+        onClick={() => handleTicketClick(ticket)}
       >
         <CardContent className={classes.ticketContent}>
           <div className={classes.ticketHeader}>
@@ -464,6 +540,31 @@ const MomentsUser = ({ onPanStart }) => {
           </div>
         </Paper>
       ))}
+
+      {/* Modal de confirmação para assumir ticket */}
+      <Dialog
+        open={confirmModalOpen}
+        onClose={handleCancelTransfer}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Assumir Atendimento</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Este ticket está sendo atendido por <strong>{selectedTicket?.user?.name || selectedTicket?.userId || 'outro usuário'}</strong>.
+            <br /><br />
+            Deseja assumir este atendimento? Ao confirmar, o ticket será transferido para você.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelTransfer} color="primary" disabled={isTransferring}>
+            Cancelar
+          </Button>
+          <Button onClick={handleConfirmTransfer} color="primary" variant="contained" disabled={isTransferring}>
+            {isTransferring ? 'Transferindo...' : 'Sim, Assumir'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 };

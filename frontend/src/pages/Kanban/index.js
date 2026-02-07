@@ -9,7 +9,10 @@ import ColorModeContext from "../../layout/themeContext";
 import { i18n } from "../../translate/i18n";
 import { useHistory } from 'react-router-dom';
 import { FilterList, Add, Refresh } from "@material-ui/icons";
-import { Tooltip, Typography, IconButton, InputBase, Select, MenuItem, FormControl } from "@material-ui/core";
+import { 
+  Tooltip, Typography, IconButton, InputBase, Select, MenuItem, FormControl,
+  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button
+} from "@material-ui/core";
 
 
 import { format, startOfMonth, endOfMonth } from "date-fns";
@@ -152,7 +155,9 @@ const Kanban = () => {
   const [filterUsers, setFilterUsers] = useState([]);
   const [filterTags, setFilterTags] = useState([]);
 
-  const [filtersModalOpen, setFiltersModalOpen] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [isTransferring, setIsTransferring] = useState(false);
 
   // Kanban Pessoal
   const [viewingUserId, setViewingUserId] = useState(user.id);
@@ -260,9 +265,65 @@ const Kanban = () => {
     fetchTickets();
   }, [fetchTickets]);
 
-  const handleCardClick = useCallback((uuid) => {
-    history.push('/tickets/' + uuid);
-  }, [history]);
+  const handleCardClick = useCallback(async (ticket) => {
+    // Verificar se o ticket pertence a outro usuário
+    const ticketUserId = ticket.userId || ticket.user?.id;
+    const currentUserId = user.id;
+    
+    // Se o ticket não tem dono, apenas navegar
+    if (!ticketUserId) {
+      history.push('/tickets/' + ticket.uuid);
+      return;
+    }
+    
+    // Se o ticket pertence ao usuário atual, apenas navegar
+    if (Number(ticketUserId) === Number(currentUserId)) {
+      history.push('/tickets/' + ticket.uuid);
+      return;
+    }
+    
+    // Se o usuário é admin ou superadmin, mostrar modal de confirmação
+    const isAdmin = user.profile === "admin";
+    const isSuper = user.super === true;
+    const isSupervisor = user.managedUserIds && user.managedUserIds.length > 0 && 
+                         user.managedUserIds.some(id => Number(id) === Number(ticketUserId));
+    
+    if (isAdmin || isSuper || isSupervisor) {
+      setSelectedTicket(ticket);
+      setConfirmModalOpen(true);
+    } else {
+      // Usuário normal não pode ver ticket de outro - apenas navegar (backend vai bloquear se necessário)
+      history.push('/tickets/' + ticket.uuid);
+    }
+  }, [history, user]);
+
+  const handleConfirmTransfer = async () => {
+    if (!selectedTicket) return;
+    
+    setIsTransferring(true);
+    try {
+      // Transferir o ticket para o usuário atual
+      await api.put(`/tickets/${selectedTicket.id}`, {
+        userId: user.id,
+        status: "open"
+      });
+      
+      // Fechar modal e navegar para o ticket
+      setConfirmModalOpen(false);
+      setSelectedTicket(null);
+      history.push('/tickets/' + selectedTicket.uuid);
+    } catch (err) {
+      console.error("Erro ao transferir ticket:", err);
+      alert("Erro ao assumir o ticket. Tente novamente.");
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  const handleCancelTransfer = () => {
+    setConfirmModalOpen(false);
+    setSelectedTicket(null);
+  };
 
   const applySearchAndSort = useCallback((list) => {
     let filtered = list;
@@ -651,6 +712,31 @@ const Kanban = () => {
           setEndDate(ed);
         }}
       />
+
+      {/* Modal de confirmação para assumir ticket */}
+      <Dialog
+        open={confirmModalOpen}
+        onClose={handleCancelTransfer}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Assumir Atendimento</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Este ticket está sendo atendido por <strong>{selectedTicket?.user?.name || selectedTicket?.userId || 'outro usuário'}</strong>.
+            <br /><br />
+            Deseja assumir este atendimento? Ao confirmar, o ticket será transferido para você.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelTransfer} color="primary" disabled={isTransferring}>
+            Cancelar
+          </Button>
+          <Button onClick={handleConfirmTransfer} color="primary" variant="contained" disabled={isTransferring}>
+            {isTransferring ? 'Transferindo...' : 'Sim, Assumir'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 };

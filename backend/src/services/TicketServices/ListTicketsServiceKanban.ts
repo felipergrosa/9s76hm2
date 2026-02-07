@@ -13,6 +13,7 @@ import { intersection } from "lodash";
 import Whatsapp from "../../models/Whatsapp";
 import ContactTag from "../../models/ContactTag";
 import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
+import UserQueue from "../../models/UserQueue";
 
 interface Request {
   searchParam?: string;
@@ -323,17 +324,32 @@ const ListTicketsServiceKanban = async ({
   }
 
   // REGRA PRINCIPAL: Ticket em atendimento (open/group com userId) só pode ser visto pelo atendente
-  // Independente de ser admin, supervisor ou estar na carteira
+  // OU por supervisores que gerenciam esse atendente
   if (userId) {
+    // Buscar usuário para verificar se é supervisor
+    const currentUser = await User.findByPk(Number(userId), {
+      attributes: ["id", "managedUserIds"]
+    });
+    const userManagedIds = (currentUser as any)?.managedUserIds || [];
+    const isSupervisor = Array.isArray(userManagedIds) && userManagedIds.length > 0;
+
+    let userOrConditions: any[] = [
+      { userId: Number(userId) }, // Meus tickets (sempre vejo os meus)
+      { userId: null }, // Tickets sem atribuição (pendentes)
+      { status: { [Op.notIn]: ["open", "group"] } } // Tickets fechados/outros (qualquer um pode ver)
+    ];
+
+    // Se for supervisor, também vê tickets dos supervisionados
+    if (isSupervisor) {
+      const managedIds = userManagedIds.map((id: any) => Number(id));
+      userOrConditions.push({ userId: { [Op.in]: managedIds } });
+    }
+
     whereCondition = {
       [Op.and]: [
         whereCondition,
         {
-          [Op.or]: [
-            { userId: Number(userId) }, // Meus tickets (sempre vejo os meus)
-            { userId: null }, // Tickets sem atribuição (pendentes)
-            { status: { [Op.notIn]: ["open", "group"] } } // Tickets fechados/outros (qualquer um pode ver)
-          ]
+          [Op.or]: userOrConditions
         }
       ]
     } as any;
