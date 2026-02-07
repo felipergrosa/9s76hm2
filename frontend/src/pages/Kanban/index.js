@@ -158,6 +158,7 @@ const Kanban = () => {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
+  const [filtersModalOpen, setFiltersModalOpen] = useState(false);
 
   // Kanban Pessoal
   const [viewingUserId, setViewingUserId] = useState(user.id);
