@@ -46,6 +46,59 @@ export async function resolveMessageContact(
   // ─── CAMADA 1: Extração (pura, sem I/O) ───
   const ids = extractMessageIdentifiers(msg, wbot);
 
+  // ─── CAMADA 1.3: Simplificação para mensagens fromMe com LID ───
+  // Em vez de tentar resolver LID→PN com heurísticas complexas,
+  // buscar diretamente o ticket pelo lidJid do destinatário
+  if (ids.isFromMe && ids.lidJid && !ids.pnJid) {
+    const ticketByLid = await Ticket.findOne({
+      where: {
+        companyId,
+        whatsappId: wbot.id,
+        status: { [Op.in]: ["open", "pending", "group", "nps", "lgpd", "bot"] }
+      },
+      include: [{
+        model: Contact,
+        as: "contact",
+        where: {
+          [Op.or]: [
+            { lidJid: ids.lidJid },
+            { remoteJid: ids.lidJid }
+          ],
+          isGroup: false
+        },
+        required: true
+      }],
+      order: [["updatedAt", "DESC"]]
+    });
+
+    if (ticketByLid?.contact) {
+      const contact = ticketByLid.contact;
+      logger.info({
+        lidJid: ids.lidJid,
+        contactId: contact.id,
+        contactName: contact.name,
+        ticketId: ticketByLid.id,
+        strategy: "ticket-by-lidJid"
+      }, "[resolveMessageContact] Contato encontrado via ticket existente (fromMe+LID)");
+
+      // Preencher os identificadores se o contato tiver número real
+      const digits = String(contact.number || "").replace(/\D/g, "");
+      if (digits.length >= 10 && digits.length <= 13) {
+        ids.pnDigits = digits;
+        ids.pnJid = `${digits}@s.whatsapp.net`;
+        const { canonical } = safeNormalizePhoneNumber(digits);
+        ids.pnCanonical = canonical;
+      }
+
+      return {
+        contact,
+        identifiers: ids,
+        isNew: false,
+        isPending: (contact.number || "").startsWith("PENDING_")
+      };
+    }
+  }
+
   // ─── CAMADA 1.4: Atalho determinístico (fromMe + LID) via histórico local (Message.wid) ───
   // Quando você envia mensagem pelo painel, salvamos no banco com wid = msg.key.id.
   // Se o Baileys entregar o remoteJid como LID e não fornecer PN/Alt, usamos o wid para achar o ticket/contato real.
