@@ -6055,12 +6055,25 @@ const filterMessages = (msg: WAMessage): boolean => {
   if (msg.message?.protocolMessage?.editedMessage) return true;
   if (msg.message?.protocolMessage) return false;
 
+  // Filtrar mensagens que falharam na decriptação (Bad MAC / No matching sessions)
+  // messageStubType=2 (CIPHERTEXT) indica erro de sessão criptográfica
+  // Processar essas mensagens cria contatos PENDING_ fantasma
+  if (msg.messageStubType === WAMessageStubType.CIPHERTEXT) {
+    logger.warn({
+      msgId: msg.key?.id,
+      remoteJid: msg.key?.remoteJid,
+      fromMe: msg.key?.fromMe,
+      stubParams: msg.messageStubParameters
+    }, "[filterMessages] Mensagem CIPHERTEXT (erro decriptação) descartada");
+    return false;
+  }
+
   if (
     [
       WAMessageStubType.REVOKE,
       WAMessageStubType.E2E_DEVICE_CHANGED,
       WAMessageStubType.E2E_IDENTITY_CHANGED
-    ].includes(msg.messageStubType as number) // Ou use diretamente os valores como WAMessageStubType.GROUP_PARTICIPANT_ADD, etc
+    ].includes(msg.messageStubType as number)
   )
     return false;
 
@@ -6233,6 +6246,38 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
     contacts.forEach(async (contact: any) => {
       console.log(`[contacts.update] contato: ${contact.id} | notify:`, contact.notify, '| objeto completo:', contact);
       if (!contact?.id) return;
+
+      // Tratamento especial para LIDs: atualizar contatos PENDING_ com nome real
+      if (contact.id.includes("@lid")) {
+        const contactName = contact.notify || contact.verifiedName || "";
+        if (contactName) {
+          try {
+            // Atualizar contato PENDING_ existente com esse LID
+            const pendingContact = await Contact.findOne({
+              where: {
+                companyId,
+                [Op.or]: [
+                  { lidJid: contact.id },
+                  { remoteJid: contact.id },
+                  { number: `PENDING_${contact.id}` }
+                ]
+              }
+            });
+            if (pendingContact) {
+              const currentName = (pendingContact.name || "").trim();
+              const isPendingName = currentName === "" || currentName.startsWith("Contato ") || currentName === pendingContact.number;
+              if (isPendingName) {
+                await pendingContact.update({ name: contactName });
+                logger.info(`[contacts.update] LID ${contact.id} → nome atualizado para "${contactName}" (contactId=${pendingContact.id})`);
+              }
+            }
+          } catch (err: any) {
+            logger.warn({ err: err?.message }, `[contacts.update] Erro ao atualizar contato LID ${contact.id}`);
+          }
+        }
+        // Não processar LIDs como contatos normais (número extraído seria inválido)
+        return;
+      }
 
       if (typeof contact.imgUrl !== "undefined") {
         console.log(`[contacts.update] contato: ${contact.id} | nome vindo do WhatsApp (notify):`, contact.notify);
