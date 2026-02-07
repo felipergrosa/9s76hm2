@@ -8,7 +8,10 @@ import whatsBackground from "../../assets/wa-background.png";
 import whatsBackgroundDark from "../../assets/wa-background-dark.png";
 
 import ContactDrawer from "../ContactDrawer";
+import GroupInfoDrawer from "../GroupInfoDrawer";
 import MessageInput from "../MessageInput";
+import MessageSearchBar from "../MessageSearchBar";
+import PinnedMessages from "../PinnedMessages";
 import TicketHeader from "../TicketHeader";
 import TicketInfo from "../TicketInfo";
 import TicketActionButtons from "../TicketActionButtonsCustom";
@@ -103,6 +106,7 @@ const Ticket = () => {
   const [contact, setContact] = useState({});
   const [ticket, setTicket] = useState({});
   const [dragDropFiles, setDragDropFiles] = useState([]);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [showComposer, setShowComposer] = useState(false);
   const [hasExternalHeader, setHasExternalHeader] = useState(() => {
     try {
@@ -439,9 +443,34 @@ const Ticket = () => {
             )}
             <TicketActionButtons
               ticket={ticket}
+              onSearchClick={() => setSearchOpen(prev => !prev)}
             />
           </TicketHeader>
         )}
+        <MessageSearchBar
+          ticketId={ticket.id}
+          open={searchOpen}
+          onClose={() => setSearchOpen(false)}
+          onNavigateToMessage={(msgId) => {
+            const el = document.getElementById(`message-${msgId}`);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+              el.style.backgroundColor = "#fef3cd";
+              setTimeout(() => { el.style.backgroundColor = ""; }, 2000);
+            }
+          }}
+        />
+        <PinnedMessages
+          ticketId={ticket.id}
+          onNavigateToMessage={(msgId) => {
+            const el = document.getElementById(`message-${msgId}`);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+              el.style.backgroundColor = "#d9fdd3";
+              setTimeout(() => { el.style.backgroundColor = ""; }, 2000);
+            }
+          }}
+        />
         <OptimisticMessageProvider>
           <ReplyMessageProvider>
             <ForwardMessageProvider>
@@ -453,13 +482,22 @@ const Ticket = () => {
         </OptimisticMessageProvider>
       </Paper>
 
-      <ContactDrawer
-        open={drawerOpen}
-        handleDrawerClose={handleDrawerClose}
-        contact={contact}
-        loading={loading}
-        ticket={ticket}
-      />
+      {ticket?.isGroup ? (
+        <GroupInfoDrawer
+          open={drawerOpen}
+          handleDrawerClose={handleDrawerClose}
+          contact={contact}
+          ticket={ticket}
+        />
+      ) : (
+        <ContactDrawer
+          open={drawerOpen}
+          handleDrawerClose={handleDrawerClose}
+          contact={contact}
+          loading={loading}
+          ticket={ticket}
+        />
+      )}
 
     </div>
   );

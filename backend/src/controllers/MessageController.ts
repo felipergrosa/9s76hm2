@@ -1438,3 +1438,253 @@ export const syncMessages = async (req: Request, res: Response): Promise<Respons
     });
   }
 };
+
+/**
+ * Buscar mensagens dentro de uma conversa por texto
+ * GET /messages/:ticketId/search?query=texto
+ */
+export const searchMessages = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { query, pageNumber = "1" } = req.query as { query: string; pageNumber?: string };
+  const { companyId } = req.user;
+
+  if (!query || query.trim().length < 2) {
+    return res.status(400).json({ error: "Busca deve ter ao menos 2 caracteres" });
+  }
+
+  try {
+    const ticket = await Ticket.findOne({
+      where: { id: ticketId, companyId }
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket não encontrado" });
+    }
+
+    // Buscar todos os tickets do mesmo contato/conexão para histórico completo
+    const relatedTickets = await Ticket.findAll({
+      where: {
+        companyId,
+        contactId: ticket.contactId,
+        whatsappId: ticket.whatsappId,
+        isGroup: ticket.isGroup
+      },
+      attributes: ["id"]
+    });
+
+    const ticketIds = relatedTickets.map(t => t.id);
+
+    const limit = 20;
+    const offset = limit * (Number(pageNumber) - 1);
+
+    const { count, rows: messages } = await Message.findAndCountAll({
+      where: {
+        ticketId: { [Op.in]: ticketIds },
+        companyId,
+        body: { [Op.iLike]: `%${query.trim()}%` },
+        isDeleted: false
+      },
+      attributes: ["id", "fromMe", "body", "createdAt", "ticketId", "mediaType", "participant", "senderName", "contactId"],
+      include: [
+        {
+          model: Contact,
+          as: "contact",
+          attributes: ["id", "name", "profilePicUrl"]
+        }
+      ],
+      limit,
+      offset,
+      order: [["createdAt", "DESC"]]
+    });
+
+    const hasMore = count > offset + messages.length;
+
+    return res.json({
+      messages,
+      count,
+      hasMore
+    });
+  } catch (error: any) {
+    console.error("[searchMessages] Erro:", error);
+    return res.status(500).json({ error: error.message || "Erro ao buscar mensagens" });
+  }
+};
+
+/**
+ * Fixar/desfixar mensagem
+ * POST /messages/:messageId/pin
+ */
+export const pinMessage = async (req: Request, res: Response): Promise<Response> => {
+  const { messageId } = req.params;
+  const { pinned } = req.body as { pinned: boolean };
+  const { companyId } = req.user;
+
+  try {
+    const message = await Message.findOne({
+      where: { id: messageId, companyId }
+    });
+
+    if (!message) {
+      return res.status(404).json({ error: "Mensagem não encontrada" });
+    }
+
+    await message.update({ isStarred: pinned });
+
+    // Emitir evento para atualizar o frontend
+    const io = getIO();
+    const ticket = await Ticket.findByPk(message.ticketId);
+    if (ticket) {
+      io.of(`/workspace-${companyId}`)
+        .to(ticket.uuid)
+        .emit(`company-${companyId}-appMessage`, {
+          action: "update",
+          message
+        });
+    }
+
+    return res.json({
+      success: true,
+      message: pinned ? "Mensagem fixada" : "Mensagem desfixada"
+    });
+  } catch (error: any) {
+    console.error("[pinMessage] Erro:", error);
+    return res.status(500).json({ error: error.message || "Erro ao fixar mensagem" });
+  }
+};
+
+/**
+ * Listar mensagens fixadas de um ticket
+ * GET /messages/:ticketId/pinned
+ */
+export const listPinnedMessages = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+
+  try {
+    const ticket = await Ticket.findOne({
+      where: { id: ticketId, companyId }
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket não encontrado" });
+    }
+
+    const relatedTickets = await Ticket.findAll({
+      where: {
+        companyId,
+        contactId: ticket.contactId,
+        whatsappId: ticket.whatsappId,
+        isGroup: ticket.isGroup
+      },
+      attributes: ["id"]
+    });
+
+    const ticketIds = relatedTickets.map(t => t.id);
+
+    const messages = await Message.findAll({
+      where: {
+        ticketId: { [Op.in]: ticketIds },
+        companyId,
+        isStarred: true,
+        isDeleted: false
+      },
+      attributes: ["id", "fromMe", "body", "createdAt", "ticketId", "mediaType", "participant", "senderName", "contactId"],
+      include: [
+        {
+          model: Contact,
+          as: "contact",
+          attributes: ["id", "name", "profilePicUrl"]
+        }
+      ],
+      order: [["createdAt", "DESC"]],
+      limit: 50
+    });
+
+    return res.json({ messages });
+  } catch (error: any) {
+    console.error("[listPinnedMessages] Erro:", error);
+    return res.status(500).json({ error: error.message || "Erro ao listar mensagens fixadas" });
+  }
+};
+
+/**
+ * Listar mídia compartilhada de uma conversa
+ * GET /messages/:ticketId/media?type=image|video|document|audio
+ */
+export const listSharedMedia = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { type = "all", pageNumber = "1" } = req.query as { type?: string; pageNumber?: string };
+  const { companyId } = req.user;
+
+  try {
+    const ticket = await Ticket.findOne({
+      where: { id: ticketId, companyId }
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket não encontrado" });
+    }
+
+    const relatedTickets = await Ticket.findAll({
+      where: {
+        companyId,
+        contactId: ticket.contactId,
+        whatsappId: ticket.whatsappId,
+        isGroup: ticket.isGroup
+      },
+      attributes: ["id"]
+    });
+
+    const ticketIds = relatedTickets.map(t => t.id);
+
+    // Filtrar por tipo de mídia
+    const mediaTypeFilter: any = {};
+    if (type === "image") {
+      mediaTypeFilter.mediaType = "image";
+    } else if (type === "video") {
+      mediaTypeFilter.mediaType = "video";
+    } else if (type === "document") {
+      mediaTypeFilter.mediaType = { [Op.in]: ["document", "application"] };
+    } else if (type === "audio") {
+      mediaTypeFilter.mediaType = { [Op.in]: ["audio", "ptt"] };
+    } else {
+      // Todos os tipos de mídia
+      mediaTypeFilter.mediaType = { [Op.notIn]: ["chat", "extendedTextMessage", "conversation", "reactionMessage", "call_log", ""] };
+    }
+
+    const limit = 30;
+    const offset = limit * (Number(pageNumber) - 1);
+
+    const { count, rows: messages } = await Message.findAndCountAll({
+      where: {
+        ticketId: { [Op.in]: ticketIds },
+        companyId,
+        mediaUrl: { [Op.not]: null, [Op.ne]: "" },
+        isDeleted: false,
+        ...mediaTypeFilter
+      },
+      attributes: ["id", "fromMe", "body", "mediaUrl", "mediaType", "createdAt", "ticketId", "participant", "senderName", "contactId"],
+      include: [
+        {
+          model: Contact,
+          as: "contact",
+          attributes: ["id", "name"]
+        }
+      ],
+      limit,
+      offset,
+      order: [["createdAt", "DESC"]]
+    });
+
+    const hasMore = count > offset + messages.length;
+
+    return res.json({
+      messages,
+      count,
+      hasMore
+    });
+  } catch (error: any) {
+    console.error("[listSharedMedia] Erro:", error);
+    return res.status(500).json({ error: error.message || "Erro ao listar mídia" });
+  }
+};

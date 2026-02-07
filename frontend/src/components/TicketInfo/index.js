@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext, useRef } from "react";
 import { i18n } from "../../translate/i18n";
 import { CardHeader } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
@@ -6,9 +6,13 @@ import Tooltip from "@material-ui/core/Tooltip";
 import ContactAvatar from "../ContactAvatar";
 import api from "../../services/api";
 import ConnectionIcon from "../ConnectionIcon";
+import { AuthContext } from "../../context/Auth/AuthContext";
 
 const TicketInfo = ({ contact, ticket, onClick }) => {
 	const [amount, setAmount] = useState("");
+	const { user, socket } = useContext(AuthContext);
+	const [presenceStatus, setPresenceStatus] = useState(null); // "composing" | "recording" | null
+	const presenceTimerRef = useRef(null);
 
     const useStyles = makeStyles(() => ({
         avatarContainer: {
@@ -97,6 +101,40 @@ const TicketInfo = ({ contact, ticket, onClick }) => {
         }
     };
 
+    // Escutar eventos de presença (digitando/gravando) via socket
+    useEffect(() => {
+        if (!socket || !user?.companyId || !contact?.number) return;
+
+        const handlePresence = (data) => {
+            // Verificar se o evento é para este contato/grupo
+            const contactJid = contact.isGroup
+                ? (contact.number?.includes("@g.us") ? contact.number : `${contact.number}@g.us`)
+                : (contact.number?.includes("@") ? contact.number : `${contact.number}@s.whatsapp.net`);
+
+            if (data.chatJid !== contactJid) return;
+
+            if (data.presence === "composing") {
+                setPresenceStatus("composing");
+            } else if (data.presence === "recording") {
+                setPresenceStatus("recording");
+            } else {
+                setPresenceStatus(null);
+            }
+
+            // Auto-limpar após 15s (caso o evento "paused" não chegue)
+            if (presenceTimerRef.current) clearTimeout(presenceTimerRef.current);
+            if (data.presence === "composing" || data.presence === "recording") {
+                presenceTimerRef.current = setTimeout(() => setPresenceStatus(null), 15000);
+            }
+        };
+
+        socket.on(`company-${user.companyId}-presence`, handlePresence);
+        return () => {
+            socket.off(`company-${user.companyId}-presence`, handlePresence);
+            if (presenceTimerRef.current) clearTimeout(presenceTimerRef.current);
+        };
+    }, [socket, user?.companyId, contact?.number, contact?.isGroup]);
+
     useEffect(() => {
         let mounted = true;
         const fetchTags = async () => {
@@ -141,9 +179,15 @@ const TicketInfo = ({ contact, ticket, onClick }) => {
 				title={`${contact?.name || '(sem contato)'} #${ticket.id}`}
 				subheader={(
 					<div className={classes.subheaderRoot}>
-						<span className={classes.subheaderText}>
-							{ticket.user && `${i18n.t("messagesList.header.assignedTo")} ${ticket.user.name}`}
-						</span>
+						{presenceStatus ? (
+							<span style={{ color: "#25d366", fontSize: 13, fontWeight: 500 }}>
+								{presenceStatus === "recording" ? "gravando áudio..." : "digitando..."}
+							</span>
+						) : (
+							<span className={classes.subheaderText}>
+								{ticket.user && `${i18n.t("messagesList.header.assignedTo")} ${ticket.user.name}`}
+							</span>
+						)}
 						<div className={classes.tagsRow}>
 							{(Array.isArray(tags) ? tags.slice(0, 8) : []).map((tag) => (
 								<Tooltip key={tag.id || tag.name} title={tag.name} placement="top">

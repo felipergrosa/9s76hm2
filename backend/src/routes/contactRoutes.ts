@@ -8,9 +8,11 @@ import uploadConfig from "../config/upload";
 
 import * as ContactController from "../controllers/ContactController";
 import * as ImportPhoneContactsController from "../controllers/ImportPhoneContactsController";
+import * as GroupController from "../controllers/GroupController";
 
 const contactRoutes = express.Router();
 const upload = multer(uploadConfig);
+const memoryUpload = multer({ storage: multer.memoryStorage() });
 
 contactRoutes.post("/contacts/import", isAuth, ImportPhoneContactsController.store);
 
@@ -92,5 +94,18 @@ contactRoutes.get("/contacts/import-logs", isAuth, ContactController.listImportL
 contactRoutes.get("/contacts/import-logs/:id", isAuth, ContactController.showImportLog);
 
 // contactRoutes.get("/contacts/list-whatsapp", isAuth, ContactController.listWhatsapp);
+
+// ========== ROTAS DE GERENCIAMENTO DE GRUPOS ==========
+contactRoutes.get("/groups/:contactId(\\d+)/participants", isAuth, GroupController.participants);
+contactRoutes.post("/groups/:contactId(\\d+)/participants/add", isAuth, GroupController.addMembers);
+contactRoutes.post("/groups/:contactId(\\d+)/participants/remove", isAuth, GroupController.removeMembers);
+contactRoutes.post("/groups/:contactId(\\d+)/participants/promote", isAuth, GroupController.promote);
+contactRoutes.post("/groups/:contactId(\\d+)/participants/demote", isAuth, GroupController.demote);
+contactRoutes.post("/groups/:contactId(\\d+)/leave", isAuth, GroupController.leave);
+contactRoutes.get("/groups/:contactId(\\d+)/invite-link", isAuth, GroupController.inviteLink);
+contactRoutes.put("/groups/:contactId(\\d+)/subject", isAuth, GroupController.updateSubject);
+contactRoutes.put("/groups/:contactId(\\d+)/description", isAuth, GroupController.updateDescription);
+contactRoutes.put("/groups/:contactId(\\d+)/picture", isAuth, memoryUpload.single("image"), GroupController.updatePicture);
+contactRoutes.put("/groups/:contactId(\\d+)/settings", isAuth, GroupController.updateSettings);
 
 export default contactRoutes;

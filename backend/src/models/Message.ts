@@ -151,6 +151,10 @@ class Message extends Model<Message> {
   @Column
   isForwarded: boolean;
 
+  @Default(false)
+  @Column
+  isStarred: boolean; // Mensagem fixada/destacada
+
   @Column(DataType.STRING)
   senderName: string; // Nome do remetente em mensagens de grupo
 }

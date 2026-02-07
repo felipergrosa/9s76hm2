@@ -14,6 +14,7 @@ import {
     CheckCircle as HighlightOffIcon,
     Undo2 as UndoIcon,
     Trash2 as DeleteForeverIcon,
+    Search as SearchIcon,
 } from "lucide-react";
 
 import { v4 as uuidv4 } from "uuid";
@@ -85,7 +86,7 @@ const SessionSchema = Yup.object().shape({
     ratingId: Yup.string().required("Avaliação obrigatória"),
 });
 
-const TicketActionButtonsCustom = ({ ticket
+const TicketActionButtonsCustom = ({ ticket, onSearchClick
     // , showSelectMessageCheckbox,
     // selectedMessages,
     // forwardMessageModalOpen,
@@ -517,6 +518,17 @@ const TicketActionButtonsCustom = ({ ticket
                     >
                         {i18n.t("messagesList.header.buttons.accept")}
                     </ButtonWithSpinner>
+                )}
+                {onSearchClick && (
+                    <Tooltip title="Buscar mensagens">
+                        <IconButton
+                            onClick={onSearchClick}
+                            color="inherit"
+                            style={{ paddingHorizontal: 3, paddingTop: 10 }}
+                        >
+                            <SearchIcon style={{ fontSize: 16, padding: 0 }} />
+                        </IconButton>
+                    </Tooltip>
                 )}
                 <IconButton
                     aria-label="account of current user"

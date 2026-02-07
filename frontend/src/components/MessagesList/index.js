@@ -389,8 +389,11 @@ const useStyles = makeStyles((theme) => ({
 
   messageContactName: {
     display: "flex",
-    color: "#6bcbef",
     fontWeight: 500,
+    fontSize: 13,
+    marginBottom: 2,
+    // Cor padrão; será sobrescrita inline por participante
+    color: "#6bcbef",
   },
 
   textContentItem: {
@@ -731,6 +734,21 @@ const reducer = (state, action) => {
       ack: msg.fromMe ? msg.ack : Math.max(msg.ack || 0, 4)
     }));
   }
+};
+
+// Cores para nomes de participantes em grupos (paleta WhatsApp)
+const GROUP_NAME_COLORS = [
+  "#06cf9c", "#25d366", "#00a884", "#5b61b3",
+  "#7c62a0", "#b660cd", "#e36f60", "#f0965b",
+  "#f5a623", "#53bdeb", "#02a698", "#ea5455",
+  "#667781", "#d4a373", "#8b5cf6", "#ec4899",
+];
+
+// Gera cor consistente baseada no contactId ou participant
+const getParticipantColor = (message) => {
+  const key = message.contactId || message.participant || message.contact?.id || 0;
+  const numKey = typeof key === "number" ? key : String(key).split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  return GROUP_NAME_COLORS[numKey % GROUP_NAME_COLORS.length];
 };
 
 const MessagesList = ({
@@ -2085,6 +2103,7 @@ const MessagesList = ({
           {renderTicketsSeparator(message, index)}
           {renderMessageDivider(message, index)}
           <div
+            id={`message-${message.id}`}
             className={clsx(
               classes.messageRowWrapper,
               { [classes.messageRowWrapperSelected]: isMessageSelected }
@@ -2111,6 +2130,13 @@ const MessagesList = ({
                 >
                   <ExpandMore />
                 </IconButton>
+
+                {/* Nome do remetente em mensagens de grupo */}
+                {isGroup && !message.fromMe && (
+                  <span className={classes.messageContactName} style={{ color: getParticipantColor(message) }}>
+                    {message.contact?.name || message.senderName || message.participant?.replace(/@.*/, "") || "Participante"}
+                  </span>
+                )}
 
                 {/* Reação em bolha sobreposta - usa wid (ID WhatsApp) para corresponder ao quotedMsgId */}
                 {(messageReactions[message.wid] || messageReactions[message.id]) && (messageReactions[message.wid]?.length > 0 || messageReactions[message.id]?.length > 0) && (

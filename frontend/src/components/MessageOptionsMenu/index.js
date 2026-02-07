@@ -134,6 +134,17 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 		handleClose();
 	};
 
+	const handlePinMessage = async () => {
+		try {
+			const newPinned = !message.isStarred;
+			await api.post(`/messages/${message.id}/pin`, { pinned: newPinned });
+			toast.success(newPinned ? "Mensagem fixada!" : "Mensagem desfixada!");
+		} catch (err) {
+			toastError(err);
+		}
+		handleClose();
+	};
+
 	const handleOpenConfirmationModal = e => {
 		setConfirmationOpen(true);
 		handleClose();
@@ -248,6 +259,9 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 				</MenuItem>
 				<MenuItem onClick={openReactionsMenu}>
 					{i18n.t("messageOptionsMenu.react")}
+				</MenuItem>
+				<MenuItem onClick={handlePinMessage}>
+					{message.isStarred ? "Desfixar mensagem" : "Fixar mensagem"}
 				</MenuItem>
 			</Menu>
 			<Popover

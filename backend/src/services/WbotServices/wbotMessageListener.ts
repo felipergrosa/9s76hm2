@@ -2054,6 +2054,7 @@ export const verifyMessage = async (
       2,
     remoteJid: msg.key.remoteJid,
     participant: msg.key.participant,
+    senderName: msg.pushName || undefined,
     dataJson: JSON.stringify(msg),
     ticketTrakingId: ticketTraking?.id,
     isPrivate,
@@ -6238,9 +6239,33 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
     });
   });
 
-  // wbot.ev.on("presence.update", (events: any) => {
-  //   console.log(events)
-  // })
+  // Indicador "digitando..." / "gravando áudio" para o frontend
+  wbot.ev.on("presence.update", (presenceData: any) => {
+    try {
+      const io = getIO();
+      const jid = presenceData?.id;
+      if (!jid) return;
+
+      // presenceData.presences é um mapa { jid: { lastKnownPresence, lastSeen } }
+      const presences = presenceData?.presences;
+      if (!presences) return;
+
+      for (const [participantJid, info] of Object.entries(presences)) {
+        const presence = (info as any)?.lastKnownPresence;
+        if (!presence) continue;
+
+        // Emitir para o frontend: composing, recording, paused, available, unavailable
+        io.of(`/workspace-${companyId}`).emit(`company-${companyId}-presence`, {
+          chatJid: jid,
+          participantJid,
+          presence, // "composing" | "recording" | "paused" | "available" | "unavailable"
+        });
+      }
+    } catch (err: any) {
+      // Não falhar por erro no presence
+      logger.debug(`[wbot] presence.update erro: ${err?.message}`);
+    }
+  });
 
   wbot.ev.on("contacts.update", (contacts: any) => {
     contacts.forEach(async (contact: any) => {
