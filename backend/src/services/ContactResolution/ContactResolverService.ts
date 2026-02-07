@@ -241,6 +241,11 @@ async function resolveFromSentWid(
       if (attempt < 3) await delay(200);
     }
 
+    if (!msgRow) {
+      logger.info({ wid, lidJid, companyId }, "[resolveMessageContact] wid não encontrado no banco (mensagem pode não ter sido enviada pelo painel)");
+      return null;
+    }
+
     const contact = (msgRow as any)?.ticket?.contact || (msgRow as any)?.contact || null;
     if (!contact) return null;
 
