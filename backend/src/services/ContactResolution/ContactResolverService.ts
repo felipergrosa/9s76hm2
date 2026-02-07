@@ -1,6 +1,7 @@
 import { proto, WASocket, jidNormalizedUser } from "@whiskeysockets/baileys";
 import { Op } from "sequelize";
 import Contact from "../../models/Contact";
+import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import LidMapping from "../../models/LidMapping";
 import logger from "../../utils/logger";
@@ -44,6 +45,32 @@ export async function resolveMessageContact(
 ): Promise<ContactResolutionResult> {
   // ─── CAMADA 1: Extração (pura, sem I/O) ───
   const ids = extractMessageIdentifiers(msg, wbot);
+
+  // ─── CAMADA 1.4: Atalho determinístico (fromMe + LID) via histórico local (Message.wid) ───
+  // Quando você envia mensagem pelo painel, salvamos no banco com wid = msg.key.id.
+  // Se o Baileys entregar o remoteJid como LID e não fornecer PN/Alt, usamos o wid para achar o ticket/contato real.
+  if (ids.isFromMe && ids.lidJid && !ids.pnJid && msg?.key?.id) {
+    const contactByWid = await resolveFromSentWid(msg.key.id, ids.lidJid, companyId, wbot);
+    if (contactByWid) {
+      try {
+        const digits = String(contactByWid.number || "").replace(/\D/g, "");
+        if (digits.length >= 10 && digits.length <= 13) {
+          ids.pnDigits = digits;
+          ids.pnJid = `${digits}@s.whatsapp.net`;
+          const { canonical } = safeNormalizePhoneNumber(digits);
+          ids.pnCanonical = canonical;
+        }
+      } catch {
+        // Não bloquear fluxo
+      }
+      return {
+        contact: contactByWid,
+        identifiers: ids,
+        isNew: false,
+        isPending: (contactByWid.number || "").startsWith("PENDING_")
+      };
+    }
+  }
 
   // ─── CAMADA 1.5: Resolução async LID→PN (quando extração não conseguiu) ───
   if (ids.lidJid && !ids.pnJid) {
@@ -180,6 +207,81 @@ export async function resolveGroupContact(
   });
 
   return groupContact;
+}
+
+async function resolveFromSentWid(
+  wid: string,
+  lidJid: string,
+  companyId: number,
+  wbot: Session
+): Promise<Contact | null> {
+  try {
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    let msgRow: Message | null = null;
+
+    // Retry curto: o upsert do Baileys pode chegar antes do save via API.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      msgRow = await Message.findOne({
+        where: {
+          companyId,
+          wid,
+          fromMe: true
+        },
+        include: [
+          {
+            model: Ticket,
+            as: "ticket",
+            required: false,
+            include: [{ model: Contact, as: "contact", required: false }]
+          },
+          { model: Contact, as: "contact", required: false }
+        ]
+      });
+      if (msgRow) break;
+      if (attempt < 3) await delay(200);
+    }
+
+    const contact = (msgRow as any)?.ticket?.contact || (msgRow as any)?.contact || null;
+    if (!contact) return null;
+
+    // Atualizar lidJid do contato real para futuras resoluções
+    if (!contact.lidJid) {
+      try {
+        await contact.update({ lidJid });
+      } catch {
+        // Não bloquear fluxo (pode falhar por constraint unique)
+      }
+    }
+
+    // Persistir LidMapping com base no number do contato real (cura para próximas mensagens)
+    try {
+      const digits = String(contact.number || "").replace(/\D/g, "");
+      if (digits.length >= 10 && digits.length <= 13) {
+        const whatsappId = (msgRow as any)?.ticket?.whatsappId || wbot.id;
+        await LidMapping.upsert({
+          lid: lidJid,
+          phoneNumber: digits,
+          companyId,
+          whatsappId,
+          verified: false
+        });
+      }
+    } catch {
+      // Não bloquear fluxo
+    }
+
+    logger.info({
+      wid,
+      lidJid,
+      contactId: contact.id,
+      strategy: "sent-wid"
+    }, "[resolveMessageContact] Contato resolvido via wid (mensagem enviada)");
+
+    return contact;
+  } catch (err: any) {
+    logger.warn({ err: err?.message, wid, lidJid }, "[resolveMessageContact] Erro ao resolver via wid");
+    return null;
+  }
 }
 
 /**
