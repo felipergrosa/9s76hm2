@@ -23,11 +23,14 @@ import {
   Typography,
   CircularProgress,
   Box,
+  FormControlLabel,
+  Switch,
   Card,
   CardContent,
   Chip,
   Grid
 } from "@material-ui/core";
+
 import {
   Edit,
   CheckCircle,
@@ -242,6 +245,7 @@ const Connections = () => {
   };
   const [confirmModalInfo, setConfirmModalInfo] = useState(confirmationModalInitialState);
   const [planConfig, setPlanConfig] = useState(false);
+  const [clearAuthOnNewQr, setClearAuthOnNewQr] = useState(false);
 
   //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
@@ -323,7 +327,8 @@ const Connections = () => {
 
   const handleRequestNewQrCode = async (whatsAppId) => {
     try {
-      await api.put(`/whatsappsession/${whatsAppId}`);
+      await api.put(`/whatsappsession/${whatsAppId}`, { clearAuth: clearAuthOnNewQr });
+      setClearAuthOnNewQr(false);
     } catch (err) {
       toastError(err);
     }
@@ -515,14 +520,27 @@ const Connections = () => {
                     : "Recarregar Conexão"}
                 </Button>{" "}
                 {isBaileys && (
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="secondary"
-                    onClick={() => handleRequestNewQrCode(whatsApp.id)}
-                  >
-                    {i18n.t("connections.buttons.newQr")}
-                  </Button>
+                  <Box display="flex" alignItems="center" style={{ gap: 8 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="secondary"
+                      onClick={() => handleRequestNewQrCode(whatsApp.id)}
+                    >
+                      {i18n.t("connections.buttons.newQr")}
+                    </Button>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          color="secondary"
+                          checked={clearAuthOnNewQr}
+                          onChange={(e) => setClearAuthOnNewQr(e.target.checked)}
+                        />
+                      }
+                      label="Limpar sessão"
+                    />
+                  </Box>
                 )}
               </>
             )}

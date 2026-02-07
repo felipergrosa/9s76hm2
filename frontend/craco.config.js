@@ -1,12 +1,20 @@
 const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
 
+const getRemoveConsolePlugin = () => {
+  if (process.env.NODE_ENV !== "production") return [];
+  try {
+    require.resolve("babel-plugin-transform-remove-console");
+    return [["transform-remove-console", { exclude: ["error", "warn"] }]];
+  } catch {
+    return [];
+  }
+};
+
 module.exports = {
   babel: {
     plugins: [
       // Remove console.log em produção para melhor performance
-      ...(process.env.NODE_ENV === 'production' 
-        ? [['transform-remove-console', { exclude: ['error', 'warn'] }]] 
-        : [])
+      ...getRemoveConsolePlugin()
     ]
   },
   style: {
