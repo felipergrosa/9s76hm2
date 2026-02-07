@@ -184,19 +184,26 @@ const WhatsAppModalCompany = ({
   };
 
   const handleStartWhatsAppSession = async whatsAppId => {
+    console.log("[DEBUG CompanyWhatsapps] handleStartWhatsAppSession chamado com ID:", whatsAppId);
     try {
-      await api.post(`/whatsappsession/${whatsAppId}`);
+      const response = await api.post(`/whatsappsession/${whatsAppId}`);
+      console.log("[DEBUG CompanyWhatsapps] Resposta:", response);
     } catch (err) {
+      console.error("[DEBUG CompanyWhatsapps] Erro:", err);
       toastError(err);
     }
   };
 
   const handleRequestNewQrCode = async whatsAppId => {
+    console.log("[DEBUG CompanyWhatsapps] handleRequestNewQrCode chamado com ID:", whatsAppId);
     try {
       const clearAuth = !!clearAuthById?.[whatsAppId];
-      await api.put(`/whatsappsession/${whatsAppId}`, { clearAuth });
+      console.log("[DEBUG CompanyWhatsapps] clearAuth:", clearAuth);
+      const response = await api.put(`/whatsappsession/${whatsAppId}`, { clearAuth });
+      console.log("[DEBUG CompanyWhatsapps] Resposta:", response);
       setClearAuthById(prev => ({ ...prev, [whatsAppId]: false }));
     } catch (err) {
+      console.error("[DEBUG CompanyWhatsapps] Erro:", err);
       toastError(err);
     }
   };

@@ -227,19 +227,26 @@ const AllConnections = () => {
   };
 
   const handleStartWhatsAppSession = async whatsAppId => {
+    console.log("[DEBUG AllConnections] handleStartWhatsAppSession chamado com ID:", whatsAppId);
     try {
-      await api.post(`/whatsappsession/${whatsAppId}`);
+      const response = await api.post(`/whatsappsession/${whatsAppId}`);
+      console.log("[DEBUG AllConnections] Resposta:", response);
     } catch (err) {
+      console.error("[DEBUG AllConnections] Erro:", err);
       toastError(err);
     }
   };
 
   const handleRequestNewQrCode = async whatsAppId => {
+    console.log("[DEBUG AllConnections] handleRequestNewQrCode chamado com ID:", whatsAppId);
     try {
       const clearAuth = !!clearAuthById?.[whatsAppId];
-      await api.put(`/whatsappsession/${whatsAppId}`, { clearAuth });
+      console.log("[DEBUG AllConnections] clearAuth:", clearAuth);
+      const response = await api.put(`/whatsappsession/${whatsAppId}`, { clearAuth });
+      console.log("[DEBUG AllConnections] Resposta:", response);
       setClearAuthById(prev => ({ ...prev, [whatsAppId]: false }));
     } catch (err) {
+      console.error("[DEBUG AllConnections] Erro:", err);
       toastError(err);
     }
   };
