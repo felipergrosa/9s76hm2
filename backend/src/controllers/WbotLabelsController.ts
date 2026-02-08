@@ -3,6 +3,7 @@ import Whatsapp from "../models/Whatsapp";
 import logger from "../utils/logger";
 import { getAllChatLabels, getLabels } from "../libs/labelCache";
 import RebuildDeviceTagsService from "../services/WbotServices/RebuildDeviceTagsService";
+import SyncAllGroupsService from "../services/WbotServices/SyncAllGroupsService";
 
 export const getLabelsDebug = async (req: Request, res: Response) => {
   try {
@@ -76,6 +77,26 @@ export const listGroups = async (req: Request, res: Response) => {
   } catch (e: any) {
     logger.warn(`[listGroups] error: ${e?.message}`);
     return res.status(500).json({ error: e?.message || "list groups failed" });
+  }
+};
+
+export const syncGroups = async (req: Request, res: Response) => {
+  try {
+    const whatsappId = Number(req.params.whatsappId);
+    if (!whatsappId) return res.status(400).json({ error: "whatsappId inválido" });
+
+    const wpp = await Whatsapp.findByPk(whatsappId);
+    if (!wpp) return res.status(404).json({ error: "Whatsapp não encontrado" });
+
+    // @ts-ignore
+    const companyId = req.user?.companyId || wpp.companyId;
+
+    const result = await SyncAllGroupsService({ whatsappId, companyId });
+
+    return res.json(result);
+  } catch (e: any) {
+    logger.warn(`[syncGroups] error: ${e?.message}`);
+    return res.status(500).json({ error: e?.message || "sync groups failed" });
   }
 };
 

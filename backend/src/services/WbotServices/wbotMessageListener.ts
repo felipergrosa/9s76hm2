@@ -1957,7 +1957,8 @@ export const verifyMediaMessage = async (
           String(msg.status).replace("PENDING", "2").replace("NaN", "1")
         ) || 2,
       remoteJid: msg.key.remoteJid,
-      participant: msg.key.participant,
+      participant: msg.key.participant || msg.participant,
+      senderName: msg.pushName || undefined,
       dataJson: JSON.stringify(msg),
       ticketTrakingId: ticketTraking?.id,
       createdAt: new Date(
@@ -2013,8 +2014,8 @@ export const verifyMediaMessage = async (
         ]
       });
 
-      // CQRS: Emitir eventos via TicketEventBus
-      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
+      // CQRS: Emitir eventos via TicketEventBus (oldStatus=closed pois ticket reabriu)
+      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, "closed");
       ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
     }
 
@@ -2053,7 +2054,7 @@ export const verifyMessage = async (
       Number(String(msg.status).replace("PENDING", "2").replace("NaN", "1")) ||
       2,
     remoteJid: msg.key.remoteJid,
-    participant: msg.key.participant,
+    participant: msg.key.participant || msg.participant,
     senderName: msg.pushName || undefined,
     dataJson: JSON.stringify(msg),
     ticketTrakingId: ticketTraking?.id,
@@ -4208,8 +4209,8 @@ export const handleRating = async (
   // Recarrega ticket com associações para emitir evento Socket.IO completo
   ticket = await ShowTicketService(ticket.id, companyId);
 
-  // CQRS: Emitir eventos via TicketEventBus
-  ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
+  // CQRS: Emitir eventos via TicketEventBus (oldStatus=nps pois ticket saiu de avaliação)
+  ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, "nps");
   ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
 };
 
@@ -4367,9 +4368,7 @@ const flowbuilderIntegration = async (
       companyId
     });
 
-    // CQRS: Emitir eventos via TicketEventBus
-    ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
-    ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+    // Eventos Socket.IO já emitidos pelo UpdateTicketService via TicketEventBus
   }
 
   if (msg.key.fromMe) {
@@ -5000,49 +4999,53 @@ const handleMessage = async (
       }
     }
 
-    // CONTROLE DE CAPTURA AUTOMÁTICA DE CONTATOS DE GRUPOS
+    // RESOLUÇÃO DE CONTATO (participante ou remetente)
     let contact: Contact | null = null;
 
-    if (isGroup && !autoCaptureGroupContacts) {
-      // Se captura automática está DESABILITADA, apenas buscar contato existente
+    if (isGroup) {
+      // Para GRUPOS: o contato do ticket é o groupContact (o grupo em si).
+      // O participante é salvo no campo "participant" da mensagem para exibição.
+      // NUNCA descartar mensagem de grupo por falta de contato do participante.
       const participantJid = msg.participant || msg.key.participant;
-      if (participantJid) {
+
+      if (participantJid && autoCaptureGroupContacts) {
+        // Se captura automática está HABILITADA, resolver/criar contato do participante
+        try {
+          const resolution = await resolveMessageContact(msg, wbot, companyId);
+          contact = resolution?.contact || null;
+        } catch (err) {
+          logger.warn(`[handleMessage] Erro ao resolver participante de grupo: ${err}`);
+        }
+      } else if (participantJid) {
+        // Captura desabilitada: apenas buscar participante existente (sem criar)
         const normalizedParticipantJid = jidNormalizedUser(participantJid);
         const participantNumber = normalizedParticipantJid.replace(/\D/g, "");
+        const isLidParticipant = participantJid.includes("@lid");
 
         contact = await Contact.findOne({
           where: {
             companyId,
-            canonicalNumber: participantNumber
+            isGroup: false,
+            [Op.or]: [
+              { canonicalNumber: participantNumber },
+              { number: participantNumber },
+              ...(isLidParticipant ? [{ lidJid: normalizedParticipantJid }, { remoteJid: normalizedParticipantJid }] : [])
+            ]
           }
         });
+      }
 
-        if (!contact) {
-          logger.info("[handleMessage] Captura automática DESABILITADA. Participante não cadastrado, ignorando.", {
-            participantJid,
-            participantNumber,
-            groupJid: msg.key.remoteJid,
-            companyId
-          });
-          return;
-        }
-      } else {
-        logger.warn("[handleMessage] Mensagem de grupo sem participant, ignorando.", {
-          groupJid: msg.key.remoteJid
-        });
-        return;
+      // FALLBACK CRÍTICO: Se não encontrou participante, usar o groupContact
+      // Isso garante que a mensagem SEMPRE seja salva no ticket do grupo
+      if (!contact) {
+        contact = groupContact;
+        logger.debug(`[handleMessage] Grupo: participante não encontrado, usando groupContact id=${groupContact?.id}`);
       }
     } else {
-      // ═══════════════════════════════════════════════════════════
-      // RESOLUÇÃO UNIFICADA via ContactResolverService
-      // Camada 1: Extração (pura, sem I/O)
-      // Camada 2: Resolução (busca por canonical → lidJid → LidMapping)
-      // Camada 3: Criação (só se resolução retorna null, com PENDING_ para LIDs)
-      // ═══════════════════════════════════════════════════════════
+      // Para DMs: resolução unificada via ContactResolverService
       const resolution = await resolveMessageContact(msg, wbot, companyId);
       contact = resolution?.contact || null;
 
-      // Validação de segurança: se contact for null, interrompe processamento
       if (!contact) {
         logger.error('[handleMessage] ERROR: resolveMessageContact retornou null', {
           remoteJid: msg.key.remoteJid,
@@ -5153,8 +5156,9 @@ const handleMessage = async (
     }
 
     if (
-      ticket.status === "closed" ||
+      (ticket.status === "closed" && !isGroup) ||
       (unreadMessages === 0 &&
+        !isGroup &&
         whatsapp.complationMessage &&
         formatBody(whatsapp.complationMessage, ticket) === bodyMessage)
     ) {
@@ -6027,6 +6031,7 @@ const verifyCampaignMessageAndCloseTicket = async (
     ) {
       const ticket = await Ticket.findByPk(messageRecord.ticketId);
       if (ticket) {
+        const oldStatus = ticket.status;
         await ticket.update({ status: "closed", amountUsedBotQueues: 0 });
 
         // Emitir apenas para a sala do ticket específico, não para todo o namespace
@@ -6035,7 +6040,8 @@ const verifyCampaignMessageAndCloseTicket = async (
           .emit(`company-${companyId}-ticket`, {
             action: "delete",
             ticket,
-            ticketId: ticket.id
+            ticketId: ticket.id,
+            oldStatus
           });
 
         io.of(`/workspace-${companyId}`)

@@ -102,9 +102,26 @@ module.exports = {
         }
       }
 
+      // Passo 5: Corrigir contatos de grupo com whatsappId NULL
+      // Preencher whatsappId dos contatos de grupo usando o whatsappId do ticket correspondente
+      const [, contactsResult]: any = await sequelize.query(`
+        UPDATE "Contacts" c
+        SET "whatsappId" = t."whatsappId"
+        FROM "Tickets" t
+        WHERE t."contactId" = c.id
+          AND t."isGroup" = true
+          AND t."whatsappId" IS NOT NULL
+          AND c."isGroup" = true
+          AND c."whatsappId" IS NULL
+      `);
+      const contactsFixed = contactsResult?.rowCount || 0;
+      if (contactsFixed > 0) {
+        console.log(`[Migration] ${contactsFixed} contatos de grupo atualizados com whatsappId`);
+      }
+
       // Resumo
       console.log("[Migration] Correção de tickets de grupo concluída!");
-      console.log(`[Migration] Resumo: ${ticketsFixed} tickets corrigidos, ${messagesConsolidated} mensagens consolidadas, ${duplicatesClosed} duplicatas fechadas`);
+      console.log(`[Migration] Resumo: ${ticketsFixed} tickets corrigidos, ${messagesConsolidated} mensagens consolidadas, ${duplicatesClosed} duplicatas fechadas, ${contactsFixed} contatos atualizados`);
 
       // Verificação final
       const [remaining]: any = await sequelize.query(`

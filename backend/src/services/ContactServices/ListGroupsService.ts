@@ -69,10 +69,11 @@ const ListGroupsService = async ({
   }
 
   // Aplicar filtro de conexões visíveis (se houver)
+  // Sempre incluir grupos com whatsappId NULL (ainda não associados a conexão)
   if (visibleWhatsappIds.length > 0) {
     whereCondition = {
       ...whereCondition,
-      whatsappId: { [Op.in]: visibleWhatsappIds }
+      whatsappId: { [Op.or]: [{ [Op.in]: visibleWhatsappIds }, null] }
     };
   }
 

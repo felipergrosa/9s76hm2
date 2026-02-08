@@ -309,13 +309,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     whatsappId
   });
 
-  const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    // .to(ticket.status)
-    .emit(`company-${companyId}-ticket`, {
-      action: "update",
-      ticket
-    });
+  // Evento Socket.IO já emitido pelo CreateTicketService via ticketEventBus.publishTicketCreated
 
   return res.status(200).json(ticket);
 };
@@ -520,12 +514,10 @@ export const remove = async (
   const io = getIO();
 
   io.of(`/workspace-${companyId}`)
-    // .to(ticket.status)
-    // .to(ticketId)
-    // .to("notification")
     .emit(`company-${companyId}-ticket`, {
       action: "delete",
-      ticketId: +ticketId
+      ticketId: +ticketId,
+      oldStatus: ticket.status
     });
 
   return res.status(200).json({ message: "ticket deleted" });

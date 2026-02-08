@@ -8,7 +8,9 @@ import {
     Eye,
     Wifi,
     WifiOff,
+    Download,
 } from "lucide-react";
+import { toast } from "react-toastify";
 import api from "../../services/api";
 import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
@@ -33,6 +35,7 @@ const Groups = () => {
     const { user } = useContext(AuthContext);
 
     const [loading, setLoading] = useState(false);
+    const [syncing, setSyncing] = useState(false);
     const [searchParam, setSearchParam] = useState("");
     const debouncedSearchParam = useDebounce(searchParam, 400);
     const [groups, setGroups] = useState([]);
@@ -138,6 +141,44 @@ const Groups = () => {
         }
     };
 
+    // Sincronizar todos os grupos do WhatsApp para o sistema
+    const handleSyncGroups = async () => {
+        setSyncing(true);
+        try {
+            // Buscar todas as conexões WhatsApp
+            const { data: whatsapps } = await api.get("/whatsapp");
+            const connections = whatsapps || [];
+            const connected = connections.filter(w => w.status === "CONNECTED");
+
+            if (connected.length === 0) {
+                toast.warn("Nenhuma conexão WhatsApp ativa encontrada.");
+                setSyncing(false);
+                return;
+            }
+
+            let totalSynced = 0;
+            let totalCreated = 0;
+
+            for (const conn of connected) {
+                try {
+                    const { data } = await api.post(`/wbot/${conn.id}/groups/sync`);
+                    totalSynced += data.total || 0;
+                    totalCreated += data.ticketsCreated || 0;
+                } catch (err) {
+                    console.warn(`Erro ao sincronizar grupos da conexão ${conn.name}:`, err);
+                }
+            }
+
+            toast.success(`Sincronização concluída: ${totalSynced} grupos encontrados, ${totalCreated} novos importados.`);
+            // Recarregar lista
+            handleRefresh();
+        } catch (err) {
+            toastError(err);
+        } finally {
+            setSyncing(false);
+        }
+    };
+
     const canViewGroups = user.allowGroup || user.profile === "admin" || user.super;
 
     const isConnected = (status) =>
@@ -213,17 +254,39 @@ const Groups = () => {
                             <button
                                 onClick={handleRefresh}
                                 title="Atualizar lista"
+                                disabled={loading}
                                 style={{
                                     padding: 8,
                                     border: "none",
                                     background: "transparent",
-                                    cursor: "pointer",
+                                    cursor: loading ? "not-allowed" : "pointer",
                                     borderRadius: 8,
                                     display: "flex",
                                     alignItems: "center",
                                 }}
                             >
                                 <RefreshCw size={18} color="#667781" />
+                            </button>
+                            <button
+                                onClick={handleSyncGroups}
+                                title="Sincronizar grupos do WhatsApp"
+                                disabled={syncing}
+                                style={{
+                                    padding: "6px 12px",
+                                    border: "1px solid #00a884",
+                                    background: syncing ? "#e8f5e9" : "#fff",
+                                    cursor: syncing ? "not-allowed" : "pointer",
+                                    borderRadius: 8,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 6,
+                                    fontSize: 13,
+                                    fontWeight: 500,
+                                    color: "#00a884",
+                                }}
+                            >
+                                <Download size={16} style={syncing ? { animation: "spin 1s linear infinite" } : {}} />
+                                {syncing ? "Sincronizando..." : "Sincronizar"}
                             </button>
                         </div>
                     </div>

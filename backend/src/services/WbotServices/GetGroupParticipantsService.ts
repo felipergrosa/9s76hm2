@@ -94,6 +94,40 @@ const GetGroupParticipantsService = async ({
   // Mapear participantes
   const participants: GroupParticipant[] = [];
 
+  // Pré-carregar todos os contatos da company de uma vez (evita N+1 queries)
+  const allRawNumbers = (groupMetadata.participants || []).map((p: any) => {
+    const raw = p.id.split("@")[0].replace(/\D/g, "");
+    const { canonical } = normalizePhoneNumber(raw);
+    return { raw, canonical: canonical || raw };
+  });
+
+  const searchNumbers = allRawNumbers.flatMap((n: any) => {
+    const nums = [n.canonical];
+    if (n.raw !== n.canonical) nums.push(n.raw);
+    return nums;
+  });
+
+  // Busca única no banco para todos os participantes
+  let contactsMap = new Map<string, Contact>();
+  try {
+    const contacts = await Contact.findAll({
+      where: {
+        companyId,
+        isGroup: false,
+        [Op.or]: [
+          { canonicalNumber: { [Op.in]: searchNumbers } },
+          { number: { [Op.in]: searchNumbers } }
+        ]
+      }
+    });
+    for (const c of contacts) {
+      if (c.canonicalNumber) contactsMap.set(c.canonicalNumber, c);
+      if (c.number) contactsMap.set(c.number, c);
+    }
+  } catch {
+    // Ignorar erros na busca batch
+  }
+
   for (const p of groupMetadata.participants || []) {
     const participantJid = p.id;
     const rawNumber = participantJid.split("@")[0].replace(/\D/g, "");
@@ -104,55 +138,34 @@ const GetGroupParticipantsService = async ({
     const { canonical } = normalizePhoneNumber(rawNumber);
     const participantNumber = canonical || rawNumber;
 
-    // Validar se é um número brasileiro válido (não um ID Meta)
-    // Números válidos BR: começam com 55 e têm 12-13 dígitos
-    const isValidBrNumber = participantNumber.startsWith("55") && 
-                            participantNumber.length >= 12 && 
-                            participantNumber.length <= 13;
+    // Validar se é um número de telefone válido (qualquer país)
+    // Números de telefone reais: 7-15 dígitos
+    // IDs internos Meta/Facebook: geralmente > 15 dígitos
+    const isValidPhoneNumber = participantNumber.length >= 7 && participantNumber.length <= 15;
 
-    // Tentar buscar contato existente no sistema (por canonicalNumber ou number)
-    let contactRecord: Contact | null = null;
-    let contactName = isValidBrNumber ? participantNumber : "Participante";
-    let profilePicUrl: string | undefined;
+    // Buscar contato no mapa pré-carregado
+    const contactRecord = contactsMap.get(participantNumber) || contactsMap.get(rawNumber) || null;
 
-    // Se não é número válido, tentar usar pushName do WhatsApp
-    if (!isValidBrNumber && p.name) {
-      contactName = p.name;
+    // Determinar nome: 1) contato do sistema, 2) pushName do WhatsApp, 3) número formatado
+    let contactName: string;
+    if (contactRecord?.name) {
+      contactName = contactRecord.name;
+    } else if (p.notify) {
+      // pushName do WhatsApp (campo "notify" no Baileys)
+      contactName = p.notify;
+    } else if (isValidPhoneNumber) {
+      // Formatar número como nome legível (ex: +55 19 99246-1008)
+      contactName = `+${participantNumber}`;
+    } else {
+      contactName = "Participante";
     }
 
-    try {
-      contactRecord = await Contact.findOne({
-        where: {
-          companyId,
-          isGroup: false,
-          [Op.or]: [
-            { canonicalNumber: participantNumber },
-            { number: participantNumber },
-            ...(rawNumber !== participantNumber ? [{ number: rawNumber }, { canonicalNumber: rawNumber }] : [])
-          ]
-        }
-      });
-
-      if (contactRecord) {
-        contactName = contactRecord.name || contactName;
-        profilePicUrl = contactRecord.profilePicUrl || undefined;
-      }
-    } catch {
-      // Ignorar erros na busca de contato
-    }
-
-    // Se não encontrou contato, tentar buscar foto de perfil via Baileys
-    if (!profilePicUrl) {
-      try {
-        profilePicUrl = await wbot.profilePictureUrl(participantJid, "image");
-      } catch {
-        // Participante pode não ter foto
-      }
-    }
+    // Usar foto do contato do sistema (sem buscar via Baileys para performance)
+    const profilePicUrl = contactRecord?.profilePicUrl || undefined;
 
     participants.push({
       id: participantJid,
-      number: participantNumber,
+      number: isValidPhoneNumber ? participantNumber : rawNumber,
       name: contactName,
       isAdmin,
       isSuperAdmin,

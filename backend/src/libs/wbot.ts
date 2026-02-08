@@ -594,6 +594,18 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 logger.warn(`[wbot] initial resyncAppState failed: ${e?.message}`);
               }
 
+              // Sincronizar todos os grupos do WhatsApp como contatos+tickets
+              // Executa com delay para não sobrecarregar a conexão recém-aberta
+              setTimeout(async () => {
+                try {
+                  const SyncAllGroupsService = require("../services/WbotServices/SyncAllGroupsService").default;
+                  const syncResult = await SyncAllGroupsService({ whatsappId: whatsapp.id, companyId });
+                  logger.info(`[wbot] Sync de grupos concluído para whatsappId=${whatsapp.id}: ${JSON.stringify(syncResult)}`);
+                } catch (e: any) {
+                  logger.warn(`[wbot] Falha ao sincronizar grupos: ${e?.message}`);
+                }
+              }, 10000);
+
               // NOVO: Escutar evento lid-mapping.update para persistir mapeamentos LID → Número
               // Isso resolve o problema de contatos duplicados causado por LIDs
               try {

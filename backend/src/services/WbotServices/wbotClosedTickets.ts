@@ -143,8 +143,8 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
           userId: ticket.userId,
         });
 
-        // CQRS: Emitir evento via TicketEventBus
-        ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
+        // CQRS: Emitir evento via TicketEventBus (oldStatus=open pois ticket era aberto)
+        ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, "open");
       }
     }
   }
@@ -191,8 +191,8 @@ const handleNPSTickets = async (companyId: number, whatsapp: any) => {
         userId: ticket.userId,
       });
 
-      // CQRS: Emitir evento via TicketEventBus
-      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
+      // CQRS: Emitir evento via TicketEventBus (oldStatus=nps pois ticket era NPS)
+      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, "nps");
     }));
   }
 };

@@ -68,13 +68,16 @@ export const updateTicketByRemoteJid = async (remoteJid: string, queue: number, 
 
     const io = getIO();
 
-    // io.to(oldStatus).emit(`company-${ticket.companyId}-ticket`, {
-    //   action: "delete",
-    //   ticketId: ticket.id
-    // });
+    if (ticket.status !== oldStatus) {
+      io.of(`/workspace-${ticket.companyId}`)
+        .emit(`company-${ticket.companyId}-ticket`, {
+          action: "delete",
+          ticketId: ticket.id,
+          oldStatus
+        });
+    }
 
-    io.of(ticket.companyId.toString())
-      // .to(ticket.id.toString())
+    io.of(`/workspace-${ticket.companyId}`)
       .emit(`company-${ticket.companyId}-ticket`, {
         action: "update",
         ticket

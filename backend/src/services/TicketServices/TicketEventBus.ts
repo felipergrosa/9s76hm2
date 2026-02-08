@@ -172,14 +172,15 @@ class TicketEventBus extends EventEmitter {
   publishTicketDeleted(
     companyId: number,
     ticketId: number,
-    ticketUuid: string
+    ticketUuid: string,
+    oldStatus?: string
   ): void {
     this.publish({
       type: "TICKET_DELETED",
       companyId,
       ticketId,
       ticketUuid,
-      payload: {},
+      payload: { oldStatus },
       timestamp: new Date()
     });
   }

@@ -227,14 +227,15 @@ export async function deleteTicket(
   }
 
   const uuid = ticket.uuid;
+  const oldStatus = ticket.status;
 
   await ticket.destroy();
 
   // Invalidar cache
   invalidateTicketCache(ticketId);
 
-  // Publicar evento
-  ticketEventBus.publishTicketDeleted(companyId, ticketId, uuid);
+  // Publicar evento (inclui oldStatus para frontend filtrar por aba)
+  ticketEventBus.publishTicketDeleted(companyId, ticketId, uuid, oldStatus);
 
   logger.debug(`[TicketCommandService] Ticket ${ticketId} deletado via CQRS`);
 
@@ -336,9 +337,10 @@ export function emitTicketUpdated(
 export function emitTicketDeleted(
   companyId: number,
   ticketId: number,
-  ticketUuid: string
+  ticketUuid: string,
+  oldStatus?: string
 ): void {
-  ticketEventBus.publishTicketDeleted(companyId, ticketId, ticketUuid);
+  ticketEventBus.publishTicketDeleted(companyId, ticketId, ticketUuid, oldStatus);
 }
 
 export default {

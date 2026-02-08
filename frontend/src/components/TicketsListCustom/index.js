@@ -332,7 +332,17 @@ const TicketsListCustom = (props) => {
                     sortDir: sortTickets
                 });
             }
-            // console.log(shouldUpdateTicket(data.ticket))
+
+            if (data.action === "create" &&
+                data.ticket && shouldUpdateTicket(data.ticket) && data.ticket.status === status) {
+                dispatch({
+                    type: "UPDATE_TICKET",
+                    payload: data.ticket,
+                    status: status,
+                    sortDir: sortTickets
+                });
+            }
+
             if (data.action === "update" &&
                 shouldUpdateTicket(data.ticket) && data.ticket.status === status) {
                 dispatch({
@@ -357,11 +367,14 @@ const TicketsListCustom = (props) => {
             }
 
             if (data.action === "delete") {
-                dispatch({
-                    type: "DELETE_TICKET", payload: data?.ticketId, status: status,
-                    sortDir: sortTickets
-                });
-
+                // Se oldStatus veio no evento, só remove da aba correspondente
+                // Isso evita que o delete de uma aba remova o ticket de outra aba
+                if (!data.oldStatus || data.oldStatus === status) {
+                    dispatch({
+                        type: "DELETE_TICKET", payload: data?.ticketId, status: status,
+                        sortDir: sortTickets
+                    });
+                }
             }
         };
 

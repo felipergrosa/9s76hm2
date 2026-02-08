@@ -121,7 +121,7 @@ const UpdateTicketService = async ({
       });
 
       // CQRS: Emitir evento via TicketEventBus
-      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
+      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, oldStatus);
       console.log(117, "UpdateTicketService - CQRS")
       return { ticket, oldStatus, oldUserId };
     }
@@ -227,7 +227,7 @@ const UpdateTicketService = async ({
           })
 
           // CQRS: Emitir evento via TicketEventBus
-          ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
+          ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, oldStatus);
 
           console.log(277, "UpdateTicketService - CQRS")
           return { ticket, oldStatus, oldUserId };
@@ -308,7 +308,7 @@ const UpdateTicketService = async ({
       });
 
       // CQRS: Emitir evento via TicketEventBus
-      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
+      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, oldStatus);
       console.log(309, "UpdateTicketService - CQRS")
       return { ticket, oldStatus, oldUserId };
     }
@@ -328,14 +328,8 @@ const UpdateTicketService = async ({
 
           await ticket.reload();
 
-          io.of(`/workspace-${companyId}`)
-            // .to(oldStatus)
-            // .to(ticketId.toString())
-            .emit(`company-${ticket.companyId}-ticket`, {
-              action: "delete",
-              ticketId: ticket.id
-            });
-
+          // CQRS: Emitir delete com oldStatus para frontend filtrar por aba
+          ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, oldStatus);
 
           newTicketTransfer = await FindOrCreateTicketService(
             ticket.contact,
@@ -498,24 +492,12 @@ const UpdateTicketService = async ({
           await ticketTraking.update({
             userId: newTicketTransfer.userId
           })
-          // console.log("emitiu socket 497", ticket.id, newTicketTransfer.id)
-          io.of(`/workspace-${companyId}`)
-            // .to(oldStatus)
-            .emit(`company-${companyId}-ticket`, {
-              action: "delete",
-              ticketId: newTicketTransfer.id
-            });
+          // CQRS: Emitir delete com oldStatus para frontend filtrar por aba
+          ticketEventBus.publishTicketDeleted(companyId, newTicketTransfer.id, newTicketTransfer.uuid, oldStatus);
         }
 
-        io.of(`/workspace-${companyId}`)
-          // .to(newTicketTransfer.status)
-          // .to("notification")
-          // .to(newTicketTransfer.id.toString())
-          .emit(`company-${companyId}-ticket`, {
-            action: "update",
-            ticket: newTicketTransfer
-          });
-
+        // CQRS: Emitir update via TicketEventBus
+        ticketEventBus.publishTicketUpdated(companyId, newTicketTransfer.id, newTicketTransfer.uuid, newTicketTransfer);
 
         return { ticket: newTicketTransfer, oldStatus, oldUserId };
 
@@ -738,7 +720,7 @@ const UpdateTicketService = async ({
 
     if (ticket.status !== oldStatus || ticket.user?.id !== oldUserId || ticket.queueId !== oldQueueId) {
       // CQRS: Emitir evento de delete via TicketEventBus
-      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid);
+      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, oldStatus);
     }
 
     // CQRS: Emitir evento de update via TicketEventBus
