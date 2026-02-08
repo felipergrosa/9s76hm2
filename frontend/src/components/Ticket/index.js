@@ -424,6 +424,7 @@ const Ticket = () => {
             contactId={contact.id}
             contactData={contact}
             ticketData={ticket}
+            drawerOpen={drawerOpen}
           />
         )}
       </>

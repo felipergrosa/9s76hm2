@@ -103,6 +103,13 @@ const useStyles = makeStyles((theme) => ({
       boxSizing: 'border-box',
       overflowX: 'hidden',
     },
+    // Ajuste quando drawer de grupo está aberto (320px de largura)
+    '&.drawer-open': {
+      [theme.breakpoints.down("sm")]: {
+        width: 'calc(100% - 320px)',
+        maxWidth: 'calc(100vw - 320px)',
+      }
+    }
   },
   avatar: {
     width: "50px",
@@ -595,7 +602,7 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketChannel, contactData, ticketData }) => {
+const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketChannel, contactData, ticketData, drawerOpen }) => {
 
   const classes = useStyles();
   const theme = useTheme();
@@ -1675,7 +1682,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   }
   else {
     return (
-      <>
+      <div className={`${classes.mainWrapper} ${drawerOpen ? 'drawer-open' : ''}`}>
         {assistantOpen && (
           <div style={{ width: '100%' }}>
             <ChatAssistantPanel
@@ -2242,10 +2249,9 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
             </ul>
           </div>
         )}
-      </>
+      </div>
     );
   }
 };
 
 export default MessageInput;
-
