@@ -141,6 +141,7 @@ const ListTicketsService = async ({
 
       whereCondition = {
         companyId,
+        isGroup: true, // Garantir que apenas grupos apareçam na aba Grupos
         // Grupos não filtram por fila - devem aparecer independente de queueId
         // Se não é super/admin sem restrição, filtra por conexões
         ...(uniqueConnIds.length > 0 && !user.super && user.profile !== "admin"

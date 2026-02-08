@@ -58,12 +58,24 @@ const ListMessagesService = async ({
     throw new AppError("ERR_NO_TICKET_FOUND", 404);
   }
 
+  logger.info(`[ListMessages] ticketId=${ticket.id} uuid=${ticket.uuid} isGroup=${ticket.isGroup} status=${ticket.status} pageNumber=${pageNumber} companyId=${companyId}`);
+
   const ticketsFilter: any[] | null = [];
 
-  // Para GRUPOS: usar apenas o ticket atual (simplificar query)
-  // Grupos têm um único ticket, não precisam buscar histórico
+  // Para GRUPOS: buscar mensagens de TODOS os tickets do mesmo grupo
+  // (pode haver tickets históricos/duplicados com mensagens vinculadas)
   if (ticket.isGroup) {
-    ticketsFilter.push([ticket.id]);
+    const groupTicketIds = await Ticket.findAll({
+      where: {
+        contactId: ticket.contactId,
+        companyId: ticket.companyId,
+        isGroup: true
+      },
+      attributes: ["id"]
+    });
+    const ids = groupTicketIds.map(t => t.id);
+    ticketsFilter.push(ids.length > 0 ? ids : [ticket.id]);
+    logger.info(`[ListMessages] GRUPO: contactId=${ticket.contactId} ticketIds=${JSON.stringify(ids)}`);
   } else {
     const isAllHistoricEnabled = await isQueueIdHistoryBlocked({ userRequest: user.id });
 
@@ -187,6 +199,8 @@ const ListMessagesService = async ({
     subQuery: false,
     order: [["createdAt", "DESC"]]
   });
+
+  logger.info(`[ListMessages] ticketId=${ticket.id} isGroup=${ticket.isGroup} tickets=${JSON.stringify(tickets)} count=${count} messages=${messages.length} offset=${offset}`);
 
   let hasMore = count > offset + messages.length;
 

@@ -60,22 +60,29 @@ const FindOrCreateTicketService = async (
   let ticket: Ticket | null = null;
 
   if (groupContact) {
+    // Buscar por contactId+companyId (sem whatsappId) para encontrar tickets antigos com whatsappId null
     ticket = await Ticket.findOne({
       where: {
         contactId: groupContact.id,
         companyId,
-        whatsappId: whatsapp.id
+        isGroup: true
       },
       order: [["id", "DESC"]]
     });
 
-    // Se encontrou ticket fechado, reabrir como "group"
-    if (ticket && ticket.status === "closed") {
-      logger.info(`[FindOrCreateTicket] Reabrindo ticket de grupo ${ticket.id} (estava closed)`);
-      await ticket.update({
-        status: "group",
-        unreadMessages,
-      });
+    if (ticket) {
+      // Atualizar whatsappId se estava null ou diferente
+      const updates: any = { unreadMessages };
+      if (!ticket.whatsappId || ticket.whatsappId !== whatsapp.id) {
+        updates.whatsappId = whatsapp.id;
+        logger.info(`[FindOrCreateTicket] Grupo ticket ${ticket.id}: atualizando whatsappId ${ticket.whatsappId} -> ${whatsapp.id}`);
+      }
+      // Se encontrou ticket fechado, reabrir como "group"
+      if (ticket.status === "closed") {
+        updates.status = "group";
+        logger.info(`[FindOrCreateTicket] Reabrindo ticket de grupo ${ticket.id} (estava closed)`);
+      }
+      await ticket.update(updates);
       ticket = await ShowTicketService(ticket.id, companyId);
       return ticket;
     }
