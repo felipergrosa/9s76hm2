@@ -85,10 +85,7 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     borderTop: "1px solid rgba(0, 0, 0, 0.08)",
     [theme.breakpoints.down("sm")]: {
-      position: "fixed",
-      bottom: 0,
-      left: 0,
-      right: 0,
+      position: "relative",
       width: "100%",
       maxWidth: "100vw",
       borderTop: 'none',
@@ -102,6 +99,7 @@ const useStyles = makeStyles((theme) => ({
       backgroundPosition: 'center bottom',
       boxSizing: 'border-box',
       overflowX: 'hidden',
+      flexShrink: 0,
     },
   },
   avatar: {

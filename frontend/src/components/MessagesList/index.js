@@ -68,6 +68,9 @@ const useStyles = makeStyles((theme) => ({
     // Remover restrição que causava barra horizontal
     // minWidth: 300,
     minHeight: 200,
+    [theme.breakpoints.down('sm')]: {
+      minHeight: 150,
+    }
   },
   loadingCenter: {
     position: 'absolute',
