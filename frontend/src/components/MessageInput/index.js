@@ -103,13 +103,6 @@ const useStyles = makeStyles((theme) => ({
       boxSizing: 'border-box',
       overflowX: 'hidden',
     },
-    // Ajuste quando drawer de grupo está aberto (320px de largura)
-    '&.drawer-open': {
-      [theme.breakpoints.down("sm")]: {
-        width: 'calc(100% - 320px)',
-        maxWidth: 'calc(100vw - 320px)',
-      }
-    }
   },
   avatar: {
     width: "50px",
@@ -136,6 +129,7 @@ const useStyles = makeStyles((theme) => ({
   newMessageBox: {
     backgroundColor: ((theme.palette.mode || theme.palette.type) === 'light') ? "#ffffff" : "#202c33",
     width: "100%",
+    maxWidth: "100%",
     display: "flex",
     padding: "0px 8px",
     alignItems: "center",
@@ -147,11 +141,12 @@ const useStyles = makeStyles((theme) => ({
     gap: 4,
     minHeight: 56,
     maxHeight: 200,
+    boxSizing: 'border-box',
     [theme.breakpoints.down('sm')]: {
       minHeight: 48,
       maxHeight: 150,
       width: '100%',
-      maxWidth: '100%',
+      maxWidth: '100vw',
       boxSizing: 'border-box',
       padding: '0px 4px',
       gap: 2,
@@ -602,7 +597,7 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketChannel, contactData, ticketData, drawerOpen }) => {
+const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketChannel, contactData, ticketData }) => {
 
   const classes = useStyles();
   const theme = useTheme();
@@ -1682,7 +1677,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   }
   else {
     return (
-      <div className={`${classes.mainWrapper} ${drawerOpen ? 'drawer-open' : ''}`}>
+      <div className={classes.mainWrapper}>
         {assistantOpen && (
           <div style={{ width: '100%' }}>
             <ChatAssistantPanel

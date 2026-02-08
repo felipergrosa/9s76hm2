@@ -17,12 +17,18 @@ const useStyles = makeStyles(theme => ({
 		padding: theme.padding,
 		height: `calc(100% - 48px)`,
 		overflowY: "hidden",
+		overflowX: "hidden",
+		maxWidth: "100vw",
+		width: "100%",
 	},
 
 	chatPapper: {
 		// backgroundColor: "red",
 		display: "flex",
 		height: "100%",
+		overflow: "hidden",
+		maxWidth: "100%",
+		width: "100%",
 	},
 
 	contactsWrapper: {
@@ -35,6 +41,9 @@ const useStyles = makeStyles(theme => ({
 		display: "flex",
 		height: "100%",
 		flexDirection: "column",
+		overflow: "hidden",
+		maxWidth: "100%",
+		width: "100%",
 	},
 	welcomeMsg: {
 		// backgroundColor: "#eee",
