@@ -60,44 +60,49 @@ const ListMessagesService = async ({
 
   const ticketsFilter: any[] | null = [];
 
-  const isAllHistoricEnabled = await isQueueIdHistoryBlocked({ userRequest: user.id });
-
-  let ticketIds = [];
-  if (!isAllHistoricEnabled) {
-    ticketIds = await Ticket.findAll({
-      where:
-      {
-        id: { [Op.lte]: ticket.id },
-        companyId: ticket.companyId,
-        contactId: ticket.contactId,
-        whatsappId: ticket.whatsappId,
-        isGroup: ticket.isGroup,
-        queueId: user.profile === "admin" || user.allTicket === "enable" || (ticket.isGroup && user.allowGroup) ?
-          {
-            [Op.or]: [queues, null]
-          } :
-          { [Op.in]: queues },
-      },
-      attributes: ["id"]
-    });
+  // Para GRUPOS: usar apenas o ticket atual (simplificar query)
+  // Grupos têm um único ticket, não precisam buscar histórico
+  if (ticket.isGroup) {
+    ticketsFilter.push([ticket.id]);
   } else {
-    ticketIds = await Ticket.findAll({
-      where:
-      {
-        id: { [Op.lte]: ticket.id },
-        companyId: ticket.companyId,
-        contactId: ticket.contactId,
-        whatsappId: ticket.whatsappId,
-        isGroup: ticket.isGroup
-      },
-      attributes: ["id"]
-    });
-  }
+    const isAllHistoricEnabled = await isQueueIdHistoryBlocked({ userRequest: user.id });
 
-  if (ticketIds) {
-    ticketsFilter.push(ticketIds.map(t => t.id));
+    let ticketIds = [];
+    if (!isAllHistoricEnabled) {
+      ticketIds = await Ticket.findAll({
+        where:
+        {
+          id: { [Op.lte]: ticket.id },
+          companyId: ticket.companyId,
+          contactId: ticket.contactId,
+          whatsappId: ticket.whatsappId,
+          isGroup: ticket.isGroup,
+          queueId: user.profile === "admin" || user.allTicket === "enable" ?
+            {
+              [Op.or]: [queues, null]
+            } :
+            { [Op.in]: queues },
+        },
+        attributes: ["id"]
+      });
+    } else {
+      ticketIds = await Ticket.findAll({
+        where:
+        {
+          id: { [Op.lte]: ticket.id },
+          companyId: ticket.companyId,
+          contactId: ticket.contactId,
+          whatsappId: ticket.whatsappId,
+          isGroup: ticket.isGroup
+        },
+        attributes: ["id"]
+      });
+    }
+
+    if (ticketIds) {
+      ticketsFilter.push(ticketIds.map(t => t.id));
+    }
   }
-  // }
 
   const tickets: number[] = intersection(...ticketsFilter);
 
