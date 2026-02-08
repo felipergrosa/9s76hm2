@@ -2134,7 +2134,19 @@ const MessagesList = ({
                 {/* Nome do remetente em mensagens de grupo */}
                 {isGroup && !message.fromMe && (
                   <span className={classes.messageContactName} style={{ color: getParticipantColor(message) }}>
-                    {message.contact?.name || message.senderName || message.participant?.replace(/@.*/, "") || "Participante"}
+                    {(() => {
+                      // Em grupos: priorizar senderName (pushName do WhatsApp) ou nome do contato individual
+                      // Evitar mostrar o nome do grupo como remetente
+                      const contactName = message.contact?.name;
+                      const isContactGroup = message.contact?.isGroup;
+                      const senderName = message.senderName;
+                      const participant = message.participant;
+                      // Se o contact é o próprio grupo, não usar seu nome como remetente
+                      if (senderName) return senderName;
+                      if (contactName && !isContactGroup) return contactName;
+                      if (participant) return participant.replace(/@.*/, "");
+                      return "Participante";
+                    })()}
                   </span>
                 )}
 

@@ -65,16 +65,34 @@ class Message extends Model<Message> {
         ? `${be}${proxyPort ? `:${proxyPort}` : ''}`
         : (fe || devFallback);
 
-      // Suporte a formato antigo (contacts/{uuid}/arquivo) e novo (contact{id}/arquivo)
-      // Se fileRel já contém / (ex: contact1676/arquivo.jpg), usa direto
-      // Se não contém / (ex: arquivo.jpg ou uuid/arquivo.jpg antigo), assume formato novo
-      const path = fileRel.includes('/')
-        ? fileRel  // Novo formato: contact1676/arquivo.jpg ou UUID antigo
-        : `contact${this.contactId}/${fileRel}`;  // Fallback: só nome do arquivo
+      // Determinar caminho relativo do arquivo
+      let filePath: string;
+      if (fileRel.includes('/')) {
+        // Já contém subpasta (ex: contact1676/arquivo.jpg)
+        filePath = fileRel;
+      } else {
+        // Só nome do arquivo — verificar onde realmente está no disco
+        // Tentar primeiro na subpasta contact{id}/, depois direto na raiz da company
+        const fs = require('fs');
+        const pathModule = require('path');
+        const companyDir = pathModule.resolve(__dirname, '..', '..', 'public', `company${this.companyId}`);
+        const inSubfolder = pathModule.join(companyDir, `contact${this.contactId}`, fileRel);
+        const inRoot = pathModule.join(companyDir, fileRel);
+
+        if (this.contactId && fs.existsSync(inSubfolder)) {
+          filePath = `contact${this.contactId}/${fileRel}`;
+        } else if (fs.existsSync(inRoot)) {
+          // Arquivo está diretamente na raiz da company (formato legado)
+          filePath = fileRel;
+        } else {
+          // Fallback: assumir subpasta (pode não existir, mas mantém compatibilidade)
+          filePath = this.contactId ? `contact${this.contactId}/${fileRel}` : fileRel;
+        }
+      }
 
       const base = origin
-        ? `${origin}/public/company${this.companyId}/${path}`
-        : `/public/company${this.companyId}/${path}`;
+        ? `${origin}/public/company${this.companyId}/${filePath}`
+        : `/public/company${this.companyId}/${filePath}`;
       return base;
     }
     return null;

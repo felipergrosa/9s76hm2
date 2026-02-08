@@ -94,8 +94,20 @@ const GetGroupParticipantsService = async ({
   // Mapear participantes
   const participants: GroupParticipant[] = [];
 
-  // Pré-carregar todos os contatos da company de uma vez (evita N+1 queries)
-  const allRawNumbers = (groupMetadata.participants || []).map((p: any) => {
+  // Separar participantes por tipo de JID (@s.whatsapp.net vs @lid)
+  const pnParticipants: any[] = [];
+  const lidParticipants: any[] = [];
+
+  for (const p of groupMetadata.participants || []) {
+    if (p.id.includes("@lid")) {
+      lidParticipants.push(p);
+    } else {
+      pnParticipants.push(p);
+    }
+  }
+
+  // Pré-carregar contatos por número de telefone (participantes @s.whatsapp.net)
+  const allRawNumbers = pnParticipants.map((p: any) => {
     const raw = p.id.split("@")[0].replace(/\D/g, "");
     const { canonical } = normalizePhoneNumber(raw);
     return { raw, canonical: canonical || raw };
@@ -107,44 +119,99 @@ const GetGroupParticipantsService = async ({
     return nums;
   });
 
-  // Busca única no banco para todos os participantes
+  // Pré-carregar contatos por LID (participantes @lid)
+  const lidJids = lidParticipants.map((p: any) => p.id);
+
+  // Busca única no banco para todos os participantes (PN + LID)
   let contactsMap = new Map<string, Contact>();
   try {
-    const contacts = await Contact.findAll({
-      where: {
-        companyId,
-        isGroup: false,
-        [Op.or]: [
-          { canonicalNumber: { [Op.in]: searchNumbers } },
-          { number: { [Op.in]: searchNumbers } }
-        ]
+    const whereConditions: any[] = [];
+    if (searchNumbers.length > 0) {
+      whereConditions.push({ canonicalNumber: { [Op.in]: searchNumbers } });
+      whereConditions.push({ number: { [Op.in]: searchNumbers } });
+    }
+    if (lidJids.length > 0) {
+      whereConditions.push({ lidJid: { [Op.in]: lidJids } });
+      whereConditions.push({ remoteJid: { [Op.in]: lidJids } });
+    }
+
+    if (whereConditions.length > 0) {
+      const contacts = await Contact.findAll({
+        where: {
+          companyId,
+          isGroup: false,
+          [Op.or]: whereConditions
+        }
+      });
+      for (const c of contacts) {
+        if (c.canonicalNumber) contactsMap.set(c.canonicalNumber, c);
+        if (c.number) contactsMap.set(c.number, c);
+        if (c.lidJid) contactsMap.set(c.lidJid, c);
+        if (c.remoteJid) contactsMap.set(c.remoteJid, c);
       }
-    });
-    for (const c of contacts) {
-      if (c.canonicalNumber) contactsMap.set(c.canonicalNumber, c);
-      if (c.number) contactsMap.set(c.number, c);
     }
   } catch {
     // Ignorar erros na busca batch
   }
 
+  // Tentar resolver LID→PN via signalRepository do Baileys (in-memory, sem I/O)
+  const signalRepo = (wbot as any).authState?.keys?.signalRepository;
+
   for (const p of groupMetadata.participants || []) {
     const participantJid = p.id;
+    const isLid = participantJid.includes("@lid");
     const rawNumber = participantJid.split("@")[0].replace(/\D/g, "");
     const isAdmin = p.admin === "admin" || p.admin === "superadmin";
     const isSuperAdmin = p.admin === "superadmin";
 
-    // Normalizar número para busca consistente
-    const { canonical } = normalizePhoneNumber(rawNumber);
-    const participantNumber = canonical || rawNumber;
+    let participantNumber = rawNumber;
+    let isValidPhoneNumber = false;
+    let contactRecord: Contact | null = null;
 
-    // Validar se é um número de telefone válido (qualquer país)
-    // Números de telefone reais: 7-15 dígitos
-    // IDs internos Meta/Facebook: geralmente > 15 dígitos
-    const isValidPhoneNumber = participantNumber.length >= 7 && participantNumber.length <= 15;
+    if (isLid) {
+      // Participante com LID: tentar resolver para número real
+      // 1) Buscar contato no banco por lidJid
+      contactRecord = contactsMap.get(participantJid) || null;
 
-    // Buscar contato no mapa pré-carregado
-    const contactRecord = contactsMap.get(participantNumber) || contactsMap.get(rawNumber) || null;
+      // 2) Tentar resolver LID→PN via signalRepository
+      let resolvedPN: string | null = null;
+      if (!contactRecord && signalRepo?.getPNForLID) {
+        try {
+          const pn = signalRepo.getPNForLID(participantJid);
+          if (pn) {
+            const pnDigits = String(pn).replace(/\D/g, "");
+            if (pnDigits.length >= 7 && pnDigits.length <= 15) {
+              resolvedPN = pnDigits;
+              const { canonical } = normalizePhoneNumber(pnDigits);
+              participantNumber = canonical || pnDigits;
+              isValidPhoneNumber = true;
+              // Buscar contato pelo número resolvido
+              contactRecord = contactsMap.get(participantNumber) || contactsMap.get(pnDigits) || null;
+            }
+          }
+        } catch {
+          // signalRepository não disponível
+        }
+      }
+
+      // Se encontrou contato por LID, usar o número do contato
+      if (contactRecord?.number) {
+        const contactNum = contactRecord.number.replace(/\D/g, "");
+        if (contactNum.length >= 7 && contactNum.length <= 15) {
+          participantNumber = contactNum;
+          isValidPhoneNumber = true;
+        }
+      } else if (contactRecord?.canonicalNumber) {
+        participantNumber = contactRecord.canonicalNumber;
+        isValidPhoneNumber = participantNumber.length >= 7 && participantNumber.length <= 15;
+      }
+    } else {
+      // Participante com número real (@s.whatsapp.net)
+      const { canonical } = normalizePhoneNumber(rawNumber);
+      participantNumber = canonical || rawNumber;
+      isValidPhoneNumber = participantNumber.length >= 7 && participantNumber.length <= 15;
+      contactRecord = contactsMap.get(participantNumber) || contactsMap.get(rawNumber) || null;
+    }
 
     // Determinar nome: 1) contato do sistema, 2) pushName do WhatsApp, 3) número formatado
     let contactName: string;
@@ -154,18 +221,22 @@ const GetGroupParticipantsService = async ({
       // pushName do WhatsApp (campo "notify" no Baileys)
       contactName = p.notify;
     } else if (isValidPhoneNumber) {
-      // Formatar número como nome legível (ex: +55 19 99246-1008)
       contactName = `+${participantNumber}`;
     } else {
       contactName = "Participante";
     }
 
-    // Usar foto do contato do sistema (sem buscar via Baileys para performance)
+    // Número exibido: preferir número real, senão pushName, senão LID
+    const displayNumber = isValidPhoneNumber
+      ? participantNumber
+      : (p.notify || rawNumber);
+
+    // Usar foto do contato do sistema
     const profilePicUrl = contactRecord?.profilePicUrl || undefined;
 
     participants.push({
       id: participantJid,
-      number: isValidPhoneNumber ? participantNumber : rawNumber,
+      number: displayNumber,
       name: contactName,
       isAdmin,
       isSuperAdmin,

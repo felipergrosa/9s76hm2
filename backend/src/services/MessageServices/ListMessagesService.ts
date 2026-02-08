@@ -151,6 +151,7 @@ const ListMessagesService = async ({
         attributes: [
           "id",
           "name",
+          "isGroup",
           // needed for avatar rendering on frontend
           "profilePicUrl",
           "urlPicture",
@@ -170,6 +171,7 @@ const ListMessagesService = async ({
             attributes: [
               "id",
               "name",
+              "isGroup",
               // needed for avatar rendering on frontend (quoted messages)
               "profilePicUrl",
               "urlPicture",
@@ -241,17 +243,17 @@ const ListMessagesService = async ({
               {
                 model: Contact,
                 as: "contact",
-                attributes: ["id", "name", "profilePicUrl", "urlPicture", "updatedAt", "companyId"],
+                attributes: ["id", "name", "isGroup", "profilePicUrl", "urlPicture", "updatedAt", "companyId"],
               },
               {
                 model: Message,
-                attributes: ["id", "fromMe", "mediaUrl", "body", "mediaType", "companyId", "audioTranscription"],
+                attributes: ["id", "fromMe", "mediaUrl", "body", "mediaType", "companyId", "audioTranscription", "participant", "senderName"],
                 as: "quotedMsg",
                 include: [
                   {
                     model: Contact,
                     as: "contact",
-                    attributes: ["id", "name", "profilePicUrl", "urlPicture", "updatedAt", "companyId"],
+                    attributes: ["id", "name", "isGroup", "profilePicUrl", "urlPicture", "updatedAt", "companyId"],
                   }
                 ],
                 required: false
