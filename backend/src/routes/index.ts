@@ -66,6 +66,7 @@ import templateRoutes from "./templateRoutes";
 import aiModelRoutes from "./aiModelRoutes";
 import contactReleaseRequestRoutes from "./contactReleaseRequestRoutes";
 import mediaRoutes from "./mediaRoutes";
+import userGroupPermissionRoutes from "./userGroupPermissionRoutes";
 
 
 const routes = Router();
@@ -147,5 +148,6 @@ routes.use(templateRoutes);
 routes.use(aiModelRoutes);
 routes.use(contactReleaseRequestRoutes);
 routes.use("/media", mediaRoutes);
+routes.use(userGroupPermissionRoutes);
 
 export default routes;

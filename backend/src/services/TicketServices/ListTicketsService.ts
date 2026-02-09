@@ -17,6 +17,7 @@ import removeAccents from "remove-accents";
 
 import FindCompanySettingOneService from "../CompaniesSettings/FindCompanySettingOneService";
 import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
+import ListUserGroupPermissionsService from "../UserGroupPermissionServices/ListUserGroupPermissionsService";
 
 interface Request {
   searchParam?: string;
@@ -141,14 +142,39 @@ const ListTicketsService = async ({
 
       whereCondition = {
         companyId,
-        isGroup: true, // Garantir que apenas grupos apareçam na aba Grupos
-        // Grupos não filtram por fila - devem aparecer independente de queueId
-        // Se não é super/admin sem restrição, filtra por conexões
-        ...(uniqueConnIds.length > 0 && !user.super && user.profile !== "admin"
-          ? { whatsappId: { [Op.in]: uniqueConnIds } }
-          : {}
-        ),
+        isGroup: true,
       };
+
+      // Super/admin vê todos os grupos; demais respeitam permissões granulares
+      if (!user.super && user.profile !== "admin") {
+        // Filtro por conexões permitidas
+        if (uniqueConnIds.length > 0) {
+          whereCondition = {
+            ...whereCondition,
+            whatsappId: { [Op.in]: uniqueConnIds },
+          };
+        }
+
+        // Filtro granular por grupos permitidos (tabela UserGroupPermissions)
+        const allowedGroupContactIds = await ListUserGroupPermissionsService(
+          user.id,
+          companyId
+        );
+
+        if (allowedGroupContactIds.length > 0) {
+          // Usuário tem permissões específicas — mostrar apenas esses grupos
+          whereCondition = {
+            ...whereCondition,
+            contactId: { [Op.in]: allowedGroupContactIds },
+          };
+        } else {
+          // Usuário tem allowGroup=true mas nenhum grupo liberado — não mostrar nenhum
+          whereCondition = {
+            ...whereCondition,
+            contactId: { [Op.in]: [0] }, // Nenhum grupo corresponde a contactId=0
+          };
+        }
+      }
     }
     else
       if (status === "bot") {

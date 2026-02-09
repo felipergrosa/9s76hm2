@@ -24,6 +24,7 @@ import Company from "./Company";
 import QuickMessage from "./QuickMessage";
 import Whatsapp from "./Whatsapp";
 import Chatbot from "./Chatbot";
+import UserGroupPermission from "./UserGroupPermission";
 
 @Table
 class User extends Model<User> {
@@ -207,6 +208,13 @@ class User extends Model<User> {
   @Default(false)
   @Column(DataType.BOOLEAN)
   isPrivate: boolean;
+
+  @HasMany(() => UserGroupPermission, {
+    onUpdate: "CASCADE",
+    onDelete: "CASCADE",
+    hooks: true
+  })
+  groupPermissions: UserGroupPermission[];
 
   @BeforeDestroy
   static async updateChatbotsUsersReferences(user: User) {

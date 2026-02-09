@@ -42,6 +42,7 @@ import DashboardIcon from "@material-ui/icons/Dashboard";
 import AccessTimeIcon from "@material-ui/icons/AccessTime";
 import CloseIcon from "@material-ui/icons/Close";
 import HierarchyTutorial from "./HierarchyTutorial";
+import GroupPermissionSelector from "../GroupPermissionSelector";
 
 const backendUrl = getBackendUrl();
 
@@ -645,6 +646,24 @@ const UserModal = ({ open, onClose, userId }) => {
                             values={values}
                             onChange={(key, value) => setFieldValue(key, value)}
                           />
+
+                          {/* Seção de Grupos Permitidos - aparece quando allowGroup está habilitado */}
+                          {values.allowGroup && userId && (
+                            <>
+                              <Divider style={{ marginTop: 16, marginBottom: 16 }} />
+                              <Typography variant="subtitle2" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <GroupIcon fontSize="small" />
+                                Grupos Permitidos
+                              </Typography>
+                              <Typography variant="caption" color="textSecondary" style={{ marginBottom: 12, display: 'block' }}>
+                                Selecione quais grupos este usuário poderá visualizar e interagir. Admins e Super Admins veem todos os grupos automaticamente.
+                              </Typography>
+                              <GroupPermissionSelector
+                                userId={userId}
+                                disabled={values.profile === 'admin' || values.super}
+                              />
+                            </>
+                          )}
 
                           <LegacySettingsGroup
                             title="Dashboard e Ações"

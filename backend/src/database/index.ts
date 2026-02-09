@@ -70,6 +70,7 @@ import AITestScenario from "../models/AITestScenario";
 import AITestResult from "../models/AITestResult";
 import AIPromptVersion from "../models/AIPromptVersion";
 import LidMapping from "../models/LidMapping";
+import UserGroupPermission from "../models/UserGroupPermission";
 
 
 // eslint-disable-next-line
@@ -220,7 +221,8 @@ const models = [
   AITestScenario,
   AITestResult,
   AIPromptVersion,
-  LidMapping
+  LidMapping,
+  UserGroupPermission
 ];
 
 sequelize.addModels(models);
