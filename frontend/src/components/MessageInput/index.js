@@ -82,7 +82,7 @@ const useStyles = makeStyles((theme) => ({
     background: "transparent",
     display: "flex",
     flexDirection: "column",
-    alignItems: "center",
+    alignItems: "stretch",
     borderTop: "1px solid rgba(0, 0, 0, 0.08)",
     [theme.breakpoints.down("sm")]: {
       position: "relative",
@@ -100,6 +100,7 @@ const useStyles = makeStyles((theme) => ({
       boxSizing: 'border-box',
       overflowX: 'hidden',
       flexShrink: 0,
+      alignItems: 'stretch',
     },
   },
   avatar: {
@@ -159,6 +160,8 @@ const useStyles = makeStyles((theme) => ({
     position: "relative",
     boxShadow: "none !important",
     border: "none",
+    width: "100%",
+    flex: 1,
     '& .MuiInputBase-root': {
       backgroundColor: ((theme.palette.mode || theme.palette.type) === 'light') ? '#ffffff' : '#202c33',
       borderRadius: 0,
@@ -169,6 +172,7 @@ const useStyles = makeStyles((theme) => ({
       alignItems: 'flex-start',
       paddingTop: 8,
       paddingBottom: 8,
+      flex: 1,
     },
     '& .MuiInputBase-multiline': {
       paddingTop: 8,
@@ -557,6 +561,8 @@ const useStyles = makeStyles((theme) => ({
   },
   flexItem: {
     flex: 1,
+    width: "100%",
+    minWidth: 0,
   },
   // Barra de seleção de mensagens (novo estilo WhatsApp)
   selectionBar: {
