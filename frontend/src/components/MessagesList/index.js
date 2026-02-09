@@ -1047,59 +1047,17 @@ const MessagesList = ({
           setLoading(false);
           setLoadingMore(false);
 
-          // Descobre o UUID do ticket diretamente do payload (mais confiável)
+          // Atualiza ref do UUID do ticket (usado para filtrar eventos)
           const ticketUuid = data?.ticket?.uuid || null;
-          // Fallback: tenta pegar da primeira mensagem caso necessário
           const firstMsg = data?.messages?.[0];
           const firstMsgUuid = firstMsg?.ticket?.uuid || null;
           const newRoomId = ticketUuid || firstMsgUuid || null;
           if (newRoomId) {
+            currentRoomIdRef.current = newRoomId;
+            // Reforço: garante que estamos na sala (o Ticket/index.js é o dono principal)
             try {
-              const prevRoom = currentRoomIdRef.current;
-              if (prevRoom && prevRoom !== newRoomId) {
-                if (typeof socket.leaveRoom === "function") {
-                  socket.leaveRoom(prevRoom, (err) => {
-                    if (err) console.log("[MessagesList] leave prev room ack error", err);
-                    else console.log("[MessagesList] left prev room", { room: prevRoom });
-                  });
-                } else {
-                  socket.emit("joinChatBoxLeave", prevRoom, (err) => {
-                    if (err) console.log("[MessagesList] leave prev room ack error", err);
-                    else console.log("[MessagesList] left prev room", { room: prevRoom });
-                  });
-                }
-              }
-              if (prevRoom !== newRoomId) {
-                currentRoomIdRef.current = newRoomId;
-                if (typeof socket.joinRoom === "function") {
-                  socket.joinRoom(newRoomId, (err) => {
-                    if (err) console.log("[MessagesList] join after fetch ack error", err);
-                    else {
-                      console.log("[MessagesList] joined room by uuid after fetch", { room: newRoomId });
-                      // Inicia health check para garantir permanência na sala
-                      if (typeof socket.startHealthCheck === "function") {
-                        socket.startHealthCheck(newRoomId, 20000);
-                      }
-                      if (typeof socket.checkRoom === "function") {
-                        socket.checkRoom(newRoomId, (res) => console.log("[MessagesList] checkRoom after fetch join", res));
-                      }
-                    }
-                  });
-                } else {
-                  socket.emit("joinChatBox", newRoomId, (err) => {
-                    if (err) console.log("[MessagesList] join after fetch ack error", err);
-                    else {
-                      console.log("[MessagesList] joined room by uuid after fetch", { room: newRoomId });
-                      // Inicia health check para garantir permanência na sala
-                      if (typeof socket.startHealthCheck === "function") {
-                        socket.startHealthCheck(newRoomId, 20000);
-                      }
-                      if (typeof socket.checkRoom === "function") {
-                        socket.checkRoom(newRoomId, (res) => console.log("[MessagesList] checkRoom after fetch join", res));
-                      }
-                    }
-                  });
-                }
+              if (typeof socket.joinRoom === "function") {
+                socket.joinRoom(newRoomId);
               }
             } catch { }
           }
@@ -1166,48 +1124,15 @@ const MessagesList = ({
 
     const companyId = user.companyId;
 
+    // Reforço de join na sala (o Ticket/index.js é o dono principal)
     const connectEventMessagesList = () => {
       try {
-        // Prioriza entrar pela sala UUID se já conhecida
-        const candidateFromUrl = ticketUuidFromUrl || "";
-        const roomToJoin = (currentRoomIdRef.current || candidateFromUrl || "").toString().trim();
-        if (!roomToJoin || roomToJoin === "undefined") {
-          console.debug("[MessagesList] skip joinChatBox - invalid ticketId", { ticketId });
-          return;
-        }
-        console.log("[MessagesList] socket connect - joinChatBox", { room: roomToJoin, hasJoinRoom: typeof socket.joinRoom === "function", connected: !!socket.connected });
+        const roomToJoin = (currentRoomIdRef.current || ticketUuidFromUrl || "").toString().trim();
+        if (!roomToJoin || roomToJoin === "undefined") return;
         if (typeof socket.joinRoom === "function") {
-          socket.joinRoom(roomToJoin, (err) => {
-            if (err) console.log("[MessagesList] joinChatBox ack error", err);
-            else {
-              console.log("[MessagesList] joinChatBox ok", { room: roomToJoin });
-              // Inicia health check para garantir permanência na sala
-              if (typeof socket.startHealthCheck === "function") {
-                socket.startHealthCheck(roomToJoin, 20000);
-              }
-              if (typeof socket.checkRoom === "function") {
-                socket.checkRoom(roomToJoin, (res) => console.log("[MessagesList] checkRoom after connect join", res));
-              }
-            }
-          });
-        } else {
-          socket.emit("joinChatBox", roomToJoin, (err) => {
-            if (err) console.log("[MessagesList] joinChatBox ack error", err);
-            else {
-              console.log("[MessagesList] joinChatBox ok", { room: roomToJoin });
-              // Inicia health check para garantir permanência na sala
-              if (typeof socket.startHealthCheck === "function") {
-                socket.startHealthCheck(roomToJoin, 20000);
-              }
-              if (typeof socket.checkRoom === "function") {
-                socket.checkRoom(roomToJoin, (res) => console.log("[MessagesList] checkRoom after connect join", res));
-              }
-            }
-          });
+          socket.joinRoom(roomToJoin);
         }
-      } catch (e) {
-        console.debug("[MessagesList] error emitting joinChatBox", e);
-      }
+      } catch { }
     };
 
     const onAppMessageMessagesList = (data) => {
@@ -1344,80 +1269,18 @@ const MessagesList = ({
     });
 
     return () => {
-      try {
-        const roomToLeave = (currentRoomIdRef.current || (ticketId ?? "")).toString().trim();
-        if (!roomToLeave || roomToLeave === "undefined") {
-          console.debug("[MessagesList] skip leave room - invalid ticketId", { ticketId });
-        } else {
-          console.debug("[MessagesList] cleanup - leave room", { room: roomToLeave });
-          if (typeof socket.leaveRoom === "function") {
-            socket.leaveRoom(roomToLeave, (err) => {
-              if (err) console.debug("[MessagesList] joinChatBoxLeave ack error", err);
-              else console.debug("[MessagesList] joinChatBoxLeave ok", { room: roomToLeave });
-            });
-          } else {
-            socket.emit("joinChatBoxLeave", roomToLeave, (err) => {
-              if (err) console.debug("[MessagesList] joinChatBoxLeave ack error", err);
-              else console.debug("[MessagesList] joinChatBoxLeave ok", { room: roomToLeave });
-            });
-          }
-        }
-      } catch { }
-
+      // NÃO faz leaveRoom aqui - o Ticket/index.js é o dono da sala
       socket.off("connect", onConnectWithRecovery);
       socket.off(`company-${companyId}-appMessage`, onAppMessageMessagesList);
       socket.off("disconnect");
       socket.off("reconnect");
       socket.off("reconnect_attempt");
       socket.off("connect_error");
-      // Para o health check ao sair do componente
-      if (typeof socket.stopHealthCheck === "function") {
-        socket.stopHealthCheck();
-      }
     };
   }, [ticketId, socket, user?.companyId]);
 
-  // Phase 2: Verificação periódica de conexão e rejoin automático
-  useEffect(() => {
-    if (!socket || !ticketId || ticketId === "undefined") return;
-
-    const checkAndRejoin = () => {
-      const roomId = currentRoomIdRef.current;
-      if (!roomId) return;
-
-      if (!socket.connected) {
-        console.warn("[MessagesList] Socket desconectado, tentando reconectar...");
-        try {
-          socket.connect();
-        } catch (e) {
-          console.error("[MessagesList] Erro ao reconectar socket:", e);
-        }
-        return;
-      }
-
-      // Verificar se ainda estamos na sala correta
-      if (typeof socket.checkRoom === "function") {
-        socket.checkRoom(roomId, (res) => {
-          if (!res?.inRoom) {
-            console.warn("[MessagesList] Não está na sala, fazendo rejoin:", roomId);
-            if (typeof socket.joinRoom === "function") {
-              socket.joinRoom(roomId, (err) => {
-                if (err) console.error("[MessagesList] Falha no rejoin:", err);
-                else console.log("[MessagesList] Rejoin bem-sucedido:", roomId);
-              });
-            } else {
-              socket.emit("joinChatBox", roomId);
-            }
-          }
-        });
-      }
-    };
-
-    // Verificar a cada 30 segundos (era 10s)
-    const interval = setInterval(checkAndRejoin, 30000);
-
-    return () => clearInterval(interval);
-  }, [socket, ticketId]);
+  // Phase 2 removida: o SocketWorker já faz rejoin automático no connect
+  // e o Ticket/index.js é o dono principal da sala.
 
   // Phase 6: Polling Inteligente (Adaptativo) - ajusta frequência baseado no estado da conexão
   const lastMessageIdRef = useRef(null);

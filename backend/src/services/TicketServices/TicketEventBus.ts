@@ -49,11 +49,13 @@ class TicketEventBus extends EventEmitter {
     // Ticket atualizado
     this.on("TICKET_UPDATED", async (event: TicketEvent) => {
       try {
+        const payload = { action: "update", ...event.payload };
+        console.log(`[TicketEventBus DEBUG] TICKET_UPDATED ticketId=${event.ticketId} status=${event.payload?.ticket?.status || event.payload?.status} companyId=${event.companyId}`);
         await emitSocketEvent(
           event.companyId,
           null,
           `company-${event.companyId}-ticket`,
-          { action: "update", ...event.payload }
+          payload
         );
       } catch (err) {
         logger.error("[TicketEventBus] Erro ao emitir TICKET_UPDATED:", err);
@@ -63,11 +65,13 @@ class TicketEventBus extends EventEmitter {
     // Ticket deletado
     this.on("TICKET_DELETED", async (event: TicketEvent) => {
       try {
+        const payload = { action: "delete", ticketId: event.ticketId, ...event.payload };
+        console.log(`[TicketEventBus DEBUG] TICKET_DELETED ticketId=${event.ticketId} oldStatus=${event.payload?.oldStatus} companyId=${event.companyId}`);
         await emitSocketEvent(
           event.companyId,
           null,
           `company-${event.companyId}-ticket`,
-          { action: "delete", ticketId: event.ticketId, ...event.payload }
+          payload
         );
       } catch (err) {
         logger.error("[TicketEventBus] Erro ao emitir TICKET_DELETED:", err);

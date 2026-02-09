@@ -108,6 +108,8 @@ const Ticket = () => {
   const [contact, setContact] = useState({});
   const [ticket, setTicket] = useState({});
   const [dragDropFiles, setDragDropFiles] = useState([]);
+  // Ref estável para o UUID do ticket - evita re-execução do useEffect de socket
+  const ticketUuidRef = useRef(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [showComposer, setShowComposer] = useState(false);
   const [hasExternalHeader, setHasExternalHeader] = useState(() => {
@@ -120,11 +122,6 @@ const Ticket = () => {
   });
   const { companyId } = user;
 
-  useEffect(() => {
-    console.log("======== Ticket ===========")
-    console.log(ticket)
-    console.log("===========================")
-  }, [ticket])
 
   useEffect(() => {
     setLoading(true);
@@ -140,54 +137,31 @@ const Ticket = () => {
             // setWhatsapp(data.whatsapp);
             // setQueueId(data.queueId);
             setTicket(data);
+            // Atualiza ref do UUID para uso estável nos handlers de socket
+            if (data?.uuid) ticketUuidRef.current = data.uuid;
             // Disponibiliza globalmente para header externo
             try { window.__lastTicket = data; window.__lastContact = data.contact; } catch { }
             // Notifica topo (HeaderTicketInfo) que o ticket foi carregado
             try {
               window.dispatchEvent(new CustomEvent('ticket-loaded', { detail: { ticket: data, contact: data.contact } }));
             } catch { }
-            // Faz join imediato na sala do ticket pelo UUID (se o socket já estiver pronto)
+            // Faz join imediato na sala do ticket pelo UUID
             try {
               const candidate = (data?.uuid || ticketId || "").toString().trim();
-              console.log("=== [Ticket] JOIN IMEDIATO ===");
-              console.log("[Ticket] UUID do ticket:", data?.uuid);
-              console.log("[Ticket] ticketId da URL:", ticketId);
-              console.log("[Ticket] Candidate (room):", candidate);
-              console.log("[Ticket] Socket existe?", !!socket);
-              console.log("[Ticket] Socket.joinRoom existe?", socket && typeof socket.joinRoom === "function");
-              console.log("[Ticket] Socket conectado?", socket?.connected);
-              
               if (candidate && candidate !== "undefined" && socket && typeof socket.joinRoom === "function") {
-                console.log("[Ticket] Chamando socket.joinRoom para:", candidate);
-                // Usa joinRoom que tem buffer automático para quando desconectado
+                console.log("[Ticket] JOIN imediato:", candidate);
                 socket.joinRoom(candidate, (err) => {
-                  if (err) {
-                    console.error("[Ticket] ❌ ERRO no immediate joinRoom:", err);
-                  } else {
-                    console.log("[Ticket] ✓ immediate joinRoom OK para sala:", candidate);
-                  }
+                  if (err) console.error("[Ticket] joinRoom ERRO:", err);
+                  else console.log("[Ticket] joinRoom OK:", candidate);
                 });
               } else if (candidate && candidate !== "undefined" && socket && typeof socket.emit === "function") {
-                console.warn("[Ticket] joinRoom não disponível, usando emit direto");
-                // Fallback para emit direto se joinRoom não existir
                 socket.emit("joinChatBox", candidate, (err) => {
-                  if (err) {
-                    console.error("[Ticket] ❌ ERRO no immediate joinChatBox:", err);
-                  } else {
-                    console.log("[Ticket] ✓ immediate joinChatBox OK para sala:", candidate);
-                  }
-                });
-              } else {
-                console.error("[Ticket] ⚠️ PULOU join imediato - socket não pronto ou ID inválido", { 
-                  uuid: data?.uuid, 
-                  ticketId, 
-                  hasSocket: !!socket,
-                  hasJoinRoom: socket && typeof socket.joinRoom === "function",
-                  connected: socket?.connected
+                  if (err) console.error("[Ticket] joinChatBox ERRO:", err);
+                  else console.log("[Ticket] joinChatBox OK:", candidate);
                 });
               }
             } catch (e) {
-              console.error("[Ticket] ❌ EXCEÇÃO no join imediato:", e);
+              console.error("[Ticket] EXCEÇÃO no join imediato:", e);
             }
             if (["pending", "open", "group"].includes(data.status)) {
               setTabOpen(data.status);
@@ -263,132 +237,104 @@ const Ticket = () => {
   }, []);
 
   useEffect(() => {
-    if (!ticket && !ticket.id && ticket.uuid !== ticketId && ticketId === "undefined") {
-      return;
-    }
+    // Guard: precisa de ticketId válido, socket e companyId
+    if (!ticketId || ticketId === "undefined") return;
+    if (!socket || typeof socket.on !== "function") return;
+    if (!user?.companyId) return;
 
-    // Aguarda socket e companyId disponíveis
-    if (!socket || typeof socket.on !== "function") {
-      return;
-    }
-    if (user.companyId) {
-      const onConnectTicket = () => {
-        try {
-          console.log("=== [Ticket] onConnectTicket DISPARADO ===");
-          // Usa imediatamente o UUID presente na URL como fallback, para evitar janela sem sala
-          const candidate = (ticket?.uuid || ticketId || "").toString().trim();
-          console.log("[Ticket] onConnectTicket - UUID do ticket:", ticket?.uuid);
-          console.log("[Ticket] onConnectTicket - ticketId da URL:", ticketId);
-          console.log("[Ticket] onConnectTicket - Candidate (room):", candidate);
-          
-          if (!candidate || candidate === "undefined") {
-            console.error("[Ticket] ⚠️ onConnectTicket - PULOU join por ID inválido", { uuid: ticket?.uuid, ticketId });
-            return;
-          }
-          
-          console.log("[Ticket] onConnectTicket - Socket existe?", !!socket);
-          console.log("[Ticket] onConnectTicket - Socket.joinRoom existe?", socket && typeof socket.joinRoom === "function");
-          
-          // Usa joinRoom que tem buffer automático
-          if (socket && typeof socket.joinRoom === "function") {
-            console.log("[Ticket] onConnectTicket - Chamando socket.joinRoom para:", candidate);
-            socket.joinRoom(candidate, (err) => {
-              if (err) {
-                console.error("[Ticket] ❌ onConnectTicket - ERRO joinRoom:", err);
-              } else {
-                console.log("[Ticket] ✓ onConnectTicket - joinRoom OK para sala:", candidate);
-              }
-            });
-          } else if (socket && typeof socket.emit === "function") {
-            console.warn("[Ticket] onConnectTicket - joinRoom não disponível, usando emit direto");
-            // Fallback
-            socket.emit("joinChatBox", candidate, (err) => {
-              if (err) {
-                console.error("[Ticket] ❌ onConnectTicket - ERRO joinChatBox:", err);
-              } else {
-                console.log("[Ticket] ✓ onConnectTicket - joinChatBox OK para sala:", candidate);
-              }
-            });
-          }
-        } catch (e) {
-          console.error("[Ticket] ❌ onConnectTicket - EXCEÇÃO:", e);
-        }
+    // Função auxiliar para entrar na sala pelo UUID
+    const doJoin = (room) => {
+      if (!room || room === "undefined") return;
+      if (typeof socket.joinRoom === "function") {
+        socket.joinRoom(room, (err) => {
+          if (err) console.error("[Ticket] joinRoom ERRO:", room, err);
+          else console.log("[Ticket] joinRoom OK:", room);
+        });
+      } else if (typeof socket.emit === "function") {
+        socket.emit("joinChatBox", room, (err) => {
+          if (err) console.error("[Ticket] joinChatBox ERRO:", room, err);
+          else console.log("[Ticket] joinChatBox OK:", room);
+        });
       }
+    };
 
-      const onCompanyTicket = (data) => {
-        if (data.action === "update" && data.ticket.id === ticket?.id) {
-          setTicket(data.ticket);
-          // Notifica topo sobre atualização do ticket
+    // Função auxiliar para sair da sala
+    const doLeave = (room) => {
+      if (!room || room === "undefined") return;
+      if (typeof socket.leaveRoom === "function") {
+        socket.leaveRoom(room);
+      } else if (typeof socket.emit === "function") {
+        socket.emit("joinChatBoxLeave", room);
+      }
+    };
+
+    const onConnectTicket = () => {
+      // Usa o UUID do ref (mais estável) ou o ticketId da URL
+      const candidate = (ticketUuidRef.current || ticketId || "").toString().trim();
+      console.log("[Ticket] onConnect - joinRoom:", candidate);
+      doJoin(candidate);
+    };
+
+    // Usa refs para evitar stale closures nos handlers de eventos
+    const ticketIdRef = { current: null };
+
+    const onCompanyTicket = (data) => {
+      setTicket((prev) => {
+        // Compara pelo ID numérico do ticket
+        if (data.action === "update" && data.ticket.id === (prev?.id || ticketIdRef.current)) {
+          // Atualiza o ref do UUID se mudou
+          if (data.ticket.uuid) ticketUuidRef.current = data.ticket.uuid;
+          ticketIdRef.current = data.ticket.id;
           try {
-            window.__lastTicket = data.ticket; window.__lastContact = contact;
-            window.dispatchEvent(new CustomEvent('ticket-loaded', { detail: { ticket: data.ticket, contact } }));
+            window.__lastTicket = data.ticket;
+            window.dispatchEvent(new CustomEvent('ticket-loaded', { detail: { ticket: data.ticket, contact: data.ticket?.contact } }));
           } catch { }
+          return data.ticket;
         }
-
-        if (data.action === "delete" && data.ticketId === ticket?.id) {
+        if (data.action === "delete" && data.ticketId === (prev?.id || ticketIdRef.current)) {
           history.push("/tickets");
         }
-      };
+        return prev;
+      });
+    };
 
-      const onCompanyContactTicket = (data) => {
-        if (data.action === "update") {
-          // if (isMounted) {
-          setContact((prevState) => {
-            let next = prevState;
-            if (prevState.id === data.contact?.id) {
-              next = { ...prevState, ...data.contact };
-            }
+    const onCompanyContactTicket = (data) => {
+      if (data.action === "update") {
+        setContact((prevState) => {
+          if (prevState.id === data.contact?.id) {
+            const next = { ...prevState, ...data.contact };
             try {
-              window.__lastTicket = ticket; window.__lastContact = next;
-              window.dispatchEvent(new CustomEvent('ticket-loaded', { detail: { ticket, contact: next } }));
+              window.__lastContact = next;
+              window.dispatchEvent(new CustomEvent('ticket-loaded', { detail: { ticket: window.__lastTicket, contact: next } }));
             } catch { }
             return next;
-          });
-          // }
-        }
-      };
-
-      socket.on("connect", onConnectTicket)
-      socket.on(`company-${companyId}-ticket`, onCompanyTicket);
-      socket.on(`company-${companyId}-contact`, onCompanyContactTicket);
-
-      // Se já estiver conectado, entra na sala imediatamente
-      try {
-        console.log("[Ticket] Verificando se socket já está conectado...");
-        console.log("[Ticket] Socket conectado?", socket?.connected);
-        if (socket && socket.connected) {
-          console.log("[Ticket] ✓ Socket JÁ CONECTADO, chamando onConnectTicket imediatamente");
-          onConnectTicket();
-        } else {
-          console.warn("[Ticket] ⚠️ Socket NÃO conectado, aguardando evento 'connect'");
-        }
-      } catch (e) {
-        console.error("[Ticket] ❌ Erro ao verificar conexão do socket:", e);
-      }
-
-      return () => {
-        try {
-          const candidate = (ticket?.uuid || ticketId || "").toString().trim();
-          if (!candidate || candidate === "undefined") {
-            console.debug("[Ticket] skip joinRoomLeave - invalid id", { uuid: ticket?.uuid, ticketId });
-          } else if (socket && typeof socket.leaveRoom === "function") {
-            socket.leaveRoom(candidate, (err) => {
-              if (err) console.debug("[Ticket] leaveRoom ack error", err);
-              else console.debug("[Ticket] leaveRoom ok", { room: candidate });
-            });
-          } else if (socket && typeof socket.emit === "function") {
-            socket.emit("joinChatBoxLeave", candidate, (err) => {
-              if (err) console.debug("[Ticket] joinChatBoxLeave ack error", err);
-              else console.debug("[Ticket] joinChatBoxLeave ok", { room: candidate });
-            });
           }
-        } catch { }
-        socket.off("connect", onConnectTicket);
-        socket.off(`company-${companyId}-ticket`, onCompanyTicket);
-        socket.off(`company-${companyId}-contact`, onCompanyContactTicket);
-      };
+          return prevState;
+        });
+      }
+    };
+
+    socket.on("connect", onConnectTicket);
+    socket.on(`company-${companyId}-ticket`, onCompanyTicket);
+    socket.on(`company-${companyId}-contact`, onCompanyContactTicket);
+
+    // Se já estiver conectado, entra na sala imediatamente
+    if (socket.connected) {
+      onConnectTicket();
     }
-  }, [ticketId, ticket, history, socket, user?.companyId]);
+
+    return () => {
+      // Sai da sala ao desmontar ou trocar de ticket
+      const candidate = (ticketUuidRef.current || ticketId || "").toString().trim();
+      doLeave(candidate);
+      socket.off("connect", onConnectTicket);
+      socket.off(`company-${companyId}-ticket`, onCompanyTicket);
+      socket.off(`company-${companyId}-contact`, onCompanyContactTicket);
+    };
+    // IMPORTANTE: NÃO incluir `ticket` nas dependências!
+    // O ticket é atualizado via setTicket dentro do handler, não precisa re-montar o effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticketId, socket, user?.companyId]);
 
   const handleDrawerOpen = useCallback(() => {
     setDrawerOpen(true);

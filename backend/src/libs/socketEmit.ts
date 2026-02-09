@@ -16,80 +16,35 @@ import logger from "../utils/logger";
  * Logs de debug controlados por SOCKET_DEBUG === "true".
  */
 
-// Delay entre tentativas de retry (ms)
-const RETRY_DELAYS = [100, 300, 500]; // 100ms, 300ms, 500ms
-
 export async function emitToCompanyRoom(
   companyId: number,
   room: string | null,
   event: string,
   payload: any,
-  skipFallback: boolean = false // Se true, nunca faz broadcast fallback
+  skipFallback: boolean = false
 ): Promise<void> {
   const io = getIO();
   const ns = io.of(`/workspace-${companyId}`);
-
-  // Se room é null/undefined/vazio, fazer broadcast direto para todo namespace
-  if (!room) {
-    ns.emit(event, payload);
-    if (process.env.SOCKET_DEBUG === "true") {
-      console.log(`[SOCKET EMIT] Broadcast para namespace /workspace-${companyId}, event=${event}`);
-    }
-    return;
-  }
-
-  const explicit = process.env.SOCKET_FALLBACK_NS_BROADCAST;
-  const isProd = process.env.NODE_ENV === "production";
-  const isAppMessageEvent = event.includes("-appMessage");
-  // Desabilita fallback se skipFallback=true ou se estamos em produção
-  // EXCEÇÃO: para eventos appMessage, manter fallback para evitar perda de realtime quando o cliente não está na sala
-  const fallbackEnabled = isAppMessageEvent || (!skipFallback && (explicit === "true" || (explicit !== "false" && !isProd)));
   const debug = process.env.SOCKET_DEBUG === "true";
 
-  // Função para tentar emitir
-  const tryEmit = async (attempt: number): Promise<boolean> => {
-    try {
-      const sockets = await ns.in(room).fetchSockets();
-      const ids = sockets.map(s => s.id).join(",");
-      
-      if (sockets.length === 0) {
-        if (attempt === 0) {
-          console.warn(`[SOCKET EMIT] SALA VAZIA: ns=/workspace-${companyId} room=${room} - Nenhum socket na sala! Tentando retry...`);
-        }
-        return false;
-      }
-      
-      const result = ns.to(room).emit(event, payload);
-      console.log(`[SOCKET EMIT] Emitido para ${sockets.length} sockets na sala ${room} (tentativa ${attempt + 1}), resultado=${result}`);
-      return true;
-    } catch (e) {
-      console.error(`[SOCKET EMIT] ERRO ao consultar sala (tentativa ${attempt + 1}):`, e);
-      return false;
-    }
-  };
-
-  // Tentativa inicial
-  if (await tryEmit(0)) {
+  // Sem sala especificada → broadcast direto
+  if (!room) {
+    ns.emit(event, payload);
+    if (debug) logger.info(`[SOCKET EMIT] Broadcast ns=/workspace-${companyId} event=${event}`);
     return;
   }
 
-  // Retry com delays progressivos
-  for (let i = 0; i < RETRY_DELAYS.length; i++) {
-    await new Promise(r => setTimeout(r, RETRY_DELAYS[i]));
-    
-    if (await tryEmit(i + 1)) {
-      return;
-    }
-  }
+  // Emite para a sala específica (entrega direta se houver sockets)
+  ns.to(room).emit(event, payload);
 
-  // Todas as tentativas falharam - usar fallback
-  console.warn(`[SOCKET EMIT] Todas as tentativas falharam para sala ${room} após ${RETRY_DELAYS.length + 1} tentativas`);
-  
-  if (fallbackEnabled) {
-    console.log(`[SOCKET EMIT] Executando fallback broadcast para event=${event} ns=/workspace-${companyId}`);
-    ns.emit(event, { ...payload, fallback: true, room });
-  } else {
-    console.warn(`[SOCKET EMIT] Fallback DESABILITADO - mensagem pode não chegar ao destinatário!`);
+  // Para eventos de mensagem, TAMBÉM faz broadcast no namespace como garantia
+  // O frontend filtra pelo UUID do ticket, então mensagens de outros tickets são ignoradas
+  const isAppMessageEvent = event.includes("-appMessage");
+  if (isAppMessageEvent && !skipFallback) {
+    ns.emit(event, payload);
+    if (debug) logger.info(`[SOCKET EMIT] room=${room} + broadcast ns=/workspace-${companyId} event=${event}`);
+  } else if (debug) {
+    logger.info(`[SOCKET EMIT] room=${room} ns=/workspace-${companyId} event=${event}`);
   }
 }
 

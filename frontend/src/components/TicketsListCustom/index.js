@@ -94,7 +94,7 @@ const ticketSortDesc = (a, b) => {
 }
 
 const reducer = (state, action) => {
-    //console.log("action", action, state)
+    console.log(`[Reducer DEBUG] action=${action.type} status=${action.status || ''} payloadCount=${Array.isArray(action.payload) ? action.payload.length : (action.payload?.id || action.payload)} stateCount=${state.length}`);
     const sortDir = action.sortDir;
 
     if (action.type === "LOAD_TICKETS") {
@@ -323,7 +323,12 @@ const TicketsListCustom = (props) => {
             ticket.queueId && selectedQueueIds.indexOf(ticket.queueId) === -1;
 
         const onCompanyTicketTicketsList = (data) => {
-            // console.log("onCompanyTicketTicketsList", data)
+            if (data.action === "update" || data.action === "delete" || data.action === "create") {
+                const t = data.ticket;
+                const sut = t ? shouldUpdateTicket(t) : "N/A";
+                const nbq = t ? notBelongsToUserQueues(t) : "N/A";
+                console.log(`[TicketsList DEBUG] aba="${status}" evento="${data.action}" ticketId=${data.ticketId || t?.id} ticketStatus="${t?.status}" oldStatus="${data.oldStatus}" shouldUpdate=${sut} notBelongs=${nbq} statusMatch=${t?.status === status} userId=${t?.userId} myId=${user?.id}`);
+            }
             if (data.action === "updateUnread") {
                 dispatch({
                     type: "RESET_UNREAD",
