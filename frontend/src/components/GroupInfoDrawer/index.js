@@ -47,6 +47,7 @@ import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { toast } from "react-toastify";
+import { i18n } from "../../translate/i18n";
 import StartPrivateChatModal from "../StartPrivateChatModal";
 import { useHistory } from "react-router-dom";
 
@@ -271,7 +272,16 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
       setGroupInfo(data);
     } catch (err) {
       console.error("[GroupInfoDrawer] Erro ao buscar dados do grupo:", err);
-      setError(err?.response?.data?.error || "Erro ao carregar dados do grupo");
+      const errorMessage = err?.response?.data?.error || err?.message || "Erro ao carregar dados do grupo";
+      
+      // Tratamento específico para erros conhecidos
+      if (errorMessage === "ERR_WAPP_NOT_INITIALIZED") {
+        setError(i18n.t("backendErrors.ERR_WAPP_NOT_INITIALIZED"));
+      } else if (errorMessage.includes("ERR_WAPP")) {
+        setError(i18n.t("backendErrors.ERR_WAPP_CHECK_CONTACT"));
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
