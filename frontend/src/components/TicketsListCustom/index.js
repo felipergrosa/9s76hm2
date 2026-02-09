@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer, useContext, useMemo } from "react";
+import React, { useState, useEffect, useReducer, useContext, useMemo, useRef } from "react";
 
 import { makeStyles } from "@material-ui/core/styles";
 import List from "@material-ui/core/List";
@@ -225,10 +225,32 @@ const TicketsListCustom = (props) => {
     const showTicketWithoutQueue = user.allTicket === 'enable';
     const companyId = user.companyId;
 
+    // Refs para valores mutáveis - evita stale closures nos handlers de socket
+    const userRef = useRef(user);
+    const selectedQueueIdsRef = useRef(selectedQueueIds);
+    const showAllRef = useRef(showAll);
+    const showTicketWithoutQueueRef = useRef(showTicketWithoutQueue);
+    const sortTicketsRef = useRef(sortTickets);
+    useEffect(() => {
+        userRef.current = user;
+        selectedQueueIdsRef.current = selectedQueueIds;
+        showAllRef.current = showAll;
+        showTicketWithoutQueueRef.current = showTicketWithoutQueue;
+        sortTicketsRef.current = sortTickets;
+    });
+
+    // Serializar deps instáveis para evitar RESET desnecessário
+    const tagsKey = JSON.stringify(tags);
+    const usersKey = JSON.stringify(users);
+    const queueIdsKey = JSON.stringify(selectedQueueIds);
+    const whatsappIdsKey = JSON.stringify(whatsappIds);
+    const statusFilterKey = JSON.stringify(statusFilter);
+
     useEffect(() => {
         dispatch({ type: "RESET" });
         setPageNumber(1);
-    }, [status, searchParam, dispatch, showAll, tags, users, forceSearch, selectedQueueIds, whatsappIds, statusFilter, sortTickets, searchOnMessages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [status, searchParam, dispatch, showAll, tagsKey, usersKey, forceSearch, queueIdsKey, whatsappIdsKey, statusFilterKey, sortTickets, searchOnMessages]);
 
     const { tickets, hasMore, loading } = useTickets({
         pageNumber,
@@ -268,73 +290,56 @@ const TicketsListCustom = (props) => {
     }, [tickets]);
 
     useEffect(() => {
-        // REGRA PRINCIPAL: Ticket em atendimento só pode ser visto pelo atendente
+        if (!socket || typeof socket.on !== "function") return;
+        if (!companyId) return;
+
+        // Funções de filtro usando refs para valores atuais (evita stale closures)
         const canViewTicket = (ticket) => {
-            // Se ticket está em atendimento (open/group) E tem userId atribuído
-            // SOMENTE o atendente pode ver - independente de ser admin/supervisor/carteira
+            const _user = userRef.current;
+            const _showAll = showAllRef.current;
             const isBeingAttended = (ticket?.status === "open" || ticket?.status === "group") && ticket?.userId;
-            
+
             if (isBeingAttended) {
-                // Só o próprio atendente pode ver
-                return ticket?.userId === user?.id;
+                // Admin com showAll pode ver todos os tickets em atendimento
+                if (_showAll && (_user?.profile === 'admin' || _user?.super)) return true;
+                return ticket?.userId === _user?.id;
             }
-            
-            // Tickets pendentes/fechados: aplicar regra de carteira
-            // Admin sem restrição de carteira vê tudo
-            if (user?.profile === 'admin' && (!user?.allowedContactTags || user?.allowedContactTags?.length === 0)) {
+
+            if (_user?.profile === 'admin' && (!_user?.allowedContactTags || _user?.allowedContactTags?.length === 0)) {
                 return true;
             }
-            
-            // Se showAll está ativo, mostrar todos (apenas pendentes/fechados chegam aqui)
-            if (showAll) {
-                return true;
-            }
-            
-            // Se não há restrição de tags, mostrar baseado apenas em queueId
-            if (!user?.allowedContactTags || user?.allowedContactTags?.length === 0) {
-                return true;
-            }
-            
-            // Verificar se o contato tem alguma tag pessoal permitida
+            if (_showAll) return true;
+            if (!_user?.allowedContactTags || _user?.allowedContactTags?.length === 0) return true;
+
             const contactTags = ticket?.contact?.tags || [];
-            if (contactTags.length === 0) {
-                return true; // Sem tags = todos podem ver (pendentes)
-            }
-            
-            // Verificar se alguma tag do contato está nas tags permitidas do usuário
-            const userTagIds = user?.allowedContactTags || [];
+            if (contactTags.length === 0) return true;
+
+            const userTagIds = _user?.allowedContactTags || [];
             return contactTags.some(tag => userTagIds.includes(tag.id));
         };
 
-        const shouldUpdateTicket = ticket => {
-            // Primeiro verifica se pode ver o ticket
-            if (!canViewTicket(ticket)) {
-                return false;
-            }
-            
-            // Depois verifica queueId
-            return ((!ticket?.queueId && showTicketWithoutQueue) || selectedQueueIds.indexOf(ticket?.queueId) > -1)
-            // (!blockNonDefaultConnections || (ticket.status == 'group' && ignoreUserConnectionForGroups) || !user?.whatsappId || ticket.whatsappId == user?.whatsappId);
-        }
-        // const shouldUpdateTicketUser = (ticket) =>
-        //     selectedQueueIds.indexOf(ticket?.queueId) > -1 && (ticket?.userId === user?.id || !ticket?.userId);
-
-        const notBelongsToUserQueues = (ticket) =>
-            ticket.queueId && selectedQueueIds.indexOf(ticket.queueId) === -1;
+        const shouldUpdateTicket = (ticket) => {
+            if (!canViewTicket(ticket)) return false;
+            const _selectedQueueIds = selectedQueueIdsRef.current;
+            const _showTicketWithoutQueue = showTicketWithoutQueueRef.current;
+            return ((!ticket?.queueId && _showTicketWithoutQueue) || _selectedQueueIds.indexOf(ticket?.queueId) > -1);
+        };
 
         const onCompanyTicketTicketsList = (data) => {
+            const _sortTickets = sortTicketsRef.current;
+            const _user = userRef.current;
+
             if (data.action === "update" || data.action === "delete" || data.action === "create") {
                 const t = data.ticket;
-                const sut = t ? shouldUpdateTicket(t) : "N/A";
-                const nbq = t ? notBelongsToUserQueues(t) : "N/A";
-                console.log(`[TicketsList DEBUG] aba="${status}" evento="${data.action}" ticketId=${data.ticketId || t?.id} ticketStatus="${t?.status}" oldStatus="${data.oldStatus}" shouldUpdate=${sut} notBelongs=${nbq} statusMatch=${t?.status === status} userId=${t?.userId} myId=${user?.id}`);
+                console.log(`[TicketsList] aba="${status}" evento="${data.action}" ticketId=${data.ticketId || t?.id} ticketStatus="${t?.status}" oldStatus="${data.oldStatus}" statusMatch=${t?.status === status} userId=${t?.userId} myId=${_user?.id}`);
             }
+
             if (data.action === "updateUnread") {
                 dispatch({
                     type: "RESET_UNREAD",
                     payload: data.ticketId,
                     status: status,
-                    sortDir: sortTickets
+                    sortDir: _sortTickets
                 });
             }
 
@@ -344,70 +349,64 @@ const TicketsListCustom = (props) => {
                     type: "UPDATE_TICKET",
                     payload: data.ticket,
                     status: status,
-                    sortDir: sortTickets
+                    sortDir: _sortTickets
                 });
             }
 
-            if (data.action === "update" &&
-                shouldUpdateTicket(data.ticket) && data.ticket.status === status) {
-                dispatch({
-                    type: "UPDATE_TICKET",
-                    payload: data.ticket,
-                    status: status,
-                    sortDir: sortTickets
-                });
-            }
-
-            // else if (data.action === "update" && shouldUpdateTicketUser(data.ticket) && data.ticket.status === status) {
-            //     dispatch({
-            //         type: "UPDATE_TICKET",
-            //         payload: data.ticket,
-            //     });
-            // }
-            if (data.action === "update" && notBelongsToUserQueues(data.ticket)) {
-                dispatch({
-                    type: "DELETE_TICKET", payload: data.ticket?.id, status: status,
-                    sortDir: sortTickets
-                });
+            if (data.action === "update" && data.ticket) {
+                if (shouldUpdateTicket(data.ticket) && data.ticket.status === status) {
+                    // Ticket pertence a esta aba → adicionar/atualizar
+                    dispatch({
+                        type: "UPDATE_TICKET",
+                        payload: data.ticket,
+                        status: status,
+                        sortDir: _sortTickets
+                    });
+                } else {
+                    // Ticket não pertence (mais) a esta aba → remover se estiver na lista
+                    dispatch({
+                        type: "DELETE_TICKET",
+                        payload: data.ticket?.id,
+                        status: status,
+                        sortDir: _sortTickets
+                    });
+                }
             }
 
             if (data.action === "delete") {
                 // Se oldStatus veio no evento, só remove da aba correspondente
-                // Isso evita que o delete de uma aba remova o ticket de outra aba
                 if (!data.oldStatus || data.oldStatus === status) {
                     dispatch({
-                        type: "DELETE_TICKET", payload: data?.ticketId, status: status,
-                        sortDir: sortTickets
+                        type: "DELETE_TICKET",
+                        payload: data?.ticketId,
+                        status: status,
+                        sortDir: _sortTickets
                     });
                 }
             }
         };
 
         const onCompanyAppMessageTicketsList = (data) => {
+            const _sortTickets = sortTicketsRef.current;
             if (data.action === "create" &&
                 shouldUpdateTicket(data.ticket) && data.ticket.status === status) {
                 dispatch({
                     type: "UPDATE_TICKET_UNREAD_MESSAGES",
                     payload: data.ticket,
                     status: status,
-                    sortDir: sortTickets
+                    sortDir: _sortTickets
                 });
             }
-            // else if (data.action === "create" && shouldUpdateTicketUser(data.ticket) && data.ticket.status === status) {
-            //     dispatch({
-            //         type: "UPDATE_TICKET_UNREAD_MESSAGES",
-            //         payload: data.ticket,
-            //     });
-            // }
         };
 
         const onCompanyContactTicketsList = (data) => {
+            const _sortTickets = sortTicketsRef.current;
             if (data.action === "update" && data.contact) {
                 dispatch({
                     type: "UPDATE_TICKET_CONTACT",
                     payload: data.contact,
                     status: status,
-                    sortDir: sortTickets
+                    sortDir: _sortTickets
                 });
             }
         };
@@ -418,12 +417,17 @@ const TicketsListCustom = (props) => {
             } else {
                 socket.emit("joinNotification");
             }
-        }
+        };
 
-        socket.on("connect", onConnectTicketsList)
+        socket.on("connect", onConnectTicketsList);
         socket.on(`company-${companyId}-ticket`, onCompanyTicketTicketsList);
         socket.on(`company-${companyId}-appMessage`, onCompanyAppMessageTicketsList);
         socket.on(`company-${companyId}-contact`, onCompanyContactTicketsList);
+
+        // Se já estiver conectado, faz join imediato
+        if (socket.connected) {
+            onConnectTicketsList();
+        }
 
         return () => {
             if (status) {
@@ -436,8 +440,9 @@ const TicketsListCustom = (props) => {
             socket.off(`company-${companyId}-appMessage`, onCompanyAppMessageTicketsList);
             socket.off(`company-${companyId}-contact`, onCompanyContactTicketsList);
         };
-
-    }, [status, showAll, user, selectedQueueIds, tags, users, profile, queues, sortTickets, showTicketWithoutQueue]);
+    // Deps mínimas: valores mutáveis acessados via refs para evitar re-registro frequente
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [status, companyId, socket]);
 
     useEffect(() => {
         if (typeof updateCount === "function") {
