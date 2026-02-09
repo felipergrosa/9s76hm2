@@ -156,30 +156,6 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-function CircularProgressWithLabel(props) {
-  return (
-    <Box position="relative" display="inline-flex">
-      <CircularProgress variant="determinate" {...props} />
-      <Box
-        top={0}
-        left={0}
-        bottom={0}
-        right={0}
-        position="absolute"
-        display="flex"
-        alignItems="center"
-        justifyContent="center"
-      >
-        <Typography
-          variant="caption"
-          component="div"
-          color="textSecondary"
-        >{`${Math.round(props.value)}%`}</Typography>
-      </Box>
-    </Box>
-  );
-}
-
 const CustomToolTip = ({ title, content, children }) => {
   const classes = useStyles();
 
@@ -230,7 +206,7 @@ const Connections = () => {
   const { whatsApps, loading } = useContext(WhatsAppsContext);
 
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
-  const [statusImport, setStatusImport] = useState([]);
+  const [, setStatusImport] = useState([]);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [selectedWhatsApp, setSelectedWhatsApp] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
@@ -263,43 +239,6 @@ const Connections = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const responseFacebook = (response) => {
-    if (response.status !== "unknown") {
-      const { accessToken, id } = response;
-
-      api
-        .post("/facebook", {
-          facebookUserId: id,
-          facebookUserToken: accessToken,
-        })
-        .then((response) => {
-          toast.success(i18n.t("connections.facebook.success"));
-        })
-        .catch((error) => {
-          toastError(error);
-        });
-    }
-  };
-
-  const responseInstagram = (response) => {
-    if (response.status !== "unknown") {
-      const { accessToken, id } = response;
-
-      api
-        .post("/facebook", {
-          addInstagram: true,
-          facebookUserId: id,
-          facebookUserToken: accessToken,
-        })
-        .then((response) => {
-          toast.success(i18n.t("connections.facebook.success"));
-        })
-        .catch((error) => {
-          toastError(error);
-        });
-    }
-  };
-
   useEffect(() => {
     socket.on(`importMessages-${user.companyId}`, (data) => {
       if (data.action === "refresh") {
@@ -314,7 +253,7 @@ const Connections = () => {
     /* return () => {
       socket.disconnect();
     }; */
-  }, [whatsApps]);
+  }, [whatsApps, socket, user.companyId, history]);
 
   const handleStartWhatsAppSession = async (whatsAppId) => {
     if (!whatsAppId) {

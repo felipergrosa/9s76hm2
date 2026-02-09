@@ -1,6 +1,8 @@
-import { Op } from "sequelize";
+import { Op, QueryTypes } from "sequelize";
 import { getWbot } from "../../libs/wbot";
 import Contact from "../../models/Contact";
+import Message from "../../models/Message";
+import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
 import logger from "../../utils/logger";
 import { normalizePhoneNumber } from "../../utils/phone";
@@ -94,68 +96,118 @@ const GetGroupParticipantsService = async ({
   // Mapear participantes
   const participants: GroupParticipant[] = [];
 
-  // Separar participantes por tipo de JID (@s.whatsapp.net vs @lid)
-  const pnParticipants: any[] = [];
-  const lidParticipants: any[] = [];
+  // === ESTRATÉGIA DE RESOLUÇÃO ===
+  // 1) Para @s.whatsapp.net: buscar contato por número (canonicalNumber/number)
+  // 2) Para @lid: buscar contato via mapeamento participant→contactId das mensagens salvas
+  //    (mesma fonte que o chat usa para exibir nomes corretamente)
+  // 3) Fallback: lidJid/remoteJid no contato, signalRepository, pushName
 
+  // Pré-carregar contatos por número (participantes @s.whatsapp.net)
+  const pnNumbers: string[] = [];
   for (const p of groupMetadata.participants || []) {
-    if (p.id.includes("@lid")) {
-      lidParticipants.push(p);
-    } else {
-      pnParticipants.push(p);
+    if (!p.id.includes("@lid")) {
+      const raw = p.id.split("@")[0].replace(/\D/g, "");
+      const { canonical } = normalizePhoneNumber(raw);
+      pnNumbers.push(canonical || raw);
+      if (raw !== (canonical || raw)) pnNumbers.push(raw);
     }
   }
 
-  // Pré-carregar contatos por número de telefone (participantes @s.whatsapp.net)
-  const allRawNumbers = pnParticipants.map((p: any) => {
-    const raw = p.id.split("@")[0].replace(/\D/g, "");
-    const { canonical } = normalizePhoneNumber(raw);
-    return { raw, canonical: canonical || raw };
-  });
-
-  const searchNumbers = allRawNumbers.flatMap((n: any) => {
-    const nums = [n.canonical];
-    if (n.raw !== n.canonical) nums.push(n.raw);
-    return nums;
-  });
-
-  // Pré-carregar contatos por LID (participantes @lid)
-  const lidJids = lidParticipants.map((p: any) => p.id);
-
-  // Busca única no banco para todos os participantes (PN + LID)
   let contactsMap = new Map<string, Contact>();
-  try {
-    const whereConditions: any[] = [];
-    if (searchNumbers.length > 0) {
-      whereConditions.push({ canonicalNumber: { [Op.in]: searchNumbers } });
-      whereConditions.push({ number: { [Op.in]: searchNumbers } });
-    }
-    if (lidJids.length > 0) {
-      whereConditions.push({ lidJid: { [Op.in]: lidJids } });
-      whereConditions.push({ remoteJid: { [Op.in]: lidJids } });
-    }
-
-    if (whereConditions.length > 0) {
+  if (pnNumbers.length > 0) {
+    try {
       const contacts = await Contact.findAll({
         where: {
           companyId,
           isGroup: false,
-          [Op.or]: whereConditions
+          [Op.or]: [
+            { canonicalNumber: { [Op.in]: pnNumbers } },
+            { number: { [Op.in]: pnNumbers } }
+          ]
         }
       });
       for (const c of contacts) {
         if (c.canonicalNumber) contactsMap.set(c.canonicalNumber, c);
         if (c.number) contactsMap.set(c.number, c);
-        if (c.lidJid) contactsMap.set(c.lidJid, c);
-        if (c.remoteJid) contactsMap.set(c.remoteJid, c);
       }
+    } catch {
+      // Ignorar erros na busca batch
     }
-  } catch {
-    // Ignorar erros na busca batch
   }
 
-  // Tentar resolver LID→PN via signalRepository do Baileys (in-memory, sem I/O)
-  const signalRepo = (wbot as any).authState?.keys?.signalRepository;
+  // Para participantes @lid: buscar mapeamento participant→contact das mensagens salvas
+  // Essa é a mesma fonte que o chat usa para exibir nomes corretamente
+  const lidParticipantJids = (groupMetadata.participants || [])
+    .filter((p: any) => p.id.includes("@lid"))
+    .map((p: any) => p.id);
+
+  const lidContactMap = new Map<string, Contact>();
+  if (lidParticipantJids.length > 0) {
+    try {
+      // Buscar tickets deste grupo
+      const groupTickets = await Ticket.findAll({
+        where: { contactId, companyId, isGroup: true },
+        attributes: ["id"]
+      });
+      const ticketIds = groupTickets.map(t => t.id);
+
+      if (ticketIds.length > 0) {
+        // Buscar o contactId mais recente para cada participant @lid
+        // usando as mensagens salvas (mesma fonte que o chat)
+        const sequelize = Contact.sequelize!;
+        const mappings: any[] = await sequelize.query(`
+          SELECT DISTINCT ON (m.participant)
+            m.participant,
+            m."contactId",
+            c.name,
+            c.number,
+            c."canonicalNumber",
+            c."profilePicUrl",
+            c."isGroup" as "contactIsGroup"
+          FROM "Messages" m
+          JOIN "Contacts" c ON c.id = m."contactId"
+          WHERE m."ticketId" IN (:ticketIds)
+            AND m."fromMe" = false
+            AND m.participant IN (:participants)
+            AND c."isGroup" = false
+          ORDER BY m.participant, m.id DESC
+        `, {
+          replacements: { ticketIds, participants: lidParticipantJids },
+          type: QueryTypes.SELECT
+        });
+
+        for (const row of mappings) {
+          // Criar um objeto Contact-like para o mapa
+          const contact = await Contact.findByPk(row.contactId);
+          if (contact) {
+            lidContactMap.set(row.participant, contact);
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn(`[GetGroupParticipants] Erro ao buscar mapeamento LID→Contact: ${err}`);
+    }
+
+    // Fallback: buscar contatos que tenham lidJid ou remoteJid @lid
+    try {
+      const lidContacts = await Contact.findAll({
+        where: {
+          companyId,
+          isGroup: false,
+          [Op.or]: [
+            { lidJid: { [Op.in]: lidParticipantJids } },
+            { remoteJid: { [Op.in]: lidParticipantJids } }
+          ]
+        }
+      });
+      for (const c of lidContacts) {
+        if (c.lidJid && !lidContactMap.has(c.lidJid)) lidContactMap.set(c.lidJid, c);
+        if (c.remoteJid && !lidContactMap.has(c.remoteJid)) lidContactMap.set(c.remoteJid, c);
+      }
+    } catch {
+      // Ignorar
+    }
+  }
 
   for (const p of groupMetadata.participants || []) {
     const participantJid = p.id;
@@ -169,41 +221,16 @@ const GetGroupParticipantsService = async ({
     let contactRecord: Contact | null = null;
 
     if (isLid) {
-      // Participante com LID: tentar resolver para número real
-      // 1) Buscar contato no banco por lidJid
-      contactRecord = contactsMap.get(participantJid) || null;
+      // Buscar contato pelo mapeamento das mensagens salvas
+      contactRecord = lidContactMap.get(participantJid) || null;
 
-      // 2) Tentar resolver LID→PN via signalRepository
-      let resolvedPN: string | null = null;
-      if (!contactRecord && signalRepo?.getPNForLID) {
-        try {
-          const pn = signalRepo.getPNForLID(participantJid);
-          if (pn) {
-            const pnDigits = String(pn).replace(/\D/g, "");
-            if (pnDigits.length >= 7 && pnDigits.length <= 15) {
-              resolvedPN = pnDigits;
-              const { canonical } = normalizePhoneNumber(pnDigits);
-              participantNumber = canonical || pnDigits;
-              isValidPhoneNumber = true;
-              // Buscar contato pelo número resolvido
-              contactRecord = contactsMap.get(participantNumber) || contactsMap.get(pnDigits) || null;
-            }
-          }
-        } catch {
-          // signalRepository não disponível
-        }
-      }
-
-      // Se encontrou contato por LID, usar o número do contato
-      if (contactRecord?.number) {
-        const contactNum = contactRecord.number.replace(/\D/g, "");
+      if (contactRecord) {
+        // Usar número real do contato encontrado
+        const contactNum = (contactRecord.canonicalNumber || contactRecord.number || "").replace(/\D/g, "");
         if (contactNum.length >= 7 && contactNum.length <= 15) {
           participantNumber = contactNum;
           isValidPhoneNumber = true;
         }
-      } else if (contactRecord?.canonicalNumber) {
-        participantNumber = contactRecord.canonicalNumber;
-        isValidPhoneNumber = participantNumber.length >= 7 && participantNumber.length <= 15;
       }
     } else {
       // Participante com número real (@s.whatsapp.net)

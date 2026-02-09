@@ -47,6 +47,8 @@ import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { toast } from "react-toastify";
+import StartPrivateChatModal from "../StartPrivateChatModal";
+import { useHistory } from "react-router-dom";
 
 const drawerWidth = 320;
 
@@ -217,6 +219,24 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [selectedParticipant, setSelectedParticipant] = useState(null);
 
+  // Handler para iniciar conversa privada
+  const handleStartPrivateChat = (participant) => {
+    setSelectedParticipantForChat(participant);
+    setPrivateChatModalOpen(true);
+  };
+
+  // Callback quando o ticket privado é criado
+  const handlePrivateChatCreated = (ticket) => {
+    setPrivateChatModalOpen(false);
+    setSelectedParticipantForChat(null);
+    
+    if (ticket) {
+      // Navegar para o novo ticket
+      history.push(`/tickets/${ticket.uuid}`);
+      toast.success(`Conversa privada iniciada com ${selectedParticipantForChat.name}`);
+    }
+  };
+
   // Edição de nome do grupo
   const [editingName, setEditingName] = useState(false);
   const [editName, setEditName] = useState("");
@@ -234,6 +254,11 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
   // Configurações do grupo
   const [savingSettings, setSavingSettings] = useState(false);
 
+  // Modal de conversa privada
+  const [privateChatModalOpen, setPrivateChatModalOpen] = useState(false);
+  const [selectedParticipantForChat, setSelectedParticipantForChat] = useState(null);
+  const history = useHistory();
+
   // Buscar dados do grupo quando abrir o drawer
   const fetchGroupInfo = useCallback(async () => {
     if (!contact?.id || !contact?.isGroup) return;
@@ -250,7 +275,7 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
     } finally {
       setLoading(false);
     }
-  }, [contact?.id, contact?.isGroup]);
+  }, [contact?.id, contact?.isGroup, api, setLoading, setError, setGroupInfo]);
 
   useEffect(() => {
     if (open && contact?.isGroup) {
@@ -680,6 +705,7 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
                   key={participant.id}
                   className={classes.participantItem}
                   button
+                  onClick={() => handleStartPrivateChat(participant)}
                 >
                   <ListItemAvatar>
                     <Avatar
@@ -822,6 +848,16 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Modal para iniciar conversa privada */}
+      <StartPrivateChatModal
+        open={privateChatModalOpen}
+        onClose={handlePrivateChatCreated}
+        participant={selectedParticipantForChat}
+        companyId={contact?.companyId}
+        whatsappId={ticket?.whatsappId}
+        user={user}
+      />
     </>
   );
 };

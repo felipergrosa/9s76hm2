@@ -1663,7 +1663,7 @@ export const listSharedMedia = async (req: Request, res: Response): Promise<Resp
         isDeleted: false,
         ...mediaTypeFilter
       },
-      attributes: ["id", "fromMe", "body", "mediaUrl", "mediaType", "createdAt", "ticketId", "participant", "senderName", "contactId"],
+      attributes: ["id", "fromMe", "body", "mediaUrl", "mediaType", "createdAt", "ticketId", "participant", "senderName", "contactId", "companyId"],
       include: [
         {
           model: Contact,
