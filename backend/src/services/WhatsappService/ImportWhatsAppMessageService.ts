@@ -129,6 +129,7 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
 
     // Cache de tickets durante a importação para evitar criar múltiplos tickets para o mesmo contato
     const ticketCache = new Map<string, Ticket>();
+    let processedCount = 0;
 
     for (const msg of messagesToImport) {
       processedCount++;
