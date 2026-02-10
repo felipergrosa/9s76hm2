@@ -750,7 +750,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
         </Toolbar>
       </AppBar>
       {/* Barra de progresso flutuante para importação de mensagens */}
-      {!hideImport && (
+      {!hideImport && statusImport && statusImport.all > 0 && (
         <ImportProgressBar
           statusImport={statusImport}
           onClose={() => setHideImport(true)}

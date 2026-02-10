@@ -127,8 +127,8 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
       status: { this: 0, all: totalImport, state: "PREPARING", date: moment().format("DD/MM/YY HH:mm:ss") }
     });
 
-    // Processamento
-    let processedCount = 0;
+    // Cache de tickets durante a importação para evitar criar múltiplos tickets para o mesmo contato
+    const ticketCache = new Map<string, Ticket>();
 
     for (const msg of messagesToImport) {
       processedCount++;
@@ -143,6 +143,9 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
         // Normalização
         const contactNumber = jidNormalizedUser(msgContactId).replace(/\D/g, "");
         const remoteNumber = jidNormalizedUser(remoteJid).replace(/\D/g, "");
+
+        // Chave única para cache: grupo usa remoteJid, privado usa contactNumber
+        const cacheKey = isGroup ? remoteNumber : contactNumber;
 
         // 2. Buscar/Criar Contato (Sem baixar foto para não travar)
         // Se for grupo, precisamos do contato do remetente E do contato do grupo
@@ -187,18 +190,28 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
           });
         }
 
-        // 3. Buscar/Criar Ticket (Associado ao Contact correto!)
-        const ticket = await FindOrCreateTicketService(
-          contact,
-          whatsApp,
-          0, // unreadMessages
-          companyId,
-          0, // queue
-          0, // userId
-          groupContact,
-          "whatsapp",
-          true // isImported = true (cria pending ou usa existente)
-        );
+        // 3. Buscar/Criar Ticket (usando cache para evitar duplicados na importação)
+        let ticket: Ticket | undefined = ticketCache.get(cacheKey);
+
+        if (!ticket) {
+          // Só chama FindOrCreateTicketService se não estiver no cache
+          ticket = await FindOrCreateTicketService(
+            contact,
+            whatsApp,
+            0, // unreadMessages
+            companyId,
+            0, // queue
+            0, // userId
+            groupContact,
+            "whatsapp",
+            true // isImported = true (cria pending ou usa existente)
+          );
+          // Guarda no cache para reutilizar nas próximas mensagens do mesmo contato
+          ticketCache.set(cacheKey, ticket);
+          logger.info(`[Import] Novo ticket criado em cache para ${cacheKey}: ${ticket.id}`);
+        } else {
+          logger.info(`[Import] Reutilizando ticket do cache para ${cacheKey}: ${ticket.id}`);
+        }
 
         // 4. Salvar Mensagem (Direto no Banco)
         const body = getBodyMessage(msg);

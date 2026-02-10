@@ -2,6 +2,7 @@ import express from "express";
 import isAuth from "../middleware/isAuth";
 
 import * as TicketController from "../controllers/TicketController";
+import * as TicketMergeController from "../controllers/TicketMergeController";
 
 const ticketRoutes = express.Router();
 
@@ -32,5 +33,10 @@ ticketRoutes.delete("/tickets/:ticketId", isAuth, TicketController.remove);
 ticketRoutes.post("/tickets/closeAll", isAuth, TicketController.closeAll);
 
 ticketRoutes.post("/tickets/bulk-process", isAuth, TicketController.bulkProcess);
+
+// Rotas para merge de tickets duplicados (importação)
+ticketRoutes.get("/tickets/duplicate-check", isAuth, TicketMergeController.checkDuplicateTickets);
+
+ticketRoutes.post("/tickets/merge-duplicates", isAuth, TicketMergeController.mergeDuplicateTickets);
 
 export default ticketRoutes;

@@ -74,7 +74,7 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
           if (!ticket.sendInactiveMessage) {
             const bodyMessageInactive = formatBody(`\u200e ${whatsapp.inactiveMessage}`, ticket);
             const sentMessage = await SendWhatsAppMessage({ body: bodyMessageInactive, ticket: ticket });
-            await verifyMessage(sentMessage, ticket, ticket.contact);
+            await verifyMessage(sentMessage, ticket, ticket.contact, undefined, undefined, false, false, undefined);
             await ticket.update({ sendInactiveMessage: true, fromMe: true });
           }
         }));
@@ -130,7 +130,7 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
         if (!isNil(whatsapp.expiresInactiveMessage) && whatsapp.expiresInactiveMessage !== "") {
           bodyExpiresMessageInactive = formatBody(`\u200e${whatsapp.expiresInactiveMessage}`, ticket);
           const sentMessage = await SendWhatsAppMessage({ body: bodyExpiresMessageInactive, ticket: ticket });
-          await verifyMessage(sentMessage, ticket, ticket.contact);
+          await verifyMessage(sentMessage, ticket, ticket.contact, undefined, undefined, false, false, undefined);
         }
 
         // Como o campo sendInactiveMessage foi atualizado, podemos garantir que a mensagem foi enviada

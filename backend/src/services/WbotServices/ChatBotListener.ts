@@ -66,7 +66,7 @@ const sendMessage = async (
       text: formatBody(body, ticket)
     }
   );
-  await verifyMessage(sentMessage, ticket, contact);
+  await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
 };
 
 const sendMessageLink = async (
@@ -95,7 +95,7 @@ const sendMessageLink = async (
       }
     );
   }
-  await verifyMessage(sentMessage, ticket, contact);
+  await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
 };
 
 const sendMessageImage = async (
@@ -125,7 +125,7 @@ const sendMessageImage = async (
       }
     );
   }
-  await verifyMessage(sentMessage, ticket, contact);
+  await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
 };
 
 // const sendDialog = async (
@@ -201,7 +201,7 @@ const sendMessageImage = async (
 //           buttonMessage
 //         );
 
-//         await verifyMessage(send, ticket, contact);
+//         await verifyMessage(send, ticket, contact, undefined, undefined, false, false, wbot);
 
 //         return send;
 //       }
@@ -344,7 +344,7 @@ const sendDialog = async (
           buttonMessage
         );
 
-        await verifyMessage(send, ticket, contact);
+        await verifyMessage(send, ticket, contact, undefined, undefined, false, false, wbot);
 
         return send;
       }
@@ -384,7 +384,7 @@ const sendDialog = async (
           listMessage
         );
 
-        await verifyMessage(sendMsg, ticket, contact);
+        await verifyMessage(sendMsg, ticket, contact, undefined, undefined, false, false, wbot);
 
         return sendMsg;
       }
@@ -465,7 +465,7 @@ const backToMainMenu = async (
         }
       );
 
-      await verifyMessage(sentMessage, ticket, contact);
+      await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
     }
 
     const deleteDialog = await DeleteDialogChatBotsServices(contact.id);

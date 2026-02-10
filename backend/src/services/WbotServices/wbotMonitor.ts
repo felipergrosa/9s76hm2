@@ -83,7 +83,7 @@ const wbotMonitor = async (
 
           if (!ticket) return;
 
-          await verifyMessage(sentMessage, ticket, contact);
+          await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
 
           const date = new Date();
           const hours = date.getHours();

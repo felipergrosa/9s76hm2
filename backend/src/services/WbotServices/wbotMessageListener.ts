@@ -1893,6 +1893,24 @@ export const verifyMediaMessage = async (
       finalMediaType = "gif";
     }
 
+    // BUSCAR NOME DO REMETENTE: prioridade 1) pushName da mensagem, 2) store do Baileys
+    const participantJid = msg.key.participant || msg.participant;
+    let senderName = msg.pushName;
+    if (!senderName && participantJid && wbot) {
+      try {
+        const store = (wbot as any).store;
+        if (store?.contacts?.[participantJid]) {
+          const contactData = store.contacts[participantJid];
+          senderName = contactData?.notify || contactData?.name || contactData?.verifiedName;
+          if (senderName) {
+            logger.debug(`[verifyMediaMessage] Nome do participante ${participantJid} obtido do store: "${senderName}"`);
+          }
+        }
+      } catch (err) {
+        // Silencioso: não falhar por erro ao buscar no store
+      }
+    }
+
     const messageData = {
       wid: msg.key.id,
       ticketId: ticket.id,
@@ -1908,8 +1926,8 @@ export const verifyMediaMessage = async (
           String(msg.status).replace("PENDING", "2").replace("NaN", "1")
         ) || 2,
       remoteJid: msg.key.remoteJid,
-      participant: msg.key.participant || msg.participant,
-      senderName: msg.pushName || undefined,
+      participant: participantJid,
+      senderName: senderName || undefined,
       dataJson: JSON.stringify(msg),
       ticketTrakingId: ticketTraking?.id,
       createdAt: new Date(
@@ -1984,13 +2002,33 @@ export const verifyMessage = async (
   ticketTraking?: TicketTraking,
   isPrivate?: boolean,
   isForwarded: boolean = false,
-  isCampaign: boolean = false  // Se true, não emite para a sala da conversa (background)
+  isCampaign: boolean = false,  // Se true, não emite para a sala da conversa (background)
+  wbot?: Session  // Opcional para buscar nome do participante no store
 ) => {
   // console.log("Mensagem recebida:", JSON.stringify(msg, null, 2));
   const io = getIO();
   const quotedMsg = await verifyQuotedMessage(msg);
   const body = getBodyMessage(msg);
   const companyId = ticket.companyId;
+
+  const participantJid = msg.key.participant || msg.participant;
+  
+  // BUSCAR NOME DO REMETENTE: prioridade 1) pushName da mensagem, 2) store do Baileys
+  let senderName = msg.pushName;
+  if (!senderName && participantJid && wbot) {
+    try {
+      const store = (wbot as any).store;
+      if (store?.contacts?.[participantJid]) {
+        const contactData = store.contacts[participantJid];
+        senderName = contactData?.notify || contactData?.name || contactData?.verifiedName;
+        if (senderName) {
+          logger.debug(`[verifyMessage] Nome do participante ${participantJid} obtido do store: "${senderName}"`);
+        }
+      }
+    } catch (err) {
+      // Silencioso: não falhar por erro ao buscar no store
+    }
+  }
 
   const messageData = {
     wid: msg.key.id,
@@ -2005,8 +2043,8 @@ export const verifyMessage = async (
       Number(String(msg.status).replace("PENDING", "2").replace("NaN", "1")) ||
       2,
     remoteJid: msg.key.remoteJid,
-    participant: msg.key.participant || msg.participant,
-    senderName: msg.pushName || undefined,
+    participant: participantJid,
+    senderName: senderName || undefined,
     dataJson: JSON.stringify(msg),
     ticketTrakingId: ticketTraking?.id,
     isPrivate,
@@ -2142,7 +2180,7 @@ const sendDialogflowAwswer = async (
       text: bodyDuvida
     });
 
-    await verifyMessage(sentMessage, ticket, contact);
+    await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
     return;
   }
 
@@ -2210,7 +2248,7 @@ async function sendDelayedMessages(
     text: `\u200e *${queueIntegration?.name}:* ` + message
   });
 
-  await verifyMessage(sentMessage, ticket, contact);
+  await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
   if (message != lastMessage) {
     await delay(500);
     wbot.sendPresenceUpdate("composing", contact.remoteJid);
@@ -2229,7 +2267,7 @@ async function sendDelayedMessages(
     //     }
     //   );
 
-    //   await verifyMessage(sentMessage, ticket, contact);
+    //   await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
     // }
 
     // if (sendImage && message === lastMessage) {
@@ -2244,7 +2282,7 @@ async function sendDelayedMessages(
     //     }
     //   );
 
-    //   await verifyMessage(sentMessage, ticket, contact);
+    //   await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
     //   await ticket.update({ lastMessage: "📷 Foto" });
     // }
 
@@ -2694,7 +2732,7 @@ const verifyQueue = async (
           }
         );
 
-        await verifyMessage(sentMessage, ticket, contact, ticketTraking);
+        await verifyMessage(sentMessage, ticket, contact, ticketTraking, undefined, false, false, wbot);
 
         if (settings?.settingsUserRandom === "enabled") {
           await UpdateTicketService({
@@ -2720,7 +2758,7 @@ const verifyQueue = async (
           }
         );
 
-        await verifyMessage(sentMessage, ticket, contact, ticketTraking);
+        await verifyMessage(sentMessage, ticket, contact, ticketTraking, undefined, false, false, wbot);
       }
 
       if (!isNil(choosenQueue.fileListId)) {
@@ -2968,7 +3006,7 @@ const verifyQueue = async (
                 }
               );
 
-              await verifyMessage(sentMessage, ticket, contact, ticketTraking);
+              await verifyMessage(sentMessage, ticket, contact, ticketTraking, undefined, false, false, wbot);
             },
             1000,
             ticket.id
@@ -2997,7 +3035,7 @@ const verifyQueue = async (
               }
             );
 
-            await verifyMessage(sentMessage, ticket, contact, ticketTraking);
+            await verifyMessage(sentMessage, ticket, contact, ticketTraking, undefined, false, false, wbot);
           },
           1000,
           ticket.id
@@ -3039,10 +3077,13 @@ const verifyQueue = async (
       }
 
       if (
-        settings?.scheduleType === "queue" && ticket.status !== "open" &&
-        !isNil(currentSchedule) && (ticket.amountUsedBotQueues < maxUseBotQueues || maxUseBotQueues === 0)
-        && (!currentSchedule || currentSchedule.inActivity === false)
-        && (!ticket.isGroup || ticket.whatsapp?.groupAsTicket === "enabled")
+        settings?.scheduleType === "queue" &&
+        ticket.status !== "open" &&
+        !isNil(currentSchedule) &&
+        (ticket.amountUsedBotQueues < maxUseBotQueues ||
+          maxUseBotQueues === 0) &&
+        (!currentSchedule || currentSchedule.inActivity === false) &&
+        (!ticket.isGroup || ticket.whatsapp?.groupAsTicket === "enabled")
       ) {
         if (timeUseBotQueues !== "0") {
           //Regra para desabilitar o chatbot por x minutos/horas após o primeiro envio
@@ -3052,15 +3093,22 @@ const verifyQueue = async (
 
 
           if (ticketTraking.chatbotAt !== null) {
-            dataLimite.setMinutes(ticketTraking.chatbotAt.getMinutes() + (Number(timeUseBotQueues)));
+            dataLimite.setMinutes(
+              ticketTraking.chatbotAt.getMinutes() + Number(timeUseBotQueues)
+            );
 
-            if (ticketTraking.chatbotAt !== null && Agora < dataLimite && timeUseBotQueues !== "0" && ticket.amountUsedBotQueues !== 0) {
-              return
+            if (
+              ticketTraking.chatbotAt !== null &&
+              Agora < dataLimite &&
+              timeUseBotQueues !== "0" &&
+              ticket.amountUsedBotQueues !== 0
+            ) {
+              return;
             }
           }
           await ticketTraking.update({
             chatbotAt: null
-          })
+          });
         }
 
         const outOfHoursMessage = queue.outOfHoursMessage;
@@ -3106,7 +3154,7 @@ const verifyQueue = async (
 
       await UpdateTicketService({
         ticketData: {
-          // amountUsedBotQueues: 0, 
+          // amountUsedBotQueues: 0,
           queueId: choosenQueue.id
         },
         // ticketData: { queueId: queues.length ===1 ? null : choosenQueue.id },
@@ -3116,7 +3164,6 @@ const verifyQueue = async (
       // }
 
       if (choosenQueue.chatbots.length > 0 && !ticket.isGroup) {
-
         const sectionsRows = [];
 
         choosenQueue.chatbots.forEach((chatbot, index) => {
@@ -3149,9 +3196,7 @@ const verifyQueue = async (
           listMessage
         );
 
-        await verifyMessage(sendMsg, ticket, contact, ticketTraking);
-
-
+        await verifyMessage(sendMsg, ticket, contact, ticketTraking, undefined, false, false, wbot);
 
         if (settings?.settingsUserRandom === "enabled") {
           await UpdateTicketService({
@@ -3174,63 +3219,85 @@ const verifyQueue = async (
           }
         );
 
-        await verifyMessage(sentMessage, ticket, contact, ticketTraking);
-
+        await verifyMessage(sentMessage, ticket, contact, ticketTraking, undefined, false, false, wbot);
       }
-
 
       if (!isNil(choosenQueue.fileListId)) {
         try {
 
-          const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
+          const publicFolder = path.resolve(
+            __dirname,
+            "..",
+            "..",
+            "..",
+            "public"
+          );
 
-          const files = await ShowFileService(choosenQueue.fileListId, ticket.companyId)
+          const files = await ShowFileService(
+            choosenQueue.fileListId,
+            ticket.companyId
+          );
 
-          const folder = path.resolve(publicFolder, `company${ticket.companyId}`, "fileList", String(files.id))
+          const folder = path.resolve(
+            publicFolder,
+            `company${ticket.companyId}`,
+            "fileList",
+            String(files.id)
+          );
 
           for (const [index, file] of files.options.entries()) {
             const mediaSrc = {
-              fieldname: 'medias',
+              fieldname: "medias",
               originalname: file.path,
-              encoding: '7bit',
+              encoding: "7bit",
               mimetype: file.mediaType,
               filename: file.path,
-              path: path.resolve(folder, file.path),
-            } as Express.Multer.File
+              path: path.resolve(folder, file.path)
+            } as Express.Multer.File;
 
             // const debouncedSentMessagePosicao = debounce(
             //   async () => {
-            const sentMessage = await SendWhatsAppMedia({ media: mediaSrc, ticket, body: `\u200e ${file.name}`, isPrivate: false, isForwarded: false });
+            const sentMessage = await SendWhatsAppMedia({
+              media: mediaSrc,
+              ticket,
+              body: `\u200e ${file.name}`,
+              isPrivate: false,
+              isForwarded: false
+            });
 
-            await verifyMediaMessage(sentMessage, ticket, ticket.contact, ticketTraking, false, false, wbot);
+            await verifyMediaMessage(
+              sentMessage,
+              ticket,
+              ticket.contact,
+              ticketTraking,
+              false,
+              false,
+              wbot
+            );
             //   },
             //   2000,
             //   ticket.id
             // );
             // debouncedSentMessagePosicao();
-          };
-
-
+          }
         } catch (error) {
           logger.info(error);
         }
       }
 
-      await delay(4000)
-
+      await delay(4000);
 
       //se fila está parametrizada para encerrar ticket automaticamente
       if (choosenQueue.closeTicket) {
         try {
-
           await UpdateTicketService({
             ticketData: {
               status: "closed",
-              queueId: choosenQueue.id,
+              queueId: choosenQueue.id
               // sendFarewellMessage: false,
             },
             ticketId: ticket.id,
-            companyId,
+            companyId
           });
         } catch (error) {
           logger.info(error);
@@ -3259,7 +3326,7 @@ const verifyQueue = async (
 
       if (enableQueuePosition && !choosenQueue.chatbots.length) {
         // Lógica para enviar posição da fila de atendimento
-        const qtd = count.count === 0 ? 1 : count.count
+        const qtd = count.count === 0 ? 1 : count.count;
         const msgFila = `${settings.sendQueuePositionMessage} *${qtd}*`;
         // const msgFila = `*Assistente Virtual:*\n{{ms}} *{{name}}*, sua posição na fila de atendimento é: *${qtd}*`;
         const bodyFila = formatBody(`${msgFila}`, ticket);
@@ -3278,13 +3345,14 @@ const verifyQueue = async (
         );
         debouncedSentMessagePosicao();
       }
-
-
     } else {
-
       if (ticket.isGroup) return;
 
-      if (maxUseBotQueues && maxUseBotQueues !== 0 && ticket.amountUsedBotQueues >= maxUseBotQueues) {
+      if (
+        maxUseBotQueues &&
+        maxUseBotQueues !== 0 &&
+        ticket.amountUsedBotQueues >= maxUseBotQueues
+      ) {
         // await UpdateTicketService({
         //   ticketData: { queueId: queues[0].id },
         //   ticketId: ticket.id
@@ -3301,16 +3369,22 @@ const verifyQueue = async (
 
 
         if (ticketTraking.chatbotAt !== null) {
-          dataLimite.setMinutes(ticketTraking.chatbotAt.getMinutes() + (Number(timeUseBotQueues)));
+          dataLimite.setMinutes(
+            ticketTraking.chatbotAt.getMinutes() + Number(timeUseBotQueues)
+          );
 
-
-          if (ticketTraking.chatbotAt !== null && Agora < dataLimite && timeUseBotQueues !== "0" && ticket.amountUsedBotQueues !== 0) {
-            return
+          if (
+            ticketTraking.chatbotAt !== null &&
+            Agora < dataLimite &&
+            timeUseBotQueues !== "0" &&
+            ticket.amountUsedBotQueues !== 0
+          ) {
+            return;
           }
         }
         await ticketTraking.update({
           chatbotAt: null
-        })
+        });
       }
 
       // if (wbot.waitForSocketOpen()) {
@@ -3319,7 +3393,6 @@ const verifyQueue = async (
       // }
 
       wbot.presenceSubscribe(contact.remoteJid);
-
 
       let options = "";
 
@@ -3356,15 +3429,22 @@ const verifyQueue = async (
 
       if (ticket.whatsapp.greetingMediaAttachment !== null) {
 
-
-        const filePath = path.resolve("public", `company${companyId}`, ticket.whatsapp.greetingMediaAttachment);
+        const filePath = path.resolve(
+          "public",
+          `company${companyId}`,
+          ticket.whatsapp.greetingMediaAttachment
+        );
 
         const fileExists = fs.existsSync(filePath);
         // console.log(fileExists);
         if (fileExists) {
-          const messagePath = ticket.whatsapp.greetingMediaAttachment
-          const optionsMsg = await getMessageOptions(messagePath, filePath, String(companyId), body);
-
+          const messagePath = ticket.whatsapp.greetingMediaAttachment;
+          const optionsMsg = await getMessageOptions(
+            messagePath,
+            filePath,
+            String(companyId),
+            body
+          );
 
           const debouncedSentgreetingMediaAttachment = debounce(
             async () => {
@@ -3401,8 +3481,7 @@ const verifyQueue = async (
                 listMessage
               );
 
-              await verifyMessage(sendMsg, ticket, contact, ticketTraking);
-
+              await verifyMessage(sendMsg, ticket, contact, ticketTraking, undefined, false, false, wbot);
             },
             1000,
             ticket.id
@@ -3410,18 +3489,16 @@ const verifyQueue = async (
           debouncedSentMessage();
         }
 
-
         await UpdateTicketService({
           ticketData: {
-            // amountUsedBotQueues: ticket.amountUsedBotQueues + 1 
+            // amountUsedBotQueues: ticket.amountUsedBotQueues + 1
           },
           ticketId: ticket.id,
           companyId
         });
 
-        return
+        return;
       } else {
-
 
         const debouncedSentMessage = debounce(
           async () => {
@@ -3445,7 +3522,7 @@ const verifyQueue = async (
               listMessage
             );
 
-            await verifyMessage(sendMsg, ticket, contact, ticketTraking);
+            await verifyMessage(sendMsg, ticket, contact, ticketTraking, undefined, false, false, wbot);
           },
           1000,
           ticket.id
@@ -3466,12 +3543,10 @@ const verifyQueue = async (
 
   const botButton = async () => {
 
-
     if (choosenQueue || (queues.length === 1 && chatbot)) {
       // console.log("entrou no choose", ticket.isOutOfHour, ticketTraking.chatbotAt)
       if (queues.length === 1) choosenQueue = queues[0]
       const queue = await Queue.findByPk(choosenQueue.id);
-
 
       if (ticket.isOutOfHour === false && ticketTraking.chatbotAt !== null) {
         await ticketTraking.update({
@@ -3489,10 +3564,13 @@ const verifyQueue = async (
       }
 
       if (
-        settings?.scheduleType === "queue" && ticket.status !== "open" &&
-        !isNil(currentSchedule) && (ticket.amountUsedBotQueues < maxUseBotQueues || maxUseBotQueues === 0)
-        && (!currentSchedule || currentSchedule.inActivity === false)
-        && (!ticket.isGroup || ticket.whatsapp?.groupAsTicket === "enabled")
+        settings?.scheduleType === "queue" &&
+        ticket.status !== "open" &&
+        !isNil(currentSchedule) &&
+        (ticket.amountUsedBotQueues < maxUseBotQueues ||
+          maxUseBotQueues === 0) &&
+        (!currentSchedule || currentSchedule.inActivity === false) &&
+        (!ticket.isGroup || ticket.whatsapp?.groupAsTicket === "enabled")
       ) {
         if (timeUseBotQueues !== "0") {
           //Regra para desabilitar o chatbot por x minutos/horas após o primeiro envio
@@ -3500,17 +3578,23 @@ const verifyQueue = async (
           let dataLimite = new Date();
           let Agora = new Date();
 
-
           if (ticketTraking.chatbotAt !== null) {
-            dataLimite.setMinutes(ticketTraking.chatbotAt.getMinutes() + (Number(timeUseBotQueues)));
+            dataLimite.setMinutes(
+              ticketTraking.chatbotAt.getMinutes() + Number(timeUseBotQueues)
+            );
 
-            if (ticketTraking.chatbotAt !== null && Agora < dataLimite && timeUseBotQueues !== "0" && ticket.amountUsedBotQueues !== 0) {
-              return
+            if (
+              ticketTraking.chatbotAt !== null &&
+              Agora < dataLimite &&
+              timeUseBotQueues !== "0" &&
+              ticket.amountUsedBotQueues !== 0
+            ) {
+              return;
             }
           }
           await ticketTraking.update({
             chatbotAt: null
-          })
+          });
         }
 
         const outOfHoursMessage = queue.outOfHoursMessage;
@@ -3518,7 +3602,6 @@ const verifyQueue = async (
         if (outOfHoursMessage !== "") {
           // console.log("entrei3");
           const body = formatBody(`${outOfHoursMessage}`, ticket);
-
 
           const debouncedSentMessage = debounce(
             async () => {
@@ -3620,7 +3703,6 @@ const verifyQueue = async (
         );
         debouncedSentMessage();
 
-
         if (settings?.settingsUserRandom === "enabled") {
           await UpdateTicketService({
             ticketData: { userId: randomUserId },
@@ -3642,10 +3724,8 @@ const verifyQueue = async (
           }
         );
 
-        await verifyMessage(sentMessage, ticket, contact, ticketTraking);
-
+        await verifyMessage(sentMessage, ticket, contact, ticketTraking, undefined, false, false, wbot);
       }
-
 
       if (!isNil(choosenQueue.fileListId)) {
         try {
@@ -4125,7 +4205,7 @@ export const handleRating = async (
     if (ticket.channel === "whatsapp") {
       const msg = await SendWhatsAppMessage({ body, ticket });
 
-      await verifyMessage(msg, ticket, ticket.contact, ticketTraking);
+      await verifyMessage(msg, ticket, ticket.contact, ticketTraking, undefined, false, false, undefined);
     }
 
     if (["facebook", "instagram"].includes(ticket.channel)) {
@@ -5203,7 +5283,7 @@ const handleMessage = async (
                 wbot
               );
             } else {
-              await verifyMessage(msg, ticket, contact, ticketTraking);
+              await verifyMessage(msg, ticket, contact, ticketTraking, undefined, false, false, wbot);
             }
 
             wbot.sendMessage(contact.remoteJid, {
@@ -5247,7 +5327,9 @@ const handleMessage = async (
           contact,
           ticketTraking,
           false,
-          isMsgForwarded
+          isMsgForwarded,
+          false,
+          wbot
         );
       }
     }
@@ -5681,7 +5763,7 @@ const handleMessage = async (
           }
         }
       );
-      await verifyMessage(sentMessage, ticket, contact, ticketTraking);
+      await verifyMessage(sentMessage, ticket, contact, ticketTraking, undefined, false, false, wbot);
     }
 
     try {
