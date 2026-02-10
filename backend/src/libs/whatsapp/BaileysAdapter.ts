@@ -121,6 +121,20 @@ export class BaileysAdapter implements IWhatsAppAdapter {
         return isOpen;
       }
 
+      // Verificações adicionais para detectar problemas sutis
+      const user = this.socket.user;
+      if (!user || !user.id) {
+        logger.warn(`[BaileysAdapter] Socket sem usuário válido. Sessão pode estar desconectada.`);
+        return false;
+      }
+
+      // Verificar se há erros de conexão recentes
+      const authState = (this.socket as any).authState;
+      if (authState && authState.status !== 'connected') {
+        logger.warn(`[BaileysAdapter] Estado de autenticação não está 'connected': ${authState.status}`);
+        return false;
+      }
+
       // Fallback: verificar se user está definido (indica conexão ativa)
       return !!this.socket.user;
     } catch (error) {
@@ -157,7 +171,9 @@ export class BaileysAdapter implements IWhatsAppAdapter {
    */
   private async sendWithRetry(jid: string, content: any): Promise<proto.WebMessageInfo> {
     try {
+      // Verificação mais rigorosa do estado da conexão
       if (!this.isSocketReady()) {
+        logger.warn(`[BaileysAdapter] Socket não pronto para envio, tentando reinicializar...`);
         await this.tryReinitializeSocket();
       }
 
@@ -165,12 +181,49 @@ export class BaileysAdapter implements IWhatsAppAdapter {
         throw new WhatsAppAdapterError("Socket não disponível", "SOCKET_NOT_AVAILABLE");
       }
 
-      return await this.socket.sendMessage(jid, content);
+      // Verificação adicional: estado da conexão Baileys
+      const connectionState = (this.socket as any).ws?.readyState;
+      if (connectionState !== 1) { // WebSocket.OPEN = 1
+        logger.error(`[BaileysAdapter] WebSocket fechado (readyState=${connectionState}). Mensagem não será enviada.`);
+        throw new WhatsAppAdapterError(
+          "Conexão WhatsApp fechada. Reconecte o dispositivo.",
+          "CONNECTION_CLOSED"
+        );
+      }
+
+      // Verificar se há problemas conhecidos que impedem envio
+      const user = this.socket.user;
+      if (!user || !user.id) {
+        logger.error(`[BaileysAdapter] Sessão WhatsApp não inicializada corretamente.`);
+        throw new WhatsAppAdapterError(
+          "Sessão WhatsApp não inicializada. Reconecte o dispositivo.",
+          "SESSION_NOT_INITIALIZED"
+        );
+      }
+
+      logger.debug(`[BaileysAdapter] Enviando mensagem para ${jid} via socket ${user.id}`);
+      
+      const result = await this.socket.sendMessage(jid, content);
+      
+      // Verificação pós-envio: validar se a mensagem foi realmente aceita
+      if (!result || !result.key || !result.key.id) {
+        logger.error(`[BaileysAdapter] WhatsApp não retornou ID válido. Possível falha no envio.`);
+        throw new WhatsAppAdapterError(
+          "WhatsApp não aceitou a mensagem. Tente novamente.",
+          "MESSAGE_NOT_ACCEPTED"
+        );
+      }
+
+      logger.info(`[BaileysAdapter] Mensagem enviada com ID: ${result.key.id}`);
+      return result;
+      
     } catch (error) {
       const isConnectionError = error.message && (
         error.message.includes("Connection Closed") ||
         error.message.includes("Socket connection null") ||
-        error.message.includes("closed")
+        error.message.includes("closed") ||
+        error.message.includes("disconnected") ||
+        error.message.includes("timeout")
       );
 
       if (isConnectionError) {
@@ -184,7 +237,24 @@ export class BaileysAdapter implements IWhatsAppAdapter {
 
         if (reinitialized && this.socket) {
           logger.info(`[BaileysAdapter] Socket reinicializado. Reenviando mensagem...`);
-          return await this.socket.sendMessage(jid, content);
+          
+          // Tentar reenvio apenas uma vez
+          try {
+            const retryResult = await this.socket.sendMessage(jid, content);
+            
+            // Validar retry também
+            if (!retryResult || !retryResult.key || !retryResult.key.id) {
+              throw new WhatsAppAdapterError("Falha no retry: ID inválido", "RETRY_INVALID_ID");
+            }
+            
+            return retryResult;
+          } catch (retryError) {
+            logger.error(`[BaileysAdapter] Falha no retry: ${retryError.message}`);
+            throw new WhatsAppAdapterError(
+              "Falha ao reenviar mensagem. Verifique a conexão WhatsApp.",
+              "RETRY_FAILED"
+            );
+          }
         }
       }
 
