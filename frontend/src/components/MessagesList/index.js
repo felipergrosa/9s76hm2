@@ -1643,7 +1643,7 @@ const MessagesList = ({
       });
     }
 
-    // Ordena mensagens por createdAt para garantir ordem cronológica correta
+    // Ordena mensagens por createdAt ASC (mais antigas primeiro, cronológico)
     filtered.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
     return { filteredMessages: filtered, messageReactions: reactions };

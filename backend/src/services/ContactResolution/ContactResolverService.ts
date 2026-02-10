@@ -50,11 +50,12 @@ export async function resolveMessageContact(
   // Em vez de tentar resolver LID→PN com heurísticas complexas,
   // buscar diretamente o ticket pelo lidJid do destinatário
   if (ids.isFromMe && ids.lidJid && !ids.pnJid) {
+    // Buscar ticket do destinatário (não filtrar por whatsappId - pode ter mudado)
+    // Incluir mais status para garantir encontrar o ticket correto
     const ticketByLid = await Ticket.findOne({
       where: {
         companyId,
-        whatsappId: wbot.id,
-        status: { [Op.in]: ["open", "pending", "group", "nps", "lgpd", "bot"] }
+        status: { [Op.in]: ["open", "pending", "group", "nps", "lgpd", "bot", "closed"] }
       },
       include: [{
         model: Contact,

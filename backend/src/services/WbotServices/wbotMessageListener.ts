@@ -6090,14 +6090,16 @@ const filterMessages = (msg: WAMessage): boolean => {
 const wbotMessageListener = (wbot: Session, companyId: number): void => {
   const wbotUserJid = wbot?.user?.id;
   wbot.ev.on("messages.upsert", async (messageUpsert: ImessageUpsert) => {
-    // Phase 4: Diferenciar tipo de mensagem (notify = tempo real, append = histórico)
+    // Phase 4: Diferenciar tipo de mensagem (notify = tempo real, append/historical = histórico)
     const upsertType = (messageUpsert as any).type || "unknown";
     const isRealtime = upsertType === "notify";
 
     if (isRealtime) {
       logger.info(`[messages.upsert] REALTIME (notify) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);
     } else {
-      logger.debug(`[messages.upsert] HISTÓRICO (${upsertType}) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);
+      // IGNORAR mensagens históricas - elas são processadas pelo ImportWhatsAppMessageService
+      logger.debug(`[messages.upsert] IGNORANDO HISTÓRICO (${upsertType}) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);
+      return;
     }
 
     const messages = messageUpsert.messages

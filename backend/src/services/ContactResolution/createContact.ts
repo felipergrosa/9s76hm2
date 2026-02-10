@@ -196,8 +196,14 @@ async function createPendingContact(
 
   // Criar novo contato pendente
   try {
+    // IMPORTANTE: Para mensagens fromMe, NÃO usar pushName porque é o nome do REMETENTE (usuário)
+    // e não do DESTINATÁRIO (cliente). Usar nome genérico até resolvermos corretamente.
+    const contactName = ids.isFromMe
+      ? `Contato ${lidJid.replace("@lid", "").slice(-6)}`
+      : (ids.pushName || `Contato ${lidJid.replace("@lid", "").slice(-6)}`);
+
     const contact = await Contact.create({
-      name: ids.pushName || `Contato ${lidJid.replace("@lid", "").slice(-6)}`,
+      name: contactName,
       number: pendingNumber,
       canonicalNumber: null,
       isGroup: false,

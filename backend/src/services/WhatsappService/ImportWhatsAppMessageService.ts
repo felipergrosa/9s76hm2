@@ -218,6 +218,10 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
         const quotedMsg = getQuotedMessage(msg); // Opcional: extrair quoted se necessário
 
         if (body || msg.message) {
+          // Timestamp original da mensagem (em segundos → milissegundos)
+          const originalTimestamp = (msg.messageTimestamp as number) * 1000;
+          const originalDate = new Date(originalTimestamp);
+
           const messageData = {
             wid: msg.key.id,
             ticketId: ticket.id,
@@ -225,15 +229,14 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
             body: body || "",
             fromMe,
             read: true, // Importadas sempre lidas
-            mediaType: getBodyMessage(msg) ? "chat" : "image", // Simplificação, type exato exigiria getTypeMessage
-            mediaUrl: null, // Importação massiva não baixa mídia via URL agora
-            timestamp: (msg.messageTimestamp as number) * 1000,
+            mediaType: getBodyMessage(msg) ? "chat" : "image",
+            mediaUrl: null,
+            timestamp: originalTimestamp,
+            createdAt: originalDate, // Data original da mensagem
+            updatedAt: originalDate,
             dataJson: JSON.stringify(msg),
             companyId
           };
-
-          // Correção de Tipo (getTypeMessage seria ideal mas getBodyMessage cobre a maioria)
-          // Se getBodyMessage retornou texto, é chat/extended. Se não, assumimos estrutura de mídia básica.
 
           await Message.upsert(messageData);
         }
