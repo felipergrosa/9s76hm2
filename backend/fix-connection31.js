@@ -1,4 +1,4 @@
-const { Sequelize, DataTypes } = require('sequelize');
+const { Sequelize } = require('sequelize');
 
 // Configuração do banco de produção
 const sequelize = new Sequelize(
@@ -9,135 +9,124 @@ const sequelize = new Sequelize(
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 5432,
     dialect: 'postgres',
-    logging: console.log
+    logging: false
   }
 );
 
-async function fixConnection31() {
+async function fixOrphanTickets() {
   try {
     await sequelize.authenticate();
-    console.log('✅ Conectado ao banco de produção');
+    console.log('Conectado ao banco\n');
     
-    console.log('\n=== CORREÇÃO EMERGENCIAL CONEXÃO #31 ===');
-    
-    // 1. Verificar se conexão #31 existe
-    const [connection31] = await sequelize.query(`
-      SELECT id, name, status, number, "channelType", "companyId", "updatedAt"
-      FROM "Whatsapps" 
-      WHERE id = 31
+    // 1. Mostrar conexão #31 (a nova, com número 5519991244679)
+    const [conn31] = await sequelize.query(`
+      SELECT id, name, status, number, "companyId"
+      FROM "Whatsapps" WHERE id = 31
     `);
     
-    if (connection31.length > 0) {
-      const conn = connection31[0];
-      console.log(`⚠️  Conexão #31 ainda existe:`);
-      console.log(`   Status: ${conn.status}`);
-      console.log(`   Nome: ${conn.name || 'N/A'}`);
-      console.log(`   Número: ${conn.number || 'N/A'}`);
-      console.log(`   Última atualização: ${conn.updatedAt}`);
+    if (conn31.length === 0) {
+      console.log('Conexao #31 nao encontrada!');
+      return;
+    }
+    
+    console.log('=== CONEXAO #31 (NOVA) ===');
+    console.log(`  Nome: ${conn31[0].name}`);
+    console.log(`  Numero: ${conn31[0].number}`);
+    console.log(`  Status: ${conn31[0].status}`);
+    console.log(`  Empresa: ${conn31[0].companyId}`);
+    
+    // 2. Listar TODAS as conexoes da empresa
+    const [allConns] = await sequelize.query(`
+      SELECT id, name, status, number
+      FROM "Whatsapps" 
+      WHERE "companyId" = :companyId
+      ORDER BY id
+    `, { replacements: { companyId: conn31[0].companyId } });
+    
+    console.log('\n=== TODAS AS CONEXOES ===');
+    allConns.forEach(c => {
+      console.log(`  #${c.id}: ${c.name || 'N/A'} | ${c.number || 'sem numero'} | ${c.status}`);
+    });
+    
+    // 3. Encontrar tickets orfaos (whatsappId aponta para conexao que NAO existe)
+    const [orphans] = await sequelize.query(`
+      SELECT t."whatsappId", COUNT(*) as total,
+             MAX(t."updatedAt") as ultimo_update,
+             MIN(t."createdAt") as primeiro_criado
+      FROM "Tickets" t
+      LEFT JOIN "Whatsapps" w ON t."whatsappId" = w.id
+      WHERE w.id IS NULL 
+        AND t."whatsappId" IS NOT NULL
+        AND t."companyId" = :companyId
+      GROUP BY t."whatsappId"
+      ORDER BY total DESC
+    `, { replacements: { companyId: conn31[0].companyId } });
+    
+    if (orphans.length === 0) {
+      console.log('\nNenhum ticket orfao encontrado!');
       
-      if (conn.status === 'connected') {
-        console.log(`\n✅ CONEXÃO #31 ESTÁ ATIVA!`);
-        console.log(`   O problema pode estar em outro lugar. Verifique os logs de envio.`);
-        return;
-      } else {
-        console.log(`\n❌ CONEXÃO #31 EXISTE MAS NÃO ESTÁ CONECTADA`);
-        console.log(`   Tente reconectar o dispositivo na interface.`);
-      }
-    } else {
-      console.log(`❌ Conexão #31 não existe no banco (foi apagada)`);
-    }
-    
-    // 2. Contar tickets com whatsappId=31
-    const [ticketCount] = await sequelize.query(`
-      SELECT COUNT(*) as count
-      FROM "Tickets" 
-      WHERE "whatsappId" = 31
-    `);
-    
-    const ticketsCount = parseInt(ticketCount[0].count);
-    console.log(`\n📊 Tickets com whatsappId=31: ${ticketsCount}`);
-    
-    if (ticketsCount === 0) {
-      console.log(`✅ Nenhum ticket órfão encontrado. Problema já resolvido.`);
+      // Verificar se ha tickets na #31
+      const [t31] = await sequelize.query(`
+        SELECT COUNT(*) as total FROM "Tickets" WHERE "whatsappId" = 31
+      `);
+      console.log(`Tickets na conexao #31: ${t31[0].total}`);
+      console.log('\nSe mensagens nao estao chegando, o problema nao e de tickets orfaos.');
       return;
     }
     
-    // 3. Buscar conexões disponíveis
-    const [availableConnections] = await sequelize.query(`
-      SELECT id, name, status, number, "channelType"
-      FROM "Whatsapps" 
-      WHERE status = 'connected' AND id != 31
-      ORDER BY id ASC
-    `);
+    console.log('\n=== TICKETS ORFAOS (conexao apagada) ===');
+    orphans.forEach(o => {
+      console.log(`  whatsappId=#${o.whatsappId}: ${o.total} tickets (ultimo: ${o.ultimo_update})`);
+    });
     
-    if (availableConnections.length === 0) {
-      console.log(`\n❌ NENHUMA CONEXÃO DISPONÍVEL PARA MIGRAÇÃO!`);
-      console.log(`   Você precisa ter pelo menos uma conexão ativa.`);
-      return;
+    const totalOrfaos = orphans.reduce((sum, o) => sum + parseInt(o.total), 0);
+    console.log(`\n  TOTAL ORFAOS: ${totalOrfaos} tickets`);
+    
+    // 4. Migrar todos os orfaos para conexao #31
+    console.log(`\n=== MIGRANDO ORFAOS PARA CONEXAO #31 ===`);
+    
+    let totalMigrados = 0;
+    for (const orphan of orphans) {
+      const [, rowCount] = await sequelize.query(`
+        UPDATE "Tickets" 
+        SET "whatsappId" = 31
+        WHERE "whatsappId" = :oldId
+          AND "companyId" = :companyId
+      `, { 
+        replacements: { oldId: orphan.whatsappId, companyId: conn31[0].companyId }
+      });
+      
+      const migrados = rowCount?.rowCount || parseInt(orphan.total);
+      totalMigrados += migrados;
+      console.log(`  #${orphan.whatsappId} -> #31: ${migrados} tickets migrados`);
     }
     
-    console.log(`\n🔌 CONEXÕES DISPONÍVEIS:`);
-    availableConnections.forEach(conn => {
-      console.log(`   ID ${conn.id}: ${conn.name || 'Sem nome'} (${conn.number || 'N/A'})`);
-    });
+    console.log(`\n  TOTAL MIGRADOS: ${totalMigrados} tickets`);
     
-    // 4. Executar migração automática para a primeira conexão disponível
-    const targetConnection = availableConnections[0];
-    
-    console.log(`\n🔧 MIGRANDO TICKETS PARA CONEXÃO #${targetConnection.id}...`);
-    
-    const [result] = await sequelize.query(`
-      UPDATE "Tickets" 
-      SET "whatsappId" = :targetId
-      WHERE "whatsappId" = 31
-      RETURNING id
-    `, {
-      replacements: { targetId: targetConnection.id },
-      type: Sequelize.QueryTypes.UPDATE
-    });
-    
-    console.log(`\n✅ MIGRAÇÃO CONCLUÍDA!`);
-    console.log(`   Tickets migrados: ${result.length || ticketsCount}`);
-    console.log(`   De: conexão #31 (apagada)`);
-    console.log(`   Para: conexão #${targetConnection.id} (${targetConnection.name || 'Sem nome'})`);
-    
-    // 5. Verificar se ainda há tickets órfãos
-    const [remainingOrphans] = await sequelize.query(`
-      SELECT COUNT(*) as count
+    // 5. Verificacao final
+    const [check] = await sequelize.query(`
+      SELECT COUNT(*) as total
       FROM "Tickets" t
       LEFT JOIN "Whatsapps" w ON t."whatsappId" = w.id
       WHERE w.id IS NULL AND t."whatsappId" IS NOT NULL
-    `);
+        AND t."companyId" = :companyId
+    `, { replacements: { companyId: conn31[0].companyId } });
     
-    const remainingCount = parseInt(remainingOrphans[0].count);
-    
-    if (remainingCount > 0) {
-      console.log(`\n⚠️  Ainda há ${remainingCount} tickets órfãos de outras conexões`);
-      console.log(`   Execute o script novamente ou verifique manualmente.`);
+    const remaining = parseInt(check[0].total);
+    if (remaining === 0) {
+      console.log('\nTodos os tickets orfaos foram migrados!');
     } else {
-      console.log(`\n🎉 TODOS OS TICKETS ÓRFÃOS FORAM RECUPERADOS!`);
+      console.log(`\nAinda restam ${remaining} tickets orfaos.`);
     }
     
-    // 6. Recomendações
-    console.log(`\n=== RECOMENDAÇÕES ===`);
-    console.log(`1. ✅ Tickets migrados com sucesso`);
-    console.log(`2. 🔄 Reinicie o backend para aplicar as mudanças`);
-    console.log(`3. 📱 Teste o envio de mensagens`);
-    console.log(`4. 🔍 Monitore os logs para garantir funcionamento`);
-    console.log(`\n💡 BLINDAGEM FUTURA:`);
-    console.log(`   - Ao recriar uma conexão, o sistema detectará automaticamente`);
-    console.log(`   - Tickets órfãos serão migrados para a nova conexão`);
-    console.log(`   - Não perderá mais dados ao apagar/recriar conexões`);
+    console.log('\nProximo passo: reinicie o backend para aplicar.');
     
   } catch (error) {
-    console.error('❌ Erro:', error.message);
-    console.error(error.stack);
+    console.error('Erro:', error.message);
   } finally {
     await sequelize.close();
   }
 }
 
-// Executar correção
-console.log('🚀 INICIANDO CORREÇÃO EMERGENCIAL DA CONEXÃO #31');
-console.log('================================================');
-fixConnection31();
+console.log('=== DIAGNOSTICO E CORRECAO DE TICKETS ORFAOS ===\n');
+fixOrphanTickets();

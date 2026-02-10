@@ -13,7 +13,9 @@ import makeWASocket, {
   makeCacheableSignalKeyStore,
 } from "@whiskeysockets/baileys";
 import { FindOptions } from "sequelize/types";
+import { Op } from "sequelize";
 import Whatsapp from "../models/Whatsapp";
+import Ticket from "../models/Ticket";
 import logger from "../utils/logger";
 import MAIN_LOGGER from "@whiskeysockets/baileys/lib/Utils/logger";
 import { useMultiFileAuthState } from "../helpers/useMultiFileAuthState";
@@ -555,6 +557,45 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               conflictCountMap.delete(id);
               reconnectingWhatsapps.delete(id);
               logger.info(`[wbot] Conexão estabelecida com sucesso para ${name}. Contadores de conflito resetados.`);
+
+              // BLINDAGEM: Migrar tickets órfãos de conexões antigas com o mesmo número
+              try {
+                const connNumber = whatsapp.number;
+                if (connNumber && connNumber !== "-") {
+                  const orphanTickets = await Ticket.findAll({
+                    attributes: ["id", "whatsappId"],
+                    where: {
+                      companyId,
+                      whatsappId: { [Op.ne]: whatsapp.id }
+                    },
+                    include: [{
+                      model: Whatsapp,
+                      as: "whatsapp",
+                      required: false,
+                      attributes: ["id"]
+                    }]
+                  });
+
+                  // Filtrar apenas tickets cujo whatsappId aponta para conexão inexistente
+                  const realOrphans = orphanTickets.filter(t => !(t as any).whatsapp);
+
+                  if (realOrphans.length > 0) {
+                    const oldIds = [...new Set(realOrphans.map(t => t.whatsappId))];
+                    const [updated] = await Ticket.update(
+                      { whatsappId: whatsapp.id },
+                      {
+                        where: {
+                          companyId,
+                          whatsappId: { [Op.in]: oldIds }
+                        }
+                      }
+                    );
+                    logger.warn(`[wbot] BLINDAGEM: Migrados ${updated} tickets órfãos (conexões ${oldIds.join(",")}) para #${whatsapp.id} (${connNumber})`);
+                  }
+                }
+              } catch (mergeErr: any) {
+                logger.error(`[wbot] Erro na blindagem de tickets órfãos: ${mergeErr?.message}`);
+              }
 
               // NOVO: Carregar labels do banco de dados primeiro (recuperação após reinício)
               try {
