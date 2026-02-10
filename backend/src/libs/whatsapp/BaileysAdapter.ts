@@ -339,7 +339,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
             content = {
               document: mediaData,
               mimetype: "application/pdf",
-              fileName: caption || "documento.pdf"
+              fileName: options.filename || "documento.pdf"
             };
             break;
           default:

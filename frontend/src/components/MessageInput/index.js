@@ -2115,8 +2115,13 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       disabled={loading}
                       tabIndex={-1}
                     >
-                      {showSelectMessageCheckbox ?
-                        <ReplyIcon size={18} className={classes.ForwardMessageIcons} /> : <SendIcon size={18} className={classes.sendMessageIcons} />}
+                      {loading ? (
+                        <CircularProgress className={classes.circleLoading} size={24} />
+                      ) : showSelectMessageCheckbox ? (
+                        <ReplyIcon size={18} className={classes.ForwardMessageIcons} />
+                      ) : (
+                        <SendIcon size={18} className={classes.sendMessageIcons} />
+                      )}
                     </IconButton>
                   </>
                 ) : recording ? (
@@ -2178,8 +2183,13 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                   onClick={showSelectMessageCheckbox ? handleOpenModalForward : handleSendMessage}
                   disabled={loading}
                 >
-                  {showSelectMessageCheckbox ?
-                    <ReplyIcon size={18} className={classes.ForwardMessageIcons} /> : <SendIcon size={18} className={classes.sendMessageIcons} />}
+                  {loading ? (
+                    <CircularProgress className={classes.circleLoading} size={24} />
+                  ) : showSelectMessageCheckbox ? (
+                    <ReplyIcon size={18} className={classes.ForwardMessageIcons} />
+                  ) : (
+                    <SendIcon size={18} className={classes.sendMessageIcons} />
+                  )}
                 </IconButton>
               </>
             )}

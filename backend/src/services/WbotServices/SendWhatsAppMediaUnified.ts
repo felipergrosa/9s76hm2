@@ -117,6 +117,14 @@ const SendWhatsAppMediaUnified = async ({
         caption: formattedBody,
         filename: media.originalname
       });
+      
+      logger.info(`[SendMediaUnified] Baileys - Mensagem enviada: ${JSON.stringify({
+        to: number.split("@")[0],
+        mediaType,
+        filename: media.originalname,
+        caption: formattedBody,
+        messageId: (sentMessage as any)?.key?.id || sentMessage?.id || 'unknown'
+      })}`);
     } 
     // ===== OFFICIAL API: Precisa de URL pública =====
     else if (channelType === "official") {
@@ -167,49 +175,56 @@ const SendWhatsAppMediaUnified = async ({
         caption: formattedBody,
         filename: media.originalname
       });
+      
+      logger.info(`[SendMediaUnified] Official API - Mensagem enviada: ${JSON.stringify({
+        to: number.split("@")[0],
+        mediaUrl,
+        mediaType,
+        filename: media.originalname,
+        caption: formattedBody,
+        messageId: sentMessage?.id || 'unknown'
+      })}`);
     } else {
       throw new AppError(`Tipo de canal não suportado: ${channelType}`, 400);
     }
 
     // Salvar mensagem no banco (para API Oficial e Baileys)
-    if (channelType === "official") {
-      const CreateMessageService = require("../MessageServices/CreateMessageService").default;
-      
-      // Extrair ID da mensagem
-      let messageId: string;
-      if ('id' in sentMessage) {
-        messageId = sentMessage.id;
-      } else if ((sentMessage as any).key?.id) {
-        messageId = (sentMessage as any).key.id;
-      } else {
-        messageId = `${Date.now()}`;
-      }
-      
-      // Determinar mediaType
-      let mediaTypeDb = "document";
-      if (mediaType === "image") mediaTypeDb = "image";
-      else if (mediaType === "video") mediaTypeDb = "video";
-      else if (mediaType === "audio") mediaTypeDb = "audio";
-      
-      // Salvar no banco
-      await CreateMessageService({
-        messageData: {
-          wid: messageId,
-          ticketId: ticket.id,
-          contactId: ticket.contactId,
-          body: formattedBody || media.originalname,
-          fromMe: true,
-          mediaType: mediaTypeDb,
-          mediaUrl: `contact${ticket.contactId}/${media.filename}`, // Incluir contactId no caminho
-          read: true,
-          ack: 1,
-          remoteJid: ticket.contact?.remoteJid,
-        },
-        companyId: ticket.companyId
-      });
-      
-      logger.info(`[SendMediaUnified] Mensagem de mídia salva no banco: ${messageId}`);
+    const CreateMessageService = require("../MessageServices/CreateMessageService").default;
+    
+    // Extrair ID da mensagem
+    let messageId: string;
+    if ('id' in sentMessage) {
+      messageId = sentMessage.id;
+    } else if ((sentMessage as any).key?.id) {
+      messageId = (sentMessage as any).key.id;
+    } else {
+      messageId = `${Date.now()}`;
     }
+    
+    // Determinar mediaType
+    let mediaTypeDb = "document";
+    if (mediaType === "image") mediaTypeDb = "image";
+    else if (mediaType === "video") mediaTypeDb = "video";
+    else if (mediaType === "audio") mediaTypeDb = "audio";
+    
+    // Salvar no banco
+    await CreateMessageService({
+      messageData: {
+        wid: messageId,
+        ticketId: ticket.id,
+        contactId: ticket.contactId,
+        body: formattedBody || media.originalname,
+        fromMe: true,
+        mediaType: mediaTypeDb,
+        mediaUrl: `contact${ticket.contactId}/${media.filename}`, // Incluir contactId no caminho
+        read: true,
+        ack: 1,
+        remoteJid: ticket.contact?.remoteJid,
+      },
+      companyId: ticket.companyId
+    });
+    
+    logger.info(`[SendMediaUnified] Mensagem de mídia salva no banco: ${messageId}`);
     
     // Atualizar última mensagem do ticket
     const lastMessage = formattedBody || `📎 ${media.originalname}`;
