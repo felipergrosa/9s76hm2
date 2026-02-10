@@ -114,29 +114,20 @@ export class BaileysAdapter implements IWhatsAppAdapter {
       // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
       const ws = (this.socket as any).ws;
       if (ws && typeof ws.readyState === 'number') {
-        const isOpen = ws.readyState === 1; // WebSocket.OPEN = 1
-        if (!isOpen) {
-          logger.warn(`[BaileysAdapter] WebSocket não está aberto. readyState=${ws.readyState} (0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)`);
+        if (ws.readyState !== 1) {
+          logger.warn(`[BaileysAdapter] WebSocket readyState=${ws.readyState} (esperado 1=OPEN)`);
+          return false;
         }
-        return isOpen;
       }
 
-      // Verificações adicionais para detectar problemas sutis
+      // Verificar se a sessão do usuário está carregada
       const user = this.socket.user;
       if (!user || !user.id) {
-        logger.warn(`[BaileysAdapter] Socket sem usuário válido. Sessão pode estar desconectada.`);
+        logger.warn(`[BaileysAdapter] Socket sem usuário válido.`);
         return false;
       }
 
-      // Verificar se há erros de conexão recentes
-      const authState = (this.socket as any).authState;
-      if (authState && authState.status !== 'connected') {
-        logger.warn(`[BaileysAdapter] Estado de autenticação não está 'connected': ${authState.status}`);
-        return false;
-      }
-
-      // Fallback: verificar se user está definido (indica conexão ativa)
-      return !!this.socket.user;
+      return true;
     } catch (error) {
       logger.error(`[BaileysAdapter] Erro ao verificar estado do socket: ${error.message}`);
       return false;
@@ -171,7 +162,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
    */
   private async sendWithRetry(jid: string, content: any): Promise<proto.WebMessageInfo> {
     try {
-      // Verificação mais rigorosa do estado da conexão
+      // Verificar se o socket está pronto, senão tentar reinicializar
       if (!this.isSocketReady()) {
         logger.warn(`[BaileysAdapter] Socket não pronto para envio, tentando reinicializar...`);
         await this.tryReinitializeSocket();
@@ -181,33 +172,19 @@ export class BaileysAdapter implements IWhatsAppAdapter {
         throw new WhatsAppAdapterError("Socket não disponível", "SOCKET_NOT_AVAILABLE");
       }
 
-      // Verificação adicional: estado da conexão Baileys
-      const connectionState = (this.socket as any).ws?.readyState;
-      if (connectionState !== 1) { // WebSocket.OPEN = 1
-        logger.error(`[BaileysAdapter] WebSocket fechado (readyState=${connectionState}). Mensagem não será enviada.`);
+      if (!this.isSocketReady()) {
         throw new WhatsAppAdapterError(
           "Conexão WhatsApp fechada. Reconecte o dispositivo.",
           "CONNECTION_CLOSED"
         );
       }
 
-      // Verificar se há problemas conhecidos que impedem envio
-      const user = this.socket.user;
-      if (!user || !user.id) {
-        logger.error(`[BaileysAdapter] Sessão WhatsApp não inicializada corretamente.`);
-        throw new WhatsAppAdapterError(
-          "Sessão WhatsApp não inicializada. Reconecte o dispositivo.",
-          "SESSION_NOT_INITIALIZED"
-        );
-      }
-
-      logger.debug(`[BaileysAdapter] Enviando mensagem para ${jid} via socket ${user.id}`);
+      logger.debug(`[BaileysAdapter] Enviando mensagem para ${jid} via socket ${this.socket.user?.id}`);
       
       const result = await this.socket.sendMessage(jid, content);
       
-      // Verificação pós-envio: validar se a mensagem foi realmente aceita
       if (!result || !result.key || !result.key.id) {
-        logger.error(`[BaileysAdapter] WhatsApp não retornou ID válido. Possível falha no envio.`);
+        logger.error(`[BaileysAdapter] WhatsApp não retornou ID válido.`);
         throw new WhatsAppAdapterError(
           "WhatsApp não aceitou a mensagem. Tente novamente.",
           "MESSAGE_NOT_ACCEPTED"
