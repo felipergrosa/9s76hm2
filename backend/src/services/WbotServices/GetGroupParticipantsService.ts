@@ -13,7 +13,8 @@ interface GroupParticipant {
   name: string; // Nome do participante (pushName ou número)
   isAdmin: boolean;
   isSuperAdmin: boolean;
-  profilePicUrl?: string;
+  profilePicUrl?: string; // URL do contato no banco
+  imgUrlBaileys?: string | null; // URL do avatar do Baileys store
   contactId?: number; // ID do contato no sistema, se existir
 }
 
@@ -85,6 +86,17 @@ const GetGroupParticipantsService = async ({
     throw new Error("Não foi possível obter dados do grupo. Verifique se a conexão está ativa.");
   }
 
+  // Sincronizar nome do grupo se mudou no WhatsApp
+  const currentSubject = groupMetadata.subject || groupContact.name || "Grupo";
+  if (currentSubject !== groupContact.name) {
+    try {
+      await groupContact.update({ name: currentSubject });
+      logger.info(`[GetGroupParticipants] Nome do grupo atualizado: "${groupContact.name}" → "${currentSubject}"`);
+    } catch (err) {
+      logger.warn(`[GetGroupParticipants] Erro ao atualizar nome do grupo: ${err}`);
+    }
+  }
+
   // Buscar foto do grupo
   let groupPicUrl: string | undefined;
   try {
@@ -101,6 +113,7 @@ const GetGroupParticipantsService = async ({
   // 2) Para @lid: buscar contato via mapeamento participant→contactId das mensagens salvas
   //    (mesma fonte que o chat usa para exibir nomes corretamente)
   // 3) Fallback: lidJid/remoteJid no contato, signalRepository, pushName
+  // 4) NOVO: Buscar em todo o banco por número parcial do LID
 
   // Pré-carregar contatos por número (participantes @s.whatsapp.net)
   const pnNumbers: string[] = [];
@@ -219,6 +232,7 @@ const GetGroupParticipantsService = async ({
     let participantNumber = rawNumber;
     let isValidPhoneNumber = false;
     let contactRecord: Contact | null = null;
+    let resolvedName: string | null = null;
 
     if (isLid) {
       // Buscar contato pelo mapeamento das mensagens salvas
@@ -231,6 +245,73 @@ const GetGroupParticipantsService = async ({
           participantNumber = contactNum;
           isValidPhoneNumber = true;
         }
+        resolvedName = contactRecord.name || null;
+      }
+
+      // NOVO: Tentar resolver via store do Baileys (chats/contacts)
+      // O store mantém mapeamento LID -> phoneNumber (número real)
+      if (!isValidPhoneNumber || !resolvedName) {
+        try {
+          // Acessar o store de contatos do Baileys
+          const store = (wbot as any).store;
+          if (store && store.contacts) {
+            // O store.contacts pode ser um Map ou um objeto
+            // Usar Object.values() como no GetDeviceContactsService
+            const allContacts = Object.values(store.contacts) as any[];
+            const baileysContact = allContacts.find(c => c.id === participantJid);
+            
+            if (baileysContact) {
+              // phoneNumber contém o número real quando id é LID
+              const realNumber = baileysContact.phoneNumber || 
+                                  baileysContact.id?.split("@")[0]?.replace(/\D/g, "");
+              if (realNumber && realNumber.length >= 7 && realNumber.length <= 15) {
+                participantNumber = realNumber;
+                isValidPhoneNumber = true;
+              }
+              // Usar nome do Baileys na ordem: name (salvo), notify (pushName), verifiedName
+              if (!resolvedName) {
+                resolvedName = baileysContact.name || 
+                              baileysContact.notify || 
+                              baileysContact.verifiedName || null;
+              }
+            }
+          }
+        } catch (err) {
+          logger.debug(`[GetGroupParticipants] Erro ao acessar store: ${err}`);
+        }
+      }
+
+      // NOVO: Tentar buscar contato no banco por número parcial (últimos dígitos do LID)
+      if (!isValidPhoneNumber && rawNumber.length >= 7) {
+        try {
+          // Alguns LIDs contêm o número no final
+          const possibleNumber = rawNumber.slice(-12); // Pegar últimos 12 dígitos
+          if (possibleNumber.length >= 10) {
+            const { canonical } = normalizePhoneNumber(possibleNumber);
+            if (canonical) {
+              const foundContact = await Contact.findOne({
+                where: {
+                  companyId,
+                  isGroup: false,
+                  [Op.or]: [
+                    { canonicalNumber: { [Op.like]: `%${possibleNumber}` } },
+                    { number: { [Op.like]: `%${possibleNumber}` } }
+                  ]
+                }
+              });
+              if (foundContact) {
+                contactRecord = foundContact;
+                participantNumber = foundContact.canonicalNumber || foundContact.number || possibleNumber;
+                isValidPhoneNumber = true;
+                if (!resolvedName) {
+                  resolvedName = foundContact.name;
+                }
+              }
+            }
+          }
+        } catch {
+          // Ignorar
+        }
       }
     } else {
       // Participante com número real (@s.whatsapp.net)
@@ -240,10 +321,15 @@ const GetGroupParticipantsService = async ({
       contactRecord = contactsMap.get(participantNumber) || contactsMap.get(rawNumber) || null;
     }
 
-    // Determinar nome: 1) contato do sistema, 2) pushName do WhatsApp, 3) número formatado
+    // Determinar nome: 1) resolvido anteriormente, 2) contato do sistema, 3) pushName do WhatsApp, 4) nome direto do Baileys, 5) número formatado
     let contactName: string;
-    if (contactRecord?.name) {
+    if (resolvedName) {
+      contactName = resolvedName;
+    } else if (contactRecord?.name) {
       contactName = contactRecord.name;
+    } else if (p.name) {
+      // Nome direto do participante no metadata do grupo
+      contactName = p.name;
     } else if (p.notify) {
       // pushName do WhatsApp (campo "notify" no Baileys)
       contactName = p.notify;
@@ -253,13 +339,46 @@ const GetGroupParticipantsService = async ({
       contactName = "Participante";
     }
 
-    // Número exibido: preferir número real, senão pushName, senão LID
-    const displayNumber = isValidPhoneNumber
-      ? participantNumber
-      : (p.notify || rawNumber);
+    // Número exibido: preferir número real formatado com DDI
+    let displayNumber: string;
+    if (isValidPhoneNumber && participantNumber.length >= 10) {
+      // Tentar formatar com DDI
+      const ddi = participantNumber.slice(0, 2);
+      const ddd = participantNumber.slice(2, 4);
+      const rest = participantNumber.slice(4);
+      if (rest.length === 9) {
+        // Celular: +55 11 91234-5678
+        displayNumber = `+${ddi} ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
+      } else if (rest.length === 8) {
+        // Fixo: +55 11 1234-5678
+        displayNumber = `+${ddi} ${ddd} ${rest.slice(0, 4)}-${rest.slice(4)}`;
+      } else {
+        displayNumber = `+${participantNumber}`;
+      }
+    } else {
+      displayNumber = p.notify || rawNumber;
+    }
 
-    // Usar foto do contato do sistema
-    const profilePicUrl = contactRecord?.profilePicUrl || undefined;
+    // Usar foto do contato do sistema ou do Baileys
+    let profilePicUrl = contactRecord?.profilePicUrl || undefined;
+    let imgUrlBaileys: string | null = null;
+    
+    // Se temos imgUrl do Baileys e é uma URL válida, usar como fallback
+    if (!profilePicUrl) {
+      // Tentar obter do store do Baileys diretamente
+      try {
+        const store = (wbot as any).store;
+        if (store && store.contacts) {
+          const allContacts = Object.values(store.contacts) as any[];
+          const bc = allContacts.find(c => c.id === participantJid);
+          if (bc && bc.imgUrl && bc.imgUrl !== 'changed' && bc.imgUrl.startsWith('http')) {
+            imgUrlBaileys = bc.imgUrl;
+          }
+        }
+      } catch {
+        // Ignorar
+      }
+    }
 
     participants.push({
       id: participantJid,
@@ -268,6 +387,7 @@ const GetGroupParticipantsService = async ({
       isAdmin,
       isSuperAdmin,
       profilePicUrl,
+      imgUrlBaileys,
       contactId: contactRecord?.id
     });
   }

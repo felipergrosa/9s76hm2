@@ -322,10 +322,14 @@ const ListContactsService = async ({
   }
 
   if (Array.isArray(foundationMonths) && foundationMonths.length > 0) {
-    const months = foundationMonths.filter(m => Number.isInteger(m) && m >= 1 && m <= 12);
+    // BUG-26 fix: Cast explícito para Number e validação antes de interpolar no SQL
+    const months = foundationMonths
+      .map(m => Number(m))
+      .filter(m => Number.isInteger(m) && m >= 1 && m <= 12);
     if (months.length > 0) {
       additionalWhere.push(literal('"foundationDate" IS NOT NULL'));
-      additionalWhere.push(literal(`EXTRACT(MONTH FROM "foundationDate") IN (${months.join(',')})`));
+      const safeMonths = months.map(m => String(m)).join(',');
+      additionalWhere.push(literal(`EXTRACT(MONTH FROM "foundationDate") IN (${safeMonths})`));
     }
   }
 

@@ -6,6 +6,9 @@ import { emitToCompanyRoom } from "../libs/socketEmit";
 // Garante que eventos não sejam perdidos mesmo em caso de falhas
 const REDIS_URI = process.env.REDIS_URI || process.env.REDIS_URI_MSG_CONN || "redis://127.0.0.1:6379";
 
+// BUG-21 fix: Contador atômico para garantir unicidade do jobId
+let jobCounter = 0;
+
 interface SocketEventPayload {
   companyId: number;
   room: string;
@@ -68,8 +71,8 @@ export async function queueSocketEvent(
     { companyId, room, event, payload },
     { 
       priority,
-      // Job ID único para evitar duplicatas
-      jobId: `${companyId}-${room}-${event}-${Date.now()}`
+      // BUG-21 fix: Job ID único com contador atômico para evitar colisão no mesmo ms
+      jobId: `${companyId}-${room}-${event}-${Date.now()}-${++jobCounter}`
     }
   );
   

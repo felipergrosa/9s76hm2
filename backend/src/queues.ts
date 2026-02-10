@@ -1715,6 +1715,14 @@ async function handleDispatchCampaign(job) {
       return;
     }
 
+    // BUG-15 fix: Verificar status final antes de processar
+    // Entre o agendamento e a execução do job, o registro pode ter sido cancelado/suprimido/já enviado
+    const validStatusesForDispatch = ["pending", "scheduled", "processing"];
+    if (!validStatusesForDispatch.includes(campaignShipping.status)) {
+      logger.warn(`[DispatchCampaign] Registro ${campaignShippingId} com status "${campaignShipping.status}" — ignorando (já processado ou cancelado)`);
+      return;
+    }
+
     // Atualiza status para processando
     await campaignShipping.update({ status: 'processing' });
 

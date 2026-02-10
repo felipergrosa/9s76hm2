@@ -5061,9 +5061,9 @@ const handleMessage = async (
         newStatus = "bot";
       }
 
+      // BUG-31 fix: Não incrementar unreadMessages aqui — FindOrCreateTicketService já atualizou
       await ticket.update({
-        status: newStatus,
-        unreadMessages: (ticket.unreadMessages || 0) + 1
+        status: newStatus
       });
 
       // Recarregar ticket com include completo (inclui queue.chatbots e queue.prompt)

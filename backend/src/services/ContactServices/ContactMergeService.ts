@@ -117,12 +117,13 @@ const mergeContacts = async (
 
     // Salvar o LID no contato real para referência futura
     if (lidContact.remoteJid && lidContact.remoteJid.includes("@lid")) {
-      // Podemos adicionar um campo lidJid no futuro
-      // Por enquanto, apenas logamos
-      logger.info("[ContactMergeService] LID original salvo para referência", {
+      updateData.lidJid = lidContact.remoteJid;
+      logger.info("[ContactMergeService] LID original salvo no contato real", {
         realContactId,
         lidJid: lidContact.remoteJid
       });
+    } else if (lidContact.lidJid) {
+      updateData.lidJid = lidContact.lidJid;
     }
 
     // Se o contato real não tem nome e o LID tem, copiar
@@ -213,7 +214,7 @@ const mergeAllDuplicateLids = async (companyId: number): Promise<{
   merged: number;
   errors: number;
 }> => {
-  const { Op, fn, col, where: seqWhere } = require("sequelize");
+  const { Op } = require("sequelize");
 
   // Buscar todos os contatos LID (remoteJid @lid ou número PENDING_)
   const lidContacts = await Contact.findAll({
@@ -232,15 +233,43 @@ const mergeAllDuplicateLids = async (companyId: number): Promise<{
 
   for (const lidContact of lidContacts) {
     try {
-      // Buscar contato real com mesmo nome (que não seja outro LID)
+      // Extrair lidJid para consultar LidMapping
+      const lidJid = lidContact.lidJid || lidContact.remoteJid;
+      if (!lidJid) {
+        logger.debug("[ContactMergeService] Contato LID sem lidJid/remoteJid, pulando", { id: lidContact.id });
+        continue;
+      }
+
+      // Consultar LidMapping para descobrir o número real (NUNCA mesclar por nome)
+      let LidMapping;
+      try {
+        LidMapping = (await import("../../models/LidMapping")).default;
+      } catch {
+        logger.warn("[ContactMergeService] Modelo LidMapping não disponível, abortando lote");
+        break;
+      }
+
+      const mapping = await LidMapping.findOne({
+        where: { lid: lidJid, companyId }
+      });
+
+      if (!mapping?.phoneNumber) {
+        // Sem mapeamento, não é possível identificar o contato real
+        continue;
+      }
+
+      const realNumber = mapping.phoneNumber;
+
+      // Buscar contato real pelo número confirmado via LidMapping
       const realContact = await Contact.findOne({
         where: {
           companyId,
           isGroup: false,
           id: { [Op.ne]: lidContact.id },
-          name: lidContact.name,
-          remoteJid: { [Op.like]: "%@s.whatsapp.net" },
-          number: { [Op.notLike]: "PENDING_%" }
+          [Op.or]: [
+            { canonicalNumber: realNumber },
+            { number: realNumber }
+          ]
         }
       });
 

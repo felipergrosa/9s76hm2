@@ -1,4 +1,4 @@
-import moment from "moment";
+﻿import moment from "moment";
 import * as Sentry from "@sentry/node";
 import { Op } from "sequelize";
 import SetTicketMessagesAsRead from "../../helpers/SetTicketMessagesAsRead";
@@ -25,6 +25,7 @@ import CreateMessageService from "../MessageServices/CreateMessageService";
 import FindOrCreateTicketService from "./FindOrCreateTicketService";
 import formatBody from "../../helpers/Mustache";
 import { Mutex } from "async-mutex";
+import logger from "../../utils/logger";
 import ApplyUserPersonalTagService from "../ContactServices/ApplyUserPersonalTagService";
 
 interface TicketData {
@@ -122,12 +123,12 @@ const UpdateTicketService = async ({
 
       // CQRS: Emitir evento via TicketEventBus
       ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, oldStatus);
-      console.log(117, "UpdateTicketService - CQRS")
+      logger.debug(`[UpdateTicketService] CQRS delete emitido (whatsappId null, closed) ticket=${ticket.id}`)
       return { ticket, oldStatus, oldUserId };
     }
 
     if (oldStatus === "closed") {
-      console.log(122, "UpdateTicketService")
+      logger.debug(`[UpdateTicketService] Reabrindo ticket fechado ${ticketId}`)
       let otherTicket = await Ticket.findOne({
         where: {
           contactId: ticket.contactId,
@@ -229,13 +230,16 @@ const UpdateTicketService = async ({
           // CQRS: Emitir evento via TicketEventBus
           ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, oldStatus);
 
-          console.log(277, "UpdateTicketService - CQRS")
+          logger.debug(`[UpdateTicketService] CQRS delete emitido (NPS) ticket=${ticket.id}`)
           return { ticket, oldStatus, oldUserId };
 
         }
       }
 
-      if (((!isNil(user?.farewellMessage) && user?.farewellMessage !== "") ||
+    // Grupos NUNCA são fechados - eles permanecem sempre abertos na aba "Grupos"
+    if (ticket.isGroup) {
+      // Grupos não recebem mensagem de encerramento
+    } else if (((!isNil(user?.farewellMessage) && user?.farewellMessage !== "") ||
         (!isNil(complationMessage) && complationMessage !== "")) &&
         (sendFarewellMessage || sendFarewellMessage === undefined)) {
 
@@ -300,16 +304,21 @@ const UpdateTicketService = async ({
 
       await ticketTraking.save();
 
-      await ticket.update({
-        status: "closed",
-        lastFlowId: null,
-        dataWebhook: null,
-        hashFlowId: null,
-      });
+      // Grupos NUNCA são fechados
+      if (!ticket.isGroup) {
+        await ticket.update({
+          status: "closed",
+          lastFlowId: null,
+          dataWebhook: null,
+          hashFlowId: null,
+        });
 
-      // CQRS: Emitir evento via TicketEventBus
-      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, oldStatus);
-      console.log(309, "UpdateTicketService - CQRS")
+        // CQRS: Emitir evento via TicketEventBus
+        ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, oldStatus);
+        logger.debug(`[UpdateTicketService] CQRS delete emitido (closed) ticket=${ticket.id}`)
+      } else {
+        logger.info(`[UpdateTicketService] Grupo ${ticket.id} - fechamento ignorado, grupo permanece aberto`);
+      }
       return { ticket, oldStatus, oldUserId };
     }
     let queue
@@ -374,7 +383,8 @@ const UpdateTicketService = async ({
 
 
 
-        await newTicketTransfer.reload();
+        // Recarregar com todas as associações para emissão Socket.IO completa
+        newTicketTransfer = await ShowTicketService(newTicketTransfer.id, companyId);
 
         if (settings.sendMsgTransfTicket === "enabled" && settings.transferMessage && settings.transferMessage.trim() !== "") {
           // Mensagem de transferencia da FILA
@@ -436,57 +446,28 @@ const UpdateTicketService = async ({
           //       }
         }
 
-        if (oldUserId !== userId && oldQueueId === queueId && !isNil(oldUserId) && !isNil(userId)) {
-          //transferiu o atendimento para fila
+        // BUG-9 fix: Removida condicao duplicada (else if identico ao if)
+        if (oldUserId !== userId && !isNil(oldUserId) && !isNil(userId)) {
           await CreateLogTicketService({
             userId: oldUserId,
             queueId: oldQueueId,
             ticketId,
             type: "transfered"
           });
-
-        } else
-          if (oldUserId !== userId && oldQueueId === queueId && !isNil(oldUserId) && !isNil(userId)) {
-            //transferiu o atendimento para atendente na mesma fila
-            await CreateLogTicketService({
-              userId: oldUserId,
-              queueId: oldQueueId,
-              ticketId,
-              type: "transfered"
-            });
-            //recebeu atendimento
-            await CreateLogTicketService({
-              userId,
-              queueId: oldQueueId,
-              ticketId: newTicketTransfer.id,
-              type: "receivedTransfer"
-            });
-          } else
-            if (oldUserId !== userId && oldQueueId !== queueId && !isNil(oldUserId) && !isNil(userId)) {
-              //transferiu o atendimento para fila e atendente
-
-              await CreateLogTicketService({
-                userId: oldUserId,
-                queueId: oldQueueId,
-                ticketId,
-                type: "transfered"
-              });
-              //recebeu atendimento
-              await CreateLogTicketService({
-                userId,
-                queueId,
-                ticketId: newTicketTransfer.id,
-                type: "receivedTransfer"
-              });
-            } else
-              if (oldUserId !== undefined && isNil(userId) && oldQueueId !== queueId && !isNil(queueId)) {
-                await CreateLogTicketService({
-                  userId: oldUserId,
-                  queueId: oldQueueId,
-                  ticketId,
-                  type: "transfered"
-                });
-              }
+          await CreateLogTicketService({
+            userId,
+            queueId: queueId || oldQueueId,
+            ticketId: newTicketTransfer.id,
+            type: "receivedTransfer"
+          });
+        } else if (oldUserId !== undefined && isNil(userId) && oldQueueId !== queueId && !isNil(queueId)) {
+          await CreateLogTicketService({
+            userId: oldUserId,
+            queueId: oldQueueId,
+            ticketId,
+            type: "transfered"
+          });
+        }
 
         if (newTicketTransfer.status !== oldStatus || newTicketTransfer.user?.id !== oldUserId) {
           await ticketTraking.update({
@@ -504,7 +485,8 @@ const UpdateTicketService = async ({
       } else {
         if (settings.sendMsgTransfTicket === "enabled" && settings.transferMessage && settings.transferMessage.trim() !== "") {
           // Mensagem de transferencia da FILA
-          if (oldQueueId !== queueId || oldUserId !== userId && !isNil(oldQueueId) && !isNil(queueId) && ticket.whatsapp.status === 'CONNECTED') {
+          // BUG-10 fix: Corrigir precedencia de operador (|| vs &&)
+          if ((oldQueueId !== queueId || oldUserId !== userId) && !isNil(oldQueueId) && !isNil(queueId) && ticket.whatsapp.status === 'CONNECTED') {
 
             const wbot = await GetTicketWbot(ticket);
             const msgtxt = formatBody(`\u200e ${settings.transferMessage.replace("${queue.name}", queue?.name)}`, ticket);
@@ -584,57 +566,28 @@ const UpdateTicketService = async ({
           await CreateMessageService({ messageData, companyId: ticket.companyId });
         }
 
-        if (oldUserId !== userId && oldQueueId === queueId && !isNil(oldUserId) && !isNil(userId)) {
-          //transferiu o atendimento para fila
+        // BUG-9 fix: Removida condicao duplicada (else if identico ao if)
+        if (oldUserId !== userId && !isNil(oldUserId) && !isNil(userId)) {
           await CreateLogTicketService({
             userId: oldUserId,
             queueId: oldQueueId,
             ticketId,
             type: "transfered"
           });
-
-        } else
-          if (oldUserId !== userId && oldQueueId === queueId && !isNil(oldUserId) && !isNil(userId)) {
-            //transferiu o atendimento para atendente na mesma fila
-            await CreateLogTicketService({
-              userId: oldUserId,
-              queueId: oldQueueId,
-              ticketId,
-              type: "transfered"
-            });
-            //recebeu atendimento
-            await CreateLogTicketService({
-              userId,
-              queueId: oldQueueId,
-              ticketId: ticket.id,
-              type: "receivedTransfer"
-            });
-          } else
-            if (oldUserId !== userId && oldQueueId !== queueId && !isNil(oldUserId) && !isNil(userId)) {
-              //transferiu o atendimento para fila e atendente
-
-              await CreateLogTicketService({
-                userId: oldUserId,
-                queueId: oldQueueId,
-                ticketId,
-                type: "transfered"
-              });
-              //recebeu atendimento
-              await CreateLogTicketService({
-                userId,
-                queueId,
-                ticketId: ticket.id,
-                type: "receivedTransfer"
-              });
-            } else
-              if (oldUserId !== undefined && isNil(userId) && oldQueueId !== queueId && !isNil(queueId)) {
-                await CreateLogTicketService({
-                  userId: oldUserId,
-                  queueId: oldQueueId,
-                  ticketId,
-                  type: "transfered"
-                });
-              }
+          await CreateLogTicketService({
+            userId,
+            queueId: queueId || oldQueueId,
+            ticketId: ticket.id,
+            type: "receivedTransfer"
+          });
+        } else if (oldUserId !== undefined && isNil(userId) && oldQueueId !== queueId && !isNil(queueId)) {
+          await CreateLogTicketService({
+            userId: oldUserId,
+            queueId: oldQueueId,
+            ticketId,
+            type: "transfered"
+          });
+        }
 
         // if (ticket.status !== oldStatus || ticket.user?.id !== oldUserId) {
         //   await ticketTraking.update({
@@ -659,7 +612,13 @@ const UpdateTicketService = async ({
       }
     }
 
-    status = queue && queue.closeTicket ? "closed" : status;
+    // Grupos NUNCA devem ser fechados automaticamente - sempre mantêm status "group"
+    if (ticket.isGroup && status === "closed") {
+      logger.info(`[UpdateTicketService] Grupo ${ticket.id} - impedindo fechamento, mantendo status "group"`);
+      status = "group";
+    }
+
+    status = queue && queue.closeTicket && !ticket.isGroup ? "closed" : status;
 
     await ticket.update({
       status,
@@ -737,7 +696,7 @@ const UpdateTicketService = async ({
 
     return { ticket, oldStatus, oldUserId };
   } catch (err) {
-    console.log("erro ao atualizar o ticket", ticketId, "ticketData", ticketData)
+    logger.error(`[UpdateTicketService] Erro ao atualizar ticket ${ticketId}`, { ticketData })
     Sentry.captureException(err);
     throw err; // Relança o erro para que o controller possa tratá-lo adequadamente
   }

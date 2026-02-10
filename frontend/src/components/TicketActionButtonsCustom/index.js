@@ -306,6 +306,17 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
     };
 
 
+    const handleCloseTicket = async (e) => {
+        // Se for grupo, apenas sai da aba sem fechar o ticket
+        if (ticket.isGroup) {
+            setCurrentTicket({ id: null, code: null });
+            history.push("/tickets");
+            return;
+        }
+        // Para tickets normais, abre o modal de confirmação
+        handleClickOpen(e);
+    };
+
     const handleUpdateTicketStatus = async (e, status, userId) => {
         setLoading(true);
         try {
@@ -458,7 +469,7 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                         <>
                             <IconButton className={classes.bottomButtonVisibilityIcon}>
                                 <Tooltip title={i18n.t("messagesList.header.buttons.resolve")}>
-                                    <HighlightOffIcon onClick={handleClickOpen} />
+                                    <HighlightOffIcon onClick={handleCloseTicket} />
                                 </Tooltip>
                             </IconButton>
                             <IconButton className={classes.bottomButtonVisibilityIcon}>
@@ -575,6 +586,12 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                                 {i18n.t("contactModal.form.chatBotContact")} {disableBot ? "(desligado)" : "(ligado)"}
                             </MenuItem>
                         </>
+                    )}
+                    {ticket.isGroup && (
+                        <MenuItem onClick={() => { handleCloseMenu(); handleCloseTicket(); }}>
+                            <HighlightOffIcon style={{ color: '#546e7a', marginRight: 10 }} />
+                            Sair da aba (não fecha grupo)
+                        </MenuItem>
                     )}
                     <MenuItem onClick={handleOpenConfirmationModal}>
                         <DeleteForeverIcon style={{ color: '#d32f2f', marginRight: 10 }} />

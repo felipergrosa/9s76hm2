@@ -449,6 +449,12 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
     }, []);
 
     const handleCloseTicket = async (id) => {
+        // Se for grupo, apenas navega para /tickets sem tentar fechar
+        if (ticket.isGroup) {
+            history.push(`/tickets/`);
+            return;
+        }
+        
         const setting = await getSetting(
             {
                 "column": "requiredTag"

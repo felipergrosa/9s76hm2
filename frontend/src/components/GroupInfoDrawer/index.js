@@ -719,7 +719,7 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
                 >
                   <ListItemAvatar>
                     <Avatar
-                      src={participant.profilePicUrl || ""}
+                      src={participant.profilePicUrl || participant.imgUrlBaileys || ""}
                       className={classes.participantAvatar}
                     >
                       {(participant.name || "?")[0]?.toUpperCase()}

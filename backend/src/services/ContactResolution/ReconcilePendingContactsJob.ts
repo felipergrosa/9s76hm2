@@ -3,8 +3,10 @@ import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
 import LidMapping from "../../models/LidMapping";
+import sequelize from "../../database";
 import logger from "../../utils/logger";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { getIO } from "../../libs/socket";
 
 /**
  * FASE 4: Job assíncrono de reconciliação de contatos PENDING_
@@ -102,34 +104,51 @@ export async function reconcilePendingContacts(
         });
 
         if (realContact) {
-          // 3a. MERGE: transferir tickets e mensagens
-          const ticketsUpdated = await Ticket.update(
-            { contactId: realContact.id },
-            { where: { contactId: pendingContact.id } }
-          );
+          // 3a. MERGE: transferir tickets e mensagens (com transação atômica)
+          const transaction = await sequelize.transaction();
+          try {
+            const ticketsUpdated = await Ticket.update(
+              { contactId: realContact.id },
+              { where: { contactId: pendingContact.id }, transaction }
+            );
 
-          const messagesUpdated = await Message.update(
-            { contactId: realContact.id },
-            { where: { contactId: pendingContact.id } }
-          );
+            const messagesUpdated = await Message.update(
+              { contactId: realContact.id },
+              { where: { contactId: pendingContact.id }, transaction }
+            );
 
-          // Atualizar lidJid do contato real
-          if (!realContact.lidJid && lidJid) {
-            await realContact.update({ lidJid });
+            // Atualizar lidJid do contato real
+            if (!realContact.lidJid && lidJid) {
+              await realContact.update({ lidJid }, { transaction });
+            }
+
+            // Remover contato fantasma
+            await pendingContact.destroy({ transaction });
+
+            await transaction.commit();
+
+            result.merged++;
+            result.reconciled++;
+            logger.info("[ReconcileJob] MERGE: contato pendente mesclado", {
+              pendingId: pendingContact.id,
+              realId: realContact.id,
+              ticketsMoved: ticketsUpdated[0],
+              messagesMoved: messagesUpdated[0],
+              phoneNumber: normalizedNumber
+            });
+
+            // Emitir eventos Socket.IO para atualizar frontend
+            try {
+              const io = getIO();
+              io.of(`/workspace-${companyId}`)
+                .emit(`company-${companyId}-contact`, { action: "delete", contactId: pendingContact.id });
+              io.of(`/workspace-${companyId}`)
+                .emit(`company-${companyId}-contact`, { action: "update", contact: realContact });
+            } catch { /* socket não crítico */ }
+          } catch (txErr: any) {
+            await transaction.rollback();
+            throw txErr;
           }
-
-          // Remover contato fantasma
-          await pendingContact.destroy();
-
-          result.merged++;
-          result.reconciled++;
-          logger.info("[ReconcileJob] MERGE: contato pendente mesclado", {
-            pendingId: pendingContact.id,
-            realId: realContact.id,
-            ticketsMoved: ticketsUpdated[0],
-            messagesMoved: messagesUpdated[0],
-            phoneNumber: normalizedNumber
-          });
         } else {
           // 3b. PROMOVER: atualizar contato pendente com número real
           await pendingContact.update({
@@ -146,6 +165,13 @@ export async function reconcilePendingContacts(
             phoneNumber: normalizedNumber,
             lidJid
           });
+
+          // Emitir evento Socket.IO para atualizar frontend
+          try {
+            const io = getIO();
+            io.of(`/workspace-${companyId}`)
+              .emit(`company-${companyId}-contact`, { action: "update", contact: pendingContact });
+          } catch { /* socket não crítico */ }
         }
       } catch (err: any) {
         result.failed++;

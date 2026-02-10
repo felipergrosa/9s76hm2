@@ -81,43 +81,10 @@ export const resolveLidToRealNumber = async (
       }
     }
 
-    // Fallback: tenta usar onWhatsApp para validar se o LID é um número válido
-    try {
-      const lidNumber = extractLidNumber(lidJid);
-      
-      // Tenta adicionar código do Brasil se não tiver
-      let possibleNumbers = [lidNumber];
-      
-      // Se o número não começa com código de país, tenta adicionar 55
-      if (!lidNumber.startsWith("55") && lidNumber.length === 11) {
-        possibleNumbers.push(`55${lidNumber}`);
-      }
-      
-      for (const testNumber of possibleNumbers) {
-        try {
-          const [result] = await wbot.onWhatsApp(`${testNumber}@s.whatsapp.net`);
-          
-          if (result && result.exists) {
-            const realJid = result.jid;
-            const realNumber = realJid.replace("@s.whatsapp.net", "").replace("@c.us", "");
-            
-            logger.info(`[ResolveLID] ✓ LID ${lidJid} resolvido via onWhatsApp para ${realJid}`);
-            
-            return {
-              success: true,
-              realNumber,
-              realJid
-            };
-          }
-        } catch (err) {
-          logger.debug(`[ResolveLID] Falha ao testar número ${testNumber}:`, err);
-        }
-      }
-    } catch (err) {
-      logger.warn(`[ResolveLID] Falha no fallback onWhatsApp:`, err);
-    }
+    // NOTA: Fallback via onWhatsApp() removido (risco de banimento se chamado em massa)
+    // Resolução deve ser feita apenas via store do Baileys ou LidMapping no banco
 
-    logger.warn(`[ResolveLID] ❌ Não foi possível resolver LID ${lidJid}`);
+    logger.warn(`[ResolveLID] LID ${lidJid} não encontrado no store do Baileys`);
     
     return {
       success: false,
@@ -176,15 +143,17 @@ export const findAndMergeLidDuplicates = async (
   try {
     logger.info(`[FindMergeLID] Procurando contatos LID duplicados para companyId=${companyId}`);
 
-    // Busca todos os contatos com LID
+    // Busca todos os contatos com LID (number @lid OU PENDING_ OU remoteJid @lid)
     const lidContacts = await Contact.findAll({
       where: {
         companyId,
-        number: {
-          [Op.like]: "%@lid"
-        }
+        [Op.or]: [
+          { number: { [Op.like]: "%@lid" } },
+          { number: { [Op.like]: "PENDING_%" } },
+          { remoteJid: { [Op.like]: "%@lid" } }
+        ]
       },
-      attributes: ["id", "number", "name"]
+      attributes: ["id", "number", "name", "remoteJid"]
     });
 
     if (lidContacts.length === 0) {
@@ -227,11 +196,13 @@ export const findAndMergeLidDuplicates = async (
               mergedCount++;
             }
           } else {
-            // Não existe contato real, apenas atualiza o número do LID
+            // Não existe contato real, apenas atualiza o número do LID (com canonicalNumber)
             logger.info(`[FindMergeLID] Atualizando contato LID ${lidContact.id} para número real ${resolution.realNumber}`);
             
             await lidContact.update({
-              number: resolution.realNumber
+              number: resolution.realNumber,
+              canonicalNumber: resolution.realNumber,
+              remoteJid: `${resolution.realNumber}@s.whatsapp.net`
             });
             
             mergedCount++;

@@ -77,10 +77,10 @@ const FindOrCreateTicketService = async (
         updates.whatsappId = whatsapp.id;
         logger.info(`[FindOrCreateTicket] Grupo ticket ${ticket.id}: atualizando whatsappId ${ticket.whatsappId} -> ${whatsapp.id}`);
       }
-      // Se encontrou ticket fechado, reabrir como "group"
-      if (ticket.status === "closed") {
+      // Se encontrou ticket fechado ou com status incorreto (lgpd, etc), reabrir como "group"
+      if (ticket.status === "closed" || ticket.status === "lgpd" || ticket.status === "nps" || ticket.status === "bot" || ticket.status === "pending") {
         updates.status = "group";
-        logger.info(`[FindOrCreateTicket] Reabrindo ticket de grupo ${ticket.id} (estava closed)`);
+        logger.info(`[FindOrCreateTicket] Reabrindo ticket de grupo ${ticket.id} (estava ${ticket.status})`);
       }
       await ticket.update(updates);
       ticket = await ShowTicketService(ticket.id, companyId);
@@ -378,7 +378,7 @@ const FindOrCreateTicketService = async (
       isActiveDemand: false,
     };
 
-    if (DirectTicketsToWallets && contact.id) {
+    if (DirectTicketsToWallets && contact.id && !groupContact) {
       const wallet: any = contact;
       const wallets = await wallet.getWallets();
       if (wallets && wallets[0]?.id) {
@@ -388,12 +388,7 @@ const FindOrCreateTicketService = async (
         const walletOwner = await User.findByPk(wallets[0].id);
 
         // Regra de Ouro: Só atribui se estiver ONLINE
-        // Grupos SEMPRE mantêm status "group" - Smart Routing não sobrescreve
-        if (groupContact) {
-          ticketData.status = "group";
-          ticketData.userId = wallets[0].id;
-          logger.info(`[SmartRouting] Grupo mantém status "group", atribuído a wallet owner: ${walletOwner?.name}`);
-        } else if (walletOwner && walletOwner.online) {
+        if (walletOwner && walletOwner.online) {
           ticketData.status = (!isImported && !isNil(settings?.enableLGPD)
             && openAsLGPD) ?
             "lgpd" : "open";

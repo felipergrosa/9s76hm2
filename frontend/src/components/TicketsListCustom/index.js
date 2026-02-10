@@ -99,96 +99,101 @@ const reducer = (state, action) => {
 
     if (action.type === "LOAD_TICKETS") {
         const newTickets = action.payload;
+        // BUG-24 fix: Trabalhar sobre cópia para evitar mutação direta do state
+        let nextState = [...state];
 
         newTickets.forEach((ticket) => {
-            const ticketIndex = state.findIndex((t) => t.id === ticket.id);
+            const ticketIndex = nextState.findIndex((t) => t.id === ticket.id);
             if (ticketIndex !== -1) {
-                state[ticketIndex] = ticket;
+                nextState[ticketIndex] = ticket;
                 if (ticket.unreadMessages > 0) {
-                    state.unshift(state.splice(ticketIndex, 1)[0]);
+                    const [moved] = nextState.splice(ticketIndex, 1);
+                    nextState.unshift(moved);
                 }
             } else {
-                state.push(ticket);
+                nextState.push(ticket);
             }
         });
         if (sortDir && ['ASC', 'DESC'].includes(sortDir)) {
-            sortDir === 'ASC' ? state.sort(ticketSortAsc) : state.sort(ticketSortDesc);
+            nextState.sort(sortDir === 'ASC' ? ticketSortAsc : ticketSortDesc);
         }
 
-        return [...state];
+        return nextState;
     }
 
     if (action.type === "RESET_UNREAD") {
         const ticketId = action.payload;
+        let nextState = [...state];
 
-        const ticketIndex = state.findIndex((t) => t.id === ticketId);
+        const ticketIndex = nextState.findIndex((t) => t.id === ticketId);
         if (ticketIndex !== -1) {
-            state[ticketIndex].unreadMessages = 0;
+            nextState[ticketIndex] = { ...nextState[ticketIndex], unreadMessages: 0 };
         }
 
         if (sortDir && ['ASC', 'DESC'].includes(sortDir)) {
-            sortDir === 'ASC' ? state.sort(ticketSortAsc) : state.sort(ticketSortDesc);
+            nextState.sort(sortDir === 'ASC' ? ticketSortAsc : ticketSortDesc);
         }
 
-        return [...state];
+        return nextState;
     }
 
     if (action.type === "UPDATE_TICKET") {
         const ticket = action.payload;
+        let nextState = [...state];
 
-        const ticketIndex = state.findIndex((t) => t.id === ticket.id);
+        const ticketIndex = nextState.findIndex((t) => t.id === ticket.id);
         if (ticketIndex !== -1) {
-            state[ticketIndex] = ticket;
+            nextState[ticketIndex] = ticket;
         } else {
-            state.unshift(ticket);
+            nextState.unshift(ticket);
         }
         if (sortDir && ['ASC', 'DESC'].includes(sortDir)) {
-            sortDir === 'ASC' ? state.sort(ticketSortAsc) : state.sort(ticketSortDesc);
+            nextState.sort(sortDir === 'ASC' ? ticketSortAsc : ticketSortDesc);
         }
 
-        return [...state];
+        return nextState;
     }
 
     if (action.type === "UPDATE_TICKET_UNREAD_MESSAGES") {
         const ticket = action.payload;
+        let nextState = [...state];
 
-        const ticketIndex = state.findIndex((t) => t.id === ticket.id);
+        const ticketIndex = nextState.findIndex((t) => t.id === ticket.id);
         if (ticketIndex !== -1) {
-            state[ticketIndex] = ticket;
-            state.unshift(state.splice(ticketIndex, 1)[0]);
+            nextState[ticketIndex] = ticket;
+            const [moved] = nextState.splice(ticketIndex, 1);
+            nextState.unshift(moved);
         } else {
             if (action.status === action.payload.status) {
-                state.unshift(ticket);
+                nextState.unshift(ticket);
             }
         }
         if (sortDir && ['ASC', 'DESC'].includes(sortDir)) {
-            sortDir === 'ASC' ? state.sort(ticketSortAsc) : state.sort(ticketSortDesc);
+            nextState.sort(sortDir === 'ASC' ? ticketSortAsc : ticketSortDesc);
         }
 
-        return [...state];
+        return nextState;
     }
 
     if (action.type === "UPDATE_TICKET_CONTACT") {
         const contact = action.payload;
-        const ticketIndex = state.findIndex((t) => t.contactId === contact.id);
+        let nextState = [...state];
+        const ticketIndex = nextState.findIndex((t) => t.contactId === contact.id);
         if (ticketIndex !== -1) {
-            state[ticketIndex].contact = contact;
+            nextState[ticketIndex] = { ...nextState[ticketIndex], contact };
         }
-        return [...state];
+        return nextState;
     }
 
     if (action.type === "DELETE_TICKET") {
         const ticketId = action.payload;
-        const ticketIndex = state.findIndex((t) => t.id === ticketId);
-        if (ticketIndex !== -1) {
-            state.splice(ticketIndex, 1);
-        }
+        let nextState = state.filter((t) => t.id !== ticketId);
 
         if (sortDir && ['ASC', 'DESC'].includes(sortDir)) {
-            sortDir === 'ASC' ? state.sort(ticketSortAsc) : state.sort(ticketSortDesc);
+            nextState.sort(sortDir === 'ASC' ? ticketSortAsc : ticketSortDesc);
         }
 
-        return [...state];
+        return nextState;
     }
 
     if (action.type === "RESET") {
@@ -320,6 +325,9 @@ const TicketsListCustom = (props) => {
 
         const shouldUpdateTicket = (ticket) => {
             if (!canViewTicket(ticket)) return false;
+            const _user = userRef.current;
+            // Tickets atribuídos diretamente ao usuário SEMPRE aparecem (ex: transferência)
+            if (ticket?.userId && ticket.userId === _user?.id) return true;
             const _selectedQueueIds = selectedQueueIdsRef.current;
             const _showTicketWithoutQueue = showTicketWithoutQueueRef.current;
             return ((!ticket?.queueId && _showTicketWithoutQueue) || _selectedQueueIds.indexOf(ticket?.queueId) > -1);
@@ -356,8 +364,11 @@ const TicketsListCustom = (props) => {
             if (data.action === "update" && data.ticket) {
                 if (shouldUpdateTicket(data.ticket) && data.ticket.status === status) {
                     // Ticket pertence a esta aba → adicionar/atualizar
+                    // Mover ao topo se tem mensagens não lidas
+                    // (tickets novos na lista já vão ao topo via unshift no reducer UPDATE_TICKET)
+                    const shouldMoveToTop = data.ticket.unreadMessages > 0;
                     dispatch({
-                        type: "UPDATE_TICKET",
+                        type: shouldMoveToTop ? "UPDATE_TICKET_UNREAD_MESSAGES" : "UPDATE_TICKET",
                         payload: data.ticket,
                         status: status,
                         sortDir: _sortTickets
