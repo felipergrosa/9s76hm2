@@ -11,6 +11,36 @@ interface DispatchContactWebhookParams {
   source?: string;
 }
 
+// Circuit breaker: após CIRCUIT_THRESHOLD falhas consecutivas,
+// para de tentar por CIRCUIT_COOLDOWN_MS para não poluir logs
+const CIRCUIT_THRESHOLD = 5;
+const CIRCUIT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos
+
+const circuitState = new Map<number, { failures: number; openUntil: number }>();
+
+const isCircuitOpen = (companyId: number): boolean => {
+  const state = circuitState.get(companyId);
+  if (!state) return false;
+  if (state.openUntil > Date.now()) return true;
+  // Cooldown expirou, resetar
+  circuitState.delete(companyId);
+  return false;
+};
+
+const recordFailure = (companyId: number): void => {
+  const state = circuitState.get(companyId) || { failures: 0, openUntil: 0 };
+  state.failures += 1;
+  if (state.failures >= CIRCUIT_THRESHOLD) {
+    state.openUntil = Date.now() + CIRCUIT_COOLDOWN_MS;
+    logger.warn(`[DispatchContactWebhookService] Circuit breaker ABERTO para companyId=${companyId}. Webhook suspenso por 5 minutos após ${state.failures} falhas consecutivas.`);
+  }
+  circuitState.set(companyId, state);
+};
+
+const recordSuccess = (companyId: number): void => {
+  circuitState.delete(companyId);
+};
+
 const DispatchContactWebhookService = async ({
   companyId,
   contact,
@@ -18,6 +48,11 @@ const DispatchContactWebhookService = async ({
   source
 }: DispatchContactWebhookParams): Promise<void> => {
   try {
+    // Circuit breaker: se o circuito está aberto, não tenta
+    if (isCircuitOpen(companyId)) {
+      return;
+    }
+
     // 1) Tenta integração do tipo "webhook" (mais genérica)
     let integration = await GetIntegrationByTypeService({
       companyId,
@@ -44,63 +79,27 @@ const DispatchContactWebhookService = async ({
       contact: contact?.toJSON ? contact.toJSON() : contact
     };
 
-    const maxRetries = 3;
-    let lastError: any = null;
+    try {
+      await axios.post(integration.urlN8N, payload, {
+        headers: {
+          "Content-Type": "application/json"
+        },
+        timeout: 10000
+      });
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        await axios.post(integration.urlN8N, payload, {
-          headers: {
-            "Content-Type": "application/json"
-          },
-          timeout: 30000 // Aumentado de 15s para 30s
-        });
+      recordSuccess(companyId);
+    } catch (error: any) {
+      recordFailure(companyId);
 
-        // Sucesso - sair do loop
-        if (attempt > 1) {
-          logger.info(`[DispatchContactWebhookService] Webhook enviado com sucesso na tentativa ${attempt}/${maxRetries}`);
-        }
-        return;
+      // Logar apenas uma vez (sem retry) para não poluir
+      const code = error?.code;
+      const status = error?.response?.status;
 
-      } catch (error: any) {
-        lastError = error;
-
-        // Se for última tentativa ou erro não-retriable, não tentar novamente
-        const isRetriable = !error?.response || error.response.status >= 500 || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT';
-
-        if (attempt < maxRetries && isRetriable) {
-          const backoffMs = attempt * 1000; // 1s, 2s, 3s
-          logger.warn(`[DispatchContactWebhookService] Tentativa ${attempt}/${maxRetries} falhou, aguardando ${backoffMs}ms antes de retry`, {
-            status: error?.response?.status,
-            code: error?.code,
-            message: error?.message
-          });
-          await new Promise(resolve => setTimeout(resolve, backoffMs));
-        } else {
-          break; // Não retriable ou última tentativa
-        }
-      }
+      // Log apenas em nível debug para não poluir
+      logger.debug(`[DispatchContactWebhookService] Falha webhook: ${code || status || error?.message} (contactId=${contact?.id})`);
     }
-
-    // Se chegou aqui, todas as tentativas falharam
-    const status = lastError?.response?.status;
-    const data = lastError?.response?.data;
-    const code = lastError?.code;
-    const message = lastError?.message;
-
-    logger.warn("[DispatchContactWebhookService] Falha ao enviar webhook de contato para n8n (todas tentativas falharam)", {
-      url: integration.urlN8N,
-      contactId: contact.id,
-      contactName: contact.name,
-      event,
-      status,
-      data,
-      code,
-      message,
-      attempts: maxRetries
-    });
   } catch (error: any) {
-    logger.error("[DispatchContactWebhookService] Erro inesperado ao preparar/enviar webhook", {
+    logger.error("[DispatchContactWebhookService] Erro inesperado ao preparar webhook", {
       error: error?.message,
       contactId: contact?.id
     });
