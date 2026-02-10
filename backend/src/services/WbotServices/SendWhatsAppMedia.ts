@@ -339,7 +339,7 @@ const SendWhatsAppMedia = async ({
     const contactNumber = await Contact.findByPk(ticket.contactId)
 
     // Resolver JID correto para envio (trata LIDs → número real)
-    const number = await ResolveSendJid(contactNumber, ticket.isGroup);
+    const number = await ResolveSendJid(contactNumber, ticket.isGroup, ticket.whatsappId);
 
     const sentMessage = await wbot.sendMessage(
       number,

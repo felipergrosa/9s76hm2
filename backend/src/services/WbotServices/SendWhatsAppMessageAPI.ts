@@ -29,7 +29,7 @@ const SendWhatsAppMessage = async ({
   let options = {};
   const wbot = await getWbot(whatsappId);
   // Resolver JID correto para envio (trata LIDs → número real)
-  const number = await ResolveSendJid(contact, contact.isGroup);
+  const number = await ResolveSendJid(contact, contact.isGroup, whatsappId);
 
   // Atualiza nome proativamente se ainda estiver vazio/igual ao número (antes do primeiro envio)
   if (!contact.isGroup) {

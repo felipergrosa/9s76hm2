@@ -25,7 +25,7 @@ const SendWhatsAppReaction = async ({
   const wbot = await GetTicketWbot(ticket);
 
   // Resolver JID correto para envio (trata LIDs → número real)
-  const number = await ResolveSendJid(ticket.contact, ticket.isGroup);
+  const number = await ResolveSendJid(ticket.contact, ticket.isGroup, ticket.whatsappId);
 
   try {
     const messageToReact = await Message.findOne({

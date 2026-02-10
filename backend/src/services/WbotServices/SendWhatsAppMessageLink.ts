@@ -37,7 +37,7 @@ const SendWhatsAppMessageLink = async ({
 }: Request): Promise<WAMessage> => {
   const wbot = await getWbot(whatsappId);
   // Resolver JID correto para envio (trata LIDs → número real)
-  const number = await ResolveSendJid(contact, contact.isGroup);
+  const number = await ResolveSendJid(contact, contact.isGroup, whatsappId);
 
   const name = caption.replace('/', '-')
 

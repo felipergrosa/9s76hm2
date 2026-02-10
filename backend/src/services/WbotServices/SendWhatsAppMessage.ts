@@ -62,7 +62,7 @@ const SendWhatsAppMessage = async ({
   const contactNumber = await Contact.findByPk(ticket.contactId);
 
   // Resolver JID correto para envio (trata LIDs → número real)
-  const number = await ResolveSendJid(contactNumber, ticket.isGroup);
+  const number = await ResolveSendJid(contactNumber, ticket.isGroup, ticket.whatsappId);
 
   // Atualiza nome proativamente se ainda estiver vazio/igual ao número (antes do primeiro envio)
   if (!ticket.isGroup) {

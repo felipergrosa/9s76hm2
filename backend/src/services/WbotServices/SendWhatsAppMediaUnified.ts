@@ -53,7 +53,7 @@ const SendWhatsAppMediaUnified = async ({
     }
 
     // Resolver JID correto para envio (trata LIDs → número real)
-    const number = await ResolveSendJid(contact, ticket.isGroup);
+    const number = await ResolveSendJid(contact, ticket.isGroup, ticket.whatsappId);
 
     // Determinar tipo de mídia baseado no mimetype
     let mediaType: "image" | "audio" | "video" | "document" = "document";

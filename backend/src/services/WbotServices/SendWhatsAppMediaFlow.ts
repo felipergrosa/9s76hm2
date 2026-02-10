@@ -73,7 +73,7 @@ export const typeSimulation = async (ticket: Ticket, presence: WAPresence) => {
     }
   });
 
-  const presenceJid = await ResolveSendJid(contact, ticket.isGroup);
+  const presenceJid = await ResolveSendJid(contact, ticket.isGroup, ticket.whatsappId);
   await wbot.sendPresenceUpdate(presence, presenceJid);
   await delay(5000);
   await wbot.sendPresenceUpdate('paused', presenceJid);
@@ -150,7 +150,7 @@ const SendWhatsAppMediaFlow = async ({
     });
 
     // Resolver JID correto para envio (trata LIDs → número real)
-    const sendJid = await ResolveSendJid(contact, ticket.isGroup);
+    const sendJid = await ResolveSendJid(contact, ticket.isGroup, ticket.whatsappId);
     const sentMessage = await wbot.sendMessage(
       sendJid,
       {

@@ -79,7 +79,7 @@ const SendWhatsAppMessageUnified = async ({
     }
 
     // Resolver JID correto para envio (trata LIDs → número real)
-    const number = await ResolveSendJid(contactNumber, ticket.isGroup);
+    const number = await ResolveSendJid(contactNumber, ticket.isGroup, ticket.whatsappId);
 
     // Atualizar nome/avatar proativamente se necessário
     if (!ticket.isGroup && channelType === "baileys") {
