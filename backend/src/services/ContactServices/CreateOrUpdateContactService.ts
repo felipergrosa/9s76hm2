@@ -324,19 +324,7 @@ const CreateOrUpdateContactService = async ({
         oldPath = path.resolve(contact.urlPicture.replace(/\\/g, '/'));
         fileName = path.join(folder, oldPath.split('\\').pop());
       }
-      // Sempre tenta atualizar imagem se não tem urlPicture ou se arquivo não existe
-      if (checkProfilePic && (!contact.urlPicture || !fs.existsSync(fileName) || contact.profilePicUrl === "")) {
-        if (wbot && ['whatsapp'].includes(channel)) {
-          try {
-            profilePicUrl = await wbot.profilePictureUrl(remoteJid, "image");
-          } catch (e) {
-            Sentry.captureException(e);
-            profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
-          }
-          contact.profilePicUrl = profilePicUrl;
-          updateImage = true;
-        }
-      }
+      // Busca de avatar centralizada no RefreshContactAvatarService
 
       // Proteção: nunca sobrescrever nome personalizado já válido
       // Somente definir/atualizar nome quando o atual estiver vazio ou igual ao número
@@ -375,16 +363,8 @@ const CreateOrUpdateContactService = async ({
         newRemoteJid = isGroup ? `${rawNumber}@g.us` : `${rawNumber}@s.whatsapp.net`;
       }
 
-      try {
-        if (checkProfilePic) {
-          profilePicUrl = await wbot.profilePictureUrl(remoteJid, "image");
-        } else {
-          profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
-        }
-      } catch (e) {
-        Sentry.captureException(e);
-        profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
-      }
+      // Busca de avatar centralizada no RefreshContactAvatarService
+      profilePicUrl = profilePicUrl || `${process.env.FRONTEND_URL}/nopicture.png`;
 
       // Definir nome efetivo na criação: se não vier nome válido, usa o número como fallback
       {
