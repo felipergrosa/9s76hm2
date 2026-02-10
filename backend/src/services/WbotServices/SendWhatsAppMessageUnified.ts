@@ -8,6 +8,7 @@ import Contact from "../../models/Contact";
 import formatBody from "../../helpers/Mustache";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
 import logger from "../../utils/logger";
+import ResolveSendJid from "../../helpers/ResolveSendJid";
 import { IWhatsAppMessage } from "../../libs/whatsapp";
 
 interface TemplateButton {
@@ -77,17 +78,8 @@ const SendWhatsAppMessageUnified = async ({
       throw new AppError("ERR_CONTACT_NOT_FOUND", 404);
     }
 
-    // Determinar número de destino
-    let number: string;
-    if (
-      contactNumber.remoteJid &&
-      contactNumber.remoteJid !== "" &&
-      contactNumber.remoteJid.includes("@")
-    ) {
-      number = contactNumber.remoteJid;
-    } else {
-      number = `${contactNumber.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
-    }
+    // Resolver JID correto para envio (trata LIDs → número real)
+    const number = await ResolveSendJid(contactNumber, ticket.isGroup);
 
     // Atualizar nome/avatar proativamente se necessário
     if (!ticket.isGroup && channelType === "baileys") {

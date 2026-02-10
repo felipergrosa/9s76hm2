@@ -9,6 +9,7 @@ import SendWhatsAppMessage from "./SendWhatsAppMessage";
 import formatBody from "../../helpers/Mustache";
 import {getBodyMessage} from "./wbotMessageListener";
 import CreateMessageService from "../MessageServices/CreateMessageService";
+import ResolveSendJid from "../../helpers/ResolveSendJid";
 
 interface ReactionRequest {
   messageId: string;
@@ -23,7 +24,8 @@ const SendWhatsAppReaction = async ({
 }: ReactionRequest): Promise<WAMessage> => {
   const wbot = await GetTicketWbot(ticket);
 
-  const number = `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
+  // Resolver JID correto para envio (trata LIDs → número real)
+  const number = await ResolveSendJid(ticket.contact, ticket.isGroup);
 
   try {
     const messageToReact = await Message.findOne({

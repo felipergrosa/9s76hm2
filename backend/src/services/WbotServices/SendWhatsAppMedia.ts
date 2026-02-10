@@ -15,6 +15,7 @@ import Contact from "../../models/Contact";
 import { getWbot } from "../../libs/wbot";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import formatBody from "../../helpers/Mustache";
+import ResolveSendJid from "../../helpers/ResolveSendJid";
 interface Request {
   media: Express.Multer.File;
   ticket: Ticket;
@@ -337,14 +338,8 @@ const SendWhatsAppMedia = async ({
 
     const contactNumber = await Contact.findByPk(ticket.contactId)
 
-    let number: string;
-
-    if (contactNumber.remoteJid && contactNumber.remoteJid !== "" && contactNumber.remoteJid.includes("@")) {
-      number = contactNumber.remoteJid;
-    } else {
-      number = `${contactNumber.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
-        }`;
-    }
+    // Resolver JID correto para envio (trata LIDs → número real)
+    const number = await ResolveSendJid(contactNumber, ticket.isGroup);
 
     const sentMessage = await wbot.sendMessage(
       number,

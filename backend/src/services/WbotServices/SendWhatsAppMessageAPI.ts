@@ -9,6 +9,7 @@ import formatBody from "../../helpers/Mustache";
 import Contact from "../../models/Contact";
 import { getWbot } from "../../libs/wbot";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
+import ResolveSendJid from "../../helpers/ResolveSendJid";
 
 interface Request {
   body: string;
@@ -27,7 +28,8 @@ const SendWhatsAppMessage = async ({
 }: Request): Promise<WAMessage> => {
   let options = {};
   const wbot = await getWbot(whatsappId);
-  const number = `${contact.number}@${contact.isGroup ? "g.us" : "s.whatsapp.net"}`;
+  // Resolver JID correto para envio (trata LIDs → número real)
+  const number = await ResolveSendJid(contact, contact.isGroup);
 
   // Atualiza nome proativamente se ainda estiver vazio/igual ao número (antes do primeiro envio)
   if (!contact.isGroup) {

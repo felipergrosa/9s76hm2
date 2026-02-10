@@ -9,6 +9,7 @@ import GetTicketWbot from "../../helpers/GetTicketWbot";
 import Ticket from "../../models/Ticket";
 import mime from "mime-types";
 import Contact from "../../models/Contact";
+import ResolveSendJid from "../../helpers/ResolveSendJid";
 
 interface Request {
   media: Express.Multer.File;
@@ -72,9 +73,10 @@ export const typeSimulation = async (ticket: Ticket, presence: WAPresence) => {
     }
   });
 
-  await wbot.sendPresenceUpdate(presence, `${contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`);
+  const presenceJid = await ResolveSendJid(contact, ticket.isGroup);
+  await wbot.sendPresenceUpdate(presence, presenceJid);
   await delay(5000);
-  await wbot.sendPresenceUpdate('paused', `${contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`);
+  await wbot.sendPresenceUpdate('paused', presenceJid);
 
 }
 
@@ -147,8 +149,10 @@ const SendWhatsAppMediaFlow = async ({
       }
     });
 
+    // Resolver JID correto para envio (trata LIDs → número real)
+    const sendJid = await ResolveSendJid(contact, ticket.isGroup);
     const sentMessage = await wbot.sendMessage(
-      `${contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`,
+      sendJid,
       {
         ...options
       }

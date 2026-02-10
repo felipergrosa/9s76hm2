@@ -7,6 +7,7 @@ import formatBody from "../../helpers/Mustache";
 import Contact from "../../models/Contact";
 import path from "path";
 import fs from "fs";
+import ResolveSendJid from "../../helpers/ResolveSendJid";
 
 interface Request {
     body: string;
@@ -36,15 +37,8 @@ const SendWhatsAppMediaImage = async ({
     const wbot = await GetTicketWbot(ticket);
     const contactNumber = await Contact.findByPk(ticket.contactId)
   
-    let number: string;
-
-    if (contactNumber.remoteJid && contactNumber.remoteJid !== "" && contactNumber.remoteJid.includes("@")) {
-        number = contactNumber.remoteJid;
-    } else {
-        number = `${contactNumber.number}@${
-        ticket.isGroup ? "g.us" : "s.whatsapp.net"
-        }`;
-    }
+    // Resolver JID correto para envio (trata LIDs → número real)
+    const number = await ResolveSendJid(contactNumber, ticket.isGroup);
 
     try {
         wbot.sendPresenceUpdate('available');

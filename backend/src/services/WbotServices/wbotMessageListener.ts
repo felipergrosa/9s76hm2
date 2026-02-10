@@ -6196,23 +6196,25 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       console.log(`[contacts.update] contato: ${contact.id} | notify:`, contact.notify, '| objeto completo:', contact);
       if (!contact?.id) return;
 
-      // Tratamento especial para LIDs: atualizar contatos PENDING_ com nome real
+      // Tratamento especial para LIDs: atualizar contatos PENDING_ existentes OU criar novo contato LID
       if (contact.id.includes("@lid")) {
         const contactName = contact.notify || contact.verifiedName || "";
-        if (contactName) {
-          try {
-            // Atualizar contato PENDING_ existente com esse LID
-            const pendingContact = await Contact.findOne({
-              where: {
-                companyId,
-                [Op.or]: [
-                  { lidJid: contact.id },
-                  { remoteJid: contact.id },
-                  { number: `PENDING_${contact.id}` }
-                ]
-              }
-            });
-            if (pendingContact) {
+        
+        try {
+          // Primeiro: tentar atualizar contato PENDING_ existente
+          const pendingContact = await Contact.findOne({
+            where: {
+              companyId,
+              [Op.or]: [
+                { lidJid: contact.id },
+                { remoteJid: contact.id },
+                { number: `PENDING_${contact.id}` }
+              ]
+            }
+          });
+          
+          if (pendingContact) {
+            if (contactName) {
               const currentName = (pendingContact.name || "").trim();
               const isPendingName = currentName === "" || currentName.startsWith("Contato ") || currentName === pendingContact.number;
               if (isPendingName) {
@@ -6220,80 +6222,102 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
                 logger.info(`[contacts.update] LID ${contact.id} → nome atualizado para "${contactName}" (contactId=${pendingContact.id})`);
               }
             }
-          } catch (err: any) {
-            logger.warn({ err: err?.message }, `[contacts.update] Erro ao atualizar contato LID ${contact.id}`);
+          } else {
+            // NOVO: Criar contato LID se não existir
+            // Extrair número do LID para uso temporário
+            const lidNumber = contact.id.replace(/\D/g, "");
+            const tempName = contactName || `Contato ${lidNumber.slice(-8)}`;
+            
+            // Criar novo contato com LID
+            const newContact = await Contact.create({
+              name: tempName,
+              number: `PENDING_${contact.id}`,  // Marcador para identificar como pendente de resolução
+              canonicalNumber: null,
+              companyId,
+              whatsappId: wbot.id,
+              isGroup: false,
+              remoteJid: contact.id,  // O LID completo
+              lidJid: contact.id,
+              profilePicUrl: "",
+              pushName: contact.notify || null,
+              businessName: contact.verifiedName || null
+            });
+            
+            logger.info(`[contacts.update] Novo contato LID criado: ${contact.id} → contactId=${newContact.id}, nome="${tempName}"`);
           }
+        } catch (err: any) {
+          logger.warn({ err: err?.message }, `[contacts.update] Erro ao processar contato LID ${contact.id}`);
         }
+        
         // Não processar LIDs como contatos normais (número extraído seria inválido)
         return;
       }
 
-      if (typeof contact.imgUrl !== "undefined") {
-        console.log(`[contacts.update] contato: ${contact.id} | nome vindo do WhatsApp (notify):`, contact.notify);
-        const newUrl =
-          contact.imgUrl === ""
-            ? ""
-            : await wbot!.profilePictureUrl(contact.id!).catch(() => null);
-        const numero = contact.id.replace(/\D/g, "");
+      // Processar contatos normais (não-LID) - independente de ter avatar ou não
+      // A condição imgUrl !== undefined foi removida para garantir atualização de nome sempre
+      const newUrl = contact.imgUrl 
+        ? await wbot!.profilePictureUrl(contact.id!).catch(() => null)
+        : null;
+      const numero = contact.id.replace(/\D/g, "");
 
-        // PRIORIDADE 1: Nome da agenda do WhatsApp (notify)
-        let finalName = contact.notify;
+      // PRIORIDADE 1: Nome da agenda do WhatsApp (notify)
+      let finalName = contact.notify;
 
-        // Se notify estiver vazio (comum em contatos LID), busca outras fontes
-        if (!finalName || finalName.trim() === "") {
-          console.log(`[contacts.update] notify vazio para ${contact.id}, buscando outras fontes`);
+      // Se notify estiver vazio (comum em contatos LID), busca outras fontes
+      if (!finalName || finalName.trim() === "") {
+        console.log(`[contacts.update] notify vazio para ${contact.id}, buscando outras fontes`);
 
-          // PRIORIDADE 2: Nome já cadastrado no CRM (se não for apenas o número)
-          const existingContact = await Contact.findOne({ where: { remoteJid: contact.id, companyId } });
-          if (existingContact?.name && existingContact.name.replace(/\D/g, "") !== numero) {
-            finalName = existingContact.name;
-            console.log(`[contacts.update] Usando nome do CRM: ${finalName}`);
-          } else {
-            // PRIORIDADE 3: Nome do perfil do usuário (businessProfile)
-            try {
-              console.log(`[contacts.update] Tentando buscar perfil do usuário: ${contact.id}`);
-              const businessProfile = await wbot.getBusinessProfile(contact.id).catch(() => null);
-
-              if (businessProfile?.email) {
-                finalName = businessProfile.email;
-                console.log(`[contacts.update] Email do perfil encontrado: ${finalName}`);
-              } else if (businessProfile?.description) {
-                // LIMITAR description para evitar mensagens de marketing completas
-                const desc = businessProfile.description.trim();
-                if (desc.length <= 100 && !desc.includes('\n')) {
-                  finalName = desc;
-                  console.log(`[contacts.update] Description do perfil encontrada (curta): ${finalName}`);
-                } else {
-                  // Description muito longa = mensagem de marketing, ignorar
-                  finalName = numero;
-                  console.log(`[contacts.update] Description muito longa (${desc.length} chars), usando número: ${numero}`);
-                }
-              } else {
-                finalName = numero;
-                console.log(`[contacts.update] Nenhum nome encontrado, usando número: ${numero}`);
-              }
-            } catch (err) {
-              finalName = numero;
-              console.log(`[contacts.update] Erro ao buscar perfil, usando número:`, err);
-            }
-
-          }
+        // PRIORIDADE 2: Nome já cadastrado no CRM (se não for apenas o número)
+        const existingContact = await Contact.findOne({ where: { remoteJid: contact.id, companyId } });
+        if (existingContact?.name && existingContact.name.replace(/\D/g, "") !== numero) {
+          finalName = existingContact.name;
+          console.log(`[contacts.update] Usando nome do CRM: ${finalName}`);
         } else {
-          console.log(`[contacts.update] Usando notify da agenda: ${finalName}`);
-        }
-        const contactData = {
-          name: finalName,
-          number: numero,
-          isGroup: contact.id.includes("@g.us") ? true : false,
-          companyId: companyId,
-          remoteJid: contact.id,
-          profilePicUrl: newUrl,
-          whatsappId: wbot.id,
-          wbot: wbot
-        };
+          // PRIORIDADE 3: Nome do perfil do usuário (businessProfile)
+          try {
+            console.log(`[contacts.update] Tentando buscar perfil do usuário: ${contact.id}`);
+            const businessProfile = await wbot.getBusinessProfile(contact.id).catch(() => null);
 
-        await CreateOrUpdateContactService(contactData);
+            if (businessProfile?.email) {
+              finalName = businessProfile.email;
+              console.log(`[contacts.update] Email do perfil encontrado: ${finalName}`);
+            } else if (businessProfile?.description) {
+              // LIMITAR description para evitar mensagens de marketing completas
+              const desc = businessProfile.description.trim();
+              if (desc.length <= 100 && !desc.includes('\n')) {
+                finalName = desc;
+                console.log(`[contacts.update] Description do perfil encontrada (curta): ${finalName}`);
+              } else {
+                // Description muito longa = mensagem de marketing, ignorar
+                finalName = numero;
+                console.log(`[contacts.update] Description muito longa (${desc.length} chars), usando número: ${numero}`);
+              }
+            } else {
+              finalName = numero;
+              console.log(`[contacts.update] Nenhum nome encontrado, usando número: ${numero}`);
+            }
+          } catch (err) {
+            finalName = numero;
+            console.log(`[contacts.update] Erro ao buscar perfil, usando número:`, err);
+          }
+
+        }
+      } else {
+        console.log(`[contacts.update] Usando notify da agenda: ${finalName}`);
       }
+      
+      const contactData = {
+        name: finalName,
+        number: numero,
+        isGroup: contact.id.includes("@g.us") ? true : false,
+        companyId: companyId,
+        remoteJid: contact.id,
+        profilePicUrl: newUrl,
+        whatsappId: wbot.id,
+        wbot: wbot
+      };
+
+      await CreateOrUpdateContactService(contactData);
     });
   });
   wbot.ev.on("groups.update", (groupUpdate: GroupMetadata[]) => {

@@ -8,6 +8,7 @@ import Contact from "../../models/Contact";
 import formatBody from "../../helpers/Mustache";
 import logger from "../../utils/logger";
 import { IWhatsAppMessage } from "../../libs/whatsapp";
+import ResolveSendJid from "../../helpers/ResolveSendJid";
 import { generatePdfThumbnail } from "../../helpers/PdfThumbnailGenerator";
 
 interface Request {
@@ -51,17 +52,8 @@ const SendWhatsAppMediaUnified = async ({
       throw new AppError("ERR_CONTACT_NOT_FOUND", 404);
     }
 
-    // Determinar número de destino
-    let number: string;
-    if (
-      contact.remoteJid &&
-      contact.remoteJid !== "" &&
-      contact.remoteJid.includes("@")
-    ) {
-      number = contact.remoteJid;
-    } else {
-      number = `${contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
-    }
+    // Resolver JID correto para envio (trata LIDs → número real)
+    const number = await ResolveSendJid(contact, ticket.isGroup);
 
     // Determinar tipo de mídia baseado no mimetype
     let mediaType: "image" | "audio" | "video" | "document" = "document";

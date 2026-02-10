@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 import Contact from "../../models/Contact";
 import { getWbot } from "../../libs/wbot";
+import ResolveSendJid from "../../helpers/ResolveSendJid";
 
 interface Request {
   whatsappId: number;
@@ -35,7 +36,8 @@ const SendWhatsAppMessageLink = async ({
   msdelay
 }: Request): Promise<WAMessage> => {
   const wbot = await getWbot(whatsappId);
-  const number = `${contact.number}@${contact.isGroup ? "g.us" : "s.whatsapp.net"}`;
+  // Resolver JID correto para envio (trata LIDs → número real)
+  const number = await ResolveSendJid(contact, contact.isGroup);
 
   const name = caption.replace('/', '-')
 

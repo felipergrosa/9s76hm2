@@ -16,6 +16,7 @@ import fs from "fs";
 
 import formatBody from "../../helpers/Mustache";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
+import ResolveSendJid from "../../helpers/ResolveSendJid";
 
 interface TemplateButton {
   index: number;
@@ -60,17 +61,8 @@ const SendWhatsAppMessage = async ({
   const wbot = await GetTicketWbot(ticket);
   const contactNumber = await Contact.findByPk(ticket.contactId);
 
-  let number: string;
-
-  if (
-    contactNumber.remoteJid &&
-    contactNumber.remoteJid !== "" &&
-    contactNumber.remoteJid.includes("@")
-  ) {
-    number = contactNumber.remoteJid;
-  } else {
-    number = `${contactNumber.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
-  }
+  // Resolver JID correto para envio (trata LIDs → número real)
+  const number = await ResolveSendJid(contactNumber, ticket.isGroup);
 
   // Atualiza nome proativamente se ainda estiver vazio/igual ao número (antes do primeiro envio)
   if (!ticket.isGroup) {
