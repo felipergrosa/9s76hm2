@@ -136,6 +136,7 @@ export const resolveLidToRealNumber = async (
 
 /**
  * Busca e mescla contatos duplicados (LID + número real do mesmo contato)
+ * Delega ao ContactMergeService que usa transação para garantir atomicidade
  */
 export const mergeDuplicateLidContacts = async (
   companyId: number,
@@ -145,63 +146,20 @@ export const mergeDuplicateLidContacts = async (
   try {
     logger.info(`[MergeLID] Mesclando contatos duplicados: LID ${lidContactId} → Real ${realContactId}`);
 
-    const lidContact = await Contact.findOne({
-      where: { id: lidContactId, companyId }
-    });
-
-    const realContact = await Contact.findOne({
-      where: { id: realContactId, companyId }
-    });
-
-    if (!lidContact || !realContact) {
-      logger.warn(`[MergeLID] Um dos contatos não foi encontrado`);
-      return false;
-    }
-
-    // Atualiza todos os tickets do contato LID para apontar para o contato real
-    const Ticket = require("../../models/Ticket").default;
+    const ContactMergeService = require("./ContactMergeService").default;
+    const result = await ContactMergeService.mergeContacts(lidContactId, realContactId, companyId);
     
-    await Ticket.update(
-      { contactId: realContactId },
-      { where: { contactId: lidContactId, companyId } }
-    );
-
-    // Atualiza todas as mensagens do contato LID
-    const Message = require("../../models/Message").default;
-    
-    await Message.update(
-      { contactId: realContactId },
-      { where: { contactId: lidContactId } }
-    );
-
-    // Move tags do contato LID para o contato real (evitando duplicatas)
-    const ContactTag = require("../../models/ContactTag").default;
-    
-    const lidTags = await ContactTag.findAll({
-      where: { contactId: lidContactId },
-      attributes: ["tagId"]
-    });
-
-    for (const tagRelation of lidTags) {
-      await ContactTag.findOrCreate({
-        where: {
-          contactId: realContactId,
-          tagId: tagRelation.tagId
-        },
-        defaults: {
-          contactId: realContactId,
-          tagId: tagRelation.tagId
-        }
+    if (result.success) {
+      logger.info(`[MergeLID] ✓ Contatos mesclados com sucesso`, {
+        ticketsMoved: result.ticketsMoved,
+        messagesMoved: result.messagesMoved,
+        tagsCopied: result.tagsCopied
       });
+    } else {
+      logger.warn(`[MergeLID] Falha na mesclagem: ${result.error}`);
     }
 
-    // Remove o contato LID temporário
-    await lidContact.destroy();
-
-    logger.info(`[MergeLID] ✓ Contatos mesclados com sucesso`);
-    
-    return true;
-    
+    return result.success;
   } catch (error) {
     logger.error(`[MergeLID] Erro ao mesclar contatos:`, error);
     return false;

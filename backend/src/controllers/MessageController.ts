@@ -1168,17 +1168,11 @@ export const edit = async (req: Request, res: Response): Promise<Response> => {
       return res.status(400).json({ error: "Ticket inválido ou sem UUID" });
     }
 
-    const io = getIO();
-    io.of(`/workspace-${companyId}`).to(ticket.uuid).emit(`company-${companyId}-appMessage`, {
-      action: "update",
-      message,
-      ticket,
-    });
-
-    io.of(`/workspace-${companyId}`).emit(`company-${companyId}-ticket`, {
-      action: "update",
-      ticket,
-    });
+    // Emitir via EventBus centralizado (com broadcast garantido)
+    const { messageEventBus: msgBus } = await import("../services/MessageServices/MessageEventBus");
+    const { ticketEventBus: tktBus } = await import("../services/TicketServices/TicketEventBus");
+    msgBus.publishMessageUpdated(companyId, ticket.id, ticket.uuid, message.id, message);
+    tktBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
 
     return res.status(200).json({ message: "Mensagem editada com sucesso" });
   } catch (error: any) {
@@ -1530,16 +1524,11 @@ export const pinMessage = async (req: Request, res: Response): Promise<Response>
 
     await message.update({ isStarred: pinned });
 
-    // Emitir evento para atualizar o frontend
-    const io = getIO();
+    // Emitir via EventBus centralizado (com broadcast)
     const ticket = await Ticket.findByPk(message.ticketId);
     if (ticket) {
-      io.of(`/workspace-${companyId}`)
-        .to(ticket.uuid)
-        .emit(`company-${companyId}-appMessage`, {
-          action: "update",
-          message
-        });
+      const { messageEventBus: msgBus } = await import("../services/MessageServices/MessageEventBus");
+      msgBus.publishMessageUpdated(companyId, ticket.id, ticket.uuid, message.id, message);
     }
 
     return res.json({

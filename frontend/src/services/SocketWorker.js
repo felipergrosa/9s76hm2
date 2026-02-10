@@ -224,7 +224,6 @@ class SocketWorker {
 
   // Desconecta um ou mais ouvintes de eventos
   off(event, callback) {
-    this.connect();
     if (this.eventListeners[event]) {
       // console.log("Desconectando do servidor Socket.IO:", event, callback);
       if (callback) {

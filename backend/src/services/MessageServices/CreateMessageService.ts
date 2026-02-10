@@ -41,18 +41,19 @@ const CreateMessageService = async ({
   messageData,
   companyId
 }: Request): Promise<Message> => {
-  // BLINDAGEM: Validação de integridade ticket/contact
-  // Log para debugging de mensagens cruzadas
+  // BLINDAGEM: Validação e correção de integridade ticket/contact
   if (messageData.contactId && messageData.ticketId) {
     const ticketCheck = await Ticket.findByPk(messageData.ticketId, { attributes: ["id", "contactId"] });
     if (ticketCheck && ticketCheck.contactId !== messageData.contactId) {
-      logger.error("[CreateMessageService] ALERTA DE INTEGRIDADE: ticket.contactId !== messageData.contactId", {
+      logger.warn("[CreateMessageService] Corrigindo contactId inconsistente", {
         ticketId: messageData.ticketId,
         ticketContactId: ticketCheck.contactId,
         messageContactId: messageData.contactId,
         wid: messageData.wid,
         companyId
       });
+      // Corrigir: usar o contactId do ticket (fonte de verdade)
+      messageData.contactId = ticketCheck.contactId;
     }
   }
 
@@ -61,7 +62,8 @@ const CreateMessageService = async ({
   const message = await Message.findOne({
     where: {
       wid: messageData.wid,
-      companyId
+      companyId,
+      ticketId: messageData.ticketId
     },
     include: [
       "contact",

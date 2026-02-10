@@ -42,6 +42,7 @@ import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
 import { debounce } from "../../helpers/Debounce";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
 import { ticketEventBus } from "../TicketServices/TicketEventBus";
+import { messageEventBus } from "../MessageServices/MessageEventBus";
 import formatBody from "../../helpers/Mustache";
 import TicketTraking from "../../models/TicketTraking";
 import UserRating from "../../models/UserRating";
@@ -665,7 +666,9 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
           lid: remoteJid,
           phoneNumber: altDigits,
           companyId,
-          whatsappId: wbot.id
+          whatsappId: wbot.id,
+          source: "baileys_remoteJidAlt",
+          confidence: 0.95
         });
       } catch (e) {
         // Ignorar erros de persistência
@@ -1358,7 +1361,8 @@ const verifyContact = async (
                 companyId,
                 whatsappId: wbot.id,
                 source: "baileys_signal_repository",
-                confidence: 0.95
+                confidence: 0.95,
+                verified: true
               });
             } catch (e) {}
             
@@ -1374,7 +1378,8 @@ const verifyContact = async (
               companyId,
               whatsappId: wbot.id,
               source: "baileys_signal_repository",
-              confidence: 0.95
+              confidence: 0.95,
+              verified: true
             });
           } catch (e) {}
         }
@@ -1450,56 +1455,12 @@ const verifyContact = async (
       debugLog("[verifyContact] Erro ao consultar store.contacts", { err });
     }
 
-    // 5. Tentar wbot.onWhatsApp() para obter dados adicionais do contato
-    // Nota: Isso pode não funcionar para todos os LIDs, mas vale tentar
-    try {
-      const [result] = await wbot.onWhatsApp(normalizedJid);
-      if (result?.exists && result.jid) {
-        const resolvedJid = jidNormalizedUser(result.jid);
-        const resolvedNumber = resolvedJid.replace(/\D/g, "");
+    // 5. REMOVIDO: wbot.onWhatsApp() — chamava API do WhatsApp a cada LID novo,
+    //    acumulando chamadas e contribuindo para rate limiting / risco de ban.
+    //    A resolução depende dos mapeamentos do Baileys (evento lid-mapping.update).
 
-        if (resolvedNumber && resolvedNumber.length >= 10 && resolvedNumber.length <= 13) {
-          const existingByResolvedNumber = await Contact.findOne({
-            where: { canonicalNumber: resolvedNumber, companyId, isGroup: false }
-          });
-          if (existingByResolvedNumber) {
-            logger.info("[verifyContact] LID resolvido via wbot.onWhatsApp", {
-              lid: normalizedJid,
-              resolvedJid,
-              resolvedNumber,
-              contactId: existingByResolvedNumber.id
-            });
-            // Atualizar o contato com o LID para futuras buscas diretas
-            await existingByResolvedNumber.update({ remoteJid: normalizedJid });
-            return existingByResolvedNumber;
-          }
-        }
-      }
-    } catch (err) {
-      debugLog("[verifyContact] wbot.onWhatsApp não conseguiu resolver LID", { err, lid: normalizedJid });
-    }
-
-    // 6. Busca por número parcial: extrair os últimos 8-9 dígitos e buscar correspondência
-    // Isso ajuda quando o LID tem um número parcial embutido
-    const partialNumber = cleaned.slice(-9); // Últimos 9 dígitos
-    if (partialNumber.length >= 8) {
-      const existingByPartial = await Contact.findOne({
-        where: {
-          canonicalNumber: { [Op.like]: `%${partialNumber}` },
-          companyId,
-          isGroup: false
-        }
-      });
-      if (existingByPartial) {
-        logger.info("[verifyContact] LID resolvido via busca parcial de número", {
-          lid: normalizedJid,
-          partialNumber,
-          contactId: existingByPartial.id,
-          contactNumber: existingByPartial.number
-        });
-        return existingByPartial;
-      }
-    }
+    // 6. REMOVIDO: Busca parcial por últimos 9 dígitos — alto risco de falso positivo,
+    //    poderia associar mensagens ao contato errado se dois contatos compartilham sufixo.
 
     // 7. ÚLTIMA VERIFICAÇÃO: Buscar contato existente pelo número LID (pode já ter sido criado antes)
     // Se já existe um contato com esse número LID, reutilizá-lo ao invés de criar duplicado
@@ -1549,7 +1510,7 @@ const verifyContact = async (
       cleaned,
       cleanedLength: cleaned.length,
       companyId,
-      metodosTentados: ["LID direto", "pushName", "número no LID", "store.contacts", "wbot.onWhatsApp", "busca parcial", "tickets existentes", "ticket recente por conexão/nome"]
+      metodosTentados: ["LidMappings (cache)", "signalRepository", "remoteJid direto", "pushName", "número no LID", "store.contacts", "número LID existente"]
     });
 
     // Usar pushName como nome, ou "Contato LID" se não tiver
@@ -1595,21 +1556,20 @@ const verifyContact = async (
         });
 
         // =================================================================
-        // HERANÇA DE TAGS PESSOAIS - Copia tags do contato original se existir
-        // Isso garante que o contato LID fique na mesma carteira
+        // HERANÇA DE TAGS PESSOAIS - Copia tags de contato com MESMO NOME
+        // Só herda se encontrar contato com pushName idêntico na mesma empresa
         // =================================================================
         try {
-          // Buscar tickets existentes na mesma conexão para encontrar contato com tags
-          const existingTicket = await Ticket.findOne({
-            where: {
-              whatsappId: wbot.id,
-              companyId,
-              contactId: { [Op.ne]: contact.id } // Diferente do contato LID
-            },
-            include: [{
-              model: Contact,
-              as: "contact",
-              where: { isGroup: false },
+          if (tempName && tempName !== `Contato ${cleaned.slice(-6)}`) {
+            // Buscar contato real (não-LID) com mesmo nome na mesma empresa
+            const matchingContact = await Contact.findOne({
+              where: {
+                companyId,
+                name: tempName,
+                isGroup: false,
+                id: { [Op.ne]: contact.id },
+                remoteJid: { [Op.notLike]: "%@lid" } // Contato real, não outro LID
+              },
               include: [{
                 model: Tag,
                 as: "tags",
@@ -1617,38 +1577,29 @@ const verifyContact = async (
                   name: {
                     [Op.and]: [
                       { [Op.like]: "#%" },      // Tags pessoais começam com #
-                      { [Op.notLike]: "##%" }   // Mas não ## (tags globais)
+                      { [Op.notLike]: "##%" }   // Mas não ## (grupo)
                     ]
                   }
                 },
                 required: true
               }]
-            }],
-            order: [["updatedAt", "DESC"]]
-          });
+            });
 
-          if (existingTicket?.contact?.tags?.length > 0) {
-            const personalTags = existingTicket.contact.tags;
-            
-            // Copiar tags pessoais para o contato LID
-            for (const tag of personalTags) {
-              await ContactTag.findOrCreate({
-                where: {
-                  contactId: contact.id,
-                  tagId: tag.id
-                },
-                defaults: {
-                  contactId: contact.id,
-                  tagId: tag.id
-                }
+            if (matchingContact?.tags?.length > 0) {
+              for (const tag of matchingContact.tags) {
+                await ContactTag.findOrCreate({
+                  where: { contactId: contact.id, tagId: tag.id },
+                  defaults: { contactId: contact.id, tagId: tag.id }
+                });
+              }
+              
+              logger.info("[verifyContact] Tags pessoais herdadas para contato LID (mesmo nome)", {
+                lidContactId: contact.id,
+                originalContactId: matchingContact.id,
+                matchedName: tempName,
+                tagsHerdadas: matchingContact.tags.map(t => t.name)
               });
             }
-            
-            logger.info("[verifyContact] Tags pessoais herdadas para contato LID", {
-              lidContactId: contact.id,
-              originalContactId: existingTicket.contact.id,
-              tagsHerdadas: personalTags.map(t => t.name)
-            });
           }
         } catch (tagErr: any) {
           // Erro na herança de tags não deve bloquear o fluxo
@@ -2085,20 +2036,10 @@ export const verifyMessage = async (
       ]
     });
 
-    // io.to("closed").emit(`company-${companyId}-ticket`, {
-    //   action: "delete",
-    //   ticket,
-    //   ticketId: ticket.id
-    // });
-
     if (!ticket.imported) {
-      io.of(`/workspace-${companyId}`)
-        .to(ticket.uuid)
-        .emit(`company-${companyId}-ticket`, {
-          action: "update",
-          ticket,
-          ticketId: ticket.id
-        });
+      // CQRS: Emitir via TicketEventBus para broadcast (oldStatus=closed pois ticket reabriu)
+      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, "closed");
+      ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
     }
   }
 };
@@ -4885,14 +4826,16 @@ const handleMessage = async (
 
       if (oldReaction) {
         await oldReaction.destroy();
-        // Emitir delete para limpar a UI antes de criar a nova
-        const io = getIO();
-        io.of(`/workspace-${companyId}`)
-          .to(targetMessage.ticketId.toString())
-          .emit(`company-${companyId}-appMessage`, {
-            action: "delete",
-            messageId: oldReaction.id
-          });
+        // Emitir delete via MessageEventBus (usa UUID do ticket, não ID numérico)
+        const reactionTicket = await Ticket.findByPk(targetMessage.ticketId, { attributes: ["id", "uuid"] });
+        if (reactionTicket) {
+          messageEventBus.publishMessageDeleted(
+            companyId,
+            reactionTicket.id,
+            reactionTicket.uuid,
+            oldReaction.id
+          );
+        }
       }
 
       // 3. Se reactionContent for vazio, significa que a reação foi removida no WhatsApp
@@ -5210,21 +5153,10 @@ const handleMessage = async (
         await ticket.update({ lastMessage: bodyEdited });
 
 
-        console.log(`[SOCKET] Emitindo appMessage`, {
-          namespace: `/workspace-${companyId}`,
-          sala: ticket.uuid,
-          evento: `company-${companyId}-appMessage`,
-          action: "update",
-          messageId: messageToUpdate.id
-        });
-        io.of(`/workspace-${companyId}`)
-          .to(ticket.uuid)
-          .emit(`company-${companyId}-appMessage`, {
-            action: "update",
-            message: messageToUpdate
-          });
+        // Emitir update da mensagem editada via MessageEventBus (com broadcast)
+        messageEventBus.publishMessageUpdated(companyId, ticket.id, ticket.uuid, messageToUpdate.id, messageToUpdate);
 
-        // CQRS: Emitir evento via TicketEventBus
+        // CQRS: Emitir evento de ticket via TicketEventBus (atualiza lastMessage na lista)
         ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
       } catch (err) {
         Sentry.captureException(err);
@@ -6034,23 +5966,9 @@ const verifyCampaignMessageAndCloseTicket = async (
         const oldStatus = ticket.status;
         await ticket.update({ status: "closed", amountUsedBotQueues: 0 });
 
-        // Emitir apenas para a sala do ticket específico, não para todo o namespace
-        io.of(`/workspace-${companyId}`)
-          .to(ticket.uuid)
-          .emit(`company-${companyId}-ticket`, {
-            action: "delete",
-            ticket,
-            ticketId: ticket.id,
-            oldStatus
-          });
-
-        io.of(`/workspace-${companyId}`)
-          .to(ticket.uuid)
-          .emit(`company-${companyId}-ticket`, {
-            action: "update",
-            ticket,
-            ticketId: ticket.id
-          });
+        // CQRS: Emitir via TicketEventBus para broadcast
+        ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, oldStatus);
+        ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
       }
     }
   }

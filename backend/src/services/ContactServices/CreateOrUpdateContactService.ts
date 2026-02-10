@@ -411,7 +411,7 @@ const CreateOrUpdateContactService = async ({
           
           if (lidContactToMerge) {
             logger.info({
-              message: "[CreateOrUpdateContactService] LID duplicado detectado - mesclando automaticamente",
+              message: "[CreateOrUpdateContactService] LID duplicado detectado - promovendo para número real",
               lidContactId: lidContactToMerge.id,
               lidRemoteJid: lidContactToMerge.remoteJid,
               newContactName: effectiveName,
@@ -419,37 +419,30 @@ const CreateOrUpdateContactService = async ({
               companyId
             });
             
-            // Importar serviço de mesclagem dinamicamente
+            // Atualizar o contato LID existente com o número real (sem chamar merge)
             try {
-              const MergeContactsService = (await import("./MergeContactsService")).default;
-              await MergeContactsService({
-                primaryContactId: lidContactToMerge.id,
-                secondaryContactId: lidContactToMerge.id, // Mesmo ID - apenas atualizar
-                companyId
-              });
-              
-              // Retornar o contato LID existente (agora atualizado)
               await lidContactToMerge.update({
                 number,
                 canonicalNumber: number,
                 remoteJid: newRemoteJid,
+                lidJid: lidContactToMerge.remoteJid, // Preservar LID original
                 profilePicUrl: profilePicUrl || null,
                 whatsappId
               });
               await lidContactToMerge.reload();
               
               logger.info({
-                message: "[CreateOrUpdateContactService] LID atualizado com número real",
+                message: "[CreateOrUpdateContactService] LID promovido com número real",
                 contactId: lidContactToMerge.id,
                 newNumber: number,
                 newRemoteJid
               });
               
               return lidContactToMerge;
-            } catch (mergeError) {
+            } catch (promoteError: any) {
               logger.warn({
-                message: "[CreateOrUpdateContactService] Erro ao mesclar LID, continuando com criação normal",
-                error: mergeError.message
+                message: "[CreateOrUpdateContactService] Erro ao promover LID, continuando com criação normal",
+                error: promoteError?.message
               });
             }
           }

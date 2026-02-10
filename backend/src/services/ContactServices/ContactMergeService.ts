@@ -165,14 +165,16 @@ const mergeContacts = async (
     // Emitir evento via Socket.IO para atualizar frontend
     try {
       const io = getIO();
-      io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-contact`, {
-        action: "delete",
-        contactId: lidContactId
-      });
-      io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-contact`, {
-        action: "update",
-        contact: realContact
-      });
+      io.of(`/workspace-${companyId}`)
+        .emit(`company-${companyId}-contact`, {
+          action: "delete",
+          contactId: lidContactId
+        });
+      io.of(`/workspace-${companyId}`)
+        .emit(`company-${companyId}-contact`, {
+          action: "update",
+          contact: realContact
+        });
     } catch (e) {
       // Ignorar erros de socket
     }
@@ -213,15 +215,14 @@ const mergeAllDuplicateLids = async (companyId: number): Promise<{
 }> => {
   const { Op, fn, col, where: seqWhere } = require("sequelize");
 
-  // Buscar todos os contatos que parecem ser LIDs (número > 13 dígitos)
+  // Buscar todos os contatos LID (remoteJid @lid ou número PENDING_)
   const lidContacts = await Contact.findAll({
     where: {
       companyId,
       isGroup: false,
-      [Op.and]: [
-        seqWhere(fn("LENGTH", fn("REGEXP_REPLACE", col("number"), "[^0-9]", "", "g")), {
-          [Op.gte]: 14
-        })
+      [Op.or]: [
+        { remoteJid: { [Op.like]: "%@lid" } },
+        { number: { [Op.like]: "PENDING_%" } }
       ]
     }
   });
@@ -231,18 +232,15 @@ const mergeAllDuplicateLids = async (companyId: number): Promise<{
 
   for (const lidContact of lidContacts) {
     try {
-      // Buscar contato real com mesmo nome
+      // Buscar contato real com mesmo nome (que não seja outro LID)
       const realContact = await Contact.findOne({
         where: {
           companyId,
           isGroup: false,
           id: { [Op.ne]: lidContact.id },
           name: lidContact.name,
-          [Op.and]: [
-            seqWhere(fn("LENGTH", fn("REGEXP_REPLACE", col("number"), "[^0-9]", "", "g")), {
-              [Op.between]: [10, 13]
-            })
-          ]
+          remoteJid: { [Op.like]: "%@s.whatsapp.net" },
+          number: { [Op.notLike]: "PENDING_%" }
         }
       });
 

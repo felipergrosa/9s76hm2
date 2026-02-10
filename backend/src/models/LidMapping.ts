@@ -48,6 +48,28 @@ class LidMapping extends Model<LidMapping> {
     })
     phoneNumber: string;
 
+    @Column({
+        type: DataType.STRING(100),
+        allowNull: true,
+        comment: "Origem do mapeamento (ex: baileys_lid_mapping_event, baileys_signal_repository)"
+    })
+    source: string;
+
+    @Column({
+        type: DataType.FLOAT,
+        allowNull: true,
+        comment: "Nível de confiança do mapeamento (0.0 a 1.0)"
+    })
+    confidence: number;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: true,
+        defaultValue: false,
+        comment: "Se o mapeamento foi verificado pelo evento lid-mapping.update do Baileys"
+    })
+    verified: boolean;
+
     @ForeignKey(() => Company)
     @Column({
         type: DataType.INTEGER,

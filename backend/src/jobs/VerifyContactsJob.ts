@@ -122,20 +122,14 @@ const resolveLidsFromMappings = async (): Promise<number> => {
  */
 const resolveLidsViaRemoteJid = async (): Promise<number> => {
   try {
-    const Ticket = require("../models/Ticket").default;
-    const Message = require("../models/Message").default;
-    const ContactTag = require("../models/ContactTag").default;
-    const sequelize = require("../database").default;
-
-    // Buscar contatos com LID (remoteJid @lid ou número com 14+ dígitos)
+    // Buscar contatos com LID (remoteJid @lid ou lidJid preenchido)
     const lidContacts = await Contact.findAll({
       where: {
         isGroup: false,
         [Op.or]: [
           { remoteJid: { [Op.like]: "%@lid" } },
-          seqWhere(fn("LENGTH", fn("REGEXP_REPLACE", col("number"), "[^0-9]", "", "g")), {
-            [Op.gte]: 14
-          })
+          { lidJid: { [Op.ne]: null } },
+          { number: { [Op.like]: "PENDING_%" } }
         ]
       }
     });
@@ -160,52 +154,21 @@ const resolveLidsViaRemoteJid = async (): Promise<number> => {
           const realNumber = realContact.remoteJid.replace("@s.whatsapp.net", "");
 
           if (realNumber && realNumber.length >= 10 && realNumber.length <= 15) {
-            // Verificar se há tickets/mensagens no LID
-            const lidTickets = await Ticket.count({ where: { contactId: lidContact.id } });
-            const realTickets = await Ticket.count({ where: { contactId: realContact.id } });
-
-            if (lidTickets > 0 && realTickets > 0) {
-              // Ambos têm tickets - mesclar via ContactMergeService
-              const mergeResult = await ContactMergeService.mergeContacts(
-                lidContact.id,
-                realContact.id,
-                lidContact.companyId
-              );
-              if (mergeResult.success) {
-                resolved++;
-                logger.info("[VerifyContactsJob] LID mesclado via remoteJid", {
-                  lidContactId: lidContact.id,
-                  realContactId: realContact.id,
-                  name: lidContact.name,
-                  realNumber
-                });
-              }
-            } else if (lidTickets > 0) {
-              // Só LID tem tickets - transferir para real e deletar LID
-              await Ticket.update(
-                { contactId: realContact.id },
-                { where: { contactId: lidContact.id } }
-              );
-              await Message.update(
-                { contactId: realContact.id },
-                { where: { contactId: lidContact.id } }
-              );
-              await ContactTag.destroy({ where: { contactId: lidContact.id } });
-              await lidContact.destroy();
+            // Usar ContactMergeService para merge atômico (com transação)
+            const mergeResult = await ContactMergeService.mergeContacts(
+              lidContact.id,
+              realContact.id,
+              lidContact.companyId
+            );
+            if (mergeResult.success) {
               resolved++;
-              logger.info("[VerifyContactsJob] LID transferido e deletado via remoteJid", {
+              logger.info("[VerifyContactsJob] LID mesclado via remoteJid", {
                 lidContactId: lidContact.id,
                 realContactId: realContact.id,
-                name: lidContact.name
-              });
-            } else {
-              // LID não tem tickets - apenas deletar
-              await ContactTag.destroy({ where: { contactId: lidContact.id } });
-              await lidContact.destroy();
-              resolved++;
-              logger.info("[VerifyContactsJob] LID órfão deletado (duplicado via remoteJid)", {
-                lidContactId: lidContact.id,
-                name: lidContact.name
+                name: lidContact.name,
+                realNumber,
+                ticketsMoved: mergeResult.ticketsMoved,
+                messagesMoved: mergeResult.messagesMoved
               });
             }
           }
@@ -268,14 +231,13 @@ const cleanOrphanLids = async (): Promise<number> => {
     const Message = require("../models/Message").default;
     const ContactTag = require("../models/ContactTag").default;
 
-    // Buscar LIDs órfãos
+    // Buscar LIDs órfãos (remoteJid @lid ou número PENDING_)
     const orphanLids = await Contact.findAll({
       where: {
         isGroup: false,
-        [Op.and]: [
-          seqWhere(fn("LENGTH", fn("REGEXP_REPLACE", col("number"), "[^0-9]", "", "g")), {
-            [Op.gte]: 14
-          })
+        [Op.or]: [
+          { remoteJid: { [Op.like]: "%@lid" } },
+          { number: { [Op.like]: "PENDING_%" } }
         ]
       }
     });

@@ -439,6 +439,8 @@ const wbotMonitor = async (
               phoneNumber,
               companyId,
               whatsappId: whatsapp.id,
+              source: "baileys_lid_mapping_event",
+              confidence: 1.0,
               verified: true
             });
             savedCount++;
@@ -477,28 +479,34 @@ const wbotMonitor = async (
             });
 
             if (realContact) {
-              // MERGE: transferir tickets e mensagens do pendente para o real
-              await Ticket.update(
-                { contactId: realContact.id },
-                { where: { contactId: pendingContact.id } }
+              // MERGE: usar ContactMergeService (com transação atômica)
+              const ContactMergeService = require("../../services/ContactServices/ContactMergeService").default;
+              const mergeResult = await ContactMergeService.mergeContacts(
+                pendingContact.id,
+                realContact.id,
+                companyId
               );
-              await Message.update(
-                { contactId: realContact.id },
-                { where: { contactId: pendingContact.id } }
-              );
-              // Atualizar lidJid do contato real
-              if (!realContact.lidJid) {
-                await realContact.update({ lidJid: lidJid });
+              if (mergeResult.success) {
+                // Atualizar lidJid do contato real
+                if (!realContact.lidJid) {
+                  await realContact.update({ lidJid: lidJid });
+                }
+                reconciledCount++;
+                logger.info("[wbotMonitor] Contato PENDING_ mesclado com contato real", {
+                  pendingId: pendingContact.id,
+                  realId: realContact.id,
+                  lidJid,
+                  phoneNumber,
+                  ticketsMoved: mergeResult.ticketsMoved,
+                  messagesMoved: mergeResult.messagesMoved
+                });
+              } else {
+                logger.warn("[wbotMonitor] Falha ao mesclar contato PENDING_", {
+                  pendingId: pendingContact.id,
+                  realId: realContact.id,
+                  error: mergeResult.error
+                });
               }
-              // Remover contato fantasma
-              await pendingContact.destroy();
-              reconciledCount++;
-              logger.info("[wbotMonitor] Contato PENDING_ mesclado com contato real", {
-                pendingId: pendingContact.id,
-                realId: realContact.id,
-                lidJid,
-                phoneNumber
-              });
             } else {
               // PROMOVER: transformar contato pendente em real
               await pendingContact.update({
