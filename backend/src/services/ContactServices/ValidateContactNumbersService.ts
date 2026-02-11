@@ -31,11 +31,104 @@ interface ValidateRequest {
     whatsappId: number;
     companyId: number;
     contactIds?: number[];
-    mode: "nine_digit" | "all";
+    mode: "nine_digit" | "all" | "no_name";
     offset?: number;
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Busca o nome real do contato no WhatsApp e atualiza se for diferente
+ */
+const fetchAndUpdateContactName = async (contact: Contact, wbot: any): Promise<boolean> => {
+    try {
+        const digits = contact.number.replace(/\D/g, "");
+        const jid = `${digits}@s.whatsapp.net`;
+        
+        // Buscar informações do contato no WhatsApp
+        const [result] = await wbot.onWhatsApp(jid);
+        
+        if (result?.exists) {
+            // Tentar obter o perfil do contato
+            try {
+                const profileInfo = await wbot.profilePictureUrl(jid, "preview").catch(() => null);
+                
+                // Buscar informações do contato nos contatos/chats do wbot
+                let whatsappName = null;
+                
+                if (wbot.store?.contacts) {
+                    const whatsappContact = wbot.store.contacts[jid];
+                    if (whatsappContact) {
+                        whatsappName = whatsappContact.name || whatsappContact.notify || whatsappContact.pushname;
+                    }
+                }
+                
+                // Se não encontrou no store, tentar via profile
+                if (!whatsappName && result.jid) {
+                    // O jid retornado pode ter o formato correto
+                    const contactInfo = wbot.store?.contacts?.[result.jid];
+                    if (contactInfo) {
+                        whatsappName = contactInfo.name || contactInfo.notify || contactInfo.pushname;
+                    }
+                }
+                
+                // Se encontrou um nome diferente e não é igual ao número, atualizar
+                if (whatsappName && 
+                    whatsappName !== contact.name && 
+                    whatsappName !== digits && 
+                    whatsappName.trim() !== "") {
+                    
+                    await contact.update({
+                        name: whatsappName.trim(),
+                        remoteJid: result.jid,
+                        isWhatsappValid: true
+                    });
+                    
+                    logger.info({
+                        contactId: contact.id,
+                        oldName: contact.name,
+                        newName: whatsappName.trim(),
+                        number: digits
+                    }, "[ValidateContactNumbers] Nome atualizado via WhatsApp");
+                    
+                    return true;
+                }
+                
+                // Se não encontrou nome diferente, apenas marcar como válido
+                if (!contact.isWhatsappValid) {
+                    await contact.update({
+                        remoteJid: result.jid,
+                        isWhatsappValid: true
+                    });
+                }
+                
+                return false;
+            } catch (profileError: any) {
+                logger.warn({
+                    contactId: contact.id,
+                    error: profileError?.message
+                }, "[ValidateContactNumbers] Erro ao buscar perfil do contato");
+                
+                // Apenas marcar como válido se conseguiu validar o número
+                if (!contact.isWhatsappValid) {
+                    await contact.update({
+                        remoteJid: result.jid,
+                        isWhatsappValid: true
+                    });
+                }
+                return false;
+            }
+        }
+        
+        return false;
+    } catch (error: any) {
+        logger.warn({
+            contactId: contact.id,
+            error: error?.message
+        }, "[ValidateContactNumbers] Erro ao buscar nome do contato");
+        return false;
+    }
+};
 
 /**
  * Remove dígito 9 de número BR celular.
@@ -104,8 +197,26 @@ const ValidateContactNumbersService = async ({
             ...whereClause.number,
             [Op.regexp]: '^55[0-9]{2}9[6-9][0-9]{7}$'
         };
-    } else {
+    } else if (mode === "all") {
         // Qualquer BR: começa com 55, 12 ou 13 dígitos
+        whereClause.number = {
+            ...whereClause.number,
+            [Op.regexp]: '^55[0-9]{10,11}$'
+        };
+    } else if (mode === "no_name") {
+        // Contatos onde o nome é igual ao número ou nulo/vazio
+        whereClause[Op.or] = [
+            {
+                name: { [Op.col]: 'Contact.number' }
+            },
+            {
+                name: { [Op.eq]: null }
+            },
+            {
+                name: { [Op.eq]: '' }
+            }
+        ];
+        // Manter apenas números BR
         whereClause.number = {
             ...whereClause.number,
             [Op.regexp]: '^55[0-9]{10,11}$'
@@ -114,6 +225,14 @@ const ValidateContactNumbersService = async ({
 
     // Contar total de pendentes (para o frontend saber quantos faltam)
     const totalPending = await Contact.count({ where: whereClause });
+    
+    logger.info({
+        mode,
+        companyId,
+        contactIds: contactIds?.length,
+        totalPending,
+        whereClause: JSON.stringify(whereClause)
+    }, "[ValidateContactNumbers] Total de contatos pendentes");
 
     const contacts = await Contact.findAll({
         where: whereClause,
@@ -130,75 +249,34 @@ const ValidateContactNumbersService = async ({
 
     for (const contact of contacts) {
         try {
-            const digits = contact.number.replace(/\D/g, "");
-            const jid = `${digits}@s.whatsapp.net`;
-
-            // Passo 1: Validar número original
-            const [result] = await (wbot as WASocket).onWhatsApp(jid);
-
-            if (result?.exists) {
-                // Número válido — atualizar JID correto se necessário
-                const correctJid = result.jid;
-                const correctNumber = correctJid.split("@")[0];
-
-                if (correctNumber !== digits) {
-                    // WhatsApp retornou um JID diferente (corrigido pelo próprio WA)
-                    await contact.update({
-                        number: correctNumber,
-                        remoteJid: correctJid,
-                        canonicalNumber: correctNumber,
-                        isWhatsappValid: true
-                    });
+            // Se o modo for "no_name", usar função especializada
+            if (mode === "no_name") {
+                const nameUpdated = await fetchAndUpdateContactName(contact, wbot);
+                
+                if (nameUpdated) {
                     results.push({
                         contactId: contact.id,
                         name: contact.name,
-                        originalNumber: digits,
+                        originalNumber: contact.number,
                         status: "corrected",
-                        newNumber: correctNumber,
-                        newJid: correctJid
+                        newNumber: contact.number,
+                        newJid: contact.remoteJid
                     });
                     corrected++;
                 } else {
-                    if (!contact.isWhatsappValid) {
-                        await contact.update({ isWhatsappValid: true });
-                    }
-                    results.push({
-                        contactId: contact.id,
-                        name: contact.name,
-                        originalNumber: digits,
-                        status: "valid"
-                    });
-                    validated++;
-                }
-            } else {
-                // Passo 2: Se inválido e tem dígito 9, tentar sem
-                const numberWithout9 = removeNineDigit(digits);
-
-                if (numberWithout9) {
-                    await sleep(DELAY_MS);
-                    const jidWithout9 = `${numberWithout9}@s.whatsapp.net`;
-                    const [retryResult] = await (wbot as WASocket).onWhatsApp(jidWithout9);
-
-                    if (retryResult?.exists) {
-                        const correctJid = retryResult.jid;
-                        const correctNumber = correctJid.split("@")[0];
-
-                        await contact.update({
-                            number: correctNumber,
-                            remoteJid: correctJid,
-                            canonicalNumber: correctNumber,
-                            isWhatsappValid: true
-                        });
-
+                    // Verificar se o número é válido
+                    const digits = contact.number.replace(/\D/g, "");
+                    const jid = `${digits}@s.whatsapp.net`;
+                    const [result] = await (wbot as WASocket).onWhatsApp(jid);
+                    
+                    if (result?.exists) {
                         results.push({
                             contactId: contact.id,
                             name: contact.name,
                             originalNumber: digits,
-                            status: "corrected",
-                            newNumber: correctNumber,
-                            newJid: correctJid
+                            status: "valid"
                         });
-                        corrected++;
+                        validated++;
                     } else {
                         await contact.update({ isWhatsappValid: false });
                         results.push({
@@ -209,15 +287,98 @@ const ValidateContactNumbersService = async ({
                         });
                         invalid++;
                     }
+                }
+            } else {
+                // Lógica original para os outros modos
+                const digits = contact.number.replace(/\D/g, "");
+                const jid = `${digits}@s.whatsapp.net`;
+
+                // Passo 1: Validar número original
+                const [result] = await (wbot as WASocket).onWhatsApp(jid);
+
+                if (result?.exists) {
+                    // Número válido — atualizar JID correto se necessário
+                    const correctJid = result.jid;
+                    const correctNumber = correctJid.split("@")[0];
+
+                    if (correctNumber !== digits) {
+                        // WhatsApp retornou um JID diferente (corrigido pelo próprio WA)
+                        await contact.update({
+                            number: correctNumber,
+                            remoteJid: correctJid,
+                            canonicalNumber: correctNumber,
+                            isWhatsappValid: true
+                        });
+                        results.push({
+                            contactId: contact.id,
+                            name: contact.name,
+                            originalNumber: digits,
+                            status: "corrected",
+                            newNumber: correctNumber,
+                            newJid: correctJid
+                        });
+                        corrected++;
+                    } else {
+                        if (!contact.isWhatsappValid) {
+                            await contact.update({ isWhatsappValid: true });
+                        }
+                        results.push({
+                            contactId: contact.id,
+                            name: contact.name,
+                            originalNumber: digits,
+                            status: "valid"
+                        });
+                        validated++;
+                    }
                 } else {
-                    await contact.update({ isWhatsappValid: false });
-                    results.push({
-                        contactId: contact.id,
-                        name: contact.name,
-                        originalNumber: digits,
-                        status: "invalid"
-                    });
-                    invalid++;
+                    // Passo 2: Se inválido e tem dígito 9, tentar sem
+                    const numberWithout9 = removeNineDigit(digits);
+
+                    if (numberWithout9) {
+                        await sleep(DELAY_MS);
+                        const jidWithout9 = `${numberWithout9}@s.whatsapp.net`;
+                        const [retryResult] = await (wbot as WASocket).onWhatsApp(jidWithout9);
+
+                        if (retryResult?.exists) {
+                            const correctJid = retryResult.jid;
+                            const correctNumber = correctJid.split("@")[0];
+
+                            await contact.update({
+                                number: correctNumber,
+                                remoteJid: correctJid,
+                                canonicalNumber: correctNumber,
+                                isWhatsappValid: true
+                            });
+
+                            results.push({
+                                contactId: contact.id,
+                                name: contact.name,
+                                originalNumber: digits,
+                                status: "corrected",
+                                newNumber: correctNumber,
+                                newJid: correctJid
+                            });
+                            corrected++;
+                        } else {
+                            await contact.update({ isWhatsappValid: false });
+                            results.push({
+                                contactId: contact.id,
+                                name: contact.name,
+                                originalNumber: digits,
+                                status: "invalid"
+                            });
+                            invalid++;
+                        }
+                    } else {
+                        await contact.update({ isWhatsappValid: false });
+                        results.push({
+                            contactId: contact.id,
+                            name: contact.name,
+                            originalNumber: digits,
+                            status: "invalid"
+                        });
+                        invalid++;
+                    }
                 }
             }
         } catch (err: any) {
@@ -234,8 +395,13 @@ const ValidateContactNumbersService = async ({
             }, "[ValidateContactNumbers] Erro ao validar contato");
 
             // Tenta marcar como inválido para não processar novamente e evitar loop infinito
+            // Tenta marcar como inválido para não processar novamente e evitar loop infinito.
+            // Usa update direto no Model para evitar validações de instância (dirty state) que causaram o erro original.
             try {
-                await contact.update({ isWhatsappValid: false });
+                await Contact.update(
+                    { isWhatsappValid: false },
+                    { where: { id: contact.id } }
+                );
             } catch (e) {
                 logger.error({ contactId: contact.id, err: e }, "Falha ao marcar contato com erro como inválido");
             }
@@ -253,6 +419,17 @@ const ValidateContactNumbersService = async ({
         // Delay entre chamadas para evitar rate limit
         await sleep(DELAY_MS);
     }
+
+    logger.info({
+        mode,
+        companyId,
+        totalProcessed: contacts.length,
+        totalPending,
+        validated,
+        corrected,
+        invalid,
+        errors
+    }, "[ValidateContactNumbers] Processamento concluído");
 
     return {
         total: contacts.length,

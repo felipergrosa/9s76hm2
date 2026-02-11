@@ -2354,7 +2354,7 @@ export const validateNumbers = async (req: AuthenticatedRequest, res: Response):
   } = req.body as {
     whatsappId: number;
     contactIds?: number[];
-    mode?: "nine_digit" | "all";
+    mode?: "nine_digit" | "all" | "no_name";
     offset?: number;
   };
 
@@ -2405,7 +2405,25 @@ export const getValidationPending = async (req: AuthenticatedRequest, res: Respo
       ...whereClause.number,
       [Op.regexp]: '^55[0-9]{2}9[6-9][0-9]{7}$'
     };
-  } else {
+  } else if (mode === "all") {
+    whereClause.number = {
+      ...whereClause.number,
+      [Op.regexp]: '^55[0-9]{10,11}$'
+    };
+  } else if (mode === "no_name") {
+    // Contatos onde o nome é igual ao número ou nulo/vazio
+    whereClause[Op.or] = [
+      {
+        name: { [Op.col]: 'Contact.number' }
+      },
+      {
+        name: { [Op.eq]: null }
+      },
+      {
+        name: { [Op.eq]: '' }
+      }
+    ];
+    // Manter apenas números BR
     whereClause.number = {
       ...whereClause.number,
       [Op.regexp]: '^55[0-9]{10,11}$'

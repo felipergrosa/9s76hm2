@@ -11,6 +11,7 @@ import {
   makeStyles,
   Dialog,
   DialogContent,
+  Avatar,
 } from "@material-ui/core";
 
 import {
@@ -128,6 +129,15 @@ const useStyles = makeStyles((theme) => ({
       mask: '50% calc(-1*var(--b))/var(--_g) exclude, 50%/var(--_g)',
       WebkitMask: '50% calc(-1*var(--b))/var(--_g) exclude, 50%/var(--_g)',
     },
+  },
+  messageAvatar: {
+    width: 30,
+    height: 30,
+    marginRight: 8,
+    alignSelf: "flex-end",
+    marginBottom: 5,
+    fontSize: 14,
+    fontWeight: "bold",
   },
 
   currentTicktText: {
@@ -1180,7 +1190,7 @@ const MessagesList = ({
         if (data.action === "create") {
           dispatch({ type: "ADD_MESSAGE", payload: data.message });
           scrollToBottom();
-          
+
           // Last Event ID: guardar ID da última mensagem recebida
           if (data.message?.id) {
             try {
@@ -1212,9 +1222,9 @@ const MessagesList = ({
         const lastMessageId = localStorage.getItem(`lastMessageId-${ticketId}`);
         if (lastMessageId && socket?.connected) {
           console.log("[MessagesList] Tentando recuperar mensagens perdidas desde ID:", lastMessageId);
-          socket.emit("recoverMissedMessages", { 
-            ticketId: ticketId, 
-            lastMessageId: parseInt(lastMessageId, 10) 
+          socket.emit("recoverMissedMessages", {
+            ticketId: ticketId,
+            lastMessageId: parseInt(lastMessageId, 10)
           }, (result) => {
             if (result?.success && result?.messages?.length > 0) {
               console.log(`[MessagesList] Recuperadas ${result.count} mensagens perdidas`);
@@ -1313,7 +1323,7 @@ const MessagesList = ({
               dispatch({ type: "ADD_MESSAGE", payload: msg });
             });
             scrollToBottom();
-            
+
             // Guardar último ID para Last Event ID pattern
             const lastMsg = newMessages[newMessages.length - 1];
             if (lastMsg?.id) {
@@ -1326,7 +1336,7 @@ const MessagesList = ({
             lastMessageIdRef.current = data.messages[data.messages.length - 1]?.id;
           }
         }
-        
+
         consecutiveFailsRef.current = 0; // Reset falhas após sucesso
       } catch (err) {
         consecutiveFailsRef.current++;
@@ -1343,7 +1353,7 @@ const MessagesList = ({
 
       // Determina intervalo baseado no estado - MAIS AGRESSIVO para garantir realtime
       let intervalMs = 30000; // Default: 30s quando socket conectado
-      
+
       if (!socket?.connected) {
         intervalMs = 5000; // 5s quando socket desconectado (mais agressivo)
         console.log("[MessagesList] Polling adaptativo: 5s (socket desconectado)");
@@ -1365,7 +1375,7 @@ const MessagesList = ({
       console.log("[MessagesList] Socket reconectado - ajustando polling");
       setupAdaptivePolling();
     };
-    
+
     const onDisconnect = () => {
       console.log("[MessagesList] Socket desconectado - aumentando frequência de polling");
       setupAdaptivePolling();
@@ -1980,6 +1990,18 @@ const MessagesList = ({
                 <SelectMessageCheckbox message={message} />
               </div>
             )}
+
+            {isGroup && !message.fromMe && (
+              <Avatar
+                src={getAvatarContactForMessage(message)?.urlPicture}
+                className={classes.messageAvatar}
+                style={{ backgroundColor: getParticipantColor(message), color: "#fff" }}
+                alt={getAvatarContactForMessage(message)?.name}
+              >
+                {(getAvatarContactForMessage(message)?.name || "P").charAt(0).toUpperCase()}
+              </Avatar>
+            )}
+
             <div className={classes.messageRowContent}>
               <div
                 className={bubbleClass}

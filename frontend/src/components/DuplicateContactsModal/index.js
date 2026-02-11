@@ -654,11 +654,16 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
         batchResults.forEach(r => { newResults[r.contactId] = r; });
         setValidationResults(prev => ({ ...prev, ...newResults }));
 
+        // Calcular progresso mais preciso
         const progress = Math.min(Math.round((processedCount / totalContacts) * 100), 99);
         setValidationProgress(progress);
 
-        // Se totalPending do backend for 0, acabou
-        if (!data?.totalPending || data.totalPending <= 0) {
+        // Debug logs
+        console.log(`[Validation Debug] Batch: ${batchResults.length}, Processed: ${processedCount}/${totalContacts}, Progress: ${progress}%, Pending: ${data?.totalPending}`);
+
+        // Se totalPending do backend for 0 OU se batchResults for menor que BATCH_SIZE, acabou
+        if ((!data?.totalPending || data.totalPending <= 0) || batchResults.length < 50) {
+          console.log(`[Validation Debug] Finalizando - batchResults.length: ${batchResults.length}, totalPending: ${data?.totalPending}`);
           hasMore = false;
         }
       }
@@ -1157,6 +1162,7 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
                 >
                   <MenuItem value="nine_digit">Apenas com dígito 9 (13 dígitos)</MenuItem>
                   <MenuItem value="all">Todos os contatos BR</MenuItem>
+                  <MenuItem value="no_name">Sem Nome (nome = número)</MenuItem>
                 </Select>
               </FormControl>
 
@@ -1169,7 +1175,7 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
                 disabled={loading || validating || !selectedWhatsappId}
                 startIcon={<Search size={16} />}
               >
-                Buscar contatos ({validationMode === "nine_digit" ? "com 9" : "todos BR"})
+                Buscar contatos ({validationMode === "nine_digit" ? "com 9" : validationMode === "all" ? "todos BR" : "sem nome"})
               </Button>
 
               <Button

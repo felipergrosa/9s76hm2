@@ -443,6 +443,7 @@ const ImportContactHistoryService = async ({
                     remoteJid: msg.key.remoteJid || ticket.contact?.remoteJid,
                     participant: msg.key.participant || null,
                     dataJson: JSON.stringify(msg),
+                    ticketImported: true,
                     createdAt: new Date(timestamp * 1000),
                     updatedAt: new Date(),
                     companyId
