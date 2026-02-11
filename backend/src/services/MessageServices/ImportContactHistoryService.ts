@@ -127,11 +127,60 @@ const ImportContactHistoryService = async ({
         // 5. Emitir estado "PREPARING"
         emitProgress(0, 0, "PREPARING");
 
-        // 6. Buscar mensagens em batches iterativos
+        // 6. Buscar mensagens via evento assíncrono
         if (typeof wbot.fetchMessageHistory !== "function") {
             emitProgress(0, 0, "COMPLETED");
             return { synced: 0, skipped: true, reason: "fetchMessageHistory não disponível nesta versão do Baileys" };
         }
+
+        /**
+         * Helper: Envia requisição fetchMessageHistory e aguarda resposta
+         * via evento "messaging-history.set" com timeout.
+         * 
+         * fetchMessageHistory retorna Promise<string> (tag/ID da requisição).
+         * As mensagens chegam assincronamente no evento "messaging-history.set".
+         */
+        const fetchMessagesViaEvent = (
+            wbotInstance: any,
+            targetJid: string,
+            count: number,
+            msgCursor?: any,
+            msgCursorTs?: number
+        ): Promise<any[]> => {
+            return new Promise((resolve) => {
+                const TIMEOUT_MS = 30_000; // 30 segundos
+
+                const timeout = setTimeout(() => {
+                    logger.warn(`[ImportHistory] Timeout aguardando messaging-history.set (${TIMEOUT_MS}ms)`);
+                    wbotInstance.ev.off("messaging-history.set", handler);
+                    resolve([]);
+                }, TIMEOUT_MS);
+
+                const handler = (data: any) => {
+                    clearTimeout(timeout);
+                    wbotInstance.ev.off("messaging-history.set", handler);
+
+                    const msgs = data?.messages || [];
+                    logger.info(`[ImportHistory] messaging-history.set recebido: ${msgs.length} mensagens, ${(data?.chats || []).length} chats, ${(data?.contacts || []).length} contatos`);
+                    resolve(msgs);
+                };
+
+                wbotInstance.ev.on("messaging-history.set", handler);
+
+                // Dispara a requisição — retorna tag (string), não as mensagens
+                logger.info(`[ImportHistory] Disparando fetchMessageHistory: jid=${targetJid}, count=${count}, cursor=${msgCursor?.id || "none"}, ts=${msgCursorTs || "none"}`);
+                wbotInstance.fetchMessageHistory(targetJid, count, msgCursor, msgCursorTs)
+                    .then((tag: string) => {
+                        logger.info(`[ImportHistory] fetchMessageHistory enviado, tag="${tag}". Aguardando evento...`);
+                    })
+                    .catch((err: any) => {
+                        clearTimeout(timeout);
+                        wbotInstance.ev.off("messaging-history.set", handler);
+                        logger.error(`[ImportHistory] Erro ao chamar fetchMessageHistory: ${err?.message}`);
+                        resolve([]);
+                    });
+            });
+        };
 
         const BATCH_SIZE = 50;
         let allMessages: any[] = [];
@@ -139,7 +188,7 @@ const ImportContactHistoryService = async ({
         let cursorTimestamp: number | undefined = undefined;
         let keepFetching = true;
         let fetchAttempts = 0;
-        const MAX_FETCH_ATTEMPTS = 100; // Segurança contra loop infinito
+        const MAX_FETCH_ATTEMPTS = 20; // Segurança contra loop infinito
 
         // Usar mensagem mais antiga do ticket como âncora inicial
         const oldestMessage = await Message.findOne({
@@ -162,30 +211,16 @@ const ImportContactHistoryService = async ({
         while (keepFetching && fetchAttempts < MAX_FETCH_ATTEMPTS) {
             fetchAttempts++;
             try {
-                const result = await wbot.fetchMessageHistory(jid, BATCH_SIZE, cursor, cursorTimestamp);
-
-                logger.info(`[ImportHistory] DEBUG: result type=${typeof result}, isArray=${Array.isArray(result)}`);
-                // logger.info(`[ImportHistory] DEBUG RAW: ${JSON.stringify(result, null, 2)}`); // Descomente se necessário, pode ser muito verborrágico
-
-                let messages: any[] = [];
-                if (Array.isArray(result)) {
-                    messages = result;
-                } else if (result && typeof result === "object") {
-                    messages = result.messages || result.data || [];
-                } else if (typeof result === "string") {
-                    logger.warn(`[ImportHistory] Baileys retornou string inesperada: "${result.substring(0, 500)}"`);
-                }
-
-                logger.debug(`[ImportHistory] fetchMessageHistory retornou ${messages.length} mensagens`);
-
-                if ((!messages || messages.length === 0) && fetchAttempts === 1 && cursor) {
-                    logger.warn(`[ImportHistory] Primeira tentativa com cursor falhou. Tentando sem cursor para pegar as mais recentes...`);
-                    cursor = undefined;
-                    cursorTimestamp = undefined;
-                    continue; // Tenta de novo sem cursor
-                }
+                // Busca via evento assíncrono
+                const messages = await fetchMessagesViaEvent(wbot, jid, BATCH_SIZE, cursor, cursorTimestamp);
 
                 if (!messages || messages.length === 0) {
+                    if (fetchAttempts === 1 && cursor) {
+                        logger.warn(`[ImportHistory] Primeira tentativa com cursor falhou. Tentando sem cursor...`);
+                        cursor = undefined;
+                        cursorTimestamp = undefined;
+                        continue;
+                    }
                     logger.info(`[ImportHistory] Sem mais mensagens retornadas pelo Baileys.`);
                     keepFetching = false;
                     break;
@@ -242,7 +277,7 @@ const ImportContactHistoryService = async ({
                 emitProgress(allMessages.length, 0, "PREPARING", `Buscando... ${allMessages.length} mensagens encontradas`);
 
                 // Delay entre batches para não sobrecarregar
-                await new Promise(r => setTimeout(r, 500));
+                await new Promise(r => setTimeout(r, 1000));
             } catch (err: any) {
                 logger.warn(`[ImportHistory] Erro no batch ${fetchAttempts}: ${err?.message}`);
                 keepFetching = false;

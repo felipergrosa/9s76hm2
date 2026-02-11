@@ -92,7 +92,7 @@ const SyncChatHistoryService = async ({
             order: [["createdAt", "ASC"]]
         });
 
-        // 6. Chamar fetchMessageHistory do Baileys
+        // 6. Chamar fetchMessageHistory do Baileys (padrão assíncrono)
         let messages: any[] = [];
         try {
             if (typeof wbot.fetchMessageHistory === "function") {
@@ -110,18 +110,42 @@ const SyncChatHistoryService = async ({
                     } catch { }
                 }
 
-                // Baileys fetchMessageHistory(jid, quantity, cursor.key, cursor.messageTimestamp)
-                const result = await wbot.fetchMessageHistory(jid, messageCount, cursor, timestamp);
+                /**
+                 * fetchMessageHistory retorna Promise<string> (tag/ID da requisição).
+                 * As mensagens chegam assincronamente via evento "messaging-history.set".
+                 * Registramos listener temporário para capturar a resposta.
+                 */
+                messages = await new Promise<any[]>((resolve) => {
+                    const TIMEOUT_MS = 30_000;
 
-                // VALIDAR: fetchMessageHistory pode retornar objeto ou array
-                if (Array.isArray(result)) {
-                    messages = result;
-                } else if (result && typeof result === 'object') {
-                    // Algumas versões do Baileys retornam { messages: [...] }
-                    messages = result.messages || result.data || [];
-                } else {
-                    messages = [];
-                }
+                    const timeout = setTimeout(() => {
+                        logger.warn(`[SyncChatHistory] Timeout aguardando messaging-history.set (${TIMEOUT_MS}ms)`);
+                        wbot.ev.off("messaging-history.set", handler);
+                        resolve([]);
+                    }, TIMEOUT_MS);
+
+                    const handler = (data: any) => {
+                        clearTimeout(timeout);
+                        wbot.ev.off("messaging-history.set", handler);
+                        const msgs = data?.messages || [];
+                        logger.info(`[SyncChatHistory] messaging-history.set recebido: ${msgs.length} mensagens`);
+                        resolve(msgs);
+                    };
+
+                    wbot.ev.on("messaging-history.set", handler);
+
+                    logger.info(`[SyncChatHistory] Disparando fetchMessageHistory: jid=${jid}, count=${messageCount}`);
+                    wbot.fetchMessageHistory(jid, messageCount, cursor, timestamp)
+                        .then((tag: string) => {
+                            logger.info(`[SyncChatHistory] fetchMessageHistory enviado, tag="${tag}". Aguardando evento...`);
+                        })
+                        .catch((err: any) => {
+                            clearTimeout(timeout);
+                            wbot.ev.off("messaging-history.set", handler);
+                            logger.warn(`[SyncChatHistory] Erro ao chamar fetchMessageHistory: ${err?.message}`);
+                            resolve([]);
+                        });
+                });
 
                 if (messages?.length > 0) {
                     logger.info(`[SyncChatHistory] Recebidas ${messages?.length} mensagens para ticketId=${ticketId}`);
