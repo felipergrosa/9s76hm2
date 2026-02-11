@@ -114,10 +114,13 @@ export const normalizePhoneNumber = (
       if (national.length === 10) {
         const ddd = national.substring(0, 2);
         const resto = national.substring(2);
-        // Se é celular sem 9 e começa 6-9, insere 9
-        if (resto.length === 8 && /^[6-9]/.test(resto)) {
-          canonical = `55${ddd}9${resto}`;
-        }
+        // REMOVIDO: Inserção automática do nono dígito (9)
+        // Isso estava causando problemas com números que o usuário explicitamente quer manter com 8 dígitos
+        // ou quando o WhatsApp envia números de 8 dígitos e o sistema forçava 9, criando duplicidade.
+        // if (resto.length === 8 && /^[6-9]/.test(resto)) {
+        //   canonical = `55${ddd}9${resto}`;
+        // }
+
       } else if (national.length === 13) {
         // Caso especial: DDI repetido; tenta reorganizar
         const possibleDDD = national.substring(0, 2);
@@ -125,8 +128,10 @@ export const normalizePhoneNumber = (
         if (restAfterDDD.length === 11 && /^[6-9]/.test(restAfterDDD.substring(1, 2))) {
           canonical = `55${possibleDDD}${restAfterDDD}`;
         } else if (restAfterDDD.length === 10 && /^[6-9]/.test(restAfterDDD.substring(0, 1))) {
-          canonical = `55${possibleDDD}9${restAfterDDD}`;
+          // canonical = `55${possibleDDD}9${restAfterDDD}`; // DESATIVADO: Evitar forçar 9
+          canonical = `55${possibleDDD}${restAfterDDD}`;
         }
+
       }
     }
   }
