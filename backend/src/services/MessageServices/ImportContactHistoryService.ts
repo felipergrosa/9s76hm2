@@ -148,10 +148,10 @@ const ImportContactHistoryService = async ({
             msgCursorTs?: number
         ): Promise<any[]> => {
             return new Promise((resolve) => {
-                const TIMEOUT_MS = 30_000; // 30 segundos
+                const TIMEOUT_MS = 15_000; // Reduzido para 15s para feedback mais rápido
 
                 const timeout = setTimeout(() => {
-                    logger.warn(`[ImportHistory] Timeout aguardando messaging-history.set (${TIMEOUT_MS}ms)`);
+                    logger.warn(`[ImportHistory] Timeout (${TIMEOUT_MS}ms) aguardando messaging-history.set. Jid=${targetJid}`);
                     wbotInstance.ev.off("messaging-history.set", handler);
                     resolve([]);
                 }, TIMEOUT_MS);
@@ -161,22 +161,34 @@ const ImportContactHistoryService = async ({
                     wbotInstance.ev.off("messaging-history.set", handler);
 
                     const msgs = data?.messages || [];
-                    logger.info(`[ImportHistory] messaging-history.set recebido: ${msgs.length} mensagens, ${(data?.chats || []).length} chats, ${(data?.contacts || []).length} contatos`);
+                    logger.info(`[ImportHistory] messaging-history.set EVENTO RECEBIDO: ${msgs.length} mensagens. Raw keys: ${Object.keys(data || {})}`);
+                    if (msgs.length > 0) {
+                        logger.info(`[ImportHistory] Time do primeiro msg: ${msgs[0]?.messageTimestamp}, Ultimo: ${msgs[msgs.length - 1]?.messageTimestamp}`);
+                    }
                     resolve(msgs);
                 };
 
                 wbotInstance.ev.on("messaging-history.set", handler);
 
-                // Dispara a requisição — retorna tag (string), não as mensagens
-                logger.info(`[ImportHistory] Disparando fetchMessageHistory: jid=${targetJid}, count=${count}, cursor=${msgCursor?.id || "none"}, ts=${msgCursorTs || "none"}`);
+                logger.info(`[ImportHistory] Disparando fetchMessageHistory: jid=${targetJid}, count=${count}, cursor=${JSON.stringify(msgCursor)}`);
+
+                // Verificar se método existe
+                if (typeof wbotInstance.fetchMessageHistory !== 'function') {
+                    logger.error(`[ImportHistory] CRITICO: fetchMessageHistory NAO E UMA FUNCAO no wbot! Keys: ${Object.keys(wbotInstance)}`);
+                    clearTimeout(timeout);
+                    wbotInstance.ev.off("messaging-history.set", handler);
+                    resolve([]);
+                    return;
+                }
+
                 wbotInstance.fetchMessageHistory(targetJid, count, msgCursor, msgCursorTs)
                     .then((tag: string) => {
-                        logger.info(`[ImportHistory] fetchMessageHistory enviado, tag="${tag}". Aguardando evento...`);
+                        logger.info(`[ImportHistory] fetchMessageHistory PROMISE RESOLVIDA. Tag="${tag}". Aguardando evento...`);
                     })
                     .catch((err: any) => {
                         clearTimeout(timeout);
                         wbotInstance.ev.off("messaging-history.set", handler);
-                        logger.error(`[ImportHistory] Erro ao chamar fetchMessageHistory: ${err?.message}`);
+                        logger.error(`[ImportHistory] fetchMessageHistory PROMISE REJECTED: ${err?.message}`);
                         resolve([]);
                     });
             });

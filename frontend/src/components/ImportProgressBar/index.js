@@ -24,10 +24,12 @@ const useStyles = makeStyles((theme) => ({
         maxWidth: 500,
         padding: theme.spacing(2),
         // Glassmorphism Deep UI - Ajustado para maior visibilidade
-        backgroundColor: theme.palette.primary.main, // Fallback sólido
-        background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-        boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.3)",
-        color: "#fff",
+        // Forçar cor escura sólida para garantir visibilidade
+        backgroundColor: "#1f2937", // Cinza escuro/Slate 800
+        background: "linear-gradient(135deg, #1f2937 0%, #111827 100%)", // Gradiente sutil
+        boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.4)",
+        color: "#ffffff",
+        border: "1px solid rgba(255, 255, 255, 0.1)",
         borderRadius: 16,
         border: "1px solid rgba(255, 255, 255, 0.2)",
         display: "flex",
