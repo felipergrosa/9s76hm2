@@ -164,6 +164,8 @@ const ImportContactHistoryService = async ({
             try {
                 const result = await wbot.fetchMessageHistory(jid, BATCH_SIZE, cursor, cursorTimestamp);
 
+                logger.debug(`[ImportHistory] fetchMessageHistory params: jid=${jid}, limit=${BATCH_SIZE}, cursor=${cursor?.id}, ts=${cursorTimestamp}`);
+
                 let messages: any[] = [];
                 if (Array.isArray(result)) {
                     messages = result;
@@ -171,7 +173,10 @@ const ImportContactHistoryService = async ({
                     messages = result.messages || result.data || [];
                 }
 
+                logger.debug(`[ImportHistory] fetchMessageHistory retornou ${messages.length} mensagens`);
+
                 if (!messages || messages.length === 0) {
+                    logger.info(`[ImportHistory] Sem mais mensagens retornadas pelo Baileys.`);
                     keepFetching = false;
                     break;
                 }
@@ -257,10 +262,18 @@ const ImportContactHistoryService = async ({
                     where: { wid: msg.key.id, companyId }
                 });
 
-                if (existingMsg) continue;
+                if (existingMsg) {
+                    logger.debug(`[ImportHistory] Msg duplicada encontrada (pular): wid=${msg.key.id}`);
+                    continue;
+                } else {
+                    logger.debug(`[ImportHistory] Msg nova (persistir): wid=${msg.key.id}`);
+                }
 
                 // Validar mensagem
-                if (!isImportableMessage(msg)) continue;
+                if (!isImportableMessage(msg)) {
+                    logger.debug(`[ImportHistory] Msg não importável: ${getMessageType(msg)}`);
+                    continue;
+                }
 
                 // Extrair dados da mensagem
                 const messageType = getMessageType(msg);
