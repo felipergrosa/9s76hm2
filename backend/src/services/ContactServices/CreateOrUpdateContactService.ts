@@ -266,7 +266,7 @@ const CreateOrUpdateContactService = async ({
     // Busca por número/canonical E pelo remoteJid quando for LID, para evitar duplicados
     contact = await Contact.findOne({
       where: isGroup
-        ? { number: rawNumberDigits, companyId }
+        ? { number, companyId }
         : {
           companyId,
           [Op.or]: [
@@ -370,14 +370,14 @@ const CreateOrUpdateContactService = async ({
       {
         const incomingName = (name || "").trim();
         const effectiveName = incomingName && incomingName !== number ? incomingName : number;
-        
+
         // =================================================================
         // PROTEÇÃO CONTRA DUPLICAÇÃO DE LIDs
         // Antes de criar novo contato, verificar se existe LID com mesmo nome
         // Se existir, mesclar automaticamente
         // =================================================================
         let lidContactToMerge: Contact | null = null;
-        
+
         if (!isGroup && effectiveName && effectiveName !== number) {
           // Buscar contato LID com mesmo nome
           lidContactToMerge = await Contact.findOne({
@@ -388,7 +388,7 @@ const CreateOrUpdateContactService = async ({
               isGroup: false
             }
           });
-          
+
           if (lidContactToMerge) {
             logger.info({
               message: "[CreateOrUpdateContactService] LID duplicado detectado - promovendo para número real",
@@ -398,7 +398,7 @@ const CreateOrUpdateContactService = async ({
               newContactNumber: number,
               companyId
             });
-            
+
             // Atualizar o contato LID existente com o número real (sem chamar merge)
             try {
               await lidContactToMerge.update({
@@ -410,14 +410,14 @@ const CreateOrUpdateContactService = async ({
                 whatsappId
               });
               await lidContactToMerge.reload();
-              
+
               logger.info({
                 message: "[CreateOrUpdateContactService] LID promovido com número real",
                 contactId: lidContactToMerge.id,
                 newNumber: number,
                 newRemoteJid
               });
-              
+
               return lidContactToMerge;
             } catch (promoteError: any) {
               logger.warn({
@@ -427,7 +427,7 @@ const CreateOrUpdateContactService = async ({
             }
           }
         }
-        
+
         // Criação normal (se não houve mesclagem)
         try {
           contact = await Contact.create({
@@ -442,7 +442,7 @@ const CreateOrUpdateContactService = async ({
           createContact = true;
         } catch (error) {
           if (error instanceof UniqueConstraintError) {
-            logger.warn(
+            logger.debug(
               { number, companyId, remoteJid: newRemoteJid },
               "CreateOrUpdateContactService: contato já existe (constraint) — reutilizando."
             );
@@ -491,7 +491,7 @@ const CreateOrUpdateContactService = async ({
           createContact = true;
         } catch (error) {
           if (error instanceof UniqueConstraintError) {
-            logger.warn(
+            logger.debug(
               { number, companyId, remoteJid },
               "CreateOrUpdateContactService: contato já existe (constraint) — reutilizando."
             );
