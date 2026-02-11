@@ -272,7 +272,9 @@ const CreateOrUpdateContactService = async ({
           [Op.or]: [
             { canonicalNumber: number },
             { number },
-            remoteJid ? { remoteJid } : {}
+            remoteJid ? { remoteJid } : {},
+            // Se for LID, tentar buscar também via lidJid (caso já esteja vinculado a um contato real)
+            remoteJid && remoteJid.includes("@lid") ? { lidJid: remoteJid } : {}
           ]
         }
     });

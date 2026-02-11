@@ -1388,9 +1388,15 @@ const verifyContact = async (
       debugLog("[verifyContact] Erro ao usar signalRepository.lidMapping", { err: err?.message });
     }
 
-    // 1. Para JIDs @lid, buscar por remoteJid (LID) existente
+    // 1. Para JIDs @lid, buscar por remoteJid (LID) existente OU pelo campo lidJid (em contato real)
     const existingByLid = await Contact.findOne({
-      where: { remoteJid: normalizedJid, companyId }
+      where: {
+        companyId,
+        [Op.or]: [
+          { remoteJid: normalizedJid },
+          { lidJid: normalizedJid }
+        ]
+      }
     });
     if (existingByLid) {
       debugLog("[verifyContact] Contato encontrado pelo LID", { contactId: existingByLid.id });
