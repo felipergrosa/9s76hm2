@@ -1413,17 +1413,20 @@ const verifyContact = async (
     }
 
     // 3. Tentar extrair telefone do próprio LID (caso seja numero@lid)
-    const { canonical: canonicalFromLid } = safeNormalizePhoneNumber(cleaned);
-    if (canonicalFromLid) {
-      const existingByLidNumber = await Contact.findOne({
-        where: { canonicalNumber: canonicalFromLid, companyId, isGroup: false }
-      });
-      if (existingByLidNumber) {
-        debugLog("[verifyContact] Contato encontrado pelo número no LID", {
-          contactId: existingByLidNumber.id,
-          canonicalFromLid
+    // Ignorar se for um LID puro (15+ dígitos) para evitar falso positivo com DDD 18
+    if (cleaned.length <= 13) {
+      const { canonical: canonicalFromLid } = safeNormalizePhoneNumber(cleaned);
+      if (canonicalFromLid) {
+        const existingByLidNumber = await Contact.findOne({
+          where: { canonicalNumber: canonicalFromLid, companyId, isGroup: false }
         });
-        return existingByLidNumber;
+        if (existingByLidNumber) {
+          debugLog("[verifyContact] Contato encontrado pelo número no LID", {
+            contactId: existingByLidNumber.id,
+            canonicalFromLid
+          });
+          return existingByLidNumber;
+        }
       }
     }
 
@@ -1502,18 +1505,9 @@ const verifyContact = async (
       pushName: msgContact.name
     });
 
-    // VALIDAÇÃO DE TAMANHO PARA LID - Evita criar contatos com números inválidos
-    if (cleaned.length > 13) {
-      logger.error("[verifyContact] LID REJEITADO: Número muito longo (acima de 13 dígitos)", {
-        originalJid: msgContact.id,
-        normalizedJid,
-        cleaned,
-        length: cleaned.length,
-        pushName: msgContact.name,
-        companyId
-      });
-      return null as any;
-    }
+    // VALIDAÇÃO DE TAMANHO REMOVIDA: LIDs possuem mais de 13 dígitos
+    // A validação anterior estava impedindo a criação correta de contatos LID.
+    // O problema de número errado era causado pelo safeNormalizePhoneNumber, já corrigido.
 
     // SOLUÇÃO: Criar contato temporário com LID quando não resolver
     // Isso permite processar a mensagem e o contato será atualizado quando o mapeamento for descoberto

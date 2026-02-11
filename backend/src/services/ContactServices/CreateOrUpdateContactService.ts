@@ -157,10 +157,10 @@ const CreateOrUpdateContactService = async ({
 
     const rawNumberDigits = isGroup ? (rawNumber || "").toString().trim() : (rawNumber || "").toString();
     const isLinkedDevice = !!remoteJid && remoteJid.includes("@lid");
-    const { canonical } = !isGroup ? safeNormalizePhoneNumber(rawNumberDigits) : { canonical: null };
+    const { canonical } = (!isGroup && !isLinkedDevice) ? safeNormalizePhoneNumber(rawNumberDigits) : { canonical: null };
 
     // Para LID, não bloquear pela canonical: usa rawNumberDigits ou remoteJid como fallback
-    let number = isGroup ? rawNumberDigits : canonical;
+    let number = (isGroup || isLinkedDevice) ? rawNumberDigits : canonical;
 
     // =================================================================
     // VALIDAÇÃO ROBUSTA DE GRUPOS: Garantir que grupos tenham @g.us
