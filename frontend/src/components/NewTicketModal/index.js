@@ -57,6 +57,7 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
   const [openAlert, setOpenAlert] = useState(false);
   const [userTicketOpen, setUserTicketOpen] = useState("");
   const [queueTicketOpen, setQueueTicketOpen] = useState("");
+  const [openTicketData, setOpenTicketData] = useState(null); // Ticket completo para transferência
   const [officialTemplateModalOpen, setOfficialTemplateModalOpen] = useState(false);
   const [pendingContactId, setPendingContactId] = useState(null);
 
@@ -76,16 +77,16 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
           .get(`/whatsapp`, { params: { companyId, session: 0 } })
           .then(({ data }) => setWhatsapps(data));
 
-          // .then(({ data }) => {
-          //   const mappedWhatsapps = data.map((whatsapp) => ({
-          //     ...whatsapp,
-          //     selected: false,
-          //   }));
-          //   setWhatsapps(mappedWhatsapps);
-          //   if (channelFilter && mappedWhatsapps.length && mappedWhatsapps?.length === 1 && (user.whatsappId === null || user?.whatsapp?.channel !== channelFilter)) {
-          //     setSelectedWhatsapp(mappedWhatsapps[0].id)
-          //   }
-          // });
+        // .then(({ data }) => {
+        //   const mappedWhatsapps = data.map((whatsapp) => ({
+        //     ...whatsapp,
+        //     selected: false,
+        //   }));
+        //   setWhatsapps(mappedWhatsapps);
+        //   if (channelFilter && mappedWhatsapps.length && mappedWhatsapps?.length === 1 && (user.whatsappId === null || user?.whatsapp?.channel !== channelFilter)) {
+        //     setSelectedWhatsapp(mappedWhatsapps[0].id)
+        //   }
+        // });
       };
 
       if (whatsappId !== null && whatsappId !== undefined) {
@@ -144,6 +145,7 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
     setOpenAlert(false);
     setUserTicketOpen("");
     setQueueTicketOpen("");
+    setOpenTicketData(null);
     setSelectedContact(null);
   };
 
@@ -153,6 +155,26 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
     setOpenAlert(false);
     setUserTicketOpen("");
     setQueueTicketOpen("");
+    setOpenTicketData(null);
+  };
+
+  // Assumir ticket aberto de outro atendente via transferência
+  const handleAcceptTicket = async () => {
+    if (!openTicketData) return;
+    setLoading(true);
+    try {
+      await api.put(`/tickets/${openTicketData.id}`, {
+        userId: user.id,
+        status: "open"
+      });
+      setOpenAlert(false);
+      setOpenTicketData(null);
+      onClose(openTicketData);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSaveTicket = async contactId => {
@@ -225,20 +247,30 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
           const ticket = JSON.parse(errorField);
           // Verificar se posso acessar: meu ticket ou de usuário que gerencio
           const managedIds = (user?.managedUserIds || []).map(id => Number(id));
-          const canAccess = ticket.userId === user?.id || 
-                            user?.profile === "admin" || 
-                            user?.super ||
-                            managedIds.includes(Number(ticket.userId));
-          
-          if (!canAccess) {
-            setOpenAlert(true);
-            setUserTicketOpen(ticket?.user?.name);
-            setQueueTicketOpen(ticket?.queue?.name);
-          } else {
+          const canAccess = ticket.userId === user?.id ||
+            user?.profile === "admin" ||
+            user?.super ||
+            managedIds.includes(Number(ticket.userId));
+
+          if (ticket.userId === user?.id) {
+            // Já é meu ticket, apenas abrir
             setOpenAlert(false);
             setUserTicketOpen("");
             setQueueTicketOpen("");
+            setOpenTicketData(null);
             onClose(ticket);
+          } else if (canAccess) {
+            // Posso assumir: mostrar modal com opção de transferir
+            setOpenAlert(true);
+            setUserTicketOpen(ticket?.user?.name);
+            setQueueTicketOpen(ticket?.queue?.name);
+            setOpenTicketData(ticket);
+          } else {
+            // Sem permissão: apenas informar
+            setOpenAlert(true);
+            setUserTicketOpen(ticket?.user?.name);
+            setQueueTicketOpen(ticket?.queue?.name);
+            setOpenTicketData(null);
           }
           return;
         }
@@ -315,7 +347,7 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
             getOptionLabel={renderOptionLabel}
             renderOption={renderOption}
             filterOptions={createAddContactOption}
-            onChange={(e, newValue) => {                     
+            onChange={(e, newValue) => {
               setChannelFilter(newValue ? newValue.channel : "whatsapp");
               handleSelectOption(e, newValue)
             }}
@@ -503,6 +535,7 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
             handleClose={handleCloseAlert}
             user={userTicketOpen}
             queue={queueTicketOpen}
+            onAccept={openTicketData ? handleAcceptTicket : undefined}
           />
         )}
       </Dialog >

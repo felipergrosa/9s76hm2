@@ -80,10 +80,24 @@ const SyncChatHistoryService = async ({
             return { synced: 0, skipped: true, reason: "Conexão WhatsApp não inicializada" };
         }
 
-        // 4. Montar JID do contato
-        const jid = ticket.isGroup
-            ? `${ticket.contact.number}@g.us`
-            : `${ticket.contact.number}@s.whatsapp.net`;
+        // 4. Montar JID do contato (com proteção contra PENDING_ e LIDs)
+        let jid: string;
+        if (ticket.isGroup) {
+            jid = ticket.contact.remoteJid || `${ticket.contact.number}@g.us`;
+        } else {
+            const num = ticket.contact.number || "";
+            if (num.startsWith("PENDING_") || num.includes("@lid")) {
+                // Contato pendente — usar remoteJid se disponível (LID é válido para fetchMessageHistory)
+                const rid = ticket.contact.remoteJid || (ticket.contact as any).lidJid;
+                if (rid) {
+                    jid = rid;
+                } else {
+                    return { synced: 0, skipped: true, reason: "Contato PENDING sem JID válido para sync" };
+                }
+            } else {
+                jid = `${num}@s.whatsapp.net`;
+            }
+        }
 
         // 5. Buscar mensagem MAIS ANTIGA do banco para usar como âncora
         // (queremos buscar mensagens ANTERIORES a esta)

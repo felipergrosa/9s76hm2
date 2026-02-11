@@ -6352,27 +6352,12 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
               }
             }
           } else {
-            // NOVO: Criar contato LID se não existir
-            // Extrair número do LID para uso temporário
-            const lidNumber = contact.id.replace(/\D/g, "");
-            const tempName = contactName || `Contato ${lidNumber.slice(-8)}`;
-
-            // Criar novo contato com LID
-            const newContact = await Contact.create({
-              name: tempName,
-              number: `PENDING_${contact.id}`,  // Marcador para identificar como pendente de resolução
-              canonicalNumber: null,
-              companyId,
-              whatsappId: wbot.id,
-              isGroup: false,
-              remoteJid: contact.id,  // O LID completo
-              lidJid: contact.id,
-              profilePicUrl: "",
-              pushName: contact.notify || null,
-              businessName: contact.verifiedName || null
-            });
-
-            logger.info(`[contacts.update] Novo contato LID criado: ${contact.id} → contactId=${newContact.id}, nome="${tempName}"`);
+            // NÃO criar contatos novos aqui — isso gerava PENDING_ com JIDs inválidos.
+            // A criação de contatos LID deve ser feita apenas pelo fluxo de mensagens (verifyContact),
+            // onde temos mais contexto (pushName, remoteJidAlt, etc.)
+            if (contactName) {
+              logger.info(`[contacts.update] LID ${contact.id} com nome "${contactName}" — contato será criado quando receber mensagem`);
+            }
           }
         } catch (err: any) {
           logger.warn({ err: err?.message }, `[contacts.update] Erro ao processar contato LID ${contact.id}`);

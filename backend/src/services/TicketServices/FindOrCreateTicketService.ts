@@ -216,7 +216,14 @@ const FindOrCreateTicketService = async (
         // @ts-ignore: Unreachable code error 
         || (queueId !== 0 && Number(ticket?.queueId) !== Number(queueId) && queueId !== "" && queueId !== "0" && !isNil(queueId))) {
         throw new AppError(
-          `Ticket em outro atendimento. Atendente: ${ticket?.user?.name} - Fila: ${ticket?.queue?.name}`
+          JSON.stringify({
+            id: ticket.id,
+            uuid: ticket.uuid,
+            userId: ticket.userId,
+            status: ticket.status,
+            user: ticket.user ? { id: ticket.user.id, name: ticket.user.name } : null,
+            queue: ticket.queue ? { id: ticket.queue.id, name: ticket.queue.name } : null
+          })
         );
       }
     }
