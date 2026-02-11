@@ -223,7 +223,7 @@ const dedupeContactTags = async (transaction: Transaction): Promise<void> => {
     `
     DELETE FROM "ContactTags" a
     USING "ContactTags" b
-    WHERE a."id" > b."id"
+    WHERE a.ctid > b.ctid
       AND a."contactId" = b."contactId"
       AND a."tagId" = b."tagId";
     `,
@@ -363,10 +363,26 @@ const ProcessDuplicateContactsService = async ({
         aggregatedUpdates.canonicalNumber = finalCanonical;
       }
 
+      // PASSO 1: Renomear o `number` dos duplicados para evitar UniqueConstraintError
+      // O campo `number` é @Unique, então precisamos liberar os valores antes do update do master
+      for (const duplicate of duplicates) {
+        const tempNumber = `__dup_${duplicate.id}_${Date.now()}`;
+        await sequelize.query(
+          'UPDATE "Contacts" SET "number" = :tempNumber WHERE "id" = :duplicateId',
+          {
+            replacements: { tempNumber, duplicateId: duplicate.id },
+            transaction,
+            type: QueryTypes.UPDATE
+          }
+        );
+      }
+
+      // PASSO 2: Atualizar o master com os campos mesclados
       if (Object.keys(aggregatedUpdates).length > 0) {
         await master.update(aggregatedUpdates, { transaction });
       }
 
+      // PASSO 3: Mover referências e destruir duplicados
       for (const duplicate of duplicates) {
         await updateReferences(master.id, duplicate.id, existingRefs, transaction);
 
