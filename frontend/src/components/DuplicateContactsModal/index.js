@@ -358,12 +358,12 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
   const handleSelectMaster = (groupKey, masterId) => {
     setGroupState(prev => {
       const next = { ...prev };
-      const group = next[groupKey];
-      if (!group) return prev;
-      const newSelected = new Set(Array.from(group.selectedIds));
-      newSelected.delete(masterId);
+      const group = next[groupKey] || { selectedIds: new Set() };
+      const newSelected = new Set(Array.from(group.selectedIds || []));
+      // Garante que o novo master não esteja nos selecionados
+      newSelected.delete(Number(masterId));
       next[groupKey] = {
-        masterId,
+        masterId: Number(masterId),
         selectedIds: newSelected
       };
       return next;
@@ -373,14 +373,16 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
   const handleToggleDuplicate = (groupKey, contactId) => {
     setGroupState(prev => {
       const next = { ...prev };
-      const group = next[groupKey];
-      if (!group) return prev;
-      const selectedIds = new Set(Array.from(group.selectedIds));
-      if (selectedIds.has(contactId)) {
-        selectedIds.delete(contactId);
+      const group = next[groupKey] || { masterId: null, selectedIds: new Set() };
+      const selectedIds = new Set(Array.from(group.selectedIds || []));
+      const numericId = Number(contactId);
+      const numericMaster = Number(group.masterId);
+
+      if (selectedIds.has(numericId)) {
+        selectedIds.delete(numericId);
       } else {
-        if (contactId !== group.masterId) {
-          selectedIds.add(contactId);
+        if (numericId !== numericMaster) {
+          selectedIds.add(numericId);
         }
       }
       next[groupKey] = {
@@ -696,7 +698,7 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
                     control={
                       <Radio
                         color="primary"
-                        checked={state.masterId === contact.id}
+                        checked={Number(state.masterId) === Number(contact.id)}
                         onChange={() => handleSelectMaster(currentGroupKey, contact.id)}
                       />
                     }
@@ -708,7 +710,7 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
                         color="primary"
                         checked={selectedIds.has(contact.id)}
                         onChange={() => handleToggleDuplicate(currentGroupKey, contact.id)}
-                        disabled={state.masterId === contact.id}
+                        disabled={Number(state.masterId) === Number(contact.id)}
                       />
                     }
                     label={<Typography variant="subtitle2">Duplicado</Typography>}

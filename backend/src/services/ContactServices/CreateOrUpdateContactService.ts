@@ -316,6 +316,28 @@ const CreateOrUpdateContactService = async ({
       contact.profilePicUrl = profilePicUrl || null;
       contact.isGroup = isGroup;
       if (!isGroup) {
+        // Lógica para preservar formato sem 9 se o webhook trouxer com 9 e for o mesmo número
+        const currentDigits = contact.number ? contact.number.replace(/\D/g, "") : "";
+        const newDigits = number.replace(/\D/g, "");
+
+        let preserveOldNumber = false;
+        if (currentDigits.length === 12 && newDigits.length === 13) {
+          const currentDDD = currentDigits.substring(2, 4);
+          const currentRest = currentDigits.substring(4);
+
+          const newDDD = newDigits.substring(2, 4);
+          const newNine = newDigits.charAt(4);
+          const newRest = newDigits.substring(5);
+
+          if (currentDDD === newDDD && newNine === '9' && currentRest === newRest) {
+            preserveOldNumber = true;
+          }
+        }
+
+        if (preserveOldNumber) {
+          number = contact.number;
+        }
+
         contact.number = number;
         contact.canonicalNumber = number;
       }
