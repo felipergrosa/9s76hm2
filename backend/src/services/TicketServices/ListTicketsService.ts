@@ -145,36 +145,37 @@ const ListTicketsService = async ({
         isGroup: true,
       };
 
-      // Super/admin vê todos os grupos; demais respeitam permissões granulares
-      if (!user.super && user.profile !== "admin") {
-        // Filtro por conexões permitidas
-        if (uniqueConnIds.length > 0) {
-          whereCondition = {
-            ...whereCondition,
-            whatsappId: { [Op.in]: uniqueConnIds },
-          };
-        }
+      // Super/admin AGORA TAMBÉM respeitam permissões granulares (mudança solicitada)
+      // if (!user.super && user.profile !== "admin") { <-- REMOVIDO PARA APLICAR A TODOS
 
-        // Filtro granular por grupos permitidos (tabela UserGroupPermissions)
-        const allowedGroupContactIds = await ListUserGroupPermissionsService(
-          user.id,
-          companyId
-        );
-
-        if (allowedGroupContactIds.length > 0) {
-          // Usuário tem permissões específicas — mostrar apenas esses grupos
-          whereCondition = {
-            ...whereCondition,
-            contactId: { [Op.in]: allowedGroupContactIds },
-          };
-        } else {
-          // Usuário tem allowGroup=true mas nenhum grupo liberado — não mostrar nenhum
-          whereCondition = {
-            ...whereCondition,
-            contactId: { [Op.in]: [0] }, // Nenhum grupo corresponde a contactId=0
-          };
-        }
+      // Filtro por conexões permitidas
+      if (uniqueConnIds.length > 0) {
+        whereCondition = {
+          ...whereCondition,
+          whatsappId: { [Op.in]: uniqueConnIds },
+        };
       }
+
+      // Filtro granular por grupos permitidos (tabela UserGroupPermissions)
+      const allowedGroupContactIds = await ListUserGroupPermissionsService(
+        user.id,
+        companyId
+      );
+
+      if (allowedGroupContactIds.length > 0) {
+        // Usuário tem permissões específicas — mostrar apenas esses grupos
+        whereCondition = {
+          ...whereCondition,
+          contactId: { [Op.in]: allowedGroupContactIds },
+        };
+      } else {
+        // Usuário tem allowGroup=true mas nenhum grupo liberado — não mostrar nenhum
+        whereCondition = {
+          ...whereCondition,
+          contactId: { [Op.in]: [0] }, // Nenhum grupo corresponde a contactId=0
+        };
+      }
+      // }
     }
     else
       if (status === "bot") {

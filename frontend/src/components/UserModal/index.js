@@ -656,11 +656,11 @@ const UserModal = ({ open, onClose, userId }) => {
                                 Grupos Permitidos
                               </Typography>
                               <Typography variant="caption" color="textSecondary" style={{ marginBottom: 12, display: 'block' }}>
-                                Selecione quais grupos este usuário poderá visualizar e interagir. Admins e Super Admins veem todos os grupos automaticamente.
+                                Selecione quais grupos este usuário poderá visualizar e interagir.
                               </Typography>
                               <GroupPermissionSelector
                                 userId={userId}
-                                disabled={values.profile === 'admin' || values.super}
+                              // disabled={values.profile === 'admin' || values.super} // Agora todos podem ter permissões específicas
                               />
                             </>
                           )}
