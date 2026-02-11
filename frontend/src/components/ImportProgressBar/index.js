@@ -24,14 +24,13 @@ const useStyles = makeStyles((theme) => ({
         maxWidth: 500,
         padding: theme.spacing(2),
         // Glassmorphism Deep UI - Ajustado para maior visibilidade
-        // Forçar cor escura sólida para garantir visibilidade
-        backgroundColor: "#1f2937 !important", // Cinza escuro/Slate 800 - !important para vencer modern-ui.css
-        background: "linear-gradient(135deg, #1f2937 0%, #111827 100%) !important", // Gradiente sutil
-        boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.4) !important",
-        color: "#ffffff !important",
-        border: "1px solid rgba(255, 255, 255, 0.1)",
+        // Fundo claro com texto escuro para melhor legibilidade
+        backgroundColor: "#ffffff !important", // Fundo branco
+        background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important", // Gradiente sutil claro
+        boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.15) !important",
+        color: "#000000 !important", // Texto preto
+        border: "1px solid rgba(0, 0, 0, 0.1)",
         borderRadius: 16,
-        border: "1px solid rgba(255, 255, 255, 0.2)",
         display: "flex",
         flexDirection: "column",
         gap: theme.spacing(1),
@@ -54,9 +53,9 @@ const useStyles = makeStyles((theme) => ({
     progressBar: {
         height: 8,
         borderRadius: 4,
-        backgroundColor: "rgba(255,255,255,0.3) !important",
+        backgroundColor: "rgba(0,0,0,0.1) !important",
         "& .MuiLinearProgress-bar": {
-            backgroundColor: "#fff !important",
+            backgroundColor: "#3b82f6 !important", // Azul para contraste
             borderRadius: 4,
         },
     },
@@ -65,14 +64,14 @@ const useStyles = makeStyles((theme) => ({
         justifyContent: "space-between",
         fontSize: "0.75rem",
         opacity: 0.9,
-        color: "#fff !important",
+        color: "#000000 !important", // Texto preto
     },
     titleText: {
         fontWeight: 600,
-        color: "#fff !important",
+        color: "#000000 !important", // Texto preto
     },
     closeButton: {
-        color: "#fff !important",
+        color: "#000000 !important", // Ícone preto
         padding: 4,
         marginRight: -8,
     },
@@ -81,7 +80,7 @@ const useStyles = makeStyles((theme) => ({
         opacity: 0.8,
         textTransform: "uppercase",
         letterSpacing: "0.5px",
-        color: "#fff !important",
+        color: "#000000 !important", // Texto preto
     },
 }));
 

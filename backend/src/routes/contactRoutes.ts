@@ -81,6 +81,9 @@ contactRoutes.post("/contacts/test-create-label", isAuth, ContactController.test
 contactRoutes.post("/contacts/normalize-numbers", isAuth, ContactController.normalizeNumbers);
 contactRoutes.post("/contacts/check-existing", isAuth, ContactController.checkExistingNumbers);
 
+// ========== VALIDAÇÃO DE NÚMEROS VIA WHATSAPP ==========
+contactRoutes.post("/contacts/validate-whatsapp", isAuth, ContactController.validateNumbers);
+
 // ========== ROTAS DE GERENCIAMENTO DE CONTATOS LID ==========
 contactRoutes.get("/contacts/lid-list", isAuth, ContactController.listLidContacts);
 contactRoutes.post("/contacts/lid-resolve/:contactId", isAuth, ContactController.resolveLid);

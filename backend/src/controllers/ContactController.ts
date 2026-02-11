@@ -62,16 +62,17 @@ import ContactTag from "../models/ContactTag";
 import ContactTagImportPreset from "../models/ContactTagImportPreset";
 import logger from "../utils/logger";
 import ValidateContactService from "../services/ContactServices/ValidateContactService";
+import ValidateContactNumbersService from "../services/ContactServices/ValidateContactNumbersService";
 import { isValidCPF, isValidCNPJ } from "../utils/validators";
 import GetDeviceTagsService from "../services/WbotServices/GetDeviceTagsService";
 import GetDeviceLabelsService from "../services/WbotServices/GetDeviceLabelsService";
 import ShowBaileysService from "../services/BaileysServices/ShowBaileysService";
 import { getLabels, getAllChatLabels } from "../libs/labelCache";
-import { 
-  isLid, 
-  resolveLidToRealNumber, 
+import {
+  isLid,
+  resolveLidToRealNumber,
   mergeDuplicateLidContacts,
-  findAndMergeLidDuplicates 
+  findAndMergeLidDuplicates
 } from "../services/ContactServices/ResolveLidToRealNumber";
 import ForceAppStateSyncService from "../services/WbotServices/ForceAppStateSyncService";
 import { getWbot } from "../libs/wbot";
@@ -1133,13 +1134,13 @@ export const update = async (
       delete (contactData as any).tagIds;
       logger.info(`[Contacts.update] Usuário ${req.user.id} tentou alterar tags sem permissão. Tags removidas do payload.`);
     }
-    
+
     // Se usuário não tem permissão para editar wallets, remove do body
     if (!hasPermission(user, "contacts.edit-wallets")) {
       delete (contactData as any).wallets;
       logger.info(`[Contacts.update] Usuário ${req.user.id} tentou alterar wallets sem permissão. Wallets removidas do payload.`);
     }
-    
+
     // Se usuário não tem permissão para editar representative, remove do body
     if (!hasPermission(user, "contacts.edit-representative")) {
       delete (contactData as any).representativeCode;
@@ -1650,7 +1651,7 @@ export const resolveLid = async (req: AuthenticatedRequest, res: Response): Prom
 
       if (realContact) {
         const merged = await mergeDuplicateLidContacts(companyId, contact.id, realContact.id);
-        
+
         return res.status(200).json({
           success: true,
           merged: true,
@@ -1662,7 +1663,7 @@ export const resolveLid = async (req: AuthenticatedRequest, res: Response): Prom
         });
       } else {
         await contact.update({ number: resolution.realNumber });
-        
+
         return res.status(200).json({
           success: true,
           merged: false,
@@ -2238,9 +2239,9 @@ export const findDuplicateLidContacts = async (req: Request, res: Response): Pro
 // Mesclar dois contatos (LID para número real)
 export const mergeContacts = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const { primaryContactId, secondaryContactId } = req.body as { 
-    primaryContactId: number; 
-    secondaryContactId: number; 
+  const { primaryContactId, secondaryContactId } = req.body as {
+    primaryContactId: number;
+    secondaryContactId: number;
   };
 
   if (!primaryContactId || !secondaryContactId) {
@@ -2279,7 +2280,7 @@ export const groups = async (req: AuthenticatedRequest, res: Response): Promise<
     pageNumber: string;
     limit: string;
   };
-  
+
   const { id: userId, companyId, profile } = req.user;
 
   try {
@@ -2329,11 +2330,52 @@ export const groups = async (req: AuthenticatedRequest, res: Response): Promise<
     return res.json(result);
   } catch (error: any) {
     logger.error(`[ContactController.groups] Erro: ${error.message}`);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: error.message || "Erro ao listar grupos",
       groups: [],
       count: 0,
       hasMore: false
+    });
+  }
+};
+
+/**
+ * POST /contacts/validate-whatsapp
+ * Valida números de contatos brasileiros via wbot.onWhatsApp().
+ * Se inválido e tiver dígito 9, tenta sem ele e atualiza o banco.
+ */
+export const validateNumbers = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const {
+    whatsappId,
+    contactIds,
+    mode = "nine_digit",
+    offset = 0
+  } = req.body as {
+    whatsappId: number;
+    contactIds?: number[];
+    mode?: "nine_digit" | "all";
+    offset?: number;
+  };
+
+  if (!whatsappId) {
+    throw new AppError("whatsappId é obrigatório", 400);
+  }
+
+  try {
+    const result = await ValidateContactNumbersService({
+      whatsappId,
+      companyId,
+      contactIds,
+      mode,
+      offset
+    });
+
+    return res.json(result);
+  } catch (err: any) {
+    logger.error({ err: err?.message, companyId, whatsappId }, "[ContactController.validateNumbers] Erro");
+    return res.status(500).json({
+      error: err?.message || "Erro ao validar contatos"
     });
   }
 };
