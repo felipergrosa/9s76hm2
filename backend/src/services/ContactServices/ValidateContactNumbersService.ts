@@ -221,17 +221,31 @@ const ValidateContactNumbersService = async ({
                 }
             }
         } catch (err: any) {
+            const message = err?.message || "";
+            let userMessage = message;
+
+            if (message.includes("Validation error") || message.includes("SequelizeUniqueConstraintError")) {
+                userMessage = "Número já pertence a outro contato (duplicado)";
+            }
+
             logger.warn({
                 contactId: contact.id,
-                err: err?.message
+                err: message
             }, "[ValidateContactNumbers] Erro ao validar contato");
+
+            // Tenta marcar como inválido para não processar novamente e evitar loop infinito
+            try {
+                await contact.update({ isWhatsappValid: false });
+            } catch (e) {
+                logger.error({ contactId: contact.id, err: e }, "Falha ao marcar contato com erro como inválido");
+            }
 
             results.push({
                 contactId: contact.id,
                 name: contact.name,
                 originalNumber: contact.number,
                 status: "error",
-                errorMessage: err?.message || "Erro desconhecido"
+                errorMessage: userMessage
             });
             errors++;
         }
