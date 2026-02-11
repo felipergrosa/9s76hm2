@@ -33,7 +33,7 @@ const validateJWTPayload = (payload: any): { userId: string; iat?: number; exp?:
 // Origens CORS permitidas
 const ALLOWED_ORIGINS = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(",").map((url) => url.trim())
-  : ["http://localhost:3000"];
+  : ["http://localhost:3000", "https://chatsapi.nobreluminarias.com.br"];
 
 // Ajuste da classe AppError para compatibilidade com Error
 class SocketCompatibleAppError extends Error {
@@ -104,6 +104,10 @@ export const initIO = (httpServer: Server): SocketIO => {
   io.use((socket, next) => {
     try {
       const token = socket.handshake.query.token as string;
+      const origin = socket.handshake.headers.origin;
+      
+      logger.info(`[SOCKET AUTH] Nova conexão - Origin: ${origin}, Token: ${token ? "presente" : "ausente"}`);
+      
       if (!token) {
         logger.warn("[SOCKET AUTH] Conexão sem token no handshake: permitindo (diagnóstico)");
         return next();
@@ -113,13 +117,14 @@ export const initIO = (httpServer: Server): SocketIO => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET || "default_secret");
         const validatedPayload = validateJWTPayload(decoded);
         socket.data.user = validatedPayload;
+        logger.info(`[SOCKET AUTH] Token válido - UserId: ${validatedPayload.userId}`);
         return next();
       } catch (err) {
-        logger.warn("[SOCKET AUTH] Token inválido no handshake: permitindo (diagnóstico)");
+        logger.warn(`[SOCKET AUTH] Token inválido no handshake: ${err.message} - permitindo (diagnóstico)`);
         return next();
       }
     } catch (e) {
-      logger.warn("[SOCKET AUTH] Erro inesperado no middleware: permitindo (diagnóstico)");
+      logger.warn(`[SOCKET AUTH] Erro inesperado no middleware: ${e.message} - permitindo (diagnóstico)`);
       return next();
     }
   });

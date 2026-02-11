@@ -91,7 +91,8 @@
 	<div id="root"></div>
 	<noscript>Você precisa habilitar o JavaScript para executar este app.</noscript>
 
-	<script src="https://cdn.tailwindcss.com" defer></script>
+	<!-- CSS otimizado será injetado pelo build -->
+	<link rel="stylesheet" href="/static/css/main.css" />
 	<script>
 		let progress = 0;
 		const progressBar = document.getElementById('progress-bar');
