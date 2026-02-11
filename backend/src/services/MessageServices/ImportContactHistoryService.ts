@@ -172,6 +172,8 @@ const ImportContactHistoryService = async ({
                     messages = result;
                 } else if (result && typeof result === "object") {
                     messages = result.messages || result.data || [];
+                } else if (typeof result === "string") {
+                    logger.warn(`[ImportHistory] Baileys retornou string inesperada: "${result.substring(0, 500)}"`);
                 }
 
                 logger.debug(`[ImportHistory] fetchMessageHistory retornou ${messages.length} mensagens`);

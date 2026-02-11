@@ -23,13 +23,13 @@ const useStyles = makeStyles((theme) => ({
         minWidth: 350,
         maxWidth: 500,
         padding: theme.spacing(2),
-        // Glassmorphism Deep UI
-        background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.85)} 0%, ${alpha(theme.palette.primary.dark, 0.95)} 100%)`,
-        backdropFilter: "blur(12px)",
+        // Glassmorphism Deep UI - Ajustado para maior visibilidade
+        backgroundColor: theme.palette.primary.main, // Fallback sólido
+        background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+        boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.3)",
         color: "#fff",
         borderRadius: 16,
         border: "1px solid rgba(255, 255, 255, 0.2)",
-        boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.1)", // 3D Effect
         display: "flex",
         flexDirection: "column",
         gap: theme.spacing(1),
