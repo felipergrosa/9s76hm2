@@ -27,6 +27,7 @@ import { isNil } from 'lodash';
 import { EditMessageProvider } from "../../context/EditingMessage/EditingMessageContext";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import { OptimisticMessageProvider } from "../../context/OptimisticMessage/OptimisticMessageContext";
+import ImportProgressBar from "../ImportProgressBar";
 
 const drawerWidth = 320;
 
@@ -121,6 +122,7 @@ const Ticket = () => {
     return false;
   });
   const { companyId } = user;
+  const [importStatus, setImportStatus] = useState(null);
 
 
   useEffect(() => {
@@ -336,6 +338,33 @@ const Ticket = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId, socket, user?.companyId]);
 
+  // Listener para progresso da importação de histórico
+  useEffect(() => {
+    if (!socket || typeof socket.on !== "function" || !ticket?.id) return;
+
+    const eventName = `importHistory-${ticket.id}`;
+
+    const onImportProgress = (data) => {
+      if (data.action === "refresh") {
+        setImportStatus(null);
+        return;
+      }
+      if (data.action === "update" && data.status) {
+        setImportStatus(data.status);
+        // Auto-clear após COMPLETED
+        if (data.status.state === "COMPLETED") {
+          setTimeout(() => setImportStatus(null), 4000);
+        }
+      }
+    };
+
+    socket.on(eventName, onImportProgress);
+
+    return () => {
+      socket.off(eventName, onImportProgress);
+    };
+  }, [socket, ticket?.id]);
+
   const handleDrawerOpen = useCallback(() => {
     setDrawerOpen(true);
   }, []);
@@ -430,6 +459,11 @@ const Ticket = () => {
             }
           }}
         />
+        {importStatus && (
+          <ImportProgressBar
+            statusImport={importStatus}
+          />
+        )}
         <OptimisticMessageProvider>
           <ReplyMessageProvider>
             <ForwardMessageProvider>

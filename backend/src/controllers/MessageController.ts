@@ -40,6 +40,7 @@ import SendWhatsAppReaction from "../services/WbotServices/SendWhatsAppReaction"
 import TranscribeAudioMessageService from "../services/MessageServices/TranscribeAudioMessageService";
 import ShowMessageService, { GetWhatsAppFromMessage } from "../services/MessageServices/ShowMessageService";
 import SyncChatHistoryService from "../services/MessageServices/SyncChatHistoryService";
+import ImportContactHistoryService from "../services/MessageServices/ImportContactHistoryService";
 
 type IndexQuery = {
   pageNumber: string;
@@ -1034,7 +1035,7 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
     if (message.isPrivate) {
       // Para mensagens privadas, deletar e emitir via CQRS
       await Message.destroy({ where: { id: message.id } });
-      
+
       // CQRS: Emitir evento de deleção via EventBus
       const { messageEventBus } = await import("../services/MessageServices/MessageEventBus");
       await messageEventBus.publishMessageDeleted(
@@ -1435,6 +1436,40 @@ export const syncMessages = async (req: Request, res: Response): Promise<Respons
       error: error.message || "Erro ao sincronizar mensagens"
     });
   }
+};
+
+/**
+ * Importar histórico de mensagens do contato
+ * POST /messages/:ticketId/import-history
+ * Body: { periodMonths: 0 | 1 | 3 | 6 }
+ */
+export const importHistory = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { periodMonths = 0 } = req.body;
+  const { companyId } = req.user;
+
+  // Validar período
+  const validPeriods = [0, 1, 3, 6];
+  if (!validPeriods.includes(Number(periodMonths))) {
+    return res.status(400).json({
+      success: false,
+      error: "Período inválido. Use 0 (completo), 1, 3 ou 6 meses."
+    });
+  }
+
+  // Executar importação em background (não bloqueia request)
+  ImportContactHistoryService({
+    ticketId,
+    companyId,
+    periodMonths: Number(periodMonths)
+  }).catch(err => {
+    console.error("[importHistory] background error:", err);
+  });
+
+  return res.status(200).json({
+    started: true,
+    message: `Importação iniciada para ticket ${ticketId}, período: ${periodMonths === 0 ? 'completo' : periodMonths + ' meses'}`
+  });
 };
 
 /**

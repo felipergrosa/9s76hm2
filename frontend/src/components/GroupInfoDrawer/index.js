@@ -230,7 +230,7 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
   const handlePrivateChatCreated = (ticket) => {
     setPrivateChatModalOpen(false);
     setSelectedParticipantForChat(null);
-    
+
     if (ticket) {
       // Navegar para o novo ticket
       history.push(`/tickets/${ticket.uuid}`);
@@ -273,7 +273,7 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
     } catch (err) {
       console.error("[GroupInfoDrawer] Erro ao buscar dados do grupo:", err);
       const errorMessage = err?.response?.data?.error || err?.message || "Erro ao carregar dados do grupo";
-      
+
       // Tratamento específico para erros conhecidos
       if (errorMessage === "ERR_WAPP_NOT_INITIALIZED") {
         setError(i18n.t("backendErrors.ERR_WAPP_NOT_INITIALIZED"));
@@ -495,6 +495,21 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
       month: "2-digit",
       year: "numeric",
     });
+  };
+
+  const formatPhoneNumber = (number) => {
+    if (!number) return "";
+    const clean = ("" + number).replace(/\D/g, "");
+
+    if (clean.length >= 10 && clean.startsWith("55")) {
+      if (clean.length === 13) { // 55 11 91234 5678
+        return `+${clean.substring(0, 2)} (${clean.substring(2, 4)}) ${clean.substring(4, 9)}-${clean.substring(9)}`;
+      }
+      if (clean.length === 12) { // 55 11 1234 5678
+        return `+${clean.substring(0, 2)} (${clean.substring(2, 4)}) ${clean.substring(4, 8)}-${clean.substring(8)}`;
+      }
+    }
+    return `+${clean}`;
   };
 
   return (
@@ -729,7 +744,7 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
                     primary={
                       <span style={{ display: "flex", alignItems: "center" }}>
                         <span className={classes.participantName}>
-                          {participant.name}
+                          {participant.name === "Participante" ? formatPhoneNumber(participant.number) : participant.name}
                         </span>
                         {participant.isSuperAdmin && (
                           <Chip
@@ -750,7 +765,7 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
                     }
                     secondary={
                       <span className={classes.participantNumber}>
-                        {participant.number}
+                        {formatPhoneNumber(participant.number)}
                       </span>
                     }
                   />

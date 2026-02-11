@@ -86,7 +86,9 @@ const ImportProgressBar = ({ statusImport, onClose }) => {
     const classes = useStyles();
 
     // Não exibir se não há importação ativa
-    if (!statusImport || !statusImport.all || statusImport.all <= 0) {
+    if (!statusImport) return null;
+    // Permite PREPARING mesmo com all=0 (total ainda desconhecido)
+    if ((!statusImport.all || statusImport.all <= 0) && statusImport.state !== "PREPARING") {
         return null;
     }
 

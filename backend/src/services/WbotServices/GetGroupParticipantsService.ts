@@ -259,20 +259,20 @@ const GetGroupParticipantsService = async ({
             // Usar Object.values() como no GetDeviceContactsService
             const allContacts = Object.values(store.contacts) as any[];
             const baileysContact = allContacts.find(c => c.id === participantJid);
-            
+
             if (baileysContact) {
               // phoneNumber contém o número real quando id é LID
-              const realNumber = baileysContact.phoneNumber || 
-                                  baileysContact.id?.split("@")[0]?.replace(/\D/g, "");
+              const realNumber = baileysContact.phoneNumber ||
+                baileysContact.id?.split("@")[0]?.replace(/\D/g, "");
               if (realNumber && realNumber.length >= 7 && realNumber.length <= 15) {
                 participantNumber = realNumber;
                 isValidPhoneNumber = true;
               }
               // Usar nome do Baileys na ordem: name (salvo), notify (pushName), verifiedName
               if (!resolvedName) {
-                resolvedName = baileysContact.name || 
-                              baileysContact.notify || 
-                              baileysContact.verifiedName || null;
+                resolvedName = baileysContact.name ||
+                  baileysContact.notify ||
+                  baileysContact.verifiedName || null;
               }
             }
           }
@@ -336,7 +336,21 @@ const GetGroupParticipantsService = async ({
     } else if (isValidPhoneNumber) {
       contactName = `+${participantNumber}`;
     } else {
-      contactName = "Participante";
+      // Fallback final: usar número formatado se possível, senão "Participante"
+      if (isValidPhoneNumber && participantNumber.length >= 10) {
+        const ddi = participantNumber.slice(0, 2);
+        const ddd = participantNumber.slice(2, 4);
+        const rest = participantNumber.slice(4);
+        if (rest.length === 9) {
+          contactName = `+${ddi} ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
+        } else if (rest.length === 8) {
+          contactName = `+${ddi} ${ddd} ${rest.slice(0, 4)}-${rest.slice(4)}`;
+        } else {
+          contactName = `+${participantNumber}`;
+        }
+      } else {
+        contactName = "Participante";
+      }
     }
 
     // Número exibido: preferir número real formatado com DDI
@@ -360,9 +374,9 @@ const GetGroupParticipantsService = async ({
     }
 
     // Usar foto do contato do sistema ou do Baileys
-    let profilePicUrl = contactRecord?.profilePicUrl || undefined;
+    let profilePicUrl = contactRecord?.profilePicUrl;
     let imgUrlBaileys: string | null = null;
-    
+
     // Se temos imgUrl do Baileys e é uma URL válida, usar como fallback
     if (!profilePicUrl) {
       // Tentar obter do store do Baileys diretamente
@@ -373,6 +387,7 @@ const GetGroupParticipantsService = async ({
           const bc = allContacts.find(c => c.id === participantJid);
           if (bc && bc.imgUrl && bc.imgUrl !== 'changed' && bc.imgUrl.startsWith('http')) {
             imgUrlBaileys = bc.imgUrl;
+            profilePicUrl = imgUrlBaileys;
           }
         }
       } catch {

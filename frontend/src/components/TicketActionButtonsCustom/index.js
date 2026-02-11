@@ -15,6 +15,7 @@ import {
     Undo2 as UndoIcon,
     Trash2 as DeleteForeverIcon,
     Search as SearchIcon,
+    Download as DownloadIcon,
 } from "lucide-react";
 
 import { v4 as uuidv4 } from "uuid";
@@ -47,6 +48,7 @@ import useCompanySettings from "../../hooks/useSettings/companySettings";
 import ShowTicketLogModal from "../ShowTicketLogModal";
 import TicketMessagesDialog from "../TicketMessagesDialog";
 import { useTheme } from "@material-ui/styles";
+import ImportHistoryModal from "../ImportHistoryModal";
 
 const useStyles = makeStyles(theme => ({
     actionButtons: {
@@ -109,6 +111,7 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
     const [showTicketLogOpen, setShowTicketLogOpen] = useState(false);
     const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
     const [disableBot, setDisableBot] = useState(ticket.contact.disableBot);
+    const [importHistoryModalOpen, setImportHistoryModalOpen] = useState(false);
 
     const [showSchedules, setShowSchedules] = useState(false);
     const [enableIntegration, setEnableIntegration] = useState(ticket.useIntegration);
@@ -377,11 +380,11 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
             if (otherTicket.data.id !== ticket.id) {
                 // Verificar se posso acessar: meu ticket ou de usuário que gerencio
                 const managedIds = (user?.managedUserIds || []).map(id => Number(id));
-                const canAccess = otherTicket.data.userId === user?.id || 
-                                  user?.profile === "admin" || 
-                                  user?.super ||
-                                  managedIds.includes(Number(otherTicket.data.userId));
-                
+                const canAccess = otherTicket.data.userId === user?.id ||
+                    user?.profile === "admin" ||
+                    user?.super ||
+                    managedIds.includes(Number(otherTicket.data.userId));
+
                 if (!canAccess) {
                     setOpenAlert(true)
                     setUserTicketOpen(otherTicket.data.user?.name || "")
@@ -615,6 +618,12 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                         <PictureAsPdf style={{ color: '#c62828', marginRight: 10 }} />
                         {i18n.t("ticketsList.buttons.exportAsPDF")}
                     </MenuItem>
+                    {ticket.channel === "whatsapp" && (
+                        <MenuItem onClick={() => { handleCloseMenu(); setImportHistoryModalOpen(true); }}>
+                            <DownloadIcon style={{ color: '#00838f', marginRight: 10 }} />
+                            Importar Histórico
+                        </MenuItem>
+                    )}
                 </Menu>
             </div>
             <>
@@ -657,6 +666,11 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                     )}
                 </Formik>
             </>
+            <ImportHistoryModal
+                open={importHistoryModalOpen}
+                onClose={() => setImportHistoryModalOpen(false)}
+                ticketId={ticket.id}
+            />
         </>
     );
 };

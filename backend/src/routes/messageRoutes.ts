@@ -22,6 +22,7 @@ messageRoutes.post('/messages/:messageId/reactions', isAuth, MessageController.a
 messageRoutes.post('/message/forward', isAuth, MessageController.forwardMessage);
 messageRoutes.post('/message/forward-external', isAuth, MessageController.forwardToExternalNumber);
 messageRoutes.post('/messages/:ticketId/sync', isAuth, MessageController.syncMessages);
+messageRoutes.post('/messages/:ticketId/import-history', isAuth, MessageController.importHistory);
 messageRoutes.get('/messages/:ticketId/search', isAuth, MessageController.searchMessages);
 messageRoutes.get('/messages/:ticketId/pinned', isAuth, MessageController.listPinnedMessages);
 messageRoutes.get('/messages/:ticketId/media', isAuth, MessageController.listSharedMedia);
