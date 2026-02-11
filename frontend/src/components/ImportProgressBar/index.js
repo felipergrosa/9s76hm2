@@ -25,10 +25,10 @@ const useStyles = makeStyles((theme) => ({
         padding: theme.spacing(2),
         // Glassmorphism Deep UI - Ajustado para maior visibilidade
         // Forçar cor escura sólida para garantir visibilidade
-        backgroundColor: "#1f2937", // Cinza escuro/Slate 800
-        background: "linear-gradient(135deg, #1f2937 0%, #111827 100%)", // Gradiente sutil
-        boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.4)",
-        color: "#ffffff",
+        backgroundColor: "#1f2937 !important", // Cinza escuro/Slate 800 - !important para vencer modern-ui.css
+        background: "linear-gradient(135deg, #1f2937 0%, #111827 100%) !important", // Gradiente sutil
+        boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.4) !important",
+        color: "#ffffff !important",
         border: "1px solid rgba(255, 255, 255, 0.1)",
         borderRadius: 16,
         border: "1px solid rgba(255, 255, 255, 0.2)",
@@ -54,9 +54,9 @@ const useStyles = makeStyles((theme) => ({
     progressBar: {
         height: 8,
         borderRadius: 4,
-        backgroundColor: "rgba(255,255,255,0.3)",
+        backgroundColor: "rgba(255,255,255,0.3) !important",
         "& .MuiLinearProgress-bar": {
-            backgroundColor: "#fff",
+            backgroundColor: "#fff !important",
             borderRadius: 4,
         },
     },
@@ -65,9 +65,14 @@ const useStyles = makeStyles((theme) => ({
         justifyContent: "space-between",
         fontSize: "0.75rem",
         opacity: 0.9,
+        color: "#fff !important",
+    },
+    titleText: {
+        fontWeight: 600,
+        color: "#fff !important",
     },
     closeButton: {
-        color: "#fff",
+        color: "#fff !important",
         padding: 4,
         marginRight: -8,
     },
@@ -76,6 +81,7 @@ const useStyles = makeStyles((theme) => ({
         opacity: 0.8,
         textTransform: "uppercase",
         letterSpacing: "0.5px",
+        color: "#fff !important",
     },
 }));
 
@@ -110,7 +116,7 @@ const ImportProgressBar = ({ statusImport, onClose }) => {
                 <Box className={classes.headerRow}>
                     <Box className={classes.titleContainer}>
                         <ImportIcon />
-                        <Typography variant="subtitle2" style={{ fontWeight: 600 }}>
+                        <Typography variant="subtitle2" className={classes.titleText}>
                             Importação de Mensagens
                         </Typography>
                     </Box>
@@ -132,11 +138,11 @@ const ImportProgressBar = ({ statusImport, onClose }) => {
                         className={classes.progressBar}
                     />
                     <Box className={classes.progressText}>
-                        <Typography variant="caption" style={{ color: "#fff" }}>
+                        <Typography variant="caption" color="inherit">
                             {stateLabels[state] || state}
                         </Typography>
                         {state !== "PREPARING" && (
-                            <Typography variant="caption" style={{ color: "#fff" }}>
+                            <Typography variant="caption" color="inherit">
                                 {current} / {total} ({percentage}%)
                             </Typography>
                         )}

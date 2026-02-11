@@ -697,90 +697,15 @@ async function resolveLidToPN(
   // 2. Busca por lidJid (strategy D acima)
   // 3. Criação de PENDING_ com pushName correto (destinatário)
 
-  // Estratégia F: Buscar contato pelo pushName (último recurso)
-  // Usa busca parcial com LIKE para maior chance de match
-  // IMPORTANTE: pushName em mensagens fromMe é o nome do DESTINATÁRIO (cliente)
+  // Estratégia F: REMOVIDA
+  // Motivo: Busca por nome parcial (LIKE %name%) causa Associação Incorreta de Contatos
+  // Ex: Mensagem de "Ana" (nova) sendo atribuída a "Ana Paula" (cliente antiga)
+  // Segurança de dados > Conveniência de resolução
+  /*
   if (ids.pushName && ids.pushName.trim().length > 2) {
-    try {
-      const pushNameClean = ids.pushName.trim();
-
-      // Tentativa 1: match exato (case insensitive)
-      let contactByName = await Contact.findOne({
-        where: {
-          companyId,
-          name: { [Op.iLike]: pushNameClean }, // Case insensitive (Postgres) ou Op.like se MySQL (mas iLike é mais seguro)
-          isGroup: false,
-          number: { [Op.notLike]: "PENDING_%" }
-        },
-        order: [["updatedAt", "DESC"]]
-      });
-
-      // Tentativa 2: busca parcial com LIKE (se não achou exato)
-      if (!contactByName) {
-        contactByName = await Contact.findOne({
-          where: {
-            companyId,
-            name: { [Op.like]: `%${pushNameClean}%` },
-            isGroup: false,
-            number: { [Op.notLike]: "PENDING_%" }
-          },
-          order: [["updatedAt", "DESC"]]
-        });
-      }
-
-      // Tentativa 3: busca por parte do nome (primeiras 10 letras)
-      if (!contactByName && pushNameClean.length > 5) {
-        const namePrefix = pushNameClean.substring(0, 10);
-        contactByName = await Contact.findOne({
-          where: {
-            companyId,
-            name: { [Op.like]: `%${namePrefix}%` },
-            isGroup: false,
-            number: { [Op.notLike]: "PENDING_%" }
-          },
-          order: [["updatedAt", "DESC"]]
-        });
-      }
-
-      if (contactByName) {
-        const digits = (contactByName.number || "").replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 13) {
-          ids.pnJid = `${digits}@s.whatsapp.net`;
-          ids.pnDigits = digits;
-          const { canonical } = safeNormalizePhoneNumber(digits);
-          ids.pnCanonical = canonical;
-
-          logger.info({
-            lidJid,
-            pnJid: ids.pnJid,
-            contactId: contactByName.id,
-            contactName: contactByName.name,
-            strategy: "pushName-match"
-          }, "[resolveLidToPN] LID→PN via pushName");
-
-          // Persistir mapeamento e atualizar lidJid do contato
-          try {
-            await LidMapping.upsert({
-              lid: lidJid,
-              phoneNumber: digits,
-              companyId,
-              whatsappId: wbot.id,
-              verified: false
-            });
-            if (!contactByName.lidJid) {
-              await contactByName.update({ lidJid });
-            }
-          } catch {
-            // Não bloquear fluxo
-          }
-
-          return;
-        }
-      }
-    } catch (err: any) {
-      logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Erro na estratégia pushName");
-    }
+     // ... código removido por segurança ...
   }
+  */
 
   logger.warn({ lidJid, isFromMe: ids.isFromMe, pushName: ids.pushName }, "[resolveLidToPN] Todas as estratégias falharam — contato será PENDING_");
 }

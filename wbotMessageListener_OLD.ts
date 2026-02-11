@@ -37,12 +37,9 @@ import logger from "../../utils/logger";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
-import { resolveMessageContact, resolveGroupContact } from "../ContactResolution/ContactResolverService";
 import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
 import { debounce } from "../../helpers/Debounce";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
-import { ticketEventBus } from "../TicketServices/TicketEventBus";
-import { messageEventBus } from "../MessageServices/MessageEventBus";
 import formatBody from "../../helpers/Mustache";
 import TicketTraking from "../../models/TicketTraking";
 import UserRating from "../../models/UserRating";
@@ -50,67 +47,7 @@ import SendWhatsAppMessage from "./SendWhatsAppMessage";
 import sendFaceMessage from "../FacebookServices/sendFacebookMessage";
 import moment from "moment";
 import Queue from "../../models/Queue";
-
-// =============================================================================
-// LOCK POR JID - Evita condição de corrida na criação de contatos
-// =============================================================================
-// Mapa de locks por JID para garantir que apenas uma thread por vez
-// possa criar contato para o mesmo JID
-const jidLocks = new Map<string, Promise<void>>();
-
-/**
- * Adquire um lock para um JID específico
- * Retorna uma função para liberar o lock
- */
-const acquireJidLock = async (jid: string): Promise<() => void> => {
-  const normalizedJid = jidNormalizedUser(jid);
-
-  // Aguardar lock existente
-  while (jidLocks.has(normalizedJid)) {
-    try {
-      await jidLocks.get(normalizedJid);
-    } catch (e) {
-      // Ignora erros de locks anteriores
-    }
-  }
-
-  // Criar novo lock
-  let releaseLock: () => void;
-  const lockPromise = new Promise<void>((resolve) => {
-    releaseLock = () => {
-      jidLocks.delete(normalizedJid);
-      resolve();
-    };
-  });
-
-  jidLocks.set(normalizedJid, lockPromise);
-
-  return releaseLock!;
-};
-
-/**
- * Executa uma função com lock por JID
- */
-const withJidLock = async <T>(jid: string, fn: () => Promise<T>): Promise<T> => {
-  const release = await acquireJidLock(jid);
-  try {
-    return await fn();
-  } finally {
-    release();
-  }
-};
 import FindOrCreateATicketTrakingService from "../TicketServices/FindOrCreateATicketTrakingService";
-
-// Mutex global compartilhado para evitar race conditions na criação de tickets
-// Um mutex por companyId para não bloquear mensagens de empresas diferentes
-const ticketMutexes = new Map<number, Mutex>();
-
-function getTicketMutex(companyId: number): Mutex {
-  if (!ticketMutexes.has(companyId)) {
-    ticketMutexes.set(companyId, new Mutex());
-  }
-  return ticketMutexes.get(companyId)!;
-}
 import VerifyCurrentSchedule from "../CompanyService/VerifyCurrentSchedule";
 import Campaign from "../../models/Campaign";
 import QueueAutoFileService from "../QueueServices/QueueAutoFileService";
@@ -146,7 +83,6 @@ import {
 import typebotListener from "../TypebotServices/typebotListener";
 import Tag from "../../models/Tag";
 import TicketTag from "../../models/TicketTag";
-import ContactTag from "../../models/ContactTag";
 import pino from "pino";
 import BullQueues from "../../libs/queue";
 import { Transform } from "stream";
@@ -641,73 +577,6 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   const participantDigits = participantJid ? participantJid.replace(/\D/g, "") : "";
   const isLid = remoteJid?.includes("@lid");
 
-  // =================================================================
-  // BAILEYS v7: Usar remoteJidAlt e participantAlt quando disponíveis
-  // Esses campos fornecem o JID alternativo (PN se LID, ou LID se PN)
-  // =================================================================
-  const remoteJidAlt = (msg.key as any).remoteJidAlt;
-  const participantAlt = (msg.key as any).participantAlt;
-
-  // Se temos remoteJidAlt com PN válido e o remoteJid é LID, usar o Alt
-  if (isLid && remoteJidAlt && remoteJidAlt.includes("@s.whatsapp.net")) {
-    const altDigits = remoteJidAlt.replace(/\D/g, "");
-    if (altDigits.length >= 10 && altDigits.length <= 13) {
-      debugLog("[getContactMessage] Usando remoteJidAlt (PN) ao invés de LID", {
-        originalLid: remoteJid,
-        remoteJidAlt,
-        altDigits
-      });
-
-      // Salvar mapeamento LID → PN para uso futuro
-      try {
-        const LidMapping = require("../../models/LidMapping").default;
-        const companyId = (wbot as any).companyId || 1;
-        await LidMapping.upsert({
-          lid: remoteJid,
-          phoneNumber: altDigits,
-          companyId,
-          whatsappId: wbot.id,
-          source: "baileys_remoteJidAlt",
-          confidence: 0.95
-        });
-      } catch (e) {
-        // Ignorar erros de persistência
-      }
-
-      return {
-        id: remoteJidAlt,
-        name: msg.pushName || altDigits,
-        lidJid: remoteJid // Guardar LID original para referência
-      };
-    }
-  }
-
-  // Se temos participantAlt com PN válido e o participant é LID, usar o Alt
-  if (participantJid?.includes("@lid") && participantAlt && participantAlt.includes("@s.whatsapp.net")) {
-    const altDigits = participantAlt.replace(/\D/g, "");
-    if (altDigits.length >= 10 && altDigits.length <= 13) {
-      debugLog("[getContactMessage] Usando participantAlt (PN) ao invés de LID", {
-        originalLid: participantJid,
-        participantAlt,
-        altDigits
-      });
-
-      // Salvar mapeamento LID → PN para uso futuro
-      try {
-        const LidMapping = require("../../models/LidMapping").default;
-        const companyId = (wbot as any).companyId || 1;
-        await LidMapping.upsert({
-          lid: participantJid,
-          phoneNumber: altDigits,
-          companyId,
-          whatsappId: wbot.id
-        });
-      } catch (e) {
-        // Ignorar erros de persistência
-      }
-    }
-  }
-
   const looksPhoneLike = (digits: string) => digits.length >= 10 && digits.length <= 13;
 
   // CORREÇÃO CRÍTICA: Para mensagens de GRUPOS, sempre usar participant
@@ -725,22 +594,6 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
     }
 
     // Validar se participant é um número válido
-    // VALIDAÇÃO CRÍTICA: Rejeitar IDs Meta (> 13 dígitos) explicitamente
-    if (participantDigits.length > 13) {
-      debugLog("[getContactMessage] REJEITADO: Participant é um ID Meta (muito longo)", {
-        participantJid,
-        participantDigits,
-        length: participantDigits.length
-      });
-      // Retornar dados do GRUPO como fallback, não do participant inválido
-      return {
-        id: remoteJid,
-        name: msg.pushName || "Participante de Grupo",
-        isGroupParticipant: true,
-        participantName: msg.pushName // Guardar nome para uso futuro
-      };
-    }
-
     if (!looksPhoneLike(participantDigits)) {
       debugLog("[getContactMessage] AVISO: Participant de grupo com formato inválido", {
         participantJid,
@@ -754,18 +607,13 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
         contactJid = `${cleanJid}@s.whatsapp.net`;
         debugLog("[getContactMessage] Número extraído do JID", { contactJid });
       } else {
-        // Número inválido, retornar dados do grupo como fallback
-        debugLog("[getContactMessage] AVISO: Impossível extrair número válido, usando grupo como fallback", {
+        // Número inválido, não processar
+        debugLog("[getContactMessage] ERRO: Impossível extrair número válido do participant", {
           participantJid,
           cleanJid,
           length: cleanJid.length
         });
-        return {
-          id: remoteJid,
-          name: msg.pushName || "Participante de Grupo",
-          isGroupParticipant: true,
-          participantName: msg.pushName
-        };
+        return null;
       }
     } else {
       contactJid = participantJid;
@@ -783,112 +631,11 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   // CORREÇÃO: Para mensagens fromMe=true com LID, tentar resolver o número real
   // O WhatsApp às vezes usa LID ao invés do número real quando enviamos pelo celular
   if (msg.key.fromMe && isLid && !isGroup) {
-    // Log detalhado para debug de mensagens fromMe com LID
-    logger.info("[getContactMessage] Mensagem fromMe=true com LID - tentando resolver", {
-      remoteJid,
-      remoteJidAlt: (msg.key as any).remoteJidAlt,
-      participantAlt: (msg.key as any).participantAlt,
-      senderPn: (msg as any).senderPn,
-      pushName: msg.pushName,
-      verifiedBizName: (msg as any).verifiedBizName,
-      messageKeys: Object.keys(msg.key || {}),
-      messageTopLevelKeys: Object.keys(msg || {}).filter(k => !['message', 'key'].includes(k))
-    });
-
     // Tentar obter o número real do store/cache do Baileys
     try {
       const sock = wbot as any;
-
-      // 0. PRIORIDADE MÁXIMA: Usar signalRepository.lidMapping.getPNForLID() do Baileys
-      const lidStore = sock.signalRepository?.lidMapping;
-      if (lidStore?.getPNForLID) {
-        const lidId = remoteJid.replace("@lid", "");
-        try {
-          const resolvedPN = await lidStore.getPNForLID(lidId);
-          if (resolvedPN) {
-            const pnDigits = resolvedPN.replace(/\D/g, "");
-            if (looksPhoneLike(pnDigits)) {
-              contactJid = resolvedPN.includes("@") ? resolvedPN : `${pnDigits}@s.whatsapp.net`;
-              logger.info("[getContactMessage] LID resolvido via signalRepository.lidMapping.getPNForLID", {
-                originalLid: remoteJid,
-                resolvedPN,
-                resolvedJid: contactJid
-              });
-
-              // Salvar mapeamento para uso futuro
-              try {
-                const LidMapping = require("../../models/LidMapping").default;
-                const companyId = sock.companyId || 1;
-                await LidMapping.upsert({
-                  lid: remoteJid,
-                  phoneNumber: pnDigits,
-                  companyId,
-                  whatsappId: wbot.id
-                });
-              } catch (e) { }
-            }
-          }
-        } catch (e) {
-          debugLog("[getContactMessage] Erro ao usar getPNForLID", { err: (e as any)?.message });
-        }
-      }
-
-      // 0.5. Consultar tabela LidMappings (cache persistente)
-      if (contactJid === remoteJid) {
-        try {
-          const LidMapping = require("../../models/LidMapping").default;
-          const companyId = sock.companyId || 1;
-          const savedMapping = await LidMapping.findOne({
-            where: { lid: remoteJid, companyId }
-          });
-          if (savedMapping?.phoneNumber) {
-            const pnDigits = savedMapping.phoneNumber.replace(/\D/g, "");
-            if (looksPhoneLike(pnDigits)) {
-              contactJid = `${pnDigits}@s.whatsapp.net`;
-              logger.info("[getContactMessage] LID resolvido via tabela LidMappings", {
-                originalLid: remoteJid,
-                phoneNumber: savedMapping.phoneNumber,
-                resolvedJid: contactJid
-              });
-            }
-          }
-        } catch (e) {
-          debugLog("[getContactMessage] Erro ao consultar LidMappings", { err: (e as any)?.message });
-        }
-      }
-
-      // 1. PRIORIDADE MÁXIMA: senderPn (campo mais confiável do Baileys)
-      const senderPn = (msg as any).senderPn;
-      if (senderPn) {
-        const senderDigits = senderPn.replace(/\D/g, "");
-        if (looksPhoneLike(senderDigits)) {
-          contactJid = senderPn.includes("@") ? senderPn : `${senderDigits}@s.whatsapp.net`;
-          debugLog("[getContactMessage] LID resolvido via senderPn (MAIS CONFIÁVEL)", {
-            originalLid: remoteJid,
-            senderPn,
-            resolvedJid: contactJid
-          });
-        }
-      }
-
-      // 2. phoneNumber no Contact (presente em alguns contatos)
-      if (contactJid === remoteJid && sock.store?.contacts?.[remoteJid]) {
-        const storedContact = sock.store.contacts[remoteJid];
-        if (storedContact.phoneNumber) {
-          const pnDigits = storedContact.phoneNumber.replace(/\D/g, "");
-          if (looksPhoneLike(pnDigits)) {
-            contactJid = `${pnDigits}@s.whatsapp.net`;
-            debugLog("[getContactMessage] LID resolvido via phoneNumber do Contact", {
-              originalLid: remoteJid,
-              phoneNumber: storedContact.phoneNumber,
-              resolvedJid: contactJid
-            });
-          }
-        }
-      }
-
-      // 3. Baileys pode ter o mapeamento LID -> número real no store
-      if (contactJid === remoteJid && sock.store?.contacts) {
+      // Baileys pode ter o mapeamento LID -> número real no store
+      if (sock.store?.contacts) {
         const lidContact = sock.store.contacts[remoteJid];
         if (lidContact?.id && lidContact.id.includes("@s.whatsapp.net")) {
           contactJid = lidContact.id;
@@ -1258,137 +1005,7 @@ const verifyContact = async (
       cleaned
     });
 
-    // =================================================================
-    // ESTRATÉGIA -1 (PRIORIDADE ABSOLUTA): Tabela LidMappings (cache persistente)
-    // =================================================================
-    // Quando o evento lid-mapping.update é recebido, salvamos no banco.
-    // Isso é mais confiável que consultar o signalRepository em tempo real.
-    try {
-      const LidMapping = require("../../models/LidMapping").default;
-      const savedMapping = await LidMapping.findOne({
-        where: {
-          lid: normalizedJid,
-          companyId,
-          // Preferir mapeamentos do evento Baileys (mais confiáveis)
-          [Op.or]: [
-            { source: "baileys_lid_mapping_event" },
-            { source: "recent_ticket_match" },
-            { confidence: { [Op.gte]: 0.8 } }
-          ]
-        },
-        order: [
-          // Ordenar por confiança (maior primeiro)
-          ["confidence", "DESC"],
-          // Depois por data (mais recente primeiro)
-          ["updatedAt", "DESC"]
-        ]
-      });
-
-      if (savedMapping?.phoneNumber) {
-        const existingByMapping = await Contact.findOne({
-          where: {
-            [Op.or]: [
-              { canonicalNumber: savedMapping.phoneNumber },
-              { number: savedMapping.phoneNumber }
-            ],
-            companyId,
-            isGroup: false
-          }
-        });
-
-        if (existingByMapping) {
-          logger.info("[verifyContact] LID resolvido via tabela LidMappings (PRIORIDADE MÁXIMA)", {
-            lid: normalizedJid,
-            phoneNumber: savedMapping.phoneNumber,
-            source: savedMapping.source,
-            confidence: savedMapping.confidence,
-            contactId: existingByMapping.id,
-            contactName: existingByMapping.name
-          });
-          // Atualizar remoteJid do contato para acelerar futuras buscas
-          if (!existingByMapping.remoteJid || existingByMapping.remoteJid !== normalizedJid) {
-            await existingByMapping.update({ remoteJid: normalizedJid });
-          }
-          return existingByMapping;
-        }
-      }
-    } catch (err: any) {
-      debugLog("[verifyContact] Erro ao consultar LidMappings", { err: err?.message });
-    }
-
-    // =================================================================
-    // ESTRATÉGIA 0: Usar signalRepository.lidMapping.getPNForLID() do Baileys v7
-    // =================================================================
-    // Esta é a função OFICIAL do Baileys para resolver LID → Número de Telefone
-    try {
-      const lidStore = (wbot as any).signalRepository?.lidMapping;
-      if (lidStore?.getPNForLID) {
-        const lidId = normalizedJid.replace("@lid", "");
-        const resolvedPN = await lidStore.getPNForLID(lidId);
-
-        if (resolvedPN) {
-          const phoneNumber = resolvedPN.replace(/\D/g, "");
-          logger.info("[verifyContact] LID resolvido via Baileys signalRepository.lidMapping.getPNForLID", {
-            lid: normalizedJid,
-            resolvedPN,
-            phoneNumber
-          });
-
-          // Buscar contato existente pelo número resolvido
-          const existingByPN = await Contact.findOne({
-            where: {
-              [Op.or]: [
-                { canonicalNumber: phoneNumber },
-                { number: phoneNumber }
-              ],
-              companyId,
-              isGroup: false
-            }
-          });
-
-          if (existingByPN) {
-            // Atualizar remoteJid para futuras buscas diretas
-            if (!existingByPN.remoteJid || existingByPN.remoteJid !== normalizedJid) {
-              await existingByPN.update({ remoteJid: normalizedJid });
-            }
-
-            // Persistir mapeamento para uso futuro
-            try {
-              const LidMapping = require("../../models/LidMapping").default;
-              await LidMapping.upsert({
-                lid: normalizedJid,
-                phoneNumber,
-                companyId,
-                whatsappId: wbot.id,
-                source: "baileys_signal_repository",
-                confidence: 0.95,
-                verified: true
-              });
-            } catch (e) { }
-
-            return existingByPN;
-          }
-
-          // Mesmo se não encontrar contato, persistir o mapeamento
-          try {
-            const LidMapping = require("../../models/LidMapping").default;
-            await LidMapping.upsert({
-              lid: normalizedJid,
-              phoneNumber,
-              companyId,
-              whatsappId: wbot.id,
-              source: "baileys_signal_repository",
-              confidence: 0.95,
-              verified: true
-            });
-          } catch (e) { }
-        }
-      }
-    } catch (err: any) {
-      debugLog("[verifyContact] Erro ao usar signalRepository.lidMapping", { err: err?.message });
-    }
-
-    // 1. Para JIDs @lid, buscar por remoteJid (LID) existente
+    // 1. Para JIDs @lid, primeiro buscar por remoteJid (LID) existente
     const existingByLid = await Contact.findOne({
       where: { remoteJid: normalizedJid, companyId }
     });
@@ -1427,197 +1044,85 @@ const verifyContact = async (
       }
     }
 
-    // 4. SOLUÇÃO ROBUSTA: Tentar resolver LID via store.contacts do Baileys
-    // O Baileys mantém um cache de contatos que pode ter o mapeamento LID → número
+    // 4. Buscar contato através de mensagens anteriores que tenham este LID no remoteJid
+    // Isso funciona quando o sistema já processou mensagens deste contato antes
     try {
-      const sock = wbot as any;
-      if (sock.store?.contacts) {
-        const storedContact = sock.store.contacts[normalizedJid] || sock.store.contacts[msgContact.id];
-        if (storedContact) {
-          // Verificar se o contato armazenado tem um número real
-          const storedNumber = storedContact.id?.replace(/\D/g, "") || storedContact.notify?.replace(/\D/g, "");
-          if (storedNumber && storedNumber.length >= 10 && storedNumber.length <= 13) {
-            const existingByStoreNumber = await Contact.findOne({
-              where: { canonicalNumber: storedNumber, companyId, isGroup: false }
-            });
-            if (existingByStoreNumber) {
-              logger.info("[verifyContact] LID resolvido via store.contacts do Baileys", {
-                lid: normalizedJid,
-                resolvedNumber: storedNumber,
-                contactId: existingByStoreNumber.id
-              });
-              return existingByStoreNumber;
-            }
-          }
+      const messageWithLid = await Message.findOne({
+        where: {
+          remoteJid: normalizedJid,
+          companyId
+        },
+        include: [{
+          model: Ticket,
+          as: "ticket",
+          attributes: ["contactId"],
+          required: true
+        }],
+        order: [["createdAt", "DESC"]]
+      });
+
+      if (messageWithLid?.ticket?.contactId) {
+        const existingContact = await Contact.findByPk(messageWithLid.ticket.contactId);
+        if (existingContact && !existingContact.remoteJid?.includes("@lid")) {
+          debugLog("[verifyContact] Contato encontrado via mensagem anterior com LID", {
+            contactId: existingContact.id,
+            contactNumber: existingContact.number,
+            lidUsed: normalizedJid
+          });
+          return existingContact;
         }
       }
     } catch (err) {
-      debugLog("[verifyContact] Erro ao consultar store.contacts", { err });
+      debugLog("[verifyContact] Erro ao buscar contato via mensagens", { err });
     }
 
-    // 5. REMOVIDO: wbot.onWhatsApp() — chamava API do WhatsApp a cada LID novo,
-    //    acumulando chamadas e contribuindo para rate limiting / risco de ban.
-    //    A resolução depende dos mapeamentos do Baileys (evento lid-mapping.update).
-
-    // 6. REMOVIDO: Busca parcial por últimos 9 dígitos — alto risco de falso positivo,
-    //    poderia associar mensagens ao contato errado se dois contatos compartilham sufixo.
-
-    // 7. ÚLTIMA VERIFICAÇÃO: Buscar contato existente pelo número LID (pode já ter sido criado antes)
-    // Se já existe um contato com esse número LID, reutilizá-lo ao invés de criar duplicado
+    // 5. Buscar contato através de tickets que tenham mensagens com este LID
     try {
-      const existingByLidNumber = await Contact.findOne({
-        where: {
-          number: cleaned,
-          companyId,
-          isGroup: false
-        }
+      const ticketWithLid = await Ticket.findOne({
+        where: { companyId },
+        include: [{
+          model: Message,
+          as: "messages",
+          where: { remoteJid: normalizedJid },
+          required: true,
+          limit: 1
+        }, {
+          model: Contact,
+          as: "contact",
+          required: true
+        }],
+        order: [["updatedAt", "DESC"]]
       });
 
-      if (existingByLidNumber) {
-        // Atualizar remoteJid se não estiver preenchido
-        if (!existingByLidNumber.remoteJid) {
-          await existingByLidNumber.update({ remoteJid: normalizedJid });
-        }
-        logger.info("[verifyContact] LID - usando contato existente pelo número", {
-          lid: normalizedJid,
-          contactId: existingByLidNumber.id,
-          contactNumber: existingByLidNumber.number,
-          contactName: existingByLidNumber.name
+      if (ticketWithLid?.contact && !ticketWithLid.contact.remoteJid?.includes("@lid")) {
+        debugLog("[verifyContact] Contato encontrado via ticket com mensagem LID", {
+          contactId: ticketWithLid.contact.id,
+          contactNumber: ticketWithLid.contact.number,
+          ticketId: ticketWithLid.id
         });
-        return existingByLidNumber;
+        return ticketWithLid.contact;
       }
-    } catch (err: any) {
-      debugLog("[verifyContact] Erro ao buscar contato por número LID", { err: err?.message });
+    } catch (err) {
+      debugLog("[verifyContact] Erro ao buscar contato via tickets", { err });
     }
 
-    // 8. ESTRATÉGIA DE TICKET RECENTE - DESATIVADA
-    // Esta estratégia foi desativada porque estava causando associações erradas.
-    // Quando não conseguia resolver o LID, o sistema pegava QUALQUER ticket recente
-    // e associava a mensagem ao contato errado.
-    // 
-    // Em vez disso, vamos criar um contato temporário com o LID e deixar
-    // o evento lid-mapping.update atualizar quando o mapeamento for descoberto.
-    debugLog("[verifyContact] Estratégia de ticket recente DESATIVADA - evita associações erradas", {
-      lid: normalizedJid,
+    // Se não encontrou por nada, criar contato básico com o LID
+    logger.warn("[verifyContact] Criando contato com JID @lid (sem match de número)", {
+      normalizedJid,
       pushName: msgContact.name
     });
-
-    // SOLUÇÃO: Criar contato temporário com LID quando não resolver
-    // Isso permite processar a mensagem e o contato será atualizado quando o mapeamento for descoberto
-    logger.warn("[verifyContact] LID não resolvido - criando contato temporário com LID", {
-      normalizedJid,
-      pushName: msgContact.name,
-      cleaned,
-      cleanedLength: cleaned.length,
+    const basicContactData = {
+      name: msgContact.name || normalizedJid,
+      number: cleaned || normalizedJid,
+      profilePicUrl: "",
+      isGroup: false,
       companyId,
-      metodosTentados: ["LidMappings (cache)", "signalRepository", "remoteJid direto", "pushName", "número no LID", "store.contacts", "número LID existente"]
-    });
-
-    // Usar pushName como nome, ou "Contato LID" se não tiver
-    const tempName = msgContact.name || `Contato ${cleaned.slice(-6)}`;
-
-    // =================================================================
-    // LOCK POR JID - Evita condição de corrida na criação de contatos
-    // =================================================================
-    return await withJidLock(normalizedJid, async () => {
-      // Verificar novamente se contato foi criado enquanto aguardava o lock
-      const existingAfterLock = await Contact.findOne({
-        where: { remoteJid: normalizedJid, companyId }
-      });
-
-      if (existingAfterLock) {
-        logger.info("[verifyContact] Contato encontrado após adquirir lock", {
-          contactId: existingAfterLock.id,
-          lid: normalizedJid
-        });
-        return existingAfterLock;
-      }
-
-      // Criar contato com LID como identificador
-      // O número será o próprio LID limpo (será atualizado quando mapeamento for descoberto)
-      // Nota: isLinkedDevice é detectado automaticamente pelo CreateOrUpdateContactService via remoteJid.includes("@lid")
-      const contactData = {
-        name: tempName,
-        number: cleaned, // Usar o LID limpo como número temporário
-        profilePicUrl: "",
-        isGroup: false,
-        companyId,
-        remoteJid: normalizedJid, // O LID completo - detecta isLinkedDevice automaticamente
-        whatsappId: wbot.id,
-        wbot
-      };
-
-      try {
-        const contact = await CreateOrUpdateContactService(contactData);
-        logger.info("[verifyContact] Contato temporário criado com LID", {
-          contactId: contact.id,
-          lid: normalizedJid,
-          name: tempName
-        });
-
-        // =================================================================
-        // HERANÇA DE TAGS PESSOAIS - Copia tags de contato com MESMO NOME
-        // Só herda se encontrar contato com pushName idêntico na mesma empresa
-        // =================================================================
-        try {
-          if (tempName && tempName !== `Contato ${cleaned.slice(-6)}`) {
-            // Buscar contato real (não-LID) com mesmo nome na mesma empresa
-            const matchingContact = await Contact.findOne({
-              where: {
-                companyId,
-                name: tempName,
-                isGroup: false,
-                id: { [Op.ne]: contact.id },
-                remoteJid: { [Op.notLike]: "%@lid" } // Contato real, não outro LID
-              },
-              include: [{
-                model: Tag,
-                as: "tags",
-                where: {
-                  name: {
-                    [Op.and]: [
-                      { [Op.like]: "#%" },      // Tags pessoais começam com #
-                      { [Op.notLike]: "##%" }   // Mas não ## (grupo)
-                    ]
-                  }
-                },
-                required: true
-              }]
-            });
-
-            if (matchingContact?.tags?.length > 0) {
-              for (const tag of matchingContact.tags) {
-                await ContactTag.findOrCreate({
-                  where: { contactId: contact.id, tagId: tag.id },
-                  defaults: { contactId: contact.id, tagId: tag.id }
-                });
-              }
-
-              logger.info("[verifyContact] Tags pessoais herdadas para contato LID (mesmo nome)", {
-                lidContactId: contact.id,
-                originalContactId: matchingContact.id,
-                matchedName: tempName,
-                tagsHerdadas: matchingContact.tags.map(t => t.name)
-              });
-            }
-          }
-        } catch (tagErr: any) {
-          // Erro na herança de tags não deve bloquear o fluxo
-          logger.warn("[verifyContact] Erro ao herdar tags pessoais", { err: tagErr?.message });
-        }
-
-        return contact;
-      } catch (err: any) {
-        // Se falhar (ex: duplicado), tentar buscar existente
-        logger.warn("[verifyContact] Erro ao criar contato LID, buscando existente", { err: err?.message });
-        const existing = await Contact.findOne({ where: { remoteJid: normalizedJid, companyId } });
-        if (existing) return existing;
-
-        // Se ainda não encontrar, retornar null como último recurso
-        logger.error("[verifyContact] Falha total ao processar LID", { normalizedJid, err: err?.message });
-        return null as any;
-      }
-    });
+      remoteJid: normalizedJid,
+      whatsappId: wbot.id,
+      wbot
+    };
+    const newContact = await CreateOrUpdateContactService(basicContactData);
+    return newContact;
   }
 
   // VALIDAÇÃO RIGOROSA: só cria contato se não for grupo e o número tiver entre 10 e 13 dígitos
@@ -1893,24 +1398,6 @@ export const verifyMediaMessage = async (
       finalMediaType = "gif";
     }
 
-    // BUSCAR NOME DO REMETENTE: prioridade 1) pushName da mensagem, 2) store do Baileys
-    const participantJid = msg.key.participant || msg.participant;
-    let senderName = msg.pushName;
-    if (!senderName && participantJid && wbot) {
-      try {
-        const store = (wbot as any).store;
-        if (store?.contacts?.[participantJid]) {
-          const contactData = store.contacts[participantJid];
-          senderName = contactData?.notify || contactData?.name || contactData?.verifiedName;
-          if (senderName) {
-            logger.debug(`[verifyMediaMessage] Nome do participante ${participantJid} obtido do store: "${senderName}"`);
-          }
-        }
-      } catch (err) {
-        // Silencioso: não falhar por erro ao buscar no store
-      }
-    }
-
     const messageData = {
       wid: msg.key.id,
       ticketId: ticket.id,
@@ -1926,8 +1413,7 @@ export const verifyMediaMessage = async (
           String(msg.status).replace("PENDING", "2").replace("NaN", "1")
         ) || 2,
       remoteJid: msg.key.remoteJid,
-      participant: participantJid,
-      senderName: senderName || undefined,
+      participant: msg.key.participant,
       dataJson: JSON.stringify(msg),
       ticketTrakingId: ticketTraking?.id,
       createdAt: new Date(
@@ -1983,9 +1469,22 @@ export const verifyMediaMessage = async (
         ]
       });
 
-      // CQRS: Emitir eventos via TicketEventBus (oldStatus=closed pois ticket reabriu)
-      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, "closed");
-      ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+      io.of(`/workspace-${companyId}`)
+        // .to("closed")
+        .emit(`company-${companyId}-ticket`, {
+          action: "delete",
+          ticket,
+          ticketId: ticket.id
+        });
+      // console.log("emitiu socket 902", ticket.id)
+      io.of(`/workspace-${companyId}`)
+        // .to(ticket.status)
+        //   .to(ticket.id.toString())
+        .emit(`company-${companyId}-ticket`, {
+          action: "update",
+          ticket,
+          ticketId: ticket.id
+        });
     }
 
     return newMessage;
@@ -2002,33 +1501,13 @@ export const verifyMessage = async (
   ticketTraking?: TicketTraking,
   isPrivate?: boolean,
   isForwarded: boolean = false,
-  isCampaign: boolean = false,  // Se true, não emite para a sala da conversa (background)
-  wbot?: Session  // Opcional para buscar nome do participante no store
+  isCampaign: boolean = false  // Se true, não emite para a sala da conversa (background)
 ) => {
   // console.log("Mensagem recebida:", JSON.stringify(msg, null, 2));
   const io = getIO();
   const quotedMsg = await verifyQuotedMessage(msg);
   const body = getBodyMessage(msg);
   const companyId = ticket.companyId;
-
-  const participantJid = msg.key.participant || msg.participant;
-
-  // BUSCAR NOME DO REMETENTE: prioridade 1) pushName da mensagem, 2) store do Baileys
-  let senderName = msg.pushName;
-  if (!senderName && participantJid && wbot) {
-    try {
-      const store = (wbot as any).store;
-      if (store?.contacts?.[participantJid]) {
-        const contactData = store.contacts[participantJid];
-        senderName = contactData?.notify || contactData?.name || contactData?.verifiedName;
-        if (senderName) {
-          logger.debug(`[verifyMessage] Nome do participante ${participantJid} obtido do store: "${senderName}"`);
-        }
-      }
-    } catch (err) {
-      // Silencioso: não falhar por erro ao buscar no store
-    }
-  }
 
   const messageData = {
     wid: msg.key.id,
@@ -2043,8 +1522,7 @@ export const verifyMessage = async (
       Number(String(msg.status).replace("PENDING", "2").replace("NaN", "1")) ||
       2,
     remoteJid: msg.key.remoteJid,
-    participant: participantJid,
-    senderName: senderName || undefined,
+    participant: msg.key.participant,
     dataJson: JSON.stringify(msg),
     ticketTrakingId: ticketTraking?.id,
     isPrivate,
@@ -2074,10 +1552,20 @@ export const verifyMessage = async (
       ]
     });
 
+    // io.to("closed").emit(`company-${companyId}-ticket`, {
+    //   action: "delete",
+    //   ticket,
+    //   ticketId: ticket.id
+    // });
+
     if (!ticket.imported) {
-      // CQRS: Emitir via TicketEventBus para broadcast (oldStatus=closed pois ticket reabriu)
-      ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, "closed");
-      ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+      io.of(`/workspace-${companyId}`)
+        .to(ticket.uuid)
+        .emit(`company-${companyId}-ticket`, {
+          action: "update",
+          ticket,
+          ticketId: ticket.id
+        });
     }
   }
 };
@@ -2180,7 +1668,7 @@ const sendDialogflowAwswer = async (
       text: bodyDuvida
     });
 
-    await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
+    await verifyMessage(sentMessage, ticket, contact);
     return;
   }
 
@@ -2248,7 +1736,7 @@ async function sendDelayedMessages(
     text: `\u200e *${queueIntegration?.name}:* ` + message
   });
 
-  await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
+  await verifyMessage(sentMessage, ticket, contact);
   if (message != lastMessage) {
     await delay(500);
     wbot.sendPresenceUpdate("composing", contact.remoteJid);
@@ -2267,7 +1755,7 @@ async function sendDelayedMessages(
     //     }
     //   );
 
-    //   await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
+    //   await verifyMessage(sentMessage, ticket, contact);
     // }
 
     // if (sendImage && message === lastMessage) {
@@ -2282,7 +1770,7 @@ async function sendDelayedMessages(
     //     }
     //   );
 
-    //   await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
+    //   await verifyMessage(sentMessage, ticket, contact);
     //   await ticket.update({ lastMessage: "📷 Foto" });
     // }
 
@@ -2732,7 +2220,7 @@ const verifyQueue = async (
           }
         );
 
-        await verifyMessage(sentMessage, ticket, contact, ticketTraking, undefined, false, false, wbot);
+        await verifyMessage(sentMessage, ticket, contact, ticketTraking);
 
         if (settings?.settingsUserRandom === "enabled") {
           await UpdateTicketService({
@@ -2758,7 +2246,7 @@ const verifyQueue = async (
           }
         );
 
-        await verifyMessage(sentMessage, ticket, contact, ticketTraking, undefined, false, false, wbot);
+        await verifyMessage(sentMessage, ticket, contact, ticketTraking);
       }
 
       if (!isNil(choosenQueue.fileListId)) {
@@ -3006,7 +2494,7 @@ const verifyQueue = async (
                 }
               );
 
-              await verifyMessage(sentMessage, ticket, contact, ticketTraking, undefined, false, false, wbot);
+              await verifyMessage(sentMessage, ticket, contact, ticketTraking);
             },
             1000,
             ticket.id
@@ -3035,7 +2523,7 @@ const verifyQueue = async (
               }
             );
 
-            await verifyMessage(sentMessage, ticket, contact, ticketTraking, undefined, false, false, wbot);
+            await verifyMessage(sentMessage, ticket, contact, ticketTraking);
           },
           1000,
           ticket.id
@@ -3077,13 +2565,10 @@ const verifyQueue = async (
       }
 
       if (
-        settings?.scheduleType === "queue" &&
-        ticket.status !== "open" &&
-        !isNil(currentSchedule) &&
-        (ticket.amountUsedBotQueues < maxUseBotQueues ||
-          maxUseBotQueues === 0) &&
-        (!currentSchedule || currentSchedule.inActivity === false) &&
-        (!ticket.isGroup || ticket.whatsapp?.groupAsTicket === "enabled")
+        settings?.scheduleType === "queue" && ticket.status !== "open" &&
+        !isNil(currentSchedule) && (ticket.amountUsedBotQueues < maxUseBotQueues || maxUseBotQueues === 0)
+        && (!currentSchedule || currentSchedule.inActivity === false)
+        && (!ticket.isGroup || ticket.whatsapp?.groupAsTicket === "enabled")
       ) {
         if (timeUseBotQueues !== "0") {
           //Regra para desabilitar o chatbot por x minutos/horas após o primeiro envio
@@ -3093,22 +2578,15 @@ const verifyQueue = async (
 
 
           if (ticketTraking.chatbotAt !== null) {
-            dataLimite.setMinutes(
-              ticketTraking.chatbotAt.getMinutes() + Number(timeUseBotQueues)
-            );
+            dataLimite.setMinutes(ticketTraking.chatbotAt.getMinutes() + (Number(timeUseBotQueues)));
 
-            if (
-              ticketTraking.chatbotAt !== null &&
-              Agora < dataLimite &&
-              timeUseBotQueues !== "0" &&
-              ticket.amountUsedBotQueues !== 0
-            ) {
-              return;
+            if (ticketTraking.chatbotAt !== null && Agora < dataLimite && timeUseBotQueues !== "0" && ticket.amountUsedBotQueues !== 0) {
+              return
             }
           }
           await ticketTraking.update({
             chatbotAt: null
-          });
+          })
         }
 
         const outOfHoursMessage = queue.outOfHoursMessage;
@@ -3154,7 +2632,7 @@ const verifyQueue = async (
 
       await UpdateTicketService({
         ticketData: {
-          // amountUsedBotQueues: 0,
+          // amountUsedBotQueues: 0, 
           queueId: choosenQueue.id
         },
         // ticketData: { queueId: queues.length ===1 ? null : choosenQueue.id },
@@ -3164,6 +2642,7 @@ const verifyQueue = async (
       // }
 
       if (choosenQueue.chatbots.length > 0 && !ticket.isGroup) {
+
         const sectionsRows = [];
 
         choosenQueue.chatbots.forEach((chatbot, index) => {
@@ -3196,7 +2675,9 @@ const verifyQueue = async (
           listMessage
         );
 
-        await verifyMessage(sendMsg, ticket, contact, ticketTraking, undefined, false, false, wbot);
+        await verifyMessage(sendMsg, ticket, contact, ticketTraking);
+
+
 
         if (settings?.settingsUserRandom === "enabled") {
           await UpdateTicketService({
@@ -3219,85 +2700,63 @@ const verifyQueue = async (
           }
         );
 
-        await verifyMessage(sentMessage, ticket, contact, ticketTraking, undefined, false, false, wbot);
+        await verifyMessage(sentMessage, ticket, contact, ticketTraking);
+
       }
+
 
       if (!isNil(choosenQueue.fileListId)) {
         try {
 
-          const publicFolder = path.resolve(
-            __dirname,
-            "..",
-            "..",
-            "..",
-            "public"
-          );
+          const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
 
-          const files = await ShowFileService(
-            choosenQueue.fileListId,
-            ticket.companyId
-          );
+          const files = await ShowFileService(choosenQueue.fileListId, ticket.companyId)
 
-          const folder = path.resolve(
-            publicFolder,
-            `company${ticket.companyId}`,
-            "fileList",
-            String(files.id)
-          );
+          const folder = path.resolve(publicFolder, `company${ticket.companyId}`, "fileList", String(files.id))
 
           for (const [index, file] of files.options.entries()) {
             const mediaSrc = {
-              fieldname: "medias",
+              fieldname: 'medias',
               originalname: file.path,
-              encoding: "7bit",
+              encoding: '7bit',
               mimetype: file.mediaType,
               filename: file.path,
-              path: path.resolve(folder, file.path)
-            } as Express.Multer.File;
+              path: path.resolve(folder, file.path),
+            } as Express.Multer.File
 
             // const debouncedSentMessagePosicao = debounce(
             //   async () => {
-            const sentMessage = await SendWhatsAppMedia({
-              media: mediaSrc,
-              ticket,
-              body: `\u200e ${file.name}`,
-              isPrivate: false,
-              isForwarded: false
-            });
+            const sentMessage = await SendWhatsAppMedia({ media: mediaSrc, ticket, body: `\u200e ${file.name}`, isPrivate: false, isForwarded: false });
 
-            await verifyMediaMessage(
-              sentMessage,
-              ticket,
-              ticket.contact,
-              ticketTraking,
-              false,
-              false,
-              wbot
-            );
+            await verifyMediaMessage(sentMessage, ticket, ticket.contact, ticketTraking, false, false, wbot);
             //   },
             //   2000,
             //   ticket.id
             // );
             // debouncedSentMessagePosicao();
-          }
+          };
+
+
         } catch (error) {
           logger.info(error);
         }
       }
 
-      await delay(4000);
+      await delay(4000)
+
 
       //se fila está parametrizada para encerrar ticket automaticamente
       if (choosenQueue.closeTicket) {
         try {
+
           await UpdateTicketService({
             ticketData: {
               status: "closed",
-              queueId: choosenQueue.id
+              queueId: choosenQueue.id,
               // sendFarewellMessage: false,
             },
             ticketId: ticket.id,
-            companyId
+            companyId,
           });
         } catch (error) {
           logger.info(error);
@@ -3326,7 +2785,7 @@ const verifyQueue = async (
 
       if (enableQueuePosition && !choosenQueue.chatbots.length) {
         // Lógica para enviar posição da fila de atendimento
-        const qtd = count.count === 0 ? 1 : count.count;
+        const qtd = count.count === 0 ? 1 : count.count
         const msgFila = `${settings.sendQueuePositionMessage} *${qtd}*`;
         // const msgFila = `*Assistente Virtual:*\n{{ms}} *{{name}}*, sua posição na fila de atendimento é: *${qtd}*`;
         const bodyFila = formatBody(`${msgFila}`, ticket);
@@ -3345,14 +2804,13 @@ const verifyQueue = async (
         );
         debouncedSentMessagePosicao();
       }
+
+
     } else {
+
       if (ticket.isGroup) return;
 
-      if (
-        maxUseBotQueues &&
-        maxUseBotQueues !== 0 &&
-        ticket.amountUsedBotQueues >= maxUseBotQueues
-      ) {
+      if (maxUseBotQueues && maxUseBotQueues !== 0 && ticket.amountUsedBotQueues >= maxUseBotQueues) {
         // await UpdateTicketService({
         //   ticketData: { queueId: queues[0].id },
         //   ticketId: ticket.id
@@ -3369,22 +2827,16 @@ const verifyQueue = async (
 
 
         if (ticketTraking.chatbotAt !== null) {
-          dataLimite.setMinutes(
-            ticketTraking.chatbotAt.getMinutes() + Number(timeUseBotQueues)
-          );
+          dataLimite.setMinutes(ticketTraking.chatbotAt.getMinutes() + (Number(timeUseBotQueues)));
 
-          if (
-            ticketTraking.chatbotAt !== null &&
-            Agora < dataLimite &&
-            timeUseBotQueues !== "0" &&
-            ticket.amountUsedBotQueues !== 0
-          ) {
-            return;
+
+          if (ticketTraking.chatbotAt !== null && Agora < dataLimite && timeUseBotQueues !== "0" && ticket.amountUsedBotQueues !== 0) {
+            return
           }
         }
         await ticketTraking.update({
           chatbotAt: null
-        });
+        })
       }
 
       // if (wbot.waitForSocketOpen()) {
@@ -3393,6 +2845,7 @@ const verifyQueue = async (
       // }
 
       wbot.presenceSubscribe(contact.remoteJid);
+
 
       let options = "";
 
@@ -3429,22 +2882,15 @@ const verifyQueue = async (
 
       if (ticket.whatsapp.greetingMediaAttachment !== null) {
 
-        const filePath = path.resolve(
-          "public",
-          `company${companyId}`,
-          ticket.whatsapp.greetingMediaAttachment
-        );
+
+        const filePath = path.resolve("public", `company${companyId}`, ticket.whatsapp.greetingMediaAttachment);
 
         const fileExists = fs.existsSync(filePath);
         // console.log(fileExists);
         if (fileExists) {
-          const messagePath = ticket.whatsapp.greetingMediaAttachment;
-          const optionsMsg = await getMessageOptions(
-            messagePath,
-            filePath,
-            String(companyId),
-            body
-          );
+          const messagePath = ticket.whatsapp.greetingMediaAttachment
+          const optionsMsg = await getMessageOptions(messagePath, filePath, String(companyId), body);
+
 
           const debouncedSentgreetingMediaAttachment = debounce(
             async () => {
@@ -3481,7 +2927,8 @@ const verifyQueue = async (
                 listMessage
               );
 
-              await verifyMessage(sendMsg, ticket, contact, ticketTraking, undefined, false, false, wbot);
+              await verifyMessage(sendMsg, ticket, contact, ticketTraking);
+
             },
             1000,
             ticket.id
@@ -3489,16 +2936,18 @@ const verifyQueue = async (
           debouncedSentMessage();
         }
 
+
         await UpdateTicketService({
           ticketData: {
-            // amountUsedBotQueues: ticket.amountUsedBotQueues + 1
+            // amountUsedBotQueues: ticket.amountUsedBotQueues + 1 
           },
           ticketId: ticket.id,
           companyId
         });
 
-        return;
+        return
       } else {
+
 
         const debouncedSentMessage = debounce(
           async () => {
@@ -3522,7 +2971,7 @@ const verifyQueue = async (
               listMessage
             );
 
-            await verifyMessage(sendMsg, ticket, contact, ticketTraking, undefined, false, false, wbot);
+            await verifyMessage(sendMsg, ticket, contact, ticketTraking);
           },
           1000,
           ticket.id
@@ -3543,10 +2992,12 @@ const verifyQueue = async (
 
   const botButton = async () => {
 
+
     if (choosenQueue || (queues.length === 1 && chatbot)) {
       // console.log("entrou no choose", ticket.isOutOfHour, ticketTraking.chatbotAt)
       if (queues.length === 1) choosenQueue = queues[0]
       const queue = await Queue.findByPk(choosenQueue.id);
+
 
       if (ticket.isOutOfHour === false && ticketTraking.chatbotAt !== null) {
         await ticketTraking.update({
@@ -3564,13 +3015,10 @@ const verifyQueue = async (
       }
 
       if (
-        settings?.scheduleType === "queue" &&
-        ticket.status !== "open" &&
-        !isNil(currentSchedule) &&
-        (ticket.amountUsedBotQueues < maxUseBotQueues ||
-          maxUseBotQueues === 0) &&
-        (!currentSchedule || currentSchedule.inActivity === false) &&
-        (!ticket.isGroup || ticket.whatsapp?.groupAsTicket === "enabled")
+        settings?.scheduleType === "queue" && ticket.status !== "open" &&
+        !isNil(currentSchedule) && (ticket.amountUsedBotQueues < maxUseBotQueues || maxUseBotQueues === 0)
+        && (!currentSchedule || currentSchedule.inActivity === false)
+        && (!ticket.isGroup || ticket.whatsapp?.groupAsTicket === "enabled")
       ) {
         if (timeUseBotQueues !== "0") {
           //Regra para desabilitar o chatbot por x minutos/horas após o primeiro envio
@@ -3578,23 +3026,17 @@ const verifyQueue = async (
           let dataLimite = new Date();
           let Agora = new Date();
 
-          if (ticketTraking.chatbotAt !== null) {
-            dataLimite.setMinutes(
-              ticketTraking.chatbotAt.getMinutes() + Number(timeUseBotQueues)
-            );
 
-            if (
-              ticketTraking.chatbotAt !== null &&
-              Agora < dataLimite &&
-              timeUseBotQueues !== "0" &&
-              ticket.amountUsedBotQueues !== 0
-            ) {
-              return;
+          if (ticketTraking.chatbotAt !== null) {
+            dataLimite.setMinutes(ticketTraking.chatbotAt.getMinutes() + (Number(timeUseBotQueues)));
+
+            if (ticketTraking.chatbotAt !== null && Agora < dataLimite && timeUseBotQueues !== "0" && ticket.amountUsedBotQueues !== 0) {
+              return
             }
           }
           await ticketTraking.update({
             chatbotAt: null
-          });
+          })
         }
 
         const outOfHoursMessage = queue.outOfHoursMessage;
@@ -3602,6 +3044,7 @@ const verifyQueue = async (
         if (outOfHoursMessage !== "") {
           // console.log("entrei3");
           const body = formatBody(`${outOfHoursMessage}`, ticket);
+
 
           const debouncedSentMessage = debounce(
             async () => {
@@ -3703,6 +3146,7 @@ const verifyQueue = async (
         );
         debouncedSentMessage();
 
+
         if (settings?.settingsUserRandom === "enabled") {
           await UpdateTicketService({
             ticketData: { userId: randomUserId },
@@ -3724,8 +3168,10 @@ const verifyQueue = async (
           }
         );
 
-        await verifyMessage(sentMessage, ticket, contact, ticketTraking, undefined, false, false, wbot);
+        await verifyMessage(sentMessage, ticket, contact, ticketTraking);
+
       }
+
 
       if (!isNil(choosenQueue.fileListId)) {
         try {
@@ -4205,7 +3651,7 @@ export const handleRating = async (
     if (ticket.channel === "whatsapp") {
       const msg = await SendWhatsAppMessage({ body, ticket });
 
-      await verifyMessage(msg, ticket, ticket.contact, ticketTraking, undefined, false, false, undefined);
+      await verifyMessage(msg, ticket, ticket.contact, ticketTraking);
     }
 
     if (["facebook", "instagram"].includes(ticket.channel)) {
@@ -4227,12 +3673,22 @@ export const handleRating = async (
     type: "closed"
   });
 
-  // Recarrega ticket com associações para emitir evento Socket.IO completo
-  ticket = await ShowTicketService(ticket.id, companyId);
+  io.of(`/workspace-${companyId}`)
+    // .to("open")
+    .emit(`company-${companyId}-ticket`, {
+      action: "delete",
+      ticket,
+      ticketId: ticket.id
+    });
 
-  // CQRS: Emitir eventos via TicketEventBus (oldStatus=nps pois ticket saiu de avaliação)
-  ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, "nps");
-  ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+  io.of(`/workspace-${companyId}`)
+    // .to(ticket.status)
+    // .to(ticket.id.toString())
+    .emit(`company-${companyId}-ticket`, {
+      action: "update",
+      ticket,
+      ticketId: ticket.id
+    });
 };
 
 const sanitizeName = (name: string): string => {
@@ -4389,7 +3845,17 @@ const flowbuilderIntegration = async (
       companyId
     });
 
-    // Eventos Socket.IO já emitidos pelo UpdateTicketService via TicketEventBus
+    io.of(`/workspace-${companyId}`).emit(`company-${companyId}-ticket`, {
+      action: "delete",
+      ticket,
+      ticketId: ticket.id
+    });
+
+    io.to(ticket.status).emit(`company-${companyId}-ticket`, {
+      action: "update",
+      ticket,
+      ticketId: ticket.id
+    });
   }
 
   if (msg.key.fromMe) {
@@ -4868,6 +4334,7 @@ const handleMessage = async (
   }
 
   try {
+    let msgContact: IMe;
     let groupContact: Contact | undefined;
     let queueId: number = null;
     let tagsId: number = null;
@@ -4876,56 +4343,6 @@ const handleMessage = async (
     let bodyMessage = getBodyMessage(msg);
     const msgType = getTypeMessage(msg);
 
-    // TRATAMENTO DE REAÇÕES (ReactionMessage) - Versão compatível com Frontend
-    if (msgType === "reactionMessage") {
-      const reactionContent = msg.message?.reactionMessage?.text;
-      const targetQuotedId = msg.message?.reactionMessage?.key?.id;
-
-      if (!targetQuotedId) return;
-
-      // 1. Verificar se a mensagem alvo existe
-      const targetMessage = await Message.findOne({
-        where: { wid: targetQuotedId, companyId }
-      });
-
-      if (!targetMessage) {
-        logger.warn(`[handleMessage] Reação ignorada: Mensagem alvo ${targetQuotedId} não encontrada no banco.`);
-        return;
-      }
-
-      // 2. Unicidade: Se este usuário já reagiu a esta mensagem, remover a reação antiga
-      const senderJid = msg.key.participant || msg.key.remoteJid;
-      const oldReaction = await Message.findOne({
-        where: {
-          quotedMsgId: targetMessage.id, // ID interno
-          participant: senderJid,
-          mediaType: "reactionMessage",
-          companyId
-        }
-      });
-
-      if (oldReaction) {
-        await oldReaction.destroy();
-        // Emitir delete via MessageEventBus (usa UUID do ticket, não ID numérico)
-        const reactionTicket = await Ticket.findByPk(targetMessage.ticketId, { attributes: ["id", "uuid"] });
-        if (reactionTicket) {
-          messageEventBus.publishMessageDeleted(
-            companyId,
-            reactionTicket.id,
-            reactionTicket.uuid,
-            oldReaction.id
-          );
-        }
-      }
-
-      // 3. Se reactionContent for vazio, significa que a reação foi removida no WhatsApp
-      if (!reactionContent) {
-        return; // Já destruímos e emitimos o delete acima
-      }
-
-      // 4. Continuar para o fluxo normal de criação (que usará verifyMessage)
-      // Mas vamos injetar os dados necessários para o verifyMessage funcionar perfeitamente
-    }
 
     const hasMedia =
       msg.message?.imageMessage ||
@@ -4977,6 +4394,7 @@ const handleMessage = async (
     if (msg.key.fromMe) {
       if (/\u200e/.test(bodyMessage)) return;
 
+
       if (
         !hasMedia &&
         msgType !== "conversation" &&
@@ -4990,6 +4408,9 @@ const handleMessage = async (
         msgType !== "hydratedContentText"
       )
         return;
+      msgContact = await getContactMessage(msg, wbot);
+    } else {
+      msgContact = await getContactMessage(msg, wbot);
     }
 
     const isGroup = msg.key.remoteJid?.endsWith("@g.us");
@@ -5006,23 +4427,10 @@ const handleMessage = async (
     // NOVA FUNCIONALIDADE: Verificar se captura automática de contatos de grupos está habilitada
     const autoCaptureGroupContacts = settings?.autoCaptureGroupContacts === "enabled";
 
-    // ═══════════════════════════════════════════════════════════════
-    // FLUXO RESTAURADO: getContactMessage + verifyContact
-    // Mantém compatibilidade com fluxo antigo (funcional) e usa melhorias
-    // de resolução de LID já incorporadas no getContactMessage atual
-    // ═══════════════════════════════════════════════════════════════
-
-    let msgContact: IMe;
-
-    // Extrair contato da mensagem (já inclui lógica de remoteJidAlt/participantAlt)
-    msgContact = await getContactMessage(msg, wbot);
-
     if (isGroup) {
-      // Para grupos, precisamos garantir que o contato do GRUPO exista
       const groupJid = msg.key.remoteJid;
       let groupSubject = getFallbackGroupName(groupJid);
 
-      // Tentar obter nome do grupo do cache ou metadados
       const cachedMetadata = getGroupMetadataFromCache(groupJid);
       if (cachedMetadata) {
         groupSubject = cachedMetadata.subject || groupSubject;
@@ -5032,7 +4440,18 @@ const handleMessage = async (
           groupSubject = grupoMeta?.subject || groupSubject;
           setGroupMetadataCache(groupJid, groupSubject);
         } catch (error) {
-          // Ignorar erros de metadados, usar JID como nome
+          if (isRateLimitError(error)) {
+            registerGroupMetadataBackoff(groupJid);
+            logger.warn(
+              { err: error, groupJid },
+              "[wbotMessageListener] groupMetadata rate limited, utilizando fallback"
+            );
+          } else {
+            logger.error(
+              { err: error, groupJid },
+              "[wbotMessageListener] Falha ao buscar groupMetadata"
+            );
+          }
         }
       }
 
@@ -5040,69 +4459,62 @@ const handleMessage = async (
         id: groupJid,
         name: groupSubject
       };
-
-      try {
-        groupContact = await verifyContact(msgGroupContact, wbot, companyId, userId);
-      } catch (e) {
-        logger.error({ err: e, groupJid }, "[handleMessage] Falha crítica ao verificar contato do grupo");
-        return; // Sem grupo, não podemos criar ticket
-      }
+      groupContact = await verifyContact(msgGroupContact, wbot, companyId, userId);
     }
 
     // CONTROLE DE CAPTURA AUTOMÁTICA DE CONTATOS DE GRUPOS
     let contact: Contact | null = null;
 
-    // Tentar verificar/criar o contato do participante/remetente
-    try {
-      if (isGroup && !autoCaptureGroupContacts) {
-        // Se captura automática está DESABILITADA, apenas buscar contato existente
-        const participantJid = msg.participant || msg.key.participant;
-        if (participantJid) {
-          const normalizedParticipantJid = jidNormalizedUser(participantJid);
-          const participantNumber = normalizedParticipantJid.replace(/\D/g, "");
-          const isLidParticipant = participantJid.includes("@lid");
+    if (isGroup && !autoCaptureGroupContacts) {
+      // Se captura automática está DESABILITADA, apenas buscar contato existente
+      // NÃO criar novo contato automaticamente
+      const participantJid = msg.participant || msg.key.participant;
+      if (participantJid) {
+        const normalizedParticipantJid = jidNormalizedUser(participantJid);
+        const participantNumber = normalizedParticipantJid.replace(/\D/g, "");
 
-          contact = await Contact.findOne({
-            where: {
-              companyId,
-              isGroup: false,
-              [Op.or]: [
-                { canonicalNumber: participantNumber },
-                { number: participantNumber },
-                ...(isLidParticipant ? [{ lidJid: normalizedParticipantJid }, { remoteJid: normalizedParticipantJid }] : [])
-              ]
-            }
-          });
-
-          if (contact) {
-            logger.info("[handleMessage] Participante de grupo já cadastrado (captura auto OFF), processando.", {
-              contactId: contact.id
-            });
+        // Buscar apenas se já existe
+        contact = await Contact.findOne({
+          where: {
+            companyId,
+            canonicalNumber: participantNumber
           }
+        });
+
+        if (!contact) {
+          logger.info("[handleMessage] Captura automática de contatos de grupos DESABILITADA. Participante não cadastrado, ignorando mensagem.", {
+            participantJid,
+            participantNumber,
+            groupJid: msg.key.remoteJid,
+            companyId
+          });
+          return; // Não processar mensagem de participante não cadastrado
         }
+
+        logger.info("[handleMessage] Participante de grupo já cadastrado, processando mensagem.", {
+          contactId: contact.id,
+          contactNumber: contact.number,
+          groupJid: msg.key.remoteJid
+        });
       } else {
-        // Fluxo normal: verificar e criar contato se necessário
-        contact = await verifyContact(msgContact, wbot, companyId, userId);
+        logger.warn("[handleMessage] Mensagem de grupo sem participant, ignorando.", {
+          groupJid: msg.key.remoteJid
+        });
+        return;
       }
-    } catch (e) {
-      logger.error({ err: e, msgContact }, "[handleMessage] Erro no verifyContact");
-    }
+    } else {
+      // Captura automática HABILITADA ou não é grupo: comportamento normal
+      contact = await verifyContact(msgContact, wbot, companyId);
 
-    // FALLBACK CRÍTICO: Se não encontrou contato do participante em grupo, usar o do grupo
-    // Isso garante que a mensagem SEMPRE seja salva no ticket do grupo
-    if (!contact && isGroup && groupContact) {
-      contact = groupContact;
-      logger.info("[handleMessage] Usando contato do grupo como fallback (participante não encontrado/criado)");
-    }
-
-    // Se ainda assim não tiver contato, falhar com erro (não descartar silenciosamente)
-    if (!contact) {
-      logger.error('[handleMessage] ERRO CRÍTICO: Contato não encontrado nem criado', {
-        remoteJid: msg.key.remoteJid,
-        isGroup,
-        msgContact
-      });
-      return;
+      // Validação de segurança: se contact for null, interrompe processamento
+      if (!contact) {
+        logger.error('[handleMessage] ERROR: verifyContact retornou null', {
+          msgContactId: msgContact?.id,
+          isGroup,
+          autoCaptureGroupContacts
+        });
+        return;
+      }
     }
 
     let unreadMessages = 0;
@@ -5129,12 +4541,9 @@ const handleMessage = async (
       order: [["id", "DESC"]]
     });
 
-    // Usa mutex global compartilhado para evitar race conditions na criação de tickets
-    const mutex = getTicketMutex(companyId);
-    console.log(`[wbotMessageListener] Processando mensagem para companyId=${companyId}, contactId=${contact.id}, mutex=${mutex ? "ativo" : "inativo"}`);
-
+    const mutex = new Mutex();
+    // Inclui a busca de ticket aqui, se realmente não achar um ticket, então vai para o findorcreate
     let ticket = await mutex.runExclusive(async () => {
-      console.log(`[wbotMessageListener] Dentro do mutex - criando/buscando ticket para contactId=${contact.id}`);
       const result = await FindOrCreateTicketService(
         contact,
         whatsapp,
@@ -5151,30 +4560,7 @@ const handleMessage = async (
         false,
         Boolean(msg?.key?.fromMe)
       );
-      console.log(`[wbotMessageListener] Ticket obtido: id=${result.id}, uuid=${result.uuid}, status=${result.status}`);
       return result;
-    }).catch(err => {
-      // Fallback em caso de timeout do mutex
-      if (err?.message === 'mutex timeout' || err?.code === 'E_TIMEOUT') {
-        logger.warn(`[wbotMessageListener] Mutex timeout para companyId=${companyId} - Executando sem lock`);
-        return FindOrCreateTicketService(
-          contact,
-          whatsapp,
-          unreadMessages,
-          companyId,
-          queueId,
-          userId,
-          groupContact,
-          "whatsapp",
-          isImported,
-          false,
-          settings,
-          false,
-          false,
-          Boolean(msg?.key?.fromMe)
-        );
-      }
-      throw err;
     });
 
     // Se o ticket está em status "campaign" e o contato respondeu, mover para fluxo normal
@@ -5189,9 +4575,9 @@ const handleMessage = async (
         newStatus = "bot";
       }
 
-      // BUG-31 fix: Não incrementar unreadMessages aqui — FindOrCreateTicketService já atualizou
       await ticket.update({
-        status: newStatus
+        status: newStatus,
+        unreadMessages: (ticket.unreadMessages || 0) + 1
       });
 
       // Recarregar ticket com include completo (inclui queue.chatbots e queue.prompt)
@@ -5227,9 +4613,8 @@ const handleMessage = async (
     }
 
     if (
-      (ticket.status === "closed" && !isGroup) ||
+      ticket.status === "closed" ||
       (unreadMessages === 0 &&
-        !isGroup &&
         whatsapp.complationMessage &&
         formatBody(whatsapp.complationMessage, ticket) === bodyMessage)
     ) {
@@ -5281,11 +4666,35 @@ const handleMessage = async (
         await ticket.update({ lastMessage: bodyEdited });
 
 
-        // Emitir update da mensagem editada via MessageEventBus (com broadcast)
-        messageEventBus.publishMessageUpdated(companyId, ticket.id, ticket.uuid, messageToUpdate.id, messageToUpdate);
+        console.log(`[SOCKET] Emitindo appMessage`, {
+          namespace: `/workspace-${companyId}`,
+          sala: ticket.uuid,
+          evento: `company-${companyId}-appMessage`,
+          action: "update",
+          messageId: messageToUpdate.id
+        });
+        io.of(`/workspace-${companyId}`)
+          .to(ticket.uuid)
+          .emit(`company-${companyId}-appMessage`, {
+            action: "update",
+            message: messageToUpdate
+          });
 
-        // CQRS: Emitir evento de ticket via TicketEventBus (atualiza lastMessage na lista)
-        ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+        console.log(`[SOCKET] Emitindo ticket`, {
+          namespace: String(companyId),
+          sala: ticket.status,
+          evento: `company-${companyId}-ticket`,
+          action: "update",
+          ticketId: ticket.id
+        });
+        io.of(`/workspace-${companyId}`)
+          // .to(ticket.status)
+          // .to("notification")
+          // .to(String(ticket.id))
+          .emit(`company-${companyId}-ticket`, {
+            action: "update",
+            ticket
+          });
       } catch (err) {
         Sentry.captureException(err);
         logger.error(`Error handling message ack. Err: ${err}`);
@@ -5331,7 +4740,7 @@ const handleMessage = async (
                 wbot
               );
             } else {
-              await verifyMessage(msg, ticket, contact, ticketTraking, undefined, false, false, wbot);
+              await verifyMessage(msg, ticket, contact, ticketTraking);
             }
 
             wbot.sendMessage(contact.remoteJid, {
@@ -5375,9 +4784,7 @@ const handleMessage = async (
           contact,
           ticketTraking,
           false,
-          isMsgForwarded,
-          false,
-          wbot
+          isMsgForwarded
         );
       }
     }
@@ -5811,7 +5218,7 @@ const handleMessage = async (
           }
         }
       );
-      await verifyMessage(sentMessage, ticket, contact, ticketTraking, undefined, false, false, wbot);
+      await verifyMessage(sentMessage, ticket, contact, ticketTraking);
     }
 
     try {
@@ -5997,22 +5404,77 @@ const handleMsgAck = async (
   chat: number | null | undefined
 ) => {
   await new Promise(r => setTimeout(r, 500));
+  const io = getIO();
 
   try {
-    // CQRS: Usar MessageCommandService para atualizar ACK
-    // Isso já faz: busca mensagem + valida ack + update DB + emite evento via EventBus
-    const { updateMessageAckByWid } = await import("../MessageServices/MessageCommandService");
-    const wid = msg.key.id;
+    const messageToUpdate = await Message.findOne({
+      where: {
+        wid: msg.key.id
+      },
+      include: [
+        "contact",
+        {
+          model: Ticket,
+          as: "ticket",
+          include: [
+            {
+              model: Contact,
+              attributes: [
+                "id",
+                "name",
+                "number",
+                "email",
+                "profilePicUrl",
+                "acceptAudioMessage",
+                "active",
+                "urlPicture",
+                "companyId"
+              ],
+              include: ["extraInfo", "tags"]
+            },
+            {
+              model: Queue,
+              attributes: ["id", "name", "color"]
+            },
+            {
+              model: Whatsapp,
+              attributes: ["id", "name", "groupAsTicket"]
+            },
+            {
+              model: User,
+              attributes: ["id", "name"]
+            },
+            {
+              model: Tag,
+              as: "tags",
+              attributes: ["id", "name", "color"]
+            }
+          ]
+        },
+        {
+          model: Message,
+          as: "quotedMsg",
+          include: ["contact"]
+        }
+      ]
+    });
 
-    if (!wid || chat === null || chat === undefined) {
-      return;
-    }
+    if (!messageToUpdate || messageToUpdate.ack > chat) return;
 
-    const updatedMessage = await updateMessageAckByWid(wid, chat);
-
-    if (updatedMessage) {
-      console.log(`[handleMsgAck] ACK atualizado via CQRS: msgId=${updatedMessage.id} ack=${chat}`);
-    }
+    await messageToUpdate.update({ ack: chat });
+    console.log(`[SOCKET] Emitindo appMessage`, {
+      namespace: `/workspace-${messageToUpdate.companyId}`,
+      sala: messageToUpdate.ticket.uuid,
+      evento: `company-${messageToUpdate.companyId}-appMessage`,
+      action: "update",
+      messageId: messageToUpdate.id
+    });
+    io.of(`/workspace-${messageToUpdate.companyId}`)
+      .to(messageToUpdate.ticket.uuid)
+      .emit(`company-${messageToUpdate.companyId}-appMessage`, {
+        action: "update",
+        message: messageToUpdate
+      });
   } catch (err) {
     Sentry.captureException(err);
     logger.error(`Error handling message ack. Err: ${err}`);
@@ -6076,8 +5538,9 @@ const verifyCampaignMessageAndCloseTicket = async (
   const isCampaign = /\u200c/.test(body);
 
   if (message.key.fromMe && isCampaign) {
-    const campaignResolution = await resolveMessageContact(message, wbot, companyId);
-    const contact = campaignResolution?.contact;
+    let msgContact: IMe;
+    msgContact = await getContactMessage(message, wbot);
+    const contact = await verifyContact(msgContact, wbot, companyId);
 
     const messageRecord = await Message.findOne({
       where: {
@@ -6093,12 +5556,24 @@ const verifyCampaignMessageAndCloseTicket = async (
     ) {
       const ticket = await Ticket.findByPk(messageRecord.ticketId);
       if (ticket) {
-        const oldStatus = ticket.status;
         await ticket.update({ status: "closed", amountUsedBotQueues: 0 });
 
-        // CQRS: Emitir via TicketEventBus para broadcast
-        ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, oldStatus);
-        ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+        // Emitir apenas para a sala do ticket específico, não para todo o namespace
+        io.of(`/workspace-${companyId}`)
+          .to(ticket.uuid)
+          .emit(`company-${companyId}-ticket`, {
+            action: "delete",
+            ticket,
+            ticketId: ticket.id
+          });
+
+        io.of(`/workspace-${companyId}`)
+          .to(ticket.uuid)
+          .emit(`company-${companyId}-ticket`, {
+            action: "update",
+            ticket,
+            ticketId: ticket.id
+          });
       }
     }
   }
@@ -6110,25 +5585,13 @@ const filterMessages = (msg: WAMessage): boolean => {
   if (msg.message?.protocolMessage?.editedMessage) return true;
   if (msg.message?.protocolMessage) return false;
 
-  // Filtrar mensagens que falharam na decriptação (Bad MAC / No matching sessions)
-  // messageStubType=2 (CIPHERTEXT) indica erro de sessão criptográfica
-  // Processar essas mensagens cria contatos PENDING_ fantasma
-  if (msg.messageStubType === WAMessageStubType.CIPHERTEXT) {
-    logger.warn({
-      msgId: msg.key?.id,
-      remoteJid: msg.key?.remoteJid,
-      fromMe: msg.key?.fromMe,
-      stubParams: msg.messageStubParameters
-    }, "[filterMessages] Mensagem CIPHERTEXT (erro decriptação) descartada");
-    return false;
-  }
-
   if (
     [
       WAMessageStubType.REVOKE,
       WAMessageStubType.E2E_DEVICE_CHANGED,
-      WAMessageStubType.E2E_IDENTITY_CHANGED
-    ].includes(msg.messageStubType as number)
+      WAMessageStubType.E2E_IDENTITY_CHANGED,
+      WAMessageStubType.CIPHERTEXT
+    ].includes(msg.messageStubType as number) // Ou use diretamente os valores como WAMessageStubType.GROUP_PARTICIPANT_ADD, etc
   )
     return false;
 
@@ -6138,16 +5601,14 @@ const filterMessages = (msg: WAMessage): boolean => {
 const wbotMessageListener = (wbot: Session, companyId: number): void => {
   const wbotUserJid = wbot?.user?.id;
   wbot.ev.on("messages.upsert", async (messageUpsert: ImessageUpsert) => {
-    // Phase 4: Diferenciar tipo de mensagem (notify = tempo real, append/historical = histórico)
+    // Phase 4: Diferenciar tipo de mensagem (notify = tempo real, append = histórico)
     const upsertType = (messageUpsert as any).type || "unknown";
     const isRealtime = upsertType === "notify";
 
     if (isRealtime) {
       logger.info(`[messages.upsert] REALTIME (notify) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);
     } else {
-      // IGNORAR mensagens históricas - elas são processadas pelo ImportWhatsAppMessageService
-      logger.debug(`[messages.upsert] IGNORANDO HISTÓRICO (${upsertType}) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);
-      return;
+      logger.debug(`[messages.upsert] HISTÓRICO (${upsertType}) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);
     }
 
     const messages = messageUpsert.messages
@@ -6261,9 +5722,12 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         );
       }
 
-      // ACK status: 0=ERROR, 1=PENDING, 2=SERVER_ACK, 3=DELIVERY_ACK, 4=READ_ACK
-      // Usar o status recebido diretamente para sincronização correta
-      const ack = message.update.status;
+      let ack;
+      if (message.update.status === 3 && message?.key?.fromMe) {
+        ack = 2;
+      } else {
+        ack = message.update.status;
+      }
 
       if (REDIS_URI_MSG_CONN !== "") {
         BullQueues.add(
@@ -6295,161 +5759,71 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
     });
   });
 
-  // Indicador "digitando..." / "gravando áudio" para o frontend
-  wbot.ev.on("presence.update", (presenceData: any) => {
-    try {
-      const io = getIO();
-      const jid = presenceData?.id;
-      if (!jid) return;
-
-      // presenceData.presences é um mapa { jid: { lastKnownPresence, lastSeen } }
-      const presences = presenceData?.presences;
-      if (!presences) return;
-
-      for (const [participantJid, info] of Object.entries(presences)) {
-        const presence = (info as any)?.lastKnownPresence;
-        if (!presence) continue;
-
-        // Emitir para o frontend: composing, recording, paused, available, unavailable
-        io.of(`/workspace-${companyId}`).emit(`company-${companyId}-presence`, {
-          chatJid: jid,
-          participantJid,
-          presence, // "composing" | "recording" | "paused" | "available" | "unavailable"
-        });
-      }
-    } catch (err: any) {
-      // Não falhar por erro no presence
-      logger.debug(`[wbot] presence.update erro: ${err?.message}`);
-    }
-  });
+  // wbot.ev.on("presence.update", (events: any) => {
+  //   console.log(events)
+  // })
 
   wbot.ev.on("contacts.update", (contacts: any) => {
     contacts.forEach(async (contact: any) => {
       console.log(`[contacts.update] contato: ${contact.id} | notify:`, contact.notify, '| objeto completo:', contact);
       if (!contact?.id) return;
 
-      // Tratamento especial para LIDs: atualizar contatos PENDING_ existentes OU criar novo contato LID
-      if (contact.id.includes("@lid")) {
-        const contactName = contact.notify || contact.verifiedName || "";
+      if (typeof contact.imgUrl !== "undefined") {
+        console.log(`[contacts.update] contato: ${contact.id} | nome vindo do WhatsApp (notify):`, contact.notify);
+        const newUrl =
+          contact.imgUrl === ""
+            ? ""
+            : await wbot!.profilePictureUrl(contact.id!).catch(() => null);
+        const numero = contact.id.replace(/\D/g, "");
 
-        try {
-          // Primeiro: tentar atualizar contato PENDING_ existente
-          const pendingContact = await Contact.findOne({
-            where: {
-              companyId,
-              [Op.or]: [
-                { lidJid: contact.id },
-                { remoteJid: contact.id },
-                { number: `PENDING_${contact.id}` }
-              ]
-            }
-          });
+        // PRIORIDADE 1: Nome da agenda do WhatsApp (notify)
+        let finalName = contact.notify;
 
-          if (pendingContact) {
-            if (contactName) {
-              const currentName = (pendingContact.name || "").trim();
-              const isPendingName = currentName === "" || currentName.startsWith("Contato ") || currentName === pendingContact.number;
-              if (isPendingName) {
-                await pendingContact.update({ name: contactName });
-                logger.info(`[contacts.update] LID ${contact.id} → nome atualizado para "${contactName}" (contactId=${pendingContact.id})`);
-              }
-            }
+        // Se notify estiver vazio (comum em contatos LID), busca outras fontes
+        if (!finalName || finalName.trim() === "") {
+          console.log(`[contacts.update] notify vazio para ${contact.id}, buscando outras fontes`);
+
+          // PRIORIDADE 2: Nome já cadastrado no CRM (se não for apenas o número)
+          const existingContact = await Contact.findOne({ where: { remoteJid: contact.id, companyId } });
+          if (existingContact?.name && existingContact.name.replace(/\D/g, "") !== numero) {
+            finalName = existingContact.name;
+            console.log(`[contacts.update] Usando nome do CRM: ${finalName}`);
           } else {
-            // NOVO: Criar contato LID se não existir
-            // Extrair número do LID para uso temporário
-            const lidNumber = contact.id.replace(/\D/g, "");
-            const tempName = contactName || `Contato ${lidNumber.slice(-8)}`;
-
-            // Criar novo contato com LID
-            const newContact = await Contact.create({
-              name: tempName,
-              number: `PENDING_${contact.id}`,  // Marcador para identificar como pendente de resolução
-              canonicalNumber: null,
-              companyId,
-              whatsappId: wbot.id,
-              isGroup: false,
-              remoteJid: contact.id,  // O LID completo
-              lidJid: contact.id,
-              profilePicUrl: "",
-              pushName: contact.notify || null,
-              businessName: contact.verifiedName || null
-            });
-
-            logger.info(`[contacts.update] Novo contato LID criado: ${contact.id} → contactId=${newContact.id}, nome="${tempName}"`);
-          }
-        } catch (err: any) {
-          logger.warn({ err: err?.message }, `[contacts.update] Erro ao processar contato LID ${contact.id}`);
-        }
-
-        // Não processar LIDs como contatos normais (número extraído seria inválido)
-        return;
-      }
-
-      // Processar contatos normais (não-LID) - independente de ter avatar ou não
-      // A condição imgUrl !== undefined foi removida para garantir atualização de nome sempre
-      const newUrl = contact.imgUrl
-        ? await wbot!.profilePictureUrl(contact.id!).catch(() => null)
-        : null;
-      const numero = contact.id.replace(/\D/g, "");
-
-      // PRIORIDADE 1: Nome da agenda do WhatsApp (notify)
-      let finalName = contact.notify;
-
-      // Se notify estiver vazio (comum em contatos LID), busca outras fontes
-      if (!finalName || finalName.trim() === "") {
-        console.log(`[contacts.update] notify vazio para ${contact.id}, buscando outras fontes`);
-
-        // PRIORIDADE 2: Nome já cadastrado no CRM (se não for apenas o número)
-        const existingContact = await Contact.findOne({ where: { remoteJid: contact.id, companyId } });
-        if (existingContact?.name && existingContact.name.replace(/\D/g, "") !== numero) {
-          finalName = existingContact.name;
-          console.log(`[contacts.update] Usando nome do CRM: ${finalName}`);
-        } else {
-          // PRIORIDADE 3: Nome do perfil do usuário (businessProfile)
-          try {
-            console.log(`[contacts.update] Tentando buscar perfil do usuário: ${contact.id}`);
-            const businessProfile = await wbot.getBusinessProfile(contact.id).catch(() => null);
-
-            if (businessProfile?.email) {
-              finalName = businessProfile.email;
-              console.log(`[contacts.update] Email do perfil encontrado: ${finalName}`);
-            } else if (businessProfile?.description) {
-              // LIMITAR description para evitar mensagens de marketing completas
-              const desc = businessProfile.description.trim();
-              if (desc.length <= 100 && !desc.includes('\n')) {
-                finalName = desc;
-                console.log(`[contacts.update] Description do perfil encontrada (curta): ${finalName}`);
+            // PRIORIDADE 3: Nome do perfil do usuário (businessProfile)
+            try {
+              console.log(`[contacts.update] Tentando buscar perfil do usuário: ${contact.id}`);
+              const businessProfile = await wbot.getBusinessProfile(contact.id).catch(() => null);
+              if (businessProfile?.description) {
+                finalName = businessProfile.description;
+                console.log(`[contacts.update] Nome do perfil encontrado: ${finalName}`);
+              } else if (businessProfile?.email) {
+                finalName = businessProfile.email;
+                console.log(`[contacts.update] Email do perfil encontrado: ${finalName}`);
               } else {
-                // Description muito longa = mensagem de marketing, ignorar
                 finalName = numero;
-                console.log(`[contacts.update] Description muito longa (${desc.length} chars), usando número: ${numero}`);
+                console.log(`[contacts.update] Nenhum nome encontrado, usando número: ${numero}`);
               }
-            } else {
+            } catch (err) {
               finalName = numero;
-              console.log(`[contacts.update] Nenhum nome encontrado, usando número: ${numero}`);
+              console.log(`[contacts.update] Erro ao buscar perfil, usando número:`, err);
             }
-          } catch (err) {
-            finalName = numero;
-            console.log(`[contacts.update] Erro ao buscar perfil, usando número:`, err);
           }
-
+        } else {
+          console.log(`[contacts.update] Usando notify da agenda: ${finalName}`);
         }
-      } else {
-        console.log(`[contacts.update] Usando notify da agenda: ${finalName}`);
+        const contactData = {
+          name: finalName,
+          number: numero,
+          isGroup: contact.id.includes("@g.us") ? true : false,
+          companyId: companyId,
+          remoteJid: contact.id,
+          profilePicUrl: newUrl,
+          whatsappId: wbot.id,
+          wbot: wbot
+        };
+
+        await CreateOrUpdateContactService(contactData);
       }
-
-      const contactData = {
-        name: finalName,
-        number: numero,
-        isGroup: contact.id.includes("@g.us") ? true : false,
-        companyId: companyId,
-        remoteJid: contact.id,
-        profilePicUrl: newUrl,
-        whatsappId: wbot.id,
-        wbot: wbot
-      };
-
-      await CreateOrUpdateContactService(contactData);
     });
   });
   wbot.ev.on("groups.update", (groupUpdate: GroupMetadata[]) => {
