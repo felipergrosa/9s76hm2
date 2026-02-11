@@ -857,20 +857,6 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
         }
       }
 
-      // 1. PRIORIDADE MÁXIMA: senderPn (campo mais confiável do Baileys)
-      const senderPn = (msg as any).senderPn;
-      if (senderPn) {
-        const senderDigits = senderPn.replace(/\D/g, "");
-        if (looksPhoneLike(senderDigits)) {
-          contactJid = senderPn.includes("@") ? senderPn : `${senderDigits}@s.whatsapp.net`;
-          debugLog("[getContactMessage] LID resolvido via senderPn (MAIS CONFIÁVEL)", {
-            originalLid: remoteJid,
-            senderPn,
-            resolvedJid: contactJid
-          });
-        }
-      }
-
       // 2. phoneNumber no Contact (presente em alguns contatos)
       if (contactJid === remoteJid && sock.store?.contacts?.[remoteJid]) {
         const storedContact = sock.store.contacts[remoteJid];
@@ -894,20 +880,6 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
           contactJid = lidContact.id;
           debugLog("[getContactMessage] LID resolvido via store.contacts", {
             originalLid: remoteJid,
-            resolvedJid: contactJid
-          });
-        }
-      }
-
-      // Alternativa: verificar se há um número no pushName da mensagem
-      if (contactJid === remoteJid && msg.pushName) {
-        const pushNameDigits = msg.pushName.replace(/\D/g, "");
-        if (looksPhoneLike(pushNameDigits)) {
-          // pushName contém um número válido, usar como JID
-          contactJid = `${pushNameDigits}@s.whatsapp.net`;
-          debugLog("[getContactMessage] LID resolvido via pushName", {
-            originalLid: remoteJid,
-            pushName: msg.pushName,
             resolvedJid: contactJid
           });
         }
@@ -6127,6 +6099,18 @@ const filterMessages = (msg: WAMessage): boolean => {
   // messageStubType=2 (CIPHERTEXT) indica erro de sessão criptográfica
   // Processar essas mensagens cria contatos PENDING_ fantasma
   if (msg.messageStubType === WAMessageStubType.CIPHERTEXT) {
+    // EXCEÇÃO: Se a mensagem for enviada por MIM (fromMe), não descartar por erro de criptografia
+    // O Baileys pode emitir esse erro para mensagens enviadas por outros dispositivos (multidevice),
+    // mas ainda assim queremos registrar a mensagem no ticket.
+    if (msg.key?.fromMe) {
+      logger.warn({
+        msgId: msg.key?.id,
+        remoteJid: msg.key?.remoteJid,
+        stubParams: msg.messageStubParameters
+      }, "[filterMessages] IGNORANDO erro CIPHERTEXT pois é fromMe=true (tentar processar)");
+      return true;
+    }
+
     logger.warn({
       msgId: msg.key?.id,
       remoteJid: msg.key?.remoteJid,
