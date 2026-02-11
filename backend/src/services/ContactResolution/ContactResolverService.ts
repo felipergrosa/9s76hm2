@@ -46,12 +46,12 @@ export async function resolveMessageContact(
   // ─── CAMADA 1: Extração (pura, sem I/O) ───
   const ids = extractMessageIdentifiers(msg, wbot);
 
-  // ─── CAMADA 1.3: Simplificação para mensagens fromMe com LID ───
-  // Em vez de tentar resolver LID→PN com heurísticas complexas,
-  // buscar diretamente o ticket pelo lidJid do destinatário
-  if (ids.isFromMe && ids.lidJid && !ids.pnJid) {
-    // Buscar ticket do destinatário (não filtrar por whatsappId - pode ter mudado)
-    // Incluir mais status para garantir encontrar o ticket correto
+  // ─── CAMADA 1.3: Busca por ticket existente via lidJid ───
+  // Quando o remoteJid é LID e não sabemos o PN, buscar diretamente
+  // o ticket pelo lidJid. Funciona tanto para mensagens de entrada
+  // quanto de saída (fromMe).
+  if (ids.lidJid && !ids.pnJid) {
+    // Buscar ticket (não filtrar por whatsappId - pode ter mudado)
     const ticketByLid = await Ticket.findOne({
       where: {
         companyId,
@@ -79,8 +79,9 @@ export async function resolveMessageContact(
         contactId: contact.id,
         contactName: contact.name,
         ticketId: ticketByLid.id,
+        isFromMe: ids.isFromMe,
         strategy: "ticket-by-lidJid"
-      }, "[resolveMessageContact] Contato encontrado via ticket existente (fromMe+LID)");
+      }, "[resolveMessageContact] Contato encontrado via ticket existente (LID)");
 
       // Preencher os identificadores se o contato tiver número real
       const digits = String(contact.number || "").replace(/\D/g, "");
@@ -590,7 +591,7 @@ async function resolveLidToPN(
   if (ids.pushName && ids.pushName.trim().length > 2) {
     try {
       const pushNameClean = ids.pushName.trim();
-      
+
       // Tentativa 1: match exato
       let contactByName = await Contact.findOne({
         where: {
