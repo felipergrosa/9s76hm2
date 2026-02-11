@@ -1360,19 +1360,22 @@ const verifyContact = async (
       debugLog("[verifyContact] Erro ao usar signalRepository.lidMapping", { err: err?.message });
     }
 
-    // 1. Para JIDs @lid, buscar por remoteJid (LID) existente OU pelo campo lidJid (em contato real)
-    const existingByLid = await Contact.findOne({
-      where: {
-        companyId,
-        [Op.or]: [
-          { remoteJid: normalizedJid },
-          { lidJid: normalizedJid }
-        ]
-      }
+    // 1. Busca primária por remoteJid (contatos LID usam remoteJid como identificador)
+    const existingByRemoteJid = await Contact.findOne({
+      where: { companyId, remoteJid: normalizedJid }
     });
-    if (existingByLid) {
-      debugLog("[verifyContact] Contato encontrado pelo LID", { contactId: existingByLid.id });
-      return existingByLid;
+    if (existingByRemoteJid) {
+      debugLog("[verifyContact] Contato encontrado pelo remoteJid (LID)", { contactId: existingByRemoteJid.id });
+      return existingByRemoteJid;
+    }
+
+    // 1b. Fallback: buscar por lidJid (contatos já reconciliados mantêm LID como índice)
+    const existingByLidJid = await Contact.findOne({
+      where: { companyId, lidJid: normalizedJid }
+    });
+    if (existingByLidJid) {
+      debugLog("[verifyContact] Contato encontrado pelo lidJid (reconciliado)", { contactId: existingByLidJid.id });
+      return existingByLidJid;
     }
 
     // 2. Tentar extrair telefone do pushName (muitas vezes é o próprio número)
@@ -6335,9 +6338,8 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
             where: {
               companyId,
               [Op.or]: [
-                { lidJid: contact.id },
                 { remoteJid: contact.id },
-                { number: `PENDING_${contact.id}` }
+                { lidJid: contact.id }
               ]
             }
           });

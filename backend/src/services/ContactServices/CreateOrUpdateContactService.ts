@@ -85,6 +85,8 @@ interface Request {
   creditLimit?: string;
   segment?: string;
   clientCode?: string;
+  dtUltCompra?: Date | string | null;
+  vlUltCompra?: number | string | null;
   checkProfilePic?: boolean; // Novo parametro para evitar rate limit na importação
 }
 
@@ -148,6 +150,8 @@ const CreateOrUpdateContactService = async ({
   creditLimit,
   segment,
   clientCode,
+  dtUltCompra,
+  vlUltCompra,
   checkProfilePic = true // Por padrão verifica (comportamento antigo)
 }: Request): Promise<Contact> => {
   try {
@@ -213,6 +217,27 @@ const CreateOrUpdateContactService = async ({
     const sanitizedCreditLimit = (creditLimit === null || creditLimit === undefined || creditLimit === '') ? null : String(creditLimit);
     const sanitizedCpfCnpj = cpfCnpj ? cpfCnpj.replace(/[^0-9]/g, "") : null;
 
+    // Validação e normalização para dtUltCompra
+    let dtUltCompraValue: Date | null = null;
+    if (dtUltCompra && typeof dtUltCompra === 'string' && dtUltCompra !== '') {
+      const d = new Date(dtUltCompra);
+      if (isNaN(d.getTime())) {
+        logger.warn("[CreateOrUpdateContactService] dtUltCompra inválido, usando null", { dtUltCompra });
+        dtUltCompraValue = null;
+      } else {
+        dtUltCompraValue = d;
+      }
+    } else if (dtUltCompra instanceof Date) {
+      dtUltCompraValue = dtUltCompra;
+    }
+
+    // Normalização para vlUltCompra
+    let vlUltCompraValue: number | null = null;
+    if (vlUltCompra !== null && vlUltCompra !== undefined && vlUltCompra !== '') {
+      const num = parseFloat(String(vlUltCompra).replace(/[^\d.,]/g, '').replace(',', '.'));
+      vlUltCompraValue = isNaN(num) ? null : num;
+    }
+
     // Normalização de email: nunca null
     const normalizedEmail = ((): string | undefined => {
       if (email === null) return "";
@@ -257,7 +282,9 @@ const CreateOrUpdateContactService = async ({
       foundationDate: foundationDate || undefined,
       creditLimit: sanitizedCreditLimit,
       segment: normalizedSegment,
-      clientCode: clientCode || undefined
+      clientCode: clientCode || undefined,
+      dtUltCompra: dtUltCompraValue,
+      vlUltCompra: vlUltCompraValue
     };
 
     const io = getIO();
@@ -272,9 +299,7 @@ const CreateOrUpdateContactService = async ({
           [Op.or]: [
             { canonicalNumber: number },
             { number },
-            remoteJid ? { remoteJid } : {},
-            // Se for LID, tentar buscar também via lidJid (caso já esteja vinculado a um contato real)
-            remoteJid && remoteJid.includes("@lid") ? { lidJid: remoteJid } : {}
+            remoteJid ? { remoteJid } : {}
           ]
         }
     });
@@ -306,6 +331,13 @@ const CreateOrUpdateContactService = async ({
       contact.segment = normalizedSegment !== undefined ? (normalizedSegment as any) : (contact as any).segment;
       contact.region = normalizedRegion !== undefined ? (normalizedRegion as any) : (contact as any).region;
       contact.clientCode = clientCode || contact.clientCode;
+      // Atualizar dtUltCompra e vlUltCompra se fornecidos
+      if (dtUltCompraValue !== undefined) {
+        (contact as any).dtUltCompra = dtUltCompraValue;
+      }
+      if (vlUltCompraValue !== undefined) {
+        (contact as any).vlUltCompra = vlUltCompraValue;
+      }
 
       if (isNil(contact.whatsappId)) {
         const whatsapp = await Whatsapp.findOne({
@@ -361,7 +393,7 @@ const CreateOrUpdateContactService = async ({
       const { acceptAudioMessageContact } = settings;
       let newRemoteJid = remoteJid;
 
-      if (!remoteJid && remoteJid !== "") {
+      if (!remoteJid || remoteJid === "") {
         newRemoteJid = isGroup ? `${rawNumber}@g.us` : `${rawNumber}@s.whatsapp.net`;
       }
 

@@ -158,8 +158,13 @@ export async function createContact(
 }
 
 /**
- * Cria contato PENDENTE com marcador PENDING_ no number.
- * O job de reconciliação (Fase 4) resolverá quando o mapeamento for descoberto.
+ * Cria contato LID temporário (sem número real conhecido).
+ * 
+ * Regras (simplificação lidJid):
+ *   - `remoteJid` = LID completo (identificador primário de busca)
+ *   - `lidJid` = NÃO setado (só será preenchido quando reconciliado com número real)
+ *   - `number` = dígitos do LID (temporário, será corrigido na reconciliação)
+ *   - NUNCA usar prefixo PENDING_
  */
 async function createPendingContact(
   ids: ExtractedIdentifiers,
@@ -167,22 +172,19 @@ async function createPendingContact(
   wbot: Session
 ): Promise<Contact> {
   const lidJid = ids.lidJid || "unknown";
-  const pendingNumber = `PENDING_${lidJid}`;
+  const lidDigits = lidJid.replace(/\D/g, "");
 
   logger.warn({
     lidJid,
     pushName: ids.pushName,
     companyId
-  }, "[createContact] Criando contato PENDENTE (sem número real)");
+  }, "[createContact] Criando contato LID temporário (sem número real)");
 
-  // Verificar se já existe contato PENDING_ para esse LID
+  // Verificar se já existe contato com esse remoteJid (busca primária por LID)
   const existing = await Contact.findOne({
     where: {
       companyId,
-      [Op.or]: [
-        { number: pendingNumber },
-        ids.lidJid ? { lidJid: ids.lidJid } : {}
-      ]
+      remoteJid: ids.lidJid
     }
   });
 
@@ -190,26 +192,24 @@ async function createPendingContact(
     logger.info({
       contactId: existing.id,
       number: existing.number
-    }, "[createContact] Contato PENDING_ já existe, reutilizando");
+    }, "[createContact] Contato LID já existe, reutilizando");
     return existing;
   }
 
-  // Criar novo contato pendente
+  // Criar novo contato LID temporário
   try {
-    // IMPORTANTE: Para mensagens fromMe, NÃO usar pushName porque é o nome do REMETENTE (usuário)
-    // e não do DESTINATÁRIO (cliente). Usar nome genérico até resolvermos corretamente.
     const contactName = ids.isFromMe
       ? `Contato ${lidJid.replace("@lid", "").slice(-6)}`
       : (ids.pushName || `Contato ${lidJid.replace("@lid", "").slice(-6)}`);
 
     const contact = await Contact.create({
       name: contactName,
-      number: pendingNumber,
+      number: lidDigits,
       canonicalNumber: null,
       isGroup: false,
       companyId,
       remoteJid: ids.lidJid,
-      lidJid: ids.lidJid,
+      // lidJid: NÃO setar — só será preenchido quando reconciliado com número real
       email: "",
       channel: "whatsapp",
       whatsappId: wbot.id
@@ -217,23 +217,19 @@ async function createPendingContact(
 
     logger.info({
       contactId: contact.id,
-      pendingNumber,
+      number: lidDigits,
       lidJid
-    }, "[createContact] Contato PENDING_ criado");
+    }, "[createContact] Contato LID temporário criado");
 
     return contact;
   } catch (err: any) {
     // Se falhar por constraint unique, tentar buscar existente
-    logger.warn({ err: err?.message }, "[createContact] Erro ao criar PENDING_, buscando existente");
+    logger.warn({ err: err?.message }, "[createContact] Erro ao criar contato LID, buscando existente");
 
     const fallback = await Contact.findOne({
       where: {
         companyId,
-        [Op.or]: [
-          { number: pendingNumber },
-          ids.lidJid ? { lidJid: ids.lidJid } : {},
-          ids.lidJid ? { remoteJid: ids.lidJid } : {}
-        ]
+        remoteJid: ids.lidJid
       }
     });
 

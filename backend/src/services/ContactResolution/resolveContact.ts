@@ -115,18 +115,13 @@ export async function resolveContact(
     });
 
     if (contactByRemoteJid) {
-      // Migrar lidJid para o campo dedicado
-      try {
-        await contactByRemoteJid.update({ lidJid: ids.lidJid });
-        lidJidUpdated = true;
-      } catch (err: any) {
-        logger.warn({ err: err?.message }, "[resolveContact] Falha ao migrar lidJid de remoteJid");
-      }
+      // Contato encontrado com remoteJid = LID
+      // NÃO migrar lidJid aqui — lidJid só é preenchido quando contato é reconciliado com número real
 
       logger.info({
         contactId: contactByRemoteJid.id,
         strategy: "remoteJid-fallback"
-      }, "[resolveContact] Contato encontrado via remoteJid (migrado para lidJid)");
+      }, "[resolveContact] Contato encontrado via remoteJid (LID)");
       return { contact: contactByRemoteJid, lidJidUpdated, pnFromMapping };
     }
   }
