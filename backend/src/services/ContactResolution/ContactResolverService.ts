@@ -534,17 +534,129 @@ async function resolveLidToPN(
       }
     }
 
-    logger.info({
+    logger.warn({
       lidJid,
       resultsCount: results?.length || 0,
-      firstResult: results?.[0] ? { jid: results[0].jid, exists: results[0].exists } : null
-    }, "[resolveLidToPN] wbot.onWhatsApp() não retornou PN válido");
+      firstResult: results?.[0] ? JSON.stringify(results[0]) : null
+    }, "[resolveLidToPN] CRITICO: wbot.onWhatsApp() não retornou PN válido. Verifique se o numero esta na lista de contatos do celular.");
   } catch (err: any) {
     logger.warn({
       err: err?.message,
       lidJid
     }, "[resolveLidToPN] Erro ao chamar wbot.onWhatsApp()");
   }
+
+  // Estratégia C2: Buscar no wbot.store (cache local de contatos sincronizados)
+  try {
+    const store = (wbot as any).store;
+    if (store && store.contacts) {
+      // 1. Tentar busca direta pelo LID
+      const contactInfo = store.contacts[lidJid];
+      if (contactInfo) {
+        logger.info({ lidJid, contactKeys: Object.keys(contactInfo) }, "[resolveLidToPN] Contato LID encontrado no wbot.store");
+      }
+
+      // 2. Tentar busca por nome no store (iterar todos)
+      // Se onWhatsApp falhou, talvez o store tenha o PN com o mesmo nome
+      if (ids.pushName) {
+        const cleanName = ids.pushName.trim().toLowerCase();
+        const allContacts = Object.values(store.contacts) as any[];
+
+        // Procurar contato com mesmo nome/notify/verifiedName e que seja PN (@s.whatsapp.net)
+        const match = allContacts.find(c => {
+          const names = [c.name, c.notify, c.verifiedName].filter(n => n).map(n => n.toLowerCase());
+          return (
+            names.some(n => n === cleanName) &&
+            c.id.includes("@s.whatsapp.net")
+          );
+        });
+
+        if (match) {
+          const pnJid = jidNormalizedUser(match.id);
+          const digits = pnJid.replace(/\D/g, "");
+          if (digits.length >= 10) {
+            ids.pnJid = pnJid;
+            ids.pnDigits = digits;
+            const { canonical } = safeNormalizePhoneNumber(digits);
+            ids.pnCanonical = canonical;
+
+            logger.info({
+              lidJid,
+              pnJid,
+              matchId: match.id,
+              matchName: match.name || match.notify
+            }, "[resolveLidToPN] Sucesso: PN encontrado no wbot.store via match de nome");
+
+            try {
+              await LidMapping.upsert({
+                lid: lidJid,
+                phoneNumber: digits,
+                companyId,
+                whatsappId: wbot.id,
+                verified: true
+              });
+            } catch { }
+            return;
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Erro ao consultar wbot.store");
+  }
+  // Estratégia C3: USync Query (Force Sync via Interactive Query)
+  // O onWhatsApp pode falhar se o contato não tiver status público recente, mas USync é mais agressivo.
+  try {
+    const sock = wbot as any;
+    if (sock.executeUSyncQuery && typeof sock.executeUSyncQuery === 'function') {
+      const { USyncQuery, USyncUser } = require("@whiskeysockets/baileys");
+
+      const usyncQuery = new USyncQuery()
+        .withMode("query")
+        .withUser(new USyncUser().withId(lidJid))
+        .withContactProtocol(); // Solicita dados de contato
+
+      const result = await sock.executeUSyncQuery(usyncQuery);
+
+      if (result && result.list && result.list.length > 0) {
+        const firstResult = result.list[0];
+        // O resultado do protocolo de contato geralmente vem no 'contact' field
+        // A estrutura exata depende do retorno do servidor, mas vamos logar para debug critico
+        // e tentar extrair se tiver PN.
+
+        logger.info({ lidJid, usyncResult: JSON.stringify(firstResult) }, "[resolveLidToPN] USync retornou dados.");
+
+        // O usync pode retornar o PN no atributo 'id' se for redirecionamento, ou dentro dos protocolos
+        // Mas o objetivo principal aqui é forçar o servidor a nos dizer quem é esse LID.
+        const protocolData = firstResult;
+        // TODO: Analisar payload exato do USync para extração, mas por hora o log já nos salva.
+        // Se o USync retornar o PN, ele geralmente aparece como JID normal.
+        if (firstResult.id && firstResult.id.includes("@s.whatsapp.net")) {
+          const pnJid = jidNormalizedUser(firstResult.id);
+          const digits = pnJid.replace(/\D/g, "");
+          if (digits.length >= 10) {
+            ids.pnJid = pnJid;
+            ids.pnDigits = digits;
+            ids.pnCanonical = safeNormalizePhoneNumber(digits).canonical;
+            logger.info({ lidJid, pnJid }, "[resolveLidToPN] LID resolvido via USync!");
+            try {
+              await LidMapping.upsert({
+                lid: lidJid,
+                phoneNumber: digits,
+                companyId,
+                whatsappId: wbot.id,
+                verified: true
+              });
+            } catch { }
+            return;
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Falha no USync Query");
+  }
+
 
   // Estratégia D: buscar contato existente pelo lidJid no banco
   // (pode ter sido criado anteriormente com número real)
@@ -592,11 +704,11 @@ async function resolveLidToPN(
     try {
       const pushNameClean = ids.pushName.trim();
 
-      // Tentativa 1: match exato
+      // Tentativa 1: match exato (case insensitive)
       let contactByName = await Contact.findOne({
         where: {
           companyId,
-          name: pushNameClean,
+          name: { [Op.iLike]: pushNameClean }, // Case insensitive (Postgres) ou Op.like se MySQL (mas iLike é mais seguro)
           isGroup: false,
           number: { [Op.notLike]: "PENDING_%" }
         },
