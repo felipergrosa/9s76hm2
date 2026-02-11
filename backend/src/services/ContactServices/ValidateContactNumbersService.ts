@@ -19,6 +19,7 @@ export interface ValidationResult {
 
 export interface ValidateContactNumbersResult {
     total: number;
+    totalPending: number;
     validated: number;
     corrected: number;
     invalid: number;
@@ -83,16 +84,36 @@ const ValidateContactNumbersService = async ({
 }: ValidateRequest): Promise<ValidateContactNumbersResult> => {
     const wbot = getWbot(whatsappId);
 
-    // Buscar contatos
+    // Construir WHERE com filtros de número BR diretamente no SQL
     const whereClause: any = {
         companyId,
         isGroup: false,
-        number: { [Op.not]: null, [Op.ne]: "" }
+        number: { [Op.not]: null, [Op.ne]: "" },
+        // Excluir contatos já validados
+        isWhatsappValid: { [Op.is]: null as any }
     };
 
     if (contactIds && contactIds.length > 0) {
         whereClause.id = { [Op.in]: contactIds };
     }
+
+    // Buscar contatos BR aplicando filtro de dígitos
+    if (mode === "nine_digit") {
+        // 55 + DDD(2) + 9 + 8dígitos = 13 dígitos, começa com 55, 5º dígito é 9
+        whereClause.number = {
+            ...whereClause.number,
+            [Op.regexp]: '^55[0-9]{2}9[6-9][0-9]{7}$'
+        };
+    } else {
+        // Qualquer BR: começa com 55, 12 ou 13 dígitos
+        whereClause.number = {
+            ...whereClause.number,
+            [Op.regexp]: '^55[0-9]{10,11}$'
+        };
+    }
+
+    // Contar total de pendentes (para o frontend saber quantos faltam)
+    const totalPending = await Contact.count({ where: whereClause });
 
     const contacts = await Contact.findAll({
         where: whereClause,
@@ -101,20 +122,13 @@ const ValidateContactNumbersService = async ({
         offset
     });
 
-    // Filtrar conforme o modo
-    const filtered = contacts.filter(c => {
-        const digits = c.number.replace(/\D/g, "");
-        if (mode === "nine_digit") return isBrazilianWithNine(digits);
-        return isBrazilian(digits);
-    });
-
     const results: ValidationResult[] = [];
     let validated = 0;
     let corrected = 0;
     let invalid = 0;
     let errors = 0;
 
-    for (const contact of filtered) {
+    for (const contact of contacts) {
         try {
             const digits = contact.number.replace(/\D/g, "");
             const jid = `${digits}@s.whatsapp.net`;
@@ -227,7 +241,8 @@ const ValidateContactNumbersService = async ({
     }
 
     return {
-        total: filtered.length,
+        total: contacts.length,
+        totalPending,
         validated,
         corrected,
         invalid,

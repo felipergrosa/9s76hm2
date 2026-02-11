@@ -578,27 +578,25 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
       setValidationResults({});
       setValidationSummary(null);
       setValidationPage(0);
-      const { data } = await api.get("/contacts", {
-        params: {
-          searchParam: "",
-          pageNumber: 1,
-          limit: 200,
-          isGroup: false,
-          isWhatsappValid: validationMode === "all" ? undefined : undefined
-        }
-      });
-      const allContacts = data?.contacts || [];
-      // Filtrar contatos BR
-      const brContacts = allContacts.filter(c => {
-        const digits = String(c.number || "").replace(/\D/g, "");
-        if (!digits.startsWith("55")) return false;
-        if (validationMode === "nine_digit") {
-          return digits.length === 13 && digits.charAt(4) === "9";
-        }
-        return digits.length === 12 || digits.length === 13;
-      });
-      setValidationContacts(brContacts);
-      toast.info(`${brContacts.length} contatos BR encontrados para validação.`);
+
+      // Buscar contatos BR pendentes via endpoint dedicado (isWhatsappValid IS NULL)
+      let allContacts = [];
+      let page = 1;
+      let hasMore = true;
+      while (hasMore) {
+        const { data } = await api.get("/contacts/validate-whatsapp/pending", {
+          params: { mode: validationMode, page, limit: 500 }
+        });
+        const batch = data?.contacts || [];
+        allContacts = [...allContacts, ...batch];
+        hasMore = data?.hasMore || false;
+        page++;
+        // Limite de segurança: máximo 10000 contatos
+        if (allContacts.length >= 10000) break;
+      }
+
+      setValidationContacts(allContacts);
+      toast.info(`${allContacts.length} contatos BR pendentes de validação.`);
     } catch (err) {
       toastError(err);
     } finally {
@@ -621,27 +619,29 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
     setValidationResults({});
     setValidationSummary(null);
 
-    const batchSize = 50;
     const totalContacts = validationContacts.length;
-    const totalBatches = Math.ceil(totalContacts / batchSize);
-    let allResults = [];
     let summary = { validated: 0, corrected: 0, invalid: 0, errors: 0 };
+    let processedCount = 0;
 
     try {
-      for (let i = 0; i < totalBatches; i++) {
-        const batchIds = validationContacts
-          .slice(i * batchSize, (i + 1) * batchSize)
-          .map(c => c.id);
-
+      // O backend processa batches de 50 automaticamente.
+      // Cada chamada POST processa um batch e o backend filtra por isWhatsappValid IS NULL,
+      // então sempre usamos offset=0 (os já validados saem da fila automaticamente).
+      let hasMore = true;
+      while (hasMore) {
         const { data } = await api.post("/contacts/validate-whatsapp", {
           whatsappId: Number(selectedWhatsappId),
-          contactIds: batchIds,
-          mode: validationMode
+          mode: validationMode,
+          offset: 0
         });
 
         const batchResults = data?.results || [];
-        allResults = [...allResults, ...batchResults];
+        if (batchResults.length === 0) {
+          hasMore = false;
+          break;
+        }
 
+        processedCount += batchResults.length;
         summary.validated += data?.validated || 0;
         summary.corrected += data?.corrected || 0;
         summary.invalid += data?.invalid || 0;
@@ -652,10 +652,16 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
         batchResults.forEach(r => { newResults[r.contactId] = r; });
         setValidationResults(prev => ({ ...prev, ...newResults }));
 
-        const progress = Math.round(((i + 1) / totalBatches) * 100);
+        const progress = Math.min(Math.round((processedCount / totalContacts) * 100), 99);
         setValidationProgress(progress);
+
+        // Se totalPending do backend for 0, acabou
+        if (!data?.totalPending || data.totalPending <= 0) {
+          hasMore = false;
+        }
       }
 
+      setValidationProgress(100);
       setValidationSummary(summary);
       toast.success(
         `Validação concluída: ${summary.validated} válidos, ${summary.corrected} corrigidos, ${summary.invalid} inválidos.`

@@ -2379,3 +2379,50 @@ export const validateNumbers = async (req: AuthenticatedRequest, res: Response):
     });
   }
 };
+
+/**
+ * GET /contacts/validate-whatsapp/pending
+ * Retorna contatos BR pendentes de validação (isWhatsappValid IS NULL).
+ */
+export const getValidationPending = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const mode = (req.query.mode as string) || "nine_digit";
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 500;
+  const offset = (page - 1) * limit;
+
+  const { Op } = require("sequelize");
+
+  const whereClause: any = {
+    companyId,
+    isGroup: false,
+    number: { [Op.not]: null, [Op.ne]: "" },
+    isWhatsappValid: { [Op.is]: null as any }
+  };
+
+  if (mode === "nine_digit") {
+    whereClause.number = {
+      ...whereClause.number,
+      [Op.regexp]: '^55[0-9]{2}9[6-9][0-9]{7}$'
+    };
+  } else {
+    whereClause.number = {
+      ...whereClause.number,
+      [Op.regexp]: '^55[0-9]{10,11}$'
+    };
+  }
+
+  const { count, rows } = await Contact.findAndCountAll({
+    where: whereClause,
+    attributes: ["id", "name", "number", "isWhatsappValid"],
+    order: [["name", "ASC"]],
+    limit,
+    offset
+  });
+
+  return res.json({
+    contacts: rows,
+    count,
+    hasMore: offset + rows.length < count
+  });
+};
