@@ -164,7 +164,8 @@ const ImportContactHistoryService = async ({
             try {
                 const result = await wbot.fetchMessageHistory(jid, BATCH_SIZE, cursor, cursorTimestamp);
 
-                logger.debug(`[ImportHistory] fetchMessageHistory params: jid=${jid}, limit=${BATCH_SIZE}, cursor=${cursor?.id}, ts=${cursorTimestamp}`);
+                logger.info(`[ImportHistory] DEBUG: result type=${typeof result}, isArray=${Array.isArray(result)}`);
+                // logger.info(`[ImportHistory] DEBUG RAW: ${JSON.stringify(result, null, 2)}`); // Descomente se necessário, pode ser muito verborrágico
 
                 let messages: any[] = [];
                 if (Array.isArray(result)) {
@@ -174,6 +175,13 @@ const ImportContactHistoryService = async ({
                 }
 
                 logger.debug(`[ImportHistory] fetchMessageHistory retornou ${messages.length} mensagens`);
+
+                if ((!messages || messages.length === 0) && fetchAttempts === 1 && cursor) {
+                    logger.warn(`[ImportHistory] Primeira tentativa com cursor falhou. Tentando sem cursor para pegar as mais recentes...`);
+                    cursor = undefined;
+                    cursorTimestamp = undefined;
+                    continue; // Tenta de novo sem cursor
+                }
 
                 if (!messages || messages.length === 0) {
                     logger.info(`[ImportHistory] Sem mais mensagens retornadas pelo Baileys.`);
