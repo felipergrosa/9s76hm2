@@ -251,7 +251,7 @@ setInterval(async () => {
   } catch (err) {
     console.error("[ReconcileJob] Erro no intervalo:", err);
   }
-}, 60_000);
+}, 300_000);
 
 initIO(server);
 gracefulShutdown(server);

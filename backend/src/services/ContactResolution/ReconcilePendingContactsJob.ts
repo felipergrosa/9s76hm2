@@ -58,10 +58,10 @@ export async function reconcilePendingContacts(
 
     if (pendingContacts.length === 0) return result;
 
-    logger.info("[ReconcileJob] Iniciando reconciliação", {
-      companyId,
-      totalPending: pendingContacts.length
-    });
+    // logger.info("[ReconcileJob] Iniciando reconciliação", {
+    //   companyId,
+    //   totalPending: pendingContacts.length
+    // });
 
     for (const pendingContact of pendingContacts) {
       try {
@@ -184,10 +184,12 @@ export async function reconcilePendingContacts(
 
     result.remaining = result.totalPending - result.reconciled - result.failed;
 
-    logger.info("[ReconcileJob] Reconciliação concluída", {
-      companyId,
-      ...result
-    });
+    if (result.reconciled > 0 || result.failed > 0) {
+      logger.info("[ReconcileJob] Reconciliação concluída", {
+        companyId,
+        ...result
+      });
+    }
   } catch (err: any) {
     logger.error("[ReconcileJob] Erro fatal na reconciliação", {
       companyId,

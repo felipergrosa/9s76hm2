@@ -112,7 +112,7 @@ const SyncChatHistoryService = async ({
 
                 // Baileys fetchMessageHistory(jid, quantity, cursor.key, cursor.messageTimestamp)
                 const result = await wbot.fetchMessageHistory(jid, messageCount, cursor, timestamp);
-                
+
                 // VALIDAR: fetchMessageHistory pode retornar objeto ou array
                 if (Array.isArray(result)) {
                     messages = result;
@@ -122,8 +122,10 @@ const SyncChatHistoryService = async ({
                 } else {
                     messages = [];
                 }
-                
-                logger.info(`[SyncChatHistory] Recebidas ${messages?.length || 0} mensagens para ticketId=${ticketId}`);
+
+                if (messages?.length > 0) {
+                    logger.info(`[SyncChatHistory] Recebidas ${messages?.length} mensagens para ticketId=${ticketId}`);
+                }
             } else {
                 // Fallback: tentar chatModify para marcar como lido e forçar sync
                 logger.warn(`[SyncChatHistory] fetchMessageHistory não disponível, usando fallback`);
