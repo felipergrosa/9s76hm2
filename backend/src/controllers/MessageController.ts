@@ -996,7 +996,11 @@ export const forwardMessage = async (req: Request, res: Response): Promise<Respo
     }
 
     const publicFolder = path.resolve(__dirname, "..", "..", "public");
-    const filePath = path.join(publicFolder, `company${createTicket.companyId}`, fileName);
+    const publicPrefix = `/public/company${createTicket.companyId}/`;
+    const relativePath = mediaUrl.includes(publicPrefix)
+      ? mediaUrl.split(publicPrefix)[1]
+      : fileName;
+    const filePath = path.join(publicFolder, `company${createTicket.companyId}`, relativePath);
 
     const mediaSrc = {
       fieldname: "medias",
