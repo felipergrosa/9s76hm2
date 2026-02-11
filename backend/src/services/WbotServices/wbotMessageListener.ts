@@ -1502,6 +1502,19 @@ const verifyContact = async (
       pushName: msgContact.name
     });
 
+    // VALIDAÇÃO DE TAMANHO PARA LID - Evita criar contatos com números inválidos
+    if (cleaned.length > 13) {
+      logger.error("[verifyContact] LID REJEITADO: Número muito longo (acima de 13 dígitos)", {
+        originalJid: msgContact.id,
+        normalizedJid,
+        cleaned,
+        length: cleaned.length,
+        pushName: msgContact.name,
+        companyId
+      });
+      return null as any;
+    }
+
     // SOLUÇÃO: Criar contato temporário com LID quando não resolver
     // Isso permite processar a mensagem e o contato será atualizado quando o mapeamento for descoberto
     logger.warn("[verifyContact] LID não resolvido - criando contato temporário com LID", {
