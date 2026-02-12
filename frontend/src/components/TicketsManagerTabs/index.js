@@ -1071,7 +1071,7 @@ const TicketsManagerTabs = () => {
               indicatorColor="primary"
               textColor="primary"
               variant="fullWidth"
-              scrollButtons={false}
+              scrollButtons="auto"
               style={{ overflow: "visible" }}
             >
               {/* ATENDENDO */}

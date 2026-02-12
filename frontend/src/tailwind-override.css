@@ -1,0 +1,215 @@
+/* Garante que classes Tailwind funcionem mesmo com Material-UI */
+
+/* Reset de flexbox para garantir compatibilidade */
+.flex {
+  display: flex !important;
+}
+
+.flex-col {
+  flex-direction: column !important;
+}
+
+.flex-row {
+  flex-direction: row !important;
+}
+
+.flex-wrap {
+  flex-wrap: wrap !important;
+}
+
+.flex-nowrap {
+  flex-wrap: nowrap !important;
+}
+
+.items-center {
+  align-items: center !important;
+}
+
+.items-start {
+  align-items: flex-start !important;
+}
+
+.items-end {
+  align-items: flex-end !important;
+}
+
+.justify-center {
+  justify-content: center !important;
+}
+
+.justify-start {
+  justify-content: flex-start !important;
+}
+
+.justify-end {
+  justify-content: flex-end !important;
+}
+
+.justify-between {
+  justify-content: space-between !important;
+}
+
+.gap-1 {
+  gap: 0.25rem !important;
+}
+
+.gap-2 {
+  gap: 0.5rem !important;
+}
+
+.gap-3 {
+  gap: 0.75rem !important;
+}
+
+.gap-4 {
+  gap: 1rem !important;
+}
+
+.flex-1 {
+  flex: 1 1 0% !important;
+}
+
+.w-full {
+  width: 100% !important;
+}
+
+.h-full {
+  height: 100% !important;
+}
+
+.min-w-0 {
+  min-width: 0 !important;
+}
+
+.max-w-full {
+  max-width: 100% !important;
+}
+
+/* Garante que display block funcione */
+.block {
+  display: block !important;
+}
+
+/* Garante que hidden funcione */
+.hidden {
+  display: none !important;
+}
+
+/* Garante que position funcione */
+.relative {
+  position: relative !important;
+}
+
+.absolute {
+  position: absolute !important;
+}
+
+.sticky {
+  position: sticky !important;
+}
+
+/* Garante que z-index funcione */
+.z-10 {
+  z-index: 10 !important;
+}
+
+.z-50 {
+  z-index: 50 !important;
+}
+
+/* Garante que overflow funcione */
+.overflow-hidden {
+  overflow: hidden !important;
+}
+
+.overflow-visible {
+  overflow: visible !important;
+}
+
+/* Garante que text-align funcione */
+.text-center {
+  text-align: center !important;
+}
+
+.text-left {
+  text-align: left !important;
+}
+
+.text-right {
+  text-align: right !important;
+}
+
+/* Garante que whitespace funcione */
+.whitespace-nowrap {
+  white-space: nowrap !important;
+}
+
+/* Garante que truncate funcione */
+.truncate {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/* Override específico para Material-UI */
+.MuiPaper-root {
+  /* Garante que classes Tailwind funcionem em componentes Material-UI */
+  &.flex {
+    display: flex !important;
+  }
+  
+  &.hidden {
+    display: none !important;
+  }
+  
+  &.relative {
+    position: relative !important;
+  }
+  
+  &.absolute {
+    position: absolute !important;
+  }
+  
+  &.sticky {
+    position: sticky !important;
+  }
+}
+
+.MuiCard-root {
+  &.flex {
+    display: flex !important;
+  }
+  
+  &.hidden {
+    display: none !important;
+  }
+}
+
+/* Garante que as classes de responsividade funcionem */
+@media (min-width: 1200px) {
+  .min-\[1200px\]\:block {
+    display: block !important;
+  }
+  
+  .min-\[1200px\]\:hidden {
+    display: none !important;
+  }
+  
+  .min-\[1200px\]\:flex {
+    display: flex !important;
+  }
+}
+
+@media (max-width: 1199px) {
+  .max-\[1199px\]\:block {
+    display: block !important;
+  }
+  
+  .max-\[1199px\]\:hidden {
+    display: none !important;
+  }
+  
+  .max-\[1199px\]\:flex {
+    display: flex !important;
+  }
+}

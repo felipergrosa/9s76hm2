@@ -34,8 +34,6 @@ import {
     CheckCircle,
     Ban,
     GitMerge,
-    UserX,
-    RefreshCw,
 } from "lucide-react";
 import { Facebook, Instagram, WhatsApp, ImportExport, Backup, ContactPhone } from "@material-ui/icons";
 import { Tooltip, Menu, MenuItem } from "@material-ui/core";
@@ -447,48 +445,6 @@ const Contacts = () => {
         } catch (_) { /* ignore */ }
     }, [location.pathname, location.search, history]);
 
-    // Função para buscar contatos (movida para fora do useEffect)
-    const fetchContacts = async () => {
-        // Garante que respostas antigas sejam ignoradas
-        const currentId = ++requestIdRef.current;
-        try {
-            const { data } = await api.get("/contacts/", {
-                params: {
-                    searchParam: debouncedSearchParam,
-                    pageNumber,
-                    limit: contactsPerPage,
-                    isGroup: "false",
-                    orderBy: sortField === 'tags' ? 'name' : sortField,
-                    order: sortDirection,
-                    segment: segmentFilter,
-                    ...appliedFilters, // Inclui todos os filtros aplicados
-                    contactTag: appliedFilters.tags ? JSON.stringify(appliedFilters.tags).replace(/\\/g, '\\\\') : undefined, // Tags precisam ser stringified e escapadas
-                },
-            });
-            // Ignora respostas de solicitações antigas
-            if (currentId !== requestIdRef.current) return;
-            // Substitui a lista pelo resultado da página atual
-            dispatch({ type: "SET_CONTACTS", payload: data.contacts });
-            setHasMore(data.hasMore);
-            // Usa a contagem total fornecida pelo backend (já respeita filtros/pesquisa)
-            setTotalContacts(data.count);
-
-            // Atualizar o estado do "Selecionar Tudo" baseado nos contatos carregados e selecionados
-            const allCurrentContactIds = data.contacts.map(c => c.id);
-            const newSelected = selectedContactIds.filter(id => allCurrentContactIds.includes(id));
-            setSelectedContactIds(newSelected); // Mantenha apenas os IDs que ainda estão na lista
-            setIsSelectAllChecked(newSelected.length === allCurrentContactIds.length && allCurrentContactIds.length > 0);
-
-        } catch (err) {
-            toastError(err);
-        } finally {
-            if (currentId === requestIdRef.current) setLoading(false);
-            // Atualiza refs de comparação após a busca
-            prevPageRef.current = pageNumber;
-            prevLimitRef.current = contactsPerPage;
-        }
-    };
-
     useEffect(() => {
         // Só reseta a lista quando mudar de página ou de itens por página
         const shouldReset = prevPageRef.current !== pageNumber || prevLimitRef.current !== contactsPerPage;
@@ -496,6 +452,46 @@ const Contacts = () => {
             dispatch({ type: "RESET" });
         }
         setLoading(true);
+        // Garante que respostas antigas sejam ignoradas
+        const currentId = ++requestIdRef.current;
+        const fetchContacts = async () => {
+            try {
+                const { data } = await api.get("/contacts/", {
+                    params: {
+                        searchParam: debouncedSearchParam,
+                        pageNumber,
+                        limit: contactsPerPage,
+                        isGroup: "false",
+                        orderBy: sortField === 'tags' ? 'name' : sortField,
+                        order: sortDirection,
+                        segment: segmentFilter,
+                        ...appliedFilters, // Inclui todos os filtros aplicados
+                        contactTag: appliedFilters.tags ? JSON.stringify(appliedFilters.tags).replace(/\\/g, '\\\\') : undefined, // Tags precisam ser stringified e escapmente escapadas
+                    },
+                });
+                // Ignora respostas de solicitações antigas
+                if (currentId !== requestIdRef.current) return;
+                // Substitui a lista pelo resultado da página atual
+                dispatch({ type: "SET_CONTACTS", payload: data.contacts });
+                setHasMore(data.hasMore);
+                // Usa a contagem total fornecida pelo backend (já respeita filtros/pesquisa)
+                setTotalContacts(data.count);
+
+                // Atualizar o estado do "Selecionar Tudo" baseado nos contatos carregados e selecionados
+                const allCurrentContactIds = data.contacts.map(c => c.id);
+                const newSelected = selectedContactIds.filter(id => allCurrentContactIds.includes(id));
+                setSelectedContactIds(newSelected); // Mantenha apenas os IDs que ainda estão na lista
+                setIsSelectAllChecked(newSelected.length === allCurrentContactIds.length && allCurrentContactIds.length > 0);
+
+            } catch (err) {
+                toastError(err);
+            } finally {
+                if (currentId === requestIdRef.current) setLoading(false);
+                // Atualiza refs de comparação após a busca
+                prevPageRef.current = pageNumber;
+                prevLimitRef.current = contactsPerPage;
+            }
+        };
         fetchContacts();
     }, [
         debouncedSearchParam,
@@ -582,27 +578,6 @@ const Contacts = () => {
 
     const handleSearch = (event) => {
         setSearchParam(event.target.value.toLowerCase());
-    };
-
-    const handleFilterNoName = () => {
-        setSearchParam("nao validados");
-    };
-
-    const handleValidateContact = async (contactId) => {
-        try {
-            const response = await api.post(`/contacts/${contactId}/validate-name`);
-
-            if (response.data.success) {
-                toast.success(`Contato validado: ${response.data.name}`);
-                // Atualizar a lista de contatos
-                fetchContacts();
-            } else {
-                toast.error(response.data.error || "Falha ao validar contato");
-            }
-        } catch (err) {
-            console.error("[validateContact] Erro:", err);
-            toastError(err);
-        }
     };
 
     const handleOpenContactModal = () => {
@@ -1061,32 +1036,18 @@ const Contacts = () => {
                         </div>
 
                         {/* Linha 2: Busca sozinha */}
-                        <div className="flex items-center gap-2">
-                            <div className="relative flex-1">
-                                <input
-                                    type="text"
-                                    placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
-                                    value={searchParam}
-                                    onChange={handleSearch}
-                                    className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                {isSearching && (
-                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
-                                )}
-                            </div>
-                            <Tooltip {...CustomTooltipProps} title="Contatos não validados">
-                                <span>
-                                    <button
-                                        onClick={handleFilterNoName}
-                                        disabled={loading}
-                                        className="shrink-0 w-10 h-10 flex items-center justify-center text-orange-600 bg-white dark:bg-gray-800 border border-orange-500 dark:border-orange-400 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/40 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                        aria-label="Contatos sem nome"
-                                    >
-                                        <UserX className="w-5 h-5" />
-                                    </button>
-                                </span>
-                            </Tooltip>
+                        <div className="relative w-full">
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
+                                value={searchParam}
+                                onChange={handleSearch}
+                                className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            {isSearching && (
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
+                            )}
                         </div>
                     </div>
 
@@ -1137,7 +1098,7 @@ const Contacts = () => {
                         {/* Filtros e Busca (Esquerda) */}
                         <div className="w-full flex items-center gap-2 flex-1 min-w-0 justify-start">
                             {/* Busca com largura limitada */}
-                            <div className="relative flex-1">
+                            <div className="relative flex-1 ">
                                 <input
                                     type="text"
                                     placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
@@ -1150,18 +1111,6 @@ const Contacts = () => {
                                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
                                 )}
                             </div>
-                            <Tooltip {...CustomTooltipProps} title="Contatos não validados">
-                                <span>
-                                    <button
-                                        onClick={handleFilterNoName}
-                                        disabled={loading}
-                                        className="shrink-0 w-10 h-10 flex items-center justify-center text-orange-600 bg-white dark:bg-gray-800 border border-orange-500 dark:border-orange-400 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/40 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                        aria-label="Contatos sem nome"
-                                    >
-                                        <UserX className="w-5 h-5" />
-                                    </button>
-                                </span>
-                            </Tooltip>
                         </div>
 
                         {/* Ações Principais (Direita) */}
@@ -1273,7 +1222,7 @@ const Contacts = () => {
 
                     {/* Tabela de Contatos (Desktop) */}
                     <div className="hidden min-[1200px]:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-hidden">
                             <table className="w-full table-fixed text-sm text-left text-gray-500 dark:text-gray-400">
                                 <thead className="uppercase text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400 tracking-wider">
                                     <tr>
@@ -1319,7 +1268,7 @@ const Contacts = () => {
                                                 <span className="text-[15px] opacity-70">{sortField === 'status' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
                                             </button>
                                         </th>
-                                        <th scope="col" className="pl-3 pr-3 py-2 text-center w-[200px] font-medium">AÇÕES</th>
+                                        <th scope="col" className="pl-3 pr-3 py-2 text-center w-[120px] font-medium">AÇÕES</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1341,7 +1290,6 @@ const Contacts = () => {
                                             onDelete={handleShowDeleteConfirm}
                                             onBlock={handleShowBlockConfirm}
                                             onUnblock={handleShowUnblockConfirm}
-                                            onValidate={handleValidateContact}
                                             formatPhoneNumber={formatPhoneNumber}
                                             CustomTooltipProps={CustomTooltipProps}
                                             rowIndex={rowIndex}

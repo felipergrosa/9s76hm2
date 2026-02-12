@@ -4,7 +4,8 @@ WORKDIR /app
 
 # Copia o package.json e instala as dependências
 COPY package*.json ./
-RUN npm install --legacy-peer-deps || npm install --legacy-peer-deps || npm install --legacy-peer-deps
+COPY docker-build-fix.sh ./
+RUN chmod +x docker-build-fix.sh
 
 # Copia o restante dos arquivos
 COPY . .
@@ -15,10 +16,10 @@ ENV REACT_APP_BACKEND_URL=https://chatsapi.nobreluminarias.com.br
 
 # Versão do frontend injetada no build (vinda do CI)
 ARG REACT_APP_FRONTEND_VERSION
-ENV REACT_APP_FRONTEND_VERSION=$REACT_APP_FRONTEND_VERSION
+ENV REACT_APP_APP_VERSION=$REACT_APP_FRONTEND_VERSION
 
-# Build da aplicação React
-RUN NODE_OPTIONS=--max-old-space-size=6144 npm run build
+# Build da aplicação React com script de tratamento de erros
+RUN ./docker-build-fix.sh
 
 # Etapa de deploy
 FROM nginx:alpine
