@@ -71,7 +71,10 @@ const ImportContactHistoryService = async ({
     const eventName = `importHistory-${ticketId}`;
     const namespace = `/workspace-${companyId}`;
 
+    logger.info(`[ImportHistory] Iniciando importação - ticketId: ${ticketId}, companyId: ${companyId}, periodMonths: ${periodMonths}`);
+
     const emitProgress = (current: number, total: number, state: string, date?: string) => {
+        logger.info(`[ImportHistory] Emitindo progresso: ${current}/${total} - ${state} - ${date || ''}`);
         io.of(namespace).emit(eventName, {
             action: "update",
             status: { this: current, all: total, state, date }
@@ -88,14 +91,17 @@ const ImportContactHistoryService = async ({
         });
 
         if (!ticket) {
+            logger.error(`[ImportHistory] Ticket não encontrado: ${ticketId}`);
             return { synced: 0, skipped: true, reason: "Ticket não encontrado" };
         }
 
         if (!ticket.whatsapp) {
+            logger.error(`[ImportHistory] Conexão WhatsApp não encontrada para ticket: ${ticketId}`);
             return { synced: 0, skipped: true, reason: "Conexão WhatsApp não encontrada" };
         }
 
         if (ticket.channel !== "whatsapp") {
+            logger.error(`[ImportHistory] Canal não suportado: ${ticket.channel} para ticket: ${ticketId}`);
             return { synced: 0, skipped: true, reason: "Canal não suportado para importação" };
         }
 
@@ -103,7 +109,9 @@ const ImportContactHistoryService = async ({
         let wbot: any;
         try {
             wbot = getWbot(ticket.whatsappId);
+            logger.info(`[ImportHistory] Wbot obtido com sucesso para whatsappId: ${ticket.whatsappId}`);
         } catch (err) {
+            logger.error(`[ImportHistory] Erro ao obter wbot: ${err.message}`);
             return { synced: 0, skipped: true, reason: "Conexão WhatsApp não inicializada" };
         }
 
