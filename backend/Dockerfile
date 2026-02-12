@@ -65,15 +65,25 @@ ENV NODE_ENV=production
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 # Dependências de runtime necessárias (FFmpeg, Chromium, e libs para canvas/PDF thumbnails)
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
-       ffmpeg \
-       chromium \
-       # Libs de runtime para node-canvas (geração de thumbnails de PDF)
-       libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libjpeg62-turbo libgif7 librsvg2-2 \
-       # GraphicsMagick e Ghostscript para pdf2pic (geração de thumbnails de PDF)
-       graphicsmagick ghostscript \
-  && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    for i in 1 2 3; do \
+      apt-get update && \
+      apt-get install -y --no-install-recommends --fix-missing \
+        ffmpeg \
+        chromium \
+        libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libjpeg62-turbo libgif7 librsvg2-2 \
+        graphicsmagick ghostscript && \
+      break || { \
+        if [ $i -lt 3 ]; then \
+          echo "Tentativa $i falhou. Tentando novamente em 5 segundos..."; \
+          sleep 5; \
+        else \
+          echo "Todas as tentativas de apt-get falharam."; \
+          exit 1; \
+        fi; \
+      }; \
+    done; \
+    rm -rf /var/lib/apt/lists/*
 
 # Build info injection
 ARG BUILD_DATE
