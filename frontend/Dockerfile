@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Copia o package.json e instala as dependências
 COPY package*.json ./
-COPY docker-build-fix.sh ./
+COPY docker-build-fix.js ./
 
 # Copia o restante dos arquivos
 COPY . .
@@ -18,7 +18,7 @@ ARG REACT_APP_FRONTEND_VERSION
 ENV REACT_APP_APP_VERSION=$REACT_APP_FRONTEND_VERSION
 
 # Build da aplicação React com script de tratamento de erros
-RUN sh docker-build-fix.sh
+RUN node docker-build-fix.js
 
 # Etapa de deploy
 FROM nginx:alpine

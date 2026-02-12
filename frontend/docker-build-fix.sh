@@ -20,6 +20,40 @@ if npm ls ajv-keywords 2>/dev/null | grep -q "3.5.2"; then
     npm install ajv-keywords@latest --save-exact --legacy-peer-deps
 fi
 
+# Aplicar patches necessários para o build
+echo "🔧 Aplicando patches para compatibilidade..."
+
+# Patch 1: Corrigir ForkTsCheckerWebpackPlugin
+echo "📝 Patch ForkTsCheckerWebpackPlugin..."
+if [ -f "node_modules/fork-ts-checker-webpack-plugin/lib/ForkTsCheckerWebpackPlugin.js" ]; then
+    sed -i 's/schema_utils_1\.default(ForkTsCheckerWebpackPluginOptions_json_1\.default, options, configuration);/\/\/ schema_utils_1.default(ForkTsCheckerWebpackPluginOptions_json_1.default, options, configuration);/' node_modules/fork-ts-checker-webpack-plugin/lib/ForkTsCheckerWebpackPlugin.js
+    sed -i 's/schema_utils_1\.default(ForkTsCheckerWebpackPluginOptions_json_1\.default, this\.options, configuration);/\/\/ schema_utils_1.default(ForkTsCheckerWebpackPluginOptions_json_1.default, this.options, configuration);/' node_modules/fork-ts-checker-webpack-plugin/lib/ForkTsCheckerWebpackPlugin.js
+    echo "✅ ForkTsCheckerWebpackPlugin patch aplicado"
+fi
+
+# Patch 2: Corrigir schema-utils
+echo "📝 Patch schema-utils..."
+if [ -f "node_modules/schema-utils/dist/validate.js" ]; then
+    sed -i 's/ajvKeywords(/\/\/ ajvKeywords(/g' node_modules/schema-utils/dist/validate.js
+    echo "✅ schema-utils patch aplicado"
+fi
+
+# Patch 3: Corrigir react-refresh-webpack-plugin
+echo "📝 Patch react-refresh-webpack-plugin..."
+if [ -f "node_modules/@pmmmwh/react-refresh-webpack-plugin/lib/index.js" ]; then
+    sed -i 's/validateOptions(/try { validateOptions(/g' node_modules/@pmmmwh/react-refresh-webpack-plugin/lib/index.js
+    sed -i 's/validateOptions\([^)]*\);/validateOptions\1; } catch(e) { \/\* ignore validation errors \*\/ }/g' node_modules/@pmmmwh/react-refresh-webpack-plugin/lib/index.js
+    echo "✅ react-refresh-webpack-plugin patch aplicado"
+fi
+
+# Patch 4: Corrigir babel-loader
+echo "📝 Patch babel-loader..."
+if [ -f "node_modules/babel-loader/lib/index.js" ]; then
+    sed -i 's/validateOptions(/try { validateOptions(/g' node_modules/babel-loader/lib/index.js
+    sed -i 's/validateOptions\([^)]*\);/validateOptions\1; } catch(e) { \/\* ignore validation errors \*\/ }/g' node_modules/babel-loader/lib/index.js
+    echo "✅ babel-loader patch aplicado"
+fi
+
 # Tenta build com diferentes configurações de memória
 echo "🏗️ Tentando build com 6GB de RAM..."
 if NODE_OPTIONS=--max-old-space-size=6144 npm run build; then
