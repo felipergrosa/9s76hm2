@@ -173,7 +173,63 @@ export async function resolveContact(
   }
 
   // ─────────────────────────────────────────────────
-  // BUSCA 4 (grupo): por number = groupJid
+  // BUSCA 4: Por número similar quando LID parece ser número
+  // ─────────────────────────────────────────────────
+  if (ids.lidJid && !ids.pnCanonical) {
+    // Extrair dígitos do LID (ex: 216144933867565@lid -> 216144933867565)
+    const lidDigits = ids.lidJid.replace(/\D/g, "");
+    
+    // Se LID tem comprimento de telefone, buscar por contatos com número similar
+    if (lidDigits.length >= 10 && lidDigits.length <= 15) {
+      // Buscar contatos onde o número contém os dígitos do LID (últimos 10-12 dígitos)
+      const minLength = Math.min(lidDigits.length, 12);
+      const maxLength = Math.min(lidDigits.length, 15);
+      
+      for (let len = minLength; len <= maxLength; len++) {
+        const suffix = lidDigits.slice(-len);
+        
+        const similarContact = await Contact.findOne({
+          where: {
+            companyId,
+            isGroup: false,
+            [Op.or]: [
+              { number: { [Op.like]: `%${suffix}` } },
+              { canonicalNumber: { [Op.like]: `%${suffix}` } }
+            ]
+          }
+        });
+        
+        if (similarContact) {
+          logger.info({
+            contactId: similarContact.id,
+            lidJid: ids.lidJid,
+            lidDigits,
+            suffix,
+            strategy: "similar-number"
+          }, "[resolveContact] Contato encontrado por número similar ao LID");
+          
+          // Atualizar lidJid no contato encontrado
+          if (!similarContact.lidJid) {
+            try {
+              await similarContact.update({ lidJid: ids.lidJid });
+              lidJidUpdated = true;
+              logger.info({
+                contactId: similarContact.id,
+                lidJid: ids.lidJid
+              }, "[resolveContact] lidJid preenchido em contato similar");
+            } catch (err: any) {
+              logger.warn({ err: err?.message }, "[resolveContact] Falha ao preencher lidJid em contato similar");
+            }
+          }
+          
+          return { contact: similarContact, lidJidUpdated, pnFromMapping };
+        }
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────
+  // BUSCA 5 (grupo): por number = groupJid
   // ─────────────────────────────────────────────────
   if (ids.isGroup && ids.groupJid) {
     const groupNumber = ids.groupJid.replace("@g.us", "");

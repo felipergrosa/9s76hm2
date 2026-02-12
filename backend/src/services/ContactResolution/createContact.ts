@@ -213,6 +213,39 @@ async function createPendingContact(
         });
         throw new Error(`LID com formato de telefone inválido: ${lidDigits}`);
       }
+      
+      // Se o LID tem formato de telefone válido, verificar se já existe contato similar
+      // antes de criar como "temporário"
+      const existingSimilar = await Contact.findOne({
+        where: {
+          companyId,
+          isGroup: false,
+          [Op.or]: [
+            { number: { [Op.like]: `%${lidDigits.slice(-10)}` } },
+            { canonicalNumber: { [Op.like]: `%${lidDigits.slice(-10)}` } }
+          ]
+        }
+      });
+      
+      if (existingSimilar) {
+        logger.info({
+          lidJid,
+          lidDigits,
+          existingContactId: existingSimilar.id,
+          existingNumber: existingSimilar.number
+        }, "[createContact] Contato similar encontrado, reutilizando em vez de criar LID temporário");
+        
+        // Atualizar lidJid no contato existente se não tiver
+        if (!existingSimilar.lidJid) {
+          try {
+            await existingSimilar.update({ lidJid: ids.lidJid });
+          } catch (err: any) {
+            logger.warn({ err: err?.message }, "[createContact] Falha ao preencher lidJid em contato similar");
+          }
+        }
+        
+        return existingSimilar;
+      }
     }
 
     const contact = await Contact.create({
@@ -221,7 +254,7 @@ async function createPendingContact(
       canonicalNumber: null,
       isGroup: false,
       companyId,
-      remoteJid: ids.lidJid,
+      remoteJid: null, // NÃO usar LID como remoteJid - será preenchido quando reconciliado
       // lidJid: NÃO setar — só será preenchido quando reconciliado com número real
       email: "",
       channel: "whatsapp",

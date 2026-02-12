@@ -4870,7 +4870,6 @@ const handleMessage = async (
   }
 
   try {
-    let groupContact: Contact | undefined;
     let queueId: number = null;
     let tagsId: number = null;
     let userId: number = null;
@@ -5009,18 +5008,18 @@ const handleMessage = async (
     const autoCaptureGroupContacts = settings?.autoCaptureGroupContacts === "enabled";
 
     // ═══════════════════════════════════════════════════════════════
-    // FLUXO RESTAURADO: getContactMessage + verifyContact
-    // Mantém compatibilidade com fluxo antigo (funcional) e usa melhorias
-    // de resolução de LID já incorporadas no getContactMessage atual
+    // NOVO FLUXO: ContactResolverService (substitui getContactMessage + verifyContact)
     // ═══════════════════════════════════════════════════════════════
 
-    let msgContact: IMe;
+    let contact: Contact | null = null;
+    let groupContact: Contact | undefined;
 
-    // Extrair contato da mensagem (já inclui lógica de remoteJidAlt/participantAlt)
-    msgContact = await getContactMessage(msg, wbot);
+    // Usar novo ContactResolverService para resolver o contato da mensagem
+    const contactResolution = await resolveMessageContact(msg, wbot, companyId);
+    contact = contactResolution.contact;
 
+    // Se é grupo, também precisamos garantir que o contato do GRUPO exista
     if (isGroup) {
-      // Para grupos, precisamos garantir que o contato do GRUPO exista
       const groupJid = msg.key.remoteJid;
       let groupSubject = getFallbackGroupName(groupJid);
 
@@ -5038,56 +5037,19 @@ const handleMessage = async (
         }
       }
 
-      const msgGroupContact = {
-        id: groupJid,
-        name: groupSubject
-      };
-
+      // Criar/atualizar contato do grupo
       try {
-        groupContact = await verifyContact(msgGroupContact, wbot, companyId, userId);
+        groupContact = await CreateOrUpdateContactService({
+          name: groupSubject,
+          number: groupJid,
+          isGroup: true,
+          companyId,
+          whatsappId: wbot.id,
+          wbot
+        });
       } catch (e) {
-        logger.error({ err: e, groupJid }, "[handleMessage] Falha crítica ao verificar contato do grupo");
-        return; // Sem grupo, não podemos criar ticket
+        logger.error({ err: e, groupJid }, "[handleMessage] Falha ao criar contato do grupo");
       }
-    }
-
-    // CONTROLE DE CAPTURA AUTOMÁTICA DE CONTATOS DE GRUPOS
-    let contact: Contact | null = null;
-
-    // Tentar verificar/criar o contato do participante/remetente
-    try {
-      if (isGroup && !autoCaptureGroupContacts) {
-        // Se captura automática está DESABILITADA, apenas buscar contato existente
-        const participantJid = msg.participant || msg.key.participant;
-        if (participantJid) {
-          const normalizedParticipantJid = jidNormalizedUser(participantJid);
-          const participantNumber = normalizedParticipantJid.replace(/\D/g, "");
-          const isLidParticipant = participantJid.includes("@lid");
-
-          contact = await Contact.findOne({
-            where: {
-              companyId,
-              isGroup: false,
-              [Op.or]: [
-                { canonicalNumber: participantNumber },
-                { number: participantNumber },
-                ...(isLidParticipant ? [{ lidJid: normalizedParticipantJid }, { remoteJid: normalizedParticipantJid }] : [])
-              ]
-            }
-          });
-
-          if (contact) {
-            logger.info("[handleMessage] Participante de grupo já cadastrado (captura auto OFF), processando.", {
-              contactId: contact.id
-            });
-          }
-        }
-      } else {
-        // Fluxo normal: verificar e criar contato se necessário
-        contact = await verifyContact(msgContact, wbot, companyId, userId);
-      }
-    } catch (e) {
-      logger.error({ err: e, msgContact }, "[handleMessage] Erro no verifyContact");
     }
 
     // FALLBACK CRÍTICO: Se não encontrou contato do participante em grupo, usar o do grupo
@@ -5102,7 +5064,7 @@ const handleMessage = async (
       logger.error('[handleMessage] ERRO CRÍTICO: Contato não encontrado nem criado', {
         remoteJid: msg.key.remoteJid,
         isGroup,
-        msgContact
+        contactId: contact?.id
       });
       return;
     }

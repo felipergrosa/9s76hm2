@@ -106,6 +106,10 @@
   "scripts": {
     "start": "node ./scripts/check_and_kill_port.js && craco start",
     "build": "set NODE_OPTIONS=--max-old-space-size=6144&& craco build",
+    "build:optimized": "set NODE_OPTIONS=--max-old-space-size=8192&& set CRACO_CONFIG_FILE=craco.config.optimized.js&& craco build",
+    "build:optimized-alt": "node scripts/build-optimized.js",
+    "build:analyze": "set ANALYZE=true&& set CRACO_CONFIG_FILE=craco.config.optimized.js&& craco build",
+    "optimize": "node scripts/optimize-build.js",
     "test": "craco test"
   },
   "eslintConfig": {
@@ -128,11 +132,13 @@
     "@types/adm-zip": "^0.5.5",
     "autoprefixer": "^10.4.21",
     "babel-plugin-transform-remove-console": "^6.9.4",
+    "compression-webpack-plugin": "^11.1.0",
     "node-polyfill-webpack-plugin": "^4.1.0",
     "pacote": "^21.0.0",
     "postcss": "^8.5.6",
     "react-app-rewired": "^2.2.1",
     "tailwindcss": "^4.1.11",
-    "typescript": "^4.9.5"
+    "typescript": "^4.9.5",
+    "webpack-bundle-analyzer": "^5.2.0"
   }
 }
