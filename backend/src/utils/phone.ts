@@ -1,3 +1,4 @@
+import { parsePhoneNumber, isValidPhoneNumber } from "libphonenumber-js";
 import logger from "./logger";
 
 export interface NormalizedPhoneResult {
@@ -5,75 +6,10 @@ export interface NormalizedPhoneResult {
   digits: string;
 }
 
-export interface CountryMetadata {
-  iso: string;
-  ddi: string;
-  areaCodeLength?: number;
-  mobileIndicatorPrefix?: string;
-  mobileNationalLengths?: number[];
-  landlineNationalLengths?: number[];
-}
-
-export const COUNTRY_METADATA: Record<string, CountryMetadata> = {
-  "55": {
-    iso: "BR",
-    ddi: "55",
-    areaCodeLength: 2,
-    mobileNationalLengths: [11],
-    landlineNationalLengths: [10]
-  },
-  "54": {
-    iso: "AR",
-    ddi: "54",
-    areaCodeLength: 2,
-    mobileIndicatorPrefix: "9",
-    mobileNationalLengths: [11],
-    landlineNationalLengths: [10]
-  },
-  "1": {
-    iso: "US",
-    ddi: "1",
-    areaCodeLength: 3,
-    mobileNationalLengths: [10],
-    landlineNationalLengths: [10]
-  }
-};
-
-export interface ResolvedCountry {
-  metadata?: CountryMetadata;
-  national: string;
-  ddi: string | null;
-}
-
-const sortedCountryKeys = Object.keys(COUNTRY_METADATA).sort((a, b) => b.length - a.length);
-
-export const resolveCountryMetadata = (digits: string): ResolvedCountry => {
-  for (const key of sortedCountryKeys) {
-    if (digits.startsWith(key)) {
-      return {
-        metadata: COUNTRY_METADATA[key],
-        national: digits.slice(key.length),
-        ddi: key
-      };
-    }
-  }
-
-  return {
-    metadata: undefined,
-    national: digits,
-    ddi: null
-  };
-};
-
-const hasKnownDdi = (digits: string): boolean => {
-  return sortedCountryKeys.some(key => digits.startsWith(key));
-};
-
 /**
- * Normaliza um número de telefone para formato canônico:
- * - Remove caracteres não numéricos
- * - Remove zeros à esquerda
- * - Mantém DDI conhecido; assume Brasil (55) quando não houver DDI e o tamanho indicar número nacional
+ * Normaliza um número de telefone usando libphonenumber-js.
+ * - Prioriza formato E.164 (sem o +)
+ * - Fallback para IDs do WhatsApp/Meta (10-20 dígitos) se a lib considerar inválido
  */
 export const normalizePhoneNumber = (
   value: string | null | undefined
@@ -92,56 +28,39 @@ export const normalizePhoneNumber = (
     return { canonical: null, digits: "" };
   }
 
-  // Remove zeros à esquerda
-  let canonical = digitsOnly.replace(/^0+/, "");
-  if (!canonical) {
-    return { canonical: null, digits: "" };
-  }
-
-  // Detecta e normaliza números brasileiros (único país suportado)
-  // Regras finais: número canônico deve ter 12 ou 13 dígitos (55 + DDD + 8/9 dígitos)
-  if (!hasKnownDdi(canonical)) {
-    // Se não reconhecemos DDI mas o número parece nacional (10/11 dígitos), assumir Brasil
-    if (canonical.length === 10 || canonical.length === 11) {
-      canonical = `55${canonical}`;
-    }
-  } else {
-    // Se já tem DDI, validar Brasil e ajustar celular sem 9
-    const resolved = resolveCountryMetadata(canonical);
-    if (resolved.ddi === "55" && resolved.metadata) {
-      const national = resolved.national;
-      // Número BR: 10 (fixo) ou 11 (móvel com 9)
-      if (national.length === 10) {
-        const ddd = national.substring(0, 2);
-        const resto = national.substring(2);
-        // REMOVIDO: Inserção automática do nono dígito (9)
-        // Isso estava causando problemas com números que o usuário explicitamente quer manter com 8 dígitos
-        // ou quando o WhatsApp envia números de 8 dígitos e o sistema forçava 9, criando duplicidade.
-        // if (resto.length === 8 && /^[6-9]/.test(resto)) {
-        //   canonical = `55${ddd}9${resto}`;
-        // }
-
-      } else if (national.length === 13) {
-        // Caso especial: DDI repetido; tenta reorganizar
-        const possibleDDD = national.substring(0, 2);
-        const restAfterDDD = national.substring(2);
-        if (restAfterDDD.length === 11 && /^[6-9]/.test(restAfterDDD.substring(1, 2))) {
-          canonical = `55${possibleDDD}${restAfterDDD}`;
-        } else if (restAfterDDD.length === 10 && /^[6-9]/.test(restAfterDDD.substring(0, 1))) {
-          // canonical = `55${possibleDDD}9${restAfterDDD}`; // DESATIVADO: Evitar forçar 9
-          canonical = `55${possibleDDD}${restAfterDDD}`;
-        }
-
+  try {
+    // Tentar parsear com libphonenumber-js
+    // Assume Brasil (BR) como default se não houver DDI claro
+    // Adicionamos + se não tiver, para forçar o parse como internacional se possível
+    let phoneNumberToParse = raw;
+    if (!raw.startsWith("+")) {
+      // Se tiver 12-13 dígitos e começar com 55, assume que já tem DDI
+      if (digitsOnly.length >= 12 && digitsOnly.startsWith("55")) {
+        phoneNumberToParse = `+${digitsOnly}`;
+      } else {
+        // Senão, o parse com "BR" resolverá
+        phoneNumberToParse = raw;
       }
     }
+
+    const parsed = parsePhoneNumber(phoneNumberToParse, "BR");
+
+    if (parsed && parsed.isValid()) {
+      const canonical = parsed.format("E.164").replace("+", "");
+      return { canonical, digits: canonical };
+    }
+  } catch (err) {
+    // Silencioso: fallback para lógica de dígitos abaixo
   }
 
-  // Após normalização, garantir faixa BR (12 ou 13 dígitos)
-  if (canonical.length < 12 || canonical.length > 13) {
-    return { canonical: null, digits: canonical };
+  // FALLBACK PARA IDs DO WHATSAPP / META / LIDs
+  // Se a lib não reconhecer como telefone válido, mas tiver entre 10 e 20 dígitos,
+  // mantemos os dígitos originais pois pode ser um ID de API Cloud ou LID.
+  if (digitsOnly.length >= 10 && digitsOnly.length <= 20) {
+    return { canonical: digitsOnly, digits: digitsOnly };
   }
 
-  return { canonical, digits: canonical };
+  return { canonical: null, digits: digitsOnly };
 };
 
 /**
@@ -159,21 +78,17 @@ export const arePhoneNumbersEquivalent = (
 export const isValidCanonicalPhoneNumber = (
   canonical: string | null | undefined
 ): boolean => {
-  const digits = String(canonical ?? "").replace(/\D/g, "");
-  if (!digits) return false;
+  if (!canonical) return false;
+  const digits = String(canonical).replace(/\D/g, "");
 
-  const { metadata, national, ddi } = resolveCountryMetadata(digits);
+  // Se estiver na faixa de ID do WhatsApp/Meta (14-20 dígitos), consideramos "válido" para o sistema
+  if (digits.length >= 14 && digits.length <= 20) return true;
 
-  // Apenas Brasil suportado
-  if (!metadata || ddi !== "55") {
-    return false;
+  try {
+    return isValidPhoneNumber(canonical.startsWith("+") ? canonical : `+${canonical}`, "BR");
+  } catch {
+    return digits.length >= 10 && digits.length <= 13;
   }
-
-  // Nacional deve ter 10 (fixo) ou 11 (móvel com 9)
-  if (national.length === 10) return true;
-  if (national.length === 11) return true;
-
-  return false;
 };
 
 export const isValidPhoneNumberByFormat = (
@@ -181,6 +96,25 @@ export const isValidPhoneNumberByFormat = (
 ): boolean => {
   const { canonical } = safeNormalizePhoneNumber(value);
   return isValidCanonicalPhoneNumber(canonical);
+};
+
+/**
+ * Formata um número para exibição internacional.
+ */
+export const formatPhoneNumber = (
+  value: string | null | undefined
+): string => {
+  if (!value) return "";
+  try {
+    const raw = String(value);
+    const parsed = parsePhoneNumber(raw.startsWith("+") ? raw : `+${raw}`, "BR");
+    if (parsed && parsed.isValid()) {
+      return parsed.formatInternational();
+    }
+  } catch (err) {
+    // Fallback
+  }
+  return String(value);
 };
 
 /**

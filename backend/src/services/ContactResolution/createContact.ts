@@ -93,7 +93,7 @@ export async function createContact(
 
     // Validar comprimento (BR: 12-13 dígitos com DDI)
     const digits = number.replace(/\D/g, "");
-    if (digits.length < 10 || digits.length > 13) {
+    if (digits.length < 10 || digits.length > 20) {
       logger.error({
         number,
         digits,
@@ -203,7 +203,7 @@ async function createPendingContact(
       : (ids.pushName || `Contato ${lidJid.replace("@lid", "").slice(-6)}`);
 
     // VALIDAÇÃO CRÍTICA: Verificar se lidDigits parece ser telefone inválido
-    if (lidDigits.length >= 10 && lidDigits.length <= 13) {
+    if (lidDigits.length >= 10 && lidDigits.length <= 20) {
       const { canonical } = safeNormalizePhoneNumber(lidDigits);
       if (!canonical) {
         logger.error("[createContact] LID com formato de telefone inválido", {
@@ -213,7 +213,7 @@ async function createPendingContact(
         });
         throw new Error(`LID com formato de telefone inválido: ${lidDigits}`);
       }
-      
+
       // Se o LID tem formato de telefone válido, verificar se já existe contato similar
       // antes de criar como "temporário"
       const existingSimilar = await Contact.findOne({
@@ -226,7 +226,7 @@ async function createPendingContact(
           ]
         }
       });
-      
+
       if (existingSimilar) {
         logger.info({
           lidJid,
@@ -234,7 +234,7 @@ async function createPendingContact(
           existingContactId: existingSimilar.id,
           existingNumber: existingSimilar.number
         }, "[createContact] Contato similar encontrado, reutilizando em vez de criar LID temporário");
-        
+
         // Atualizar lidJid no contato existente se não tiver
         if (!existingSimilar.lidJid) {
           try {
@@ -243,7 +243,7 @@ async function createPendingContact(
             logger.warn({ err: err?.message }, "[createContact] Falha ao preencher lidJid em contato similar");
           }
         }
-        
+
         return existingSimilar;
       }
     }

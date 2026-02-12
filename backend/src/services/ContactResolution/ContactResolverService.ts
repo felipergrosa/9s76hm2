@@ -85,7 +85,7 @@ export async function resolveMessageContact(
 
       // Preencher os identificadores se o contato tiver número real
       const digits = String(contact.number || "").replace(/\D/g, "");
-      if (digits.length >= 10 && digits.length <= 13) {
+      if (digits.length >= 10 && digits.length <= 20) {
         ids.pnDigits = digits;
         ids.pnJid = `${digits}@s.whatsapp.net`;
         const { canonical } = safeNormalizePhoneNumber(digits);
@@ -109,7 +109,7 @@ export async function resolveMessageContact(
     if (contactByWid) {
       try {
         const digits = String(contactByWid.number || "").replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 13) {
+        if (digits.length >= 10 && digits.length <= 20) {
           ids.pnDigits = digits;
           ids.pnJid = `${digits}@s.whatsapp.net`;
           const { canonical } = safeNormalizePhoneNumber(digits);
@@ -330,7 +330,7 @@ async function resolveFromSentWid(
     // Persistir LidMapping com base no number do contato real (cura para próximas mensagens)
     try {
       const digits = String(contact.number || "").replace(/\D/g, "");
-      if (digits.length >= 10 && digits.length <= 13) {
+      if (digits.length >= 10 && digits.length <= 20) {
         const whatsappId = (msgRow as any)?.ticket?.whatsappId || wbot.id;
         await LidMapping.upsert({
           lid: lidJid,
@@ -382,7 +382,7 @@ async function resolveLidToPN(
     });
     if (mapping?.phoneNumber) {
       const digits = mapping.phoneNumber.replace(/\D/g, "");
-      if (digits.length >= 10 && digits.length <= 13) {
+      if (digits.length >= 10 && digits.length <= 20) {
         ids.pnJid = `${digits}@s.whatsapp.net`;
         ids.pnDigits = digits;
         const { canonical } = safeNormalizePhoneNumber(digits);
@@ -408,7 +408,7 @@ async function resolveLidToPN(
       const resolvedPN = await lidStore.getPNForLID(lidId);
       if (resolvedPN) {
         const digits = resolvedPN.replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 13) {
+        if (digits.length >= 10 && digits.length <= 20) {
           const pnJid = resolvedPN.includes("@") ? jidNormalizedUser(resolvedPN) : `${digits}@s.whatsapp.net`;
           ids.pnJid = pnJid;
           ids.pnDigits = digits;
@@ -461,7 +461,7 @@ async function resolveLidToPN(
       const resolved = tryExtract(raw);
       if (resolved) {
         const digits = resolved.replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 13) {
+        if (digits.length >= 10 && digits.length <= 20) {
           const pnJid = resolved.includes("@") ? jidNormalizedUser(resolved) : `${digits}@s.whatsapp.net`;
           ids.pnJid = pnJid;
           ids.pnDigits = digits;
@@ -504,7 +504,7 @@ async function resolveLidToPN(
       if (result.jid && result.jid.includes("@s.whatsapp.net")) {
         const pnJid = jidNormalizedUser(result.jid);
         const digits = pnJid.replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 13) {
+        if (digits.length >= 10 && digits.length <= 20) {
           ids.pnJid = pnJid;
           ids.pnDigits = digits;
           const { canonical } = safeNormalizePhoneNumber(digits);
@@ -671,7 +671,7 @@ async function resolveLidToPN(
 
     if (existingContact && existingContact.number && !existingContact.number.startsWith("PENDING_")) {
       const digits = existingContact.number.replace(/\D/g, "");
-      if (digits.length >= 10 && digits.length <= 13) {
+      if (digits.length >= 10 && digits.length <= 20) {
         ids.pnJid = `${digits}@s.whatsapp.net`;
         ids.pnDigits = digits;
         const { canonical } = safeNormalizePhoneNumber(digits);

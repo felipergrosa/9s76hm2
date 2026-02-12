@@ -203,7 +203,7 @@ const CreateOrUpdateContactService = async ({
     // Números brasileiros válidos têm no máximo 13 dígitos (55 + DDD + 9 + 8 dígitos)
     // IDs da Meta como "247540473708749" têm 15+ dígitos
     const numberDigitsOnly = (number || "").replace(/\D/g, "");
-    if (!isGroup && !isLinkedDevice && numberDigitsOnly.length > 13) {
+    if (!isGroup && !isLinkedDevice && numberDigitsOnly.length > 20) {
       logger.error("[CreateOrUpdateContactService] REJEITADO: Número muito longo (provável ID Meta/Facebook)", {
         rawNumber,
         number,

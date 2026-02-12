@@ -83,7 +83,7 @@ export function extractMessageIdentifiers(
     // Estratégia 1: usar altJid se for PN válido
     if (altJid && altJid.includes("@s.whatsapp.net")) {
       const altDigits = altJid.replace(/\D/g, "");
-      if (altDigits.length >= 10 && altDigits.length <= 13) {
+      if (altDigits.length >= 10 && altDigits.length <= 20) {
         pnJid = jidNormalizedUser(altJid);
         logger.info({ lidJid: primaryJid, pnJid, strategy: "altJid" }, "[extractIdentifiers] LID→PN via altJid");
       }
@@ -98,7 +98,7 @@ export function extractMessageIdentifiers(
           const pn = signalRepo.getPNForLID(primaryJid) || signalRepo.getPNForLID(lidId);
           if (pn) {
             const pnDigits = String(pn).replace(/\D/g, "");
-            if (pnDigits.length >= 10 && pnDigits.length <= 13) {
+            if (pnDigits.length >= 10 && pnDigits.length <= 20) {
               const pnJidCandidate = String(pn).includes("@") ? String(pn) : `${pnDigits}@s.whatsapp.net`;
               pnJid = jidNormalizedUser(pnJidCandidate);
               logger.info({ lidJid: primaryJid, pnJid, strategy: "signalRepository" }, "[extractIdentifiers] LID→PN via signalRepository");
@@ -115,7 +115,7 @@ export function extractMessageIdentifiers(
       const senderPn = (msg as any).senderPn;
       if (senderPn) {
         const spDigits = senderPn.replace(/\D/g, "");
-        if (spDigits.length >= 10 && spDigits.length <= 13) {
+        if (spDigits.length >= 10 && spDigits.length <= 20) {
           pnJid = senderPn.includes("@") ? jidNormalizedUser(senderPn) : `${spDigits}@s.whatsapp.net`;
           logger.info({ lidJid: primaryJid, pnJid, strategy: "senderPn" }, "[extractIdentifiers] LID→PN via senderPn");
         }
@@ -127,7 +127,7 @@ export function extractMessageIdentifiers(
       const participantPn = (key as any).participantPn;
       if (participantPn && participantPn.includes("@s.whatsapp.net")) {
         const ppDigits = participantPn.replace(/\D/g, "");
-        if (ppDigits.length >= 10 && ppDigits.length <= 13) {
+        if (ppDigits.length >= 10 && ppDigits.length <= 20) {
           pnJid = jidNormalizedUser(participantPn);
           logger.info({ lidJid: primaryJid, pnJid, strategy: "participantPn" }, "[extractIdentifiers] LID→PN via participantPn");
         }
@@ -138,7 +138,7 @@ export function extractMessageIdentifiers(
     if (!pnJid) {
       try {
         const sock = wbot as any;
-        const looksPhoneLike = (digits: string) => digits.length >= 10 && digits.length <= 13;
+        const looksPhoneLike = (digits: string) => digits.length >= 10 && digits.length <= 20;
 
         // 5.1) Lookup direto por chave (quando o store usa o LID como chave)
         if (sock.store?.contacts?.[primaryJid]) {
@@ -184,7 +184,7 @@ export function extractMessageIdentifiers(
     // Estratégia 6: pushName contendo número válido (último recurso, como no código antigo)
     if (!pnJid && msg.pushName) {
       const pushNameDigits = (msg.pushName || "").replace(/\D/g, "");
-      if (pushNameDigits.length >= 10 && pushNameDigits.length <= 13) {
+      if (pushNameDigits.length >= 10 && pushNameDigits.length <= 20) {
         pnJid = `${pushNameDigits}@s.whatsapp.net`;
         logger.info({ lidJid: primaryJid, pnJid, pushName: msg.pushName, strategy: "pushName" }, "[extractIdentifiers] LID→PN via pushName");
       }
