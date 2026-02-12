@@ -1,7 +1,6 @@
 import { Buffer } from "buffer";
 import React from "react";
 import ReactDOM from "react-dom";
-import "./tailwind.css";
 import "./index.css";
 import "./modern-ui.css";
 import CssBaseline from "@material-ui/core/CssBaseline";

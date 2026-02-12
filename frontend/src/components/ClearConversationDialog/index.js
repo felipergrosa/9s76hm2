@@ -115,14 +115,14 @@ const ClearConversationDialog = ({ open, onClose, ticketId, onCleared }) => {
                     Esta ação irá:
                 </Typography>
                 
-                <ul style={{ margin: theme.spacing(2, 0), paddingLeft: theme.spacing(3) }}>
+                <ul style={{ margin: 16, paddingLeft: 24 }}>
                     <li>Manter todas as mensagens existentes</li>
                     <li>Adicionar mensagens que faltam do WhatsApp</li>
                     <li>Preservar o histórico completo</li>
                     <li>Não apagar nenhuma mensagem</li>
                 </ul>
                 
-                <FormControl fullWidth style={{ marginTop: theme.spacing(2) }}>
+                <FormControl fullWidth style={{ marginTop: 16 }}>
                     <InputLabel id="period-months-label">Período do histórico</InputLabel>
                     <Select
                         labelId="period-months-label"
