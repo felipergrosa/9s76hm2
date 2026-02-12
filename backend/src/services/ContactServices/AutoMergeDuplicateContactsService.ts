@@ -1,4 +1,4 @@
-import { Op } from "sequelize";
+import { Op, fn, col, literal } from "sequelize";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
@@ -20,14 +20,14 @@ const AutoMergeDuplicateContactsService = async (companyId: number): Promise<{
         // 1. Encontrar grupos de contatos que possuem o mesmo canonicalNumber
         // mas são registros diferentes.
         const duplicates = await Contact.findAll({
-            attributes: ['canonicalNumber', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+            attributes: ['canonicalNumber', [fn('COUNT', col('id')), 'count']],
             where: {
                 companyId,
                 canonicalNumber: { [Op.ne]: null },
                 isGroup: false
             },
             group: ['canonicalNumber'],
-            having: sequelize.literal('count > 1'),
+            having: literal('count > 1'),
             raw: true
         });
 
