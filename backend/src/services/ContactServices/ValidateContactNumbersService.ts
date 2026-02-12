@@ -182,7 +182,7 @@ const ValidateContactNumbersService = async ({
         companyId,
         isGroup: false,
         number: { [Op.not]: null, [Op.ne]: "" },
-        // Excluir contatos já validados
+        // Excluir contatos já validados (exceto no modo no_name)
         isWhatsappValid: { [Op.is]: null as any }
     };
 
@@ -204,6 +204,8 @@ const ValidateContactNumbersService = async ({
             [Op.regexp]: '^55[0-9]{10,11}$'
         };
     } else if (mode === "no_name") {
+        // No modo no_name queremos atualizar dados mesmo que o contato já tenha sido validado antes
+        delete whereClause.isWhatsappValid;
         // Contatos onde o nome é igual ao número ou nulo/vazio
         // Para PostgreSQL, usar literal para comparar colunas
         // Para outros bancos, faremos o filtro em memória após buscar

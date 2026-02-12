@@ -1177,7 +1177,8 @@ const verifyContact = async (
   msgContact: IMe,
   wbot: Session,
   companyId: number,
-  userId: number = null
+  userId: number = null,
+  msg?: proto.IWebMessageInfo
 ): Promise<Contact> => {
   // VALIDAÇÃO CRÍTICA: msgContact pode ser null se getContactMessage falhou
   if (!msgContact || !msgContact.id) {
@@ -1672,7 +1673,7 @@ const verifyContact = async (
   // CORREÇÃO: Para mensagens de outros (fromMe=false), buscar nome real do contato via store
   // Evita usar pushName (nome do remetente) como nome do contato destinatário
   let nomeContato = msgContact.name;
-  if (!msg.key.fromMe && !isGroup) {
+  if (msg && !msg.key.fromMe && !isGroup) {
     try {
       const store = (wbot as any).store;
       if (store?.contacts) {
