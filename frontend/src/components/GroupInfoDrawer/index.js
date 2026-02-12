@@ -744,7 +744,9 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
                     primary={
                       <span style={{ display: "flex", alignItems: "center" }}>
                         <span className={classes.participantName}>
-                          {participant.name === "Participante" ? formatPhoneNumber(participant.number) : participant.name}
+                          {participant.name !== "Participante" && participant.name !== participant.number
+                            ? participant.name
+                            : formatPhoneNumber(participant.number)}
                         </span>
                         {participant.isSuperAdmin && (
                           <Chip
@@ -764,9 +766,11 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
                       </span>
                     }
                     secondary={
-                      <span className={classes.participantNumber}>
-                        {formatPhoneNumber(participant.number)}
-                      </span>
+                      participant.name !== "Participante" && participant.name !== participant.number ? (
+                        <span className={classes.participantNumber}>
+                          {formatPhoneNumber(participant.number)}
+                        </span>
+                      ) : null
                     }
                   />
                   <ListItemSecondaryAction>

@@ -48,6 +48,50 @@ const shouldOverwriteName = (currentName: string | null | undefined, digits: str
     return currentDigits === digits;
 };
 
+const getWhatsappDisplayName = (jid: string, result: any, wbot: any): string | null => {
+    const candidates: string[] = [];
+
+    const pushCandidate = (value?: string) => {
+        if (value && typeof value === "string") {
+            const trimmed = value.trim();
+            if (trimmed) {
+                candidates.push(trimmed);
+            }
+        }
+    };
+
+    if (result) {
+        pushCandidate(result.notify);
+        pushCandidate(result.pushName);
+        pushCandidate(result.name);
+        pushCandidate(result.verifiedName);
+        pushCandidate(result.businessName);
+    }
+
+    const storeContacts = wbot?.store?.contacts;
+    if (storeContacts) {
+        const storeEntry = storeContacts[jid] || (result?.jid ? storeContacts[result.jid] : null);
+        if (storeEntry) {
+            pushCandidate(storeEntry.name);
+            pushCandidate(storeEntry.notify);
+            pushCandidate(storeEntry.pushname);
+            pushCandidate(storeEntry.verifiedName);
+        }
+    }
+
+    if (typeof wbot?.contacts?.get === "function") {
+        const byJid = wbot.contacts.get(jid) || (result?.jid ? wbot.contacts.get(result.jid) : null);
+        if (byJid) {
+            pushCandidate(byJid.name);
+            pushCandidate(byJid.notify);
+            pushCandidate(byJid.pushname);
+            pushCandidate(byJid.verifiedName);
+        }
+    }
+
+    return candidates.find(Boolean) || null;
+};
+
 const fetchAndUpdateContactName = async (contact: Contact, wbot: any): Promise<boolean> => {
     try {
         const digits = contact.number.replace(/\D/g, "");
@@ -61,22 +105,15 @@ const fetchAndUpdateContactName = async (contact: Contact, wbot: any): Promise<b
             try {
                 const profileInfo = await wbot.profilePictureUrl(jid, "preview").catch(() => null);
                 
-                // Buscar informações do contato nos contatos/chats do wbot
-                let whatsappName = null;
+                // Buscar informações do contato (pushName/notify) priorizando dados retornados pela API
+                let whatsappName = getWhatsappDisplayName(jid, result, wbot);
                 
-                if (wbot.store?.contacts) {
-                    const whatsappContact = wbot.store.contacts[jid];
-                    if (whatsappContact) {
-                        whatsappName = whatsappContact.name || whatsappContact.notify || whatsappContact.pushname;
-                    }
-                }
-                
-                // Se não encontrou no store, tentar via profile
-                if (!whatsappName && result.jid) {
-                    // O jid retornado pode ter o formato correto
-                    const contactInfo = wbot.store?.contacts?.[result.jid];
-                    if (contactInfo) {
-                        whatsappName = contactInfo.name || contactInfo.notify || contactInfo.pushname;
+                // Se ainda não encontrou e o profile retornou algo utilizável, tentar extrair nome de lá
+                if (!whatsappName && profileInfo && typeof profileInfo === "string") {
+                    const fragments = profileInfo.split("/").filter(Boolean);
+                    const possible = fragments[fragments.length - 1];
+                    if (possible) {
+                        whatsappName = decodeURIComponent(possible).replace(/\.[^.]+$/, "");
                     }
                 }
                 
