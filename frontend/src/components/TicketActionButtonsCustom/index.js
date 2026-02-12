@@ -16,6 +16,7 @@ import {
     Trash2 as DeleteForeverIcon,
     Search as SearchIcon,
     Download as DownloadIcon,
+    DeleteSweep,
 } from "lucide-react";
 
 import { v4 as uuidv4 } from "uuid";
@@ -49,6 +50,7 @@ import ShowTicketLogModal from "../ShowTicketLogModal";
 import TicketMessagesDialog from "../TicketMessagesDialog";
 import { useTheme } from "@material-ui/styles";
 import ImportHistoryModal from "../ImportHistoryModal";
+import ClearConversationDialog from "../ClearConversationDialog";
 
 const useStyles = makeStyles(theme => ({
     actionButtons: {
@@ -112,6 +114,7 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
     const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
     const [disableBot, setDisableBot] = useState(ticket.contact.disableBot);
     const [importHistoryModalOpen, setImportHistoryModalOpen] = useState(false);
+    const [clearConversationOpen, setClearConversationOpen] = useState(false);
 
     const [showSchedules, setShowSchedules] = useState(false);
     const [enableIntegration, setEnableIntegration] = useState(ticket.useIntegration);
@@ -624,6 +627,12 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                             Importar Histórico
                         </MenuItem>
                     )}
+                    {ticket.channel === "whatsapp" && (
+                        <MenuItem onClick={() => { handleCloseMenu(); setClearConversationOpen(true); }}>
+                            <DeleteSweep style={{ color: '#f44336', marginRight: 10 }} />
+                            Limpar Conversa
+                        </MenuItem>
+                    )}
                 </Menu>
             </div>
             <>
@@ -670,6 +679,15 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                 open={importHistoryModalOpen}
                 onClose={() => setImportHistoryModalOpen(false)}
                 ticketId={ticket.id}
+            />
+            <ClearConversationDialog
+                open={clearConversationOpen}
+                onClose={() => setClearConversationOpen(false)}
+                ticketId={ticket.id}
+                onCleared={(deleted) => {
+                    // Atualizar UI se necessário
+                    console.log(`Conversa limpa: ${deleted} mensagens removidas`);
+                }}
             />
         </>
     );

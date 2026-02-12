@@ -41,6 +41,7 @@ import TranscribeAudioMessageService from "../services/MessageServices/Transcrib
 import ShowMessageService, { GetWhatsAppFromMessage } from "../services/MessageServices/ShowMessageService";
 import SyncChatHistoryService from "../services/MessageServices/SyncChatHistoryService";
 import ImportContactHistoryService from "../services/MessageServices/ImportContactHistoryService";
+import ClearTicketMessagesService from "../services/MessageServices/ClearTicketMessagesService";
 
 type IndexQuery = {
   pageNumber: string;
@@ -1714,5 +1715,35 @@ export const listSharedMedia = async (req: Request, res: Response): Promise<Resp
   } catch (error: any) {
     console.error("[listSharedMedia] Erro:", error);
     return res.status(500).json({ error: error.message || "Erro ao listar mídia" });
+  }
+};
+
+/**
+ * Limpar todas as mensagens de um ticket
+ * DELETE /messages/:ticketId/clear
+ */
+export const clearTicketMessages = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+
+  try {
+    const result = await ClearTicketMessagesService({ ticketId, companyId });
+    
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    return res.json({
+      success: true,
+      deleted: result.deleted,
+      message: `${result.deleted} mensagens removidas com sucesso`
+    });
+
+  } catch (error: any) {
+    console.error("[clearTicketMessages] Erro:", error);
+    return res.status(500).json({ error: error.message || "Erro ao limpar mensagens" });
   }
 };
