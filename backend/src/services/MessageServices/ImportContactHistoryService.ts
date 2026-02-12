@@ -132,8 +132,8 @@ const ImportContactHistoryService = async ({
             jid = jid.includes("@s.whatsapp.net") ? jid : `${jid}@s.whatsapp.net`;
         }
 
-        // 5. Emitir estado "PREPARING"
-        emitProgress(0, 0, "PREPARING");
+        // 5. Emitir estado "FETCHING" (em vez de PREPARING apenas)
+        emitProgress(0, -1, "FETCHING", "Iniciando busca no dispositivo...");
 
         // 6. Verificar se store está disponível para importação
         if (!wbot.store || typeof wbot.store.loadMessages !== "function") {
@@ -148,23 +148,23 @@ const ImportContactHistoryService = async ({
         const forceSyncViaChatModify = async (wbotInstance: any, targetJid: string): Promise<void> => {
             try {
                 logger.info(`[ImportHistory] Forçando sincronização via chatModify para jid=${targetJid}`);
-                
+
                 // Marcar como não lido para forçar sync
-                await wbotInstance.chatModify({ 
+                await wbotInstance.chatModify({
                     markRead: false,
                     archive: false,
                     lastMessages: []
                 }, targetJid);
-                
+
                 // Esperar um pouco para o WhatsApp processar
                 await new Promise(resolve => setTimeout(resolve, 2000));
-                
+
                 // Marcar como lido novamente
-                await wbotInstance.chatModify({ 
+                await wbotInstance.chatModify({
                     markRead: true,
                     lastMessages: []
                 }, targetJid);
-                
+
                 logger.info(`[ImportHistory] Sync via chatModify concluído`);
             } catch (err: any) {
                 logger.warn(`[ImportHistory] Erro ao forçar sync via chatModify: ${err?.message}`);
@@ -189,7 +189,7 @@ const ImportContactHistoryService = async ({
                 }
 
                 logger.info(`[ImportHistory] Carregando ${count} mensagens do store para jid=${targetJid}, cursor=${cursor ? 'SIM' : 'NÃO'}`);
-                
+
                 // loadMessages do store é síncrono e mais confiável
                 const messages = await wbotInstance.store.loadMessages(
                     targetJid,
@@ -209,119 +209,90 @@ const ImportContactHistoryService = async ({
         const BATCH_SIZE = 50;
         let allMessages: any[] = [];
         let cursor: any = undefined;
-        let cursorTimestamp: number | undefined = undefined;
         let keepFetching = true;
         let fetchAttempts = 0;
-        const MAX_FETCH_ATTEMPTS = 20; // Segurança contra loop infinito
+        const MAX_FETCH_ATTEMPTS = 50; // Aumentado para buscar mais fundo se necessário
 
-        // Usar mensagem mais antiga do ticket como âncora inicial
-        const oldestMessage = await Message.findOne({
+        // Tentar encontrar o cursor inicial baseado na mensagem mais antiga do banco
+        const oldestMessageInDB = await Message.findOne({
             where: { ticketId: ticket.id },
             order: [["createdAt", "ASC"]]
         });
 
-        if (oldestMessage?.dataJson) {
+        if (oldestMessageInDB?.dataJson) {
             try {
-                const parsed = JSON.parse(oldestMessage.dataJson);
+                const parsed = JSON.parse(oldestMessageInDB.dataJson);
                 cursor = parsed?.key;
-                cursorTimestamp = parsed?.messageTimestamp
-                    ? Number(parsed.messageTimestamp)
-                    : undefined;
             } catch { }
         }
 
-        logger.info(`[ImportHistory] Iniciando importação para ticketId=${ticketId}, período=${periodMonths} meses, jid=${jid}`);
+        logger.info(`[ImportHistory] Iniciando busca iterativa para ticketId=${ticketId}, jid=${jid}`);
 
-        // Forçar sincronização completa antes de importar
+        // Forçar sincronização via chatModify antes de começar
         await forceSyncViaChatModify(wbot, jid);
 
         while (keepFetching && fetchAttempts < MAX_FETCH_ATTEMPTS) {
             fetchAttempts++;
             try {
-                // Busca via store do Baileys (mais confiável)
+                // Busca via store (mais rápido)
                 const messages = await fetchMessagesViaStore(wbot, jid, BATCH_SIZE, cursor);
 
                 if (!messages || messages.length === 0) {
-                    logger.info(`[ImportHistory] Sem mais mensagens no store.`);
+                    // Se o store falhar em trazer mais e ainda tivermos tentativas, 
+                    // podemos tentar um pequeno delay ou forçar chatModify de novo (throttle)
+                    if (fetchAttempts < 3) {
+                        logger.info(`[ImportHistory] Store vazio na tentativa ${fetchAttempts}, aguardando sync...`);
+                        await new Promise(r => setTimeout(r, 2000));
+                        continue;
+                    }
                     keepFetching = false;
                     break;
                 }
 
-                // Filtrar pela data de corte se período especificado
-                const validMessages = messages.filter(m => {
-                    if (!m || !m.key || !m.key.id) return false;
+                // Filtrar e processar
+                const validBatch = messages.filter(m => {
+                    if (!m?.key?.id) return false;
                     if (cutoffTimestamp) {
-                        const msgTs = typeof m.messageTimestamp === "object" && m.messageTimestamp.low
-                            ? m.messageTimestamp.low
-                            : Number(m.messageTimestamp || 0);
+                        const msgTs = Number(m.messageTimestamp || 0);
                         if (msgTs < cutoffTimestamp) return false;
                     }
                     return true;
                 });
 
-                // Log detalhado das mensagens recebidas
-                if (validMessages.length > 0) {
-                    const firstMsg = validMessages[0];
-                    const lastMsg = validMessages[validMessages.length - 1];
-                    logger.info(`[ImportHistory] Batch ${fetchAttempts}: ${validMessages.length} válidas`);
-                    logger.info(`[ImportHistory] Primeira msg: ${firstMsg.key.id} (${new Date(Number(firstMsg.messageTimestamp) * 1000).toISOString()})`);
-                    logger.info(`[ImportHistory] Última msg: ${lastMsg.key.id} (${new Date(Number(lastMsg.messageTimestamp) * 1000).toISOString()})`);
+                allMessages.push(...validBatch);
+
+                // Atualizar cursor para próxima página
+                const oldestInBatch = messages[messages.length - 1];
+                if (oldestInBatch?.key) {
+                    cursor = oldestInBatch.key;
                 }
 
-                allMessages.push(...validMessages);
+                // Emitir progresso de busca (total = -1 indica que ainda estamos contando)
+                emitProgress(allMessages.length, -1, "FETCHING", `Localizadas ${allMessages.length} mensagens...`);
 
-                logger.info(`[ImportHistory] Batch ${fetchAttempts}: ${messages.length} msgs recebidas, ${validMessages.length} válidas, total acumulado: ${allMessages.length}`);
-
-                // Atualizar cursor para a próxima busca (usar a mensagem mais antiga do batch)
-                if (messages.length > 0) {
-                    const oldestMessage = messages[messages.length - 1];
-                    if (oldestMessage && oldestMessage.key) {
-                        cursor = oldestMessage.key;
-                        logger.info(`[ImportHistory] Cursor atualizado para mensagem mais antiga: ${oldestMessage.key.id}`);
-                    }
-                }
-
-                // Se retornou menos que o batch, não há mais mensagens
+                // Se trouxe menos que o batch, parou de encontrar no cache
                 if (messages.length < BATCH_SIZE) {
                     keepFetching = false;
                     break;
                 }
 
-                // Verificar se alguma mensagem ultrapassou o corte de data
+                // Verificar se a última mensagem do batch já passou do corte
                 if (cutoffTimestamp) {
-                    const allTimestamps = messages.map(m => {
-                        return typeof m.messageTimestamp === "object" && m.messageTimestamp?.low
-                            ? m.messageTimestamp.low
-                            : Number(m.messageTimestamp || 0);
-                    });
-                    const oldestTs = Math.min(...allTimestamps);
-                    if (oldestTs < cutoffTimestamp) {
+                    const lastTs = Number(oldestInBatch.messageTimestamp || 0);
+                    if (lastTs < cutoffTimestamp) {
                         keepFetching = false;
                         break;
                     }
                 }
 
-                // Atualizar cursor para próximo batch (usar mensagem mais antiga do batch atual)
-                const lastMsg = messages[messages.length - 1];
-                if (lastMsg?.key) {
-                    cursor = lastMsg.key;
-                    cursorTimestamp = typeof lastMsg.messageTimestamp === "object" && lastMsg.messageTimestamp?.low
-                        ? lastMsg.messageTimestamp.low
-                        : Number(lastMsg.messageTimestamp || 0);
-                } else {
-                    keepFetching = false;
-                }
-
-                // Emitir progresso de busca
-                emitProgress(allMessages.length, 0, "PREPARING", `Buscando... ${allMessages.length} mensagens encontradas`);
-
-                // Delay entre batches para não sobrecarregar
-                await new Promise(r => setTimeout(r, 1000));
+                // Pequeno delay para permitir processamento de outros eventos de socket
+                await new Promise(r => setTimeout(r, 500));
             } catch (err: any) {
-                logger.warn(`[ImportHistory] Erro no batch ${fetchAttempts}: ${err?.message}`);
+                logger.warn(`[ImportHistory] Erro na busca batch ${fetchAttempts}: ${err?.message}`);
                 keepFetching = false;
             }
         }
+
 
         if (allMessages.length === 0) {
             emitProgress(0, 0, "COMPLETED");

@@ -777,6 +777,7 @@ const MessagesList = ({
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshCounter, setRefreshCounter] = useState(0);
   const history = useHistory();
   const lastMessageRef = useRef();
 
@@ -1095,19 +1096,19 @@ const MessagesList = ({
     };
 
     fetchMessages();
-  }, [pageNumber, ticketId, selectedQueuesMessage]);
+  }, [pageNumber, ticketId, selectedQueuesMessage, refreshCounter]);
 
   // Listener para evento de refresh de mensagens (importação de histórico)
   useEffect(() => {
     const handleRefreshMessages = () => {
       console.log("[MessagesList] Evento refreshMessages recebido - recarregando mensagens");
-      // Recarrega mensagens da página atual
-      setLoading(true);
-      setPageNumber(1); // Reset para primeira página
+      // Incrementa counter para disparar o useEffect de busca
+      setRefreshCounter(prev => prev + 1);
+      setPageNumber(1);
     };
 
     window.addEventListener('refreshMessages', handleRefreshMessages);
-    
+
     return () => {
       window.removeEventListener('refreshMessages', handleRefreshMessages);
     };

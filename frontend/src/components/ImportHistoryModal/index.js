@@ -66,15 +66,15 @@ const ImportHistoryModal = ({ open, onClose, ticketId }) => {
         // Importar SocketWorker dinamicamente para evitar dependência circular
         import("../../services/SocketWorker").then(({ default: SocketWorker }) => {
             const socketWorker = SocketWorker(user.companyId, user.id);
-            
+
             const eventName = `importHistory-${ticketId}`;
-            
+
             console.log(`[ImportHistoryModal] Escutando eventos: ${eventName}`);
             console.log(`[ImportHistoryModal] SocketWorker conectado:`, socketWorker.connected);
 
             const handleImportUpdate = (data) => {
                 console.log(`[ImportHistoryModal] Evento recebido:`, data);
-                
+
                 if (data.action === "update") {
                     setProgress({
                         current: data.status.this,
@@ -82,7 +82,7 @@ const ImportHistoryModal = ({ open, onClose, ticketId }) => {
                         state: data.status.state,
                         date: data.status.date
                     });
-                    
+
                     // Se completou, mostrar mensagem de sucesso
                     if (data.status.state === "COMPLETED") {
                         if (data.status.this > 0) {
@@ -123,22 +123,22 @@ const ImportHistoryModal = ({ open, onClose, ticketId }) => {
     const handleImport = async () => {
         setLoading(true);
         setProgress({ current: 0, total: 0, state: "PREPARING", date: "" });
-        
+
         try {
             console.log(`[ImportHistoryModal] Iniciando importação - ticketId: ${ticketId}, periodMonths: ${periodMonths}`);
-            
+
             const response = await api.post(`/messages/${ticketId}/import-history`, {
                 periodMonths: Number(periodMonths),
             });
-            
+
             console.log(`[ImportHistoryModal] Resposta do backend:`, response.data);
-            
+
             if (response.data.started) {
                 toast.success("Importação iniciada! Acompanhe o progresso.");
             } else {
                 toast.error("Falha ao iniciar importação.");
             }
-            
+
             // Fechar modal após 2 segundos se não houver progresso
             setTimeout(() => {
                 if (progress.state === "" || progress.state === "PREPARING") {
@@ -146,7 +146,7 @@ const ImportHistoryModal = ({ open, onClose, ticketId }) => {
                     setProgress({ current: 0, total: 0, state: "", date: "" });
                 }
             }, 2000);
-            
+
         } catch (err) {
             console.error("[ImportHistoryModal] Erro na importação:", err);
             toastError(err);
@@ -206,7 +206,7 @@ const ImportHistoryModal = ({ open, onClose, ticketId }) => {
                     />
                 </RadioGroup>
             </DialogContent>
-            
+
             {/* Progress Indicator */}
             {progress.state && (
                 <DialogContent style={{ paddingTop: 0 }}>
@@ -214,30 +214,50 @@ const ImportHistoryModal = ({ open, onClose, ticketId }) => {
                         Progresso da importação:
                     </Typography>
                     <div style={{ marginBottom: 16 }}>
-                        <div style={{ 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            marginBottom: 4 
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            marginBottom: 4
                         }}>
-                            <span>{progress.state}</span>
+                            <span>{progress.state === 'FETCHING' ? 'Localizando' : progress.state}</span>
                             <span>
-                                {progress.current} / {progress.total}
-                                {progress.total > 0 && ` (${Math.round((progress.current / progress.total) * 100)}%)`}
+                                {progress.total > 0 ? (
+                                    `${progress.current} / ${progress.total} (${Math.round((progress.current / progress.total) * 100)}%)`
+                                ) : progress.total === -1 ? (
+                                    `${progress.current} localizadas...`
+                                ) : (
+                                    progress.current
+                                )}
                             </span>
                         </div>
-                        <div style={{ 
-                            width: '100%', 
-                            height: 8, 
-                            backgroundColor: '#e0e0e0', 
-                            borderRadius: 4, 
-                            overflow: 'hidden' 
+                        <div style={{
+                            width: '100%',
+                            height: 8,
+                            backgroundColor: '#e0e0e0',
+                            borderRadius: 4,
+                            overflow: 'hidden',
+                            position: 'relative'
                         }}>
                             <div style={{
-                                width: progress.total > 0 ? `${(progress.current / progress.total) * 100}%` : '0%',
+                                width: progress.total > 0 ? `${(progress.current / progress.total) * 100}%` : progress.total === -1 ? '100%' : '0%',
                                 height: '100%',
                                 backgroundColor: '#4caf50',
-                                transition: 'width 0.3s ease'
+                                transition: 'width 0.3s ease',
+                                // Efeito de pulso quando estiver buscando
+                                opacity: progress.total === -1 ? 0.6 : 1,
+                                animation: progress.total === -1 ? 'pulse 1.5s infinite' : 'none'
                             }} />
+                            {progress.total === -1 && (
+                                <style>
+                                    {`
+                                        @keyframes pulse {
+                                            0% { opacity: 0.3; }
+                                            50% { opacity: 0.8; }
+                                            100% { opacity: 0.3; }
+                                        }
+                                    `}
+                                </style>
+                            )}
                         </div>
                         {progress.date && (
                             <Typography variant="caption" color="textSecondary">
@@ -247,7 +267,7 @@ const ImportHistoryModal = ({ open, onClose, ticketId }) => {
                     </div>
                 </DialogContent>
             )}
-            
+
             <DialogActions className={classes.actions}>
                 <Button onClick={onClose} disabled={loading}>
                     Cancelar
