@@ -161,7 +161,36 @@ const ImportDeviceContactsAutoService = async ({
             searchMethod: 'special_jid',
             matchCriteria: number.length < 8 ? 'Número muito curto' : 'Grupo/Broadcast/LID',
             tagsApplied: [],
-            errorMessage: null,
+            errorMessage: 'JID especial (grupo, broadcast, LID)',
+            errorStack: null,
+            timestamp: new Date()
+          });
+        }
+        continue;
+      }
+
+      // VALIDAÇÃO CRÍTICA: Verificar se o número é válido antes de criar contato
+      const { canonical } = safeNormalizePhoneNumber(number);
+      if (!canonical) {
+        logger.warn(`[ImportDeviceContactsAutoService] Número inválido ignorado: ${number} (JID: ${jid})`);
+        skipped++;
+        processed++;
+        if (generateDetailedReport) {
+          importLogs.push({
+            sequenceNumber: processed,
+            originalJid: jid,
+            extractedNumber: rawNumber,
+            normalizedNumber: number,
+            canonicalNumber: null,
+            whatsappName: c.name || c.notify || '',
+            status: 'SKIPPED',
+            action: 'Número inválido',
+            contactIdInDb: null,
+            nameInDb: null,
+            searchMethod: 'not_found' as const,
+            matchCriteria: null,
+            tagsApplied: [],
+            errorMessage: 'Número de telefone inválido',
             errorStack: null,
             timestamp: new Date()
           });

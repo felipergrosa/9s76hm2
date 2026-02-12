@@ -202,6 +202,19 @@ async function createPendingContact(
       ? `Contato ${lidJid.replace("@lid", "").slice(-6)}`
       : (ids.pushName || `Contato ${lidJid.replace("@lid", "").slice(-6)}`);
 
+    // VALIDAÇÃO CRÍTICA: Verificar se lidDigits parece ser telefone inválido
+    if (lidDigits.length >= 10 && lidDigits.length <= 13) {
+      const { canonical } = safeNormalizePhoneNumber(lidDigits);
+      if (!canonical) {
+        logger.error("[createContact] LID com formato de telefone inválido", {
+          lidJid,
+          lidDigits,
+          companyId
+        });
+        throw new Error(`LID com formato de telefone inválido: ${lidDigits}`);
+      }
+    }
+
     const contact = await Contact.create({
       name: contactName,
       number: lidDigits,

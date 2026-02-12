@@ -1526,7 +1526,7 @@ const verifyContact = async (
       // Nota: isLinkedDevice é detectado automaticamente pelo CreateOrUpdateContactService via remoteJid.includes("@lid")
       const contactData = {
         name: tempName,
-        number: cleaned, // Usar o LID limpo como número temporário
+        number: cleaned, // Usar o LID limpo como número temporário - VALIDADO!
         profilePicUrl: "",
         isGroup: false,
         companyId,
@@ -1534,6 +1534,20 @@ const verifyContact = async (
         whatsappId: wbot.id,
         wbot
       };
+
+      // VALIDAÇÃO CRÍTICA: Mesmo contatos LID devem ter número válido
+      // LIDs são permitidos, mas números que parecem telefones devem ser validados
+      if (cleaned.length <= 13 && cleaned.length >= 10) {
+        const { canonical } = safeNormalizePhoneNumber(cleaned);
+        if (!canonical) {
+          logger.error("[verifyContact] LID parece ser telefone inválido, rejeitando criação", {
+            lid: normalizedJid,
+            cleaned,
+            cleanedLength: cleaned.length
+          });
+          throw new Error(`LID com formato de telefone inválido: ${cleaned}`);
+        }
+      }
 
       try {
         const contact = await CreateOrUpdateContactService(contactData);

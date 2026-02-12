@@ -163,6 +163,19 @@ const CreateOrUpdateContactService = async ({
     const isLinkedDevice = !!remoteJid && remoteJid.includes("@lid");
     const { canonical } = (!isGroup && !isLinkedDevice) ? safeNormalizePhoneNumber(rawNumberDigits) : { canonical: null };
 
+    // VALIDAÇÃO CRÍTICA: Mesmo LIDs com formato de telefone devem ser validados
+    if (isLinkedDevice && rawNumberDigits.length >= 10 && rawNumberDigits.length <= 13) {
+      const { canonical: lidCanonical } = safeNormalizePhoneNumber(rawNumberDigits);
+      if (!lidCanonical) {
+        logger.error("[CreateOrUpdateContactService] LID com formato de telefone inválido", {
+          rawNumberDigits,
+          remoteJid,
+          companyId
+        });
+        throw new Error(`LID com formato de telefone inválido: ${rawNumberDigits}`);
+      }
+    }
+
     // Para LID, não bloquear pela canonical: usa rawNumberDigits ou remoteJid como fallback
     let number = (isGroup || isLinkedDevice) ? rawNumberDigits : canonical;
 
