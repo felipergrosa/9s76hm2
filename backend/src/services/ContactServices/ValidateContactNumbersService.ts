@@ -2,7 +2,7 @@ import { WASocket } from "@whiskeysockets/baileys";
 import Contact from "../../models/Contact";
 import { getWbot } from "../../libs/wbot";
 import logger from "../../utils/logger";
-import { Op } from "sequelize";
+import { Op, literal } from "sequelize";
 
 const BATCH_SIZE = 50;
 const DELAY_MS = 500;
@@ -205,17 +205,29 @@ const ValidateContactNumbersService = async ({
         };
     } else if (mode === "no_name") {
         // Contatos onde o nome é igual ao número ou nulo/vazio
-        whereClause[Op.or] = [
-            {
-                name: { [Op.col]: 'Contact.number' }
-            },
-            {
-                name: { [Op.eq]: null }
-            },
-            {
-                name: { [Op.eq]: '' }
-            }
-        ];
+        // Para PostgreSQL, usar literal para comparar colunas
+        // Para outros bancos, faremos o filtro em memória após buscar
+        if (process.env.DB_DIALECT === 'postgres') {
+            whereClause[Op.or] = [
+                {
+                    name: { [Op.eq]: null }
+                },
+                {
+                    name: { [Op.eq]: '' }
+                },
+                literal('name = number')
+            ];
+        } else {
+            // Para outros bancos, buscar apenas nulos/vazios e filtrar em memória
+            whereClause[Op.or] = [
+                {
+                    name: { [Op.eq]: null }
+                },
+                {
+                    name: { [Op.eq]: '' }
+                }
+            ];
+        }
         // Manter apenas números BR
         whereClause.number = {
             ...whereClause.number,
@@ -241,13 +253,23 @@ const ValidateContactNumbersService = async ({
         offset
     });
 
+    // Se não for PostgreSQL e o modo for "no_name", filtrar em memória
+    let filteredContacts = contacts;
+    if (mode === "no_name" && process.env.DB_DIALECT !== 'postgres') {
+        filteredContacts = contacts.filter(contact => {
+            const name = (contact.name || '').trim();
+            const number = (contact.number || '').trim();
+            return name === '' || name === null || name === number;
+        });
+    }
+
     const results: ValidationResult[] = [];
     let validated = 0;
     let corrected = 0;
     let invalid = 0;
     let errors = 0;
 
-    for (const contact of contacts) {
+    for (const contact of filteredContacts) {
         try {
             // Se o modo for "no_name", usar função especializada
             if (mode === "no_name") {
@@ -423,7 +445,7 @@ const ValidateContactNumbersService = async ({
     logger.info({
         mode,
         companyId,
-        totalProcessed: contacts.length,
+        totalProcessed: filteredContacts.length,
         totalPending,
         validated,
         corrected,
@@ -432,7 +454,7 @@ const ValidateContactNumbersService = async ({
     }, "[ValidateContactNumbers] Processamento concluído");
 
     return {
-        total: contacts.length,
+        total: filteredContacts.length,
         totalPending,
         validated,
         corrected,

@@ -2392,7 +2392,7 @@ export const getValidationPending = async (req: AuthenticatedRequest, res: Respo
   const limit = Number(req.query.limit) || 500;
   const offset = (page - 1) * limit;
 
-  const { Op } = require("sequelize");
+  const { Op, literal } = require("sequelize");
 
   const whereClause: any = {
     companyId,
@@ -2413,17 +2413,29 @@ export const getValidationPending = async (req: AuthenticatedRequest, res: Respo
     };
   } else if (mode === "no_name") {
     // Contatos onde o nome é igual ao número ou nulo/vazio
-    whereClause[Op.or] = [
-      {
-        name: { [Op.col]: 'Contact.number' }
-      },
-      {
-        name: { [Op.eq]: null }
-      },
-      {
-        name: { [Op.eq]: '' }
-      }
-    ];
+    // Para PostgreSQL, usar literal para comparar colunas
+    // Para outros bancos, faremos o filtro em memória após buscar
+    if (process.env.DB_DIALECT === 'postgres') {
+      whereClause[Op.or] = [
+        {
+          name: { [Op.eq]: null }
+        },
+        {
+          name: { [Op.eq]: '' }
+        },
+        literal('name = number')
+      ];
+    } else {
+      // Para outros bancos, buscar apenas nulos/vazios e filtrar em memória
+      whereClause[Op.or] = [
+        {
+          name: { [Op.eq]: null }
+        },
+        {
+          name: { [Op.eq]: '' }
+        }
+      ];
+    }
     // Manter apenas números BR
     whereClause.number = {
       ...whereClause.number,
@@ -2439,10 +2451,20 @@ export const getValidationPending = async (req: AuthenticatedRequest, res: Respo
     offset
   });
 
+  // Se não for PostgreSQL e o modo for "no_name", filtrar em memória
+  let filteredRows = rows;
+  if (mode === "no_name" && process.env.DB_DIALECT !== 'postgres') {
+    filteredRows = rows.filter(contact => {
+      const name = (contact.name || '').trim();
+      const number = (contact.number || '').trim();
+      return name === '' || name === null || name === number;
+    });
+  }
+
   return res.json({
-    contacts: rows,
-    count,
-    hasMore: offset + rows.length < count
+    contacts: filteredRows,
+    count: mode === "no_name" && process.env.DB_DIALECT !== 'postgres' ? filteredRows.length : count,
+    hasMore: offset + filteredRows.length < (mode === "no_name" && process.env.DB_DIALECT !== 'postgres' ? filteredRows.length : count)
   });
 };
 

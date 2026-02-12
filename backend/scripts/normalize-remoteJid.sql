@@ -76,7 +76,7 @@ SELECT
   COUNT(CASE WHEN "remoteJid" IS NOT NULL THEN 1 END) as com_remoteJid,
   COUNT(CASE WHEN "remoteJid" IS NULL THEN 1 END) as remoteJid_null,
   COUNT(CASE WHEN "remoteJid" LIKE '%@s.whatsapp.net' THEN 1 END) as formato_correto,
-  COUNT(CASE WHEN "remoteJid" LIKE '%@lid' THEN 1 END) como formato_lid,
-  COUNT(CASE WHEN "remoteJid" IS NULL AND "number" IS NOT NULL THEN 1 END) como precisam_atualizar
+  COUNT(CASE WHEN "remoteJid" LIKE '%@lid' THEN 1 END) AS formato_lid,
+  COUNT(CASE WHEN "remoteJid" IS NULL AND "number" IS NOT NULL THEN 1 END) AS precisam_atualizar
 FROM "Contacts"
 WHERE "companyId" = 1;  -- Altere para o companyId desejado
