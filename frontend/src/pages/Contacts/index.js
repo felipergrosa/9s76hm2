@@ -451,43 +451,43 @@ const Contacts = () => {
     const fetchContacts = async () => {
         // Garante que respostas antigas sejam ignoradas
         const currentId = ++requestIdRef.current;
-        try {
-            const { data } = await api.get("/contacts/", {
-                params: {
-                    searchParam: debouncedSearchParam,
-                    pageNumber,
-                    limit: contactsPerPage,
-                    isGroup: "false",
-                    orderBy: sortField === 'tags' ? 'name' : sortField,
-                    order: sortDirection,
-                    segment: segmentFilter,
-                    ...appliedFilters, // Inclui todos os filtros aplicados
+            try {
+                const { data } = await api.get("/contacts/", {
+                    params: {
+                        searchParam: debouncedSearchParam,
+                        pageNumber,
+                        limit: contactsPerPage,
+                        isGroup: "false",
+                        orderBy: sortField === 'tags' ? 'name' : sortField,
+                        order: sortDirection,
+                        segment: segmentFilter,
+                        ...appliedFilters, // Inclui todos os filtros aplicados
                     contactTag: appliedFilters.tags ? JSON.stringify(appliedFilters.tags).replace(/\\/g, '\\\\') : undefined, // Tags precisam ser stringified e escapadas
-                },
-            });
-            // Ignora respostas de solicitações antigas
-            if (currentId !== requestIdRef.current) return;
-            // Substitui a lista pelo resultado da página atual
-            dispatch({ type: "SET_CONTACTS", payload: data.contacts });
-            setHasMore(data.hasMore);
-            // Usa a contagem total fornecida pelo backend (já respeita filtros/pesquisa)
-            setTotalContacts(data.count);
+                    },
+                });
+                // Ignora respostas de solicitações antigas
+                if (currentId !== requestIdRef.current) return;
+                // Substitui a lista pelo resultado da página atual
+                dispatch({ type: "SET_CONTACTS", payload: data.contacts });
+                setHasMore(data.hasMore);
+                // Usa a contagem total fornecida pelo backend (já respeita filtros/pesquisa)
+                setTotalContacts(data.count);
 
-            // Atualizar o estado do "Selecionar Tudo" baseado nos contatos carregados e selecionados
-            const allCurrentContactIds = data.contacts.map(c => c.id);
-            const newSelected = selectedContactIds.filter(id => allCurrentContactIds.includes(id));
-            setSelectedContactIds(newSelected); // Mantenha apenas os IDs que ainda estão na lista
-            setIsSelectAllChecked(newSelected.length === allCurrentContactIds.length && allCurrentContactIds.length > 0);
+                // Atualizar o estado do "Selecionar Tudo" baseado nos contatos carregados e selecionados
+                const allCurrentContactIds = data.contacts.map(c => c.id);
+                const newSelected = selectedContactIds.filter(id => allCurrentContactIds.includes(id));
+                setSelectedContactIds(newSelected); // Mantenha apenas os IDs que ainda estão na lista
+                setIsSelectAllChecked(newSelected.length === allCurrentContactIds.length && allCurrentContactIds.length > 0);
 
-        } catch (err) {
-            toastError(err);
-        } finally {
-            if (currentId === requestIdRef.current) setLoading(false);
-            // Atualiza refs de comparação após a busca
-            prevPageRef.current = pageNumber;
-            prevLimitRef.current = contactsPerPage;
-        }
-    };
+            } catch (err) {
+                toastError(err);
+            } finally {
+                if (currentId === requestIdRef.current) setLoading(false);
+                // Atualiza refs de comparação após a busca
+                prevPageRef.current = pageNumber;
+                prevLimitRef.current = contactsPerPage;
+            }
+        };
 
     useEffect(() => {
         // Só reseta a lista quando mudar de página ou de itens por página
@@ -1063,17 +1063,17 @@ const Contacts = () => {
                         {/* Linha 2: Busca sozinha */}
                         <div className="flex items-center gap-2">
                             <div className="relative flex-1">
-                                <input
-                                    type="text"
-                                    placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
-                                    value={searchParam}
-                                    onChange={handleSearch}
-                                    className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                {isSearching && (
-                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
-                                )}
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
+                                value={searchParam}
+                                onChange={handleSearch}
+                                className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            {isSearching && (
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
+                            )}
                             </div>
                             <Tooltip {...CustomTooltipProps} title="Contatos não validados">
                                 <span>
