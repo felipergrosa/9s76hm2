@@ -26,7 +26,12 @@ module.exports = {
     },
   },
   webpack: {
-    configure: (webpackConfig) => {
+    configure: (webpackConfig, { env }) => {
+      // Desabilita ESLint completamente
+      webpackConfig.plugins = webpackConfig.plugins.filter(plugin => 
+        plugin.constructor.name !== 'ESLintWebpackPlugin'
+      );
+
       webpackConfig.resolve.fallback = {
         ...webpackConfig.resolve.fallback,
         path: "path-browserify",

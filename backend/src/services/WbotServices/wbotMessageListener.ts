@@ -1669,8 +1669,22 @@ const verifyContact = async (
     });
     return null as any;
   }
-  // Corrige: nunca sobrescrever nome personalizado
+  // CORREÇÃO: Para mensagens de outros (fromMe=false), buscar nome real do contato via store
+  // Evita usar pushName (nome do remetente) como nome do contato destinatário
   let nomeContato = msgContact.name;
+  if (!msg.key.fromMe && !isGroup) {
+    try {
+      const store = (wbot as any).store;
+      if (store?.contacts) {
+        const baileysContact = store.contacts[msgContact.id] || store.contacts[normalizedJid];
+        if (baileysContact?.name || baileysContact?.notify) {
+          nomeContato = baileysContact.name || baileysContact.notify;
+        }
+      }
+    } catch (e) {
+      // Ignora erro e continua com pushName como fallback
+    }
+  }
   if (!isGroup) {
     // Se nome está vazio ou igual ao número, usa número, senão mantém nome
     if (!nomeContato || nomeContato === cleaned) {
