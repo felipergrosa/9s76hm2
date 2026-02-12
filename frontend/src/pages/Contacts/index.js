@@ -447,6 +447,48 @@ const Contacts = () => {
         } catch (_) { /* ignore */ }
     }, [location.pathname, location.search, history]);
 
+    // Função para buscar contatos (movida para fora do useEffect)
+    const fetchContacts = async () => {
+        // Garante que respostas antigas sejam ignoradas
+        const currentId = ++requestIdRef.current;
+        try {
+            const { data } = await api.get("/contacts/", {
+                params: {
+                    searchParam: debouncedSearchParam,
+                    pageNumber,
+                    limit: contactsPerPage,
+                    isGroup: "false",
+                    orderBy: sortField === 'tags' ? 'name' : sortField,
+                    order: sortDirection,
+                    segment: segmentFilter,
+                    ...appliedFilters, // Inclui todos os filtros aplicados
+                    contactTag: appliedFilters.tags ? JSON.stringify(appliedFilters.tags).replace(/\\/g, '\\\\') : undefined, // Tags precisam ser stringified e escapadas
+                },
+            });
+            // Ignora respostas de solicitações antigas
+            if (currentId !== requestIdRef.current) return;
+            // Substitui a lista pelo resultado da página atual
+            dispatch({ type: "SET_CONTACTS", payload: data.contacts });
+            setHasMore(data.hasMore);
+            // Usa a contagem total fornecida pelo backend (já respeita filtros/pesquisa)
+            setTotalContacts(data.count);
+
+            // Atualizar o estado do "Selecionar Tudo" baseado nos contatos carregados e selecionados
+            const allCurrentContactIds = data.contacts.map(c => c.id);
+            const newSelected = selectedContactIds.filter(id => allCurrentContactIds.includes(id));
+            setSelectedContactIds(newSelected); // Mantenha apenas os IDs que ainda estão na lista
+            setIsSelectAllChecked(newSelected.length === allCurrentContactIds.length && allCurrentContactIds.length > 0);
+
+        } catch (err) {
+            toastError(err);
+        } finally {
+            if (currentId === requestIdRef.current) setLoading(false);
+            // Atualiza refs de comparação após a busca
+            prevPageRef.current = pageNumber;
+            prevLimitRef.current = contactsPerPage;
+        }
+    };
+
     useEffect(() => {
         // Só reseta a lista quando mudar de página ou de itens por página
         const shouldReset = prevPageRef.current !== pageNumber || prevLimitRef.current !== contactsPerPage;
@@ -454,46 +496,6 @@ const Contacts = () => {
             dispatch({ type: "RESET" });
         }
         setLoading(true);
-        // Garante que respostas antigas sejam ignoradas
-        const currentId = ++requestIdRef.current;
-        const fetchContacts = async () => {
-            try {
-                const { data } = await api.get("/contacts/", {
-                    params: {
-                        searchParam: debouncedSearchParam,
-                        pageNumber,
-                        limit: contactsPerPage,
-                        isGroup: "false",
-                        orderBy: sortField === 'tags' ? 'name' : sortField,
-                        order: sortDirection,
-                        segment: segmentFilter,
-                        ...appliedFilters, // Inclui todos os filtros aplicados
-                        contactTag: appliedFilters.tags ? JSON.stringify(appliedFilters.tags).replace(/\\/g, '\\\\') : undefined, // Tags precisam ser stringified e escapmente escapadas
-                    },
-                });
-                // Ignora respostas de solicitações antigas
-                if (currentId !== requestIdRef.current) return;
-                // Substitui a lista pelo resultado da página atual
-                dispatch({ type: "SET_CONTACTS", payload: data.contacts });
-                setHasMore(data.hasMore);
-                // Usa a contagem total fornecida pelo backend (já respeita filtros/pesquisa)
-                setTotalContacts(data.count);
-
-                // Atualizar o estado do "Selecionar Tudo" baseado nos contatos carregados e selecionados
-                const allCurrentContactIds = data.contacts.map(c => c.id);
-                const newSelected = selectedContactIds.filter(id => allCurrentContactIds.includes(id));
-                setSelectedContactIds(newSelected); // Mantenha apenas os IDs que ainda estão na lista
-                setIsSelectAllChecked(newSelected.length === allCurrentContactIds.length && allCurrentContactIds.length > 0);
-
-            } catch (err) {
-                toastError(err);
-            } finally {
-                if (currentId === requestIdRef.current) setLoading(false);
-                // Atualiza refs de comparação após a busca
-                prevPageRef.current = pageNumber;
-                prevLimitRef.current = contactsPerPage;
-            }
-        };
         fetchContacts();
     }, [
         debouncedSearchParam,

@@ -1097,6 +1097,22 @@ const MessagesList = ({
     fetchMessages();
   }, [pageNumber, ticketId, selectedQueuesMessage]);
 
+  // Listener para evento de refresh de mensagens (importação de histórico)
+  useEffect(() => {
+    const handleRefreshMessages = () => {
+      console.log("[MessagesList] Evento refreshMessages recebido - recarregando mensagens");
+      // Recarrega mensagens da página atual
+      setLoading(true);
+      setPageNumber(1); // Reset para primeira página
+    };
+
+    window.addEventListener('refreshMessages', handleRefreshMessages);
+    
+    return () => {
+      window.removeEventListener('refreshMessages', handleRefreshMessages);
+    };
+  }, [ticketId, selectedQueuesMessage]);
+
   // Garante que, quando o composer sinalizar que está pronto, a lista role ao final
   useEffect(() => {
     const onComposerReady = () => {
