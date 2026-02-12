@@ -112,3 +112,24 @@ docker-compose*
 
 # Scripts que podem causar problemas no Docker
 scripts/check_and_kill_port.js
+
+# Arquivos de desenvolvimento e dados temporários
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!public/manifest.json
+
+# Arquivos específicos grandes
+chats.nobreluminarias.com.br-*.json
+Atualiza*Cadastro*.json
+RAG_SELECTOR_MANUAL_FIX.txt
+*GUIA*.md
+*ANALISE*.md
+*SOLUCAO*.md
+*ROADMAP*.md
+*README*.md
+*.sql
+*.bat
+*.sh
+!docker-build-fix.sh
