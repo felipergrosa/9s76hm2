@@ -27,7 +27,7 @@ messageRoutes.get('/messages/:ticketId/search', isAuth, MessageController.search
 messageRoutes.get('/messages/:ticketId/pinned', isAuth, MessageController.listPinnedMessages);
 messageRoutes.get('/messages/:ticketId/media', isAuth, MessageController.listSharedMedia);
 messageRoutes.post('/messages/:messageId/pin', isAuth, MessageController.pinMessage);
-messageRoutes.delete('/messages/:ticketId/clear', isAuth, MessageController.clearTicketMessages);
+messageRoutes.post('/messages/:ticketId/clear', isAuth, MessageController.clearTicketMessages);
 
 // Rotas genéricas com parâmetros dinâmicos devem vir por último
 messageRoutes.get("/messages/:ticketId", isAuth, MessageController.index);

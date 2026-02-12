@@ -16,7 +16,7 @@ import { History } from "lucide-react";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { toast } from "react-toastify";
-import { useAuth } from "../../context/Auth/AuthContext";
+import useAuth from "../../hooks/useAuth.js/index.js";
 
 const useStyles = makeStyles((theme) => ({
     dialogPaper: {

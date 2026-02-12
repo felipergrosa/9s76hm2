@@ -17,6 +17,7 @@ import {
     Search as SearchIcon,
     Download as DownloadIcon,
     DeleteSweep,
+    RefreshCw,
 } from "lucide-react";
 
 import { v4 as uuidv4 } from "uuid";
@@ -114,7 +115,7 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
     const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
     const [disableBot, setDisableBot] = useState(ticket.contact.disableBot);
     const [importHistoryModalOpen, setImportHistoryModalOpen] = useState(false);
-    const [clearConversationOpen, setClearConversationOpen] = useState(false);
+    const [resyncConversationOpen, setResyncConversationOpen] = useState(false);
 
     const [showSchedules, setShowSchedules] = useState(false);
     const [enableIntegration, setEnableIntegration] = useState(ticket.useIntegration);
@@ -628,9 +629,9 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                         </MenuItem>
                     )}
                     {ticket.channel === "whatsapp" && (
-                        <MenuItem onClick={() => { handleCloseMenu(); setClearConversationOpen(true); }}>
-                            <DeleteSweep style={{ color: '#f44336', marginRight: 10 }} />
-                            Limpar Conversa
+                        <MenuItem onClick={() => { handleCloseMenu(); setResyncConversationOpen(true); }}>
+                            <RefreshCw style={{ color: '#ff9800', marginRight: 10 }} />
+                            Ressincronizar Conversa
                         </MenuItem>
                     )}
                 </Menu>
@@ -681,12 +682,12 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                 ticketId={ticket.id}
             />
             <ClearConversationDialog
-                open={clearConversationOpen}
-                onClose={() => setClearConversationOpen(false)}
+                open={resyncConversationOpen}
+                onClose={() => setResyncConversationOpen(false)}
                 ticketId={ticket.id}
-                onCleared={(deleted) => {
+                onCleared={(existing) => {
                     // Atualizar UI se necessário
-                    console.log(`Conversa limpa: ${deleted} mensagens removidas`);
+                    console.log(`Conversa ressincronizada: ${existing} mensagens existentes preservadas`);
                 }}
             />
         </>

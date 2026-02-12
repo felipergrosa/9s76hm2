@@ -42,6 +42,7 @@ import ShowMessageService, { GetWhatsAppFromMessage } from "../services/MessageS
 import SyncChatHistoryService from "../services/MessageServices/SyncChatHistoryService";
 import ImportContactHistoryService from "../services/MessageServices/ImportContactHistoryService";
 import ClearTicketMessagesService from "../services/MessageServices/ClearTicketMessagesService";
+import ResyncTicketMessagesService from "../services/MessageServices/ResyncTicketMessagesService";
 
 type IndexQuery = {
   pageNumber: string;
@@ -1719,15 +1720,20 @@ export const listSharedMedia = async (req: Request, res: Response): Promise<Resp
 };
 
 /**
- * Limpar todas as mensagens de um ticket
+ * Ressincronizar mensagens de um ticket (sem apagar histórico)
  * DELETE /messages/:ticketId/clear
  */
 export const clearTicketMessages = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
   const { companyId } = req.user;
+  const { periodMonths = 0 } = req.body;
 
   try {
-    const result = await ClearTicketMessagesService({ ticketId, companyId });
+    const result = await ResyncTicketMessagesService({ 
+      ticketId, 
+      companyId, 
+      periodMonths 
+    });
     
     if (!result.success) {
       return res.status(400).json({
@@ -1738,12 +1744,12 @@ export const clearTicketMessages = async (req: Request, res: Response): Promise<
 
     return res.json({
       success: true,
-      deleted: result.deleted,
-      message: `${result.deleted} mensagens removidas com sucesso`
+      existing: result.existing,
+      message: result.message
     });
 
   } catch (error: any) {
     console.error("[clearTicketMessages] Erro:", error);
-    return res.status(500).json({ error: error.message || "Erro ao limpar mensagens" });
+    return res.status(500).json({ error: error.message || "Erro ao ressincronizar mensagens" });
   }
 };
