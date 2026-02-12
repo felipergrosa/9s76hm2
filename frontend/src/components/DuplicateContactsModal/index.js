@@ -35,6 +35,8 @@ import toastError from "../../errors/toastError";
 
 const DEFAULT_LIMIT = 10;
 
+const BACKEND_VALIDATION_BATCH_SIZE = 50;
+
 const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
   const [activeTab, setActiveTab] = useState("normalization");
   const [loading, setLoading] = useState(false);
@@ -623,7 +625,9 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
 
     const totalContacts = validationContacts.length;
     let summary = { validated: 0, corrected: 0, invalid: 0, errors: 0 };
+    const processedIds = new Set();
     let processedCount = 0;
+    let offsetCursor = 0;
 
     try {
       // O backend processa batches de 50 automaticamente.
@@ -634,7 +638,7 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
         const { data } = await api.post("/contacts/validate-whatsapp", {
           whatsappId: Number(selectedWhatsappId),
           mode: validationMode,
-          offset: 0
+          offset: offsetCursor
         });
 
         const batchResults = data?.results || [];
@@ -643,27 +647,52 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
           break;
         }
 
-        processedCount += batchResults.length;
-        summary.validated += data?.validated || 0;
-        summary.corrected += data?.corrected || 0;
-        summary.invalid += data?.invalid || 0;
-        summary.errors += data?.errors || 0;
-
-        // Atualizar results por contactId
+        // Atualizar results por contactId e consolidar resumo sem contar duplicados
         const newResults = {};
-        batchResults.forEach(r => { newResults[r.contactId] = r; });
+        batchResults.forEach(result => {
+          newResults[result.contactId] = result;
+
+          if (processedIds.has(result.contactId)) {
+            return;
+          }
+
+          processedIds.add(result.contactId);
+          processedCount = processedIds.size;
+
+          if (result.status === "valid") {
+            summary.validated += 1;
+          } else if (result.status === "corrected") {
+            summary.corrected += 1;
+          } else if (result.status === "invalid") {
+            summary.invalid += 1;
+          } else if (result.status === "error") {
+            summary.errors += 1;
+          }
+        });
         setValidationResults(prev => ({ ...prev, ...newResults }));
 
         // Calcular progresso mais preciso
-        const progress = Math.min(Math.round((processedCount / totalContacts) * 100), 99);
+        const progress = Math.min(
+          Math.round((processedCount / totalContacts) * 100),
+          100
+        );
         setValidationProgress(progress);
 
         // Debug logs
-        console.log(`[Validation Debug] Batch: ${batchResults.length}, Processed: ${processedCount}/${totalContacts}, Progress: ${progress}%, Pending: ${data?.totalPending}`);
+        console.log(
+          `[Validation Debug] Batch: ${batchResults.length}, Offset: ${offsetCursor}, Processed únicos: ${processedCount}/${totalContacts}, Progress: ${progress}%`
+        );
 
-        // Se totalPending do backend for 0 OU se batchResults for menor que BATCH_SIZE, acabou
-        if ((!data?.totalPending || data.totalPending <= 0) || batchResults.length < 50) {
-          console.log(`[Validation Debug] Finalizando - batchResults.length: ${batchResults.length}, totalPending: ${data?.totalPending}`);
+        offsetCursor += BACKEND_VALIDATION_BATCH_SIZE;
+
+        // Condições de parada: backend retornou menos que o batch, offset >= total ou processados >= total esperado
+        const reachedTotal = processedCount >= totalContacts;
+        const batchIncomplete = batchResults.length < BACKEND_VALIDATION_BATCH_SIZE;
+
+        if (batchIncomplete || reachedTotal) {
+          console.log(
+            `[Validation Debug] Finalizando - batchLength: ${batchResults.length}, reachedTotal: ${reachedTotal}`
+          );
           hasMore = false;
         }
       }

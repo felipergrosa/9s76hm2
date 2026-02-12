@@ -2412,6 +2412,8 @@ export const getValidationPending = async (req: AuthenticatedRequest, res: Respo
       [Op.regexp]: '^55[0-9]{10,11}$'
     };
   } else if (mode === "no_name") {
+    // No modo no_name queremos atualizar dados mesmo que já tenham sido validados
+    delete whereClause.isWhatsappValid;
     // Contatos onde o nome é igual ao número ou nulo/vazio
     // Para PostgreSQL, usar literal para comparar colunas
     // Para outros bancos, faremos o filtro em memória após buscar

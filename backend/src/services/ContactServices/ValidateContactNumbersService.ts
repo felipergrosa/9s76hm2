@@ -40,6 +40,14 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 /**
  * Busca o nome real do contato no WhatsApp e atualiza se for diferente
  */
+const shouldOverwriteName = (currentName: string | null | undefined, digits: string): boolean => {
+    const normalized = (currentName || "").trim();
+    if (!normalized) return true;
+
+    const currentDigits = normalized.replace(/\D/g, "");
+    return currentDigits === digits;
+};
+
 const fetchAndUpdateContactName = async (contact: Contact, wbot: any): Promise<boolean> => {
     try {
         const digits = contact.number.replace(/\D/g, "");
@@ -74,10 +82,10 @@ const fetchAndUpdateContactName = async (contact: Contact, wbot: any): Promise<b
                 
                 // Se encontrou um nome diferente e não é igual ao número, atualizar
                 if (whatsappName && 
-                    whatsappName !== contact.name && 
-                    whatsappName !== digits && 
-                    whatsappName.trim() !== "") {
-                    
+                    whatsappName.trim() !== "" &&
+                    shouldOverwriteName(contact.name, digits) &&
+                    whatsappName.replace(/\D/g, "") !== digits) {
+
                     await contact.update({
                         name: whatsappName.trim(),
                         remoteJid: result.jid,
