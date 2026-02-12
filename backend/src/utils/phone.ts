@@ -29,17 +29,23 @@ export const normalizePhoneNumber = (
   }
 
   try {
+    // Tratamento para DDIs duplicados (ex: 555511999...)
+    let cleanedDigits = digitsOnly;
+    if (cleanedDigits.startsWith("5555")) {
+      cleanedDigits = cleanedDigits.slice(2);
+    }
+
     // Tentar parsear com libphonenumber-js
     // Assume Brasil (BR) como default se não houver DDI claro
     // Adicionamos + se não tiver, para forçar o parse como internacional se possível
-    let phoneNumberToParse = raw;
-    if (!raw.startsWith("+")) {
+    let phoneNumberToParse = cleanedDigits;
+    if (!cleanedDigits.startsWith("+")) {
       // Se tiver 12-13 dígitos e começar com 55, assume que já tem DDI
-      if (digitsOnly.length >= 12 && digitsOnly.startsWith("55")) {
-        phoneNumberToParse = `+${digitsOnly}`;
+      if (cleanedDigits.length >= 12 && cleanedDigits.startsWith("55")) {
+        phoneNumberToParse = `+${cleanedDigits}`;
       } else {
         // Senão, o parse com "BR" resolverá
-        phoneNumberToParse = raw;
+        phoneNumberToParse = cleanedDigits;
       }
     }
 
@@ -56,8 +62,9 @@ export const normalizePhoneNumber = (
   // FALLBACK PARA IDs DO WHATSAPP / META / LIDs
   // Se a lib não reconhecer como telefone válido, mas tiver entre 10 e 20 dígitos,
   // mantemos os dígitos originais pois pode ser um ID de API Cloud ou LID.
-  if (digitsOnly.length >= 10 && digitsOnly.length <= 20) {
-    return { canonical: digitsOnly, digits: digitsOnly };
+  const finalDigits = digitsOnly.startsWith("5555") ? digitsOnly.slice(2) : digitsOnly;
+  if (finalDigits.length >= 10 && finalDigits.length <= 20) {
+    return { canonical: finalDigits, digits: finalDigits };
   }
 
   return { canonical: null, digits: digitsOnly };

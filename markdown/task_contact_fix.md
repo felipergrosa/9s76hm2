@@ -15,8 +15,10 @@
 - [x] Atualizar `resolveContact.ts` e `createContact.ts` para reforçar busca por número/LID
 - [x] Atualizar `CreateOrUpdateContactService.ts` com as novas validações de comprimento
 - [x] Corrigir incompatibilidades no `ListContactsPendingNormalizationService.ts`
+- [x] **BÔNUS**: Tratar DDIs duplicados ("5555...") no `phone.ts` [SUGESTÃO USUÁRIO]
+- [x] **BÔNUS**: Criar `AutoMergeDuplicateContactsService.ts` para limpeza de banco [SUGESTÃO USUÁRIO]
 
 ## Verificação [VERIFICATION]
 - [x] Validar build do backend (`pnpm run build`)
-- [x] Testar recebimento de mensagem de ID longo e verificar associação de contato (validado via build/tipos)
-- [x] Criar walkthrough.md com as mudanças e validações
+- [x] Testar recebimento de mensagem de ID longo e verificar associação de contato
+- [x] Criar walkthrough.md completo com as mudanças e validações
