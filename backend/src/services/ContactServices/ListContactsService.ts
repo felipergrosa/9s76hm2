@@ -260,7 +260,17 @@ const ListContactsService = async ({
             "LIKE",
             `%${sanitizedSearchParam}%`
           )
-        }
+        },
+        // Condição especial para encontrar contatos não validados (number == name)
+        ...(sanitizedSearchParam.includes("sem nome") || sanitizedSearchParam.includes("nao validados") ? [
+          {
+            [Op.and]: [
+              where(col("Contact.number"), col("Contact.name")),
+              { name: { [Op.ne]: null } },
+              { name: { [Op.ne]: "" } }
+            ]
+          }
+        ] : [])
       ]
     };
   }

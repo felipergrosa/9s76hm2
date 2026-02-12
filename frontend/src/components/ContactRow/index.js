@@ -5,7 +5,8 @@ import {
   Lock, 
   Unlock, 
   CheckCircle, 
-  Ban
+  Ban,
+  RefreshCw
 } from "lucide-react";
 import { WhatsApp } from "@material-ui/icons";
 import { Tooltip } from "@material-ui/core";
@@ -22,6 +23,7 @@ const ContactRow = memo(({
   onDelete, 
   onBlock, 
   onUnblock,
+  onValidate,
   formatPhoneNumber,
   CustomTooltipProps,
   rowStyle,
@@ -146,6 +148,17 @@ const ContactRow = memo(({
                     <Trash2 className="w-5 h-5" />
                   </button>
                 </Tooltip>
+                {/* Botão de validação - aparece apenas quando name == number */}
+                {contact.name === contact.number && (
+                  <Tooltip {...CustomTooltipProps} title="Validar nome no WhatsApp">
+                    <button 
+                      onClick={() => onValidate(contact.id)} 
+                      className="text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-300"
+                    >
+                      <RefreshCw className="w-5 h-5" />
+                    </button>
+                  </Tooltip>
+                )}
               </>
             )}
             no={() => null}

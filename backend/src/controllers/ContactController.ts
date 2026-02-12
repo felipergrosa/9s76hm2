@@ -48,6 +48,7 @@ import ListDuplicateContactsService from "../services/ContactServices/ListDuplic
 import ProcessDuplicateContactsService from "../services/ContactServices/ProcessDuplicateContactsService";
 import ProcessDuplicateContactsByNameService from "../services/ContactServices/ProcessDuplicateContactsByNameService";
 import ListContactsPendingNormalizationService from "../services/ContactServices/ListContactsPendingNormalizationService";
+import ValidateContactNameService from "../services/ContactServices/ValidateContactNameService";
 import ProcessContactsNormalizationService from "../services/ContactServices/ProcessContactsNormalizationService";
 import BackfillWalletsAndPersonalTagsService from "../services/ContactServices/BackfillWalletsAndPersonalTagsService";
 import SyncContactWalletsAndPersonalTagsService from "../services/ContactServices/SyncContactWalletsAndPersonalTagsService";
@@ -2443,4 +2444,37 @@ export const getValidationPending = async (req: AuthenticatedRequest, res: Respo
     count,
     hasMore: offset + rows.length < count
   });
+};
+
+/**
+ * Valida o nome de um contato buscando na API WhatsApp
+ * POST /contacts/:contactId/validate-name
+ */
+export const validateContactName = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { contactId } = req.params;
+  const { companyId } = req.user;
+
+  try {
+    const result = await ValidateContactNameService({ 
+      contactId, 
+      companyId 
+    });
+    
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    return res.json({
+      success: true,
+      name: result.name,
+      message: `Nome validado: ${result.name}`
+    });
+
+  } catch (error: any) {
+    console.error("[validateContactName] Erro:", error);
+    return res.status(500).json({ error: error.message || "Erro ao validar nome do contato" });
+  }
 };

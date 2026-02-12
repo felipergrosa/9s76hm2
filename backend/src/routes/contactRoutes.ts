@@ -47,6 +47,7 @@ contactRoutes.post(
   checkPermission("settings.view"),
   ContactController.backfillWalletsAndPersonalTags
 );
+contactRoutes.post("/contacts/:contactId/validate-name", isAuth, ContactController.validateContactName);
 
 // Mova a rota de deleção em massa ANTES da rota de deleção de ID único.
 contactRoutes.delete("/contacts/batch-delete", isAuth, ContactController.bulkRemove); // <-- MOVA ESTA LINHA PARA CIMA
