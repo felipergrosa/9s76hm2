@@ -69,9 +69,7 @@
   flex: 1 1 0% !important;
 }
 
-.w-full {
-  width: 100% !important;
-}
+
 
 .h-full {
   height: 100% !important;
@@ -211,5 +209,53 @@
   
   .max-\[1199px\]\:flex {
     display: flex !important;
+  }
+}
+
+/* Classes lg: manualmente adicionadas */
+@media (min-width: 1024px) {
+  .lg\:block {
+    display: block !important;
+  }
+  
+  .lg\:hidden {
+    display: none !important;
+  }
+  
+  .lg\:flex {
+    display: flex !important;
+  }
+  
+  .lg\:flex-row {
+    flex-direction: row !important;
+  }
+  
+  .lg\:flex-col {
+    flex-direction: column !important;
+  }
+  
+  .lg\:items-center {
+    align-items: center !important;
+  }
+  
+  .lg\:justify-between {
+    justify-content: space-between !important;
+  }
+  
+  .lg\:gap-2 {
+    gap: 0.5rem !important;
+  }
+  
+  .lg\:gap-3 {
+    gap: 0.75rem !important;
+  }
+  
+  .lg\:flex-nowrap {
+    flex-wrap: nowrap !important;
+  }
+  
+  .lg\:text-3xl {
+    font-size: 1.875rem !important;
+    line-height: 2.25rem !important;
   }
 }

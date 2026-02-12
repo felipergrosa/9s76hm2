@@ -113,4 +113,3 @@ docker-compose*
 
 # Scripts que podem causar problemas no Docker
 scripts/check_and_kill_port.js
-docker-build-fix.sh
