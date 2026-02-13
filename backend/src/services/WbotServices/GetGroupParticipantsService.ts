@@ -5,7 +5,7 @@ import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
 import logger from "../../utils/logger";
-import { normalizePhoneNumber } from "../../utils/phone";
+import { normalizePhoneNumber, isValidCanonicalPhoneNumber } from "../../utils/phone";
 
 interface GroupParticipant {
   id: string; // JID do participante (ex: 5511999999999@s.whatsapp.net)
@@ -251,7 +251,7 @@ const GetGroupParticipantsService = async ({
       // Participante com número real (@s.whatsapp.net)
       const { canonical } = normalizePhoneNumber(rawNumber);
       participantNumber = canonical || rawNumber;
-      isValidPhoneNumber = participantNumber.length >= 7 && participantNumber.length <= 15;
+      isValidPhoneNumber = isValidCanonicalPhoneNumber(participantNumber) && participantNumber.replace(/\D/g, "").length <= 14;
       contactRecord = contactsMap.get(participantNumber) || contactsMap.get(rawNumber) || null;
     }
 
@@ -336,26 +336,13 @@ const GetGroupParticipantsService = async ({
     } else if (isValidPhoneNumber) {
       contactName = `+${participantNumber}`;
     } else {
-      // Fallback final: usar número formatado se possível, senão "Participante"
-      if (isValidPhoneNumber && participantNumber.length >= 10) {
-        const ddi = participantNumber.slice(0, 2);
-        const ddd = participantNumber.slice(2, 4);
-        const rest = participantNumber.slice(4);
-        if (rest.length === 9) {
-          contactName = `+${ddi} ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
-        } else if (rest.length === 8) {
-          contactName = `+${ddi} ${ddd} ${rest.slice(0, 4)}-${rest.slice(4)}`;
-        } else {
-          contactName = `+${participantNumber}`;
-        }
-      } else {
-        contactName = "Participante";
-      }
+      // Fallback final: Se for LID ou inválido, não exibir o número
+      contactName = "Participante";
     }
 
     // Número exibido: preferir número real formatado com DDI
     let displayNumber: string;
-    if (isValidPhoneNumber && participantNumber.length >= 10) {
+    if (isValidPhoneNumber && participantNumber.length >= 10 && participantNumber.length <= 14) {
       // Tentar formatar com DDI
       const ddi = participantNumber.slice(0, 2);
       const ddd = participantNumber.slice(2, 4);
@@ -370,7 +357,8 @@ const GetGroupParticipantsService = async ({
         displayNumber = `+${participantNumber}`;
       }
     } else {
-      displayNumber = p.notify || rawNumber;
+      // Se tiver nome (notify/pushName), usa ele. Se não, oculta o ID técnico.
+      displayNumber = p.notify || resolvedName || "Participante";
     }
 
     // Usar foto do contato do sistema ou do Baileys

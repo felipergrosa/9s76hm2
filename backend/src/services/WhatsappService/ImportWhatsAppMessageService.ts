@@ -143,8 +143,19 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
         const fromMe = msg.key.fromMe;
 
         // Normalização
-        const { canonical: contactNumberCanonical } = safeNormalizePhoneNumber(jidNormalizedUser(msgContactId));
+        let { canonical: contactNumberCanonical } = safeNormalizePhoneNumber(jidNormalizedUser(msgContactId));
         const { canonical: remoteNumberCanonical } = safeNormalizePhoneNumber(jidNormalizedUser(remoteJid));
+
+        // Tentar resolver LID para número real se necessário
+        if (msgContactId.includes("@lid") && !contactNumberCanonical) {
+          const store = (wbot as any).store;
+          if (store && store.contacts) {
+            const lidContact = store.contacts[msgContactId];
+            if (lidContact && lidContact.phoneNumber) {
+              contactNumberCanonical = safeNormalizePhoneNumber(lidContact.phoneNumber).canonical;
+            }
+          }
+        }
 
         const contactNumber = contactNumberCanonical || jidNormalizedUser(msgContactId).replace(/\D/g, "");
         const remoteNumber = remoteNumberCanonical || jidNormalizedUser(remoteJid).replace(/\D/g, "");

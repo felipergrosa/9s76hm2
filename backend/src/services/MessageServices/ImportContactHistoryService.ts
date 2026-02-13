@@ -243,163 +243,116 @@ const ImportContactHistoryService = async ({
         }
 
         // ============================================================
-        //  FASE 2 — Servidor WhatsApp (fetchMessageHistory)
+        //  FASE 2 — History Sync via reconexão do WebSocket
+        //  Força reconexão para que o WhatsApp envie sync automático,
+        //  capturando mensagens do JID alvo via messaging-history.set
         // ============================================================
-        if (typeof wbot.fetchMessageHistory === "function") {
-            logger.info(`[ImportHistory] Fase 2 — Solicitando histórico do servidor do WhatsApp para jid=${jid}`);
-            emitProgress(allMessages.length, -1, "FETCHING", "Fase 2: Buscando mensagens do servidor WhatsApp...");
+        logger.info(`[ImportHistory] Fase 2 — Iniciando history sync via reconexão para jid=${jid}`);
+        emitProgress(allMessages.length, -1, "FETCHING", "Fase 2: Reconectando para sincronizar histórico...");
 
-            // Determinar a key e timestamp mais antigos
-            let oldestKey: any = null;
-            let oldestTimestamp: number = Math.floor(Date.now() / 1000);
+        let totalFromServer = 0;
+        const SYNC_TIMEOUT_MS = 120_000; // 120s para aguardar reconexão + sync
 
-            // Primeiro tentar das mensagens já buscadas na Fase 1
-            if (allMessages.length > 0) {
-                const oldest = allMessages[allMessages.length - 1];
-                oldestKey = oldest?.key;
-                oldestTimestamp = Number(oldest?.messageTimestamp || oldestTimestamp);
-            }
+        try {
+            // 1. Registrar handler temporário ANTES de fechar o websocket
+            const capturedMessages: any[] = [];
+            let resolveCapture: () => void;
+            let syncEventsReceived = 0;
 
-            // Se não tem da Fase 1, tentar do banco
-            if (!oldestKey) {
-                const oldestInDB = await Message.findOne({
-                    where: { ticketId: ticket.id },
-                    order: [["createdAt", "ASC"]]
-                });
-                if (oldestInDB?.dataJson) {
-                    try {
-                        const parsed = JSON.parse(oldestInDB.dataJson);
-                        oldestKey = parsed?.key;
-                        oldestTimestamp = Number(parsed?.messageTimestamp || Math.floor(new Date(oldestInDB.createdAt).getTime() / 1000));
-                    } catch { }
-                }
-            }
+            const capturePromise = new Promise<void>((resolve) => {
+                resolveCapture = resolve;
+                setTimeout(() => resolve(), SYNC_TIMEOUT_MS);
+            });
 
-            // Se ainda não tem key, criar uma key sintética para o JID
-            if (!oldestKey) {
-                oldestKey = {
-                    remoteJid: jid,
-                    fromMe: false,
-                    id: "INITIAL_SYNC"
-                };
-                oldestTimestamp = Math.floor(Date.now() / 1000);
-            }
-
-            const FETCH_COUNT = 50;
-            const MAX_FETCH_ROUNDS = 50;
-            let fetchRound = 0;
-            let totalFromServer = 0;
-
-            while (fetchRound < MAX_FETCH_ROUNDS) {
-                fetchRound++;
-
+            // Handler que captura TODAS as mensagens do JID alvo durante o sync
+            const historyHandler = (messageSet: any) => {
                 try {
-                    // Registrar handler temporário para capturar mensagens do evento
-                    const capturedMessages: any[] = [];
-                    let resolveCapture: () => void;
+                    syncEventsReceived++;
+                    const messages = messageSet?.messages || [];
+                    logger.info(`[ImportHistory] Fase 2 — messaging-history.set #${syncEventsReceived}: ${messages.length} mensagens recebidas`);
 
-                    const capturePromise = new Promise<void>((resolve) => {
-                        resolveCapture = resolve;
-
-                        // Timeout de 30s por round
-                        setTimeout(() => resolve(), 30000);
+                    // Filtrar mensagens do JID alvo
+                    const targetMessages = messages.filter((m: any) => {
+                        if (!m?.key) return false;
+                        return m.key.remoteJid === jid;
                     });
 
-                    const historyHandler = (messageSet: any) => {
-                        try {
-                            const messages = messageSet?.messages || [];
-                            logger.info(`[ImportHistory] Fase 2 — messaging-history.set recebido: ${messages.length} mensagens`);
-
-                            // Filtrar mensagens do JID alvo
-                            const targetMessages = messages.filter((m: any) => {
-                                if (!m?.key) return false;
-                                // Aceitar mensagens que pertencem ao JID do contato
-                                return m.key.remoteJid === jid;
-                            });
-
-                            capturedMessages.push(...targetMessages);
-                            logger.info(`[ImportHistory] Fase 2 — ${targetMessages.length} mensagens do JID alvo (de ${messages.length} total)`);
-
-                            // Resolver imediatamente quando receber mensagens relevantes
-                            if (targetMessages.length > 0) {
-                                resolveCapture();
-                            }
-                        } catch (err: any) {
-                            logger.warn(`[ImportHistory] Fase 2 — Erro no handler: ${err?.message}`);
-                        }
-                    };
-
-                    // Registrar handler temporário
-                    wbot.ev.on("messaging-history.set", historyHandler);
-
-                    // Solicitar mensagens ao servidor
-                    logger.info(`[ImportHistory] Fase 2 — Round ${fetchRound}: fetchMessageHistory(${FETCH_COUNT}, ...)` +
-                        ` key=${JSON.stringify(oldestKey)}, ts=${oldestTimestamp}`);
-
-                    await wbot.fetchMessageHistory(FETCH_COUNT, oldestKey, oldestTimestamp);
-
-                    // Aguardar resposta do servidor (até 30s)
-                    await capturePromise;
-
-                    // Desregistrar handler
-                    wbot.ev.off("messaging-history.set", historyHandler);
-
-                    if (capturedMessages.length === 0) {
-                        logger.info(`[ImportHistory] Fase 2 — Nenhuma mensagem recebida no round ${fetchRound}, finalizando`);
-                        break;
+                    if (targetMessages.length > 0) {
+                        capturedMessages.push(...targetMessages);
+                        logger.info(`[ImportHistory] Fase 2 — +${targetMessages.length} mensagens do JID alvo (total acumulado: ${capturedMessages.length})`);
+                        emitProgress(allMessages.length + capturedMessages.length, -1, "FETCHING", `Fase 2: +${capturedMessages.length} do sync...`);
                     }
-
-                    // Filtrar por período
-                    const validMessages = capturedMessages.filter(m => {
-                        if (!m?.key?.id) return false;
-                        if (cutoffTimestamp) {
-                            const msgTs = Number(m.messageTimestamp || 0);
-                            if (msgTs < cutoffTimestamp) return false;
-                        }
-                        return true;
-                    });
-
-                    allMessages.push(...validMessages);
-                    totalFromServer += validMessages.length;
-
-                    // Atualizar cursor para próximo round
-                    const oldestCaptured = capturedMessages[capturedMessages.length - 1];
-                    if (oldestCaptured?.key) {
-                        oldestKey = oldestCaptured.key;
-                        oldestTimestamp = Number(oldestCaptured.messageTimestamp || oldestTimestamp);
-                    }
-
-                    emitProgress(allMessages.length, -1, "FETCHING", `Fase 2: +${totalFromServer} do servidor (${allMessages.length} total)...`);
-
-                    // Se recebeu menos do que pediu, provavelmente acabou
-                    if (capturedMessages.length < FETCH_COUNT) {
-                        logger.info(`[ImportHistory] Fase 2 — Menos mensagens que o solicitado, finalizando`);
-                        break;
-                    }
-
-                    // Verificar se já passou do corte
-                    if (cutoffTimestamp && oldestTimestamp < cutoffTimestamp) {
-                        logger.info(`[ImportHistory] Fase 2 — Atingiu cutoff de período, finalizando`);
-                        break;
-                    }
-
-                    // Delay entre rounds para não sobrecarregar
-                    await new Promise(r => setTimeout(r, 1000));
-
                 } catch (err: any) {
-                    logger.warn(`[ImportHistory] Fase 2 — Erro no round ${fetchRound}: ${err?.message}`);
-                    // Se o erro for crítico (ex: não autenticado), parar
-                    if (err?.message?.includes("not authenticated") || err?.message?.includes("Connection Closed")) {
-                        break;
+                    logger.warn(`[ImportHistory] Fase 2 — Erro no handler de sync: ${err?.message}`);
+                }
+            };
+
+            // Handler para detectar quando o sync terminou
+            // O isLatest=true indica a última batch de sync
+            const syncCompleteHandler = (messageSet: any) => {
+                try {
+                    if (messageSet?.isLatest) {
+                        logger.info(`[ImportHistory] Fase 2 — Sync completo detectado (isLatest=true). Total capturadas: ${capturedMessages.length}`);
+                        // Aguardar mais 5s para batches restantes antes de resolver
+                        setTimeout(() => resolveCapture(), 5000);
                     }
-                    // Para outros erros, tentar mais um round
-                    await new Promise(r => setTimeout(r, 2000));
+                } catch { }
+            };
+
+            // 2. Registrar handlers no wbot
+            wbot.ev.on("messaging-history.set", historyHandler);
+            wbot.ev.on("messaging-history.set", syncCompleteHandler);
+
+            // 3. Monitorar reconexão
+            let reconnected = false;
+            const connectionHandler = (update: any) => {
+                if (update?.connection === "open") {
+                    reconnected = true;
+                    logger.info(`[ImportHistory] Fase 2 — Sessão reconectou com sucesso`);
+                    emitProgress(allMessages.length, -1, "FETCHING", "Fase 2: Reconectado — aguardando sync do WhatsApp...");
+                }
+            };
+            wbot.ev.on("connection.update", connectionHandler);
+
+            // 4. Fechar WebSocket (reconexão automática do Baileys)
+            logger.info(`[ImportHistory] Fase 2 — Fechando WebSocket para forçar reconexão...`);
+            wbot.ws.close();
+
+            // 5. Aguardar sync completar ou timeout
+            await capturePromise;
+
+            // 6. Limpar handlers
+            wbot.ev.off("messaging-history.set", historyHandler);
+            wbot.ev.off("messaging-history.set", syncCompleteHandler);
+            wbot.ev.off("connection.update", connectionHandler);
+
+            // 7. Processar mensagens capturadas
+            if (capturedMessages.length > 0) {
+                // Filtrar por período
+                const validMessages = capturedMessages.filter((m: any) => {
+                    if (!m?.key?.id) return false;
+                    if (cutoffTimestamp) {
+                        const msgTs = Number(
+                            typeof m.messageTimestamp === "object" && m.messageTimestamp?.low
+                                ? m.messageTimestamp.low
+                                : m.messageTimestamp || 0
+                        );
+                        if (msgTs < cutoffTimestamp) return false;
+                    }
+                    return true;
+                });
+
+                allMessages.push(...validMessages);
+                totalFromServer = validMessages.length;
+                logger.info(`[ImportHistory] Fase 2 concluída: ${totalFromServer} mensagens do sync (${syncEventsReceived} eventos, ${capturedMessages.length} raw)`);
+            } else {
+                logger.warn(`[ImportHistory] Fase 2 concluída: 0 mensagens recebidas (${syncEventsReceived} eventos, reconectou: ${reconnected})`);
+                if (!reconnected) {
+                    logger.error(`[ImportHistory] Fase 2 — Sessão NÃO reconectou. Verifique o status da conexão WhatsApp.`);
                 }
             }
-
-            logger.info(`[ImportHistory] Fase 2 concluída: ${totalFromServer} mensagens do servidor`);
-        } else {
-            logger.warn(`[ImportHistory] fetchMessageHistory não disponível nesta versão do Baileys`);
+        } catch (syncErr: any) {
+            logger.error(`[ImportHistory] Fase 2 — Erro no history sync: ${syncErr?.message}`);
         }
 
         // ============================================================

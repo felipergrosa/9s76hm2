@@ -9,7 +9,7 @@ import logger from "../../utils/logger";
 import { isNil } from "lodash";
 import Whatsapp from "../../models/Whatsapp";
 import * as Sentry from "@sentry/node";
-import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { safeNormalizePhoneNumber, isValidCanonicalPhoneNumber } from "../../utils/phone";
 import DispatchContactWebhookService from "./DispatchContactWebhookService";
 import ContactTag from "../../models/ContactTag";
 import Tag from "../../models/Tag";
@@ -205,14 +205,23 @@ const CreateOrUpdateContactService = async ({
     // =================================================================
     if (!isGroup && number) {
       const numberDigitsOnly = number.replace(/\D/g, "");
-      if (numberDigitsOnly.length > 14 && !number.startsWith("PENDING_")) {
-        logger.error("[CreateOrUpdateContact] BLOQUEADO: Número parece ser LID (>14 dígitos)", {
-          number,
-          digitsLength: numberDigitsOnly.length,
-          remoteJid,
-          companyId
-        });
-        throw new Error(`Número inválido (parece LID): ${number}`);
+      // Usar validador E checar comprimento
+      const isValid = isValidCanonicalPhoneNumber(number);
+      if ((numberDigitsOnly.length > 14 || !isValid) && !number.startsWith("PENDING_")) {
+        // Se for length > 14 é certeza que é LID/Inválido para contato telefônico
+        // Se !isValid, também rejeita
+        // Mas se for 10-13 digitos e !isValid (ex: numero incompleto), maybe allow?
+        // O foco aqui é BLOQUEAR LIDs.
+
+        if (numberDigitsOnly.length > 14) {
+          logger.error("[CreateOrUpdateContact] BLOQUEADO: Número parece ser LID (>14 dígitos)", {
+            number,
+            digitsLength: numberDigitsOnly.length,
+            remoteJid,
+            companyId
+          });
+          throw new Error(`Número inválido (parece LID): ${number}`);
+        }
       }
     }
 

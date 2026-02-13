@@ -770,6 +770,86 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
       }
     } else {
       contactJid = participantJid;
+
+      // =================================================================
+      // TENTATIVA DE RESOLUÇÃO DE LID EM GRUPO
+      // Se o participant for um LID ou tiver > 13 digitos, tentar resolver
+      // =================================================================
+      const isLidParticipant = participantJid.includes("@lid");
+      if (isLidParticipant) {
+        debugLog("[getContactMessage] Tentando resolver LID de participante de grupo", { participantJid });
+        let resolvedIdentity = null;
+
+        // 1. Tentar resolver via signalRepository (Baileys v7)
+        try {
+          const lidStore = (wbot as any).signalRepository?.lidMapping;
+          if (lidStore?.getPNForLID) {
+            const lidId = participantJid.replace("@lid", "");
+            const resolvedPN = await lidStore.getPNForLID(lidId);
+            if (resolvedPN) {
+              const pnDigits = resolvedPN.replace(/\D/g, "");
+              if (looksPhoneLike(pnDigits)) {
+                resolvedIdentity = resolvedPN.includes("@") ? resolvedPN : `${pnDigits}@s.whatsapp.net`;
+                logger.info("[getContactMessage] Participant LID resolvido via signalRepository", {
+                  originalLid: participantJid,
+                  resolvedIdentity
+                });
+
+                // Salvar mapping
+                try {
+                  const LidMapping = require("../../models/LidMapping").default;
+                  const companyId = (wbot as any).companyId || 1;
+                  await LidMapping.upsert({
+                    lid: participantJid,
+                    phoneNumber: pnDigits,
+                    companyId,
+                    whatsappId: wbot.id
+                  });
+                } catch (e) { }
+              }
+            }
+          }
+        } catch (e) { }
+
+        // 2. Tentar LidMapping (banco)
+        if (!resolvedIdentity) {
+          try {
+            const LidMapping = require("../../models/LidMapping").default;
+            const companyId = (wbot as any).companyId || 1;
+            const savedMapping = await LidMapping.findOne({
+              where: { lid: participantJid, companyId }
+            });
+            if (savedMapping?.phoneNumber) {
+              const pnDigits = savedMapping.phoneNumber.replace(/\D/g, "");
+              if (looksPhoneLike(pnDigits)) {
+                resolvedIdentity = `${pnDigits}@s.whatsapp.net`;
+                logger.info("[getContactMessage] Participant LID resolvido via LidMapping (banco)", { resolvedIdentity });
+              }
+            }
+          } catch (e) { }
+        }
+
+        // 3. Tentar store contacts
+        if (!resolvedIdentity) {
+          try {
+            const sock = wbot as any;
+            const lidContact = sock.store?.contacts?.[participantJid];
+            if (lidContact && lidContact.id && lidContact.id.includes("@s.whatsapp.net")) {
+              resolvedIdentity = lidContact.id;
+              logger.info("[getContactMessage] Participant LID resolvido via Store Contacts", { resolvedIdentity });
+            } else if (lidContact?.phoneNumber) {
+              const pnDigits = lidContact.phoneNumber.replace(/\D/g, "");
+              if (looksPhoneLike(pnDigits)) {
+                resolvedIdentity = `${pnDigits}@s.whatsapp.net`;
+              }
+            }
+          } catch (e) { }
+        }
+
+        if (resolvedIdentity) {
+          contactJid = resolvedIdentity;
+        }
+      }
     }
   } else {
     // Em conversas diretas (não-grupo)

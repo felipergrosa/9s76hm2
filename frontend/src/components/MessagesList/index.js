@@ -134,8 +134,9 @@ const useStyles = makeStyles((theme) => ({
     width: 30,
     height: 30,
     marginRight: 8,
-    alignSelf: "flex-end",
-    marginBottom: 5,
+    // alignSelf: "flex-end", // Removido para alinhar ao topo (ao lado do nome)
+    // marginBottom: 5,
+    marginTop: 2, // Ajuste fino para alinhar com o topo do balão
     fontSize: 14,
     fontWeight: "bold",
   },
@@ -902,6 +903,10 @@ const MessagesList = ({
       const c = msg?.contact;
       const hasPic = !!(c?.urlPicture || c?.profilePicUrl || c?.contact?.urlPicture || c?.contact?.profilePicUrl);
       if (hasPic) return c;
+
+      // Se for grupo, NÃO fazer fallback para o ticketContact (que é a foto do grupo)
+      // Queremos que apareça o avatar (ou iniciais) do PARTICIPANTE
+      if (isGroup) return c;
 
       // tenta pegar do próprio msg.ticket ou do fallback informado
       const ticketContact = msg?.ticket?.contact || fallbackTicketContact;

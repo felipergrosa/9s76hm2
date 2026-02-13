@@ -53,7 +53,7 @@ const ImportContactsService = async (companyId: number): Promise<void> => {
   if (isArray(phoneContactsList)) {
     for (const item of phoneContactsList) {
       const { id, name, notify } = item as any;
-      if (!id || id === "status@broadcast" || String(id).includes("g.us")) continue;
+      if (!id || id === "status@broadcast" || String(id).includes("g.us") || String(id).includes("@lid")) continue;
       const rawDigits = String(id).replace(/\D/g, "");
       const { canonical } = safeNormalizePhoneNumber(rawDigits);
       const number = canonical || rawDigits;
@@ -78,12 +78,15 @@ const ImportContactsService = async (companyId: number): Promise<void> => {
             // Atualiza nome principal quando vazio/igual ao número e armazena também em contactName
             await existingContact.update({
               name: phoneName || number,
-              contactName: phoneName || null
+              contactName: phoneName || null,
+              remoteJid: id
             });
           } else {
             // Nome já curado pelo usuário: não sobrescrever; apenas guarda referência em contactName
             if (phoneName) {
-              await existingContact.update({ contactName: phoneName });
+              await existingContact.update({ contactName: phoneName, remoteJid: id });
+            } else {
+              await existingContact.update({ remoteJid: id });
             }
           }
         } else {
@@ -96,7 +99,8 @@ const ImportContactsService = async (companyId: number): Promise<void> => {
             // contactName espelha o nome de origem do aparelho na criação
             // florder permanece default false
             // @ts-ignore: parâmetro extra suportado pelo serviço
-            contactName: phoneName || null
+            contactName: phoneName || null,
+            remoteJid: id
           } as any);
         }
       } catch (error) {
