@@ -8,6 +8,8 @@ import CreateContactService from "../ContactServices/CreateContactService";
 import { isString, isArray } from "lodash";
 import path from "path";
 import fs from 'fs';
+import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { Op } from "sequelize";
 
 const ImportContactsService = async (companyId: number): Promise<void> => {
   const defaultWhatsapp = await GetDefaultWhatsApp(undefined, companyId);
@@ -20,7 +22,7 @@ const ImportContactsService = async (companyId: number): Promise<void> => {
     phoneContacts = JSON.parse(JSON.stringify(contactsString.contacts));
 
     const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
-    const beforeFilePath = path.join(publicFolder,`company${companyId}`, 'contatos_antes.txt');
+    const beforeFilePath = path.join(publicFolder, `company${companyId}`, 'contatos_antes.txt');
     fs.writeFile(beforeFilePath, JSON.stringify(phoneContacts, null, 2), (err) => {
       if (err) {
         logger.error(`Failed to write contacts to file: ${err}`);
@@ -35,7 +37,7 @@ const ImportContactsService = async (companyId: number): Promise<void> => {
   }
 
   const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
-  const afterFilePath = path.join(publicFolder,`company${companyId}`, 'contatos_depois.txt');
+  const afterFilePath = path.join(publicFolder, `company${companyId}`, 'contatos_depois.txt');
   fs.writeFile(afterFilePath, JSON.stringify(phoneContacts, null, 2), (err) => {
     if (err) {
       logger.error(`Failed to write contacts to file: ${err}`);
@@ -52,10 +54,20 @@ const ImportContactsService = async (companyId: number): Promise<void> => {
     for (const item of phoneContactsList) {
       const { id, name, notify } = item as any;
       if (!id || id === "status@broadcast" || String(id).includes("g.us")) continue;
-      const number = String(id).replace(/\D/g, "");
+      const rawDigits = String(id).replace(/\D/g, "");
+      const { canonical } = safeNormalizePhoneNumber(rawDigits);
+      const number = canonical || rawDigits;
 
       try {
-        const existingContact = await Contact.findOne({ where: { number, companyId } });
+        const existingContact = await Contact.findOne({
+          where: {
+            companyId,
+            [Op.or]: [
+              { canonicalNumber: number },
+              { number }
+            ]
+          }
+        });
         const phoneName = (name || notify || "").trim();
 
         if (existingContact) {

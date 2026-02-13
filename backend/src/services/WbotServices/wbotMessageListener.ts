@@ -2,6 +2,7 @@ import path, { join } from "path";
 import { promisify } from "util";
 import { readFile, writeFile } from "fs";
 import fs from "fs";
+import "multer"; // Importar multer explicitamente para o namespace Express
 import * as Sentry from "@sentry/node";
 import { isNil, isNull } from "lodash";
 import { REDIS_URI_MSG_CONN } from "../../config/redis";
@@ -1487,140 +1488,21 @@ const verifyContact = async (
       pushName: msgContact.name
     });
 
-    // VALIDAÇÃO DE TAMANHO REMOVIDA: LIDs possuem mais de 13 dígitos
-    // A validação anterior estava impedindo a criação correta de contatos LID.
-    // O problema de número errado era causado pelo safeNormalizePhoneNumber, já corrigido.
-
-    // SOLUÇÃO: Criar contato temporário com LID quando não resolver
-    // Isso permite processar a mensagem e o contato será atualizado quando o mapeamento for descoberto
-    logger.warn("[verifyContact] LID não resolvido - criando contato temporário com LID", {
+    // =================================================================
+    // LID NÃO RESOLVIDO: NÃO criar contato com número de LID
+    // O número de telefone só pode vir de JID @s.whatsapp.net
+    // Quando o evento lid-mapping.update resolver o LID, o contato será criado corretamente
+    // =================================================================
+    logger.warn("[verifyContact] LID não resolvido — ignorando (aguardando lid-mapping.update)", {
       normalizedJid,
       pushName: msgContact.name,
       cleaned,
       cleanedLength: cleaned.length,
       companyId,
-      metodosTentados: ["LidMappings (cache)", "signalRepository", "remoteJid direto", "pushName", "número no LID", "store.contacts", "número LID existente"]
+      metodosTentados: ["LidMappings (cache)", "signalRepository", "remoteJid direto", "pushName", "store.contacts"]
     });
 
-    // Usar pushName como nome, ou "Contato LID" se não tiver
-    const tempName = msgContact.name || `Contato ${cleaned.slice(-6)}`;
-
-    // =================================================================
-    // LOCK POR JID - Evita condição de corrida na criação de contatos
-    // =================================================================
-    return await withJidLock(normalizedJid, async () => {
-      // Verificar novamente se contato foi criado enquanto aguardava o lock
-      const existingAfterLock = await Contact.findOne({
-        where: { remoteJid: normalizedJid, companyId }
-      });
-
-      if (existingAfterLock) {
-        logger.info("[verifyContact] Contato encontrado após adquirir lock", {
-          contactId: existingAfterLock.id,
-          lid: normalizedJid
-        });
-        return existingAfterLock;
-      }
-
-      // Criar contato com LID como identificador
-      // O número será o próprio LID limpo (será atualizado quando mapeamento for descoberto)
-      // Nota: isLinkedDevice é detectado automaticamente pelo CreateOrUpdateContactService via remoteJid.includes("@lid")
-      const contactData = {
-        name: tempName,
-        number: cleaned, // Usar o LID limpo como número temporário - VALIDADO!
-        profilePicUrl: "",
-        isGroup: false,
-        companyId,
-        remoteJid: normalizedJid, // O LID completo - detecta isLinkedDevice automaticamente
-        whatsappId: wbot.id,
-        wbot
-      };
-
-      // VALIDAÇÃO CRÍTICA: Mesmo contatos LID devem ter número válido
-      // LIDs são permitidos, mas números que parecem telefones devem ser validados
-      if (cleaned.length <= 13 && cleaned.length >= 10) {
-        const { canonical } = safeNormalizePhoneNumber(cleaned);
-        if (!canonical) {
-          logger.error("[verifyContact] LID parece ser telefone inválido, rejeitando criação", {
-            lid: normalizedJid,
-            cleaned,
-            cleanedLength: cleaned.length
-          });
-          throw new Error(`LID com formato de telefone inválido: ${cleaned}`);
-        }
-      }
-
-      try {
-        const contact = await CreateOrUpdateContactService(contactData);
-        logger.info("[verifyContact] Contato temporário criado com LID", {
-          contactId: contact.id,
-          lid: normalizedJid,
-          name: tempName
-        });
-
-        // =================================================================
-        // HERANÇA DE TAGS PESSOAIS - Copia tags de contato com MESMO NOME
-        // Só herda se encontrar contato com pushName idêntico na mesma empresa
-        // =================================================================
-        try {
-          if (tempName && tempName !== `Contato ${cleaned.slice(-6)}`) {
-            // Buscar contato real (não-LID) com mesmo nome na mesma empresa
-            const matchingContact = await Contact.findOne({
-              where: {
-                companyId,
-                name: tempName,
-                isGroup: false,
-                id: { [Op.ne]: contact.id },
-                remoteJid: { [Op.notLike]: "%@lid" } // Contato real, não outro LID
-              },
-              include: [{
-                model: Tag,
-                as: "tags",
-                where: {
-                  name: {
-                    [Op.and]: [
-                      { [Op.like]: "#%" },      // Tags pessoais começam com #
-                      { [Op.notLike]: "##%" }   // Mas não ## (grupo)
-                    ]
-                  }
-                },
-                required: true
-              }]
-            });
-
-            if (matchingContact?.tags?.length > 0) {
-              for (const tag of matchingContact.tags) {
-                await ContactTag.findOrCreate({
-                  where: { contactId: contact.id, tagId: tag.id },
-                  defaults: { contactId: contact.id, tagId: tag.id }
-                });
-              }
-
-              logger.info("[verifyContact] Tags pessoais herdadas para contato LID (mesmo nome)", {
-                lidContactId: contact.id,
-                originalContactId: matchingContact.id,
-                matchedName: tempName,
-                tagsHerdadas: matchingContact.tags.map(t => t.name)
-              });
-            }
-          }
-        } catch (tagErr: any) {
-          // Erro na herança de tags não deve bloquear o fluxo
-          logger.warn("[verifyContact] Erro ao herdar tags pessoais", { err: tagErr?.message });
-        }
-
-        return contact;
-      } catch (err: any) {
-        // Se falhar (ex: duplicado), tentar buscar existente
-        logger.warn("[verifyContact] Erro ao criar contato LID, buscando existente", { err: err?.message });
-        const existing = await Contact.findOne({ where: { remoteJid: normalizedJid, companyId } });
-        if (existing) return existing;
-
-        // Se ainda não encontrar, retornar null como último recurso
-        logger.error("[verifyContact] Falha total ao processar LID", { normalizedJid, err: err?.message });
-        return null as any;
-      }
-    });
+    return null as any;
   }
 
   // VALIDAÇÃO RIGOROSA: só cria contato se não for grupo e o número tiver entre 10 e 13 dígitos
@@ -1691,6 +1573,16 @@ const verifyContact = async (
     if (!nomeContato || nomeContato === cleaned) {
       nomeContato = cleaned;
     }
+
+    // Buscar profilePicture do Baileys para contatos com JID real
+    if (normalizedJid.includes("@s.whatsapp.net")) {
+      try {
+        const pic = await wbot.profilePictureUrl(normalizedJid, "image");
+        if (pic) profilePicUrl = pic;
+      } catch (e) {
+        // Privacidade ou indisponível — profilePicUrl permanece vazio
+      }
+    }
   }
   const contactData = {
     name: nomeContato,
@@ -1700,7 +1592,9 @@ const verifyContact = async (
     companyId,
     remoteJid: normalizedJid,
     whatsappId: wbot.id,
-    wbot
+    wbot,
+    pushName: (msg as any)?.pushName || undefined,
+    verifiedName: (msg as any)?.verifiedBizName || undefined
   };
 
   const contact = await CreateOrUpdateContactService(contactData);
@@ -6134,7 +6028,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
     const isRealtime = upsertType === "notify";
 
     if (isRealtime) {
-      logger.info(`[messages.upsert] REALTIME (notify) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);
+      logger.debug(`[messages.upsert] REALTIME (notify) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);
     } else {
       // IGNORAR mensagens históricas - elas são processadas pelo ImportWhatsAppMessageService
       logger.debug(`[messages.upsert] IGNORANDO HISTÓRICO (${upsertType}) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);

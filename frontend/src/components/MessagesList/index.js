@@ -1217,7 +1217,12 @@ const MessagesList = ({
         }
 
         if (data.action === "update") {
-          dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
+          // Se a mensagem foi deletada (isDeleted=true), remove do chat
+          if (data.message?.isDeleted) {
+            dispatch({ type: "DELETE_MESSAGE", payload: data.message.id });
+          } else {
+            dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
+          }
         }
 
         if (data.action === "delete") {

@@ -28,6 +28,7 @@ const getMessageType = (msg: proto.IWebMessageInfo): string => {
 
 /**
  * Verifica se a mensagem é válida para importação
+ * Aceita TODOS os tipos relevantes: texto, mídia, stickers, reações, contatos, localização etc.
  */
 const isImportableMessage = (msg: proto.IWebMessageInfo): boolean => {
     if (!msg?.message) return false;
@@ -35,12 +36,38 @@ const isImportableMessage = (msg: proto.IWebMessageInfo): boolean => {
     const msgType = getMessageType(msg);
     if (!msgType) return false;
     const validTypes = [
+        // Texto
         "conversation", "extendedTextMessage",
+        // Mídia
         "imageMessage", "videoMessage", "audioMessage", "voiceMessage",
         "documentMessage", "stickerMessage", "ptvMessage",
+        // Contatos e localização
         "contactMessage", "contactsArrayMessage", "locationMessage",
-        "liveLocationMessage", "viewOnceMessage", "viewOnceMessageV2",
-        "documentWithCaptionMessage", "ephemeralMessage"
+        "liveLocationMessage",
+        // ViewOnce
+        "viewOnceMessage", "viewOnceMessageV2", "viewOnceMessageV2Extension",
+        // Documentos com legenda
+        "documentWithCaptionMessage",
+        // Efêmeras
+        "ephemeralMessage",
+        // Reações
+        "reactionMessage",
+        // Enquetes
+        "pollCreationMessage", "pollCreationMessageV2", "pollCreationMessageV3", "pollUpdateMessage",
+        // Botões e listas (templates)
+        "buttonsMessage", "buttonsResponseMessage",
+        "listMessage", "listResponseMessage",
+        "templateMessage", "templateButtonReplyMessage",
+        // Protocolo de mensagem editada
+        "editedMessage", "protocolMessage",
+        // Pedidos e pagamentos
+        "orderMessage", "paymentInviteMessage",
+        // Produtos
+        "productMessage",
+        // Mensagem com caption
+        "imageWithCaptionMessage",
+        // Newsletter/channel
+        "newsletterAdminInviteMessage",
     ];
     return validTypes.includes(msgType);
 };
@@ -58,8 +85,12 @@ interface ImportResult {
 }
 
 /**
- * Importa histórico de mensagens de um contato do WhatsApp
- * usando fetchMessageHistory do Baileys em batches iterativos.
+ * Importa histórico de mensagens de um contato do WhatsApp.
+ * 
+ * Fase 1: Busca mensagens do cache local do Baileys (store.loadMessages)
+ * Fase 2: Solicita mensagens mais antigas ao servidor do WhatsApp (fetchMessageHistory)
+ *         capturando-as via evento messaging-history.set
+ * 
  * Emite progresso via Socket.IO no canal importHistory-{ticketId}.
  */
 const ImportContactHistoryService = async ({
@@ -74,7 +105,7 @@ const ImportContactHistoryService = async ({
     logger.info(`[ImportHistory] Iniciando importação - ticketId: ${ticketId}, companyId: ${companyId}, periodMonths: ${periodMonths}`);
 
     const emitProgress = (current: number, total: number, state: string, date?: string) => {
-        logger.info(`[ImportHistory] Emitindo progresso: ${current}/${total} - ${state} - ${date || ''}`);
+        logger.info(`[ImportHistory] Progresso: ${current}/${total} - ${state} - ${date || ''}`);
         io.of(namespace).emit(eventName, {
             action: "update",
             status: { this: current, all: total, state, date }
@@ -124,7 +155,6 @@ const ImportContactHistoryService = async ({
         }
 
         // 4. Montar JID do contato
-        // 4. Montar JID do contato
         let jid = ticket.contact.number;
         if (ticket.isGroup) {
             jid = jid.includes("@g.us") ? jid : `${jid}@g.us`;
@@ -132,174 +162,271 @@ const ImportContactHistoryService = async ({
             jid = jid.includes("@s.whatsapp.net") ? jid : `${jid}@s.whatsapp.net`;
         }
 
-        // 5. Emitir estado "FETCHING" (em vez de PREPARING apenas)
+        // 5. Emitir estado "FETCHING"
         emitProgress(0, -1, "FETCHING", "Iniciando busca no dispositivo...");
 
-        // 6. Verificar se store está disponível para importação
-        if (!wbot.store || typeof wbot.store.loadMessages !== "function") {
-            emitProgress(0, 0, "COMPLETED");
-            return { synced: 0, skipped: true, reason: "Store não disponível nesta versão do Baileys" };
-        }
-
-        /**
-         * Helper: Força sincronização completa usando chatModify
-         * Isso força o WhatsApp Web a buscar mensagens mais antigas
-         */
-        const forceSyncViaChatModify = async (wbotInstance: any, targetJid: string): Promise<void> => {
-            try {
-                logger.info(`[ImportHistory] Forçando sincronização via chatModify para jid=${targetJid}`);
-
-                // Marcar como não lido para forçar sync
-                await wbotInstance.chatModify({
-                    markRead: false,
-                    archive: false,
-                    lastMessages: []
-                }, targetJid);
-
-                // Esperar um pouco para o WhatsApp processar
-                await new Promise(resolve => setTimeout(resolve, 2000));
-
-                // Marcar como lido novamente
-                await wbotInstance.chatModify({
-                    markRead: true,
-                    lastMessages: []
-                }, targetJid);
-
-                logger.info(`[ImportHistory] Sync via chatModify concluído`);
-            } catch (err: any) {
-                logger.warn(`[ImportHistory] Erro ao forçar sync via chatModify: ${err?.message}`);
-            }
-        };
-
-        /**
-         * Helper: Usa loadMessages do store do Baileys (método mais confiável)
-         * loadMessages carrega mensagens do cache local do WhatsApp Web
-         */
-        const fetchMessagesViaStore = async (
-            wbotInstance: any,
-            targetJid: string,
-            count: number,
-            cursor?: any
-        ): Promise<any[]> => {
-            try {
-                // Verificar se store está disponível
-                if (!wbotInstance.store || typeof wbotInstance.store.loadMessages !== 'function') {
-                    logger.warn(`[ImportHistory] Store ou loadMessages não disponível`);
-                    return [];
-                }
-
-                logger.info(`[ImportHistory] Carregando ${count} mensagens do store para jid=${targetJid}, cursor=${cursor ? 'SIM' : 'NÃO'}`);
-
-                // loadMessages do store é síncrono e mais confiável
-                const messages = await wbotInstance.store.loadMessages(
-                    targetJid,
-                    count,
-                    cursor, // cursor - undefined para pegar as mais recentes, ou key da mensagem mais antiga
-                    undefined // sock - undefined para store local
-                );
-
-                logger.info(`[ImportHistory] loadMessages retornou ${messages.length} mensagens`);
-                return messages || [];
-            } catch (err: any) {
-                logger.error(`[ImportHistory] Erro ao usar loadMessages: ${err?.message}`);
-                return [];
-            }
-        };
-
-        const BATCH_SIZE = 50;
+        // ============================================================
+        //  FASE 1 — Cache local (store.loadMessages)
+        // ============================================================
         let allMessages: any[] = [];
-        let cursor: any = undefined;
-        let keepFetching = true;
-        let fetchAttempts = 0;
-        const MAX_FETCH_ATTEMPTS = 50; // Aumentado para buscar mais fundo se necessário
 
-        // Tentar encontrar o cursor inicial baseado na mensagem mais antiga do banco
-        const oldestMessageInDB = await Message.findOne({
-            where: { ticketId: ticket.id },
-            order: [["createdAt", "ASC"]]
-        });
+        if (wbot.store && typeof wbot.store.loadMessages === "function") {
+            logger.info(`[ImportHistory] Fase 1 — Buscando mensagens do cache local para jid=${jid}`);
 
-        if (oldestMessageInDB?.dataJson) {
-            try {
-                const parsed = JSON.parse(oldestMessageInDB.dataJson);
-                cursor = parsed?.key;
-            } catch { }
-        }
+            const BATCH_SIZE = 50;
+            let cursor: any = undefined;
+            let keepFetching = true;
+            let fetchAttempts = 0;
+            const MAX_FETCH_ATTEMPTS = 100;
 
-        logger.info(`[ImportHistory] Iniciando busca iterativa para ticketId=${ticketId}, jid=${jid}`);
+            // Cursor inicial baseado na mensagem mais antiga do banco
+            const oldestMessageInDB = await Message.findOne({
+                where: { ticketId: ticket.id },
+                order: [["createdAt", "ASC"]]
+            });
 
-        // Forçar sincronização via chatModify antes de começar
-        await forceSyncViaChatModify(wbot, jid);
+            if (oldestMessageInDB?.dataJson) {
+                try {
+                    const parsed = JSON.parse(oldestMessageInDB.dataJson);
+                    cursor = parsed?.key;
+                } catch { }
+            }
 
-        while (keepFetching && fetchAttempts < MAX_FETCH_ATTEMPTS) {
-            fetchAttempts++;
-            try {
-                // Busca via store (mais rápido)
-                const messages = await fetchMessagesViaStore(wbot, jid, BATCH_SIZE, cursor);
+            while (keepFetching && fetchAttempts < MAX_FETCH_ATTEMPTS) {
+                fetchAttempts++;
+                try {
+                    const messages = await wbot.store.loadMessages(jid, BATCH_SIZE, cursor, undefined);
 
-                if (!messages || messages.length === 0) {
-                    // Se o store falhar em trazer mais e ainda tivermos tentativas, 
-                    // podemos tentar um pequeno delay ou forçar chatModify de novo (throttle)
-                    if (fetchAttempts < 3) {
-                        logger.info(`[ImportHistory] Store vazio na tentativa ${fetchAttempts}, aguardando sync...`);
-                        await new Promise(r => setTimeout(r, 2000));
-                        continue;
-                    }
-                    keepFetching = false;
-                    break;
-                }
-
-                // Filtrar e processar
-                const validBatch = messages.filter(m => {
-                    if (!m?.key?.id) return false;
-                    if (cutoffTimestamp) {
-                        const msgTs = Number(m.messageTimestamp || 0);
-                        if (msgTs < cutoffTimestamp) return false;
-                    }
-                    return true;
-                });
-
-                allMessages.push(...validBatch);
-
-                // Atualizar cursor para próxima página
-                const oldestInBatch = messages[messages.length - 1];
-                if (oldestInBatch?.key) {
-                    cursor = oldestInBatch.key;
-                }
-
-                // Emitir progresso de busca (total = -1 indica que ainda estamos contando)
-                emitProgress(allMessages.length, -1, "FETCHING", `Localizadas ${allMessages.length} mensagens...`);
-
-                // Se trouxe menos que o batch, parou de encontrar no cache
-                if (messages.length < BATCH_SIZE) {
-                    keepFetching = false;
-                    break;
-                }
-
-                // Verificar se a última mensagem do batch já passou do corte
-                if (cutoffTimestamp) {
-                    const lastTs = Number(oldestInBatch.messageTimestamp || 0);
-                    if (lastTs < cutoffTimestamp) {
-                        keepFetching = false;
+                    if (!messages || messages.length === 0) {
+                        if (fetchAttempts < 3) {
+                            await new Promise(r => setTimeout(r, 2000));
+                            continue;
+                        }
                         break;
                     }
-                }
 
-                // Pequeno delay para permitir processamento de outros eventos de socket
-                await new Promise(r => setTimeout(r, 500));
-            } catch (err: any) {
-                logger.warn(`[ImportHistory] Erro na busca batch ${fetchAttempts}: ${err?.message}`);
-                keepFetching = false;
+                    const validBatch = messages.filter(m => {
+                        if (!m?.key?.id) return false;
+                        if (cutoffTimestamp) {
+                            const msgTs = Number(m.messageTimestamp || 0);
+                            if (msgTs < cutoffTimestamp) return false;
+                        }
+                        return true;
+                    });
+
+                    allMessages.push(...validBatch);
+
+                    const oldestInBatch = messages[messages.length - 1];
+                    if (oldestInBatch?.key) {
+                        cursor = oldestInBatch.key;
+                    }
+
+                    emitProgress(allMessages.length, -1, "FETCHING", `Fase 1: ${allMessages.length} mensagens do cache...`);
+
+                    if (messages.length < BATCH_SIZE) break;
+
+                    if (cutoffTimestamp) {
+                        const lastTs = Number(oldestInBatch.messageTimestamp || 0);
+                        if (lastTs < cutoffTimestamp) break;
+                    }
+
+                    await new Promise(r => setTimeout(r, 200));
+                } catch (err: any) {
+                    logger.warn(`[ImportHistory] Fase 1 — Erro batch ${fetchAttempts}: ${err?.message}`);
+                    break;
+                }
             }
+
+            logger.info(`[ImportHistory] Fase 1 concluída: ${allMessages.length} mensagens do cache local`);
+        } else {
+            logger.warn(`[ImportHistory] store.loadMessages não disponível, pulando Fase 1`);
         }
 
+        // ============================================================
+        //  FASE 2 — Servidor WhatsApp (fetchMessageHistory)
+        // ============================================================
+        if (typeof wbot.fetchMessageHistory === "function") {
+            logger.info(`[ImportHistory] Fase 2 — Solicitando histórico do servidor do WhatsApp para jid=${jid}`);
+            emitProgress(allMessages.length, -1, "FETCHING", "Fase 2: Buscando mensagens do servidor WhatsApp...");
+
+            // Determinar a key e timestamp mais antigos
+            let oldestKey: any = null;
+            let oldestTimestamp: number = Math.floor(Date.now() / 1000);
+
+            // Primeiro tentar das mensagens já buscadas na Fase 1
+            if (allMessages.length > 0) {
+                const oldest = allMessages[allMessages.length - 1];
+                oldestKey = oldest?.key;
+                oldestTimestamp = Number(oldest?.messageTimestamp || oldestTimestamp);
+            }
+
+            // Se não tem da Fase 1, tentar do banco
+            if (!oldestKey) {
+                const oldestInDB = await Message.findOne({
+                    where: { ticketId: ticket.id },
+                    order: [["createdAt", "ASC"]]
+                });
+                if (oldestInDB?.dataJson) {
+                    try {
+                        const parsed = JSON.parse(oldestInDB.dataJson);
+                        oldestKey = parsed?.key;
+                        oldestTimestamp = Number(parsed?.messageTimestamp || Math.floor(new Date(oldestInDB.createdAt).getTime() / 1000));
+                    } catch { }
+                }
+            }
+
+            // Se ainda não tem key, criar uma key sintética para o JID
+            if (!oldestKey) {
+                oldestKey = {
+                    remoteJid: jid,
+                    fromMe: false,
+                    id: "INITIAL_SYNC"
+                };
+                oldestTimestamp = Math.floor(Date.now() / 1000);
+            }
+
+            const FETCH_COUNT = 50;
+            const MAX_FETCH_ROUNDS = 50;
+            let fetchRound = 0;
+            let totalFromServer = 0;
+
+            while (fetchRound < MAX_FETCH_ROUNDS) {
+                fetchRound++;
+
+                try {
+                    // Registrar handler temporário para capturar mensagens do evento
+                    const capturedMessages: any[] = [];
+                    let resolveCapture: () => void;
+
+                    const capturePromise = new Promise<void>((resolve) => {
+                        resolveCapture = resolve;
+
+                        // Timeout de 30s por round
+                        setTimeout(() => resolve(), 30000);
+                    });
+
+                    const historyHandler = (messageSet: any) => {
+                        try {
+                            const messages = messageSet?.messages || [];
+                            logger.info(`[ImportHistory] Fase 2 — messaging-history.set recebido: ${messages.length} mensagens`);
+
+                            // Filtrar mensagens do JID alvo
+                            const targetMessages = messages.filter((m: any) => {
+                                if (!m?.key) return false;
+                                // Aceitar mensagens que pertencem ao JID do contato
+                                return m.key.remoteJid === jid;
+                            });
+
+                            capturedMessages.push(...targetMessages);
+                            logger.info(`[ImportHistory] Fase 2 — ${targetMessages.length} mensagens do JID alvo (de ${messages.length} total)`);
+
+                            // Resolver imediatamente quando receber mensagens relevantes
+                            if (targetMessages.length > 0) {
+                                resolveCapture();
+                            }
+                        } catch (err: any) {
+                            logger.warn(`[ImportHistory] Fase 2 — Erro no handler: ${err?.message}`);
+                        }
+                    };
+
+                    // Registrar handler temporário
+                    wbot.ev.on("messaging-history.set", historyHandler);
+
+                    // Solicitar mensagens ao servidor
+                    logger.info(`[ImportHistory] Fase 2 — Round ${fetchRound}: fetchMessageHistory(${FETCH_COUNT}, ...)` +
+                        ` key=${JSON.stringify(oldestKey)}, ts=${oldestTimestamp}`);
+
+                    await wbot.fetchMessageHistory(FETCH_COUNT, oldestKey, oldestTimestamp);
+
+                    // Aguardar resposta do servidor (até 30s)
+                    await capturePromise;
+
+                    // Desregistrar handler
+                    wbot.ev.off("messaging-history.set", historyHandler);
+
+                    if (capturedMessages.length === 0) {
+                        logger.info(`[ImportHistory] Fase 2 — Nenhuma mensagem recebida no round ${fetchRound}, finalizando`);
+                        break;
+                    }
+
+                    // Filtrar por período
+                    const validMessages = capturedMessages.filter(m => {
+                        if (!m?.key?.id) return false;
+                        if (cutoffTimestamp) {
+                            const msgTs = Number(m.messageTimestamp || 0);
+                            if (msgTs < cutoffTimestamp) return false;
+                        }
+                        return true;
+                    });
+
+                    allMessages.push(...validMessages);
+                    totalFromServer += validMessages.length;
+
+                    // Atualizar cursor para próximo round
+                    const oldestCaptured = capturedMessages[capturedMessages.length - 1];
+                    if (oldestCaptured?.key) {
+                        oldestKey = oldestCaptured.key;
+                        oldestTimestamp = Number(oldestCaptured.messageTimestamp || oldestTimestamp);
+                    }
+
+                    emitProgress(allMessages.length, -1, "FETCHING", `Fase 2: +${totalFromServer} do servidor (${allMessages.length} total)...`);
+
+                    // Se recebeu menos do que pediu, provavelmente acabou
+                    if (capturedMessages.length < FETCH_COUNT) {
+                        logger.info(`[ImportHistory] Fase 2 — Menos mensagens que o solicitado, finalizando`);
+                        break;
+                    }
+
+                    // Verificar se já passou do corte
+                    if (cutoffTimestamp && oldestTimestamp < cutoffTimestamp) {
+                        logger.info(`[ImportHistory] Fase 2 — Atingiu cutoff de período, finalizando`);
+                        break;
+                    }
+
+                    // Delay entre rounds para não sobrecarregar
+                    await new Promise(r => setTimeout(r, 1000));
+
+                } catch (err: any) {
+                    logger.warn(`[ImportHistory] Fase 2 — Erro no round ${fetchRound}: ${err?.message}`);
+                    // Se o erro for crítico (ex: não autenticado), parar
+                    if (err?.message?.includes("not authenticated") || err?.message?.includes("Connection Closed")) {
+                        break;
+                    }
+                    // Para outros erros, tentar mais um round
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+            }
+
+            logger.info(`[ImportHistory] Fase 2 concluída: ${totalFromServer} mensagens do servidor`);
+        } else {
+            logger.warn(`[ImportHistory] fetchMessageHistory não disponível nesta versão do Baileys`);
+        }
+
+        // ============================================================
+        //  DEDUPLICAÇÃO
+        // ============================================================
+        // Remover mensagens duplicadas pelo key.id
+        const seenIds = new Set<string>();
+        const uniqueMessages: any[] = [];
+        for (const msg of allMessages) {
+            const id = msg?.key?.id;
+            if (id && !seenIds.has(id)) {
+                seenIds.add(id);
+                uniqueMessages.push(msg);
+            }
+        }
+        allMessages = uniqueMessages;
+
+        logger.info(`[ImportHistory] Total após dedup: ${allMessages.length} mensagens`);
 
         if (allMessages.length === 0) {
             emitProgress(0, 0, "COMPLETED");
             return { synced: 0, skipped: false, reason: "Nenhuma mensagem encontrada no período" };
         }
 
-        // 7. Processar e salvar mensagens
+        // ============================================================
+        //  PROCESSAMENTO E IMPORTAÇÃO
+        // ============================================================
         const totalToProcess = allMessages.length;
         let syncedCount = 0;
         let processedCount = 0;
@@ -318,15 +445,11 @@ const ImportContactHistoryService = async ({
                 });
 
                 if (existingMsg) {
-                    logger.debug(`[ImportHistory] Msg duplicada encontrada (pular): wid=${msg.key.id}`);
                     continue;
-                } else {
-                    logger.debug(`[ImportHistory] Msg nova (persistir): wid=${msg.key.id}`);
                 }
 
                 // Validar mensagem
                 if (!isImportableMessage(msg)) {
-                    logger.debug(`[ImportHistory] Msg não importável: ${getMessageType(msg)}`);
                     continue;
                 }
 
@@ -383,7 +506,8 @@ const ImportContactHistoryService = async ({
                                 msg.message?.ephemeralMessage?.message?.videoMessage ||
                                 msg.message?.ephemeralMessage?.message?.imageMessage ||
                                 msg.message?.viewOnceMessage?.message?.imageMessage ||
-                                msg.message?.viewOnceMessage?.message?.videoMessage;
+                                msg.message?.viewOnceMessage?.message?.videoMessage ||
+                                msg.message?.ptvMessage;
 
                             if (mineType?.mimetype) {
                                 let filename = msg.message?.documentMessage?.fileName || "";

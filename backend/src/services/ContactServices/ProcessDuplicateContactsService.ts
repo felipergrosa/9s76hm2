@@ -260,29 +260,11 @@ const ProcessDuplicateContactsService = async ({
 
   const contactIdRows = await sequelize.query<{ id: number }>(
     `
-      WITH contact_digits AS (
-        SELECT
-          "id",
-          "companyId",
-          REGEXP_REPLACE(COALESCE("canonicalNumber", "number", ''), '\\D', '', 'g') AS digits
-        FROM "Contacts"
-        WHERE "companyId" = :companyId
-          AND "isGroup" = false
-      ),
-      normalized_contacts AS (
-        SELECT
-          "id",
-          CASE
-            WHEN digits IS NULL OR digits = '' THEN NULL
-            WHEN LENGTH(digits) >= 11 THEN RIGHT(digits, 11)
-            WHEN LENGTH(digits) >= 8 THEN digits
-            ELSE NULL
-          END AS normalized
-        FROM contact_digits
-      )
       SELECT "id"
-      FROM normalized_contacts
-      WHERE normalized = :normalizedKey;
+      FROM "Contacts"
+      WHERE "companyId" = :companyId
+        AND "isGroup" = false
+        AND "canonicalNumber" = :normalizedKey;
     `,
     {
       replacements: {

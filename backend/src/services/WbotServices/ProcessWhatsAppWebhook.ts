@@ -10,6 +10,7 @@ import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketServi
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import { getIO } from "../../libs/socket";
 import DownloadOfficialMediaService from "./DownloadOfficialMediaService";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 /**
  * Interface para mudança (change) do webhook Meta
@@ -296,22 +297,22 @@ async function processIncomingMessage(
       // CRÍTICO: Usar wa_id como número real (é o telefone correto!)
       // O wa_id sempre contém o número de telefone real, mesmo quando message.from é um ID Meta
       if (contactInfo.wa_id) {
-        const waIdDigits = contactInfo.wa_id.replace(/\D/g, "");
-        // Validar se wa_id parece um número de telefone válido (10-13 dígitos)
-        if (waIdDigits.length >= 10 && waIdDigits.length <= 13) {
-          actualPhoneNumber = contactInfo.wa_id;
-          logger.info(`[WebhookProcessor] Usando wa_id real: ${actualPhoneNumber} (message.from era: ${from})`);
+        const { canonical } = safeNormalizePhoneNumber(contactInfo.wa_id);
+        // Validar se wa_id parece um número de telefone válido
+        if (canonical) {
+          actualPhoneNumber = canonical;
+          logger.info(`[WebhookProcessor] Usando wa_id real normalizado: ${actualPhoneNumber} (message.from era: ${from})`);
         }
       }
     }
   }
 
-  // Verificar se o número ainda é um ID Meta (> 13 dígitos)
-  const phoneDigits = actualPhoneNumber.replace(/\D/g, "");
-  const isMetaId = phoneDigits.length > 13;
+  // Verificar se o número ainda é um ID Meta (> 13 dígitos para BR, mas libphonenumber cuida disso)
+  const { canonical: finalCanonical } = safeNormalizePhoneNumber(actualPhoneNumber);
+  const isMetaId = !finalCanonical && actualPhoneNumber.replace(/\D/g, "").length > 13;
 
   if (isMetaId) {
-    logger.warn(`[WebhookProcessor] Número ${actualPhoneNumber} parece ser ID Meta (${phoneDigits.length} dígitos). Tentando fallback...`);
+    logger.warn(`[WebhookProcessor] Número ${actualPhoneNumber} parece ser ID Meta. Tentando fallback...`);
 
     // Tentar encontrar contato existente pelo nome
     const existingByName = await Contact.findOne({
@@ -333,7 +334,7 @@ async function processIncomingMessage(
         from,
         actualPhoneNumber,
         contactName,
-        phoneDigitsLength: phoneDigits.length
+        phoneDigitsLength: actualPhoneNumber.replace(/\D/g, "").length
       });
       return;
     }
@@ -717,9 +718,9 @@ async function processMessageStatus(
   // CQRS: Usar MessageCommandService para atualizar ACK
   // Isso já faz: busca mensagem + valida ack + update DB + emite evento via EventBus
   const { updateMessageAckByWid } = await import("../MessageServices/MessageCommandService");
-  
+
   const updatedMessage = await updateMessageAckByWid(messageId, ack);
-  
+
   if (updatedMessage) {
     logger.debug(`[WebhookProcessor] Mensagem ${messageId} atualizada para ack=${ack} via CQRS`);
   } else {

@@ -181,12 +181,12 @@ export function extractMessageIdentifiers(
       }
     }
 
-    // Estratégia 6: pushName contendo número válido (último recurso, como no código antigo)
+    // Estratégia 6: pushName contendo número válido (último recurso)
     if (!pnJid && msg.pushName) {
-      const pushNameDigits = (msg.pushName || "").replace(/\D/g, "");
-      if (pushNameDigits.length >= 10 && pushNameDigits.length <= 20) {
-        pnJid = `${pushNameDigits}@s.whatsapp.net`;
-        logger.info({ lidJid: primaryJid, pnJid, pushName: msg.pushName, strategy: "pushName" }, "[extractIdentifiers] LID→PN via pushName");
+      const { canonical } = safeNormalizePhoneNumber(msg.pushName);
+      if (canonical) {
+        pnJid = `${canonical}@s.whatsapp.net`;
+        logger.info({ lidJid: primaryJid, pnJid, pushName: msg.pushName, strategy: "pushName" }, "[extractIdentifiers] LID→PN via pushName (safeNormalize)");
       }
     }
   } else if (isPn) {

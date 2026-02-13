@@ -48,7 +48,7 @@ const FindOrCreateTicketService = async (
       settings.enableLGPD === "enabled" &&
       settings.lgpdMessage !== "" &&
       (settings.lgpdConsent === "enabled" ||
-        (settings.lgpdConsent === "disabled" && isNil(contact?.lgpdAcceptedAt)));
+        (settings.lgpdConsent === "disabled" && (!contact || isNil(contact?.lgpdAcceptedAt))));
   }
 
   const io = getIO();
@@ -93,7 +93,7 @@ const FindOrCreateTicketService = async (
         status: {
           [Op.or]: ["open", "pending", "group", "nps", "lgpd", "bot", "campaign"]
         },
-        contactId: contact.id,
+        contactId: contact?.id,
         companyId,
         whatsappId: whatsapp.id
       },
@@ -385,7 +385,7 @@ const FindOrCreateTicketService = async (
       isActiveDemand: false,
     };
 
-    if (DirectTicketsToWallets && contact.id && !groupContact) {
+    if (DirectTicketsToWallets && contact?.id && !groupContact) {
       const wallet: any = contact;
       const wallets = await wallet.getWallets();
       if (wallets && wallets[0]?.id) {

@@ -64,7 +64,7 @@ export const initIO = (httpServer: Server): SocketIO => {
     maxHttpBufferSize: 1e6, // Limita payload a 1MB
     pingTimeout: 20000,
     pingInterval: 25000,
-    
+
     // Connection State Recovery: recupera eventos perdidos durante desconexões temporárias
     // Funciona para desconexões de até 2 minutos (configurable)
     connectionStateRecovery: {
@@ -83,7 +83,9 @@ export const initIO = (httpServer: Server): SocketIO => {
         maxRetriesPerRequest: null,
         enableAutoPipelining: true
       });
-      const subClient = pubClient.duplicate();
+      const subClient = pubClient.duplicate({
+        enableReadyCheck: false
+      });
       try {
         // Requer dinamicamente para evitar erro de tipos quando o pacote ainda não estiver instalado no dev
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -105,9 +107,9 @@ export const initIO = (httpServer: Server): SocketIO => {
     try {
       const token = socket.handshake.query.token as string;
       const origin = socket.handshake.headers.origin;
-      
+
       logger.info(`[SOCKET AUTH] Nova conexão - Origin: ${origin}, Token: ${token ? "presente" : "ausente"}`);
-      
+
       if (!token) {
         logger.warn("[SOCKET AUTH] Conexão sem token no handshake: permitindo (diagnóstico)");
         return next();
@@ -162,7 +164,7 @@ export const initIO = (httpServer: Server): SocketIO => {
 
   workspaces.on("connection", (socket) => {
     const clientIp = socket.handshake.address;
-    
+
     // Connection State Recovery: verifica se a conexão foi recuperada
     if ((socket as any).recovered) {
       logger.info(`[SOCKET RECOVERY] ✅ Conexão RECUPERADA - namespace=${socket.nsp.name} socketId=${socket.id} rooms=${Array.from(socket.rooms).join(",")}`);
@@ -170,7 +172,7 @@ export const initIO = (httpServer: Server): SocketIO => {
     } else {
       try {
         logger.info(`[SOCKET] Cliente conectado ao namespace ${socket.nsp.name} (IP: ${clientIp}) query=${JSON.stringify(socket.handshake.query)}`);
-      } catch {}
+      } catch { }
     }
 
     // Valida userId
@@ -229,10 +231,10 @@ export const initIO = (httpServer: Server): SocketIO => {
 
         logger.info(`[SOCKET RECOVERY] Recuperando ${missedMessages.length} mensagens perdidas para ticket ${ticketId} desde ID ${lastMessageId}`);
 
-        callback?.({ 
-          success: true, 
+        callback?.({
+          success: true,
           messages: missedMessages,
-          count: missedMessages.length 
+          count: missedMessages.length
         });
       } catch (e) {
         logger.error("[SOCKET RECOVERY] Erro ao recuperar mensagens:", e);

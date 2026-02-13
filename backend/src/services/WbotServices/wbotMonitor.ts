@@ -514,6 +514,13 @@ const wbotMonitor = async (
                 remoteJid: `${phoneNumber}@s.whatsapp.net`,
                 lidJid: lidJid
               });
+
+              // Buscar profile picture usando o JID real recém-resolvido
+              try {
+                const pic = await wbot.profilePictureUrl(`${phoneNumber}@s.whatsapp.net`, "image");
+                if (pic) await pendingContact.update({ profilePicUrl: pic });
+              } catch (e) { /* privacidade ou indisponível */ }
+
               reconciledCount++;
               logger.info("[wbotMonitor] Contato PENDING_ promovido a real", {
                 contactId: pendingContact.id,

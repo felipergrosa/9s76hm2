@@ -10,6 +10,7 @@
 import axios from "axios";
 import Whatsapp from "../../models/Whatsapp";
 import logger from "../../utils/logger";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 interface ContactValidationResult {
   input: string;           // Número original enviado
@@ -69,27 +70,6 @@ async function getOfficialWhatsappConfig(companyId: number): Promise<{
 }
 
 /**
- * Normaliza número para formato internacional (apenas dígitos)
- * Adiciona código do Brasil (55) se não tiver
- */
-function normalizePhoneNumber(number: string): string {
-  // Remove tudo que não é dígito
-  let digits = number.replace(/\D/g, "");
-
-  // Se começar com 0, remove
-  if (digits.startsWith("0")) {
-    digits = digits.substring(1);
-  }
-
-  // Se não tiver código do país, adiciona 55 (Brasil)
-  if (digits.length <= 11) {
-    digits = `55${digits}`;
-  }
-
-  return digits;
-}
-
-/**
  * Valida um único número usando a API oficial
  * 
  * IMPORTANTE: A API oficial da Meta não tem um endpoint direto para verificar
@@ -111,7 +91,7 @@ export async function CheckNumberOfficial(
     throw new Error("Nenhuma conexão oficial disponível para validação");
   }
 
-  const normalizedNumber = normalizePhoneNumber(number);
+  const { canonical: normalizedNumber } = safeNormalizePhoneNumber(number);
 
   try {
     // Usar endpoint de contacts para verificar
@@ -187,7 +167,7 @@ export async function CheckNumbersOfficialBatch(
   // Processar em lotes
   for (let i = 0; i < numbers.length; i += batchSize) {
     const batch = numbers.slice(i, i + batchSize);
-    const normalizedBatch = batch.map(n => `+${normalizePhoneNumber(n)}`);
+    const normalizedBatch = batch.map(n => `+${safeNormalizePhoneNumber(n).canonical || n.replace(/\D/g, "")}`);
 
     logger.info(`[CheckNumberOfficial] Validando lote ${Math.floor(i / batchSize) + 1}: ${batch.length} números`);
 
@@ -288,12 +268,12 @@ export async function ValidateOnSend(
     return { isValid: false, wa_id: null, error: "Sem conexão oficial" };
   }
 
-  const normalizedNumber = normalizePhoneNumber(number);
+  const { canonical: normalizedNumber } = safeNormalizePhoneNumber(number);
 
   try {
     // Tentar enviar uma mensagem de "presença" ou template simples
     // Se falhar com erro específico, o número é inválido
-    
+
     // Por enquanto, apenas normalizar e assumir válido
     // A validação real acontece no momento do envio da campanha
     return {

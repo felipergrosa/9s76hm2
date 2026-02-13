@@ -108,22 +108,22 @@ const SyncChatHistoryService = async ({
 
         // 6. Forçar sincronização completa antes de buscar
         try {
-            await wbot.chatModify({ 
+            await wbot.chatModify({
                 markRead: false,
                 archive: false,
                 lastMessages: []
             }, jid);
-            
+
             // Esperar um pouco para o WhatsApp processar
             await new Promise(resolve => setTimeout(resolve, 2000));
-            
+
             // Marcar como lido novamente
-            await wbot.chatModify({ 
+            await wbot.chatModify({
                 markRead: true,
                 lastMessages: []
             }, jid);
-            
-            logger.info(`[SyncChatHistory] Sync via chatModify concluído`);
+
+            // logger.info(`[SyncChatHistory] Sync via chatModify concluído`);
         } catch (err: any) {
             logger.warn(`[SyncChatHistory] Erro ao forçar sync via chatModify: ${err?.message}`);
         }
@@ -132,7 +132,7 @@ const SyncChatHistoryService = async ({
         let messages: any[] = [];
         try {
             if (wbot.store && typeof wbot.store.loadMessages === "function") {
-                logger.info(`[SyncChatHistory] Carregando ${messageCount} mensagens do store para jid=${jid}`);
+                // logger.info(`[SyncChatHistory] Carregando ${messageCount} mensagens do store para jid=${jid}`);
 
                 // loadMessages do store é síncrono e mais confiável
                 messages = await wbot.store.loadMessages(
@@ -142,10 +142,10 @@ const SyncChatHistoryService = async ({
                     undefined // sock - undefined para store local
                 );
 
-                logger.info(`[SyncChatHistory] loadMessages retornou ${messages.length} mensagens`);
+                // logger.info(`[SyncChatHistory] loadMessages retornou ${messages.length} mensagens`);
             } else {
                 // Fallback: tentar chatModify para marcar como lido e forçar sync
-                logger.warn(`[SyncChatHistory] Store ou loadMessages não disponível, usando fallback`);
+                // logger.warn(`[SyncChatHistory] Store ou loadMessages não disponível, usando fallback`);
 
                 // Marcar chat como lido pode ajudar a sincronizar
                 try {
