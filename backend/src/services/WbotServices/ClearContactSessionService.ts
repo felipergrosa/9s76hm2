@@ -1,107 +1,96 @@
 import Whatsapp from "../../models/Whatsapp";
-import { BufferJSON } from "@whiskeysockets/baileys";
 import logger from "../../utils/logger";
+import cacheLayer from "../../libs/cache";
+import path from "path";
+import fs from "fs";
+import * as crypto from "crypto";
 
 interface ClearContactSessionData {
   whatsappId: number;
-  contactJid: string; // Ex: "5519999999999@s.whatsapp.net" ou "247540473708749@lid"
+  contactJid: string;
 }
 
-/**
- * Serviço para limpar a sessão criptográfica de um contato específico.
- * Útil para resolver erros de "Bad MAC" e "No matching sessions found"
- * sem precisar reconectar todo o WhatsApp.
- */
+const sanitizeFileName = (name: string) => {
+  const valid = name
+    .replace(/[<>:\\"/\\|?*]/g, "_")
+    .replace(/@/g, "_at_")
+    .replace(/::/g, "__");
+  const hash = crypto.createHash("md5").update(name).digest("hex").slice(0, 6);
+  return `${valid}-${hash}`;
+};
+
 const ClearContactSessionService = async ({
   whatsappId,
   contactJid
 }: ClearContactSessionData): Promise<{ success: boolean; message: string }> => {
   try {
     const whatsapp = await Whatsapp.findByPk(whatsappId);
-    
+
     if (!whatsapp) {
       return { success: false, message: "WhatsApp não encontrado" };
     }
 
-    if (!whatsapp.session) {
-      return { success: false, message: "Sessão não encontrada" };
-    }
-
-    // Parse da sessão
-    const sessionData = JSON.parse(whatsapp.session, BufferJSON.reviver);
-    const { creds, keys } = sessionData;
-
-    if (!keys) {
-      return { success: false, message: "Chaves de sessão não encontradas" };
-    }
-
-    let cleared = false;
+    const driver = (process.env.SESSIONS_DRIVER || "").toLowerCase() || (process.env.REDIS_URI ? "redis" : "fs");
     const clearedItems: string[] = [];
 
-    // Limpar sessão do contato (sessions)
-    if (keys.sessions && keys.sessions[contactJid]) {
-      delete keys.sessions[contactJid];
-      cleared = true;
-      clearedItems.push("session");
-    }
+    // Keys usually associated with a contact session
+    const keyTypes = [
+      `session-${contactJid}`,
+      `sender-key-${contactJid}`,
+      `sender-key-memory-${contactJid}`,
+      // LIDs might have their own keys
+      ...(contactJid.includes("@lid") ? [`lid-mapping-${contactJid.split("@")[0]}`] : [])
+    ];
 
-    // Limpar sender keys do contato (senderKeys)
-    if (keys.senderKeys) {
-      const senderKeyPattern = contactJid.split("@")[0];
-      for (const key of Object.keys(keys.senderKeys)) {
-        if (key.includes(senderKeyPattern)) {
-          delete keys.senderKeys[key];
-          cleared = true;
-          clearedItems.push(`senderKey:${key}`);
+    if (driver === "redis") {
+      for (const keyType of keyTypes) {
+        const redisKey = `sessions:${whatsappId}:${keyType}`;
+        const exists = await cacheLayer.get(redisKey);
+        if (exists) {
+          await cacheLayer.del(redisKey);
+          clearedItems.push(keyType);
+        }
+      }
+
+      // Also pattern match for sender keys if exact match failed or to be thorough
+      // Note: Redis KEYS/SCAN is expensive, so we try specific keys first. 
+      // Given Baileys v6 MultiFileAuthState structure, keys are exact files.
+
+    } else {
+      // FS Driver
+      const baseDir = path.resolve(
+        process.cwd(),
+        process.env.SESSIONS_DIR || "private/sessions",
+        String(whatsapp.companyId || "0"),
+        String(whatsappId)
+      );
+
+      for (const keyType of keyTypes) {
+        const fileName = `${sanitizeFileName(keyType)}.json`;
+        const filePath = path.join(baseDir, fileName);
+        if (fs.existsSync(filePath)) {
+          await fs.promises.unlink(filePath);
+          clearedItems.push(keyType);
         }
       }
     }
 
-    // Limpar sender key memory (senderKeyMemory)
-    if (keys.senderKeyMemory) {
-      const senderKeyPattern = contactJid.split("@")[0];
-      for (const key of Object.keys(keys.senderKeyMemory)) {
-        if (key.includes(senderKeyPattern)) {
-          delete keys.senderKeyMemory[key];
-          cleared = true;
-          clearedItems.push(`senderKeyMemory:${key}`);
-        }
-      }
-    }
-
-    // Limpar LID mapping se for um LID
-    if (contactJid.includes("@lid") && keys.lidMapping) {
-      const lidNumber = contactJid.split("@")[0];
-      if (keys.lidMapping[lidNumber]) {
-        delete keys.lidMapping[lidNumber];
-        cleared = true;
-        clearedItems.push("lidMapping");
-      }
-    }
-
-    if (!cleared) {
-      return { 
-        success: false, 
-        message: `Nenhuma sessão encontrada para o contato ${contactJid}` 
+    if (clearedItems.length === 0) {
+      return {
+        success: false,
+        message: `Nenhuma sessão encontrada para o contato ${contactJid} (Driver: ${driver})`
       };
     }
 
-    // Salvar sessão atualizada
-    await whatsapp.update({
-      session: JSON.stringify({ creds, keys }, BufferJSON.replacer, 0)
-    });
-
+    const message = `Sessão limpa com sucesso (${driver}): ${clearedItems.length} arquivos removidos.`;
     logger.info({
-      message: `[ClearContactSession] Sessão limpa para contato`,
+      message: `[ClearContactSession] ${message}`,
       whatsappId,
       contactJid,
       clearedItems
     });
 
-    return { 
-      success: true, 
-      message: `Sessão limpa com sucesso: ${clearedItems.join(", ")}. O contato precisará enviar uma nova mensagem para re-estabelecer a criptografia.`
-    };
+    return { success: true, message };
 
   } catch (error) {
     logger.error({
@@ -110,10 +99,10 @@ const ClearContactSessionService = async ({
       contactJid,
       error: error.message
     });
-    
-    return { 
-      success: false, 
-      message: `Erro ao limpar sessão: ${error.message}` 
+
+    return {
+      success: false,
+      message: `Erro ao limpar sessão: ${error.message}`
     };
   }
 };

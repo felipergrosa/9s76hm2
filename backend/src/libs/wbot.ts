@@ -630,6 +630,14 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               //   }
               // }, 10000);
 
+              try {
+                // Iniciar monitor de conexão
+                const wbotMonitor = require("../services/WbotServices/wbotMonitor").default;
+                wbotMonitor(whatsapp, companyId, whatsapp.id);
+              } catch (err: any) {
+                logger.error(`[wbot] Error starting wbotMonitor: ${err?.message}`);
+              }
+
               // Nota: lid-mapping.update é tratado pelo wbotMonitor.ts (com reconciliação completa)
 
               resolve(wsocket);

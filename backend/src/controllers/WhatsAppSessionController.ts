@@ -85,6 +85,9 @@ const remove = async (req: Request, res: Response): Promise<Response> => {
       await removeWbot(Number(whatsappId), true);
     } catch { }
 
+    // Garantir limpeza total do Redis
+    await cacheLayer.delFromPattern(`sessions:${whatsappId}:*`);
+
     await whatsapp.update({ status: "DISCONNECTED", session: "" });
 
     const io = getIO();
