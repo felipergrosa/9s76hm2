@@ -7,7 +7,7 @@ import LidMapping from "../../models/LidMapping";
 import logger from "../../utils/logger";
 import { extractMessageIdentifiers, ExtractedIdentifiers } from "./extractMessageIdentifiers";
 import { resolveContact } from "./resolveContact";
-import { createContact } from "./createContact";
+import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
 
@@ -258,14 +258,43 @@ export async function resolveMessageContact(
   }
 
   // ─── CAMADA 3: Criação (último recurso) ───
-  const newContact = await createContact(ids, companyId, wbot, pnFromMapping);
+  // PADRONIZAÇÃO: Usar CreateOrUpdateContactService em vez de createContact duplicado
+  const contactName = ids.pushName || ids.pnDigits || ids.lidJid;
+  const contactNumber = ids.pnDigits || ((ids.lidJid && ids.lidJid.replace(/\D/g, "")) || "");
+  const contactRemoteJid = ids.pnJid || ids.lidJid;
 
-  // Refresh Avatar (async throttle)
+  logger.info({
+    lidJid: ids.lidJid,
+    contactNumber,
+    contactName,
+    strategy: "CreateOrUpdateContactService"
+  }, "[ContactResolver] Tentando criar contato via serviço padronizado");
+
+  const newContact = await CreateOrUpdateContactService({
+    name: contactName,
+    number: contactNumber,
+    isGroup: false,
+    companyId,
+    whatsappId: wbot.id,
+    remoteJid: contactRemoteJid,
+    wbot,
+    checkProfilePic: true
+  });
+
+  if (!newContact) {
+    // Se o serviço retornou null (bloqueou LID ou número inválido), lançar erro
+    // para que o wbotMessageListener capture e pare o processamento
+    throw new Error(`LID_CREATION_BLOCKED: CreateOrUpdateContactService retornou null para ${ids.lidJid}`);
+  }
+
+  // Refresh Avatar (async throttle) - O Service já faz, mas mal não faz garantir
+  /*
   RefreshContactAvatarService({
     contactId: newContact.id,
     companyId,
     whatsappId: wbot.id
   });
+  */
 
   // Persistir mapeamento LID↔PN se ambos conhecidos
   if (ids.lidJid && ids.pnDigits) {
