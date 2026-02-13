@@ -220,7 +220,9 @@ const CreateOrUpdateContactService = async ({
             remoteJid,
             companyId
           });
-          throw new Error(`Número inválido (parece LID): ${number}`);
+          // Em vez de lançar erro, retornar null para que o processo de importação possa continuar
+          // O erro será tratado pelo chamador (ImportWhatsAppMessageService)
+          return null as any;
         }
       }
     }
