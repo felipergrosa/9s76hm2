@@ -6080,6 +6080,9 @@ const BAD_MAC_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos
 const createFilterMessages = (whatsappId: number) => (msg: WAMessage): boolean => {
   msgDB.save(msg);
 
+  // DEBUG: Log todas as mensagens que chegam
+  logger.info(`[FILTER DEBUG] Mensagem recebida: msgId=${msg.key?.id}, remoteJid=${msg.key?.remoteJid}, fromMe=${msg.key?.fromMe}, stubType=${msg.messageStubType}, hasMessage=${!!msg.message}`);
+
   if (msg.message?.protocolMessage?.editedMessage) return true;
   if (msg.message?.protocolMessage) return false;
 
@@ -6146,6 +6149,7 @@ const createFilterMessages = (whatsappId: number) => (msg: WAMessage): boolean =
   )
     return false;
 
+  logger.info(`[FILTER DEBUG] Mensagem APROVADA: msgId=${msg.key?.id}`);
   return true;
 };
 
