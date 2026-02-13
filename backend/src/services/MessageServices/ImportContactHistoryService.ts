@@ -2,20 +2,24 @@ import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
 import Whatsapp from "../../models/Whatsapp";
 import Contact from "../../models/Contact";
-import { getWbot } from "../../libs/wbot";
+import { dataMessages, getWbot } from "../../libs/wbot";
 import { getIO } from "../../libs/socket";
 import logger from "../../utils/logger";
-import CreateMessageService from "./CreateMessageService";
 import { getBodyMessage } from "../WbotServices/wbotMessageListener";
-import { downloadMediaMessage, proto } from "@whiskeysockets/baileys";
+import { downloadMediaMessage, proto, jidNormalizedUser } from "@whiskeysockets/baileys";
+import { Op } from "sequelize";
 import path from "path";
 import fs from "fs";
 import { promisify } from "util";
 
 const writeFileAsync = promisify(fs.writeFile);
 
+// ============================================================
+//  Funções Auxiliares
+// ============================================================
+
 /**
- * Extrai o tipo da mensagem (inline para evitar dependência de export)
+ * Extrai o tipo da mensagem
  */
 const getMessageType = (msg: proto.IWebMessageInfo): string => {
     const types = Object.keys(msg.message || {});
@@ -28,7 +32,6 @@ const getMessageType = (msg: proto.IWebMessageInfo): string => {
 
 /**
  * Verifica se a mensagem é válida para importação
- * Aceita TODOS os tipos relevantes: texto, mídia, stickers, reações, contatos, localização etc.
  */
 const isImportableMessage = (msg: proto.IWebMessageInfo): boolean => {
     if (!msg?.message) return false;
@@ -36,41 +39,47 @@ const isImportableMessage = (msg: proto.IWebMessageInfo): boolean => {
     const msgType = getMessageType(msg);
     if (!msgType) return false;
     const validTypes = [
-        // Texto
         "conversation", "extendedTextMessage",
-        // Mídia
         "imageMessage", "videoMessage", "audioMessage", "voiceMessage",
         "documentMessage", "stickerMessage", "ptvMessage",
-        // Contatos e localização
         "contactMessage", "contactsArrayMessage", "locationMessage",
         "liveLocationMessage",
-        // ViewOnce
         "viewOnceMessage", "viewOnceMessageV2", "viewOnceMessageV2Extension",
-        // Documentos com legenda
         "documentWithCaptionMessage",
-        // Efêmeras
         "ephemeralMessage",
-        // Reações
         "reactionMessage",
-        // Enquetes
         "pollCreationMessage", "pollCreationMessageV2", "pollCreationMessageV3", "pollUpdateMessage",
-        // Botões e listas (templates)
         "buttonsMessage", "buttonsResponseMessage",
         "listMessage", "listResponseMessage",
         "templateMessage", "templateButtonReplyMessage",
-        // Protocolo de mensagem editada
         "editedMessage", "protocolMessage",
-        // Pedidos e pagamentos
         "orderMessage", "paymentInviteMessage",
-        // Produtos
         "productMessage",
-        // Mensagem com caption
         "imageWithCaptionMessage",
-        // Newsletter/channel
         "newsletterAdminInviteMessage",
     ];
     return validTypes.includes(msgType);
 };
+
+/**
+ * Remove duplicatas pelo key.id e ordena por timestamp ASC
+ */
+function deduplicateAndSort(array: any[]): any[] {
+    const seen = new Map<string, any>();
+    for (const msg of array) {
+        const id = msg?.key?.id;
+        if (id && !seen.has(id)) {
+            seen.set(id, msg);
+        }
+    }
+    return Array.from(seen.values()).sort((a, b) =>
+        (Number(a.messageTimestamp) || 0) - (Number(b.messageTimestamp) || 0)
+    );
+}
+
+// ============================================================
+//  Interfaces
+// ============================================================
 
 interface ImportContactHistoryParams {
     ticketId: string | number;
@@ -84,13 +93,18 @@ interface ImportResult {
     reason?: string;
 }
 
+// ============================================================
+//  Serviço Principal (Reescrito — Estratégia dataMessages)
+// ============================================================
+
 /**
  * Importa histórico de mensagens de um contato do WhatsApp.
- * 
- * Fase 1: Busca mensagens do cache local do Baileys (store.loadMessages)
- * Fase 2: Solicita mensagens mais antigas ao servidor do WhatsApp (fetchMessageHistory)
- *         capturando-as via evento messaging-history.set
- * 
+ *
+ * Estratégia segura (sem fechar websocket):
+ * 1. Busca mensagens do cache `dataMessages[whatsappId]` filtradas pelo JID do contato
+ * 2. Deduplicação em batch contra o banco
+ * 3. Salva mensagens novas com download de mídia opcional
+ *
  * Emite progresso via Socket.IO no canal importHistory-{ticketId}.
  */
 const ImportContactHistoryService = async ({
@@ -105,7 +119,6 @@ const ImportContactHistoryService = async ({
     logger.info(`[ImportHistory] Iniciando importação - ticketId: ${ticketId}, companyId: ${companyId}, periodMonths: ${periodMonths}`);
 
     const emitProgress = (current: number, total: number, state: string, date?: string) => {
-        logger.info(`[ImportHistory] Progresso: ${current}/${total} - ${state} - ${date || ''}`);
         io.of(namespace).emit(eventName, {
             action: "update",
             status: { this: current, all: total, state, date }
@@ -132,21 +145,44 @@ const ImportContactHistoryService = async ({
         }
 
         if (ticket.channel !== "whatsapp") {
-            logger.error(`[ImportHistory] Canal não suportado: ${ticket.channel} para ticket: ${ticketId}`);
             return { synced: 0, skipped: true, reason: "Canal não suportado para importação" };
         }
 
-        // 2. Obter wbot da conexão
+        const whatsappId = ticket.whatsappId;
+
+        // 2. Verificar wbot ativo
         let wbot: any;
         try {
-            wbot = getWbot(ticket.whatsappId);
-            logger.info(`[ImportHistory] Wbot obtido com sucesso para whatsappId: ${ticket.whatsappId}`);
-        } catch (err) {
-            logger.error(`[ImportHistory] Erro ao obter wbot: ${err.message}`);
+            wbot = getWbot(whatsappId);
+        } catch (err: any) {
+            logger.error(`[ImportHistory] Wbot não disponível: ${err.message}`);
             return { synced: 0, skipped: true, reason: "Conexão WhatsApp não inicializada" };
         }
 
-        // 3. Calcular data de corte
+        // 3. Montar JIDs possíveis do contato (para filtrar dataMessages)
+        const contactNumber = ticket.contact.number;
+        const possibleJids = new Set<string>();
+
+        // JID padrão
+        if (ticket.isGroup) {
+            possibleJids.add(contactNumber.includes("@g.us") ? contactNumber : `${contactNumber}@g.us`);
+        } else {
+            possibleJids.add(contactNumber.includes("@s.whatsapp.net") ? contactNumber : `${contactNumber}@s.whatsapp.net`);
+            // Também incluir versão normalizada
+            try {
+                const normalized = jidNormalizedUser(`${contactNumber}@s.whatsapp.net`);
+                possibleJids.add(normalized);
+            } catch { }
+        }
+
+        // Incluir remoteJid do contato se disponível
+        if (ticket.contact.remoteJid) {
+            possibleJids.add(ticket.contact.remoteJid);
+        }
+
+        logger.info(`[ImportHistory] JIDs alvo: ${Array.from(possibleJids).join(", ")}`);
+
+        // 4. Calcular data de corte
         let cutoffTimestamp: number | null = null;
         if (periodMonths > 0) {
             const cutoffDate = new Date();
@@ -154,268 +190,111 @@ const ImportContactHistoryService = async ({
             cutoffTimestamp = Math.floor(cutoffDate.getTime() / 1000);
         }
 
-        // 4. Montar JID do contato
-        let jid = ticket.contact.number;
-        if (ticket.isGroup) {
-            jid = jid.includes("@g.us") ? jid : `${jid}@g.us`;
-        } else {
-            jid = jid.includes("@s.whatsapp.net") ? jid : `${jid}@s.whatsapp.net`;
-        }
-
         // 5. Emitir estado "FETCHING"
-        emitProgress(0, -1, "FETCHING", "Iniciando busca no dispositivo...");
+        emitProgress(0, -1, "FETCHING", "Buscando mensagens do cache...");
 
         // ============================================================
-        //  FASE 1 — Cache local (store.loadMessages)
+        //  BUSCA DE MENSAGENS (do dataMessages — sem fechar websocket)
         // ============================================================
-        let allMessages: any[] = [];
+        const rawMessages = dataMessages[whatsappId] || [];
 
-        if (wbot.store && typeof wbot.store.loadMessages === "function") {
-            logger.info(`[ImportHistory] Fase 1 — Buscando mensagens do cache local para jid=${jid}`);
+        // Filtrar mensagens do contato alvo
+        const contactMessages = rawMessages.filter((msg: any) => {
+            if (!msg?.key?.remoteJid) return false;
 
-            const BATCH_SIZE = 50;
-            let cursor: any = undefined;
-            let keepFetching = true;
-            let fetchAttempts = 0;
-            const MAX_FETCH_ATTEMPTS = 100;
+            // Verificar se é do JID alvo
+            if (!possibleJids.has(msg.key.remoteJid)) return false;
 
-            // Cursor inicial baseado na mensagem mais antiga do banco
-            const oldestMessageInDB = await Message.findOne({
-                where: { ticketId: ticket.id },
-                order: [["createdAt", "ASC"]]
-            });
-
-            if (oldestMessageInDB?.dataJson) {
-                try {
-                    const parsed = JSON.parse(oldestMessageInDB.dataJson);
-                    cursor = parsed?.key;
-                } catch { }
+            // Filtrar por período
+            if (cutoffTimestamp) {
+                const msgTs = Number(
+                    typeof msg.messageTimestamp === "object" && msg.messageTimestamp?.low
+                        ? msg.messageTimestamp.low
+                        : msg.messageTimestamp || 0
+                );
+                if (msgTs < cutoffTimestamp) return false;
             }
 
-            while (keepFetching && fetchAttempts < MAX_FETCH_ATTEMPTS) {
-                fetchAttempts++;
-                try {
-                    const messages = await wbot.store.loadMessages(jid, BATCH_SIZE, cursor, undefined);
+            return true;
+        });
 
-                    if (!messages || messages.length === 0) {
-                        if (fetchAttempts < 3) {
-                            await new Promise(r => setTimeout(r, 2000));
-                            continue;
-                        }
-                        break;
-                    }
+        // Deduplicar e ordenar
+        const allMessages = deduplicateAndSort(contactMessages);
 
-                    const validBatch = messages.filter(m => {
-                        if (!m?.key?.id) return false;
-                        if (cutoffTimestamp) {
-                            const msgTs = Number(m.messageTimestamp || 0);
-                            if (msgTs < cutoffTimestamp) return false;
-                        }
-                        return true;
-                    });
-
-                    allMessages.push(...validBatch);
-
-                    const oldestInBatch = messages[messages.length - 1];
-                    if (oldestInBatch?.key) {
-                        cursor = oldestInBatch.key;
-                    }
-
-                    emitProgress(allMessages.length, -1, "FETCHING", `Fase 1: ${allMessages.length} mensagens do cache...`);
-
-                    if (messages.length < BATCH_SIZE) break;
-
-                    if (cutoffTimestamp) {
-                        const lastTs = Number(oldestInBatch.messageTimestamp || 0);
-                        if (lastTs < cutoffTimestamp) break;
-                    }
-
-                    await new Promise(r => setTimeout(r, 200));
-                } catch (err: any) {
-                    logger.warn(`[ImportHistory] Fase 1 — Erro batch ${fetchAttempts}: ${err?.message}`);
-                    break;
-                }
-            }
-
-            logger.info(`[ImportHistory] Fase 1 concluída: ${allMessages.length} mensagens do cache local`);
-        } else {
-            logger.warn(`[ImportHistory] store.loadMessages não disponível, pulando Fase 1`);
-        }
-
-        // ============================================================
-        //  FASE 2 — History Sync via reconexão do WebSocket
-        //  Força reconexão para que o WhatsApp envie sync automático,
-        //  capturando mensagens do JID alvo via messaging-history.set
-        // ============================================================
-        logger.info(`[ImportHistory] Fase 2 — Iniciando history sync via reconexão para jid=${jid}`);
-        emitProgress(allMessages.length, -1, "FETCHING", "Fase 2: Reconectando para sincronizar histórico...");
-
-        let totalFromServer = 0;
-        const SYNC_TIMEOUT_MS = 120_000; // 120s para aguardar reconexão + sync
-
-        try {
-            // 1. Registrar handler temporário ANTES de fechar o websocket
-            const capturedMessages: any[] = [];
-            let resolveCapture: () => void;
-            let syncEventsReceived = 0;
-
-            const capturePromise = new Promise<void>((resolve) => {
-                resolveCapture = resolve;
-                setTimeout(() => resolve(), SYNC_TIMEOUT_MS);
-            });
-
-            // Handler que captura TODAS as mensagens do JID alvo durante o sync
-            const historyHandler = (messageSet: any) => {
-                try {
-                    syncEventsReceived++;
-                    const messages = messageSet?.messages || [];
-                    logger.info(`[ImportHistory] Fase 2 — messaging-history.set #${syncEventsReceived}: ${messages.length} mensagens recebidas`);
-
-                    // Filtrar mensagens do JID alvo
-                    const targetMessages = messages.filter((m: any) => {
-                        if (!m?.key) return false;
-                        return m.key.remoteJid === jid;
-                    });
-
-                    if (targetMessages.length > 0) {
-                        capturedMessages.push(...targetMessages);
-                        logger.info(`[ImportHistory] Fase 2 — +${targetMessages.length} mensagens do JID alvo (total acumulado: ${capturedMessages.length})`);
-                        emitProgress(allMessages.length + capturedMessages.length, -1, "FETCHING", `Fase 2: +${capturedMessages.length} do sync...`);
-                    }
-                } catch (err: any) {
-                    logger.warn(`[ImportHistory] Fase 2 — Erro no handler de sync: ${err?.message}`);
-                }
-            };
-
-            // Handler para detectar quando o sync terminou
-            // O isLatest=true indica a última batch de sync
-            const syncCompleteHandler = (messageSet: any) => {
-                try {
-                    if (messageSet?.isLatest) {
-                        logger.info(`[ImportHistory] Fase 2 — Sync completo detectado (isLatest=true). Total capturadas: ${capturedMessages.length}`);
-                        // Aguardar mais 5s para batches restantes antes de resolver
-                        setTimeout(() => resolveCapture(), 5000);
-                    }
-                } catch { }
-            };
-
-            // 2. Registrar handlers no wbot
-            wbot.ev.on("messaging-history.set", historyHandler);
-            wbot.ev.on("messaging-history.set", syncCompleteHandler);
-
-            // 3. Monitorar reconexão
-            let reconnected = false;
-            const connectionHandler = (update: any) => {
-                if (update?.connection === "open") {
-                    reconnected = true;
-                    logger.info(`[ImportHistory] Fase 2 — Sessão reconectou com sucesso`);
-                    emitProgress(allMessages.length, -1, "FETCHING", "Fase 2: Reconectado — aguardando sync do WhatsApp...");
-                }
-            };
-            wbot.ev.on("connection.update", connectionHandler);
-
-            // 4. Fechar WebSocket (reconexão automática do Baileys)
-            logger.info(`[ImportHistory] Fase 2 — Fechando WebSocket para forçar reconexão...`);
-            wbot.ws.close();
-
-            // 5. Aguardar sync completar ou timeout
-            await capturePromise;
-
-            // 6. Limpar handlers
-            wbot.ev.off("messaging-history.set", historyHandler);
-            wbot.ev.off("messaging-history.set", syncCompleteHandler);
-            wbot.ev.off("connection.update", connectionHandler);
-
-            // 7. Processar mensagens capturadas
-            if (capturedMessages.length > 0) {
-                // Filtrar por período
-                const validMessages = capturedMessages.filter((m: any) => {
-                    if (!m?.key?.id) return false;
-                    if (cutoffTimestamp) {
-                        const msgTs = Number(
-                            typeof m.messageTimestamp === "object" && m.messageTimestamp?.low
-                                ? m.messageTimestamp.low
-                                : m.messageTimestamp || 0
-                        );
-                        if (msgTs < cutoffTimestamp) return false;
-                    }
-                    return true;
-                });
-
-                allMessages.push(...validMessages);
-                totalFromServer = validMessages.length;
-                logger.info(`[ImportHistory] Fase 2 concluída: ${totalFromServer} mensagens do sync (${syncEventsReceived} eventos, ${capturedMessages.length} raw)`);
-            } else {
-                logger.warn(`[ImportHistory] Fase 2 concluída: 0 mensagens recebidas (${syncEventsReceived} eventos, reconectou: ${reconnected})`);
-                if (!reconnected) {
-                    logger.error(`[ImportHistory] Fase 2 — Sessão NÃO reconectou. Verifique o status da conexão WhatsApp.`);
-                }
-            }
-        } catch (syncErr: any) {
-            logger.error(`[ImportHistory] Fase 2 — Erro no history sync: ${syncErr?.message}`);
-        }
-
-        // ============================================================
-        //  DEDUPLICAÇÃO
-        // ============================================================
-        // Remover mensagens duplicadas pelo key.id
-        const seenIds = new Set<string>();
-        const uniqueMessages: any[] = [];
-        for (const msg of allMessages) {
-            const id = msg?.key?.id;
-            if (id && !seenIds.has(id)) {
-                seenIds.add(id);
-                uniqueMessages.push(msg);
-            }
-        }
-        allMessages = uniqueMessages;
-
-        logger.info(`[ImportHistory] Total após dedup: ${allMessages.length} mensagens`);
+        logger.info(`[ImportHistory] ${allMessages.length} mensagens encontradas para o contato (de ${rawMessages.length} total em cache)`);
 
         if (allMessages.length === 0) {
-            emitProgress(0, 0, "COMPLETED");
-            return { synced: 0, skipped: false, reason: "Nenhuma mensagem encontrada no período" };
+            emitProgress(0, 0, "COMPLETED", "Nenhuma mensagem nova encontrada no cache");
+            // Auto-fechar progresso
+            setTimeout(() => {
+                io.of(namespace).emit(eventName, { action: "refresh" });
+            }, 3000);
+            return { synced: 0, skipped: false, reason: "Nenhuma mensagem encontrada no cache. Reconecte a conexão WhatsApp para repopular o cache." };
         }
 
         // ============================================================
-        //  PROCESSAMENTO E IMPORTAÇÃO
+        //  DEDUPLICAÇÃO EM BATCH (contra o banco)
         // ============================================================
-        const totalToProcess = allMessages.length;
+        emitProgress(0, allMessages.length, "PREPARING", "Verificando duplicatas...");
+
+        const allWids = allMessages.map((m: any) => m.key.id).filter(Boolean);
+        const existingWids = new Set<string>();
+        const chunkSize = 1000;
+
+        for (let i = 0; i < allWids.length; i += chunkSize) {
+            const chunk = allWids.slice(i, i + chunkSize);
+            const existing = await Message.findAll({
+                where: {
+                    wid: { [Op.in]: chunk },
+                    companyId
+                },
+                attributes: ["wid"]
+            });
+            existing.forEach((m: any) => existingWids.add(m.wid));
+        }
+
+        const messagesToImport = allMessages.filter((m: any) => !existingWids.has(m.key.id));
+        const totalImport = messagesToImport.length;
+
+        logger.info(`[ImportHistory] Novas: ${totalImport}, Existentes ignoradas: ${existingWids.size}`);
+
+        if (totalImport === 0) {
+            emitProgress(0, 0, "COMPLETED", "Todas as mensagens já estão importadas");
+            setTimeout(() => {
+                io.of(namespace).emit(eventName, { action: "refresh" });
+            }, 3000);
+            return { synced: 0, skipped: false, reason: "Todas as mensagens já existem no banco" };
+        }
+
+        // ============================================================
+        //  IMPORTAÇÃO
+        // ============================================================
+        emitProgress(0, totalImport, "IMPORTING");
+
         let syncedCount = 0;
         let processedCount = 0;
 
-        emitProgress(0, totalToProcess, "IMPORTING");
-
-        for (const msg of allMessages) {
+        for (const msg of messagesToImport) {
             processedCount++;
 
             try {
-                if (!msg || !msg.key || !msg.key.id) continue;
-
-                // Verificar se já existe no banco
-                const existingMsg = await Message.findOne({
-                    where: { wid: msg.key.id, companyId }
-                });
-
-                if (existingMsg) {
-                    continue;
-                }
+                if (!msg?.key?.id) continue;
 
                 // Validar mensagem
-                if (!isImportableMessage(msg)) {
-                    continue;
-                }
+                if (!isImportableMessage(msg)) continue;
 
-                // Extrair dados da mensagem
+                // Extrair dados
                 const messageType = getMessageType(msg);
                 const messageBody = getBodyMessage(msg) || "";
 
-                // Validar timestamp
+                // Timestamp
                 const timestamp = msg.messageTimestamp
                     ? (typeof msg.messageTimestamp === "object" && msg.messageTimestamp.low
                         ? msg.messageTimestamp.low
                         : Number(msg.messageTimestamp))
                     : Math.floor(Date.now() / 1000);
+
+                const originalDate = new Date(timestamp * 1000);
 
                 // Determinar se é mídia
                 const isMediaType = [
@@ -425,9 +304,9 @@ const ImportContactHistoryService = async ({
                 ].includes(messageType);
 
                 let mediaUrl: string | null = null;
-                let mediaType = messageType;
+                let finalMediaType = messageType;
 
-                // Tentar baixar mídia se for mensagem de mídia
+                // Tentar baixar mídia
                 if (isMediaType) {
                     try {
                         let buffer: Buffer | null = null;
@@ -442,11 +321,11 @@ const ImportContactHistoryService = async ({
                                 }
                             ) as Buffer;
                         } catch (downloadErr: any) {
-                            logger.warn(`[ImportHistory] Falha download mídia msg ${msg.key.id}: ${downloadErr?.message}`);
+                            // Mídia antiga pode não estar mais disponível — isso é normal
+                            logger.debug(`[ImportHistory] Mídia indisponível msg ${msg.key.id}: ${downloadErr?.message}`);
                         }
 
                         if (buffer) {
-                            // Determinar mimetype e filename
                             const mineType =
                                 msg.message?.imageMessage ||
                                 msg.message?.audioMessage ||
@@ -465,13 +344,12 @@ const ImportContactHistoryService = async ({
                             if (mineType?.mimetype) {
                                 let filename = msg.message?.documentMessage?.fileName || "";
                                 if (!filename) {
-                                    const ext = mineType.mimetype.split("/")[1].split(";")[0];
-                                    filename = `${new Date().getTime()}_${msg.key.id.slice(-6)}.${ext}`;
+                                    const ext = mineType.mimetype.split("/")[1]?.split(";")[0] || "bin";
+                                    filename = `${Date.now()}_${msg.key.id.slice(-6)}.${ext}`;
                                 } else {
-                                    filename = `${new Date().getTime()}_${filename}`;
+                                    filename = `${Date.now()}_${filename}`;
                                 }
 
-                                // Salvar arquivo
                                 const contactFolder = `contact${ticket.contactId}`;
                                 const folder = path.resolve(
                                     __dirname, "..", "..", "..", "public",
@@ -490,28 +368,27 @@ const ImportContactHistoryService = async ({
                                 );
 
                                 mediaUrl = `${contactFolder}/${filename}`;
-
-                                // Determinar mediaType final
                                 const mimeBase = mineType.mimetype.split("/")[0];
                                 if (messageType === "stickerMessage" || mineType.mimetype === "image/webp") {
-                                    mediaType = "sticker";
+                                    finalMediaType = "sticker";
                                 } else {
-                                    mediaType = mimeBase;
+                                    finalMediaType = mimeBase;
                                 }
                             }
                         }
                     } catch (mediaErr: any) {
-                        logger.warn(`[ImportHistory] Erro processando mídia: ${mediaErr?.message}`);
+                        logger.debug(`[ImportHistory] Erro mídia: ${mediaErr?.message}`);
                     }
                 }
 
-                const messageData: any = {
+                // Salvar mensagem via upsert (mais rápido que CreateMessageService)
+                const messageData = {
                     wid: msg.key.id,
                     ticketId: ticket.id,
                     contactId: msg.key.fromMe ? undefined : ticket.contactId,
                     body: messageBody || (mediaUrl ? "Mídia" : ""),
                     fromMe: msg.key.fromMe || false,
-                    mediaType: mediaUrl ? mediaType : messageType,
+                    mediaType: mediaUrl ? finalMediaType : (messageBody ? "chat" : messageType),
                     mediaUrl,
                     read: true,
                     ack: msg.status || 0,
@@ -519,19 +396,21 @@ const ImportContactHistoryService = async ({
                     participant: msg.key.participant || null,
                     dataJson: JSON.stringify(msg),
                     ticketImported: true,
-                    createdAt: new Date(timestamp * 1000),
-                    updatedAt: new Date(),
+                    timestamp: timestamp * 1000,
+                    createdAt: originalDate,
+                    updatedAt: originalDate,
                     companyId
                 };
 
-                await CreateMessageService({ messageData, companyId });
+                await Message.upsert(messageData);
                 syncedCount++;
+
             } catch (msgErr: any) {
-                logger.warn(`[ImportHistory] Erro ao salvar mensagem ${processedCount}: ${msgErr?.message}`);
+                logger.warn(`[ImportHistory] Erro msg ${processedCount}: ${msgErr?.message}`);
             }
 
-            // Emitir progresso a cada 5 mensagens ou na última
-            if (processedCount % 5 === 0 || processedCount === totalToProcess) {
+            // Emitir progresso a cada 10 mensagens ou na última
+            if (processedCount % 10 === 0 || processedCount === totalImport) {
                 const msgTs = msg.messageTimestamp
                     ? Number(typeof msg.messageTimestamp === "object" && msg.messageTimestamp.low
                         ? msg.messageTimestamp.low
@@ -540,22 +419,24 @@ const ImportContactHistoryService = async ({
 
                 emitProgress(
                     processedCount,
-                    totalToProcess,
+                    totalImport,
                     "IMPORTING",
                     new Date(msgTs).toLocaleDateString("pt-BR")
                 );
             }
 
-            // Throttle mínimo entre processamento para não travar
+            // Throttle mínimo
             if (processedCount % 20 === 0) {
-                await new Promise(r => setTimeout(r, 100));
+                await new Promise(r => setTimeout(r, 50));
             }
         }
 
-        // 8. Emitir "COMPLETED"
-        emitProgress(totalToProcess, totalToProcess, "COMPLETED");
+        // ============================================================
+        //  FINALIZAÇÃO
+        // ============================================================
+        emitProgress(totalImport, totalImport, "COMPLETED");
 
-        // 9. Emitir refresh do ticket para atualizar UI
+        // Refresh do ticket na UI
         if (syncedCount > 0) {
             io.of(namespace).emit(`company-${companyId}-ticket`, {
                 action: "update",
