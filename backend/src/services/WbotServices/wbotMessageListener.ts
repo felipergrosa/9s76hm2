@@ -6130,8 +6130,10 @@ const createFilterMessages = (whatsappId: number) => (msg: WAMessage): boolean =
       msgId: msg.key?.id,
       remoteJid,
       fromMe: msg.key?.fromMe,
-      stubParams: msg.messageStubParameters
-    }, "[filterMessages] Mensagem CIPHERTEXT (erro decriptação) descartada");
+      stubParams: msg.messageStubParameters,
+      isLid: remoteJid?.includes("@lid"),
+      senderPn: msg.key?.participant || msg.key?.remoteJid
+    }, "[filterMessages] Mensagem CIPHERTEXT (erro decriptação) descartada - Sessão Signal expirada");
     return false;
   }
 
