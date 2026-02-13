@@ -523,13 +523,13 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 await releaseWbotLock(id);
                 removeWbot(id, false);
                 // Verificar se já está reconectando antes de agendar
-                if (!reconnectingWhatsapps.get(id)) {
-                  reconnectingWhatsapps.set(id, true);
-                  setTimeout(() => {
-                    reconnectingWhatsapps.delete(id);
-                    StartWhatsAppSession(whatsapp, whatsapp.companyId);
-                  }, 10000);
-                }
+                // if (!reconnectingWhatsapps.get(id)) {
+                //   reconnectingWhatsapps.set(id, true);
+                //   setTimeout(() => {
+                //     reconnectingWhatsapps.delete(id);
+                //     StartWhatsAppSession(whatsapp, whatsapp.companyId);
+                //   }, 10000);
+                // }
               }
             }
 

@@ -883,7 +883,7 @@ const Connections = () => {
                       </div>
                       <div>
                         <div className={classes.metaLabel}>{i18n.t("connections.table.lastUpdate")}</div>
-                        <div className={classes.metaValue}>{format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm")}</div>
+                        <div className={classes.metaValue}>{whatsApp.updatedAt ? format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm") : ""}</div>
                       </div>
                       <div>
                         <div className={classes.metaLabel}>{i18n.t("connections.table.default")}</div>
@@ -994,7 +994,7 @@ const Connections = () => {
                             <TableCell align="center">{whatsApp.number && whatsApp.channel === 'whatsapp' ? (<>{formatSerializedId(whatsApp.number)}</>) : whatsApp.number}</TableCell>
                             <TableCell align="center">{renderStatusToolTips(whatsApp)}</TableCell>
                             <TableCell align="center">{renderActionButtons(whatsApp)}</TableCell>
-                            <TableCell align="center">{format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm")}</TableCell>
+                            <TableCell align="center">{whatsApp.updatedAt ? format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm") : ""}</TableCell>
                             <TableCell align="center">
                               {whatsApp.isDefault && (
                                 <div className={classes.customTableCell}>
