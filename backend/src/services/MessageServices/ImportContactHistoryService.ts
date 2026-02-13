@@ -223,14 +223,119 @@ const ImportContactHistoryService = async ({
 
         logger.info(`[ImportHistory] ${allMessages.length} mensagens encontradas para o contato (de ${rawMessages.length} total em cache)`);
 
+
+        // ============================================================
+        //  FASE 2 — ESTRATÉGIA HÍBRIDA (On-Demand Fetch)
+        //  Se não encontrou no cache, solicitar ao WhatsApp (sem derrubar conexão)
+        // ============================================================
+
         if (allMessages.length === 0) {
-            emitProgress(0, 0, "COMPLETED", "Nenhuma mensagem nova encontrada no cache");
+            logger.info("[ImportHistory] Cache local vazio. Tentando buscar histórico via API (fetchMessageHistory)...");
+
+            const wbotAny = wbot as any;
+            if (typeof wbotAny.fetchMessageHistory === "function") {
+                // 1. Definir mensagem âncora (a partir da qual buscaremos para trás)
+                // Se tiver mensagem no banco, usa a mais antiga. Se não, usa "agora".
+                let oldestKey: any = {
+                    remoteJid: ticket.contact.remoteJid || `${ticket.contact.number}@s.whatsapp.net`,
+                    id: "",
+                    fromMe: true // tanto faz para âncora inicial se não tiver ID?
+                };
+                let oldestTimestamp = Math.floor(Date.now() / 1000);
+
+                const oldestInDb = await Message.findOne({
+                    where: { ticketId, companyId },
+                    order: [["timestamp", "ASC"]]
+                });
+
+                if (oldestInDb && oldestInDb.dataJson) {
+                    try {
+                        const parsed = JSON.parse(oldestInDb.dataJson);
+                        if (parsed.key) {
+                            oldestKey = parsed.key;
+                            oldestTimestamp = Number(parsed.messageTimestamp) || oldestTimestamp;
+                            logger.info(`[ImportHistory] Usando mensagem DB como âncora: ${oldestKey.id} (${oldestTimestamp})`);
+                        }
+                    } catch { }
+                }
+
+                // 2. Setup de captura (Promessa)
+                const mainJid = oldestKey.remoteJid;
+
+                try {
+                    emitProgress(0, -1, "FETCHING", "Solicitando histórico ao WhatsApp...");
+
+                    const fetchedMessages = await new Promise<any[]>((resolve, reject) => {
+                        const timeoutId = setTimeout(() => {
+                            cleanup();
+                            resolve([]);
+                        }, 20000); // 20s timeout
+
+                        const historyHandler = (event: any) => {
+                            // O evento traz { messages: [...], isLatest: boolean, ... }
+                            const msgs = event?.messages || [];
+                            // Filtrar apenas do JID que queremos
+                            const relevant = msgs.filter((m: any) => m?.key?.remoteJid === mainJid);
+
+                            if (relevant.length > 0) {
+                                logger.info(`[ImportHistory] Recebido history sync: ${relevant.length} mensagens relevantes.`);
+                                cleanup();
+                                clearTimeout(timeoutId);
+                                resolve(relevant);
+                            }
+                        };
+
+                        const cleanup = () => {
+                            wbot.ev.off("messaging-history.set", historyHandler);
+                        };
+
+                        wbot.ev.on("messaging-history.set", historyHandler);
+
+                        // Disparar o fetch
+                        // fetchMessageHistory(count, oldestMsgKey, oldestMsgTimestamp)
+                        wbotAny.fetchMessageHistory(50, oldestKey, oldestTimestamp)
+                            .catch((err: any) => {
+                                clearTimeout(timeoutId);
+                                cleanup();
+                                logger.warn(`[ImportHistory] Falha ao chamar API fetchMessageHistory: ${err}`);
+                                resolve([]);
+                            });
+                    });
+
+                    // Adicionar ao allMessages
+                    if (fetchedMessages.length > 0) {
+                        for (const msg of fetchedMessages) {
+                            allMessages.push(msg);
+                        }
+                        // Repassar dedup
+                        const uniqueFetched = deduplicateAndSort(allMessages);
+                        allMessages.length = 0; // limpar original
+                        allMessages.push(...uniqueFetched);
+
+                        logger.info(`[ImportHistory] Recuperado via API: ${allMessages.length} mensagens.`);
+
+                        // Opcional: Popular o cache dataMessages com o que veio
+                        if (!dataMessages[whatsappId]) dataMessages[whatsappId] = [];
+                        dataMessages[whatsappId].unshift(...fetchedMessages);
+                    }
+
+                } catch (fetchErr) {
+                    logger.warn(`[ImportHistory] Erro na Fase 2: ${fetchErr}`);
+                }
+            } else {
+                logger.warn("[ImportHistory] fetchMessageHistory não disponível nesta versão do Baileys.");
+            }
+        }
+
+        if (allMessages.length === 0) {
+            emitProgress(0, 0, "COMPLETED", "Nenhuma mensagem encontrada (Cache e API vazios)");
             // Auto-fechar progresso
             setTimeout(() => {
                 io.of(namespace).emit(eventName, { action: "refresh" });
             }, 3000);
-            return { synced: 0, skipped: false, reason: "Nenhuma mensagem encontrada no cache. Reconecte a conexão WhatsApp para repopular o cache." };
+            return { synced: 0, skipped: false, reason: "Nenhuma mensagem encontrada no cache ou servidor." };
         }
+
 
         // ============================================================
         //  DEDUPLICAÇÃO EM BATCH (contra o banco)
