@@ -126,6 +126,7 @@ import cacheLayer from "../../libs/cache";
 import { addLogs } from "../../helpers/addLogs";
 import SendWhatsAppMedia, { getMessageOptions } from "./SendWhatsAppMedia";
 import QueueRAGService from "../QueueServices/QueueRAGService";
+import ClearContactSessionService from "./ClearContactSessionService";
 
 import ShowQueueIntegrationService from "../QueueIntegrationServices/ShowQueueIntegrationService";
 import { createDialogflowSessionWithModel } from "../QueueIntegrationServices/CreateSessionDialogflow";
@@ -6071,7 +6072,12 @@ const verifyCampaignMessageAndCloseTicket = async (
   }
 };
 
-const filterMessages = (msg: WAMessage): boolean => {
+// AUTO-HEAL: Map de cooldown para evitar limpar sessão em loop
+// Chave: "whatsappId:remoteJid" -> timestamp do último auto-heal
+const badMacAutoHealMap = new Map<string, number>();
+const BAD_MAC_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos
+
+const createFilterMessages = (whatsappId: number) => (msg: WAMessage): boolean => {
   msgDB.save(msg);
 
   if (msg.message?.protocolMessage?.editedMessage) return true;
@@ -6081,16 +6087,32 @@ const filterMessages = (msg: WAMessage): boolean => {
   // messageStubType=2 (CIPHERTEXT) indica erro de sessão criptográfica
   // Processar essas mensagens cria contatos PENDING_ fantasma
   if (msg.messageStubType === WAMessageStubType.CIPHERTEXT) {
+    const remoteJid = msg.key?.remoteJid;
+
+    // AUTO-HEAL: Limpar sessão corrompida automaticamente (com cooldown)
+    if (remoteJid && whatsappId) {
+      const healKey = `${whatsappId}:${remoteJid}`;
+      const lastHeal = badMacAutoHealMap.get(healKey) || 0;
+      const now = Date.now();
+      if (now - lastHeal > BAD_MAC_COOLDOWN_MS) {
+        badMacAutoHealMap.set(healKey, now);
+        logger.warn(`[AUTO-HEAL] Detectado Bad MAC para whatsappId=${whatsappId}, contact=${remoteJid}. Limpando sessão corrompida...`);
+        ClearContactSessionService({ whatsappId, contactJid: remoteJid })
+          .then(r => logger.info(`[AUTO-HEAL] Resultado: ${r.message}`))
+          .catch(e => logger.error(`[AUTO-HEAL] Erro ao limpar sessão: ${e.message}`));
+      }
+    }
+
     // EXCEÇÃO: Se a mensagem for enviada por MIM (fromMe), não descartar por erro de criptografia
     // O Baileys pode emitir esse erro para mensagens enviadas por outros dispositivos (multidevice),
     // mas ainda assim queremos registrar a mensagem no ticket.
     if (msg.key?.fromMe) {
       // CORREÇÃO GHOST CHAT: Se for fromMe + CIPHERTEXT + LID, é lixo de sync e deve ser ignorado.
       // Se tentarmos processar, cria um Ticket Fantasma com o LID do próprio bot.
-      if (msg.key?.remoteJid?.includes("@lid")) {
+      if (remoteJid?.includes("@lid")) {
         logger.warn({
           msgId: msg.key?.id,
-          remoteJid: msg.key?.remoteJid,
+          remoteJid,
           stubParams: msg.messageStubParameters
         }, "[filterMessages] IGNORANDO erro CIPHERTEXT (Bad MAC) em canal LID (evitar Ghost Chat)");
         return false;
@@ -6098,7 +6120,7 @@ const filterMessages = (msg: WAMessage): boolean => {
 
       logger.warn({
         msgId: msg.key?.id,
-        remoteJid: msg.key?.remoteJid,
+        remoteJid,
         stubParams: msg.messageStubParameters
       }, "[filterMessages] IGNORANDO erro CIPHERTEXT pois é fromMe=true (tentar processar)");
       return true;
@@ -6106,7 +6128,7 @@ const filterMessages = (msg: WAMessage): boolean => {
 
     logger.warn({
       msgId: msg.key?.id,
-      remoteJid: msg.key?.remoteJid,
+      remoteJid,
       fromMe: msg.key?.fromMe,
       stubParams: msg.messageStubParameters
     }, "[filterMessages] Mensagem CIPHERTEXT (erro decriptação) descartada");
@@ -6141,7 +6163,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
     }
 
     const messages = messageUpsert.messages
-      .filter(filterMessages)
+      .filter(createFilterMessages(wbot.id))
       .map(msg => msg);
 
     if (!messages) return;

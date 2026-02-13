@@ -633,7 +633,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               try {
                 // Iniciar monitor de conexão
                 const wbotMonitor = require("../services/WbotServices/wbotMonitor").default;
-                wbotMonitor(whatsapp, companyId, whatsapp.id);
+                wbotMonitor(wsocket, whatsapp, companyId);
               } catch (err: any) {
                 logger.error(`[wbot] Error starting wbotMonitor: ${err?.message}`);
               }
