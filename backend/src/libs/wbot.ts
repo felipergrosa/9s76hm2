@@ -631,6 +631,15 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               // }, 10000);
 
               try {
+                // Iniciar listener de mensagens CRÍTICO para recebimento
+                const wbotMessageListener = require("../services/WbotServices/wbotMessageListener").default;
+                wbotMessageListener(wsocket, companyId);
+                logger.info(`[wbot] Message listener started for whatsappId=${whatsapp.id}`);
+              } catch (err: any) {
+                logger.error(`[wbot] Error starting message listener: ${err?.message}`);
+              }
+
+              try {
                 // Iniciar monitor de conexão
                 const wbotMonitor = require("../services/WbotServices/wbotMonitor").default;
                 wbotMonitor(wsocket, whatsapp, companyId);
