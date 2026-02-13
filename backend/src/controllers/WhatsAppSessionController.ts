@@ -69,6 +69,8 @@ const update = async (req: Request, res: Response): Promise<Response> => {
   return res.status(200).json({ message: "Starting session." });
 };
 
+import { getIO } from "../libs/socket";
+
 const remove = async (req: Request, res: Response): Promise<Response> => {
   const { whatsappId } = req.params;
   const { companyId } = req.user;
@@ -82,6 +84,15 @@ const remove = async (req: Request, res: Response): Promise<Response> => {
     try {
       await removeWbot(Number(whatsappId), true);
     } catch { }
+
+    await whatsapp.update({ status: "DISCONNECTED", session: "" });
+
+    const io = getIO();
+    io.of(`/workspace-${companyId}`)
+      .emit(`company-${companyId}-whatsappSession`, {
+        action: "update",
+        session: whatsapp
+      });
   }
 
   return res.status(200).json({ message: "Session disconnected." });
