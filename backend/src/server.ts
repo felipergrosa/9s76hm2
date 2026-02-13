@@ -36,6 +36,7 @@ import { startQueueProcess } from "./queues";
 import tagRulesCron from "./cron/tagRulesCron";
 import tagRulesRecentContactsCron from "./cron/tagRulesRecentContactsCron";
 import { checkOrphanedSessionsCron } from "./cron/checkOrphanedSessionsCron";
+import { clearSessionLocks } from "./libs/wbotMutex";
 
 const ENV_PROFILE = process.env.APP_ENV || process.env.NODE_ENV || "development";
 const isProduction = ENV_PROFILE === "production";
@@ -159,12 +160,17 @@ const server = app.listen(port, async () => {
     // eslint-disable-next-line no-console
     console.log(`BACKEND BUILD: ${buildDate} | Commit: ${commit} | Version: ${backendVersion}`);
   })();
+  // Limpar locks de sessão antigos no startup
+  // Isso evita que o servidor ache que há "outra instância" rodando após um restart
+  await clearSessionLocks();
+
   const companies = await Company.findAll({
     where: { status: true },
     attributes: ["id"]
   });
 
   const allPromises: any[] = [];
+
 
   companies.forEach(c => {
     const promise = StartAllWhatsAppsSessions(c.id).catch(err => {

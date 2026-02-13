@@ -9,6 +9,7 @@ import { extractMessageIdentifiers, ExtractedIdentifiers } from "./extractMessag
 import { resolveContact } from "./resolveContact";
 import { createContact } from "./createContact";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
 
 /**
  * ContactResolverService — Orquestrador das 3 camadas de resolução de contato.
@@ -74,30 +75,50 @@ export async function resolveMessageContact(
 
     if (ticketByLid?.contact) {
       const contact = ticketByLid.contact;
-      logger.info({
-        lidJid: ids.lidJid,
-        contactId: contact.id,
-        contactName: contact.name,
-        ticketId: ticketByLid.id,
-        isFromMe: ids.isFromMe,
-        strategy: "ticket-by-lidJid"
-      }, "[resolveMessageContact] Contato encontrado via ticket existente (LID)");
 
-      // Preencher os identificadores se o contato tiver número real
+      // Validação: O contato encontrado tem um número válido?
       const digits = String(contact.number || "").replace(/\D/g, "");
-      if (digits.length >= 10 && digits.length <= 20) {
+      const hasValidNumber = digits.length >= 10 && digits.length <= 20 && !contact.number?.includes("@lid");
+
+      if (hasValidNumber) {
+        logger.info({
+          lidJid: ids.lidJid,
+          contactId: contact.id,
+          contactName: contact.name,
+          ticketId: ticketByLid.id,
+          isFromMe: ids.isFromMe,
+          strategy: "ticket-by-lidJid"
+        }, "[resolveMessageContact] Contato encontrado via ticket existente (LID)");
+
         ids.pnDigits = digits;
         ids.pnJid = `${digits}@s.whatsapp.net`;
         const { canonical } = safeNormalizePhoneNumber(digits);
         ids.pnCanonical = canonical;
+
+        return {
+          contact,
+          identifiers: ids,
+          isNew: false,
+          isPending: (contact.number || "").startsWith("PENDING_")
+        };
+      } else {
+        logger.info({
+          lidJid: ids.lidJid,
+          contactId: contact.id,
+          ticketId: ticketByLid.id,
+          currentNumber: contact.number
+        }, "[resolveMessageContact] Ticket encontrado via LID, mas contato não tem PN válido. Tentando resolver...");
+        // Não retorna aqui! Deixa cair para o Layer 1.5 (resolveLidToPN)
+        // Se resolver lá, vamos atualizar este contato nas próximas etapas ou aqui mesmo?
+        // O ideal é deixar o fluxo seguir para Layer 1.5 e depois verificar novamente se temos contato.
       }
 
-      return {
-        contact,
-        identifiers: ids,
-        isNew: false,
-        isPending: (contact.number || "").startsWith("PENDING_")
-      };
+      // Refresh Avatar (async throttle)
+      RefreshContactAvatarService({
+        contactId: contact.id,
+        companyId,
+        whatsappId: wbot.id
+      });
     }
   }
 
@@ -166,6 +187,43 @@ export async function resolveMessageContact(
       }
     }
 
+    // CORREÇÃO CRÍTICA: Se descobrimos o PN agora (via LidMapping ou USync),
+    // mas o contato foi encontrado pelo LID (e tem number = LID ou PENDING),
+    // devemos atualizar o number/remoteJid para o PN real!
+    if (ids.pnJid && ids.pnDigits) {
+      const currentNumber = existingContact.number || "";
+      const isLidNumber = currentNumber.includes("@lid") || currentNumber.includes("@") || currentNumber.startsWith("PENDING_");
+      // Se number não parece um telefone válido (tem letras, @, ou length errado)
+      const currentDigits = currentNumber.replace(/\D/g, "");
+      const isInvalidNumber = currentDigits.length < 10 && ids.pnDigits.length >= 10;
+
+      if (isLidNumber || isInvalidNumber) {
+        try {
+          await existingContact.update({
+            number: ids.pnDigits,
+            remoteJid: ids.pnJid,
+            canonicalNumber: ids.pnCanonical || undefined
+          });
+
+          logger.info({
+            contactId: existingContact.id,
+            oldNumber: currentNumber,
+            newNumber: ids.pnDigits,
+            strategy: "enrich-existing-contact"
+          }, "[resolveMessageContact] Contato atualizado com PN descoberto");
+        } catch (err: any) {
+          logger.warn({ err: err?.message }, "[resolveMessageContact] Falha ao atualizar contato com PN descoberto");
+        }
+      }
+    }
+
+    // Refresh Avatar (async throttle)
+    RefreshContactAvatarService({
+      contactId: existingContact.id,
+      companyId,
+      whatsappId: wbot.id
+    });
+
     return {
       contact: existingContact,
       identifiers: ids,
@@ -176,6 +234,13 @@ export async function resolveMessageContact(
 
   // ─── CAMADA 3: Criação (último recurso) ───
   const newContact = await createContact(ids, companyId, wbot, pnFromMapping);
+
+  // Refresh Avatar (async throttle)
+  RefreshContactAvatarService({
+    contactId: newContact.id,
+    companyId,
+    whatsappId: wbot.id
+  });
 
   // Persistir mapeamento LID↔PN se ambos conhecidos
   if (ids.lidJid && ids.pnDigits) {

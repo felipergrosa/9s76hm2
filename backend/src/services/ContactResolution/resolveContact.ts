@@ -79,7 +79,8 @@ export async function resolveContact(
 
       logger.info({
         contactId: contact.id,
-        strategy: "pnCanonical"
+        strategy: "pnCanonical",
+        profilePicUrl: contact.profilePicUrl
       }, "[resolveContact] Contato encontrado");
       return { contact, lidJidUpdated, pnFromMapping };
     }
@@ -100,7 +101,8 @@ export async function resolveContact(
     if (contact) {
       logger.info({
         contactId: contact.id,
-        strategy: "lidJid"
+        strategy: "lidJid",
+        profilePicUrl: contact.profilePicUrl
       }, "[resolveContact] Contato encontrado");
       return { contact, lidJidUpdated, pnFromMapping };
     }
@@ -178,16 +180,16 @@ export async function resolveContact(
   if (ids.lidJid && !ids.pnCanonical) {
     // Extrair dígitos do LID (ex: 216144933867565@lid -> 216144933867565)
     const lidDigits = ids.lidJid.replace(/\D/g, "");
-    
+
     // Se LID tem comprimento de telefone, buscar por contatos com número similar
     if (lidDigits.length >= 10 && lidDigits.length <= 15) {
       // Buscar contatos onde o número contém os dígitos do LID (últimos 10-12 dígitos)
       const minLength = Math.min(lidDigits.length, 12);
       const maxLength = Math.min(lidDigits.length, 15);
-      
+
       for (let len = minLength; len <= maxLength; len++) {
         const suffix = lidDigits.slice(-len);
-        
+
         const similarContact = await Contact.findOne({
           where: {
             companyId,
@@ -198,7 +200,7 @@ export async function resolveContact(
             ]
           }
         });
-        
+
         if (similarContact) {
           logger.info({
             contactId: similarContact.id,
@@ -207,7 +209,7 @@ export async function resolveContact(
             suffix,
             strategy: "similar-number"
           }, "[resolveContact] Contato encontrado por número similar ao LID");
-          
+
           // Atualizar lidJid no contato encontrado
           if (!similarContact.lidJid) {
             try {
@@ -221,7 +223,7 @@ export async function resolveContact(
               logger.warn({ err: err?.message }, "[resolveContact] Falha ao preencher lidJid em contato similar");
             }
           }
-          
+
           return { contact: similarContact, lidJidUpdated, pnFromMapping };
         }
       }
