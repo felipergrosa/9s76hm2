@@ -906,7 +906,10 @@ const MessagesList = ({
 
       // Se for grupo, NÃO fazer fallback para o ticketContact (que é a foto do grupo)
       // Queremos que apareça o avatar (ou iniciais) do PARTICIPANTE
-      if (isGroup) return c;
+      // Check both component prop and message/ticket data
+      const messageIsGroup = isGroup || msg?.ticket?.isGroup || msg?.chat?.isGroup;
+
+      if (messageIsGroup) return c;
 
       // tenta pegar do próprio msg.ticket ou do fallback informado
       const ticketContact = msg?.ticket?.contact || fallbackTicketContact;

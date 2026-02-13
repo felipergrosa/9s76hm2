@@ -4858,6 +4858,20 @@ const handleMessage = async (
     return;
   }
 
+  // Sincronização de LIDs: Se a mensagem for "fromMe" e o remoteJid for o próprio LID do bot,
+  // isso geralmente é uma mensagem de sincronização interna (Note to Self / Sync).
+  // Se processarmos, criaremos um Ticket fantasma.
+  if (msg.key.fromMe && msg.key.remoteJid && msg.key.remoteJid.includes("@lid")) {
+    const wbotUser = wbot.user?.id || "";
+    if (wbotUser.includes(msg.key.remoteJid)) {
+      logger.warn({
+        msgId: msg.key.id,
+        remoteJid: msg.key.remoteJid,
+      }, "[handleMessage] DETECTADO Self-LID (Sync/NoteToSelf) - Mensagem pode criar Ghost Chat se processada.");
+      // Opcional: return; se confirmarmos que isso nunca deve virar ticket
+    }
+  }
+
   try {
     let queueId: number = null;
     let tagsId: number = null;
@@ -6071,6 +6085,17 @@ const filterMessages = (msg: WAMessage): boolean => {
     // O Baileys pode emitir esse erro para mensagens enviadas por outros dispositivos (multidevice),
     // mas ainda assim queremos registrar a mensagem no ticket.
     if (msg.key?.fromMe) {
+      // CORREÇÃO GHOST CHAT: Se for fromMe + CIPHERTEXT + LID, é lixo de sync e deve ser ignorado.
+      // Se tentarmos processar, cria um Ticket Fantasma com o LID do próprio bot.
+      if (msg.key?.remoteJid?.includes("@lid")) {
+        logger.warn({
+          msgId: msg.key?.id,
+          remoteJid: msg.key?.remoteJid,
+          stubParams: msg.messageStubParameters
+        }, "[filterMessages] IGNORANDO erro CIPHERTEXT (Bad MAC) em canal LID (evitar Ghost Chat)");
+        return false;
+      }
+
       logger.warn({
         msgId: msg.key?.id,
         remoteJid: msg.key?.remoteJid,

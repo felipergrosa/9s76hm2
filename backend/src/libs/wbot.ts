@@ -591,32 +591,32 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               }
 
               // Forçar uma sincronização completa do App State ao abrir a conexão
-              try {
-                const sock: any = wsocket as any;
-                if (sock && typeof sock.resyncAppState === 'function') {
-                  const { ALL_WA_PATCH_NAMES } = require("@whiskeysockets/baileys");
-                  const labelPatches = (ALL_WA_PATCH_NAMES || []).filter((n: string) => /label/i.test(n));
-                  logger.info(`[wbot] Triggering initial resyncAppState for whatsappId=${whatsapp.id}. Label patches: ${JSON.stringify(labelPatches)}`);
-                  // Primeiro tenta resync focado em labels
-                  if (Array.isArray(labelPatches) && labelPatches.length > 0) {
-                    try {
-                      await sock.resyncAppState(labelPatches, true);
-                      logger.info(`[wbot] Label-only resync requested for whatsappId=${whatsapp.id}`);
-                    } catch (e: any) {
-                      logger.warn(`[wbot] Label-only resync failed: ${e?.message}`);
-                    }
-                  }
-                  // Em seguida, faz um resync completo como fallback
-                  try {
-                    await sock.resyncAppState(ALL_WA_PATCH_NAMES, true);
-                    logger.info(`[wbot] Full resyncAppState requested for whatsappId=${whatsapp.id}`);
-                  } catch (e: any) {
-                    logger.warn(`[wbot] full resyncAppState failed: ${e?.message}`);
-                  }
-                }
-              } catch (e: any) {
-                logger.warn(`[wbot] initial resyncAppState failed: ${e?.message}`);
-              }
+              // try {
+              //   const sock: any = wsocket as any;
+              //   if (sock && typeof sock.resyncAppState === 'function') {
+              //     const { ALL_WA_PATCH_NAMES } = require("@whiskeysockets/baileys");
+              //     const labelPatches = (ALL_WA_PATCH_NAMES || []).filter((n: string) => /label/i.test(n));
+              //     logger.info(`[wbot] Triggering initial resyncAppState for whatsappId=${whatsapp.id}. Label patches: ${JSON.stringify(labelPatches)}`);
+              //     // Primeiro tenta resync focado em labels
+              //     if (Array.isArray(labelPatches) && labelPatches.length > 0) {
+              //       try {
+              //         await sock.resyncAppState(labelPatches, true);
+              //         logger.info(`[wbot] Label-only resync requested for whatsappId=${whatsapp.id}`);
+              //       } catch (e: any) {
+              //         logger.warn(`[wbot] Label-only resync failed: ${e?.message}`);
+              //       }
+              //     }
+              //     // Em seguida, faz um resync completo como fallback
+              //     try {
+              //       await sock.resyncAppState(ALL_WA_PATCH_NAMES, true);
+              //       logger.info(`[wbot] Full resyncAppState requested for whatsappId=${whatsapp.id}`);
+              //     } catch (e: any) {
+              //       logger.warn(`[wbot] full resyncAppState failed: ${e?.message}`);
+              //     }
+              //   }
+              // } catch (e: any) {
+              //   logger.warn(`[wbot] initial resyncAppState failed: ${e?.message}`);
+              // }
 
               // Sincronizar todos os grupos do WhatsApp como contatos+tickets
               // Executa com delay para não sobrecarregar a conexão recém-aberta

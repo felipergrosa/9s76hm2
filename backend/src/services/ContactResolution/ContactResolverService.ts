@@ -47,6 +47,31 @@ export async function resolveMessageContact(
   // ─── CAMADA 1: Extração (pura, sem I/O) ───
   const ids = extractMessageIdentifiers(msg, wbot);
 
+  // ─── CAMADA 0: Verificação de Self-LID (Correção de "Novo Grupo") ───
+  // Se o LID for do próprio bot, forçar isFromMe=true para evitar criar contato "self"
+  if (ids.lidJid && !ids.isFromMe) {
+    const botId = wbot.user?.id;
+    const botLid = botId?.includes("@lid") ? jidNormalizedUser(botId) : null;
+
+    // Se o bot não sabe seu próprio LID, tentar descobrir nos keys
+    let myLid = botLid;
+    if (!myLid) {
+      const authState = (wbot as any).authState;
+      myLid = authState?.creds?.me?.lid;
+    }
+
+    if (myLid && jidNormalizedUser(myLid) === ids.lidJid) {
+      logger.info({
+        lidJid: ids.lidJid,
+        myLid,
+        originalFromMe: ids.isFromMe
+      }, "[resolveMessageContact] LID identificado como sendo o próprio bot. Forçando isFromMe=true.");
+      ids.isFromMe = true;
+      // Se isFromMe=true, o extractMessageIdentifiers já deve ter lidado com pnJid se possível,
+      // mas podemos garantir que ele não tente resolver como "outro contato".
+    }
+  }
+
   // ─── CAMADA 1.3: Busca por ticket existente via lidJid ───
   // Quando o remoteJid é LID e não sabemos o PN, buscar diretamente
   // o ticket pelo lidJid. Funciona tanto para mensagens de entrada
