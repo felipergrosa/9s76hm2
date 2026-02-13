@@ -206,13 +206,19 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
           });
         }
 
+        // PROTEÇÃO CRÍTICA: Verificar se contatos foram criados com sucesso
+        if (!contact && !groupContact) {
+          logger.warn(`[Import] Pulando mensagem ${msg.key.id}: Contato rejeitado (LID ou inválido)`);
+          continue;
+        }
+
         // 3. Buscar/Criar Ticket (usando cache para evitar duplicados na importação)
         let ticket: Ticket | undefined = ticketCache.get(cacheKey);
 
         if (!ticket) {
-          // Proteção contra contatos nulos (rejeitados por serem IDs Meta ou inválidos)
+          // PROTEÇÃO CRÍTICA: Verificar novamente (duplicado proposital)
           if (!contact && !groupContact) {
-            logger.warn(`[Import] Pulando mensagem ${msg.key.id}: Contato não pôde ser criado (provável ID Meta ou inválido)`);
+            logger.warn(`[Import] Pulando mensagem ${msg.key.id}: Contato nulo detectado`);
             continue;
           }
 
@@ -236,6 +242,12 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
 
           // Guarda no cache para reutilizar nas próximas mensagens do mesmo contato
           ticketCache.set(cacheKey, ticket);
+        }
+
+        // PROTEÇÃO FINAL: Garantir que temos um ticket válido
+        if (!ticket || !ticket.id) {
+          logger.warn(`[Import] Pulando mensagem ${msg.key.id}: Ticket inválido`);
+          continue;
         }
 
         // 4. Salvar Mensagem (Direto no Banco)
