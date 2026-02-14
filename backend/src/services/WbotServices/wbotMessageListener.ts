@@ -127,6 +127,8 @@ import { addLogs } from "../../helpers/addLogs";
 import SendWhatsAppMedia, { getMessageOptions } from "./SendWhatsAppMedia";
 import QueueRAGService from "../QueueServices/QueueRAGService";
 import ClearContactSessionService from "./ClearContactSessionService";
+const PreKeyErrorDetector = require("./PreKeyErrorDetector");
+import MessageRetryService from "./MessageRetryService";
 
 import ShowQueueIntegrationService from "../QueueIntegrationServices/ShowQueueIntegrationService";
 import { createDialogflowSessionWithModel } from "../QueueIntegrationServices/CreateSessionDialogflow";
@@ -5955,6 +5957,14 @@ const handleMessage = async (
 
     await ticket.reload();
   } catch (err) {
+    // SMART GUARDIAN: Detectar erros Signal durante processamento de mensagem
+    if (wbot?.id) {
+      const needsRecovery = PreKeyErrorDetector.detectSignalError(wbot.id, err);
+      if (needsRecovery) {
+        logger.warn(`[handleMessage] Erro Signal detectado, recuperação automática iniciada para whatsappId=${wbot.id}`);
+      }
+    }
+    
     Sentry.captureException(err);
     console.log(err);
     logger.error(`Error handling whatsapp message: Err: ${err}`);
@@ -6092,17 +6102,30 @@ const createFilterMessages = (whatsappId: number) => (msg: WAMessage): boolean =
   if (msg.messageStubType === WAMessageStubType.CIPHERTEXT) {
     const remoteJid = msg.key?.remoteJid;
 
-    // AUTO-HEAL: Limpar sessão corrompida automaticamente (com cooldown)
+    // SMART GUARDIAN: Detectar patterns de erro Signal (Bad MAC, SessionError, PreKeyError)
     if (remoteJid && whatsappId) {
-      const healKey = `${whatsappId}:${remoteJid}`;
-      const lastHeal = badMacAutoHealMap.get(healKey) || 0;
-      const now = Date.now();
-      if (now - lastHeal > BAD_MAC_COOLDOWN_MS) {
-        badMacAutoHealMap.set(healKey, now);
-        logger.warn(`[AUTO-HEAL] Detectado Bad MAC para whatsappId=${whatsappId}, contact=${remoteJid}. Limpando sessão corrompida...`);
-        ClearContactSessionService({ whatsappId, contactJid: remoteJid })
-          .then(r => logger.info(`[AUTO-HEAL] Resultado: ${r.message}`))
-          .catch(e => logger.error(`[AUTO-HEAL] Erro ao limpar sessão: ${e.message}`));
+      // Simular erro Signal para trigger do detector inteligente
+      const mockError = {
+        message: msg.messageStubParameters?.[0] || 'Bad MAC Error',
+        type: 'SessionError',
+        stack: 'verifyMAC'
+      };
+      
+      // PreKeyErrorDetector agora detecta todos os erros Signal, não apenas PreKeyError
+      const needsRecovery = PreKeyErrorDetector.detectSignalError(whatsappId, mockError);
+      
+      if (!needsRecovery) {
+        // Fallback para limpeza individual de sessão do contato (mantém backward compatibility)
+        const healKey = `${whatsappId}:${remoteJid}`;
+        const lastHeal = badMacAutoHealMap.get(healKey) || 0;
+        const now = Date.now();
+        if (now - lastHeal > BAD_MAC_COOLDOWN_MS) {
+          badMacAutoHealMap.set(healKey, now);
+          logger.warn(`[AUTO-HEAL] Detectado Bad MAC para whatsappId=${whatsappId}, contact=${remoteJid}. Limpando sessão corrompida...`);
+          ClearContactSessionService({ whatsappId, contactJid: remoteJid })
+            .then(r => logger.info(`[AUTO-HEAL] Resultado: ${r.message}`))
+            .catch(e => logger.error(`[AUTO-HEAL] Erro ao limpar sessão: ${e.message}`));
+        }
       }
     }
 
@@ -6127,6 +6150,17 @@ const createFilterMessages = (whatsappId: number) => (msg: WAMessage): boolean =
         stubParams: msg.messageStubParameters
       }, "[filterMessages] IGNORANDO erro CIPHERTEXT pois é fromMe=true (tentar processar)");
       return true;
+    }
+
+    // Adicionar mensagem para retry após recuperação de sessão (se não for fromMe)
+    if (!msg.key?.fromMe && whatsappId) {
+      const companyId = 1; // TODO: obter companyId correto do contexto
+      MessageRetryService.addPendingMessage(
+        msg,
+        whatsappId,
+        companyId,
+        msg.messageStubParameters?.[0] || 'CIPHERTEXT decryption error'
+      );
     }
 
     logger.warn({

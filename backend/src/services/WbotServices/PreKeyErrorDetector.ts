@@ -18,7 +18,7 @@ class PreKeyErrorDetector {
   private static readonly MAX_RECOVERY_ATTEMPTS = 2;
   private static readonly RECOVERY_COOLDOWN = 30000; // 30 segundos
 
-  static detectPreKeyError(whatsappId: number, error: any): boolean {
+  static detectSignalError(whatsappId: number, error: any): boolean {
     const now = Date.now();
     const tracker = this.trackers.get(whatsappId) || {
       whatsappId,
@@ -28,12 +28,17 @@ class PreKeyErrorDetector {
       recoveryAttempts: 0
     };
 
-    // Verificar se é PreKeyError
-    const isPreKeyError = error?.message?.includes('Invalid PreKey ID') || 
+    // Verificar se é erro de criptografia Signal (PreKeyError, Bad MAC, SessionError)
+    const isSignalError = error?.message?.includes('Invalid PreKey ID') || 
                           error?.type === 'PreKeyError' ||
-                          error?.stack?.includes('SessionBuilder.initIncoming');
+                          error?.stack?.includes('SessionBuilder.initIncoming') ||
+                          error?.message?.includes('Bad MAC') ||
+                          error?.message?.includes('No matching sessions found') ||
+                          error?.type === 'SessionError' ||
+                          error?.stack?.includes('verifyMAC') ||
+                          error?.stack?.includes('decryptWithSessions');
 
-    if (!isPreKeyError) return false;
+    if (!isSignalError) return false;
 
     // Atualizar tracker
     tracker.lastErrorTime = now;
@@ -49,7 +54,7 @@ class PreKeyErrorDetector {
 
     // Verificar se atingiu threshold
     if (tracker.errorCount >= this.ERROR_THRESHOLD && !tracker.isRecovering) {
-      logger.warn(`[PREKEY-DETECTOR] Threshold atingido para whatsappId=${whatsappId}: ${tracker.errorCount} erros`);
+      logger.warn(`[SIGNAL-DETECTOR] Threshold atingido para whatsappId=${whatsappId}: ${tracker.errorCount} erros Signal`);
       this.triggerRecovery(whatsappId);
       return true;
     }
@@ -64,7 +69,7 @@ class PreKeyErrorDetector {
     tracker.isRecovering = true;
     tracker.recoveryAttempts++;
 
-    logger.info(`[PREKEY-DETECTOR] Iniciando recuperação para whatsappId=${whatsappId} (tentativa ${tracker.recoveryAttempts})`);
+    logger.info(`[SIGNAL-DETECTOR] Iniciando recuperação Signal para whatsappId=${whatsappId} (tentativa ${tracker.recoveryAttempts})`);
 
     try {
       // Importar dinamicamente para evitar dependência circular
@@ -72,20 +77,20 @@ class PreKeyErrorDetector {
       const whatsapp = await Whatsapp.findByPk(whatsappId);
       
       if (!whatsapp) {
-        logger.error(`[PREKEY-DETECTOR] WhatsApp não encontrado: ${whatsappId}`);
+        logger.error(`[SIGNAL-DETECTOR] WhatsApp não encontrado: ${whatsappId}`);
         return;
       }
 
       // 1. Desconectar
-      logger.info(`[PREKEY-DETECTOR] Desconectando whatsappId=${whatsappId}`);
+      logger.info(`[SIGNAL-DETECTOR] Desconectando whatsappId=${whatsappId}`);
       await whatsapp.update({ status: 'DISCONNECTED' });
 
-      // 2. Limpar sessão
+      // 2. Limpar sessão completa
       const sessionPath = require('path').join(__dirname, `../../private/sessions/1/${whatsappId}`);
       const fs = require('fs');
       if (fs.existsSync(sessionPath)) {
         fs.rmSync(sessionPath, { recursive: true, force: true });
-        logger.info(`[PREKEY-DETECTOR] Sessão removida: ${sessionPath}`);
+        logger.info(`[SIGNAL-DETECTOR] Sessão removida: ${sessionPath}`);
       }
 
       // 3. Limpar cache Redis se disponível
@@ -95,26 +100,34 @@ class PreKeyErrorDetector {
         await client.connect();
         await client.flushAll();
         await client.disconnect();
-        logger.info(`[PREKEY-DETECTOR] Cache Redis limpo`);
+        logger.info(`[SIGNAL-DETECTOR] Cache Redis limpo`);
       } catch (error) {
-        logger.warn(`[PREKEY-DETECTOR] Redis não disponível: ${error.message}`);
+        logger.warn(`[SIGNAL-DETECTOR] Redis não disponível: ${error.message}`);
       }
 
       // 4. Esperar um momento
       await new Promise(resolve => setTimeout(resolve, 5000));
 
       // 5. Reconectar
-      logger.info(`[PREKEY-DETECTOR] Reconectando whatsappId=${whatsappId}`);
+      logger.info(`[SIGNAL-DETECTOR] Reconectando whatsappId=${whatsappId}`);
       await whatsapp.update({ status: 'OPENING' });
 
-      // Limpar tracker após recuperação bem-sucedida
-      setTimeout(() => {
+      // Limpar tracker e tentar reprocessar mensagens pendentes após recuperação bem-sucedida
+      setTimeout(async () => {
         this.trackers.delete(whatsappId);
-        logger.info(`[PREKEY-DETECTOR] Recuperação concluída para whatsappId=${whatsappId}`);
+        logger.info(`[SIGNAL-DETECTOR] Recuperação Signal concluída para whatsappId=${whatsappId}`);
+        
+        // Tentar reprocessar mensagens que falharam durante a sessão corrompida
+        try {
+          const MessageRetryService = require("./MessageRetryService").default;
+          await MessageRetryService.retryPendingMessages(whatsappId);
+        } catch (error) {
+          logger.warn(`[SIGNAL-DETECTOR] Erro ao tentar retry de mensagens: ${error.message}`);
+        }
       }, 10000);
 
     } catch (error) {
-      logger.error(`[PREKEY-DETECTOR] Erro na recuperação do whatsappId=${whatsappId}: ${error.message}`);
+      logger.error(`[SIGNAL-DETECTOR] Erro na recuperação Signal do whatsappId=${whatsappId}: ${error.message}`);
       
       // Tentar novamente se não excedeu limite
       if (tracker.recoveryAttempts < this.MAX_RECOVERY_ATTEMPTS) {
@@ -123,7 +136,7 @@ class PreKeyErrorDetector {
           this.triggerRecovery(whatsappId);
         }, this.RECOVERY_COOLDOWN);
       } else {
-        logger.error(`[PREKEY-DETECTOR] Limite de tentativas atingido para whatsappId=${whatsappId}`);
+        logger.error(`[SIGNAL-DETECTOR] Limite de tentativas atingido para whatsappId=${whatsappId}`);
         tracker.isRecovering = false;
       }
     }
