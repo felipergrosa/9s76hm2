@@ -127,8 +127,7 @@ import { addLogs } from "../../helpers/addLogs";
 import SendWhatsAppMedia, { getMessageOptions } from "./SendWhatsAppMedia";
 import QueueRAGService from "../QueueServices/QueueRAGService";
 import ClearContactSessionService from "./ClearContactSessionService";
-const PreKeyErrorDetector = require("./PreKeyErrorDetector");
-import MessageRetryService from "./MessageRetryService";
+import SignalErrorHandler from "./SignalErrorHandler";
 
 import ShowQueueIntegrationService from "../QueueIntegrationServices/ShowQueueIntegrationService";
 import { createDialogflowSessionWithModel } from "../QueueIntegrationServices/CreateSessionDialogflow";
@@ -5957,12 +5956,10 @@ const handleMessage = async (
 
     await ticket.reload();
   } catch (err) {
-    // SMART GUARDIAN: Detectar erros Signal durante processamento de mensagem
-    if (wbot?.id) {
-      const needsRecovery = PreKeyErrorDetector.detectSignalError(wbot.id, err);
-      if (needsRecovery) {
-        logger.warn(`[handleMessage] Erro Signal detectado, recuperação automática iniciada para whatsappId=${wbot.id}`);
-      }
+    // SIGNAL RECOVERY: Detecção otimizada de erros Signal sem overhead
+    if (wbot?.id && SignalErrorHandler.isSignalError(err)) {
+      SignalErrorHandler.handleSignalError(wbot.id, err);
+      logger.warn(`[handleMessage] Erro Signal detectado para whatsappId=${wbot.id}, iniciando recovery`);
     }
     
     Sentry.captureException(err);
@@ -6102,30 +6099,24 @@ const createFilterMessages = (whatsappId: number) => (msg: WAMessage): boolean =
   if (msg.messageStubType === WAMessageStubType.CIPHERTEXT) {
     const remoteJid = msg.key?.remoteJid;
 
-    // SMART GUARDIAN: Detectar patterns de erro Signal (Bad MAC, SessionError, PreKeyError)
+    // SIGNAL RECOVERY: Detecção e limpeza simples de sessão corrompida
     if (remoteJid && whatsappId) {
-      // Simular erro Signal para trigger do detector inteligente
-      const mockError = {
-        message: msg.messageStubParameters?.[0] || 'Bad MAC Error',
-        type: 'SessionError',
-        stack: 'verifyMAC'
-      };
+      // Cooldown simples para evitar spam de recovery
+      const healKey = `${whatsappId}:${remoteJid}`;
+      const lastHeal = badMacAutoHealMap.get(healKey) || 0;
+      const now = Date.now();
       
-      // PreKeyErrorDetector agora detecta todos os erros Signal, não apenas PreKeyError
-      const needsRecovery = PreKeyErrorDetector.detectSignalError(whatsappId, mockError);
-      
-      if (!needsRecovery) {
-        // Fallback para limpeza individual de sessão do contato (mantém backward compatibility)
-        const healKey = `${whatsappId}:${remoteJid}`;
-        const lastHeal = badMacAutoHealMap.get(healKey) || 0;
-        const now = Date.now();
-        if (now - lastHeal > BAD_MAC_COOLDOWN_MS) {
-          badMacAutoHealMap.set(healKey, now);
-          logger.warn(`[AUTO-HEAL] Detectado Bad MAC para whatsappId=${whatsappId}, contact=${remoteJid}. Limpando sessão corrompida...`);
-          ClearContactSessionService({ whatsappId, contactJid: remoteJid })
-            .then(r => logger.info(`[AUTO-HEAL] Resultado: ${r.message}`))
-            .catch(e => logger.error(`[AUTO-HEAL] Erro ao limpar sessão: ${e.message}`));
-        }
+      if (now - lastHeal > BAD_MAC_COOLDOWN_MS) {
+        badMacAutoHealMap.set(healKey, now);
+        
+        // Trigger recovery de sessão completa em caso de erro Signal crítico
+        const mockError = { message: msg.messageStubParameters?.[0] || 'Bad MAC Error' };
+        SignalErrorHandler.handleSignalError(whatsappId, mockError);
+        
+        // Fallback: limpeza individual do contato
+        ClearContactSessionService({ whatsappId, contactJid: remoteJid })
+          .then(r => logger.info(`[AUTO-HEAL] Resultado: ${r.message}`))
+          .catch(e => logger.error(`[AUTO-HEAL] Erro ao limpar sessão: ${e.message}`));
       }
     }
 
@@ -6152,16 +6143,8 @@ const createFilterMessages = (whatsappId: number) => (msg: WAMessage): boolean =
       return true;
     }
 
-    // Adicionar mensagem para retry após recuperação de sessão (se não for fromMe)
-    if (!msg.key?.fromMe && whatsappId) {
-      const companyId = 1; // TODO: obter companyId correto do contexto
-      MessageRetryService.addPendingMessage(
-        msg,
-        whatsappId,
-        companyId,
-        msg.messageStubParameters?.[0] || 'CIPHERTEXT decryption error'
-      );
-    }
+    // Mensagens com erro de descriptografia serão processadas novamente após recovery de sessão
+    // (sem queue complexa - deixa para próxima tentativa natural do usuário)
 
     logger.warn({
       msgId: msg.key?.id,
