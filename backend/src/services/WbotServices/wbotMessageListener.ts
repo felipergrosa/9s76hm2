@@ -6189,8 +6189,23 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         logger.warn("MENSAGEM PERDIDA", JSON.stringify(msg));
       }
       const messageExists = await Message.count({
-        where: { wid: message.key.id!, companyId }
+        where: {
+          wid: message.key.id!,
+          companyId,
+          remoteJid: message.key.remoteJid || null,
+          fromMe: Boolean(message.key.fromMe)
+        }
       });
+
+      if (messageExists) {
+        logger.debug("[messages.upsert] Mensagem duplicada ignorada", {
+          companyId,
+          whatsappId: wbot.id,
+          wid: message.key.id,
+          remoteJid: message.key.remoteJid,
+          fromMe: Boolean(message.key.fromMe)
+        });
+      }
 
       if (!messageExists) {
         let isCampaign = false;
