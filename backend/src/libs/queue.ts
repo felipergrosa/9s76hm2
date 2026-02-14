@@ -48,8 +48,16 @@ export default {
       queue.bull.process(queue.handle);
 
       queue.bull.on('failed', (job, err) => {
-        logger.error(`Job failed: ${queue.key} ${job.data}`);
-        logger.error(err);
+        logger.error(
+          {
+            queueName: queue.name,
+            jobId: job?.id,
+            data: job?.data,
+            error: err?.message || err,
+            stack: err?.stack
+          },
+          "[BullQueue] Job failed"
+        );
       });
     })
   }

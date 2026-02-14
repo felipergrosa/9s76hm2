@@ -6222,6 +6222,9 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
 
         if (!isCampaign) {
           if (REDIS_URI_MSG_CONN !== "") {
+            const queueRemoteJid = (message.key.remoteJid || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
+            const queueFromMe = message.key.fromMe ? "1" : "0";
+            const handleMessageJobId = `${wbot.id}-handleMessage-${message.key.id}-${queueRemoteJid}-${queueFromMe}`;
             //} && (!message.key.fromMe || (message.key.fromMe && !message.key.id.startsWith('BAE')))) {
             try {
               await BullQueues.add(
@@ -6229,11 +6232,26 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
                 { message, wbot: wbot.id, companyId },
                 {
                   priority: 1,
-                  jobId: `${wbot.id}-handleMessage-${message.key.id}`
+                  jobId: handleMessageJobId
                 }
               );
-            } catch (e) {
+            } catch (e: any) {
               Sentry.captureException(e);
+              logger.error(
+                {
+                  error: e?.message || e,
+                  stack: e?.stack,
+                  companyId,
+                  whatsappId: wbot.id,
+                  wid: message.key.id,
+                  remoteJid: message.key.remoteJid,
+                  fromMe: Boolean(message.key.fromMe)
+                },
+                "[messages.upsert] Falha no enqueue do handleMessage, usando fallback direto"
+              );
+
+              // Fallback de segurança para não perder mensagem em falha de fila.
+              await handleMessage(message, wbot, companyId);
             }
           } else {
             await handleMessage(message, wbot, companyId);
@@ -6246,14 +6264,35 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
 
       if (message.key.remoteJid?.endsWith("@g.us")) {
         if (REDIS_URI_MSG_CONN !== "") {
-          BullQueues.add(
-            `${process.env.DB_NAME}-handleMessageAck`,
-            { msg: message, chat: 2 },
-            {
-              priority: 1,
-              jobId: `${wbot.id}-handleMessageAck-${message.key.id}`
-            }
-          );
+          const queueRemoteJid = (message.key.remoteJid || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
+          const queueFromMe = message.key.fromMe ? "1" : "0";
+          const handleMessageAckJobId = `${wbot.id}-handleMessageAck-${message.key.id}-${queueRemoteJid}-${queueFromMe}`;
+          try {
+            await BullQueues.add(
+              `${process.env.DB_NAME}-handleMessageAck`,
+              { msg: message, chat: 2 },
+              {
+                priority: 1,
+                jobId: handleMessageAckJobId
+              }
+            );
+          } catch (e: any) {
+            Sentry.captureException(e);
+            logger.error(
+              {
+                error: e?.message || e,
+                stack: e?.stack,
+                companyId,
+                whatsappId: wbot.id,
+                wid: message.key.id,
+                remoteJid: message.key.remoteJid,
+                fromMe: Boolean(message.key.fromMe)
+              },
+              "[messages.upsert] Falha no enqueue do handleMessageAck, usando fallback direto"
+            );
+
+            handleMsgAck(message, 2);
+          }
         } else {
           handleMsgAck(message, 2);
         }
@@ -6300,14 +6339,36 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       const ack = message.update.status;
 
       if (REDIS_URI_MSG_CONN !== "") {
-        BullQueues.add(
-          `${process.env.DB_NAME}-handleMessageAck`,
-          { msg: message, chat: ack },
-          {
-            priority: 1,
-            jobId: `${wbot.id}-handleMessageAck-${message.key.id}`
-          }
-        );
+        const queueRemoteJid = (message.key.remoteJid || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const queueFromMe = message.key.fromMe ? "1" : "0";
+        const handleMessageAckJobId = `${wbot.id}-handleMessageAck-${message.key.id}-${queueRemoteJid}-${queueFromMe}`;
+        try {
+          await BullQueues.add(
+            `${process.env.DB_NAME}-handleMessageAck`,
+            { msg: message, chat: ack },
+            {
+              priority: 1,
+              jobId: handleMessageAckJobId
+            }
+          );
+        } catch (e: any) {
+          Sentry.captureException(e);
+          logger.error(
+            {
+              error: e?.message || e,
+              stack: e?.stack,
+              companyId,
+              whatsappId: wbot.id,
+              wid: message.key.id,
+              remoteJid: message.key.remoteJid,
+              fromMe: Boolean(message.key.fromMe),
+              ack
+            },
+            "[messages.update] Falha no enqueue do handleMessageAck, usando fallback direto"
+          );
+
+          handleMsgAck(message, ack);
+        }
       } else {
         handleMsgAck(message, ack);
       }
