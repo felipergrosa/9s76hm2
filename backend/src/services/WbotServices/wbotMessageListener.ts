@@ -6484,8 +6484,8 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
   });
 };
 
+export default wbotMessageListener;
 export {
-  wbotMessageListener,
   handleMessage,
   isValidMsg,
   getTypeMessage,
