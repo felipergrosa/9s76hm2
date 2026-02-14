@@ -2,7 +2,7 @@ import { initWASocket } from "../../libs/wbot";
 import { acquireWbotLock, renewWbotLock, releaseWbotLock } from "../../libs/wbotMutex";
 import { WhatsAppFactory } from "../../libs/whatsapp";
 import Whatsapp from "../../models/Whatsapp";
-import { wbotMessageListener } from "./wbotMessageListener";
+import wbotMessageListener from "./wbotMessageListener";
 import { getIO } from "../../libs/socket";
 import wbotMonitor from "./wbotMonitor";
 import logger from "../../utils/logger";
