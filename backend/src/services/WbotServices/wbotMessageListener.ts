@@ -6155,6 +6155,7 @@ const createFilterMessages = (whatsappId: number) => (msg: WAMessage): boolean =
 
 const wbotMessageListener = (wbot: Session, companyId: number): void => {
   const wbotUserJid = wbot?.user?.id;
+  
   wbot.ev.on("messages.upsert", async (messageUpsert: ImessageUpsert) => {
     // Phase 4: Diferenciar tipo de mensagem (notify = tempo real, append/historical = histórico)
     const upsertType = (messageUpsert as any).type || "unknown";
