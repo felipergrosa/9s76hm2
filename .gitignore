@@ -166,3 +166,7 @@ docs-privadas/
 !*.md
 
 backend/private/sessions/
+
+# Backups locais
+back-up-limpo/
+back-up-limpo/**
