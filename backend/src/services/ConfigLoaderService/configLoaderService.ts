@@ -19,10 +19,10 @@ interface WebhookConfig {
 
     return {
       webhook: {
-        attempts: 3,
+        attempts: 10,
         backoff: {
           type: 'exponential',
-          delay: 1000,
+          delay: 3000,
         },
         limiter: {
           max: 1,

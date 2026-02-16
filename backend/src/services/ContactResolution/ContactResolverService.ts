@@ -270,7 +270,7 @@ export async function resolveMessageContact(
     strategy: "CreateOrUpdateContactService"
   }, "[ContactResolver] Tentando criar contato via serviço padronizado");
 
-  const newContact = await CreateOrUpdateContactService({
+  let newContact = await CreateOrUpdateContactService({
     name: contactName,
     number: contactNumber,
     isGroup: false,
@@ -282,9 +282,45 @@ export async function resolveMessageContact(
   });
 
   if (!newContact) {
-    // Se o serviço retornou null (bloqueou LID ou número inválido), lançar erro
-    // para que o wbotMessageListener capture e pare o processamento
-    throw new Error(`LID_CREATION_BLOCKED: CreateOrUpdateContactService retornou null para ${ids.lidJid}`);
+    // CreateOrUpdateContactService retornou null (bloqueou LID >14 dígitos).
+    // Em vez de throw (que mata a mensagem inteira), criar contato PENDING_
+    // diretamente para que a mensagem seja processada.
+    const pendingNumber = `PENDING_${ids.lidJid || contactNumber}`;
+    const pendingName = ids.pushName || pendingNumber;
+
+    logger.warn({
+      lidJid: ids.lidJid,
+      contactNumber,
+      pendingNumber,
+      pendingName
+    }, "[ContactResolver] CreateOrUpdateContactService bloqueou LID — criando contato PENDING para não perder mensagem");
+
+    try {
+      const CompaniesSettings = (await import("../../models/CompaniesSettings")).default;
+      const settings = await CompaniesSettings.findOne({ where: { companyId } });
+      const acceptAudioMessageContact = (settings as any)?.acceptAudioMessageContact === "enabled";
+
+      newContact = await Contact.findOrCreate({
+        where: {
+          companyId,
+          remoteJid: contactRemoteJid
+        },
+        defaults: {
+          name: pendingName,
+          number: pendingNumber,
+          isGroup: false,
+          companyId,
+          remoteJid: contactRemoteJid,
+          lidJid: ids.lidJid || null,
+          channel: "whatsapp",
+          acceptAudioMessage: acceptAudioMessageContact,
+          whatsappId: wbot.id
+        }
+      }).then(([c]) => c);
+    } catch (pendingErr: any) {
+      logger.error({ err: pendingErr?.message, lidJid: ids.lidJid }, "[ContactResolver] Falha ao criar contato PENDING");
+      throw new Error(`LID_CREATION_BLOCKED: Não foi possível criar contato para ${ids.lidJid}`);
+    }
   }
 
   // Refresh Avatar (async throttle) - O Service já faz, mas mal não faz garantir
