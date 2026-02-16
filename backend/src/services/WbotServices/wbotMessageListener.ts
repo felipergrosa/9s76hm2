@@ -126,7 +126,6 @@ import cacheLayer from "../../libs/cache";
 import { addLogs } from "../../helpers/addLogs";
 import SendWhatsAppMedia, { getMessageOptions } from "./SendWhatsAppMedia";
 import QueueRAGService from "../QueueServices/QueueRAGService";
-import ClearContactSessionService from "./ClearContactSessionService";
 import SignalErrorHandler from "./SignalErrorHandler";
 
 import ShowQueueIntegrationService from "../QueueIntegrationServices/ShowQueueIntegrationService";
@@ -5972,22 +5971,68 @@ const handleMsgAck = async (
   chat: number | null | undefined
 ) => {
   await new Promise(r => setTimeout(r, 500));
+  const io = getIO();
 
   try {
-    // CQRS: Usar MessageCommandService para atualizar ACK
-    // Isso já faz: busca mensagem + valida ack + update DB + emite evento via EventBus
-    const { updateMessageAckByWid } = await import("../MessageServices/MessageCommandService");
-    const wid = msg.key.id;
+    const messageToUpdate = await Message.findOne({
+      where: {
+        wid: msg.key.id
+      },
+      include: [
+        "contact",
+        {
+          model: Ticket,
+          as: "ticket",
+          include: [
+            {
+              model: Contact,
+              attributes: [
+                "id",
+                "name",
+                "number",
+                "email",
+                "profilePicUrl",
+                "acceptAudioMessage",
+                "active",
+                "urlPicture",
+                "companyId"
+              ],
+              include: ["extraInfo", "tags"]
+            },
+            {
+              model: Queue,
+              attributes: ["id", "name", "color"]
+            },
+            {
+              model: Whatsapp,
+              attributes: ["id", "name", "groupAsTicket"]
+            },
+            {
+              model: User,
+              attributes: ["id", "name"]
+            },
+            {
+              model: Tag,
+              as: "tags",
+              attributes: ["id", "name", "color"]
+            }
+          ]
+        },
+        {
+          model: Message,
+          as: "quotedMsg",
+          include: ["contact"]
+        }
+      ]
+    });
+    if (!messageToUpdate || messageToUpdate.ack > chat) return;
 
-    if (!wid || chat === null || chat === undefined) {
-      return;
-    }
-
-    const updatedMessage = await updateMessageAckByWid(wid, chat);
-
-    if (updatedMessage) {
-      console.log(`[handleMsgAck] ACK atualizado via CQRS: msgId=${updatedMessage.id} ack=${chat}`);
-    }
+    await messageToUpdate.update({ ack: chat });
+    io.of(`/workspace-${messageToUpdate.companyId}`)
+      .emit(`company-${messageToUpdate.companyId}-appMessage`, {
+        action: "update",
+        message: messageToUpdate
+      });
   } catch (err) {
     Sentry.captureException(err);
     logger.error(`Error handling message ack. Err: ${err}`);
@@ -6079,94 +6124,22 @@ const verifyCampaignMessageAndCloseTicket = async (
   }
 };
 
-// AUTO-HEAL: Map de cooldown para evitar limpar sessão em loop
-// Chave: "whatsappId:remoteJid" -> timestamp do último auto-heal
-const badMacAutoHealMap = new Map<string, number>();
-const BAD_MAC_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos
-
-const createFilterMessages = (whatsappId: number) => (msg: WAMessage): boolean => {
+const filterMessages = (msg: WAMessage): boolean => {
   msgDB.save(msg);
-
-  // DEBUG: Log todas as mensagens que chegam
-  logger.info(`[FILTER DEBUG] Mensagem recebida: msgId=${msg.key?.id}, remoteJid=${msg.key?.remoteJid}, fromMe=${msg.key?.fromMe}, stubType=${msg.messageStubType}, hasMessage=${!!msg.message}`);
 
   if (msg.message?.protocolMessage?.editedMessage) return true;
   if (msg.message?.protocolMessage) return false;
-
-  // Filtrar mensagens que falharam na decriptação (Bad MAC / No matching sessions)
-  // messageStubType=2 (CIPHERTEXT) indica erro de sessão criptográfica
-  // Processar essas mensagens cria contatos PENDING_ fantasma
-  if (msg.messageStubType === WAMessageStubType.CIPHERTEXT) {
-    const remoteJid = msg.key?.remoteJid;
-
-    // SIGNAL RECOVERY: Detecção e limpeza simples de sessão corrompida
-    if (remoteJid && whatsappId) {
-      // Cooldown simples para evitar spam de recovery
-      const healKey = `${whatsappId}:${remoteJid}`;
-      const lastHeal = badMacAutoHealMap.get(healKey) || 0;
-      const now = Date.now();
-      
-      if (now - lastHeal > BAD_MAC_COOLDOWN_MS) {
-        badMacAutoHealMap.set(healKey, now);
-        
-        // Trigger recovery de sessão completa em caso de erro Signal crítico
-        const mockError = { message: msg.messageStubParameters?.[0] || 'Bad MAC Error' };
-        SignalErrorHandler.handleSignalError(whatsappId, mockError);
-        
-        // Fallback: limpeza individual do contato
-        ClearContactSessionService({ whatsappId, contactJid: remoteJid })
-          .then(r => logger.info(`[AUTO-HEAL] Resultado: ${r.message}`))
-          .catch(e => logger.error(`[AUTO-HEAL] Erro ao limpar sessão: ${e.message}`));
-      }
-    }
-
-    // EXCEÇÃO: Se a mensagem for enviada por MIM (fromMe), não descartar por erro de criptografia
-    // O Baileys pode emitir esse erro para mensagens enviadas por outros dispositivos (multidevice),
-    // mas ainda assim queremos registrar a mensagem no ticket.
-    if (msg.key?.fromMe) {
-      // CORREÇÃO GHOST CHAT: Se for fromMe + CIPHERTEXT + LID, é lixo de sync e deve ser ignorado.
-      // Se tentarmos processar, cria um Ticket Fantasma com o LID do próprio bot.
-      if (remoteJid?.includes("@lid")) {
-        logger.warn({
-          msgId: msg.key?.id,
-          remoteJid,
-          stubParams: msg.messageStubParameters
-        }, "[filterMessages] IGNORANDO erro CIPHERTEXT (Bad MAC) em canal LID (evitar Ghost Chat)");
-        return false;
-      }
-
-      logger.warn({
-        msgId: msg.key?.id,
-        remoteJid,
-        stubParams: msg.messageStubParameters
-      }, "[filterMessages] IGNORANDO erro CIPHERTEXT pois é fromMe=true (tentar processar)");
-      return true;
-    }
-
-    // Mensagens com erro de descriptografia serão processadas novamente após recovery de sessão
-    // (sem queue complexa - deixa para próxima tentativa natural do usuário)
-
-    logger.warn({
-      msgId: msg.key?.id,
-      remoteJid,
-      fromMe: msg.key?.fromMe,
-      stubParams: msg.messageStubParameters,
-      isLid: remoteJid?.includes("@lid"),
-      senderPn: msg.key?.participant || msg.key?.remoteJid
-    }, "[filterMessages] Mensagem CIPHERTEXT (erro decriptação) descartada - Sessão Signal expirada");
-    return false;
-  }
 
   if (
     [
       WAMessageStubType.REVOKE,
       WAMessageStubType.E2E_DEVICE_CHANGED,
-      WAMessageStubType.E2E_IDENTITY_CHANGED
-    ].includes(msg.messageStubType as number)
+      WAMessageStubType.E2E_IDENTITY_CHANGED,
+      WAMessageStubType.CIPHERTEXT
+    ].includes(msg.messageStubType)
   )
     return false;
 
-  logger.info(`[FILTER DEBUG] Mensagem APROVADA: msgId=${msg.key?.id}`);
   return true;
 };
 
@@ -6174,20 +6147,8 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
   const wbotUserJid = wbot?.user?.id;
   
   wbot.ev.on("messages.upsert", async (messageUpsert: ImessageUpsert) => {
-    // Phase 4: Diferenciar tipo de mensagem (notify = tempo real, append/historical = histórico)
-    const upsertType = (messageUpsert as any).type || "unknown";
-    const isRealtime = upsertType === "notify";
-
-    if (isRealtime) {
-      logger.debug(`[messages.upsert] REALTIME (notify) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);
-    } else {
-      // IGNORAR mensagens históricas - elas são processadas pelo ImportWhatsAppMessageService
-      logger.debug(`[messages.upsert] IGNORANDO HISTÓRICO (${upsertType}) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);
-      return;
-    }
-
     const messages = messageUpsert.messages
-      .filter(createFilterMessages(wbot.id))
+      .filter(filterMessages)
       .map(msg => msg);
 
     if (!messages) return;
@@ -6206,23 +6167,8 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         logger.warn("MENSAGEM PERDIDA", JSON.stringify(msg));
       }
       const messageExists = await Message.count({
-        where: {
-          wid: message.key.id!,
-          companyId,
-          remoteJid: message.key.remoteJid || null,
-          fromMe: Boolean(message.key.fromMe)
-        }
+        where: { wid: message.key.id!, companyId }
       });
-
-      if (messageExists) {
-        logger.debug("[messages.upsert] Mensagem duplicada ignorada", {
-          companyId,
-          whatsappId: wbot.id,
-          wid: message.key.id,
-          remoteJid: message.key.remoteJid,
-          fromMe: Boolean(message.key.fromMe)
-        });
-      }
 
       if (!messageExists) {
         let isCampaign = false;
@@ -6351,9 +6297,12 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         );
       }
 
-      // ACK status: 0=ERROR, 1=PENDING, 2=SERVER_ACK, 3=DELIVERY_ACK, 4=READ_ACK
-      // Usar o status recebido diretamente para sincronização correta
-      const ack = message.update.status;
+      let ack;
+      if (message.update.status === 3 && message?.key?.fromMe) {
+        ack = 2;
+      } else {
+        ack = message.update.status;
+      }
 
       if (REDIS_URI_MSG_CONN !== "") {
         const queueRemoteJid = (message.key.remoteJid || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
