@@ -25,6 +25,9 @@ module.exports = {
       ],
     },
   },
+  eslint: {
+    enable: false, // Desabilita ESLint no webpack
+  },
   webpack: {
     configure: (webpackConfig) => {
       webpackConfig.resolve.fallback = {

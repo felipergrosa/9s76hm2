@@ -199,7 +199,7 @@ export const initIO = (httpServer: Server): SocketIO => {
     });
 
     // Last Event ID Pattern: recupera mensagens perdidas desde o último ID conhecido
-    socket.on("recoverMissedMessages", async (data: { ticketId: string; lastMessageId: number }, callback?: (result: any) => void) => {
+    socket.on("recoverMissedMessages", async (data: { ticketId: string | number; lastMessageId: number }, callback?: (result: any) => void) => {
       try {
         const { ticketId, lastMessageId } = data;
         if (!ticketId || !lastMessageId) {
@@ -209,14 +209,35 @@ export const initIO = (httpServer: Server): SocketIO => {
 
         // Importação dinâmica para evitar dependência circular
         const { default: Message } = await import("../models/Message");
+        const { default: Ticket } = await import("../models/Ticket");
         const { Op } = await import("sequelize");
+
+        // Determinar se é UUID ou ID numérico
+        let whereCondition: any = {
+          id: { [Op.gt]: lastMessageId }
+        };
+
+        if (typeof ticketId === 'string' && ticketId.includes('-')) {
+          // É UUID - precisa fazer join com Ticket
+          const ticket = await Ticket.findOne({
+            where: { uuid: ticketId },
+            attributes: ['id']
+          });
+          
+          if (ticket) {
+            whereCondition.ticketId = ticket.id;
+          } else {
+            callback?.({ error: "Ticket não encontrado" });
+            return;
+          }
+        } else {
+          // É ID numérico
+          whereCondition.ticketId = ticketId;
+        }
 
         // Busca mensagens mais recentes que o último ID conhecido
         const missedMessages = await Message.findAll({
-          where: {
-            ticketId: ticketId,
-            id: { [Op.gt]: lastMessageId }
-          },
+          where: whereCondition,
           order: [["id", "ASC"]],
           limit: 100, // Limita para evitar sobrecarga
           include: ["contact"]

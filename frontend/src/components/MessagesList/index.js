@@ -693,11 +693,14 @@ const reducer = (state, action) => {
 
   if (action.type === "ADD_MESSAGE") {
     const newMessage = action.payload;
+    console.log("[MessagesList REDUCER] ADD_MESSAGE chamado para:", newMessage.id);
     const messageIndex = state.findIndex((m) => m.id === newMessage.id);
 
     if (messageIndex !== -1) {
+      console.log("[MessagesList REDUCER] Mensagem atualizada:", newMessage.id);
       state[messageIndex] = newMessage;
     } else {
+      console.log("[MessagesList REDUCER] Mensagem adicionada:", newMessage.id);
       state.push(newMessage);
     }
 
@@ -1154,6 +1157,15 @@ const MessagesList = ({
           msgId: data?.message?.id,
         });
 
+        // Log adicional para debug
+        console.log("[MessagesList] DEBUG - Mensagem recebida:", {
+          message: data?.message?.body,
+          ticketUuid: data?.message?.ticket?.uuid,
+          ticketId: data?.message?.ticketId,
+          urlUuid: ticketUuidFromUrl,
+          currentRoomId: currentRoomIdRef.current
+        });
+
         // CRÍTICO: Sempre verificar se a mensagem pertence ao ticket atual
         // Se não houver UUID, verificar pelo ticketId
         // Se nenhum dos dois bater, REJEITAR a mensagem
@@ -1178,6 +1190,7 @@ const MessagesList = ({
         }
 
         if (data.action === "create") {
+          console.log("[MessagesList] Executando ADD_MESSAGE para mensagem:", data.message.id);
           dispatch({ type: "ADD_MESSAGE", payload: data.message });
           scrollToBottom();
           
