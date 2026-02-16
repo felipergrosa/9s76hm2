@@ -738,6 +738,44 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           wsocket.ev.on("messaging-history.set", async (messageSet: any) => {
             try {
               const wppId = whatsapp.id;
+
+              // ══════════════════════════════════════════════════════════════
+              // CAPTURA LID↔PN: HistorySync envia mapeamentos completos
+              // ══════════════════════════════════════════════════════════════
+              const lidMappings = Array.isArray(messageSet?.phoneNumberToLidMappings)
+                ? messageSet.phoneNumberToLidMappings
+                : [];
+              if (lidMappings.length) {
+                logger.info(`[wbot] HistorySync: ${lidMappings.length} mapeamentos LID↔PN recebidos para whatsappId=${wppId}`);
+                try {
+                  const LidMapping = (await import("../models/LidMapping")).default;
+                  let saved = 0;
+                  for (const mapping of lidMappings) {
+                    const pnJid = mapping?.pnJid || mapping?.phoneNumber;
+                    const lidJid = mapping?.lidJid || mapping?.lid;
+                    if (!pnJid || !lidJid) continue;
+                    const pnDigits = String(pnJid).replace(/\D/g, "");
+                    if (pnDigits.length < 10 || pnDigits.length > 20) continue;
+                    try {
+                      await LidMapping.upsert({
+                        lid: String(lidJid).includes("@") ? String(lidJid) : `${lidJid}@lid`,
+                        phoneNumber: pnDigits,
+                        companyId: whatsapp.companyId,
+                        whatsappId: wppId,
+                        source: "history-sync",
+                        verified: true
+                      });
+                      saved++;
+                    } catch { }
+                  }
+                  if (saved > 0) {
+                    logger.info(`[wbot] HistorySync: ${saved} mapeamentos LID↔PN salvos na tabela LidMapping`);
+                  }
+                } catch (e: any) {
+                  logger.warn(`[wbot] Falha ao processar phoneNumberToLidMappings: ${e?.message}`);
+                }
+              }
+
               const labels = Array.isArray(messageSet?.labels) ? messageSet.labels : [];
               const chats = Array.isArray(messageSet?.chats) ? messageSet.chats : [];
               if (labels.length) {

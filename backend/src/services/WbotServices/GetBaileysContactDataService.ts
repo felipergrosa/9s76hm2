@@ -64,9 +64,9 @@ const GetBaileysContactDataService = async (
         }
 
         // 4. Se tiver LID, tentar buscar metadados por ele (Pode trazer o nome verificado)
-        if (result?.lid) {
+        if ((result as any)?.lid) {
             try {
-                const lidBusiness = await (wbot as any).getBusinessProfile?.(result.lid);
+                const lidBusiness = await (wbot as any).getBusinessProfile?.((result as any).lid);
                 if (lidBusiness) {
                     console.log("[DEBUG] Business Profile (via LID) Bruto:", JSON.stringify(lidBusiness, null, 2));
                     (data as any).businessProfileLid = lidBusiness;

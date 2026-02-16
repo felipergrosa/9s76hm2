@@ -6389,13 +6389,59 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       console.log(`[contacts.update] contato: ${contact.id} | notify:`, contact.notify, '| objeto completo:', contact);
       if (!contact?.id) return;
 
-      // Tratamento especial para LIDs: atualizar contatos PENDING_ existentes OU criar novo contato LID
+      // Tratamento especial para LIDs: atualizar contatos existentes e capturar mapeamentos PN
       if (contact.id.includes("@lid")) {
         const contactName = contact.notify || contact.verifiedName || "";
 
         try {
-          // Primeiro: tentar atualizar contato PENDING_ existente
-          const pendingContact = await Contact.findOne({
+          // Se Baileys enviou phoneNumber junto com o LID, salvar mapeamento
+          const pnFromEvent = contact.phoneNumber || contact.pn || contact.number;
+          if (pnFromEvent) {
+            const pnDigits = String(pnFromEvent).replace(/\D/g, "");
+            if (pnDigits.length >= 10 && pnDigits.length <= 20) {
+              try {
+                const LidMapping = (await import("../../models/LidMapping")).default;
+                await LidMapping.upsert({
+                  lid: contact.id,
+                  phoneNumber: pnDigits,
+                  companyId,
+                  whatsappId: wbot.id,
+                  source: "contacts-update",
+                  verified: true
+                });
+                logger.info(`[contacts.update] LID ${contact.id} → PN ${pnDigits} salvo via contacts.update`);
+
+                // Atualizar contato LID existente com o número real
+                const lidContact = await Contact.findOne({
+                  where: {
+                    companyId,
+                    [Op.or]: [
+                      { remoteJid: contact.id },
+                      { lidJid: contact.id }
+                    ]
+                  }
+                });
+                if (lidContact) {
+                  const currentDigits = (lidContact.number || "").replace(/\D/g, "");
+                  const hasValidNumber = currentDigits.length >= 10 && currentDigits.length <= 15;
+                  if (!hasValidNumber) {
+                    await lidContact.update({
+                      number: pnDigits,
+                      remoteJid: `${pnDigits}@s.whatsapp.net`,
+                      lidJid: contact.id,
+                      canonicalNumber: pnDigits
+                    });
+                    logger.info(`[contacts.update] Contato ${lidContact.id} atualizado de LID para PN real: ${pnDigits}`);
+                  }
+                }
+              } catch (mapErr: any) {
+                logger.warn({ err: mapErr?.message }, `[contacts.update] Erro ao salvar mapeamento LID→PN`);
+              }
+            }
+          }
+
+          // Atualizar nome de contatos LID existentes
+          const existingLidContact = await Contact.findOne({
             where: {
               companyId,
               [Op.or]: [
@@ -6405,21 +6451,14 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
             }
           });
 
-          if (pendingContact) {
+          if (existingLidContact) {
             if (contactName) {
-              const currentName = (pendingContact.name || "").trim();
-              const isPendingName = currentName === "" || currentName.startsWith("Contato ") || currentName === pendingContact.number;
+              const currentName = (existingLidContact.name || "").trim();
+              const isPendingName = currentName === "" || currentName.startsWith("Contato ") || currentName === existingLidContact.number;
               if (isPendingName) {
-                await pendingContact.update({ name: contactName });
-                logger.info(`[contacts.update] LID ${contact.id} → nome atualizado para "${contactName}" (contactId=${pendingContact.id})`);
+                await existingLidContact.update({ name: contactName });
+                logger.info(`[contacts.update] LID ${contact.id} → nome atualizado para "${contactName}" (contactId=${existingLidContact.id})`);
               }
-            }
-          } else {
-            // NÃO criar contatos novos aqui — isso gerava PENDING_ com JIDs inválidos.
-            // A criação de contatos LID deve ser feita apenas pelo fluxo de mensagens (verifyContact),
-            // onde temos mais contexto (pushName, remoteJidAlt, etc.)
-            if (contactName) {
-              logger.info(`[contacts.update] LID ${contact.id} com nome "${contactName}" — contato será criado quando receber mensagem`);
             }
           }
         } catch (err: any) {

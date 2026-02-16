@@ -258,42 +258,45 @@ export async function resolveMessageContact(
   }
 
   // ─── CAMADA 3: Criação (último recurso) ───
-  // PADRONIZAÇÃO: Usar CreateOrUpdateContactService em vez de createContact duplicado
-  const contactName = ids.pushName || ids.pnDigits || ids.lidJid;
-  const contactNumber = ids.pnDigits || ((ids.lidJid && ids.lidJid.replace(/\D/g, "")) || "");
   const contactRemoteJid = ids.pnJid || ids.lidJid;
+  const isLidOnly = !ids.pnDigits && !!ids.lidJid;
 
-  logger.info({
-    lidJid: ids.lidJid,
-    contactNumber,
-    contactName,
-    strategy: "CreateOrUpdateContactService"
-  }, "[ContactResolver] Tentando criar contato via serviço padronizado");
+  let newContact: Contact | null = null;
 
-  let newContact = await CreateOrUpdateContactService({
-    name: contactName,
-    number: contactNumber,
-    isGroup: false,
-    companyId,
-    whatsappId: wbot.id,
-    remoteJid: contactRemoteJid,
-    wbot,
-    checkProfilePic: true
-  });
+  if (!isLidOnly) {
+    // CASO A: Temos o número real (PN) → criar contato normalmente
+    const contactName = ids.pushName || ids.pnDigits;
+    const contactNumber = ids.pnDigits || "";
 
-  if (!newContact) {
-    // CreateOrUpdateContactService retornou null (bloqueou LID >14 dígitos).
-    // Em vez de throw (que mata a mensagem inteira), criar contato PENDING_
-    // diretamente para que a mensagem seja processada.
-    const pendingNumber = `PENDING_${ids.lidJid || contactNumber}`;
-    const pendingName = ids.pushName || pendingNumber;
-
-    logger.warn({
-      lidJid: ids.lidJid,
+    logger.info({
       contactNumber,
-      pendingNumber,
-      pendingName
-    }, "[ContactResolver] CreateOrUpdateContactService bloqueou LID — criando contato PENDING para não perder mensagem");
+      contactName,
+      strategy: "CreateOrUpdateContactService-PN"
+    }, "[ContactResolver] Criando contato com número real");
+
+    newContact = await CreateOrUpdateContactService({
+      name: contactName,
+      number: contactNumber,
+      isGroup: false,
+      companyId,
+      whatsappId: wbot.id,
+      remoteJid: contactRemoteJid,
+      wbot,
+      checkProfilePic: true
+    });
+  }
+
+  if (!newContact && isLidOnly) {
+    // CASO B: Só temos LID, sem PN → criar contato com LID como
+    // identificador interno, mas NUNCA colocar dígitos do LID no campo number.
+    // Usar pushName como nome. O número será preenchido quando o PN for descoberto.
+    const contactName = ids.pushName || ids.lidJid;
+
+    logger.info({
+      lidJid: ids.lidJid,
+      contactName,
+      strategy: "LID-direct-create"
+    }, "[ContactResolver] Criando contato via LID (sem PN disponível) — número será preenchido quando descoberto");
 
     try {
       const CompaniesSettings = (await import("../../models/CompaniesSettings")).default;
@@ -303,24 +306,30 @@ export async function resolveMessageContact(
       newContact = await Contact.findOrCreate({
         where: {
           companyId,
-          remoteJid: contactRemoteJid
+          remoteJid: ids.lidJid
         },
         defaults: {
-          name: pendingName,
-          number: pendingNumber,
+          name: contactName,
+          number: contactName, // pushName como number (não dígitos do LID)
           isGroup: false,
           companyId,
-          remoteJid: contactRemoteJid,
-          lidJid: ids.lidJid || null,
+          remoteJid: ids.lidJid,
+          lidJid: ids.lidJid,
           channel: "whatsapp",
           acceptAudioMessage: acceptAudioMessageContact,
           whatsappId: wbot.id
         }
       }).then(([c]) => c);
-    } catch (pendingErr: any) {
-      logger.error({ err: pendingErr?.message, lidJid: ids.lidJid }, "[ContactResolver] Falha ao criar contato PENDING");
-      throw new Error(`LID_CREATION_BLOCKED: Não foi possível criar contato para ${ids.lidJid}`);
+    } catch (createErr: any) {
+      logger.error({ err: createErr?.message, lidJid: ids.lidJid }, "[ContactResolver] Falha ao criar contato LID");
+      throw new Error(`LID_CREATION_FAILED: Não foi possível criar contato para ${ids.lidJid}`);
     }
+  }
+
+  if (!newContact) {
+    // Fallback final: CreateOrUpdateContactService retornou null por outro motivo
+    logger.error({ ids }, "[ContactResolver] Não foi possível criar contato por nenhuma estratégia");
+    throw new Error(`CONTACT_CREATION_FAILED: Sem PN e sem LID para criar contato`);
   }
 
   // Refresh Avatar (async throttle) - O Service já faz, mas mal não faz garantir
