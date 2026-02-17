@@ -7,6 +7,7 @@ import { getIO } from "../../libs/socket";
 import wbotMonitor from "./wbotMonitor";
 import logger from "../../utils/logger";
 import * as Sentry from "@sentry/node";
+import { Op } from "sequelize";
 
 /**
  * Inicia sessão WhatsApp usando adapters (Baileys ou Official API)
@@ -107,8 +108,11 @@ export const StartWhatsAppSessionUnified = async (
                   const Contact = require("../../models/Contact").default;
                   const contactsToUpdate = await Contact.findAll({
                     where: {
-                      remoteJid: mapping.lid,
-                      companyId
+                      companyId,
+                      [Op.or]: [
+                        { remoteJid: mapping.lid },  // Antigo: remoteJid com LID
+                        { lidJid: mapping.lid }      // Novo: campo lidJid
+                      ]
                     }
                   });
                   
