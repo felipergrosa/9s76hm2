@@ -1,0 +1,73 @@
+FROM node:18-bullseye AS build
+WORKDIR /app
+ENV NODE_ENV=development
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV NPM_CONFIG_LEGACY_PEER_DEPS=true
+ENV PYTHON=/usr/bin/python3
+ENV npm_config_python=/usr/bin/python3
+
+# Copia apenas manifestos para aproveitar cache
+COPY package*.json ./
+
+# Toolchain para dependências nativas
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+       python3 python-is-python3 python3-dev python3-distutils \
+       build-essential pkg-config libssl-dev git ca-certificates \
+       libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
+       graphicsmagick ghostscript \
+  && rm -rf /var/lib/apt/lists/*
+
+# Instala dependências com abordagem mais conservadora
+RUN npm cache clean --force \
+  && npm config set fund false \
+  && npm config set audit false \
+  && npm config set fetch-retry-mintimeout 10000 \
+  && npm config set fetch-retry-maxtimeout 60000
+
+# Instala com yarn como alternativa (mais robusto para projetos com muitos peer deps)
+RUN npm install -g yarn \
+  && yarn config set network-timeout 600000 \
+  && yarn install --verbose \
+  || (echo "Yarn failed, trying npm..." && \
+      npm install --legacy-peer-deps --no-audit --no-fund)
+
+# Copia o restante do código
+COPY . .
+
+# Build Typescript
+RUN npm run build
+
+# Runtime
+FROM node:18-bullseye-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Dependências runtime
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+       python3 python-is-python3 python3-dev python3-distutils \
+       build-essential pkg-config libssl-dev \
+       libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
+       graphicsmagick ghostscript curl \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package*.json ./
+COPY --from=build /app/public ./public
+COPY --from=build /app/scripts ./scripts
+COPY --from=build /app/private ./private
+COPY --from=build /app/certs ./certs
+
+RUN mkdir -p /app/public/company1 /app/private \
+  && useradd -m -u 1001 -s /bin/bash nodeapp \
+  && chown -R nodeapp:nodeapp /app
+
+USER nodeapp
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:8080/health || exit 1
+
+EXPOSE 8080
+CMD ["npm", "start"]
