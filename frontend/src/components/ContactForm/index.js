@@ -359,6 +359,16 @@ export function ContactForm ({ initialContact, onSave, onCancel }) {
                                 fullWidth
                             />
                         </Grid>
+                        <Grid item xs={12} md={6}>
+                            <Field
+                                as={TextField}
+                                label="Segmento"
+                                name="segment"
+                                variant="outlined"
+                                margin="dense"
+                                fullWidth
+                            />
+                        </Grid>
                         <Grid item xs={12} spacing={1}>
                             <Grid container spacing={1}>
                                 <Grid xs={6} item>
