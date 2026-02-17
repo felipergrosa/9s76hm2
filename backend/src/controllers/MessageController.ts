@@ -42,6 +42,8 @@ import TranscribeAudioMessageService from "../services/MessageServices/Transcrib
 import ShowMessageService, { GetWhatsAppFromMessage } from "../services/MessageServices/ShowMessageService";
 import SyncChatHistoryService from "../services/MessageServices/SyncChatHistoryService";
 import ImportContactHistoryService from "../services/MessageServices/ImportContactHistoryService";
+import ExportChatService from "../services/MessageServices/ExportChatService";
+import MessageStatsService from "../services/MessageServices/MessageStatsService";
 
 // Função para obter nome e extensão do arquivo
 function obterNomeEExtensaoDoArquivo(url: string): string {
@@ -1735,5 +1737,55 @@ export const markAsRead = async (req: Request, res: Response): Promise<Response>
   } catch (err) {
     logger.error("Erro ao marcar ticket como lido:", err);
     throw new AppError("ERR_MARK_AS_READ", 500);
+  }
+};
+
+export const exportChat = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { format = "json", includeMedia = false } = req.query;
+  const { companyId } = req.user;
+
+  try {
+    const result = await ExportChatService({
+      ticketId,
+      companyId,
+      format: format as "json" | "csv" | "txt",
+      includeMedia: includeMedia === "true"
+    });
+
+    if (!result.success) {
+      throw new AppError(result.error || "Erro ao exportar conversa", 400);
+    }
+
+    return res.status(200).json(result);
+  } catch (err: any) {
+    logger.error("Erro ao exportar conversa:", err);
+    if (err instanceof AppError) {
+      return res.status(err.statusCode).json({ message: err.message });
+    }
+    return res.status(500).json({ message: "Erro ao exportar conversa" });
+  }
+};
+
+export const getMessageStats = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId, contactId, period = 30, includeMedia = true } = req.query;
+  const { companyId } = req.user;
+
+  try {
+    const result = await MessageStatsService({
+      ticketId: ticketId ? Number(ticketId) : undefined,
+      contactId: contactId ? Number(contactId) : undefined,
+      companyId,
+      period: Number(period),
+      includeMedia: includeMedia === "true"
+    });
+
+    return res.status(200).json(result);
+  } catch (err: any) {
+    logger.error("Erro ao gerar estatísticas:", err);
+    return res.status(500).json({ 
+      message: "Erro ao gerar estatísticas de mensagens",
+      error: err.message 
+    });
   }
 };

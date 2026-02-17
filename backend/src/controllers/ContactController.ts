@@ -48,6 +48,8 @@ import ListDuplicateContactsService from "../services/ContactServices/ListDuplic
 import ProcessDuplicateContactsService from "../services/ContactServices/ProcessDuplicateContactsService";
 import ProcessDuplicateContactsByNameService from "../services/ContactServices/ProcessDuplicateContactsByNameService";
 import ListContactsPendingNormalizationService from "../services/ContactServices/ListContactsPendingNormalizationService";
+import FindDuplicatesService from "../services/ContactServices/FindDuplicatesService";
+import AdvancedMergeContactsService from "../services/ContactServices/AdvancedMergeContactsService";
 import ProcessContactsNormalizationService from "../services/ContactServices/ProcessContactsNormalizationService";
 import BackfillWalletsAndPersonalTagsService from "../services/ContactServices/BackfillWalletsAndPersonalTagsService";
 import SyncContactWalletsAndPersonalTagsService from "../services/ContactServices/SyncContactWalletsAndPersonalTagsService";
@@ -2236,7 +2238,7 @@ export const findDuplicateLidContacts = async (req: Request, res: Response): Pro
 };
 
 // Mesclar dois contatos (LID para número real)
-export const mergeContacts = async (req: Request, res: Response): Promise<Response> => {
+export const advancedMergeContacts = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
   const { primaryContactId, secondaryContactId } = req.body as { 
     primaryContactId: number; 
@@ -2334,6 +2336,63 @@ export const groups = async (req: AuthenticatedRequest, res: Response): Promise<
       groups: [],
       count: 0,
       hasMore: false
+    });
+  }
+};
+
+export const findDuplicates = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const { criteria = "both", contactId } = req.query;
+
+  try {
+    const result = await FindDuplicatesService({
+      companyId,
+      criteria: criteria as "number" | "name" | "both",
+      contactId: contactId ? Number(contactId) : undefined
+    });
+
+    return res.json(result);
+  } catch (error: any) {
+    logger.error(`[ContactController.findDuplicates] Erro: ${error.message}`);
+    return res.status(500).json({ 
+      error: error.message || "Erro ao buscar duplicados",
+      duplicateGroups: [],
+      totalDuplicates: 0,
+      suggestions: []
+    });
+  }
+};
+
+export const bulkMergeContacts = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const { primaryContactId, contactIdsToMerge, preserveData } = req.body;
+
+  try {
+    if (!primaryContactId || !contactIdsToMerge || !Array.isArray(contactIdsToMerge)) {
+      return res.status(400).json({ 
+        error: "primaryContactId e contactIdsToMerge são obrigatórios" 
+      });
+    }
+
+    if (contactIdsToMerge.length === 0) {
+      return res.status(400).json({ 
+        error: "É necessário informar pelo menos um contato para mesclar" 
+      });
+    }
+
+    const result = await AdvancedMergeContactsService({
+      companyId,
+      primaryContactId: Number(primaryContactId),
+      contactIdsToMerge: contactIdsToMerge.map(id => Number(id)),
+      preserveData
+    });
+
+    return res.json(result);
+  } catch (error: any) {
+    logger.error(`[ContactController.bulkMergeContacts] Erro: ${error.message}`);
+    return res.status(500).json({ 
+      error: error.message || "Erro ao mesclar contatos",
+      success: false
     });
   }
 };

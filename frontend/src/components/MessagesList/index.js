@@ -1055,14 +1055,22 @@ const MessagesList = ({
           const firstMsg = data?.messages?.[0];
           const firstMsgUuid = firstMsg?.ticket?.uuid || null;
           const newRoomId = ticketUuid || firstMsgUuid || null;
+          console.log("[MessagesList] ===== DADOS DO TICKET =====");
+          console.log("[MessagesList] ticketId da URL:", ticketId);
+          console.log("[MessagesList] ticket.uuid:", ticketUuid);
+          console.log("[MessagesList] firstMsg.ticket.uuid:", firstMsgUuid);
+          console.log("[MessagesList] newRoomId (para joinRoom):", newRoomId);
           if (newRoomId) {
             currentRoomIdRef.current = newRoomId;
             // Reforço: garante que estamos na sala (o Ticket/index.js é o dono principal)
             try {
               if (typeof socket.joinRoom === "function") {
+                console.log("[MessagesList] Chamando socket.joinRoom com:", newRoomId);
                 socket.joinRoom(newRoomId);
               }
             } catch { }
+          } else {
+            console.error("[MessagesList] ***** ERRO: newRoomId é nulo! Não é possível entrar na sala *****");
           }
         }
 
@@ -1146,7 +1154,8 @@ const MessagesList = ({
         const currentUuid = (currentRoomIdRef.current || ticketUuidFromUrl || "").toString().trim();
         const urlIsUuid = Boolean(ticketUuidFromUrl);
 
-        console.debug("[MessagesList] appMessage", {
+        console.log("[MessagesList] ===== MENSAGEM RECEBIDA =====");
+        console.log("[MessagesList] appMessage", {
           action: data?.action,
           evtUuid,
           evtTicketId,
@@ -1155,6 +1164,7 @@ const MessagesList = ({
           currentTicketId: ticketId,
           currentUuid,
           msgId: data?.message?.id,
+          messageBody: data?.message?.body
         });
 
         // Log adicional para debug
@@ -1173,21 +1183,27 @@ const MessagesList = ({
         // Preferência: comparar UUID quando disponível (rota em uuid ou sala em uuid)
         if (hasUuid && currentUuid && String(evtUuid) === String(currentUuid)) {
           shouldHandle = true;
+          console.log("[MessagesList] UUID bateu - shouldHandle = true");
         } else if (!urlIsUuid && evtTicketId && String(evtTicketId) === String(ticketId)) {
           // Compatibilidade: quando a rota ainda é numérica, compara ticketId
           shouldHandle = true;
+          console.log("[MessagesList] TicketId bateu - shouldHandle = true");
         }
 
         if (!shouldHandle) {
-          console.debug("[MessagesList] Rejeitando mensagem de outro ticket", {
+          console.log("[MessagesList] ***** REJEITANDO MENSAGEM DE OUTRO TICKET *****", {
             evtUuid,
             evtTicketId,
             currentRoom: currentRoomIdRef.current,
             currentUuid,
-            ticketId
+            ticketId,
+            hasUuid,
+            urlIsUuid
           });
           return;
         }
+
+        console.log("[MessagesList] ***** PROCESSANDO MENSAGEM *****", { action: data.action });
 
         if (data.action === "create") {
           console.log("[MessagesList] Executando ADD_MESSAGE para mensagem:", data.message.id);

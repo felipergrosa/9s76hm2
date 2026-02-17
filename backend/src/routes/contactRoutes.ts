@@ -24,6 +24,7 @@ contactRoutes.get("/groups", isAuth, ContactController.groups);
 
 contactRoutes.get("/contacts", isAuth, ContactController.index);
 contactRoutes.get("/contacts/duplicates", isAuth, ContactController.listDuplicates);
+contactRoutes.get("/contacts/find-duplicates", isAuth, ContactController.findDuplicates);
 contactRoutes.get("/contacts/pending-normalization", isAuth, ContactController.listPendingNormalization);
 contactRoutes.get("/contacts/list", isAuth, ContactController.list);
 contactRoutes.get("/contacts/segments", isAuth, ContactController.segments);
@@ -40,6 +41,7 @@ contactRoutes.post(
   isAuth,
   ContactController.processDuplicatesByName
 );
+contactRoutes.post("/contacts/merge", isAuth, ContactController.bulkMergeContacts);
 contactRoutes.post("/contacts/normalization/process", isAuth, ContactController.processNormalization);
 contactRoutes.post(
   "/contacts/backfill-wallets-tags",

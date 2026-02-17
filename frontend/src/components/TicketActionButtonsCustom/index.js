@@ -49,6 +49,7 @@ import ShowTicketLogModal from "../ShowTicketLogModal";
 import TicketMessagesDialog from "../TicketMessagesDialog";
 import { useTheme } from "@material-ui/styles";
 import ImportHistoryModal from "../ImportHistoryModal";
+import ExportChatModal from "../ExportChatModal";
 
 const useStyles = makeStyles(theme => ({
     actionButtons: {
@@ -112,6 +113,7 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
     const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
     const [disableBot, setDisableBot] = useState(ticket.contact.disableBot);
     const [importHistoryModalOpen, setImportHistoryModalOpen] = useState(false);
+    const [exportChatModalOpen, setExportChatModalOpen] = useState(false);
 
     const [showSchedules, setShowSchedules] = useState(false);
     const [enableIntegration, setEnableIntegration] = useState(ticket.useIntegration);
@@ -618,6 +620,10 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                         <PictureAsPdf style={{ color: '#c62828', marginRight: 10 }} />
                         {i18n.t("ticketsList.buttons.exportAsPDF")}
                     </MenuItem>
+                    <MenuItem onClick={() => { handleCloseMenu(); setExportChatModalOpen(true); }}>
+                        <DownloadIcon style={{ color: '#2e7d32', marginRight: 10 }} />
+                        Exportar Conversa
+                    </MenuItem>
                     {ticket.channel === "whatsapp" && (
                         <MenuItem onClick={() => { handleCloseMenu(); setImportHistoryModalOpen(true); }}>
                             <DownloadIcon style={{ color: '#00838f', marginRight: 10 }} />
@@ -669,6 +675,11 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
             <ImportHistoryModal
                 open={importHistoryModalOpen}
                 onClose={() => setImportHistoryModalOpen(false)}
+                ticketId={ticket.id}
+            />
+            <ExportChatModal
+                open={exportChatModalOpen}
+                onClose={() => setExportChatModalOpen(false)}
                 ticketId={ticket.id}
             />
         </>

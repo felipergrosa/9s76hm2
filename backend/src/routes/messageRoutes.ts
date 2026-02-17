@@ -28,6 +28,8 @@ messageRoutes.get('/messages/:ticketId/pinned', isAuth, MessageController.listPi
 messageRoutes.get('/messages/:ticketId/media', isAuth, MessageController.listSharedMedia);
 messageRoutes.post('/messages/:messageId/pin', isAuth, MessageController.pinMessage);
 messageRoutes.post('/tickets/:ticketId/mark-as-read', isAuth, MessageController.markAsRead);
+messageRoutes.get('/messages/:ticketId/export', isAuth, MessageController.exportChat);
+messageRoutes.get('/messages/stats', isAuth, MessageController.getMessageStats);
 
 // Rotas genéricas com parâmetros dinâmicos devem vir por último
 messageRoutes.get("/messages/:ticketId", isAuth, MessageController.index);

@@ -180,17 +180,28 @@ export const initIO = (httpServer: Server): SocketIO => {
 
     socket.on("joinChatBox", async (ticketId: string, callback?: (error?: string) => void) => {
       const normalizedId = (ticketId ?? "").toString().trim();
+      console.log("[SOCKET] joinChatBox chamado com:", { 
+        ticketId, 
+        normalizedId, 
+        isValid: isValidUUID(normalizedId),
+        socketId: socket.id,
+        namespace: socket.nsp.name
+      });
+      
       if (!normalizedId || normalizedId === "undefined" || !isValidUUID(normalizedId)) {
         logger.warn(`ticketId inválido: ${normalizedId || "vazio"}`);
+        console.error("[SOCKET] ticketId inválido:", { normalizedId, isValid: isValidUUID(normalizedId) });
         callback?.("ID de ticket inválido");
         return;
       }
       await socket.join(normalizedId);
       logger.info(`Cliente entrou no canal de ticket ${ticketId} no namespace ${socket.nsp.name}`);
+      
       if (process.env.SOCKET_DEBUG === "true") {
         try {
           const sockets = await socket.nsp.in(normalizedId).fetchSockets();
           logger.info(`[SOCKET JOIN DEBUG] ns=${socket.nsp.name} room=${normalizedId} count=${sockets.length}`);
+          console.log(`[SOCKET] Clientes na sala ${normalizedId}:`, sockets.length);
         } catch (e) {
           logger.warn(`[SOCKET JOIN DEBUG] falha ao consultar sala ${normalizedId} em ${socket.nsp.name}`);
         }
