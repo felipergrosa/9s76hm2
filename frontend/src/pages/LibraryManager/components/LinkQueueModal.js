@@ -15,8 +15,8 @@ import {
     Box
 } from '@material-ui/core';
 import { toast } from 'react-toastify';
-import api from '../../../services/api';
-import toastError from '../../../errors/toastError';
+import api from '../../../../services/api';
+import toastError from '../../../../errors/toastError';
 
 const LinkQueueModal = ({ open, onClose, folder, onSuccess }) => {
     const [queues, setQueues] = useState([]);

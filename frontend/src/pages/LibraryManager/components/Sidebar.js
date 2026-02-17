@@ -3,8 +3,8 @@ import { Box, Typography, Divider } from '@material-ui/core';
 import { Folder as FolderIcon } from '@material-ui/icons';
 import useStyles from '../styles';
 import FolderTreeItem from './FolderTreeItem';
-import * as libraryApi from '../../../services/libraryApi';
-import toastError from '../../../errors/toastError';
+import * as libraryApi from '../../../../services/libraryApi';
+import toastError from '../../../../errors/toastError';
 
 const Sidebar = ({ currentFolderId, onFolderClick }) => {
     const classes = useStyles();

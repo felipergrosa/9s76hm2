@@ -22,8 +22,8 @@ import {
     InsertDriveFile as FileIcon
 } from '@material-ui/icons';
 import { toast } from 'react-toastify';
-import api from '../../../services/api';
-import toastError from '../../../errors/toastError';
+import api from '../../../../services/api';
+import toastError from '../../../../errors/toastError';
 import Autocomplete from '@material-ui/lab/Autocomplete';
 
 const UploadModal = ({ open, onClose, currentFolder, onUploadComplete, user }) => {
