@@ -8,7 +8,7 @@ import {
     TextField,
     Box
 } from '@material-ui/core';
-import TagAutocomplete from '../../../../components/TagAutocomplete';
+import TagAutocomplete from '../../../components/TagAutocomplete';
 
 const CreateFolderModal = ({ open, onClose, onSubmit, parentFolder }) => {
     const [name, setName] = useState('');

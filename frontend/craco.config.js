@@ -1,4 +1,5 @@
 const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
+const path = require("path");
 
 const getRemoveConsolePlugin = () => {
   if (process.env.NODE_ENV !== "production") return [];
