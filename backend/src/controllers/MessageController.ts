@@ -13,6 +13,7 @@ import Whatsapp from "../models/Whatsapp";
 import path from "path";
 import { isNil } from "lodash";
 import { Mutex } from "async-mutex";
+import logger from "../utils/logger";
 import { Op } from "sequelize";
 
 import ListMessagesService from "../services/MessageServices/ListMessagesService";
@@ -41,6 +42,19 @@ import TranscribeAudioMessageService from "../services/MessageServices/Transcrib
 import ShowMessageService, { GetWhatsAppFromMessage } from "../services/MessageServices/ShowMessageService";
 import SyncChatHistoryService from "../services/MessageServices/SyncChatHistoryService";
 import ImportContactHistoryService from "../services/MessageServices/ImportContactHistoryService";
+
+// Função para obter nome e extensão do arquivo
+function obterNomeEExtensaoDoArquivo(url: string): string {
+  const urlObj = new URL(url);
+  const pathname = urlObj.pathname;
+  const filename = pathname.split("/").pop() || "";
+  const parts = filename.split(".");
+
+  const nomeDoArquivo = parts[0];
+  const extensao = parts[1] || "";
+
+  return `${nomeDoArquivo}.${extensao}`;
+}
 
 type IndexQuery = {
   pageNumber: string;
@@ -755,25 +769,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     user: user!,
   });
 
-  if (ticket.channel === "whatsapp" && ticket.whatsappId) {
-    await SetTicketMessagesAsRead(ticket);
-  }
-
   return res.json({ count, messages, ticket, hasMore });
 };
-
-// Função para obter nome e extensão do arquivo
-function obterNomeEExtensaoDoArquivo(url: string): string {
-  const urlObj = new URL(url);
-  const pathname = urlObj.pathname;
-  const filename = pathname.split("/").pop() || "";
-  const parts = filename.split(".");
-
-  const nomeDoArquivo = parts[0];
-  const extensao = parts[1] || "";
-
-  return `${nomeDoArquivo}.${extensao}`;
-}
 
 // Armazenar mensagem
 export const store = async (req: Request, res: Response): Promise<Response> => {
@@ -1714,5 +1711,29 @@ export const listSharedMedia = async (req: Request, res: Response): Promise<Resp
   } catch (error: any) {
     console.error("[listSharedMedia] Erro:", error);
     return res.status(500).json({ error: error.message || "Erro ao listar mídia" });
+  }
+};
+
+export const markAsRead = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+
+  try {
+    const ticket = await Ticket.findOne({
+      where: { id: ticketId, companyId }
+    });
+
+    if (!ticket) {
+      throw new AppError("ERR_NO_TICKET_FOUND", 404);
+    }
+
+    if (ticket.channel === "whatsapp" && ticket.whatsappId) {
+      await SetTicketMessagesAsRead(ticket);
+    }
+
+    return res.status(204).send();
+  } catch (err) {
+    logger.error("Erro ao marcar ticket como lido:", err);
+    throw new AppError("ERR_MARK_AS_READ", 500);
   }
 };
