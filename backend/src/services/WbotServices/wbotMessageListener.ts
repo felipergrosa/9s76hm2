@@ -1542,7 +1542,7 @@ const verifyContact = async (
         profilePicUrl: "",
         isGroup: false,
         companyId,
-        remoteJid: normalizedJid, // O LID completo - detecta isLinkedDevice automaticamente
+        remoteJid: null, // NÃO salvar LID como remoteJid
         whatsappId: wbot.id,
         wbot
       };
@@ -6320,7 +6320,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
               companyId,
               whatsappId: wbot.id,
               isGroup: false,
-              remoteJid: contact.id,  // O LID completo
+              remoteJid: null,  // NÃO salvar LID como remoteJid - será preenchido quando resolver
               lidJid: contact.id,
               profilePicUrl: "",
               pushName: contact.notify || null,
