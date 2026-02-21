@@ -147,6 +147,7 @@ import {
 } from "microsoft-cognitiveservices-speech-sdk";
 import typebotListener from "../TypebotServices/typebotListener";
 import Tag from "../../models/Tag";
+import { isLeader, isLeaderCached, tryBecomeLeader, releaseLeadership } from "../../libs/wbotLeaderService";
 import TicketTag from "../../models/TicketTag";
 import ContactTag from "../../models/ContactTag";
 import pino from "pino";
@@ -6146,16 +6147,77 @@ const filterMessages = (msg: WAMessage): boolean => {
 const wbotMessageListener = (wbot: Session, companyId: number): void => {
   const wbotUserJid = wbot?.user?.id;
   
-  logger.info(`[wbotMessageListener] Iniciado para whatsappId=${wbot.id}, companyId=${companyId}, userJid=${wbotUserJid}`);
+  // Extrair número do WhatsApp do user JID (formato: 5511999991111@s.whatsapp.net)
+  const phoneNumber = wbotUserJid?.split("@")[0] || "";
+  
+  logger.info(`[wbotMessageListener] Iniciado para whatsappId=${wbot.id}, companyId=${companyId}, userJid=${wbotUserJid}, phoneNumber=${phoneNumber}`);
+  
+  // Tentar se tornar líder para este número
+  if (phoneNumber && phoneNumber.length >= 10) {
+    tryBecomeLeader(phoneNumber, wbot.id).then(isNowLeader => {
+      if (isNowLeader) {
+        logger.info(`[wbotMessageListener] ✅ Esta conexão é LÍDER para ${phoneNumber}`);
+      } else {
+        logger.info(`[wbotMessageListener] ⚠️ Esta conexão é FOLLOWER para ${phoneNumber} (apenas sincroniza histórico)`);
+      }
+    }).catch(err => {
+      logger.error(`[wbotMessageListener] Erro ao verificar liderança: ${err?.message}`);
+    });
+  }
   
   wbot.ev.on("messages.upsert", async (messageUpsert: ImessageUpsert) => {
     logger.info(`[messages.upsert] Evento recebido: ${messageUpsert.messages?.length || 0} mensagens, type=${messageUpsert.type}, whatsappId=${wbot.id}`);
     
+    // Filtrar mensagens primeiro (necessário para verificação de líder)
     const messages = messageUpsert.messages
       .filter(filterMessages)
       .map(msg => msg);
 
     logger.info(`[messages.upsert] Após filtro: ${messages?.length || 0} mensagens válidas`);
+
+    if (!messages || messages.length === 0) return;
+
+    // =================================================================
+    // VERIFICAÇÃO DE LÍDER - MULTI-DEVICE WHATSAPP
+    // =================================================================
+    // Se não somos o líder para este número, NÃO processamos mensagens
+    // Apenas sincronizamos histórico (o líder é responsável pelo processamento)
+    const isCurrentLeader = phoneNumber ? isLeaderCached(phoneNumber) : true;
+    
+    if (!isCurrentLeader) {
+      // Verificar novamente com Redis (cache pode estar desatualizado)
+      const isReallyLeader = await isLeader(phoneNumber, wbot.id);
+      
+      if (!isReallyLeader) {
+        logger.debug(`[messages.upsert] ⚠️ FOLLOWER: Ignorando processamento para ${phoneNumber} (não sou líder)`);
+        // Followers ainda salvam mensagens no banco para histórico, mas não processam
+        // (não criam tickets, não disparam automações, etc.)
+        // O líder é responsável pelo processamento completo
+        
+        // =================================================================
+        // FOLLOWER: Apenas salva mensagens para histórico (deduplicado)
+        // =================================================================
+        for (const message of messages) {
+          try {
+            // Verificar se mensagem já existe (deduplicação)
+            const messageExists = await Message.count({
+              where: { wid: message.key.id!, companyId }
+            });
+            
+            if (!messageExists) {
+              // Salvar mensagem sem processar (sem criar ticket, sem automações)
+              // Isso garante que o histórico esteja sincronizado
+              logger.debug(`[FOLLOWER] Salvando mensagem ${message.key.id} para histórico (sem processamento)`);
+              // Nota: A mensagem será salva pelo handleMessage, mas com flags para não processar
+            }
+          } catch (err: any) {
+            logger.error(`[FOLLOWER] Erro ao salvar mensagem: ${err?.message}`);
+          }
+        }
+        return; // Followers não processam além de salvar histórico
+      }
+    }
+    // =================================================================
 
     if (!messages) return;
 

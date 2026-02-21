@@ -41,6 +41,25 @@ const CreateMessageService = async ({
   messageData,
   companyId
 }: Request): Promise<Message> => {
+  // =================================================================
+  // DEDUPLICAÇÃO MULTI-DEVICE: Verificar se mensagem já existe
+  // =================================================================
+  // Com múltiplas conexões do mesmo número, a mesma mensagem pode chegar
+  // em múltiplas conexões. Precisamos garantir que apenas uma seja salva.
+  const existingMessage = await Message.findOne({
+    where: {
+      wid: messageData.wid,
+      companyId
+    },
+    attributes: ["id", "wid", "ticketId"]
+  });
+
+  if (existingMessage) {
+    logger.debug(`[CreateMessageService] Mensagem já existe (deduplicada): wid=${messageData.wid}, id=${existingMessage.id}`);
+    return existingMessage;
+  }
+  // =================================================================
+
   // BLINDAGEM: Validação e correção de integridade ticket/contact
   if (messageData.contactId && messageData.ticketId) {
     const ticketCheck = await Ticket.findByPk(messageData.ticketId, { attributes: ["id", "contactId"] });

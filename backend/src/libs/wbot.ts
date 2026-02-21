@@ -33,6 +33,7 @@ import { Store } from "./store";
 import fs from "fs";
 import path from "path";
 import createOrUpdateBaileysService from "../services/BaileysServices/CreateOrUpdateBaileysService";
+import { releaseLeadership } from "./wbotLeaderService";
 
 const msgRetryCounterCache = new NodeCache({
   stdTTL: 600,
@@ -505,6 +506,22 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
                 await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
+                
+                // =================================================================
+                // LIBERAR LIDERANÇA - MULTI-DEVICE WHATSAPP
+                // =================================================================
+                // Extrair número do WhatsApp do user JID para liberar liderança
+                const phoneNumber = wsocket?.user?.id?.split("@")[0] || "";
+                if (phoneNumber && phoneNumber.length >= 10) {
+                  try {
+                    await releaseLeadership(phoneNumber, whatsapp.id);
+                    logger.info(`[wbot] Liderança liberada para ${phoneNumber} (whatsappId=${whatsapp.id})`);
+                  } catch (err: any) {
+                    logger.error(`[wbot] Erro ao liberar liderança: ${err?.message}`);
+                  }
+                }
+                // =================================================================
+                
                 // remove sessão em filesystem se existir
                 try {
                   const baseDir = path.resolve(
