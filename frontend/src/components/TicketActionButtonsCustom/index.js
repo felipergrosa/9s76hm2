@@ -113,8 +113,7 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
     const [acceptTicketWithouSelectQueueOpen, setAcceptTicketWithouSelectQueueOpen] = useState(false);
     const [showTicketLogOpen, setShowTicketLogOpen] = useState(false);
     const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
-    const [disableBot, setDisableBot] = useState(ticket.contact.disableBot);
-    const [importHistoryModalOpen, setImportHistoryModalOpen] = useState(false);
+    const [disableBot, setDisableBot] = useState(ticket?.contact?.disableBot || false);
     const [resyncConversationOpen, setResyncConversationOpen] = useState(false);
 
     const [showSchedules, setShowSchedules] = useState(false);
