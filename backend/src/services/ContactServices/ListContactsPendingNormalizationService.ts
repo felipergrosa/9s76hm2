@@ -1,7 +1,7 @@
 import { Op, WhereOptions, fn, col, where as sequelizeWhere, literal } from "sequelize";
 import Contact from "../../models/Contact";
 import { parsePhoneNumber } from "libphonenumber-js";
-import { formatPhoneNumber, safeNormalizePhoneNumber } from "../../utils/phone";
+import { formatPhoneNumber, safeNormalizePhoneNumber, isRealPhoneNumber, MAX_PHONE_DIGITS } from "../../utils/phone";
 
 interface ListParams {
   companyId: number;
@@ -81,7 +81,7 @@ const classifyPhoneNumber = (value: string | null | undefined): PhoneClassificat
   return digitsOnly.length > 15 ? "invalid" : "international";
 };
 
-const isValidCanonicalLength = (digits: string): boolean => digits.length >= 10 && digits.length <= 20;
+const isValidCanonicalLength = (digits: string): boolean => isRealPhoneNumber(digits);
 
 const detectIssues = (contact: Contact): NormalizationIssue[] => {
   const issues: NormalizationIssue[] = [];

@@ -561,7 +561,14 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               // CORREÇÃO: Resetar contadores de conflito ao conectar com sucesso
               conflictCountMap.delete(id);
               reconnectingWhatsapps.delete(id);
-              logger.info(`[wbot] Conexão estabelecida com sucesso para ${name}. Contadores de conflito resetados.`);
+              
+              // Resetar contador de erros Signal ao conectar com sucesso
+              try {
+                const { default: SignalErrorHandler } = require("../services/WbotServices/SignalErrorHandler");
+                SignalErrorHandler.resetErrorCount(id);
+              } catch { /* ignore */ }
+              
+              logger.info(`[wbot] Conexão estabelecida com sucesso para ${name}. Contadores de conflito e Signal resetados.`);
 
               // BLINDAGEM: Detectar reconexão com mesmo número e migrar histórico
               try {

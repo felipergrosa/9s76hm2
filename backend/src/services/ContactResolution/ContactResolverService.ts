@@ -8,7 +8,7 @@ import logger from "../../utils/logger";
 import { extractMessageIdentifiers, ExtractedIdentifiers } from "./extractMessageIdentifiers";
 import { resolveContact } from "./resolveContact";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
-import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { safeNormalizePhoneNumber, isRealPhoneNumber } from "../../utils/phone";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
 
 /**
@@ -103,7 +103,7 @@ export async function resolveMessageContact(
 
       // Validação: O contato encontrado tem um número válido?
       const digits = String(contact.number || "").replace(/\D/g, "");
-      const hasValidNumber = digits.length >= 10 && digits.length <= 20 && !contact.number?.includes("@lid");
+      const hasValidNumber = isRealPhoneNumber(digits) && !contact.number?.includes("@lid");
 
       if (hasValidNumber) {
         logger.info({
@@ -155,7 +155,7 @@ export async function resolveMessageContact(
     if (contactByWid) {
       try {
         const digits = String(contactByWid.number || "").replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 20) {
+        if (isRealPhoneNumber(digits)) {
           ids.pnDigits = digits;
           ids.pnJid = `${digits}@s.whatsapp.net`;
           const { canonical } = safeNormalizePhoneNumber(digits);
@@ -494,7 +494,7 @@ async function resolveFromSentWid(
     // Persistir LidMapping com base no number do contato real (cura para próximas mensagens)
     try {
       const digits = String(contact.number || "").replace(/\D/g, "");
-      if (digits.length >= 10 && digits.length <= 20) {
+      if (isRealPhoneNumber(digits)) {
         const whatsappId = (msgRow as any)?.ticket?.whatsappId || wbot.id;
         await LidMapping.upsert({
           lid: lidJid,
@@ -546,7 +546,7 @@ async function resolveLidToPN(
     });
     if (mapping?.phoneNumber) {
       const digits = mapping.phoneNumber.replace(/\D/g, "");
-      if (digits.length >= 10 && digits.length <= 20) {
+      if (isRealPhoneNumber(digits)) {
         ids.pnJid = `${digits}@s.whatsapp.net`;
         ids.pnDigits = digits;
         const { canonical } = safeNormalizePhoneNumber(digits);
@@ -572,7 +572,7 @@ async function resolveLidToPN(
       const resolvedPN = await lidStore.getPNForLID(lidId);
       if (resolvedPN) {
         const digits = resolvedPN.replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 20) {
+        if (isRealPhoneNumber(digits)) {
           const pnJid = resolvedPN.includes("@") ? jidNormalizedUser(resolvedPN) : `${digits}@s.whatsapp.net`;
           ids.pnJid = pnJid;
           ids.pnDigits = digits;
@@ -625,7 +625,7 @@ async function resolveLidToPN(
       const resolved = tryExtract(raw);
       if (resolved) {
         const digits = resolved.replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 20) {
+        if (isRealPhoneNumber(digits)) {
           const pnJid = resolved.includes("@") ? jidNormalizedUser(resolved) : `${digits}@s.whatsapp.net`;
           ids.pnJid = pnJid;
           ids.pnDigits = digits;
@@ -668,7 +668,7 @@ async function resolveLidToPN(
       if (result.jid && result.jid.includes("@s.whatsapp.net")) {
         const pnJid = jidNormalizedUser(result.jid);
         const digits = pnJid.replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 20) {
+        if (isRealPhoneNumber(digits)) {
           ids.pnJid = pnJid;
           ids.pnDigits = digits;
           const { canonical } = safeNormalizePhoneNumber(digits);
@@ -835,7 +835,7 @@ async function resolveLidToPN(
 
     if (existingContact && existingContact.number && !existingContact.number.startsWith("PENDING_")) {
       const digits = existingContact.number.replace(/\D/g, "");
-      if (digits.length >= 10 && digits.length <= 20) {
+      if (isRealPhoneNumber(digits)) {
         ids.pnJid = `${digits}@s.whatsapp.net`;
         ids.pnDigits = digits;
         const { canonical } = safeNormalizePhoneNumber(digits);

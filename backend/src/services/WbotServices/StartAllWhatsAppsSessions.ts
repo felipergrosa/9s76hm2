@@ -1,6 +1,7 @@
 import ListWhatsAppsService from "../WhatsappService/ListWhatsAppsService";
 import { StartWhatsAppSessionUnified } from "./StartWhatsAppSessionUnified";
 import * as Sentry from "@sentry/node";
+import logger from "../../utils/logger";
 
 export const StartAllWhatsAppsSessions = async (
   companyId: number
@@ -27,7 +28,9 @@ export const StartAllWhatsAppsSessions = async (
     //   });
     // }
 
-  } catch (e) {
+  } catch (e: any) {
+    logger.error(`[StartAllWhatsAppsSessions] Erro ao iniciar sessões da empresa ${companyId}: ${e?.message || e}`);
+    logger.error(`[StartAllWhatsAppsSessions] Stack: ${e?.stack}`);
     Sentry.captureException(e);
   }
 };

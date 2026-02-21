@@ -1,5 +1,5 @@
 import { proto, jidNormalizedUser, WASocket } from "@whiskeysockets/baileys";
-import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { safeNormalizePhoneNumber, MAX_PHONE_DIGITS, isRealPhoneNumber } from "../../utils/phone";
 import logger from "../../utils/logger";
 
 /**
@@ -83,7 +83,7 @@ export function extractMessageIdentifiers(
     // Estratégia 1: usar altJid se for PN válido
     if (altJid && altJid.includes("@s.whatsapp.net")) {
       const altDigits = altJid.replace(/\D/g, "");
-      if (altDigits.length >= 10 && altDigits.length <= 20) {
+      if (isRealPhoneNumber(altDigits)) {
         pnJid = jidNormalizedUser(altJid);
         logger.info({ lidJid: primaryJid, pnJid, strategy: "altJid" }, "[extractIdentifiers] LID→PN via altJid");
       }
@@ -98,7 +98,7 @@ export function extractMessageIdentifiers(
           const pn = signalRepo.getPNForLID(primaryJid) || signalRepo.getPNForLID(lidId);
           if (pn) {
             const pnDigits = String(pn).replace(/\D/g, "");
-            if (pnDigits.length >= 10 && pnDigits.length <= 20) {
+            if (isRealPhoneNumber(pnDigits)) {
               const pnJidCandidate = String(pn).includes("@") ? String(pn) : `${pnDigits}@s.whatsapp.net`;
               pnJid = jidNormalizedUser(pnJidCandidate);
               logger.info({ lidJid: primaryJid, pnJid, strategy: "signalRepository" }, "[extractIdentifiers] LID→PN via signalRepository");
@@ -115,7 +115,7 @@ export function extractMessageIdentifiers(
       const senderPn = (msg as any).senderPn;
       if (senderPn) {
         const spDigits = senderPn.replace(/\D/g, "");
-        if (spDigits.length >= 10 && spDigits.length <= 20) {
+        if (isRealPhoneNumber(spDigits)) {
           pnJid = senderPn.includes("@") ? jidNormalizedUser(senderPn) : `${spDigits}@s.whatsapp.net`;
           logger.info({ lidJid: primaryJid, pnJid, strategy: "senderPn" }, "[extractIdentifiers] LID→PN via senderPn");
         }
@@ -127,7 +127,7 @@ export function extractMessageIdentifiers(
       const participantPn = (key as any).participantPn;
       if (participantPn && participantPn.includes("@s.whatsapp.net")) {
         const ppDigits = participantPn.replace(/\D/g, "");
-        if (ppDigits.length >= 10 && ppDigits.length <= 20) {
+        if (isRealPhoneNumber(ppDigits)) {
           pnJid = jidNormalizedUser(participantPn);
           logger.info({ lidJid: primaryJid, pnJid, strategy: "participantPn" }, "[extractIdentifiers] LID→PN via participantPn");
         }
@@ -138,14 +138,14 @@ export function extractMessageIdentifiers(
     if (!pnJid) {
       try {
         const sock = wbot as any;
-        const looksPhoneLike = (digits: string) => digits.length >= 10 && digits.length <= 20;
+        const looksPhoneLike = (digits: string) => isRealPhoneNumber(digits);
 
         // 5.1) Lookup direto por chave (quando o store usa o LID como chave)
         if (sock.store?.contacts?.[primaryJid]) {
           const storedContact = sock.store.contacts[primaryJid];
           if (storedContact.phoneNumber) {
             const pnDigits = storedContact.phoneNumber.replace(/\D/g, "");
-            if (looksPhoneLike(pnDigits)) {
+            if (isRealPhoneNumber(pnDigits)) {
               pnJid = `${pnDigits}@s.whatsapp.net`;
               logger.info({ lidJid: primaryJid, pnJid, strategy: "store.phoneNumber" }, "[extractIdentifiers] LID→PN via store.phoneNumber");
             }
@@ -167,7 +167,7 @@ export function extractMessageIdentifiers(
               const pnCandidate = String(jid);
               if (pnCandidate.includes("@s.whatsapp.net")) {
                 const digits = pnCandidate.replace(/\D/g, "");
-                if (looksPhoneLike(digits)) {
+                if (isRealPhoneNumber(digits)) {
                   pnJid = pnCandidate;
                   logger.info({ lidJid: primaryJid, pnJid, strategy: "store.scan.lid" }, "[extractIdentifiers] LID→PN via store.contacts (scan)");
                   break;

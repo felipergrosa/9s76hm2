@@ -9,7 +9,7 @@ import logger from "../../utils/logger";
 import { isNil } from "lodash";
 import Whatsapp from "../../models/Whatsapp";
 import * as Sentry from "@sentry/node";
-import { safeNormalizePhoneNumber, isValidCanonicalPhoneNumber } from "../../utils/phone";
+import { safeNormalizePhoneNumber, isRealPhoneNumber, MAX_PHONE_DIGITS } from "../../utils/phone";
 import DispatchContactWebhookService from "./DispatchContactWebhookService";
 import ContactTag from "../../models/ContactTag";
 import Tag from "../../models/Tag";
@@ -200,30 +200,32 @@ const CreateOrUpdateContactService = async ({
     }
 
     // =================================================================
-    // GUARD: Número de telefone NUNCA pode ser um LID puro (>14 dígitos)
+    // GUARD: Número de telefone NUNCA pode ser um LID puro (>13 dígitos)
     // Telefones reais têm no máximo 13 dígitos (55 + DDD + 9 dígitos)
     // =================================================================
     if (!isGroup && number) {
       const numberDigitsOnly = number.replace(/\D/g, "");
-      // Usar validador E checar comprimento
-      const isValid = isValidCanonicalPhoneNumber(number);
-      if ((numberDigitsOnly.length > 14 || !isValid) && !number.startsWith("PENDING_")) {
-        // Se for length > 14 é certeza que é LID/Inválido para contato telefônico
-        // Se !isValid, também rejeita
-        // Mas se for 10-13 digitos e !isValid (ex: numero incompleto), maybe allow?
-        // O foco aqui é BLOQUEAR LIDs.
-
-        if (numberDigitsOnly.length > 14) {
-          logger.error("[CreateOrUpdateContact] BLOQUEADO: Número parece ser LID (>14 dígitos)", {
-            number,
-            digitsLength: numberDigitsOnly.length,
-            remoteJid,
-            companyId
-          });
-          // Em vez de lançar erro, retornar null para que o processo de importação possa continuar
-          // O erro será tratado pelo chamador (ImportWhatsAppMessageService)
-          return null as any;
-        }
+      
+      // BLOQUEAR: números com >13 dígitos são LIDs ou IDs internos da Meta
+      if (numberDigitsOnly.length > MAX_PHONE_DIGITS && !number.startsWith("PENDING_")) {
+        logger.error("[CreateOrUpdateContact] BLOQUEADO: Número parece ser LID/ID Meta (>13 dígitos)", {
+          number,
+          digitsLength: numberDigitsOnly.length,
+          remoteJid,
+          companyId
+        });
+        return null as any;
+      }
+      
+      // BLOQUEAR: números que não passam na validação de telefone real
+      if (!isRealPhoneNumber(numberDigitsOnly) && !number.startsWith("PENDING_")) {
+        logger.error("[CreateOrUpdateContact] BLOQUEADO: Número não é telefone válido", {
+          number,
+          digitsLength: numberDigitsOnly.length,
+          remoteJid,
+          companyId
+        });
+        return null as any;
       }
     }
 
@@ -231,15 +233,15 @@ const CreateOrUpdateContactService = async ({
     // Números brasileiros válidos têm no máximo 13 dígitos (55 + DDD + 9 + 8 dígitos)
     // IDs da Meta como "247540473708749" têm 15+ dígitos
     const numberDigitsOnly = (number || "").replace(/\D/g, "");
-    if (!isGroup && !isLinkedDevice && numberDigitsOnly.length > 20) {
-      // logger.warn("[CreateOrUpdateContactService] REJEITADO: Número muito longo (provável ID Meta/Facebook)", {
-      //   rawNumber,
-      //   number,
-      //   length: numberDigitsOnly.length,
-      //   companyId,
-      //   isLinkedDevice,
-      //   remoteJid
-      // });
+    if (!isGroup && !isLinkedDevice && numberDigitsOnly.length > MAX_PHONE_DIGITS) {
+      logger.warn("[CreateOrUpdateContactService] REJEITADO: Número muito longo (provável ID Meta/Facebook)", {
+        rawNumber,
+        number,
+        length: numberDigitsOnly.length,
+        companyId,
+        isLinkedDevice,
+        remoteJid
+      });
       return null as any;
     }
 

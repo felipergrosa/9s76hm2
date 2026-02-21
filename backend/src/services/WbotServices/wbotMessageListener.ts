@@ -35,7 +35,7 @@ import { Mutex } from "async-mutex";
 import { getIO } from "../../libs/socket";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import logger from "../../utils/logger";
-import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { safeNormalizePhoneNumber, isRealPhoneNumber, MAX_PHONE_DIGITS } from "../../utils/phone";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
 import { resolveMessageContact, resolveGroupContact } from "../ContactResolution/ContactResolverService";
@@ -5957,8 +5957,8 @@ const handleMessage = async (
   } catch (err) {
     // SIGNAL RECOVERY: Detecção otimizada de erros Signal sem overhead
     if (wbot?.id && SignalErrorHandler.isSignalError(err)) {
-      SignalErrorHandler.handleSignalError(wbot.id, err);
-      logger.warn(`[handleMessage] Erro Signal detectado para whatsappId=${wbot.id}, iniciando recovery`);
+      SignalErrorHandler.handleSignalError(wbot.id, err, companyId);
+      logger.warn(`[handleMessage] Erro Signal detectado para whatsappId=${wbot.id}, iniciando auto-recovery`);
     }
     
     Sentry.captureException(err);
@@ -6146,10 +6146,16 @@ const filterMessages = (msg: WAMessage): boolean => {
 const wbotMessageListener = (wbot: Session, companyId: number): void => {
   const wbotUserJid = wbot?.user?.id;
   
+  logger.info(`[wbotMessageListener] Iniciado para whatsappId=${wbot.id}, companyId=${companyId}, userJid=${wbotUserJid}`);
+  
   wbot.ev.on("messages.upsert", async (messageUpsert: ImessageUpsert) => {
+    logger.info(`[messages.upsert] Evento recebido: ${messageUpsert.messages?.length || 0} mensagens, type=${messageUpsert.type}, whatsappId=${wbot.id}`);
+    
     const messages = messageUpsert.messages
       .filter(filterMessages)
       .map(msg => msg);
+
+    logger.info(`[messages.upsert] Após filtro: ${messages?.length || 0} mensagens válidas`);
 
     if (!messages) return;
 
@@ -6398,7 +6404,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
           const pnFromEvent = contact.phoneNumber || contact.pn || contact.number;
           if (pnFromEvent) {
             const pnDigits = String(pnFromEvent).replace(/\D/g, "");
-            if (pnDigits.length >= 10 && pnDigits.length <= 20) {
+            if (isRealPhoneNumber(pnDigits)) {
               try {
                 const LidMapping = (await import("../../models/LidMapping")).default;
                 await LidMapping.upsert({

@@ -7,9 +7,26 @@ export interface NormalizedPhoneResult {
 }
 
 /**
+ * Máximo de dígitos para um número de telefone real.
+ * Brasil: 55 (DDI) + 2 (DDD) + 9 (número) = 13 dígitos.
+ * Números com 14+ dígitos são LIDs ou IDs internos da Meta — NUNCA devem virar contato.
+ */
+export const MAX_PHONE_DIGITS = 13;
+
+/**
+ * Retorna true se o número de dígitos é compatível com um telefone real.
+ * Rejeita LIDs (15 dígitos), IDs de grupo (@g.us) e IDs internos da Meta (>13 dígitos).
+ */
+export const isRealPhoneNumber = (value: string | null | undefined): boolean => {
+  if (!value) return false;
+  const digits = String(value).replace(/\D/g, "");
+  return digits.length >= 10 && digits.length <= MAX_PHONE_DIGITS;
+};
+
+/**
  * Normaliza um número de telefone usando libphonenumber-js.
  * - Prioriza formato E.164 (sem o +)
- * - Fallback para IDs do WhatsApp/Meta (10-20 dígitos) se a lib considerar inválido
+ * - NÃO aceita LIDs ou IDs internos da Meta como canonical válido
  */
 export const normalizePhoneNumber = (
   value: string | null | undefined
@@ -59,11 +76,10 @@ export const normalizePhoneNumber = (
     // Silencioso: fallback para lógica de dígitos abaixo
   }
 
-  // FALLBACK PARA IDs DO WHATSAPP / META / LIDs
-  // Se a lib não reconhecer como telefone válido, mas tiver entre 10 e 20 dígitos,
-  // mantemos os dígitos originais pois pode ser um ID de API Cloud ou LID.
+  // Fallback conservador: aceitar apenas números com comprimento de telefone real (10-13 dígitos).
+  // LIDs (15 dígitos) e IDs internos da Meta (>13 dígitos) são REJEITADOS aqui.
   const finalDigits = digitsOnly.startsWith("5555") ? digitsOnly.slice(2) : digitsOnly;
-  if (finalDigits.length >= 10 && finalDigits.length <= 20) {
+  if (finalDigits.length >= 10 && finalDigits.length <= MAX_PHONE_DIGITS) {
     return { canonical: finalDigits, digits: finalDigits };
   }
 
@@ -88,13 +104,13 @@ export const isValidCanonicalPhoneNumber = (
   if (!canonical) return false;
   const digits = String(canonical).replace(/\D/g, "");
 
-  // Se estiver na faixa de ID do WhatsApp/Meta (14-20 dígitos), consideramos "válido" para o sistema
-  if (digits.length >= 14 && digits.length <= 20) return true;
+  // LIDs e IDs internos da Meta (>13 dígitos) NÃO são números de telefone válidos
+  if (digits.length > MAX_PHONE_DIGITS) return false;
 
   try {
     return isValidPhoneNumber(canonical.startsWith("+") ? canonical : `+${canonical}`, "BR");
   } catch {
-    return digits.length >= 10 && digits.length <= 13;
+    return digits.length >= 10 && digits.length <= MAX_PHONE_DIGITS;
   }
 };
 
