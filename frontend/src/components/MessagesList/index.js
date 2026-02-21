@@ -688,18 +688,20 @@ const reducer = (state, action) => {
   if (action.type === "LOAD_MESSAGES") {
     const messages = action.payload;
     const newMessages = [];
+    const existingIds = new Set(state.map(m => m.id));
 
     messages.forEach((message) => {
-
-      const messageIndex = state.findIndex((m) => m.id === message.id);
-      if (messageIndex !== -1) {
-        state[messageIndex] = message;
-      } else {
+      // Só adiciona se não existe no estado atual (evita duplicar mensagens recebidas via Socket)
+      if (!existingIds.has(message.id)) {
         newMessages.push(message);
       }
     });
 
-    return [...newMessages, ...state];
+    // Merge: mensagens carregadas do banco + mensagens já existentes (Socket)
+    // Ordena por ID para manter ordem cronológica
+    const merged = [...newMessages, ...state];
+    merged.sort((a, b) => a.id - b.id);
+    return merged;
   }
 
   if (action.type === "ADD_MESSAGE") {

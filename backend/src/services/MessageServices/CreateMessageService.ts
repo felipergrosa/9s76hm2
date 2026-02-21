@@ -116,7 +116,13 @@ const CreateMessageService = async ({
   }
 
   // Invalidar cache de mensagens do ticket (nova mensagem chegou)
-  invalidateTicketMessagesCache(companyId, message.ticketId).catch(() => {});
+  // CRÍTICO: aguardar invalidação ANTES de emitir para evitar race condition
+  // onde o frontend carrega cache stale e sobrescreve a mensagem recebida via Socket
+  try {
+    await invalidateTicketMessagesCache(companyId, message.ticketId);
+  } catch (err) {
+    logger.debug("[CreateMessageService] Erro ao invalidar cache (não crítico):", err);
+  }
 
   // Atualizar lastMessage do ticket (para exibir preview na lista)
   // Não atualizar se for mensagem privada

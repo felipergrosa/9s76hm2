@@ -11,6 +11,8 @@ import { Op } from "sequelize";
 import path from "path";
 import fs from "fs";
 import { promisify } from "util";
+import CreateMessageService from "./CreateMessageService";
+import { invalidateTicketMessagesCache } from "./MessageCacheService";
 
 const writeFileAsync = promisify(fs.writeFile);
 
@@ -486,7 +488,8 @@ const ImportContactHistoryService = async ({
                     }
                 }
 
-                // Salvar mensagem via upsert (mais rápido que CreateMessageService)
+                // Salvar mensagem via CreateMessageService (invalida cache e emite Socket)
+                // NOTA: ticketImported=true indica que é mensagem importada (não tempo real)
                 const messageData = {
                     wid: msg.key.id,
                     ticketId: ticket.id,
@@ -507,7 +510,7 @@ const ImportContactHistoryService = async ({
                     companyId
                 };
 
-                await Message.upsert(messageData);
+                await CreateMessageService({ messageData, companyId });
                 syncedCount++;
 
             } catch (msgErr: any) {
