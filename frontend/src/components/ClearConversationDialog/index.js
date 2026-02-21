@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     Dialog,
     DialogTitle,
@@ -18,6 +18,7 @@ import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { toast } from "react-toastify";
 import { useTheme } from "@material-ui/core/styles";
+import useAuth from "../../hooks/useAuth.js/index.js";
 
 const useStyles = makeStyles((theme) => ({
     dialogPaper: {
@@ -28,16 +29,16 @@ const useStyles = makeStyles((theme) => ({
         display: "flex",
         alignItems: "center",
         gap: 10,
-        color: theme.palette.error.main,
+        color: theme.palette.primary.main,
         "& svg": {
-            color: theme.palette.error.main,
+            color: theme.palette.primary.main,
         },
     },
     content: {
         padding: theme.spacing(2, 3),
     },
     warningText: {
-        color: theme.palette.error.main,
+        color: "#ff9800",
         fontWeight: 500,
         margin: theme.spacing(2, 0),
     },
@@ -47,45 +48,109 @@ const useStyles = makeStyles((theme) => ({
         gap: theme.spacing(1),
         justifyContent: "flex-end",
     },
+    progressBar: {
+        width: '100%',
+        height: 8,
+        backgroundColor: '#e0e0e0',
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        backgroundColor: '#4caf50',
+        transition: 'width 0.3s ease',
+    },
 }));
 
 const ClearConversationDialog = ({ open, onClose, ticketId, onCleared }) => {
     const classes = useStyles();
     const theme = useTheme();
+    const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [periodMonths, setPeriodMonths] = useState(0);
+    const [progress, setProgress] = useState({ current: 0, total: 0, state: "", date: "" });
+
+    // Escutar eventos de progresso da ressincronização via Socket
+    useEffect(() => {
+        if (!open || !user?.companyId || !ticketId) return;
+
+        import("../../services/SocketWorker").then(({ default: SocketWorker }) => {
+            const socketWorker = SocketWorker(user.companyId, user.id);
+            const eventName = `resync-${ticketId}`;
+
+            const handleResyncUpdate = (data) => {
+                console.log(`[ResyncDialog] Evento recebido:`, data);
+
+                if (data.action === "update") {
+                    setProgress({
+                        current: data.status?.this || 0,
+                        total: data.status?.all || 0,
+                        state: data.status?.state || "",
+                        date: data.status?.date || ""
+                    });
+
+                    if (data.status?.state === "COMPLETED") {
+                        if (data.status?.this > 0) {
+                            toast.success(`Ressincronização concluída! ${data.status.this} mensagens sincronizadas.`);
+                            window.dispatchEvent(new CustomEvent("refreshMessages"));
+                        } else {
+                            toast.info("Nenhuma mensagem nova encontrada.");
+                        }
+                        setTimeout(() => {
+                            onClose();
+                            setProgress({ current: 0, total: 0, state: "", date: "" });
+                        }, 2000);
+                    }
+                } else if (data.action === "refresh") {
+                    window.dispatchEvent(new CustomEvent("refreshMessages"));
+                }
+            };
+
+            if (socketWorker.socket) {
+                socketWorker.socket.on(eventName, handleResyncUpdate);
+            }
+
+            return () => {
+                if (socketWorker.socket) {
+                    socketWorker.socket.off(eventName, handleResyncUpdate);
+                }
+            };
+        }).catch(err => {
+            console.error("[ResyncDialog] Erro ao importar SocketWorker:", err);
+        });
+    }, [open, user, ticketId, onClose]);
 
     const handleResync = async () => {
         setLoading(true);
+        setProgress({ current: 0, total: 0, state: "PREPARING", date: "" });
 
         try {
-            console.log(`[ResyncConversation] Ressincronizando conversa do ticket: ${ticketId}`);
+            console.log(`[ResyncDialog] Ressincronizando histórico do ticket: ${ticketId}, período: ${periodMonths} meses`);
 
-            const response = await api.post(`/messages/${ticketId}/clear`, {
+            // Usar endpoint de resync que usa SyncChatHistoryService com forceSync
+            const response = await api.post(`/messages/${ticketId}/resync`, {
                 periodMonths
             });
 
-            if (response.data.success) {
+            console.log(`[ResyncDialog] Resposta do backend:`, response.data);
+
+            if (response.data.started) {
+                toast.success("Ressincronização iniciada! Acompanhe o progresso.");
+            } else if (response.data.success) {
                 toast.success(response.data.message);
-
-                // Notificar componente pai
                 if (onCleared) {
-                    onCleared(response.data.existing);
+                    onCleared(response.data.synced || 0);
                 }
-
-                // Fechar modal
                 onClose();
-
-                // Emitir evento para atualizar UI do chat
                 window.dispatchEvent(new CustomEvent("refreshMessages"));
-
             } else {
-                toast.error("Falha ao ressincronizar conversa");
+                toast.error("Falha ao ressincronizar histórico.");
             }
 
         } catch (err) {
-            console.error("[ResyncConversation] Erro:", err);
+            console.error("[ResyncDialog] Erro:", err);
             toastError(err);
+            setProgress({ current: 0, total: 0, state: "", date: "" });
         } finally {
             setLoading(false);
         }
@@ -101,7 +166,7 @@ const ClearConversationDialog = ({ open, onClose, ticketId, onCleared }) => {
         >
             <DialogTitle className={classes.title}>
                 <RefreshCw size={24} />
-                <span>Ressincronizar Conversa</span>
+                <span>Ressincronizar Histórico</span>
             </DialogTitle>
 
             <DialogContent className={classes.content}>
@@ -115,7 +180,7 @@ const ClearConversationDialog = ({ open, onClose, ticketId, onCleared }) => {
 
                 <ul style={{ margin: 16, paddingLeft: 24 }}>
                     <li>Manter todas as mensagens existentes</li>
-                    <li>Adicionar mensagens que faltam do WhatsApp</li>
+                    <li>Buscar mensagens que faltam do WhatsApp</li>
                     <li>Preservar o histórico completo</li>
                     <li>Não apagar nenhuma mensagem</li>
                 </ul>
@@ -141,11 +206,45 @@ const ClearConversationDialog = ({ open, onClose, ticketId, onCleared }) => {
                         O histórico existente será preservado!
                     </Typography>
                 </div>
-
-                <Typography variant="body2" color="textSecondary" style={{ marginTop: theme.spacing(1) }}>
-                    A ressincronização ocorrerá em background e você verá as novas mensagens aparecendo automaticamente.
-                </Typography>
             </DialogContent>
+
+            {/* Progress Indicator */}
+            {progress.state && (
+                <DialogContent style={{ paddingTop: 0 }}>
+                    <Typography variant="body2" gutterBottom>
+                        Progresso da ressincronização:
+                    </Typography>
+                    <div style={{ marginBottom: 16 }}>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            marginBottom: 4
+                        }}>
+                            <span>{progress.state === 'FETCHING' ? 'Buscando' : progress.state}</span>
+                            <span>
+                                {progress.total > 0 ? (
+                                    `${progress.current} / ${progress.total} (${Math.round((progress.current / progress.total) * 100)}%)`
+                                ) : progress.total === -1 ? (
+                                    `${progress.current} localizadas...`
+                                ) : (
+                                    progress.current
+                                )}
+                            </span>
+                        </div>
+                        <div className={classes.progressBar}>
+                            <div className={classes.progressFill} style={{
+                                width: progress.total > 0 ? `${(progress.current / progress.total) * 100}%` : progress.total === -1 ? '100%' : '0%',
+                                opacity: progress.total === -1 ? 0.6 : 1
+                            }} />
+                        </div>
+                        {progress.date && (
+                            <Typography variant="caption" color="textSecondary">
+                                Data: {progress.date}
+                            </Typography>
+                        )}
+                    </div>
+                </DialogContent>
+            )}
 
             <DialogActions className={classes.actions}>
                 <Button onClick={onClose} disabled={loading}>

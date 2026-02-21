@@ -1753,3 +1753,88 @@ export const clearTicketMessages = async (req: Request, res: Response): Promise<
     return res.status(500).json({ error: error.message || "Erro ao ressincronizar mensagens" });
   }
 };
+
+/**
+ * Ressincronizar histórico do ticket usando SyncChatHistoryService
+ * POST /messages/:ticketId/resync
+ * Body: { periodMonths: 0 | 1 | 3 | 6 }
+ */
+export const resyncTicketHistory = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { periodMonths = 0 } = req.body;
+  const { companyId } = req.user;
+
+  try {
+    // Buscar ticket para verificar se existe
+    const ticket = await Ticket.findByPk(ticketId, {
+      include: [{ model: Whatsapp, as: "whatsapp" }]
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket não encontrado" });
+    }
+
+    if (ticket.companyId !== companyId) {
+      return res.status(403).json({ error: "Ticket não pertence a esta empresa" });
+    }
+
+    if (ticket.channel !== "whatsapp") {
+      return res.status(400).json({ error: "Canal não suportado para ressincronização" });
+    }
+
+    if (!ticket.whatsapp || ticket.whatsapp.status !== "CONNECTED") {
+      return res.status(400).json({ error: "Conexão WhatsApp não está ativa" });
+    }
+
+    const io = getIO();
+    const eventName = `resync-${ticketId}`;
+    const namespace = `/workspace-${companyId}`;
+
+    // Emitir progresso inicial
+    const emitProgress = (current: number, total: number, state: string, date?: string) => {
+      io.of(namespace).emit(eventName, {
+        action: "update",
+        status: { this: current, all: total, state, date }
+      });
+    };
+
+    emitProgress(0, -1, "FETCHING", "Buscando mensagens do WhatsApp...");
+
+    // Executar SyncChatHistoryService com forceSync em background
+    SyncChatHistoryService({
+      ticketId: ticket.id,
+      companyId,
+      messageCount: periodMonths > 0 ? periodMonths * 30 * 50 : 100, // Estimativa de mensagens
+      forceSync: true
+    }).then((result) => {
+      emitProgress(result.synced, result.synced, "COMPLETED");
+
+      // Atualizar ticket na UI
+      io.of(namespace).emit(`company-${companyId}-ticket`, {
+        action: "update",
+        ticket
+      });
+
+      // Emitir refresh
+      setTimeout(() => {
+        io.of(namespace).emit(eventName, { action: "refresh" });
+      }, 2000);
+
+    }).catch((err: any) => {
+      console.error("[resyncTicketHistory] Erro:", err);
+      io.of(namespace).emit(eventName, {
+        action: "update",
+        status: { this: 0, all: 0, state: "ERROR", date: err?.message || "Erro desconhecido" }
+      });
+    });
+
+    return res.status(200).json({
+      started: true,
+      message: `Ressincronização iniciada para ticket ${ticketId}`
+    });
+
+  } catch (error: any) {
+    console.error("[resyncTicketHistory] Erro:", error);
+    return res.status(500).json({ error: error.message || "Erro ao ressincronizar histórico" });
+  }
+};

@@ -623,15 +623,9 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                         {i18n.t("ticketsList.buttons.exportAsPDF")}
                     </MenuItem>
                     {ticket.channel === "whatsapp" && (
-                        <MenuItem onClick={() => { handleCloseMenu(); setImportHistoryModalOpen(true); }}>
-                            <DownloadIcon style={{ color: '#00838f', marginRight: 10 }} />
-                            Importar Histórico
-                        </MenuItem>
-                    )}
-                    {ticket.channel === "whatsapp" && (
                         <MenuItem onClick={() => { handleCloseMenu(); setResyncConversationOpen(true); }}>
-                            <RefreshCw style={{ color: '#ff9800', marginRight: 10 }} />
-                            Ressincronizar Conversa
+                            <RefreshCw style={{ color: '#00838f', marginRight: 10 }} />
+                            Ressincronizar Histórico
                         </MenuItem>
                     )}
                 </Menu>
@@ -676,11 +670,6 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                     )}
                 </Formik>
             </>
-            <ImportHistoryModal
-                open={importHistoryModalOpen}
-                onClose={() => setImportHistoryModalOpen(false)}
-                ticketId={ticket.id}
-            />
             <ClearConversationDialog
                 open={resyncConversationOpen}
                 onClose={() => setResyncConversationOpen(false)}
