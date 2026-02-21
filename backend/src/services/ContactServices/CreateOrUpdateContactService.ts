@@ -9,7 +9,7 @@ import logger from "../../utils/logger";
 import { isNil } from "lodash";
 import Whatsapp from "../../models/Whatsapp";
 import * as Sentry from "@sentry/node";
-import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { safeNormalizePhoneNumber, isValidCanonicalPhoneNumber } from "../../utils/phone";
 import DispatchContactWebhookService from "./DispatchContactWebhookService";
 import ContactTag from "../../models/ContactTag";
 import Tag from "../../models/Tag";
@@ -85,6 +85,10 @@ interface Request {
   creditLimit?: string;
   segment?: string;
   clientCode?: string;
+  dtUltCompra?: Date | string | null;
+  vlUltCompra?: number | string | null;
+  verifiedName?: string;
+  pushName?: string;
   checkProfilePic?: boolean; // Novo parametro para evitar rate limit na importação
 }
 
@@ -148,6 +152,10 @@ const CreateOrUpdateContactService = async ({
   creditLimit,
   segment,
   clientCode,
+  dtUltCompra,
+  vlUltCompra,
+  verifiedName,
+  pushName,
   checkProfilePic = true // Por padrão verifica (comportamento antigo)
 }: Request): Promise<Contact> => {
   try {
@@ -157,10 +165,23 @@ const CreateOrUpdateContactService = async ({
 
     const rawNumberDigits = isGroup ? (rawNumber || "").toString().trim() : (rawNumber || "").toString();
     const isLinkedDevice = !!remoteJid && remoteJid.includes("@lid");
-    const { canonical } = !isGroup ? safeNormalizePhoneNumber(rawNumberDigits) : { canonical: null };
+    const { canonical } = (!isGroup && !isLinkedDevice) ? safeNormalizePhoneNumber(rawNumberDigits) : { canonical: null };
+
+    // VALIDAÇÃO CRÍTICA: Mesmo LIDs com formato de telefone devem ser validados
+    if (isLinkedDevice && rawNumberDigits.length >= 10 && rawNumberDigits.length <= 13) {
+      const { canonical: lidCanonical } = safeNormalizePhoneNumber(rawNumberDigits);
+      if (!lidCanonical) {
+        logger.error("[CreateOrUpdateContactService] LID com formato de telefone inválido", {
+          rawNumberDigits,
+          remoteJid,
+          companyId
+        });
+        throw new Error(`LID com formato de telefone inválido: ${rawNumberDigits}`);
+      }
+    }
 
     // Para LID, não bloquear pela canonical: usa rawNumberDigits ou remoteJid como fallback
-    let number = isGroup ? rawNumberDigits : canonical;
+    let number = (isGroup || isLinkedDevice) ? rawNumberDigits : canonical;
 
     // =================================================================
     // VALIDAÇÃO ROBUSTA DE GRUPOS: Garantir que grupos tenham @g.us
@@ -171,40 +192,64 @@ const CreateOrUpdateContactService = async ({
         // Remover qualquer sufixo existente e adicionar @g.us
         const cleanGroupNumber = number.replace(/@.*$/, "");
         number = `${cleanGroupNumber}@g.us`;
-        logger.info("[CreateOrUpdateContactService] Grupo corrigido: adicionado @g.us", {
-          original: rawNumberDigits,
-          corrected: number,
-          companyId
-        });
       }
     }
+
     if (!isGroup && isLinkedDevice) {
       number = canonical || rawNumberDigits || remoteJid || "";
+    }
+
+    // =================================================================
+    // GUARD: Número de telefone NUNCA pode ser um LID puro (>14 dígitos)
+    // Telefones reais têm no máximo 13 dígitos (55 + DDD + 9 dígitos)
+    // =================================================================
+    if (!isGroup && number) {
+      const numberDigitsOnly = number.replace(/\D/g, "");
+      // Usar validador E checar comprimento
+      const isValid = isValidCanonicalPhoneNumber(number);
+      if ((numberDigitsOnly.length > 14 || !isValid) && !number.startsWith("PENDING_")) {
+        // Se for length > 14 é certeza que é LID/Inválido para contato telefônico
+        // Se !isValid, também rejeita
+        // Mas se for 10-13 digitos e !isValid (ex: numero incompleto), maybe allow?
+        // O foco aqui é BLOQUEAR LIDs.
+
+        if (numberDigitsOnly.length > 14) {
+          logger.error("[CreateOrUpdateContact] BLOQUEADO: Número parece ser LID (>14 dígitos)", {
+            number,
+            digitsLength: numberDigitsOnly.length,
+            remoteJid,
+            companyId
+          });
+          // Em vez de lançar erro, retornar null para que o processo de importação possa continuar
+          // O erro será tratado pelo chamador (ImportWhatsAppMessageService)
+          return null as any;
+        }
+      }
     }
 
     // VALIDAÇÃO CRÍTICA: Rejeitar IDs internos da Meta/Facebook (> 13 dígitos)
     // Números brasileiros válidos têm no máximo 13 dígitos (55 + DDD + 9 + 8 dígitos)
     // IDs da Meta como "247540473708749" têm 15+ dígitos
     const numberDigitsOnly = (number || "").replace(/\D/g, "");
-    if (!isGroup && !isLinkedDevice && numberDigitsOnly.length > 13) {
-      logger.error("[CreateOrUpdateContactService] REJEITADO: Número muito longo (provável ID Meta/Facebook)", {
-        rawNumber,
-        number,
-        length: numberDigitsOnly.length,
-        companyId,
-        isLinkedDevice,
-        remoteJid
-      });
+    if (!isGroup && !isLinkedDevice && numberDigitsOnly.length > 20) {
+      // logger.warn("[CreateOrUpdateContactService] REJEITADO: Número muito longo (provável ID Meta/Facebook)", {
+      //   rawNumber,
+      //   number,
+      //   length: numberDigitsOnly.length,
+      //   companyId,
+      //   isLinkedDevice,
+      //   remoteJid
+      // });
       return null as any;
     }
 
     if (!isGroup && !number) {
-      logger.warn("[CreateOrUpdateContactService] Número inválido após normalização", {
-        rawNumber,
-        companyId,
-        isLinkedDevice,
-        remoteJid
-      });
+      // logger.warn("[CreateOrUpdateContactService] Número inválido após normalização", {
+      //   rawNumber,
+      //   companyId,
+      //   isLinkedDevice,
+      //   remoteJid
+      // });
       return null as any;
     }
 
@@ -212,6 +257,27 @@ const CreateOrUpdateContactService = async ({
     // Garante que creditLimit seja null se não estiver definido
     const sanitizedCreditLimit = (creditLimit === null || creditLimit === undefined || creditLimit === '') ? null : String(creditLimit);
     const sanitizedCpfCnpj = cpfCnpj ? cpfCnpj.replace(/[^0-9]/g, "") : null;
+
+    // Validação e normalização para dtUltCompra
+    let dtUltCompraValue: Date | null = null;
+    if (dtUltCompra && typeof dtUltCompra === 'string' && dtUltCompra !== '') {
+      const d = new Date(dtUltCompra);
+      if (isNaN(d.getTime())) {
+        logger.warn("[CreateOrUpdateContactService] dtUltCompra inválido, usando null", { dtUltCompra });
+        dtUltCompraValue = null;
+      } else {
+        dtUltCompraValue = d;
+      }
+    } else if (dtUltCompra instanceof Date) {
+      dtUltCompraValue = dtUltCompra;
+    }
+
+    // Normalização para vlUltCompra
+    let vlUltCompraValue: number | null = null;
+    if (vlUltCompra !== null && vlUltCompra !== undefined && vlUltCompra !== '') {
+      const num = parseFloat(String(vlUltCompra).replace(/[^\d.,]/g, '').replace(',', '.'));
+      vlUltCompraValue = isNaN(num) ? null : num;
+    }
 
     // Normalização de email: nunca null
     const normalizedEmail = ((): string | undefined => {
@@ -257,7 +323,11 @@ const CreateOrUpdateContactService = async ({
       foundationDate: foundationDate || undefined,
       creditLimit: sanitizedCreditLimit,
       segment: normalizedSegment,
-      clientCode: clientCode || undefined
+      clientCode: clientCode || undefined,
+      dtUltCompra: dtUltCompraValue,
+      vlUltCompra: vlUltCompraValue,
+      verifiedName: verifiedName || undefined,
+      pushName: pushName || undefined
     };
 
     const io = getIO();
@@ -288,7 +358,15 @@ const CreateOrUpdateContactService = async ({
       contact.remoteJid = remoteJid;
       contact.profilePicUrl = profilePicUrl || null;
       contact.isGroup = isGroup;
-      if (!isGroup) {
+      if (!isGroup && !isLinkedDevice) {
+        // Lógica para preservar o formato do número se for o mesmo contato (mesmo canonical)
+        const { canonical: currentCanonical } = safeNormalizePhoneNumber(contact.number);
+        const { canonical: newCanonical } = safeNormalizePhoneNumber(number);
+
+        if (currentCanonical && newCanonical && currentCanonical === newCanonical) {
+          number = contact.number;
+        }
+
         contact.number = number;
         contact.canonicalNumber = number;
       }
@@ -304,6 +382,33 @@ const CreateOrUpdateContactService = async ({
       contact.segment = normalizedSegment !== undefined ? (normalizedSegment as any) : (contact as any).segment;
       contact.region = normalizedRegion !== undefined ? (normalizedRegion as any) : (contact as any).region;
       contact.clientCode = clientCode || contact.clientCode;
+      // Atualizar dtUltCompra e vlUltCompra se fornecidos
+      if (dtUltCompraValue !== undefined) {
+        (contact as any).dtUltCompra = dtUltCompraValue;
+      }
+      if (vlUltCompraValue !== undefined) {
+        (contact as any).vlUltCompra = vlUltCompraValue;
+      }
+
+      // Atualizar pushName e verifiedName se fornecidos
+      if (pushName) {
+        contact.pushName = pushName;
+        // Se nome atual é o próprio número (ou vazio), substituir pelo pushName
+        const currentNameClean = (contact.name || "").replace(/\D/g, "");
+        const isNameJustNumber = !contact.name || currentNameClean === String(number);
+        if (isNameJustNumber) {
+          (contactData as any).name = pushName;
+        }
+      }
+      if (verifiedName) {
+        contact.verifiedName = verifiedName;
+        // verifiedName também substitui nome-número (prioridade sobre pushName)
+        const currentNameClean = (contact.name || "").replace(/\D/g, "");
+        const isNameJustNumber = !contact.name || currentNameClean === String(number);
+        if (isNameJustNumber) {
+          (contactData as any).name = verifiedName;
+        }
+      }
 
       if (isNil(contact.whatsappId)) {
         const whatsapp = await Whatsapp.findOne({
@@ -359,7 +464,7 @@ const CreateOrUpdateContactService = async ({
       const { acceptAudioMessageContact } = settings;
       let newRemoteJid = remoteJid;
 
-      if (!remoteJid && remoteJid !== "") {
+      if (!remoteJid || remoteJid === "") {
         newRemoteJid = isGroup ? `${rawNumber}@g.us` : `${rawNumber}@s.whatsapp.net`;
       }
 
@@ -628,7 +733,7 @@ const CreateOrUpdateContactService = async ({
 
     return contact;
   } catch (err) {
-    logger.error("Error to find or create a contact:", err);
+    // logger.error("Error to find or create a contact:", err);
     throw err;
   }
 };

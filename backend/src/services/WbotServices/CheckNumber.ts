@@ -1,6 +1,7 @@
 import AppError from "../../errors/AppError";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
 import { getWbot } from "../../libs/wbot";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 const CheckContactNumber = async (
   number: string,
@@ -16,17 +17,8 @@ const CheckContactNumber = async (
       throw new AppError("Validação de grupos não suportada via API oficial");
     }
 
-    let digits = String(number).replace(/\D/g, "");
-
-    if (digits.startsWith("0")) {
-      digits = digits.substring(1);
-    }
-
-    if (digits.length <= 11) {
-      digits = `55${digits}`;
-    }
-
-    return digits;
+    const { canonical } = safeNormalizePhoneNumber(number);
+    return canonical || number.replace(/\D/g, "");
   }
 
   // Fluxo padrão Baileys (Web)
@@ -43,10 +35,8 @@ const CheckContactNumber = async (
       }
     ];
   } else {
-    let digits = String(number).replace(/\D/g, "");
-    if (digits.length <= 11) {
-      digits = `55${digits}`;
-    }
+    const { canonical } = safeNormalizePhoneNumber(number);
+    const digits = canonical || number.replace(/\D/g, "");
     numberArray = await wbot.onWhatsApp(`${digits}@s.whatsapp.net`);
   }
 

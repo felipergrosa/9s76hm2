@@ -25,7 +25,8 @@ import {
   Switch,
   FormControl,
   InputLabel,
-  Select
+  Select,
+  LinearProgress
 } from "@material-ui/core";
 import { RefreshCw, Trash2, GitMerge, Search, Wand2, Tag as TagIcon } from "lucide-react";
 import { toast } from "react-toastify";
@@ -33,6 +34,8 @@ import api from "../../services/api";
 import toastError from "../../errors/toastError";
 
 const DEFAULT_LIMIT = 10;
+
+const BACKEND_VALIDATION_BATCH_SIZE = 50;
 
 const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
   const [activeTab, setActiveTab] = useState("normalization");
@@ -52,6 +55,17 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
   const [customTagName, setCustomTagName] = useState("");
   const [customTagColor, setCustomTagColor] = useState("#FFB020");
   const [applyNormalization, setApplyNormalization] = useState(false);
+
+  // ── Estado da aba Validação WhatsApp ──
+  const [validationContacts, setValidationContacts] = useState([]);
+  const [validationResults, setValidationResults] = useState({});
+  const [validationProgress, setValidationProgress] = useState(0);
+  const [validating, setValidating] = useState(false);
+  const [selectedWhatsappId, setSelectedWhatsappId] = useState("");
+  const [whatsapps, setWhatsapps] = useState([]);
+  const [validationMode, setValidationMode] = useState("nine_digit");
+  const [validationSummary, setValidationSummary] = useState(null);
+  const [validationPage, setValidationPage] = useState(0);
 
   const totalPages = useMemo(() => {
     if (activeTab === "normalization") {
@@ -245,9 +259,9 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
       const requestLimit = tab === "normalization" ? 0 : limit;
       const duplicateParams = tab === "duplicates"
         ? {
-            groupBy: duplicatesGroupBy,
-            name: duplicatesGroupBy === "name" && duplicatesNameFilter.trim() ? duplicatesNameFilter.trim() : undefined
-          }
+          groupBy: duplicatesGroupBy,
+          name: duplicatesGroupBy === "name" && duplicatesNameFilter.trim() ? duplicatesNameFilter.trim() : undefined
+        }
         : {};
       const { data } = await api.get(endpoint, {
         params: {
@@ -311,7 +325,25 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
       setSelectedTagId("");
       setCustomTagName("");
       setApplyNormalization(false);
+      setValidationContacts([]);
+      setValidationResults({});
+      setValidationProgress(0);
+      setValidating(false);
+      setSelectedWhatsappId("");
+      setValidationMode("nine_digit");
+      setValidationSummary(null);
+      setValidationPage(0);
       fetchTags();
+      // Buscar conexões WhatsApp ativas
+      api.get("/whatsapp", { params: { session: 0 } })
+        .then(({ data }) => {
+          const connected = (data || []).filter(
+            w => w.status === "CONNECTED" && w.channel !== "official"
+          );
+          setWhatsapps(connected);
+          if (connected.length > 0) setSelectedWhatsappId(connected[0].id);
+        })
+        .catch(() => { });
     }
   }, [open, fetchTags]);
 
@@ -328,12 +360,12 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
   const handleSelectMaster = (groupKey, masterId) => {
     setGroupState(prev => {
       const next = { ...prev };
-      const group = next[groupKey];
-      if (!group) return prev;
-      const newSelected = new Set(Array.from(group.selectedIds));
-      newSelected.delete(masterId);
+      const group = next[groupKey] || { selectedIds: new Set() };
+      const newSelected = new Set(Array.from(group.selectedIds || []));
+      // Garante que o novo master não esteja nos selecionados
+      newSelected.delete(Number(masterId));
       next[groupKey] = {
-        masterId,
+        masterId: Number(masterId),
         selectedIds: newSelected
       };
       return next;
@@ -343,14 +375,16 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
   const handleToggleDuplicate = (groupKey, contactId) => {
     setGroupState(prev => {
       const next = { ...prev };
-      const group = next[groupKey];
-      if (!group) return prev;
-      const selectedIds = new Set(Array.from(group.selectedIds));
-      if (selectedIds.has(contactId)) {
-        selectedIds.delete(contactId);
+      const group = next[groupKey] || { masterId: null, selectedIds: new Set() };
+      const selectedIds = new Set(Array.from(group.selectedIds || []));
+      const numericId = Number(contactId);
+      const numericMaster = Number(group.masterId);
+
+      if (selectedIds.has(numericId)) {
+        selectedIds.delete(numericId);
       } else {
-        if (contactId !== group.masterId) {
-          selectedIds.add(contactId);
+        if (numericId !== numericMaster) {
+          selectedIds.add(numericId);
         }
       }
       next[groupKey] = {
@@ -533,8 +567,146 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
   };
 
   const handleClose = () => {
-    if (loading) return;
+    if (loading || validating) return;
     onClose();
+  };
+
+  // ── Funções da aba Validação WhatsApp ──
+  const fetchValidationContacts = async () => {
+    if (!selectedWhatsappId) {
+      toast.warn("Selecione uma conexão WhatsApp.");
+      return;
+    }
+    try {
+      setLoading(true);
+      setValidationResults({});
+      setValidationSummary(null);
+      setValidationPage(0);
+
+      // Buscar contatos BR pendentes via endpoint dedicado (isWhatsappValid IS NULL)
+      let allContacts = [];
+      let page = 1;
+      let hasMore = true;
+      while (hasMore) {
+        const { data } = await api.get("/contacts/validate-whatsapp/pending", {
+          params: { mode: validationMode, page, limit: 500 }
+        });
+        const batch = data?.contacts || [];
+        allContacts = [...allContacts, ...batch];
+        hasMore = data?.hasMore || false;
+        page++;
+        // Limite de segurança: máximo 10000 contatos
+        if (allContacts.length >= 10000) break;
+      }
+
+      setValidationContacts(allContacts);
+      toast.info(`${allContacts.length} contatos BR pendentes de validação.`);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const executeValidation = async () => {
+    if (!selectedWhatsappId) {
+      toast.warn("Selecione uma conexão WhatsApp.");
+      return;
+    }
+    if (validationContacts.length === 0) {
+      toast.warn("Nenhum contato para validar. Busque os contatos primeiro.");
+      return;
+    }
+
+    setValidating(true);
+    setValidationProgress(0);
+    setValidationResults({});
+    setValidationSummary(null);
+
+    const totalContacts = validationContacts.length;
+    let summary = { validated: 0, corrected: 0, invalid: 0, errors: 0 };
+    const processedIds = new Set();
+    let processedCount = 0;
+    let offsetCursor = 0;
+
+    try {
+      // O backend processa batches de 50 automaticamente.
+      // Cada chamada POST processa um batch e o backend filtra por isWhatsappValid IS NULL,
+      // então sempre usamos offset=0 (os já validados saem da fila automaticamente).
+      let hasMore = true;
+      while (hasMore) {
+        const { data } = await api.post("/contacts/validate-whatsapp", {
+          whatsappId: Number(selectedWhatsappId),
+          mode: validationMode,
+          offset: offsetCursor
+        });
+
+        const batchResults = data?.results || [];
+        if (batchResults.length === 0) {
+          hasMore = false;
+          break;
+        }
+
+        // Atualizar results por contactId e consolidar resumo sem contar duplicados
+        const newResults = {};
+        batchResults.forEach(result => {
+          newResults[result.contactId] = result;
+
+          if (processedIds.has(result.contactId)) {
+            return;
+          }
+
+          processedIds.add(result.contactId);
+          processedCount = processedIds.size;
+
+          if (result.status === "valid") {
+            summary.validated += 1;
+          } else if (result.status === "corrected") {
+            summary.corrected += 1;
+          } else if (result.status === "invalid") {
+            summary.invalid += 1;
+          } else if (result.status === "error") {
+            summary.errors += 1;
+          }
+        });
+        setValidationResults(prev => ({ ...prev, ...newResults }));
+
+        // Calcular progresso mais preciso
+        const progress = Math.min(
+          Math.round((processedCount / totalContacts) * 100),
+          100
+        );
+        setValidationProgress(progress);
+
+        // Debug logs
+        console.log(
+          `[Validation Debug] Batch: ${batchResults.length}, Offset: ${offsetCursor}, Processed únicos: ${processedCount}/${totalContacts}, Progress: ${progress}%`
+        );
+
+        offsetCursor += BACKEND_VALIDATION_BATCH_SIZE;
+
+        // Condições de parada: backend retornou menos que o batch, offset >= total ou processados >= total esperado
+        const reachedTotal = processedCount >= totalContacts;
+        const batchIncomplete = batchResults.length < BACKEND_VALIDATION_BATCH_SIZE;
+
+        if (batchIncomplete || reachedTotal) {
+          console.log(
+            `[Validation Debug] Finalizando - batchLength: ${batchResults.length}, reachedTotal: ${reachedTotal}`
+          );
+          hasMore = false;
+        }
+      }
+
+      setValidationProgress(100);
+      setValidationSummary(summary);
+      toast.success(
+        `Validação concluída: ${summary.validated} válidos, ${summary.corrected} corrigidos, ${summary.invalid} inválidos.`
+      );
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setValidating(false);
+    }
   };
 
   const renderDuplicateContacts = () => {
@@ -560,7 +732,7 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
                     control={
                       <Radio
                         color="primary"
-                        checked={state.masterId === contact.id}
+                        checked={Number(state.masterId) === Number(contact.id)}
                         onChange={() => handleSelectMaster(currentGroupKey, contact.id)}
                       />
                     }
@@ -572,7 +744,7 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
                         color="primary"
                         checked={selectedIds.has(contact.id)}
                         onChange={() => handleToggleDuplicate(currentGroupKey, contact.id)}
-                        disabled={state.masterId === contact.id}
+                        disabled={Number(state.masterId) === Number(contact.id)}
                       />
                     }
                     label={<Typography variant="subtitle2">Duplicado</Typography>}
@@ -740,8 +912,8 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
                   activeTab === "normalization"
                     ? (group.displayLabel || formatDisplayNumber(group.suggestedCanonical) || group.groupKey)
                     : (duplicatesGroupBy === "name"
-                        ? `Nome: ${group.canonicalNumber}`
-                        : `Número: ${group.canonicalNumber}`)
+                      ? `Nome: ${group.canonicalNumber}`
+                      : `Número: ${group.canonicalNumber}`)
                 }
                 secondary={
                   activeTab === "duplicates"
@@ -774,6 +946,7 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
             >
               <Tab value="normalization" label="Normalizar" />
               <Tab value="duplicates" label="Duplicados" />
+              <Tab value="validation" label="Validar WhatsApp" />
             </Tabs>
             {renderDuplicateFilters()}
             {activeTab === "normalization" && initialFetchDone && (
@@ -806,13 +979,13 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
           </Box>
         </Box>
 
-        {loading && (
+        {activeTab !== "validation" && loading && (
           <Box display="flex" justifyContent="center" alignItems="center" py={4}>
             <CircularProgress size={32} />
           </Box>
         )}
 
-        {!loading && initialFetchDone && groups.length === 0 && (
+        {activeTab !== "validation" && !loading && initialFetchDone && groups.length === 0 && (
           <Box display="flex" flexDirection="column" alignItems="center" py={6}>
             <Typography variant="body2" color="textSecondary">
               Nenhum resultado encontrado para esta categoria.
@@ -820,7 +993,7 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
           </Box>
         )}
 
-        {!loading && groups.length > 0 && (
+        {activeTab !== "validation" && !loading && groups.length > 0 && (
           <Box display="flex" gridGap={16}>
             <Box flex={1.1} maxHeight={360} overflow="auto" borderRight="1px solid rgba(0,0,0,0.08)">
               {renderGroupList()}
@@ -982,9 +1155,155 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
             )}
           </Box>
         )}
+
+        {/* ─── Aba Validação WhatsApp ─── */}
+        {activeTab === "validation" && (
+          <Box display="flex" gridGap={16}>
+            {/* Coluna esquerda: configurações e ações */}
+            <Box flex={1.2} display="flex" flexDirection="column" gridGap={12}>
+              <Typography variant="subtitle2">Conexão WhatsApp</Typography>
+              <FormControl fullWidth variant="outlined" size="small">
+                <InputLabel id="whatsapp-selector-label">Conexão</InputLabel>
+                <Select
+                  labelId="whatsapp-selector-label"
+                  value={selectedWhatsappId}
+                  onChange={(e) => setSelectedWhatsappId(e.target.value)}
+                  label="Conexão"
+                >
+                  {whatsapps.map(w => (
+                    <MenuItem key={w.id} value={w.id}>
+                      {w.name} ({w.status})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Divider />
+
+              <Typography variant="subtitle2">Modo de validação</Typography>
+              <FormControl fullWidth variant="outlined" size="small">
+                <InputLabel id="validation-mode-label">Modo</InputLabel>
+                <Select
+                  labelId="validation-mode-label"
+                  value={validationMode}
+                  onChange={(e) => setValidationMode(e.target.value)}
+                  label="Modo"
+                >
+                  <MenuItem value="nine_digit">Apenas com dígito 9 (13 dígitos)</MenuItem>
+                  <MenuItem value="all">Todos os contatos BR</MenuItem>
+                  <MenuItem value="no_name">Sem Nome (nome = número)</MenuItem>
+                </Select>
+              </FormControl>
+
+              <Divider />
+
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={fetchValidationContacts}
+                disabled={loading || validating || !selectedWhatsappId}
+                startIcon={<Search size={16} />}
+              >
+                Buscar contatos ({validationMode === "nine_digit" ? "com 9" : validationMode === "all" ? "todos BR" : "sem nome"})
+              </Button>
+
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={executeValidation}
+                disabled={loading || validating || validationContacts.length === 0}
+                startIcon={validating ? <CircularProgress size={16} /> : <Wand2 size={16} />}
+              >
+                {validating ? "Validando..." : `Validar ${validationContacts.length} contatos`}
+              </Button>
+
+              {validating && (
+                <Box>
+                  <LinearProgress variant="determinate" value={validationProgress} />
+                  <Typography variant="caption" color="textSecondary">
+                    Progresso: {validationProgress}%
+                  </Typography>
+                </Box>
+              )}
+
+              {validationSummary && (
+                <Box mt={1} p={1.5} borderRadius={4} bgcolor="#f5f5f5">
+                  <Typography variant="subtitle2" gutterBottom>Resumo</Typography>
+                  <Typography variant="body2">
+                    ✅ Válidos: {validationSummary.validated}
+                  </Typography>
+                  <Typography variant="body2" style={{ color: "#2e7d32" }}>
+                    🔄 Corrigidos: {validationSummary.corrected}
+                  </Typography>
+                  <Typography variant="body2" color="error">
+                    ❌ Inválidos: {validationSummary.invalid}
+                  </Typography>
+                  {validationSummary.errors > 0 && (
+                    <Typography variant="body2" color="textSecondary">
+                      ⚠️ Erros: {validationSummary.errors}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+            </Box>
+
+            {/* Coluna direita: lista de contatos com resultados */}
+            <Box flex={2.8} maxHeight={360} overflow="auto">
+              {validationContacts.length === 0 ? (
+                <Box display="flex" flexDirection="column" alignItems="center" py={6}>
+                  <Typography variant="body2" color="textSecondary">
+                    Clique em "Buscar contatos" para listar os contatos BR pendentes de validação.
+                  </Typography>
+                </Box>
+              ) : (
+                <List dense>
+                  {validationContacts.map(contact => {
+                    const result = validationResults[contact.id];
+                    const statusIcon = !result ? "⏳" :
+                      result.status === "valid" ? "✅" :
+                        result.status === "corrected" ? "🔄" :
+                          result.status === "invalid" ? "❌" : "⚠️";
+                    const statusLabel = !result ? "Pendente" :
+                      result.status === "valid" ? "Válido" :
+                        result.status === "corrected" ? `Corrigido → ${result.newNumber}` :
+                          result.status === "invalid" ? "Inválido no WhatsApp" : `Erro: ${result.errorMessage}`;
+                    const statusColor = !result ? "textSecondary" :
+                      result.status === "valid" ? "primary" :
+                        result.status === "corrected" ? "primary" :
+                          result.status === "invalid" ? "error" : "textSecondary";
+
+                    return (
+                      <React.Fragment key={contact.id}>
+                        <ListItem>
+                          <ListItemText
+                            primary={
+                              <Box display="flex" alignItems="center" gridGap={8}>
+                                <span>{statusIcon}</span>
+                                <Typography variant="subtitle2">{contact.name || "(sem nome)"}</Typography>
+                              </Box>
+                            }
+                            secondary={
+                              <Box component="span" display="flex" flexDirection="column" gridGap={2}>
+                                <Typography variant="body2">Número: {contact.number}</Typography>
+                                <Typography variant="body2" color={statusColor}>
+                                  {statusLabel}
+                                </Typography>
+                              </Box>
+                            }
+                          />
+                        </ListItem>
+                        <Divider component="li" />
+                      </React.Fragment>
+                    );
+                  })}
+                </List>
+              )}
+            </Box>
+          </Box>
+        )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>Fechar</Button>
+        <Button onClick={handleClose} disabled={loading || validating}>Fechar</Button>
         {activeTab === "duplicates" && (
           <Box display="flex" alignItems="center" gridGap={8} mr={2}>
             <Tooltip title="Mesclar apenas selecionados">

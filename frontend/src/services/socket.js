@@ -1,4 +1,3 @@
-import openSocket from "socket.io-client";
 import { isObject } from "lodash";
 import SocketWorker from "./SocketWorker"
 

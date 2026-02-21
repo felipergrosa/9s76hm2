@@ -106,6 +106,8 @@ export const getWbot = (whatsappId: number): Session => {
   const sessionIndex = sessions.findIndex(s => s.id === whatsappId);
 
   if (sessionIndex === -1) {
+    const availableSessions = sessions.map(s => s.id);
+    logger.error(`[getWbot] Sessão não encontrada para whatsappId=${whatsappId}. Sessões disponíveis: ${JSON.stringify(availableSessions)}`);
     throw new AppError("ERR_WAPP_NOT_INITIALIZED");
   }
   return sessions[sessionIndex];
@@ -179,7 +181,12 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
       sessionTokens.set(whatsapp.id, mySessionToken);
 
       (async () => {
-        const io = getIO();
+        let io: any;
+        try {
+          io = getIO();
+        } catch (e) {
+          logger.warn("[wbot] Socket.io não inicializado (possível script CLI). Ignorando emissão de eventos.");
+        }
         // ... (omitted lines) ...
         const whatsappUpdate = await Whatsapp.findOne({
           where: { id: whatsapp.id }
@@ -229,7 +236,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           shouldIgnoreJid: (jid) => {
             return isJidBroadcast(jid) || (!allowGroup && isJidGroup(jid))
           },
-          browser: Browsers.appropriate("Desktop"),
+          browser: ["Whaticket " + (process.env.NODE_ENV === "production" ? "PROD" : "DEV"), "Chrome", "10.0"],
           defaultQueryTimeoutMs: undefined,
           msgRetryCounterCache,
           markOnlineOnConnect: false,
@@ -307,8 +314,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
               setTimeout(async () => {
                 const wpp = await Whatsapp.findByPk(whatsappId);
-                io.of(`/workspace-${companyId}`).emit(`importMessages-${wpp.companyId}`, { action: "update", status: { this: -1, all: -1 } });
-                io.of(`/workspace-${companyId}`).emit(`company-${companyId}-whatsappSession`, { action: "update", session: wpp });
+                io?.of(`/workspace-${companyId}`).emit(`importMessages-${wpp.companyId}`, { action: "update", status: { this: -1, all: -1 } });
+                io?.of(`/workspace-${companyId}`).emit(`company-${companyId}-whatsappSession`, { action: "update", session: wpp });
               }, 500);
 
               setTimeout(async () => {
@@ -317,7 +324,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   ImportWhatsAppMessageService(wpp.id);
                   wpp.update({ statusImportMessages: "Running" });
                 }
-                io.of(`/workspace-${companyId}`).emit(`company-${companyId}-whatsappSession`, { action: "update", session: wpp });
+                io?.of(`/workspace-${companyId}`).emit(`company-${companyId}-whatsappSession`, { action: "update", session: wpp });
               }, 1000 * 45);
             });
           }
@@ -368,7 +375,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               // NÃO mostra modal para 515 (restart) pois reconecta automaticamente
               if (isConflict || isForbidden || isLoggedOut) {
                 try {
-                  io.of(`/workspace-${companyId}`)
+                  io?.of(`/workspace-${companyId}`)
                     .emit("wa-conn-lost", {
                       whatsappId: id,
                       whatsappName: name, // Nome da conexão para exibição no modal
@@ -451,7 +458,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   );
                   await fs.promises.rm(baseDir, { recursive: true, force: true });
                 } catch { }
-                io.of(`/workspace-${companyId}`)
+                io?.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",
                     session: whatsapp
@@ -508,7 +515,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   );
                   await fs.promises.rm(baseDir, { recursive: true, force: true });
                 } catch { }
-                io.of(`/workspace-${companyId}`)
+                io?.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",
                     session: whatsapp
@@ -516,13 +523,13 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 await releaseWbotLock(id);
                 removeWbot(id, false);
                 // Verificar se já está reconectando antes de agendar
-                if (!reconnectingWhatsapps.get(id)) {
-                  reconnectingWhatsapps.set(id, true);
-                  setTimeout(() => {
-                    reconnectingWhatsapps.delete(id);
-                    StartWhatsAppSession(whatsapp, whatsapp.companyId);
-                  }, 10000);
-                }
+                // if (!reconnectingWhatsapps.get(id)) {
+                //   reconnectingWhatsapps.set(id, true);
+                //   setTimeout(() => {
+                //     reconnectingWhatsapps.delete(id);
+                //     StartWhatsAppSession(whatsapp, whatsapp.companyId);
+                //   }, 10000);
+                // }
               }
             }
 
@@ -537,7 +544,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     : "-"
               });
 
-              io.of(`/workspace-${companyId}`)
+              io?.of(`/workspace-${companyId}`)
                 .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                   action: "update",
                   session: whatsapp
@@ -584,44 +591,47 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               }
 
               // Forçar uma sincronização completa do App State ao abrir a conexão
-              try {
-                const sock: any = wsocket as any;
-                if (sock && typeof sock.resyncAppState === 'function') {
-                  const { ALL_WA_PATCH_NAMES } = require("@whiskeysockets/baileys");
-                  const labelPatches = (ALL_WA_PATCH_NAMES || []).filter((n: string) => /label/i.test(n));
-                  logger.info(`[wbot] Triggering initial resyncAppState for whatsappId=${whatsapp.id}. Label patches: ${JSON.stringify(labelPatches)}`);
-                  // Primeiro tenta resync focado em labels
-                  if (Array.isArray(labelPatches) && labelPatches.length > 0) {
-                    try {
-                      await sock.resyncAppState(labelPatches, true);
-                      logger.info(`[wbot] Label-only resync requested for whatsappId=${whatsapp.id}`);
-                    } catch (e: any) {
-                      logger.warn(`[wbot] Label-only resync failed: ${e?.message}`);
-                    }
-                  }
-                  // Em seguida, faz um resync completo como fallback
-                  try {
-                    await sock.resyncAppState(ALL_WA_PATCH_NAMES, true);
-                    logger.info(`[wbot] Full resyncAppState requested for whatsappId=${whatsapp.id}`);
-                  } catch (e: any) {
-                    logger.warn(`[wbot] full resyncAppState failed: ${e?.message}`);
-                  }
-                }
-              } catch (e: any) {
-                logger.warn(`[wbot] initial resyncAppState failed: ${e?.message}`);
-              }
+              // try {
+              //   const sock: any = wsocket as any;
+              //   if (sock && typeof sock.resyncAppState === 'function') {
+              //     const { ALL_WA_PATCH_NAMES } = require("@whiskeysockets/baileys");
+              //     const labelPatches = (ALL_WA_PATCH_NAMES || []).filter((n: string) => /label/i.test(n));
+              //     logger.info(`[wbot] Triggering initial resyncAppState for whatsappId=${whatsapp.id}. Label patches: ${JSON.stringify(labelPatches)}`);
+              //     // Primeiro tenta resync focado em labels
+              //     if (Array.isArray(labelPatches) && labelPatches.length > 0) {
+              //       try {
+              //         await sock.resyncAppState(labelPatches, true);
+              //         logger.info(`[wbot] Label-only resync requested for whatsappId=${whatsapp.id}`);
+              //       } catch (e: any) {
+              //         logger.warn(`[wbot] Label-only resync failed: ${e?.message}`);
+              //       }
+              //     }
+              //     // Em seguida, faz um resync completo como fallback
+              //     try {
+              //       await sock.resyncAppState(ALL_WA_PATCH_NAMES, true);
+              //       logger.info(`[wbot] Full resyncAppState requested for whatsappId=${whatsapp.id}`);
+              //     } catch (e: any) {
+              //       logger.warn(`[wbot] full resyncAppState failed: ${e?.message}`);
+              //     }
+              //   }
+              // } catch (e: any) {
+              //   logger.warn(`[wbot] initial resyncAppState failed: ${e?.message}`);
+              // }
 
               // Sincronizar todos os grupos do WhatsApp como contatos+tickets
               // Executa com delay para não sobrecarregar a conexão recém-aberta
-              setTimeout(async () => {
-                try {
-                  const SyncAllGroupsService = require("../services/WbotServices/SyncAllGroupsService").default;
-                  const syncResult = await SyncAllGroupsService({ whatsappId: whatsapp.id, companyId });
-                  logger.info(`[wbot] Sync de grupos concluído para whatsappId=${whatsapp.id}: ${JSON.stringify(syncResult)}`);
-                } catch (e: any) {
-                  logger.warn(`[wbot] Falha ao sincronizar grupos: ${e?.message}`);
-                }
-              }, 10000);
+              // setTimeout(async () => {
+              //   try {
+              //     const SyncAllGroupsService = require("../services/WbotServices/SyncAllGroupsService").default;
+              //     const syncResult = await SyncAllGroupsService({ whatsappId: whatsapp.id, companyId });
+              //     logger.info(`[wbot] Sync de grupos concluído para whatsappId=${whatsapp.id}: ${JSON.stringify(syncResult)}`);
+              //   } catch (e: any) {
+              //     logger.warn(`[wbot] Falha ao sincronizar grupos: ${e?.message}`);
+              //   }
+              // }, 10000);
+
+              // NOTA: wbotMessageListener é iniciado pelo StartWhatsAppSessionUnified.ts
+              logger.info(`[wbot] Conexão estabelecida para whatsappId=${whatsapp.id}`);
 
               // Nota: lid-mapping.update é tratado pelo wbotMonitor.ts (com reconciliação completa)
 
@@ -636,7 +646,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 });
                 await DeleteBaileysService(whatsappUpdate.id);
                 await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
-                io.of(`/workspace-${companyId}`)
+                io?.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",
                     session: whatsappUpdate
@@ -664,7 +674,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   sessions.push(wsocket);
                 }
 
-                io.of(`/workspace-${companyId}`)
+                io?.of(`/workspace-${companyId}`)
                   .emit(`company-${whatsapp.companyId}-whatsappSession`, {
                     action: "update",
                     session: whatsapp
@@ -675,34 +685,6 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         );
         wsocket.ev.on("creds.update", saveCreds);
 
-        // Diagnóstico temporário (até estabilizar labels): logar eventos relevantes por 5 minutos
-        try {
-          const start = Date.now();
-          const logEvent = (name: string) => (payload: any) => {
-            if (Date.now() - start > 5 * 60 * 1000) return; // 5 min
-            const size = (() => { try { return JSON.stringify(payload).length; } catch { return -1; } })();
-            logger.info(`[wbot][ev:${name}] size=${size}`);
-            // Log detalhado para labels.edit (para debug de tags novas)
-            if (name === "labels.edit" && payload) {
-              try {
-                const items = Array.isArray(payload) ? payload : [payload];
-                items.forEach((item: any) => {
-                  if (item?.id && item?.name) {
-                    logger.info(`[wbot][labels.edit] ID: ${item.id}, Nome: ${item.name}, Cor: ${item.color || 'N/A'}`);
-                  }
-                });
-              } catch { }
-            }
-          };
-          (wsocket.ev as any).on("labels.relations", logEvent("labels.relations"));
-          wsocket.ev.on("labels.edit" as any, logEvent("labels.edit"));
-          wsocket.ev.on("labels.association" as any, logEvent("labels.association"));
-          wsocket.ev.on("messaging-history.set" as any, logEvent("messaging-history.set"));
-          wsocket.ev.on("chats.update", logEvent("chats.update"));
-          wsocket.ev.on("chats.upsert", logEvent("chats.upsert"));
-        } catch (e) {
-          logger.warn(`[wbot] não foi possível registrar logs de diagnóstico: ${e?.message}`);
-        }
 
         // Handler geral: extrai labels de messaging-history.set e atualiza caches/persistência
         try {
@@ -710,7 +692,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           // Redundância: capturar labels.edit aqui também para garantir inventário
           (wsocket.ev as any).on("labels.edit", (payload: any) => {
             try {
-              logger.info(`[wbot] labels.edit recebido: ${JSON.stringify(payload)}`);
+              // logger.info(`[wbot] labels.edit recebido: ${JSON.stringify(payload)}`);
               const items = Array.isArray(payload) ? payload : [payload];
               for (const item of items) {
                 const id = String(item?.id || "");
@@ -718,7 +700,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 const name = String(item?.name || id);
                 const color = item?.color;
                 const deleted = item?.deleted === true;
-                logger.info(`[wbot] Processando label: ID=${id}, Nome=${name}, Deletada=${deleted}`);
+                // logger.info(`[wbot] Processando label: ID=${id}, Nome=${name}, Deletada=${deleted}`);
                 upsertLabel(whatsapp.id, { id, name, color, predefinedId: item?.predefinedId, deleted });
               }
             } catch (e: any) {
@@ -729,7 +711,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           // Handler para labels.association - crítico para popular o cache
           (wsocket.ev as any).on("labels.association", (payload: any) => {
             try {
-              logger.info(`[wbot] labels.association recebido: ${JSON.stringify(payload)}`);
+              // logger.info(`[wbot] labels.association recebido: ${JSON.stringify(payload)}`);
               if (payload && typeof payload === 'object') {
                 const associations = payload.associations || payload;
                 if (Array.isArray(associations)) {
@@ -737,14 +719,14 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     const chatId = String(assoc?.chatId || assoc?.jid || "");
                     const labelId = String(assoc?.labelId || assoc?.id || "");
                     if (chatId && labelId) {
-                      logger.info(`[wbot] Associando chat ${chatId} com label ${labelId}`);
+                      // logger.info(`[wbot] Associando chat ${chatId} com label ${labelId}`);
                       addChatLabelAssociation(whatsapp.id, chatId, labelId, true);
                     }
                   }
                 } else if (associations.chatId && associations.labelId) {
                   const chatId = String(associations.chatId);
                   const labelId = String(associations.labelId);
-                  logger.info(`[wbot] Associando chat ${chatId} com label ${labelId}`);
+                  // logger.info(`[wbot] Associando chat ${chatId} com label ${labelId}`);
                   addChatLabelAssociation(whatsapp.id, chatId, labelId, true);
                 }
               }
@@ -756,6 +738,44 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           wsocket.ev.on("messaging-history.set", async (messageSet: any) => {
             try {
               const wppId = whatsapp.id;
+
+              // ══════════════════════════════════════════════════════════════
+              // CAPTURA LID↔PN: HistorySync envia mapeamentos completos
+              // ══════════════════════════════════════════════════════════════
+              const lidMappings = Array.isArray(messageSet?.phoneNumberToLidMappings)
+                ? messageSet.phoneNumberToLidMappings
+                : [];
+              if (lidMappings.length) {
+                logger.info(`[wbot] HistorySync: ${lidMappings.length} mapeamentos LID↔PN recebidos para whatsappId=${wppId}`);
+                try {
+                  const LidMapping = (await import("../models/LidMapping")).default;
+                  let saved = 0;
+                  for (const mapping of lidMappings) {
+                    const pnJid = mapping?.pnJid || mapping?.phoneNumber;
+                    const lidJid = mapping?.lidJid || mapping?.lid;
+                    if (!pnJid || !lidJid) continue;
+                    const pnDigits = String(pnJid).replace(/\D/g, "");
+                    if (pnDigits.length < 10 || pnDigits.length > 20) continue;
+                    try {
+                      await LidMapping.upsert({
+                        lid: String(lidJid).includes("@") ? String(lidJid) : `${lidJid}@lid`,
+                        phoneNumber: pnDigits,
+                        companyId: whatsapp.companyId,
+                        whatsappId: wppId,
+                        source: "history-sync",
+                        verified: true
+                      });
+                      saved++;
+                    } catch { }
+                  }
+                  if (saved > 0) {
+                    logger.info(`[wbot] HistorySync: ${saved} mapeamentos LID↔PN salvos na tabela LidMapping`);
+                  }
+                } catch (e: any) {
+                  logger.warn(`[wbot] Falha ao processar phoneNumberToLidMappings: ${e?.message}`);
+                }
+              }
+
               const labels = Array.isArray(messageSet?.labels) ? messageSet.labels : [];
               const chats = Array.isArray(messageSet?.chats) ? messageSet.chats : [];
               if (labels.length) {
@@ -816,7 +836,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               }
               if (batch.length) {
                 await createOrUpdateBaileysService({ whatsappId: whatsapp.id, chats: batch as any });
-                logger.info(`[wbot] persisted ${batch.length} chat label updates from ${source}`);
+                // logger.info(`[wbot] persisted ${batch.length} chat label updates from ${source}`);
               }
             } catch (e: any) {
               logger.warn(`[wbot] handleChatLabelUpdate failed (${source}): ${e?.message}`);

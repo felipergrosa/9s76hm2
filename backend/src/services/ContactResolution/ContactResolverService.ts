@@ -7,8 +7,9 @@ import LidMapping from "../../models/LidMapping";
 import logger from "../../utils/logger";
 import { extractMessageIdentifiers, ExtractedIdentifiers } from "./extractMessageIdentifiers";
 import { resolveContact } from "./resolveContact";
-import { createContact } from "./createContact";
+import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
 
 /**
  * ContactResolverService — Orquestrador das 3 camadas de resolução de contato.
@@ -46,12 +47,37 @@ export async function resolveMessageContact(
   // ─── CAMADA 1: Extração (pura, sem I/O) ───
   const ids = extractMessageIdentifiers(msg, wbot);
 
-  // ─── CAMADA 1.3: Simplificação para mensagens fromMe com LID ───
-  // Em vez de tentar resolver LID→PN com heurísticas complexas,
-  // buscar diretamente o ticket pelo lidJid do destinatário
-  if (ids.isFromMe && ids.lidJid && !ids.pnJid) {
-    // Buscar ticket do destinatário (não filtrar por whatsappId - pode ter mudado)
-    // Incluir mais status para garantir encontrar o ticket correto
+  // ─── CAMADA 0: Verificação de Self-LID (Correção de "Novo Grupo") ───
+  // Se o LID for do próprio bot, forçar isFromMe=true para evitar criar contato "self"
+  if (ids.lidJid && !ids.isFromMe) {
+    const botId = wbot.user?.id;
+    const botLid = botId?.includes("@lid") ? jidNormalizedUser(botId) : null;
+
+    // Se o bot não sabe seu próprio LID, tentar descobrir nos keys
+    let myLid = botLid;
+    if (!myLid) {
+      const authState = (wbot as any).authState;
+      myLid = authState?.creds?.me?.lid;
+    }
+
+    if (myLid && jidNormalizedUser(myLid) === ids.lidJid) {
+      logger.info({
+        lidJid: ids.lidJid,
+        myLid,
+        originalFromMe: ids.isFromMe
+      }, "[resolveMessageContact] LID identificado como sendo o próprio bot. Forçando isFromMe=true.");
+      ids.isFromMe = true;
+      // Se isFromMe=true, o extractMessageIdentifiers já deve ter lidado com pnJid se possível,
+      // mas podemos garantir que ele não tente resolver como "outro contato".
+    }
+  }
+
+  // ─── CAMADA 1.3: Busca por ticket existente via lidJid ───
+  // Quando o remoteJid é LID e não sabemos o PN, buscar diretamente
+  // o ticket pelo lidJid. Funciona tanto para mensagens de entrada
+  // quanto de saída (fromMe).
+  if (ids.lidJid && !ids.pnJid) {
+    // Buscar ticket (não filtrar por whatsappId - pode ter mudado)
     const ticketByLid = await Ticket.findOne({
       where: {
         companyId,
@@ -74,29 +100,50 @@ export async function resolveMessageContact(
 
     if (ticketByLid?.contact) {
       const contact = ticketByLid.contact;
-      logger.info({
-        lidJid: ids.lidJid,
-        contactId: contact.id,
-        contactName: contact.name,
-        ticketId: ticketByLid.id,
-        strategy: "ticket-by-lidJid"
-      }, "[resolveMessageContact] Contato encontrado via ticket existente (fromMe+LID)");
 
-      // Preencher os identificadores se o contato tiver número real
+      // Validação: O contato encontrado tem um número válido?
       const digits = String(contact.number || "").replace(/\D/g, "");
-      if (digits.length >= 10 && digits.length <= 13) {
+      const hasValidNumber = digits.length >= 10 && digits.length <= 20 && !contact.number?.includes("@lid");
+
+      if (hasValidNumber) {
+        logger.info({
+          lidJid: ids.lidJid,
+          contactId: contact.id,
+          contactName: contact.name,
+          ticketId: ticketByLid.id,
+          isFromMe: ids.isFromMe,
+          strategy: "ticket-by-lidJid"
+        }, "[resolveMessageContact] Contato encontrado via ticket existente (LID)");
+
         ids.pnDigits = digits;
         ids.pnJid = `${digits}@s.whatsapp.net`;
         const { canonical } = safeNormalizePhoneNumber(digits);
         ids.pnCanonical = canonical;
+
+        return {
+          contact,
+          identifiers: ids,
+          isNew: false,
+          isPending: (contact.number || "").startsWith("PENDING_")
+        };
+      } else {
+        logger.info({
+          lidJid: ids.lidJid,
+          contactId: contact.id,
+          ticketId: ticketByLid.id,
+          currentNumber: contact.number
+        }, "[resolveMessageContact] Ticket encontrado via LID, mas contato não tem PN válido. Tentando resolver...");
+        // Não retorna aqui! Deixa cair para o Layer 1.5 (resolveLidToPN)
+        // Se resolver lá, vamos atualizar este contato nas próximas etapas ou aqui mesmo?
+        // O ideal é deixar o fluxo seguir para Layer 1.5 e depois verificar novamente se temos contato.
       }
 
-      return {
-        contact,
-        identifiers: ids,
-        isNew: false,
-        isPending: (contact.number || "").startsWith("PENDING_")
-      };
+      // Refresh Avatar (async throttle)
+      RefreshContactAvatarService({
+        contactId: contact.id,
+        companyId,
+        whatsappId: wbot.id
+      });
     }
   }
 
@@ -108,7 +155,7 @@ export async function resolveMessageContact(
     if (contactByWid) {
       try {
         const digits = String(contactByWid.number || "").replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 13) {
+        if (digits.length >= 10 && digits.length <= 20) {
           ids.pnDigits = digits;
           ids.pnJid = `${digits}@s.whatsapp.net`;
           const { canonical } = safeNormalizePhoneNumber(digits);
@@ -165,6 +212,43 @@ export async function resolveMessageContact(
       }
     }
 
+    // CORREÇÃO CRÍTICA: Se descobrimos o PN agora (via LidMapping ou USync),
+    // mas o contato foi encontrado pelo LID (e tem number = LID ou PENDING),
+    // devemos atualizar o number/remoteJid para o PN real!
+    if (ids.pnJid && ids.pnDigits) {
+      const currentNumber = existingContact.number || "";
+      const isLidNumber = currentNumber.includes("@lid") || currentNumber.includes("@") || currentNumber.startsWith("PENDING_");
+      // Se number não parece um telefone válido (tem letras, @, ou length errado)
+      const currentDigits = currentNumber.replace(/\D/g, "");
+      const isInvalidNumber = currentDigits.length < 10 && ids.pnDigits.length >= 10;
+
+      if (isLidNumber || isInvalidNumber) {
+        try {
+          await existingContact.update({
+            number: ids.pnDigits,
+            remoteJid: ids.pnJid,
+            canonicalNumber: ids.pnCanonical || undefined
+          });
+
+          logger.info({
+            contactId: existingContact.id,
+            oldNumber: currentNumber,
+            newNumber: ids.pnDigits,
+            strategy: "enrich-existing-contact"
+          }, "[resolveMessageContact] Contato atualizado com PN descoberto");
+        } catch (err: any) {
+          logger.warn({ err: err?.message }, "[resolveMessageContact] Falha ao atualizar contato com PN descoberto");
+        }
+      }
+    }
+
+    // Refresh Avatar (async throttle)
+    RefreshContactAvatarService({
+      contactId: existingContact.id,
+      companyId,
+      whatsappId: wbot.id
+    });
+
     return {
       contact: existingContact,
       identifiers: ids,
@@ -174,7 +258,88 @@ export async function resolveMessageContact(
   }
 
   // ─── CAMADA 3: Criação (último recurso) ───
-  const newContact = await createContact(ids, companyId, wbot, pnFromMapping);
+  const contactRemoteJid = ids.pnJid || ids.lidJid;
+  const isLidOnly = !ids.pnDigits && !!ids.lidJid;
+
+  let newContact: Contact | null = null;
+
+  if (!isLidOnly) {
+    // CASO A: Temos o número real (PN) → criar contato normalmente
+    const contactName = ids.pushName || ids.pnDigits;
+    const contactNumber = ids.pnDigits || "";
+
+    logger.info({
+      contactNumber,
+      contactName,
+      strategy: "CreateOrUpdateContactService-PN"
+    }, "[ContactResolver] Criando contato com número real");
+
+    newContact = await CreateOrUpdateContactService({
+      name: contactName,
+      number: contactNumber,
+      isGroup: false,
+      companyId,
+      whatsappId: wbot.id,
+      remoteJid: contactRemoteJid,
+      wbot,
+      checkProfilePic: true
+    });
+  }
+
+  if (!newContact && isLidOnly) {
+    // CASO B: Só temos LID, sem PN → criar contato com LID como
+    // identificador interno, mas NUNCA colocar dígitos do LID no campo number.
+    // Usar pushName como nome. O número será preenchido quando o PN for descoberto.
+    const contactName = ids.pushName || ids.lidJid;
+
+    logger.info({
+      lidJid: ids.lidJid,
+      contactName,
+      strategy: "LID-direct-create"
+    }, "[ContactResolver] Criando contato via LID (sem PN disponível) — número será preenchido quando descoberto");
+
+    try {
+      const CompaniesSettings = (await import("../../models/CompaniesSettings")).default;
+      const settings = await CompaniesSettings.findOne({ where: { companyId } });
+      const acceptAudioMessageContact = (settings as any)?.acceptAudioMessageContact === "enabled";
+
+      newContact = await Contact.findOrCreate({
+        where: {
+          companyId,
+          remoteJid: ids.lidJid
+        },
+        defaults: {
+          name: contactName,
+          number: contactName, // pushName como number (não dígitos do LID)
+          isGroup: false,
+          companyId,
+          remoteJid: ids.lidJid,
+          lidJid: ids.lidJid,
+          channel: "whatsapp",
+          acceptAudioMessage: acceptAudioMessageContact,
+          whatsappId: wbot.id
+        }
+      }).then(([c]) => c);
+    } catch (createErr: any) {
+      logger.error({ err: createErr?.message, lidJid: ids.lidJid }, "[ContactResolver] Falha ao criar contato LID");
+      throw new Error(`LID_CREATION_FAILED: Não foi possível criar contato para ${ids.lidJid}`);
+    }
+  }
+
+  if (!newContact) {
+    // Fallback final: CreateOrUpdateContactService retornou null por outro motivo
+    logger.error({ ids }, "[ContactResolver] Não foi possível criar contato por nenhuma estratégia");
+    throw new Error(`CONTACT_CREATION_FAILED: Sem PN e sem LID para criar contato`);
+  }
+
+  // Refresh Avatar (async throttle) - O Service já faz, mas mal não faz garantir
+  /*
+  RefreshContactAvatarService({
+    contactId: newContact.id,
+    companyId,
+    whatsappId: wbot.id
+  });
+  */
 
   // Persistir mapeamento LID↔PN se ambos conhecidos
   if (ids.lidJid && ids.pnDigits) {
@@ -329,7 +494,7 @@ async function resolveFromSentWid(
     // Persistir LidMapping com base no number do contato real (cura para próximas mensagens)
     try {
       const digits = String(contact.number || "").replace(/\D/g, "");
-      if (digits.length >= 10 && digits.length <= 13) {
+      if (digits.length >= 10 && digits.length <= 20) {
         const whatsappId = (msgRow as any)?.ticket?.whatsappId || wbot.id;
         await LidMapping.upsert({
           lid: lidJid,
@@ -381,7 +546,7 @@ async function resolveLidToPN(
     });
     if (mapping?.phoneNumber) {
       const digits = mapping.phoneNumber.replace(/\D/g, "");
-      if (digits.length >= 10 && digits.length <= 13) {
+      if (digits.length >= 10 && digits.length <= 20) {
         ids.pnJid = `${digits}@s.whatsapp.net`;
         ids.pnDigits = digits;
         const { canonical } = safeNormalizePhoneNumber(digits);
@@ -407,7 +572,7 @@ async function resolveLidToPN(
       const resolvedPN = await lidStore.getPNForLID(lidId);
       if (resolvedPN) {
         const digits = resolvedPN.replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 13) {
+        if (digits.length >= 10 && digits.length <= 20) {
           const pnJid = resolvedPN.includes("@") ? jidNormalizedUser(resolvedPN) : `${digits}@s.whatsapp.net`;
           ids.pnJid = pnJid;
           ids.pnDigits = digits;
@@ -460,7 +625,7 @@ async function resolveLidToPN(
       const resolved = tryExtract(raw);
       if (resolved) {
         const digits = resolved.replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 13) {
+        if (digits.length >= 10 && digits.length <= 20) {
           const pnJid = resolved.includes("@") ? jidNormalizedUser(resolved) : `${digits}@s.whatsapp.net`;
           ids.pnJid = pnJid;
           ids.pnDigits = digits;
@@ -503,7 +668,7 @@ async function resolveLidToPN(
       if (result.jid && result.jid.includes("@s.whatsapp.net")) {
         const pnJid = jidNormalizedUser(result.jid);
         const digits = pnJid.replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 13) {
+        if (digits.length >= 10 && digits.length <= 20) {
           ids.pnJid = pnJid;
           ids.pnDigits = digits;
           const { canonical } = safeNormalizePhoneNumber(digits);
@@ -533,17 +698,129 @@ async function resolveLidToPN(
       }
     }
 
-    logger.info({
+    logger.warn({
       lidJid,
       resultsCount: results?.length || 0,
-      firstResult: results?.[0] ? { jid: results[0].jid, exists: results[0].exists } : null
-    }, "[resolveLidToPN] wbot.onWhatsApp() não retornou PN válido");
+      firstResult: results?.[0] ? JSON.stringify(results[0]) : null
+    }, "[resolveLidToPN] CRITICO: wbot.onWhatsApp() não retornou PN válido. Verifique se o numero esta na lista de contatos do celular.");
   } catch (err: any) {
     logger.warn({
       err: err?.message,
       lidJid
     }, "[resolveLidToPN] Erro ao chamar wbot.onWhatsApp()");
   }
+
+  // Estratégia C2: Buscar no wbot.store (cache local de contatos sincronizados)
+  try {
+    const store = (wbot as any).store;
+    if (store && store.contacts) {
+      // 1. Tentar busca direta pelo LID
+      const contactInfo = store.contacts[lidJid];
+      if (contactInfo) {
+        logger.info({ lidJid, contactKeys: Object.keys(contactInfo) }, "[resolveLidToPN] Contato LID encontrado no wbot.store");
+      }
+
+      // 2. Tentar busca por nome no store (iterar todos)
+      // Se onWhatsApp falhou, talvez o store tenha o PN com o mesmo nome
+      if (ids.pushName) {
+        const cleanName = ids.pushName.trim().toLowerCase();
+        const allContacts = Object.values(store.contacts) as any[];
+
+        // Procurar contato com mesmo nome/notify/verifiedName e que seja PN (@s.whatsapp.net)
+        const match = allContacts.find(c => {
+          const names = [c.name, c.notify, c.verifiedName].filter(n => n).map(n => n.toLowerCase());
+          return (
+            names.some(n => n === cleanName) &&
+            c.id.includes("@s.whatsapp.net")
+          );
+        });
+
+        if (match) {
+          const pnJid = jidNormalizedUser(match.id);
+          const digits = pnJid.replace(/\D/g, "");
+          if (digits.length >= 10) {
+            ids.pnJid = pnJid;
+            ids.pnDigits = digits;
+            const { canonical } = safeNormalizePhoneNumber(digits);
+            ids.pnCanonical = canonical;
+
+            logger.info({
+              lidJid,
+              pnJid,
+              matchId: match.id,
+              matchName: match.name || match.notify
+            }, "[resolveLidToPN] Sucesso: PN encontrado no wbot.store via match de nome");
+
+            try {
+              await LidMapping.upsert({
+                lid: lidJid,
+                phoneNumber: digits,
+                companyId,
+                whatsappId: wbot.id,
+                verified: true
+              });
+            } catch { }
+            return;
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Erro ao consultar wbot.store");
+  }
+  // Estratégia C3: USync Query (Force Sync via Interactive Query)
+  // O onWhatsApp pode falhar se o contato não tiver status público recente, mas USync é mais agressivo.
+  try {
+    const sock = wbot as any;
+    if (sock.executeUSyncQuery && typeof sock.executeUSyncQuery === 'function') {
+      const { USyncQuery, USyncUser } = require("@whiskeysockets/baileys");
+
+      const usyncQuery = new USyncQuery()
+        .withMode("query")
+        .withUser(new USyncUser().withId(lidJid))
+        .withContactProtocol(); // Solicita dados de contato
+
+      const result = await sock.executeUSyncQuery(usyncQuery);
+
+      if (result && result.list && result.list.length > 0) {
+        const firstResult = result.list[0];
+        // O resultado do protocolo de contato geralmente vem no 'contact' field
+        // A estrutura exata depende do retorno do servidor, mas vamos logar para debug critico
+        // e tentar extrair se tiver PN.
+
+        logger.info({ lidJid, usyncResult: JSON.stringify(firstResult) }, "[resolveLidToPN] USync retornou dados.");
+
+        // O usync pode retornar o PN no atributo 'id' se for redirecionamento, ou dentro dos protocolos
+        // Mas o objetivo principal aqui é forçar o servidor a nos dizer quem é esse LID.
+        const protocolData = firstResult;
+        // TODO: Analisar payload exato do USync para extração, mas por hora o log já nos salva.
+        // Se o USync retornar o PN, ele geralmente aparece como JID normal.
+        if (firstResult.id && firstResult.id.includes("@s.whatsapp.net")) {
+          const pnJid = jidNormalizedUser(firstResult.id);
+          const digits = pnJid.replace(/\D/g, "");
+          if (digits.length >= 10) {
+            ids.pnJid = pnJid;
+            ids.pnDigits = digits;
+            ids.pnCanonical = safeNormalizePhoneNumber(digits).canonical;
+            logger.info({ lidJid, pnJid }, "[resolveLidToPN] LID resolvido via USync!");
+            try {
+              await LidMapping.upsert({
+                lid: lidJid,
+                phoneNumber: digits,
+                companyId,
+                whatsappId: wbot.id,
+                verified: true
+              });
+            } catch { }
+            return;
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Falha no USync Query");
+  }
+
 
   // Estratégia D: buscar contato existente pelo lidJid no banco
   // (pode ter sido criado anteriormente com número real)
@@ -558,7 +835,7 @@ async function resolveLidToPN(
 
     if (existingContact && existingContact.number && !existingContact.number.startsWith("PENDING_")) {
       const digits = existingContact.number.replace(/\D/g, "");
-      if (digits.length >= 10 && digits.length <= 13) {
+      if (digits.length >= 10 && digits.length <= 20) {
         ids.pnJid = `${digits}@s.whatsapp.net`;
         ids.pnDigits = digits;
         const { canonical } = safeNormalizePhoneNumber(digits);
@@ -584,90 +861,15 @@ async function resolveLidToPN(
   // 2. Busca por lidJid (strategy D acima)
   // 3. Criação de PENDING_ com pushName correto (destinatário)
 
-  // Estratégia F: Buscar contato pelo pushName (último recurso)
-  // Usa busca parcial com LIKE para maior chance de match
-  // IMPORTANTE: pushName em mensagens fromMe é o nome do DESTINATÁRIO (cliente)
+  // Estratégia F: REMOVIDA
+  // Motivo: Busca por nome parcial (LIKE %name%) causa Associação Incorreta de Contatos
+  // Ex: Mensagem de "Ana" (nova) sendo atribuída a "Ana Paula" (cliente antiga)
+  // Segurança de dados > Conveniência de resolução
+  /*
   if (ids.pushName && ids.pushName.trim().length > 2) {
-    try {
-      const pushNameClean = ids.pushName.trim();
-      
-      // Tentativa 1: match exato
-      let contactByName = await Contact.findOne({
-        where: {
-          companyId,
-          name: pushNameClean,
-          isGroup: false,
-          number: { [Op.notLike]: "PENDING_%" }
-        },
-        order: [["updatedAt", "DESC"]]
-      });
-
-      // Tentativa 2: busca parcial com LIKE (se não achou exato)
-      if (!contactByName) {
-        contactByName = await Contact.findOne({
-          where: {
-            companyId,
-            name: { [Op.like]: `%${pushNameClean}%` },
-            isGroup: false,
-            number: { [Op.notLike]: "PENDING_%" }
-          },
-          order: [["updatedAt", "DESC"]]
-        });
-      }
-
-      // Tentativa 3: busca por parte do nome (primeiras 10 letras)
-      if (!contactByName && pushNameClean.length > 5) {
-        const namePrefix = pushNameClean.substring(0, 10);
-        contactByName = await Contact.findOne({
-          where: {
-            companyId,
-            name: { [Op.like]: `%${namePrefix}%` },
-            isGroup: false,
-            number: { [Op.notLike]: "PENDING_%" }
-          },
-          order: [["updatedAt", "DESC"]]
-        });
-      }
-
-      if (contactByName) {
-        const digits = (contactByName.number || "").replace(/\D/g, "");
-        if (digits.length >= 10 && digits.length <= 13) {
-          ids.pnJid = `${digits}@s.whatsapp.net`;
-          ids.pnDigits = digits;
-          const { canonical } = safeNormalizePhoneNumber(digits);
-          ids.pnCanonical = canonical;
-
-          logger.info({
-            lidJid,
-            pnJid: ids.pnJid,
-            contactId: contactByName.id,
-            contactName: contactByName.name,
-            strategy: "pushName-match"
-          }, "[resolveLidToPN] LID→PN via pushName");
-
-          // Persistir mapeamento e atualizar lidJid do contato
-          try {
-            await LidMapping.upsert({
-              lid: lidJid,
-              phoneNumber: digits,
-              companyId,
-              whatsappId: wbot.id,
-              verified: false
-            });
-            if (!contactByName.lidJid) {
-              await contactByName.update({ lidJid });
-            }
-          } catch {
-            // Não bloquear fluxo
-          }
-
-          return;
-        }
-      }
-    } catch (err: any) {
-      logger.warn({ err: err?.message, lidJid }, "[resolveLidToPN] Erro na estratégia pushName");
-    }
+     // ... código removido por segurança ...
   }
+  */
 
   logger.warn({ lidJid, isFromMe: ids.isFromMe, pushName: ids.pushName }, "[resolveLidToPN] Todas as estratégias falharam — contato será PENDING_");
 }

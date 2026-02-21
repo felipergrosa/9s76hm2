@@ -2,12 +2,11 @@ import { initWASocket } from "../../libs/wbot";
 import { acquireWbotLock, renewWbotLock, releaseWbotLock } from "../../libs/wbotMutex";
 import { WhatsAppFactory } from "../../libs/whatsapp";
 import Whatsapp from "../../models/Whatsapp";
-import { wbotMessageListener } from "./wbotMessageListener";
+import wbotMessageListener from "./wbotMessageListener";
 import { getIO } from "../../libs/socket";
 import wbotMonitor from "./wbotMonitor";
 import logger from "../../utils/logger";
 import * as Sentry from "@sentry/node";
-import { Op } from "sequelize";
 
 /**
  * Inicia sessão WhatsApp usando adapters (Baileys ou Official API)
@@ -108,11 +107,8 @@ export const StartWhatsAppSessionUnified = async (
                   const Contact = require("../../models/Contact").default;
                   const contactsToUpdate = await Contact.findAll({
                     where: {
-                      companyId,
-                      [Op.or]: [
-                        { remoteJid: mapping.lid },  // Antigo: remoteJid com LID
-                        { lidJid: mapping.lid }      // Novo: campo lidJid
-                      ]
+                      remoteJid: mapping.lid,
+                      companyId
                     }
                   });
                   

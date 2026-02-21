@@ -133,6 +133,92 @@ const ContactListItems = () => {
   const [allTags, setAllTags] = useState([]);
   const fileUploadRef = useRef(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // DEBUG: Logs para diagnóstico do layout mobile/desktop
+  useEffect(() => {
+    const checkScreenSize = () => {
+      console.log('=== LAYOUT DEBUG ===');
+      console.log('Window width:', window.innerWidth);
+      console.log('Window height:', window.innerHeight);
+      
+      // Verificar se Tailwind está carregado
+      const tailwindClasses = document.querySelector('.hidden');
+      console.log('Tailwind carregado:', tailwindClasses ? '✅' : '❌');
+      
+      // Breakpoints do Tailwind
+      console.log('Breakpoints:');
+      console.log('- sm (640px):', window.innerWidth >= 640 ? '✅' : '❌');
+      console.log('- md (768px):', window.innerWidth >= 768 ? '✅' : '❌');
+      console.log('- lg (1024px):', window.innerWidth >= 1024 ? '✅' : '❌');
+      console.log('- xl (1280px):', window.innerWidth >= 1280 ? '✅' : '❌');
+      
+      // Verificar se classes lg: estão no CSS
+      const styleSheets = Array.from(document.styleSheets);
+      let hasLgClasses = false;
+      styleSheets.forEach(sheet => {
+        try {
+          const rules = Array.from(sheet.cssRules || sheet.rules || []);
+          rules.forEach(rule => {
+            if (rule.selectorText && rule.selectorText.includes('lg:')) {
+              hasLgClasses = true;
+            }
+          });
+        } catch (e) {
+          // Ignorar erros de CORS
+        }
+      });
+      console.log('Classes lg: encontradas no CSS:', hasLgClasses ? '✅' : '❌');
+      
+      // Verificar elementos no DOM
+      setTimeout(() => {
+        const desktopTable = document.getElementById('desktop-table');
+        const mobileList = document.getElementById('mobile-list');
+        
+        console.log('Elementos encontrados:');
+        console.log('- Desktop table:', desktopTable ? '✅' : '❌');
+        console.log('- Mobile list:', mobileList ? '✅' : '❌');
+        
+        if (desktopTable) {
+          const styles = window.getComputedStyle(desktopTable);
+          console.log('Desktop table:');
+          console.log('  - display:', styles.display);
+          console.log('  - visibility:', styles.visibility);
+          console.log('  - opacity:', styles.opacity);
+          console.log('  - height:', styles.height);
+          console.log('  - classes:', desktopTable.className);
+          console.log('  - inline style:', desktopTable.getAttribute('style'));
+        }
+        
+        if (mobileList) {
+          const styles = window.getComputedStyle(mobileList);
+          console.log('Mobile list:');
+          console.log('  - display:', styles.display);
+          console.log('  - visibility:', styles.visibility);
+          console.log('  - opacity:', styles.opacity);
+          console.log('  - height:', styles.height);
+          console.log('  - classes:', mobileList.className);
+          console.log('  - inline style:', mobileList.getAttribute('style'));
+        }
+        
+        // Verificar CSS computado vs inline
+        if (desktopTable) {
+          const computed = window.getComputedStyle(desktopTable);
+          const inline = desktopTable.style.display;
+          console.log('CSS vs INLINE:');
+          console.log('  - Computed display:', computed.display);
+          console.log('  - Inline display:', inline);
+          console.log('  - Prevalece:', inline || computed.display);
+        }
+      }, 100);
+      
+      console.log('==================');
+    };
+
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
   const [totalContacts, setTotalContacts] = useState(0);
   const [contactsPerPage, setContactsPerPage] = useState(20); // espelha backend (ListService.limit)
   // Ordenação
@@ -788,8 +874,8 @@ const ContactListItems = () => {
               :
               <>
                 {/* Cabeçalho */}
-                <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
-                  <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">
+                <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4">
+                  <h1 className="text-2xl lg:text-3xl font-bold text-gray-800 dark:text-white">
                     Lista de Contatos {"›"} {contactList.name}
                   </h1>
                 </header>
@@ -798,10 +884,10 @@ const ContactListItems = () => {
                 <FilterSummary />
 
                 {/* Barra de Ações e Filtros */}
-                <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 md:flex-nowrap mb-2 md:mb-2">
+                <div className="flex flex-col gap-2 mb-2 lg:flex-row lg:items-center lg:gap-3 lg:flex-nowrap lg:mb-2">
                   {/* Busca (Esquerda) */}
-                  <div className="w-full flex items-center gap-2 flex-1 min-w-0 justify-start">
-                    <div className="relative flex-1 min-w-[260px] max-w-[620px]">
+                  <div className="flex-1 min-w-0">
+                    <div className="relative max-w-[620px]">
                       <input
                         type="text"
                         placeholder={i18n.t("contactListItems.searchPlaceholder")}
@@ -813,17 +899,19 @@ const ContactListItems = () => {
                     </div>
                   </div>
 
-                  {/* Dock minimalista (somente ícones com tooltip) */}
-                  <IconDock
-                    actions={[
-                      { id: 'import', label: i18n.t("contactListItems.buttons.import"), onClick: () => { if (fileUploadRef.current) { fileUploadRef.current.value = null; fileUploadRef.current.click(); } }, icon: DefaultIconSet({ color: '#111' }).import },
-                      { id: 'filter', label: 'Filtrar', onClick: handleOpenFilterModal, icon: DefaultIconSet({ color: '#111' }).filter, active: filterModalOpen },
-                      { id: 'addManual', label: 'Adicionar contatos manualmente', onClick: handleOpenManualContactsModal, icon: DefaultIconSet({ color: '#059669' }).addManual },
-                      { id: 'fixLinks', label: 'Corrigir vínculos', onClick: handleFixLinks, icon: DefaultIconSet({ color: '#0284c7' }).fixLinks },
-                      { id: 'clearItems', label: 'Limpar itens da lista', onClick: () => setConfirmClearListOpen(true), icon: DefaultIconSet({ color: '#b91c1c' }).clearItems },
-                      { id: 'syncNow', label: 'Sincronizar agora', onClick: handleSyncNow, icon: DefaultIconSet({ color: '#065f46' }).syncNow },
-                    ]}
-                  />
+                  {/* Dock minimalista (somente ícones com tooltip) - Centralizado em mobile, à direita em desktop */}
+                  <div className="flex justify-center w-full max-w-[375px] mx-auto lg:flex-shrink-0 lg:w-auto lg:max-w-none lg:mx-0">
+                    <IconDock
+                      actions={[
+                        { id: 'import', label: i18n.t("contactListItems.buttons.import"), onClick: () => { if (fileUploadRef.current) { fileUploadRef.current.value = null; fileUploadRef.current.click(); } }, icon: DefaultIconSet({ color: '#111' }).import },
+                        { id: 'filter', label: 'Filtrar', onClick: handleOpenFilterModal, icon: DefaultIconSet({ color: '#111' }).filter, active: filterModalOpen },
+                        { id: 'addManual', label: 'Adicionar contatos manualmente', onClick: handleOpenManualContactsModal, icon: DefaultIconSet({ color: '#059669' }).addManual },
+                        { id: 'fixLinks', label: 'Corrigir vínculos', onClick: handleFixLinks, icon: DefaultIconSet({ color: '#0284c7' }).fixLinks },
+                        { id: 'clearItems', label: 'Limpar itens da lista', onClick: () => setConfirmClearListOpen(true), icon: DefaultIconSet({ color: '#b91c1c' }).clearItems },
+                        { id: 'syncNow', label: 'Sincronizar agora', onClick: handleSyncNow, icon: DefaultIconSet({ color: '#065f46' }).syncNow },
+                      ]}
+                    />
+                  </div>
 
                 </div>
 
@@ -843,7 +931,7 @@ const ContactListItems = () => {
                 />
 
                 {/* Tabela (Desktop) */}
-                <div className="hidden md:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
+                <div id="desktop-table" className="hidden lg:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
                   <div className="overflow-x-hidden">
                     <table className="w-full table-auto text-sm text-left text-gray-500 dark:text-gray-400">
                       <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 sticky top-0 z-10">
@@ -1031,7 +1119,7 @@ const ContactListItems = () => {
                 </div>
 
                 {/* Paginação (Desktop) */}
-                <div className="hidden md:flex justify-between items-center mt-4">
+                <div className="hidden lg:flex justify-between items-center mt-4">
                   <div className="text-sm text-gray-600 dark:text-gray-300">
                     Página {pageNumber} de {totalPages} • {totalContacts} itens
                   </div>
@@ -1063,7 +1151,7 @@ const ContactListItems = () => {
                 </div>
 
                 {/* Lista (Mobile) */}
-                <div className="md:hidden flex flex-col gap-2 mt-4 items-center">
+                <div id="mobile-list" className="lg:hidden flex flex-col gap-2 mt-4 items-center">
                   {sortedContacts.map((contact) => {
                     const isUnlinked = !contact?.contact?.id;
                     return (
@@ -1144,7 +1232,7 @@ const ContactListItems = () => {
                 </div>
 
                 {/* Paginação (Mobile) */}
-                <div className="md:hidden flex justify-between items-center mt-4">
+                <div className="lg:hidden flex justify-between items-center mt-4">
                   <div className="text-sm text-gray-600 dark:text-gray-300">
                     Página {pageNumber} de {totalPages}
                   </div>

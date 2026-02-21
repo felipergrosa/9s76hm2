@@ -2,6 +2,7 @@ import path, { join } from "path";
 import { promisify } from "util";
 import { readFile, writeFile } from "fs";
 import fs from "fs";
+import "multer"; // Importar multer explicitamente para o namespace Express
 import * as Sentry from "@sentry/node";
 import { isNil, isNull } from "lodash";
 import { REDIS_URI_MSG_CONN } from "../../config/redis";
@@ -64,7 +65,7 @@ const jidLocks = new Map<string, Promise<void>>();
  */
 const acquireJidLock = async (jid: string): Promise<() => void> => {
   const normalizedJid = jidNormalizedUser(jid);
-  
+
   // Aguardar lock existente
   while (jidLocks.has(normalizedJid)) {
     try {
@@ -73,7 +74,7 @@ const acquireJidLock = async (jid: string): Promise<() => void> => {
       // Ignora erros de locks anteriores
     }
   }
-  
+
   // Criar novo lock
   let releaseLock: () => void;
   const lockPromise = new Promise<void>((resolve) => {
@@ -82,9 +83,9 @@ const acquireJidLock = async (jid: string): Promise<() => void> => {
       resolve();
     };
   });
-  
+
   jidLocks.set(normalizedJid, lockPromise);
-  
+
   return releaseLock!;
 };
 
@@ -125,6 +126,7 @@ import cacheLayer from "../../libs/cache";
 import { addLogs } from "../../helpers/addLogs";
 import SendWhatsAppMedia, { getMessageOptions } from "./SendWhatsAppMedia";
 import QueueRAGService from "../QueueServices/QueueRAGService";
+import SignalErrorHandler from "./SignalErrorHandler";
 
 import ShowQueueIntegrationService from "../QueueIntegrationServices/ShowQueueIntegrationService";
 import { createDialogflowSessionWithModel } from "../QueueIntegrationServices/CreateSessionDialogflow";
@@ -657,7 +659,7 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
         remoteJidAlt,
         altDigits
       });
-      
+
       // Salvar mapeamento LID → PN para uso futuro
       try {
         const LidMapping = require("../../models/LidMapping").default;
@@ -673,7 +675,7 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
       } catch (e) {
         // Ignorar erros de persistência
       }
-      
+
       return {
         id: remoteJidAlt,
         name: msg.pushName || altDigits,
@@ -691,7 +693,7 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
         participantAlt,
         altDigits
       });
-      
+
       // Salvar mapeamento LID → PN para uso futuro
       try {
         const LidMapping = require("../../models/LidMapping").default;
@@ -769,6 +771,86 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
       }
     } else {
       contactJid = participantJid;
+
+      // =================================================================
+      // TENTATIVA DE RESOLUÇÃO DE LID EM GRUPO
+      // Se o participant for um LID ou tiver > 13 digitos, tentar resolver
+      // =================================================================
+      const isLidParticipant = participantJid.includes("@lid");
+      if (isLidParticipant) {
+        debugLog("[getContactMessage] Tentando resolver LID de participante de grupo", { participantJid });
+        let resolvedIdentity = null;
+
+        // 1. Tentar resolver via signalRepository (Baileys v7)
+        try {
+          const lidStore = (wbot as any).signalRepository?.lidMapping;
+          if (lidStore?.getPNForLID) {
+            const lidId = participantJid.replace("@lid", "");
+            const resolvedPN = await lidStore.getPNForLID(lidId);
+            if (resolvedPN) {
+              const pnDigits = resolvedPN.replace(/\D/g, "");
+              if (looksPhoneLike(pnDigits)) {
+                resolvedIdentity = resolvedPN.includes("@") ? resolvedPN : `${pnDigits}@s.whatsapp.net`;
+                logger.info("[getContactMessage] Participant LID resolvido via signalRepository", {
+                  originalLid: participantJid,
+                  resolvedIdentity
+                });
+
+                // Salvar mapping
+                try {
+                  const LidMapping = require("../../models/LidMapping").default;
+                  const companyId = (wbot as any).companyId || 1;
+                  await LidMapping.upsert({
+                    lid: participantJid,
+                    phoneNumber: pnDigits,
+                    companyId,
+                    whatsappId: wbot.id
+                  });
+                } catch (e) { }
+              }
+            }
+          }
+        } catch (e) { }
+
+        // 2. Tentar LidMapping (banco)
+        if (!resolvedIdentity) {
+          try {
+            const LidMapping = require("../../models/LidMapping").default;
+            const companyId = (wbot as any).companyId || 1;
+            const savedMapping = await LidMapping.findOne({
+              where: { lid: participantJid, companyId }
+            });
+            if (savedMapping?.phoneNumber) {
+              const pnDigits = savedMapping.phoneNumber.replace(/\D/g, "");
+              if (looksPhoneLike(pnDigits)) {
+                resolvedIdentity = `${pnDigits}@s.whatsapp.net`;
+                logger.info("[getContactMessage] Participant LID resolvido via LidMapping (banco)", { resolvedIdentity });
+              }
+            }
+          } catch (e) { }
+        }
+
+        // 3. Tentar store contacts
+        if (!resolvedIdentity) {
+          try {
+            const sock = wbot as any;
+            const lidContact = sock.store?.contacts?.[participantJid];
+            if (lidContact && lidContact.id && lidContact.id.includes("@s.whatsapp.net")) {
+              resolvedIdentity = lidContact.id;
+              logger.info("[getContactMessage] Participant LID resolvido via Store Contacts", { resolvedIdentity });
+            } else if (lidContact?.phoneNumber) {
+              const pnDigits = lidContact.phoneNumber.replace(/\D/g, "");
+              if (looksPhoneLike(pnDigits)) {
+                resolvedIdentity = `${pnDigits}@s.whatsapp.net`;
+              }
+            }
+          } catch (e) { }
+        }
+
+        if (resolvedIdentity) {
+          contactJid = resolvedIdentity;
+        }
+      }
     }
   } else {
     // Em conversas diretas (não-grupo)
@@ -814,7 +896,7 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
                 resolvedPN,
                 resolvedJid: contactJid
               });
-              
+
               // Salvar mapeamento para uso futuro
               try {
                 const LidMapping = require("../../models/LidMapping").default;
@@ -825,7 +907,7 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
                   companyId,
                   whatsappId: wbot.id
                 });
-              } catch (e) {}
+              } catch (e) { }
             }
           }
         } catch (e) {
@@ -857,20 +939,6 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
         }
       }
 
-      // 1. PRIORIDADE MÁXIMA: senderPn (campo mais confiável do Baileys)
-      const senderPn = (msg as any).senderPn;
-      if (senderPn) {
-        const senderDigits = senderPn.replace(/\D/g, "");
-        if (looksPhoneLike(senderDigits)) {
-          contactJid = senderPn.includes("@") ? senderPn : `${senderDigits}@s.whatsapp.net`;
-          debugLog("[getContactMessage] LID resolvido via senderPn (MAIS CONFIÁVEL)", {
-            originalLid: remoteJid,
-            senderPn,
-            resolvedJid: contactJid
-          });
-        }
-      }
-
       // 2. phoneNumber no Contact (presente em alguns contatos)
       if (contactJid === remoteJid && sock.store?.contacts?.[remoteJid]) {
         const storedContact = sock.store.contacts[remoteJid];
@@ -894,20 +962,6 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
           contactJid = lidContact.id;
           debugLog("[getContactMessage] LID resolvido via store.contacts", {
             originalLid: remoteJid,
-            resolvedJid: contactJid
-          });
-        }
-      }
-
-      // Alternativa: verificar se há um número no pushName da mensagem
-      if (contactJid === remoteJid && msg.pushName) {
-        const pushNameDigits = msg.pushName.replace(/\D/g, "");
-        if (looksPhoneLike(pushNameDigits)) {
-          // pushName contém um número válido, usar como JID
-          contactJid = `${pushNameDigits}@s.whatsapp.net`;
-          debugLog("[getContactMessage] LID resolvido via pushName", {
-            originalLid: remoteJid,
-            pushName: msg.pushName,
             resolvedJid: contactJid
           });
         }
@@ -1205,7 +1259,8 @@ const verifyContact = async (
   msgContact: IMe,
   wbot: Session,
   companyId: number,
-  userId: number = null
+  userId: number = null,
+  msg?: proto.IWebMessageInfo
 ): Promise<Contact> => {
   // VALIDAÇÃO CRÍTICA: msgContact pode ser null se getContactMessage falhou
   if (!msgContact || !msgContact.id) {
@@ -1266,8 +1321,8 @@ const verifyContact = async (
     try {
       const LidMapping = require("../../models/LidMapping").default;
       const savedMapping = await LidMapping.findOne({
-        where: { 
-          lid: normalizedJid, 
+        where: {
+          lid: normalizedJid,
           companyId,
           // Preferir mapeamentos do evento Baileys (mais confiáveis)
           [Op.or]: [
@@ -1325,7 +1380,7 @@ const verifyContact = async (
       if (lidStore?.getPNForLID) {
         const lidId = normalizedJid.replace("@lid", "");
         const resolvedPN = await lidStore.getPNForLID(lidId);
-        
+
         if (resolvedPN) {
           const phoneNumber = resolvedPN.replace(/\D/g, "");
           logger.info("[verifyContact] LID resolvido via Baileys signalRepository.lidMapping.getPNForLID", {
@@ -1333,7 +1388,7 @@ const verifyContact = async (
             resolvedPN,
             phoneNumber
           });
-          
+
           // Buscar contato existente pelo número resolvido
           const existingByPN = await Contact.findOne({
             where: {
@@ -1345,13 +1400,13 @@ const verifyContact = async (
               isGroup: false
             }
           });
-          
+
           if (existingByPN) {
             // Atualizar remoteJid para futuras buscas diretas
             if (!existingByPN.remoteJid || existingByPN.remoteJid !== normalizedJid) {
               await existingByPN.update({ remoteJid: normalizedJid });
             }
-            
+
             // Persistir mapeamento para uso futuro
             try {
               const LidMapping = require("../../models/LidMapping").default;
@@ -1364,11 +1419,11 @@ const verifyContact = async (
                 confidence: 0.95,
                 verified: true
               });
-            } catch (e) {}
-            
+            } catch (e) { }
+
             return existingByPN;
           }
-          
+
           // Mesmo se não encontrar contato, persistir o mapeamento
           try {
             const LidMapping = require("../../models/LidMapping").default;
@@ -1381,20 +1436,29 @@ const verifyContact = async (
               confidence: 0.95,
               verified: true
             });
-          } catch (e) {}
+          } catch (e) { }
         }
       }
     } catch (err: any) {
       debugLog("[verifyContact] Erro ao usar signalRepository.lidMapping", { err: err?.message });
     }
 
-    // 1. Para JIDs @lid, buscar por remoteJid (LID) existente
-    const existingByLid = await Contact.findOne({
-      where: { remoteJid: normalizedJid, companyId }
+    // 1. Busca primária por remoteJid (contatos LID usam remoteJid como identificador)
+    const existingByRemoteJid = await Contact.findOne({
+      where: { companyId, remoteJid: normalizedJid }
     });
-    if (existingByLid) {
-      debugLog("[verifyContact] Contato encontrado pelo LID", { contactId: existingByLid.id });
-      return existingByLid;
+    if (existingByRemoteJid) {
+      debugLog("[verifyContact] Contato encontrado pelo remoteJid (LID)", { contactId: existingByRemoteJid.id });
+      return existingByRemoteJid;
+    }
+
+    // 1b. Fallback: buscar por lidJid (contatos já reconciliados mantêm LID como índice)
+    const existingByLidJid = await Contact.findOne({
+      where: { companyId, lidJid: normalizedJid }
+    });
+    if (existingByLidJid) {
+      debugLog("[verifyContact] Contato encontrado pelo lidJid (reconciliado)", { contactId: existingByLidJid.id });
+      return existingByLidJid;
     }
 
     // 2. Tentar extrair telefone do pushName (muitas vezes é o próprio número)
@@ -1413,17 +1477,20 @@ const verifyContact = async (
     }
 
     // 3. Tentar extrair telefone do próprio LID (caso seja numero@lid)
-    const { canonical: canonicalFromLid } = safeNormalizePhoneNumber(cleaned);
-    if (canonicalFromLid) {
-      const existingByLidNumber = await Contact.findOne({
-        where: { canonicalNumber: canonicalFromLid, companyId, isGroup: false }
-      });
-      if (existingByLidNumber) {
-        debugLog("[verifyContact] Contato encontrado pelo número no LID", {
-          contactId: existingByLidNumber.id,
-          canonicalFromLid
+    // Ignorar se for um LID puro (15+ dígitos) para evitar falso positivo com DDD 18
+    if (cleaned.length <= 13) {
+      const { canonical: canonicalFromLid } = safeNormalizePhoneNumber(cleaned);
+      if (canonicalFromLid) {
+        const existingByLidNumber = await Contact.findOne({
+          where: { canonicalNumber: canonicalFromLid, companyId, isGroup: false }
         });
-        return existingByLidNumber;
+        if (existingByLidNumber) {
+          debugLog("[verifyContact] Contato encontrado pelo número no LID", {
+            contactId: existingByLidNumber.id,
+            canonicalFromLid
+          });
+          return existingByLidNumber;
+        }
       }
     }
 
@@ -1502,122 +1569,21 @@ const verifyContact = async (
       pushName: msgContact.name
     });
 
-    // SOLUÇÃO: Criar contato temporário com LID quando não resolver
-    // Isso permite processar a mensagem e o contato será atualizado quando o mapeamento for descoberto
-    logger.warn("[verifyContact] LID não resolvido - criando contato temporário com LID", {
+    // =================================================================
+    // LID NÃO RESOLVIDO: NÃO criar contato com número de LID
+    // O número de telefone só pode vir de JID @s.whatsapp.net
+    // Quando o evento lid-mapping.update resolver o LID, o contato será criado corretamente
+    // =================================================================
+    logger.warn("[verifyContact] LID não resolvido — ignorando (aguardando lid-mapping.update)", {
       normalizedJid,
       pushName: msgContact.name,
       cleaned,
       cleanedLength: cleaned.length,
       companyId,
-      metodosTentados: ["LidMappings (cache)", "signalRepository", "remoteJid direto", "pushName", "número no LID", "store.contacts", "número LID existente"]
+      metodosTentados: ["LidMappings (cache)", "signalRepository", "remoteJid direto", "pushName", "store.contacts"]
     });
 
-    // Usar pushName como nome, ou "Contato LID" se não tiver
-    const tempName = msgContact.name || `Contato ${cleaned.slice(-6)}`;
-    
-    // =================================================================
-    // LOCK POR JID - Evita condição de corrida na criação de contatos
-    // =================================================================
-    return await withJidLock(normalizedJid, async () => {
-      // Verificar novamente se contato foi criado enquanto aguardava o lock
-      const existingAfterLock = await Contact.findOne({
-        where: { remoteJid: normalizedJid, companyId }
-      });
-      
-      if (existingAfterLock) {
-        logger.info("[verifyContact] Contato encontrado após adquirir lock", {
-          contactId: existingAfterLock.id,
-          lid: normalizedJid
-        });
-        return existingAfterLock;
-      }
-      
-      // Criar contato com LID como identificador
-      // O número será o próprio LID limpo (será atualizado quando mapeamento for descoberto)
-      // Nota: isLinkedDevice é detectado automaticamente pelo CreateOrUpdateContactService via remoteJid.includes("@lid")
-      const contactData = {
-        name: tempName,
-        number: cleaned, // Usar o LID limpo como número temporário
-        profilePicUrl: "",
-        isGroup: false,
-        companyId,
-        remoteJid: null, // NÃO salvar LID como remoteJid
-        whatsappId: wbot.id,
-        wbot
-      };
-
-      try {
-        const contact = await CreateOrUpdateContactService(contactData);
-        logger.info("[verifyContact] Contato temporário criado com LID", {
-          contactId: contact.id,
-          lid: normalizedJid,
-          name: tempName
-        });
-
-        // =================================================================
-        // HERANÇA DE TAGS PESSOAIS - Copia tags de contato com MESMO NOME
-        // Só herda se encontrar contato com pushName idêntico na mesma empresa
-        // =================================================================
-        try {
-          if (tempName && tempName !== `Contato ${cleaned.slice(-6)}`) {
-            // Buscar contato real (não-LID) com mesmo nome na mesma empresa
-            const matchingContact = await Contact.findOne({
-              where: {
-                companyId,
-                name: tempName,
-                isGroup: false,
-                id: { [Op.ne]: contact.id },
-                remoteJid: { [Op.notLike]: "%@lid" } // Contato real, não outro LID
-              },
-              include: [{
-                model: Tag,
-                as: "tags",
-                where: {
-                  name: {
-                    [Op.and]: [
-                      { [Op.like]: "#%" },      // Tags pessoais começam com #
-                      { [Op.notLike]: "##%" }   // Mas não ## (grupo)
-                    ]
-                  }
-                },
-                required: true
-              }]
-            });
-
-            if (matchingContact?.tags?.length > 0) {
-              for (const tag of matchingContact.tags) {
-                await ContactTag.findOrCreate({
-                  where: { contactId: contact.id, tagId: tag.id },
-                  defaults: { contactId: contact.id, tagId: tag.id }
-                });
-              }
-              
-              logger.info("[verifyContact] Tags pessoais herdadas para contato LID (mesmo nome)", {
-                lidContactId: contact.id,
-                originalContactId: matchingContact.id,
-                matchedName: tempName,
-                tagsHerdadas: matchingContact.tags.map(t => t.name)
-              });
-            }
-          }
-        } catch (tagErr: any) {
-          // Erro na herança de tags não deve bloquear o fluxo
-          logger.warn("[verifyContact] Erro ao herdar tags pessoais", { err: tagErr?.message });
-        }
-
-        return contact;
-      } catch (err: any) {
-        // Se falhar (ex: duplicado), tentar buscar existente
-        logger.warn("[verifyContact] Erro ao criar contato LID, buscando existente", { err: err?.message });
-        const existing = await Contact.findOne({ where: { remoteJid: normalizedJid, companyId } });
-        if (existing) return existing;
-        
-        // Se ainda não encontrar, retornar null como último recurso
-        logger.error("[verifyContact] Falha total ao processar LID", { normalizedJid, err: err?.message });
-        return null as any;
-      }
-    });
+    return null as any;
   }
 
   // VALIDAÇÃO RIGOROSA: só cria contato se não for grupo e o número tiver entre 10 e 13 dígitos
@@ -1667,12 +1633,36 @@ const verifyContact = async (
     });
     return null as any;
   }
-  // Corrige: nunca sobrescrever nome personalizado
+  // CORREÇÃO: Para mensagens de outros (fromMe=false), buscar nome real do contato via store
+  // Evita usar pushName (nome do remetente) como nome do contato destinatário
   let nomeContato = msgContact.name;
+  if (msg && !msg.key.fromMe && !isGroup) {
+    try {
+      const store = (wbot as any).store;
+      if (store?.contacts) {
+        const baileysContact = store.contacts[msgContact.id] || store.contacts[normalizedJid];
+        if (baileysContact?.name || baileysContact?.notify) {
+          nomeContato = baileysContact.name || baileysContact.notify;
+        }
+      }
+    } catch (e) {
+      // Ignora erro e continua com pushName como fallback
+    }
+  }
   if (!isGroup) {
     // Se nome está vazio ou igual ao número, usa número, senão mantém nome
     if (!nomeContato || nomeContato === cleaned) {
       nomeContato = cleaned;
+    }
+
+    // Buscar profilePicture do Baileys para contatos com JID real
+    if (normalizedJid.includes("@s.whatsapp.net")) {
+      try {
+        const pic = await wbot.profilePictureUrl(normalizedJid, "image");
+        if (pic) profilePicUrl = pic;
+      } catch (e) {
+        // Privacidade ou indisponível — profilePicUrl permanece vazio
+      }
     }
   }
   const contactData = {
@@ -1683,7 +1673,9 @@ const verifyContact = async (
     companyId,
     remoteJid: normalizedJid,
     whatsappId: wbot.id,
-    wbot
+    wbot,
+    pushName: (msg as any)?.pushName || undefined,
+    verifiedName: (msg as any)?.verifiedBizName || undefined
   };
 
   const contact = await CreateOrUpdateContactService(contactData);
@@ -2012,7 +2004,7 @@ export const verifyMessage = async (
   const companyId = ticket.companyId;
 
   const participantJid = msg.key.participant || msg.participant;
-  
+
   // BUSCAR NOME DO REMETENTE: prioridade 1) pushName da mensagem, 2) store do Baileys
   let senderName = msg.pushName;
   if (!senderName && participantJid && wbot) {
@@ -4867,8 +4859,21 @@ const handleMessage = async (
     return;
   }
 
+  // Sincronização de LIDs: Se a mensagem for "fromMe" e o remoteJid for o próprio LID do bot,
+  // isso geralmente é uma mensagem de sincronização interna (Note to Self / Sync).
+  // Se processarmos, criaremos um Ticket fantasma.
+  if (msg.key.fromMe && msg.key.remoteJid && msg.key.remoteJid.includes("@lid")) {
+    const wbotUser = wbot.user?.id || "";
+    if (wbotUser.includes(msg.key.remoteJid)) {
+      logger.warn({
+        msgId: msg.key.id,
+        remoteJid: msg.key.remoteJid,
+      }, "[handleMessage] DETECTADO Self-LID (Sync/NoteToSelf) - Mensagem pode criar Ghost Chat se processada.");
+      // Opcional: return; se confirmarmos que isso nunca deve virar ticket
+    }
+  }
+
   try {
-    let groupContact: Contact | undefined;
     let queueId: number = null;
     let tagsId: number = null;
     let userId: number = null;
@@ -5007,76 +5012,65 @@ const handleMessage = async (
     const autoCaptureGroupContacts = settings?.autoCaptureGroupContacts === "enabled";
 
     // ═══════════════════════════════════════════════════════════════
-    // NOVO FLUXO: ContactResolverService (3 camadas limpas)
-    // Substitui getContactMessage + verifyContact (~800 linhas)
+    // NOVO FLUXO: ContactResolverService (substitui getContactMessage + verifyContact)
     // ═══════════════════════════════════════════════════════════════
 
+    let contact: Contact | null = null;
+    let groupContact: Contact | undefined;
+
+    // Usar novo ContactResolverService para resolver o contato da mensagem
+    const contactResolution = await resolveMessageContact(msg, wbot, companyId);
+    contact = contactResolution.contact;
+
+    // Se é grupo, também precisamos garantir que o contato do GRUPO exista
     if (isGroup) {
-      // Resolver contato do grupo (o grupo em si)
+      const groupJid = msg.key.remoteJid;
+      let groupSubject = getFallbackGroupName(groupJid);
+
+      // Tentar obter nome do grupo do cache ou metadados
+      const cachedMetadata = getGroupMetadataFromCache(groupJid);
+      if (cachedMetadata) {
+        groupSubject = cachedMetadata.subject || groupSubject;
+      } else if (!shouldBackoffGroupMetadata(groupJid)) {
+        try {
+          const grupoMeta = await wbot.groupMetadata(groupJid);
+          groupSubject = grupoMeta?.subject || groupSubject;
+          setGroupMetadataCache(groupJid, groupSubject);
+        } catch (error) {
+          // Ignorar erros de metadados, usar JID como nome
+        }
+      }
+
+      // Criar/atualizar contato do grupo
       try {
-        groupContact = await resolveGroupContact(msg, wbot, companyId);
-      } catch (error) {
-        logger.error({ err: error, groupJid: msg.key.remoteJid },
-          "[wbotMessageListener] Falha ao resolver contato do grupo");
-        return;
+        groupContact = await CreateOrUpdateContactService({
+          name: groupSubject,
+          number: groupJid,
+          isGroup: true,
+          companyId,
+          whatsappId: wbot.id,
+          wbot
+        });
+      } catch (e) {
+        logger.error({ err: e, groupJid }, "[handleMessage] Falha ao criar contato do grupo");
       }
     }
 
-    // RESOLUÇÃO DE CONTATO (participante ou remetente)
-    let contact: Contact | null = null;
+    // FALLBACK CRÍTICO: Se não encontrou contato do participante em grupo, usar o do grupo
+    // Isso garante que a mensagem SEMPRE seja salva no ticket do grupo
+    if (!contact && isGroup && groupContact) {
+      contact = groupContact;
+      logger.info("[handleMessage] Usando contato do grupo como fallback (participante não encontrado/criado)");
+    }
 
-    if (isGroup) {
-      // Para GRUPOS: o contato do ticket é o groupContact (o grupo em si).
-      // O participante é salvo no campo "participant" da mensagem para exibição.
-      // NUNCA descartar mensagem de grupo por falta de contato do participante.
-      const participantJid = msg.participant || msg.key.participant;
-
-      if (participantJid && autoCaptureGroupContacts) {
-        // Se captura automática está HABILITADA, resolver/criar contato do participante
-        try {
-          const resolution = await resolveMessageContact(msg, wbot, companyId);
-          contact = resolution?.contact || null;
-        } catch (err) {
-          logger.warn(`[handleMessage] Erro ao resolver participante de grupo: ${err}`);
-        }
-      } else if (participantJid) {
-        // Captura desabilitada: apenas buscar participante existente (sem criar)
-        const normalizedParticipantJid = jidNormalizedUser(participantJid);
-        const participantNumber = normalizedParticipantJid.replace(/\D/g, "");
-        const isLidParticipant = participantJid.includes("@lid");
-
-        contact = await Contact.findOne({
-          where: {
-            companyId,
-            isGroup: false,
-            [Op.or]: [
-              { canonicalNumber: participantNumber },
-              { number: participantNumber },
-              ...(isLidParticipant ? [{ lidJid: normalizedParticipantJid }, { remoteJid: normalizedParticipantJid }] : [])
-            ]
-          }
-        });
-      }
-
-      // FALLBACK CRÍTICO: Se não encontrou participante, usar o groupContact
-      // Isso garante que a mensagem SEMPRE seja salva no ticket do grupo
-      if (!contact) {
-        contact = groupContact;
-        logger.debug(`[handleMessage] Grupo: participante não encontrado, usando groupContact id=${groupContact?.id}`);
-      }
-    } else {
-      // Para DMs: resolução unificada via ContactResolverService
-      const resolution = await resolveMessageContact(msg, wbot, companyId);
-      contact = resolution?.contact || null;
-
-      if (!contact) {
-        logger.error('[handleMessage] ERROR: resolveMessageContact retornou null', {
-          remoteJid: msg.key.remoteJid,
-          isGroup,
-          isFromMe: msg.key.fromMe
-        });
-        return;
-      }
+    // Se ainda assim não tiver contato, falhar com erro (não descartar silenciosamente)
+    if (!contact) {
+      logger.error('[handleMessage] ERRO CRÍTICO: Contato não encontrado nem criado', {
+        remoteJid: msg.key.remoteJid,
+        isGroup,
+        contactId: contact?.id
+      });
+      return;
     }
 
     let unreadMessages = 0;
@@ -5106,7 +5100,7 @@ const handleMessage = async (
     // Usa mutex global compartilhado para evitar race conditions na criação de tickets
     const mutex = getTicketMutex(companyId);
     console.log(`[wbotMessageListener] Processando mensagem para companyId=${companyId}, contactId=${contact.id}, mutex=${mutex ? "ativo" : "inativo"}`);
-    
+
     let ticket = await mutex.runExclusive(async () => {
       console.log(`[wbotMessageListener] Dentro do mutex - criando/buscando ticket para contactId=${contact.id}`);
       const result = await FindOrCreateTicketService(
@@ -5127,6 +5121,28 @@ const handleMessage = async (
       );
       console.log(`[wbotMessageListener] Ticket obtido: id=${result.id}, uuid=${result.uuid}, status=${result.status}`);
       return result;
+    }).catch(err => {
+      // Fallback em caso de timeout do mutex
+      if (err?.message === 'mutex timeout' || err?.code === 'E_TIMEOUT') {
+        logger.warn(`[wbotMessageListener] Mutex timeout para companyId=${companyId} - Executando sem lock`);
+        return FindOrCreateTicketService(
+          contact,
+          whatsapp,
+          unreadMessages,
+          companyId,
+          queueId,
+          userId,
+          groupContact,
+          "whatsapp",
+          isImported,
+          false,
+          settings,
+          false,
+          false,
+          Boolean(msg?.key?.fromMe)
+        );
+      }
+      throw err;
     });
 
     // Se o ticket está em status "campaign" e o contato respondeu, mover para fluxo normal
@@ -5939,6 +5955,12 @@ const handleMessage = async (
 
     await ticket.reload();
   } catch (err) {
+    // SIGNAL RECOVERY: Detecção otimizada de erros Signal sem overhead
+    if (wbot?.id && SignalErrorHandler.isSignalError(err)) {
+      SignalErrorHandler.handleSignalError(wbot.id, err);
+      logger.warn(`[handleMessage] Erro Signal detectado para whatsappId=${wbot.id}, iniciando recovery`);
+    }
+    
     Sentry.captureException(err);
     console.log(err);
     logger.error(`Error handling whatsapp message: Err: ${err}`);
@@ -5949,22 +5971,68 @@ const handleMsgAck = async (
   chat: number | null | undefined
 ) => {
   await new Promise(r => setTimeout(r, 500));
+  const io = getIO();
 
   try {
-    // CQRS: Usar MessageCommandService para atualizar ACK
-    // Isso já faz: busca mensagem + valida ack + update DB + emite evento via EventBus
-    const { updateMessageAckByWid } = await import("../MessageServices/MessageCommandService");
-    const wid = msg.key.id;
-    
-    if (!wid || chat === null || chat === undefined) {
-      return;
-    }
+    const messageToUpdate = await Message.findOne({
+      where: {
+        wid: msg.key.id
+      },
+      include: [
+        "contact",
+        {
+          model: Ticket,
+          as: "ticket",
+          include: [
+            {
+              model: Contact,
+              attributes: [
+                "id",
+                "name",
+                "number",
+                "email",
+                "profilePicUrl",
+                "acceptAudioMessage",
+                "active",
+                "urlPicture",
+                "companyId"
+              ],
+              include: ["extraInfo", "tags"]
+            },
+            {
+              model: Queue,
+              attributes: ["id", "name", "color"]
+            },
+            {
+              model: Whatsapp,
+              attributes: ["id", "name", "groupAsTicket"]
+            },
+            {
+              model: User,
+              attributes: ["id", "name"]
+            },
+            {
+              model: Tag,
+              as: "tags",
+              attributes: ["id", "name", "color"]
+            }
+          ]
+        },
+        {
+          model: Message,
+          as: "quotedMsg",
+          include: ["contact"]
+        }
+      ]
+    });
+    if (!messageToUpdate || messageToUpdate.ack > chat) return;
 
-    const updatedMessage = await updateMessageAckByWid(wid, chat);
-    
-    if (updatedMessage) {
-      console.log(`[handleMsgAck] ACK atualizado via CQRS: msgId=${updatedMessage.id} ack=${chat}`);
-    }
+    await messageToUpdate.update({ ack: chat });
+    io.of(`/workspace-${messageToUpdate.companyId}`)
+      .emit(`company-${messageToUpdate.companyId}-appMessage`, {
+        action: "update",
+        message: messageToUpdate
+      });
   } catch (err) {
     Sentry.captureException(err);
     logger.error(`Error handling message ack. Err: ${err}`);
@@ -6062,25 +6130,13 @@ const filterMessages = (msg: WAMessage): boolean => {
   if (msg.message?.protocolMessage?.editedMessage) return true;
   if (msg.message?.protocolMessage) return false;
 
-  // Filtrar mensagens que falharam na decriptação (Bad MAC / No matching sessions)
-  // messageStubType=2 (CIPHERTEXT) indica erro de sessão criptográfica
-  // Processar essas mensagens cria contatos PENDING_ fantasma
-  if (msg.messageStubType === WAMessageStubType.CIPHERTEXT) {
-    logger.warn({
-      msgId: msg.key?.id,
-      remoteJid: msg.key?.remoteJid,
-      fromMe: msg.key?.fromMe,
-      stubParams: msg.messageStubParameters
-    }, "[filterMessages] Mensagem CIPHERTEXT (erro decriptação) descartada");
-    return false;
-  }
-
   if (
     [
       WAMessageStubType.REVOKE,
       WAMessageStubType.E2E_DEVICE_CHANGED,
-      WAMessageStubType.E2E_IDENTITY_CHANGED
-    ].includes(msg.messageStubType as number)
+      WAMessageStubType.E2E_IDENTITY_CHANGED,
+      WAMessageStubType.CIPHERTEXT
+    ].includes(msg.messageStubType)
   )
     return false;
 
@@ -6089,19 +6145,8 @@ const filterMessages = (msg: WAMessage): boolean => {
 
 const wbotMessageListener = (wbot: Session, companyId: number): void => {
   const wbotUserJid = wbot?.user?.id;
+  
   wbot.ev.on("messages.upsert", async (messageUpsert: ImessageUpsert) => {
-    // Phase 4: Diferenciar tipo de mensagem (notify = tempo real, append/historical = histórico)
-    const upsertType = (messageUpsert as any).type || "unknown";
-    const isRealtime = upsertType === "notify";
-
-    if (isRealtime) {
-      logger.info(`[messages.upsert] REALTIME (notify) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);
-    } else {
-      // IGNORAR mensagens históricas - elas são processadas pelo ImportWhatsAppMessageService
-      logger.debug(`[messages.upsert] IGNORANDO HISTÓRICO (${upsertType}) - ${messageUpsert.messages.length} mensagem(s) | companyId=${companyId}`);
-      return;
-    }
-
     const messages = messageUpsert.messages
       .filter(filterMessages)
       .map(msg => msg);
@@ -6140,6 +6185,9 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
 
         if (!isCampaign) {
           if (REDIS_URI_MSG_CONN !== "") {
+            const queueRemoteJid = (message.key.remoteJid || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
+            const queueFromMe = message.key.fromMe ? "1" : "0";
+            const handleMessageJobId = `${wbot.id}-handleMessage-${message.key.id}-${queueRemoteJid}-${queueFromMe}`;
             //} && (!message.key.fromMe || (message.key.fromMe && !message.key.id.startsWith('BAE')))) {
             try {
               await BullQueues.add(
@@ -6147,11 +6195,26 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
                 { message, wbot: wbot.id, companyId },
                 {
                   priority: 1,
-                  jobId: `${wbot.id}-handleMessage-${message.key.id}`
+                  jobId: handleMessageJobId
                 }
               );
-            } catch (e) {
+            } catch (e: any) {
               Sentry.captureException(e);
+              logger.error(
+                {
+                  error: e?.message || e,
+                  stack: e?.stack,
+                  companyId,
+                  whatsappId: wbot.id,
+                  wid: message.key.id,
+                  remoteJid: message.key.remoteJid,
+                  fromMe: Boolean(message.key.fromMe)
+                },
+                "[messages.upsert] Falha no enqueue do handleMessage, usando fallback direto"
+              );
+
+              // Fallback de segurança para não perder mensagem em falha de fila.
+              await handleMessage(message, wbot, companyId);
             }
           } else {
             await handleMessage(message, wbot, companyId);
@@ -6164,14 +6227,35 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
 
       if (message.key.remoteJid?.endsWith("@g.us")) {
         if (REDIS_URI_MSG_CONN !== "") {
-          BullQueues.add(
-            `${process.env.DB_NAME}-handleMessageAck`,
-            { msg: message, chat: 2 },
-            {
-              priority: 1,
-              jobId: `${wbot.id}-handleMessageAck-${message.key.id}`
-            }
-          );
+          const queueRemoteJid = (message.key.remoteJid || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
+          const queueFromMe = message.key.fromMe ? "1" : "0";
+          const handleMessageAckJobId = `${wbot.id}-handleMessageAck-${message.key.id}-${queueRemoteJid}-${queueFromMe}`;
+          try {
+            await BullQueues.add(
+              `${process.env.DB_NAME}-handleMessageAck`,
+              { msg: message, chat: 2 },
+              {
+                priority: 1,
+                jobId: handleMessageAckJobId
+              }
+            );
+          } catch (e: any) {
+            Sentry.captureException(e);
+            logger.error(
+              {
+                error: e?.message || e,
+                stack: e?.stack,
+                companyId,
+                whatsappId: wbot.id,
+                wid: message.key.id,
+                remoteJid: message.key.remoteJid,
+                fromMe: Boolean(message.key.fromMe)
+              },
+              "[messages.upsert] Falha no enqueue do handleMessageAck, usando fallback direto"
+            );
+
+            handleMsgAck(message, 2);
+          }
         } else {
           handleMsgAck(message, 2);
         }
@@ -6213,19 +6297,44 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         );
       }
 
-      // ACK status: 0=ERROR, 1=PENDING, 2=SERVER_ACK, 3=DELIVERY_ACK, 4=READ_ACK
-      // Usar o status recebido diretamente para sincronização correta
-      const ack = message.update.status;
+      let ack;
+      if (message.update.status === 3 && message?.key?.fromMe) {
+        ack = 2;
+      } else {
+        ack = message.update.status;
+      }
 
       if (REDIS_URI_MSG_CONN !== "") {
-        BullQueues.add(
-          `${process.env.DB_NAME}-handleMessageAck`,
-          { msg: message, chat: ack },
-          {
-            priority: 1,
-            jobId: `${wbot.id}-handleMessageAck-${message.key.id}`
-          }
-        );
+        const queueRemoteJid = (message.key.remoteJid || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const queueFromMe = message.key.fromMe ? "1" : "0";
+        const handleMessageAckJobId = `${wbot.id}-handleMessageAck-${message.key.id}-${queueRemoteJid}-${queueFromMe}`;
+        try {
+          await BullQueues.add(
+            `${process.env.DB_NAME}-handleMessageAck`,
+            { msg: message, chat: ack },
+            {
+              priority: 1,
+              jobId: handleMessageAckJobId
+            }
+          );
+        } catch (e: any) {
+          Sentry.captureException(e);
+          logger.error(
+            {
+              error: e?.message || e,
+              stack: e?.stack,
+              companyId,
+              whatsappId: wbot.id,
+              wid: message.key.id,
+              remoteJid: message.key.remoteJid,
+              fromMe: Boolean(message.key.fromMe),
+              ack
+            },
+            "[messages.update] Falha no enqueue do handleMessageAck, usando fallback direto"
+          );
+
+          handleMsgAck(message, ack);
+        }
       } else {
         handleMsgAck(message, ack);
       }
@@ -6280,66 +6389,89 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       console.log(`[contacts.update] contato: ${contact.id} | notify:`, contact.notify, '| objeto completo:', contact);
       if (!contact?.id) return;
 
-      // Tratamento especial para LIDs: atualizar contatos PENDING_ existentes OU criar novo contato LID
+      // Tratamento especial para LIDs: atualizar contatos existentes e capturar mapeamentos PN
       if (contact.id.includes("@lid")) {
         const contactName = contact.notify || contact.verifiedName || "";
-        
+
         try {
-          // Primeiro: tentar atualizar contato PENDING_ existente
-          const pendingContact = await Contact.findOne({
+          // Se Baileys enviou phoneNumber junto com o LID, salvar mapeamento
+          const pnFromEvent = contact.phoneNumber || contact.pn || contact.number;
+          if (pnFromEvent) {
+            const pnDigits = String(pnFromEvent).replace(/\D/g, "");
+            if (pnDigits.length >= 10 && pnDigits.length <= 20) {
+              try {
+                const LidMapping = (await import("../../models/LidMapping")).default;
+                await LidMapping.upsert({
+                  lid: contact.id,
+                  phoneNumber: pnDigits,
+                  companyId,
+                  whatsappId: wbot.id,
+                  source: "contacts-update",
+                  verified: true
+                });
+                logger.info(`[contacts.update] LID ${contact.id} → PN ${pnDigits} salvo via contacts.update`);
+
+                // Atualizar contato LID existente com o número real
+                const lidContact = await Contact.findOne({
+                  where: {
+                    companyId,
+                    [Op.or]: [
+                      { remoteJid: contact.id },
+                      { lidJid: contact.id }
+                    ]
+                  }
+                });
+                if (lidContact) {
+                  const currentDigits = (lidContact.number || "").replace(/\D/g, "");
+                  const hasValidNumber = currentDigits.length >= 10 && currentDigits.length <= 15;
+                  if (!hasValidNumber) {
+                    await lidContact.update({
+                      number: pnDigits,
+                      remoteJid: `${pnDigits}@s.whatsapp.net`,
+                      lidJid: contact.id,
+                      canonicalNumber: pnDigits
+                    });
+                    logger.info(`[contacts.update] Contato ${lidContact.id} atualizado de LID para PN real: ${pnDigits}`);
+                  }
+                }
+              } catch (mapErr: any) {
+                logger.warn({ err: mapErr?.message }, `[contacts.update] Erro ao salvar mapeamento LID→PN`);
+              }
+            }
+          }
+
+          // Atualizar nome de contatos LID existentes
+          const existingLidContact = await Contact.findOne({
             where: {
               companyId,
               [Op.or]: [
-                { lidJid: contact.id },
                 { remoteJid: contact.id },
-                { number: `PENDING_${contact.id}` }
+                { lidJid: contact.id }
               ]
             }
           });
-          
-          if (pendingContact) {
+
+          if (existingLidContact) {
             if (contactName) {
-              const currentName = (pendingContact.name || "").trim();
-              const isPendingName = currentName === "" || currentName.startsWith("Contato ") || currentName === pendingContact.number;
+              const currentName = (existingLidContact.name || "").trim();
+              const isPendingName = currentName === "" || currentName.startsWith("Contato ") || currentName === existingLidContact.number;
               if (isPendingName) {
-                await pendingContact.update({ name: contactName });
-                logger.info(`[contacts.update] LID ${contact.id} → nome atualizado para "${contactName}" (contactId=${pendingContact.id})`);
+                await existingLidContact.update({ name: contactName });
+                logger.info(`[contacts.update] LID ${contact.id} → nome atualizado para "${contactName}" (contactId=${existingLidContact.id})`);
               }
             }
-          } else {
-            // NOVO: Criar contato LID se não existir
-            // Extrair número do LID para uso temporário
-            const lidNumber = contact.id.replace(/\D/g, "");
-            const tempName = contactName || `Contato ${lidNumber.slice(-8)}`;
-            
-            // Criar novo contato com LID
-            const newContact = await Contact.create({
-              name: tempName,
-              number: `PENDING_${contact.id}`,  // Marcador para identificar como pendente de resolução
-              canonicalNumber: null,
-              companyId,
-              whatsappId: wbot.id,
-              isGroup: false,
-              remoteJid: null,  // NÃO salvar LID como remoteJid - será preenchido quando resolver
-              lidJid: contact.id,
-              profilePicUrl: "",
-              pushName: contact.notify || null,
-              businessName: contact.verifiedName || null
-            });
-            
-            logger.info(`[contacts.update] Novo contato LID criado: ${contact.id} → contactId=${newContact.id}, nome="${tempName}"`);
           }
         } catch (err: any) {
           logger.warn({ err: err?.message }, `[contacts.update] Erro ao processar contato LID ${contact.id}`);
         }
-        
+
         // Não processar LIDs como contatos normais (número extraído seria inválido)
         return;
       }
 
       // Processar contatos normais (não-LID) - independente de ter avatar ou não
       // A condição imgUrl !== undefined foi removida para garantir atualização de nome sempre
-      const newUrl = contact.imgUrl 
+      const newUrl = contact.imgUrl
         ? await wbot!.profilePictureUrl(contact.id!).catch(() => null)
         : null;
       const numero = contact.id.replace(/\D/g, "");
@@ -6389,7 +6521,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       } else {
         console.log(`[contacts.update] Usando notify da agenda: ${finalName}`);
       }
-      
+
       const contactData = {
         name: finalName,
         number: numero,
@@ -6434,8 +6566,8 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
   });
 };
 
+export default wbotMessageListener;
 export {
-  wbotMessageListener,
   handleMessage,
   isValidMsg,
   getTypeMessage,

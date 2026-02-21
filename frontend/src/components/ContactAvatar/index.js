@@ -60,12 +60,13 @@ const ContactAvatar = memo(({ contact, ...props }) => {
 
   // Se tem contact.contact (estrutura de ContactListItems)
   if (contact.contact) {
-    imageUrl = contact.contact.urlPicture || contact.contact.profilePicUrl;
+    // CORREÇÃO: Priorizar profilePicUrl (URL do WhatsApp) sobre urlPicture (caminho local)
+    imageUrl = contact.contact.profilePicUrl || contact.contact.urlPicture;
     contactName = contact.contact.name || contact.name;
     contactNumber = contact.contact.number || contact.number;
   } else {
-    // Estrutura normal de contatos: prefira urlPicture
-    imageUrl = contact.urlPicture || contact.profilePicUrl;
+    // CORREÇÃO: Priorizar profilePicUrl (URL do WhatsApp) sobre urlPicture (caminho local)
+    imageUrl = contact.profilePicUrl || contact.urlPicture;
   }
 
   // Se houve erro ou não tem imagem, usa avatar colorido com iniciais

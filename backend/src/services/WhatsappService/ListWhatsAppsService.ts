@@ -39,7 +39,13 @@ const ListWhatsAppsService = async ({
     return Whatsapp.findAll(options);
   });
 
-  return whatsapps;
+  // Re-instanciar como Modelos Sequelize se vierem do cache (POJOs)
+  return whatsapps.map(wh => {
+    if (typeof wh.update !== "function") {
+      return Whatsapp.build(wh, { isNewRecord: false });
+    }
+    return wh;
+  });
 };
 
 

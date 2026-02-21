@@ -89,6 +89,11 @@ const Groups = () => {
             map[wId].groups.push(group);
         });
 
+        // Ordenar os grupos dentro de cada lane por data da última mensagem (DESC)
+        Object.values(map).forEach(lane => {
+            lane.groups.sort((a, b) => new Date(b.lastMessageDate) - new Date(a.lastMessageDate));
+        });
+
         // Ordenar lanes pelo nome da conexão
         return Object.values(map).sort((a, b) =>
             a.whatsappName.localeCompare(b.whatsappName)
@@ -474,11 +479,35 @@ const Groups = () => {
                                                     </div>
                                                     <div style={{
                                                         display: "flex",
-                                                        alignItems: "center",
-                                                        gap: 4,
+                                                        flexDirection: "column",
+                                                        alignItems: "flex-end",
+                                                        gap: 6,
                                                     }}>
-                                                        <Eye size={14} color="#8696a0" />
-                                                        <MessageSquare size={14} color="#00a884" />
+                                                        {parseInt(group.unreadCount) > 0 && (
+                                                            <div style={{
+                                                                backgroundColor: "#25d366",
+                                                                color: "white",
+                                                                minWidth: 20,
+                                                                height: 20,
+                                                                borderRadius: 10,
+                                                                display: "flex",
+                                                                alignItems: "center",
+                                                                justifyContent: "center",
+                                                                fontSize: 11,
+                                                                fontWeight: "bold",
+                                                                padding: "0 6px",
+                                                            }}>
+                                                                {group.unreadCount}
+                                                            </div>
+                                                        )}
+                                                        <div style={{
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            gap: 4,
+                                                        }}>
+                                                            <Eye size={14} color="#8696a0" />
+                                                            <MessageSquare size={14} color="#00a884" />
+                                                        </div>
                                                     </div>
                                                 </div>
                                             ))}

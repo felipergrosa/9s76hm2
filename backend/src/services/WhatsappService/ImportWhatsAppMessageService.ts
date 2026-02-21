@@ -11,6 +11,7 @@ import moment from "moment";
 import { addLogs } from "../../helpers/addLogs";
 import logger from "../../utils/logger";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
 import { getBodyMessage, getQuotedMessage } from "../WbotServices/wbotMessageListener";
 import { jidNormalizedUser } from "@whiskeysockets/baileys";
@@ -142,8 +143,22 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
         const fromMe = msg.key.fromMe;
 
         // Normalização
-        const contactNumber = jidNormalizedUser(msgContactId).replace(/\D/g, "");
-        const remoteNumber = jidNormalizedUser(remoteJid).replace(/\D/g, "");
+        let { canonical: contactNumberCanonical } = safeNormalizePhoneNumber(jidNormalizedUser(msgContactId));
+        const { canonical: remoteNumberCanonical } = safeNormalizePhoneNumber(jidNormalizedUser(remoteJid));
+
+        // Tentar resolver LID para número real se necessário
+        if (msgContactId.includes("@lid") && !contactNumberCanonical) {
+          const store = (wbot as any).store;
+          if (store && store.contacts) {
+            const lidContact = store.contacts[msgContactId];
+            if (lidContact && lidContact.phoneNumber) {
+              contactNumberCanonical = safeNormalizePhoneNumber(lidContact.phoneNumber).canonical;
+            }
+          }
+        }
+
+        const contactNumber = contactNumberCanonical || jidNormalizedUser(msgContactId).replace(/\D/g, "");
+        const remoteNumber = remoteNumberCanonical || jidNormalizedUser(remoteJid).replace(/\D/g, "");
 
         // Chave única para cache: grupo usa remoteJid, privado usa contactNumber
         const cacheKey = isGroup ? remoteNumber : contactNumber;
@@ -191,10 +206,22 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
           });
         }
 
+        // PROTEÇÃO CRÍTICA: Verificar se contatos foram criados com sucesso
+        if (!contact && !groupContact) {
+          logger.warn(`[Import] Pulando mensagem ${msg.key.id}: Contato rejeitado (LID ou inválido)`);
+          continue;
+        }
+
         // 3. Buscar/Criar Ticket (usando cache para evitar duplicados na importação)
         let ticket: Ticket | undefined = ticketCache.get(cacheKey);
 
         if (!ticket) {
+          // PROTEÇÃO CRÍTICA: Verificar novamente (duplicado proposital)
+          if (!contact && !groupContact) {
+            logger.warn(`[Import] Pulando mensagem ${msg.key.id}: Contato nulo detectado`);
+            continue;
+          }
+
           // Só chama FindOrCreateTicketService se não estiver no cache
           ticket = await FindOrCreateTicketService(
             contact,
@@ -207,11 +234,20 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
             "whatsapp",
             true // isImported = true (cria pending ou usa existente)
           );
+
+          if (!ticket) {
+            logger.warn(`[Import] Falha ao obter ticket para ${cacheKey}, ignorando mensagem.`);
+            continue;
+          }
+
           // Guarda no cache para reutilizar nas próximas mensagens do mesmo contato
           ticketCache.set(cacheKey, ticket);
-          logger.info(`[Import] Novo ticket criado em cache para ${cacheKey}: ${ticket.id}`);
-        } else {
-          logger.info(`[Import] Reutilizando ticket do cache para ${cacheKey}: ${ticket.id}`);
+        }
+
+        // PROTEÇÃO FINAL: Garantir que temos um ticket válido
+        if (!ticket || !ticket.id) {
+          logger.warn(`[Import] Pulando mensagem ${msg.key.id}: Ticket inválido`);
+          continue;
         }
 
         // 4. Salvar Mensagem (Direto no Banco)
@@ -223,10 +259,13 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
           const originalTimestamp = (msg.messageTimestamp as number) * 1000;
           const originalDate = new Date(originalTimestamp);
 
+          // PROTEÇÃO: Usar contactId seguro (verificar se não é null)
+          const safeContactId = fromMe ? undefined : (contact?.id || null);
+          
           const messageData = {
             wid: msg.key.id,
             ticketId: ticket.id,
-            contactId: fromMe ? undefined : contact.id,
+            contactId: safeContactId,
             body: body || "",
             fromMe,
             read: true, // Importadas sempre lidas

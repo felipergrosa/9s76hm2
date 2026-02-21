@@ -1,0 +1,92 @@
+{
+  "basic": {
+    "jid": "5519981670745@s.whatsapp.net",
+    "exists": true,
+    "lid": "46093605830683@lid"
+  },
+  "profile": {
+    "profilePicUrl": "https://pps.whatsapp.net/v/t61.24694-24/397559158_3163045614004241_6498961798547349504_n.jpg?ccb=11-4&oh=01_Q5Aa3wEeMYzZoDCD-81GIS1qRHaA6pKAk7jUoc4vQL1GlgJHLQ&oe=699BB2F1&_nc_sid=5e03e0&_nc_cat=105",
+    "profilePicUrlHD": "https://pps.whatsapp.net/v/t61.24694-24/397559158_3163045614004241_6498961798547349504_n.jpg?stp=dst-jpg_s96x96_tt6&ccb=11-4&oh=01_Q5Aa3wH91QwvTMzxOm_JfuKYlp6DB4oZWu4zZIo37b4mwBM_Eg&oe=699BB2F1&_nc_sid=5e03e0&_nc_cat=105"
+  },
+  "metadata": {},
+  "extra": {
+    "timestamp": "2026-02-13T03:05:44.237Z",
+    "rawData": {
+      "onWhatsApp": {
+        "jid": "5519981670745@s.whatsapp.net",
+        "exists": true,
+        "lid": "46093605830683@lid"
+      }
+    }
+  },
+  "business": {
+    "wid": "5519981670745@s.whatsapp.net",
+    "address": "Araras interior de SP",
+    "description": "Fábrica de luminárias pendentes decorativos em alumínio com pintura eletrostática",
+    "website": [
+      "https://www.nobreluminarias.com.br"
+    ],
+    "email": "diretoria@nobregerencia.com",
+    "category": "Metal Fabricator",
+    "businessHours": {
+      "timezone": "America/Sao_Paulo",
+      "business_config": [
+        {
+          "day_of_week": "sun",
+          "mode": "open_24h",
+          "open_time": "0",
+          "close_time": "0"
+        },
+        {
+          "day_of_week": "mon",
+          "mode": "open_24h",
+          "open_time": "0",
+          "close_time": "0"
+        },
+        {
+          "day_of_week": "tue",
+          "mode": "open_24h",
+          "open_time": "0",
+          "close_time": "0"
+        },
+        {
+          "day_of_week": "wed",
+          "mode": "open_24h",
+          "open_time": "0",
+          "close_time": "0"
+        },
+        {
+          "day_of_week": "thu",
+          "mode": "open_24h",
+          "open_time": "0",
+          "close_time": "0"
+        },
+        {
+          "day_of_week": "fri",
+          "mode": "open_24h",
+          "open_time": "0",
+          "close_time": "0"
+        },
+        {
+          "day_of_week": "sat",
+          "mode": "open_24h",
+          "open_time": "0",
+          "close_time": "0"
+        }
+      ]
+    }
+  },
+  "privacy": {
+    "calladd": "known",
+    "defense": "off",
+    "groupadd": "contacts",
+    "messages": "all",
+    "pix": "contacts",
+    "online": "all",
+    "last": "contacts",
+    "profile": "contacts",
+    "readreceipts": "all",
+    "status": "all",
+    "stickers": "contacts"
+  }
+}

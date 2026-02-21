@@ -33,7 +33,7 @@ const validateJWTPayload = (payload: any): { userId: string; iat?: number; exp?:
 // Origens CORS permitidas
 const ALLOWED_ORIGINS = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(",").map((url) => url.trim())
-  : ["http://localhost:3000"];
+  : ["http://localhost:3000", "https://chatsapi.nobreluminarias.com.br"];
 
 // Ajuste da classe AppError para compatibilidade com Error
 class SocketCompatibleAppError extends Error {
@@ -64,7 +64,7 @@ export const initIO = (httpServer: Server): SocketIO => {
     maxHttpBufferSize: 1e6, // Limita payload a 1MB
     pingTimeout: 20000,
     pingInterval: 25000,
-    
+
     // Connection State Recovery: recupera eventos perdidos durante desconexões temporárias
     // Funciona para desconexões de até 2 minutos (configurable)
     connectionStateRecovery: {
@@ -83,7 +83,9 @@ export const initIO = (httpServer: Server): SocketIO => {
         maxRetriesPerRequest: null,
         enableAutoPipelining: true
       });
-      const subClient = pubClient.duplicate();
+      const subClient = pubClient.duplicate({
+        enableReadyCheck: false
+      });
       try {
         // Requer dinamicamente para evitar erro de tipos quando o pacote ainda não estiver instalado no dev
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -104,6 +106,10 @@ export const initIO = (httpServer: Server): SocketIO => {
   io.use((socket, next) => {
     try {
       const token = socket.handshake.query.token as string;
+      const origin = socket.handshake.headers.origin;
+
+      logger.info(`[SOCKET AUTH] Nova conexão - Origin: ${origin}, Token: ${token ? "presente" : "ausente"}`);
+
       if (!token) {
         logger.warn("[SOCKET AUTH] Conexão sem token no handshake: permitindo (diagnóstico)");
         return next();
@@ -113,13 +119,14 @@ export const initIO = (httpServer: Server): SocketIO => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET || "default_secret");
         const validatedPayload = validateJWTPayload(decoded);
         socket.data.user = validatedPayload;
+        logger.info(`[SOCKET AUTH] Token válido - UserId: ${validatedPayload.userId}`);
         return next();
       } catch (err) {
-        logger.warn("[SOCKET AUTH] Token inválido no handshake: permitindo (diagnóstico)");
+        logger.warn(`[SOCKET AUTH] Token inválido no handshake: ${err.message} - permitindo (diagnóstico)`);
         return next();
       }
     } catch (e) {
-      logger.warn("[SOCKET AUTH] Erro inesperado no middleware: permitindo (diagnóstico)");
+      logger.warn(`[SOCKET AUTH] Erro inesperado no middleware: ${e.message} - permitindo (diagnóstico)`);
       return next();
     }
   });
@@ -157,7 +164,7 @@ export const initIO = (httpServer: Server): SocketIO => {
 
   workspaces.on("connection", (socket) => {
     const clientIp = socket.handshake.address;
-    
+
     // Connection State Recovery: verifica se a conexão foi recuperada
     if ((socket as any).recovered) {
       logger.info(`[SOCKET RECOVERY] ✅ Conexão RECUPERADA - namespace=${socket.nsp.name} socketId=${socket.id} rooms=${Array.from(socket.rooms).join(",")}`);
@@ -165,7 +172,7 @@ export const initIO = (httpServer: Server): SocketIO => {
     } else {
       try {
         logger.info(`[SOCKET] Cliente conectado ao namespace ${socket.nsp.name} (IP: ${clientIp}) query=${JSON.stringify(socket.handshake.query)}`);
-      } catch {}
+      } catch { }
     }
 
     // Valida userId
@@ -180,28 +187,17 @@ export const initIO = (httpServer: Server): SocketIO => {
 
     socket.on("joinChatBox", async (ticketId: string, callback?: (error?: string) => void) => {
       const normalizedId = (ticketId ?? "").toString().trim();
-      console.log("[SOCKET] joinChatBox chamado com:", { 
-        ticketId, 
-        normalizedId, 
-        isValid: isValidUUID(normalizedId),
-        socketId: socket.id,
-        namespace: socket.nsp.name
-      });
-      
       if (!normalizedId || normalizedId === "undefined" || !isValidUUID(normalizedId)) {
         logger.warn(`ticketId inválido: ${normalizedId || "vazio"}`);
-        console.error("[SOCKET] ticketId inválido:", { normalizedId, isValid: isValidUUID(normalizedId) });
         callback?.("ID de ticket inválido");
         return;
       }
       await socket.join(normalizedId);
       logger.info(`Cliente entrou no canal de ticket ${ticketId} no namespace ${socket.nsp.name}`);
-      
       if (process.env.SOCKET_DEBUG === "true") {
         try {
           const sockets = await socket.nsp.in(normalizedId).fetchSockets();
           logger.info(`[SOCKET JOIN DEBUG] ns=${socket.nsp.name} room=${normalizedId} count=${sockets.length}`);
-          console.log(`[SOCKET] Clientes na sala ${normalizedId}:`, sockets.length);
         } catch (e) {
           logger.warn(`[SOCKET JOIN DEBUG] falha ao consultar sala ${normalizedId} em ${socket.nsp.name}`);
         }
@@ -210,7 +206,7 @@ export const initIO = (httpServer: Server): SocketIO => {
     });
 
     // Last Event ID Pattern: recupera mensagens perdidas desde o último ID conhecido
-    socket.on("recoverMissedMessages", async (data: { ticketId: string | number; lastMessageId: number }, callback?: (result: any) => void) => {
+    socket.on("recoverMissedMessages", async (data: { ticketId: string; lastMessageId: number }, callback?: (result: any) => void) => {
       try {
         const { ticketId, lastMessageId } = data;
         if (!ticketId || !lastMessageId) {
@@ -220,35 +216,14 @@ export const initIO = (httpServer: Server): SocketIO => {
 
         // Importação dinâmica para evitar dependência circular
         const { default: Message } = await import("../models/Message");
-        const { default: Ticket } = await import("../models/Ticket");
         const { Op } = await import("sequelize");
-
-        // Determinar se é UUID ou ID numérico
-        let whereCondition: any = {
-          id: { [Op.gt]: lastMessageId }
-        };
-
-        if (typeof ticketId === 'string' && ticketId.includes('-')) {
-          // É UUID - precisa fazer join com Ticket
-          const ticket = await Ticket.findOne({
-            where: { uuid: ticketId },
-            attributes: ['id']
-          });
-          
-          if (ticket) {
-            whereCondition.ticketId = ticket.id;
-          } else {
-            callback?.({ error: "Ticket não encontrado" });
-            return;
-          }
-        } else {
-          // É ID numérico
-          whereCondition.ticketId = ticketId;
-        }
 
         // Busca mensagens mais recentes que o último ID conhecido
         const missedMessages = await Message.findAll({
-          where: whereCondition,
+          where: {
+            ticketId: ticketId,
+            id: { [Op.gt]: lastMessageId }
+          },
           order: [["id", "ASC"]],
           limit: 100, // Limita para evitar sobrecarga
           include: ["contact"]
@@ -256,10 +231,10 @@ export const initIO = (httpServer: Server): SocketIO => {
 
         logger.info(`[SOCKET RECOVERY] Recuperando ${missedMessages.length} mensagens perdidas para ticket ${ticketId} desde ID ${lastMessageId}`);
 
-        callback?.({ 
-          success: true, 
+        callback?.({
+          success: true,
           messages: missedMessages,
-          count: missedMessages.length 
+          count: missedMessages.length
         });
       } catch (e) {
         logger.error("[SOCKET RECOVERY] Erro ao recuperar mensagens:", e);

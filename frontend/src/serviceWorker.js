@@ -1,3 +1,5 @@
+let deferredPrompt = null;
+
 export function register() {
   console.log("Registrando service worker", navigator)
   if ('serviceWorker' in navigator) {
@@ -11,6 +13,30 @@ export function register() {
         .catch((error) => {
           console.error('Erro durante o registro do service worker:', error);
         });
+    });
+  }
+
+  // Tratar evento beforeinstallprompt para PWA
+  window.addEventListener('beforeinstallprompt', (e) => {
+    console.log('Evento beforeinstallprompt recebido');
+    e.preventDefault();
+    deferredPrompt = e;
+    
+    // Opcional: mostrar botão de instalação customizado
+    // showInstallButton();
+  });
+}
+
+export function showInstallPrompt() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choiceResult) => {
+      if (choiceResult.outcome === 'accepted') {
+        console.log('Usuário aceitou a instalação do PWA');
+      } else {
+        console.log('Usuário recusou a instalação do PWA');
+      }
+      deferredPrompt = null;
     });
   }
 }

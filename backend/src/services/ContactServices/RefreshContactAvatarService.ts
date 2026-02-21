@@ -11,6 +11,7 @@ import { getIO } from "../../libs/socket";
 import { getWbot } from "../../libs/wbot";
 import axios from "axios";
 import { buildContactAvatarPath, buildGroupAvatarPath, sanitizeFileName } from "../../utils/publicPath";
+import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 interface Request {
   contactId: number | string;
@@ -109,8 +110,8 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
     // Determina JID do grupo (sanitizado) quando for grupo
     const groupJid = isGroup
       ? (contact.remoteJid && contact.remoteJid.includes("@")
-          ? contact.remoteJid
-          : `${contact.number}@g.us`)
+        ? contact.remoteJid
+        : `${contact.number}@g.us`)
       : "";
 
     // Caminhos com company para o filesystem
@@ -199,9 +200,26 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
             } catch (e) {
               // silencioso
             }
-            if (nomeNovo !== nomeAtual && nomeNovo && nomeNovo.replace(/\D/g, "") !== contact.number) {
-              await contact.update({ name: nomeNovo });
-              await contact.reload();
+            const { canonical: canonicalAtual } = safeNormalizePhoneNumber(nomeAtual);
+            const { canonical: canonicalNovo } = safeNormalizePhoneNumber(nomeNovo);
+            const { canonical: canonicalContato } = safeNormalizePhoneNumber(contact.number);
+
+            if (
+              nomeNovo !== nomeAtual &&
+              nomeNovo &&
+              canonicalNovo !== canonicalContato
+            ) {
+              // Sanitização: Rejeitar hashes de sistema
+              const isHash = (nomeNovo.match(/_/g) || []).length > 3 ||
+                (nomeNovo.match(/-/g) || []).length > 4 ||
+                /\.(jpe?g|png|gif|webp|bmp)$/i.test(nomeNovo);
+
+              if (isHash) {
+                logger.warn({ nomeNovo, contactId: contact.id }, "[RefreshAvatar] Nome novo rejeitado por parecer hash");
+              } else {
+                await contact.update({ name: nomeNovo });
+                await contact.reload();
+              }
             }
           }
         }
@@ -267,7 +285,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
             return true;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
       return false;
     };
 

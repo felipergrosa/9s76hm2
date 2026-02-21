@@ -30,7 +30,6 @@ import toastError from "../../errors/toastError";
 import UserStatusIcon from "../../components/UserModal/statusIcon";
 import { getBackendUrl } from "../../config";
 import { AuthContext } from "../../context/Auth/AuthContext";
-import { Avatar } from "@material-ui/core";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import usePermissions from "../../hooks/usePermissions";
 import AvatarFallback from "../../components/AvatarFallback";

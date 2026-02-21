@@ -151,35 +151,17 @@ const ListDuplicateContactsService = async ({
 
   const duplicates = await sequelize.query<DuplicateRow>(
     `
-      WITH contact_digits AS (
-        SELECT
-          "id",
-          "companyId",
-          REGEXP_REPLACE(COALESCE("canonicalNumber", "number", ''), '\\D', '', 'g') AS digits
-        FROM "Contacts"
-        WHERE "companyId" = :companyId
-          AND "isGroup" = false
-      ),
-      normalized_contacts AS (
-        SELECT
-          "id",
-          CASE
-            WHEN digits IS NULL OR digits = '' THEN NULL
-            WHEN LENGTH(digits) >= 11 THEN RIGHT(digits, 11)
-            WHEN LENGTH(digits) >= 8 THEN digits
-            ELSE NULL
-          END AS normalized
-        FROM contact_digits
-      )
       SELECT
-        normalized,
+        "canonicalNumber" AS normalized,
         ARRAY_AGG(id ORDER BY id) AS ids,
         COUNT(*) AS total
-      FROM normalized_contacts
-      WHERE normalized IS NOT NULL
-        AND normalized != ''
-        ${normalizedFilter ? "AND normalized = :normalizedFilter" : ""}
-      GROUP BY normalized
+      FROM "Contacts"
+      WHERE "companyId" = :companyId
+        AND "isGroup" = false
+        AND "canonicalNumber" IS NOT NULL
+        AND "canonicalNumber" != ''
+        ${normalizedFilter ? "AND \"canonicalNumber\" = :normalizedFilter" : ""}
+      GROUP BY "canonicalNumber"
       HAVING COUNT(*) > 1
       ORDER BY COUNT(*) DESC
       LIMIT :limit

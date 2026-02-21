@@ -169,6 +169,5 @@ backend/private/sessions/
 
 # Pastas de backup
 back-up-limpo/
-back-up-limpo/**
 backup-*/
 backups/

@@ -141,13 +141,6 @@ const Ticket = () => {
             setTicket(data);
             // Atualiza ref do UUID para uso estável nos handlers de socket
             if (data?.uuid) ticketUuidRef.current = data.uuid;
-            
-            // Marcar mensagens como lidas ao abrir o ticket
-            if (data.id && data.unreadMessages > 0) {
-              import("../../helpers/markTicketAsRead").then(({ markTicketAsRead }) => {
-                markTicketAsRead(data.id);
-              });
-            }
             // Disponibiliza globalmente para header externo
             try { window.__lastTicket = data; window.__lastContact = data.contact; } catch { }
             // Notifica topo (HeaderTicketInfo) que o ticket foi carregado

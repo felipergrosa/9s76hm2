@@ -651,6 +651,9 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   // Menu de contexto (right-click) para sugestões
   const [contextMenu, setContextMenu] = useState(null); // { x, y, word, suggestions, message, type }
 
+  // Debounce para análise ortográfica pesada
+  const spellCheckTimeoutRef = useRef(null);
+
   const { list: listQuickMessages } = useQuickMessages();
 
 
@@ -1006,13 +1009,37 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
     
     // Verificação ortográfica/gramatical apenas via LanguageTool (API)
     if (spellCheckEnabled) {
-      analyzeText(value, cursorPos);
+      // debounce feito via useEffect
       setMisspelledWords([]); // Desabilitado: corretor local estava com dicionário corrompido
     } else {
       setMisspelledWords([]);
       setGrammarErrors([]);
     }
   };
+
+  // Debounce da chamada analyzeText (ortografia via LanguageTool)
+  useEffect(() => {
+    if (!spellCheckEnabled || !inputMessage) {
+      if (spellCheckTimeoutRef.current) {
+        clearTimeout(spellCheckTimeoutRef.current);
+      }
+      return;
+    }
+
+    if (spellCheckTimeoutRef.current) {
+      clearTimeout(spellCheckTimeoutRef.current);
+    }
+
+    spellCheckTimeoutRef.current = setTimeout(() => {
+      analyzeText(inputMessage, inputCursorPosition);
+    }, 300);
+
+    return () => {
+      if (spellCheckTimeoutRef.current) {
+        clearTimeout(spellCheckTimeoutRef.current);
+      }
+    };
+  }, [inputMessage, inputCursorPosition, spellCheckEnabled, analyzeText]);
 
   // Verificação gramatical com LanguageTool (debounced)
   const grammarTimeoutRef = useRef(null);

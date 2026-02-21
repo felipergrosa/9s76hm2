@@ -80,10 +80,24 @@ const SyncChatHistoryService = async ({
             return { synced: 0, skipped: true, reason: "Conexão WhatsApp não inicializada" };
         }
 
-        // 4. Montar JID do contato
-        const jid = ticket.isGroup
-            ? `${ticket.contact.number}@g.us`
-            : `${ticket.contact.number}@s.whatsapp.net`;
+        // 4. Montar JID do contato (com proteção contra PENDING_ e LIDs)
+        let jid: string;
+        if (ticket.isGroup) {
+            jid = ticket.contact.remoteJid || `${ticket.contact.number}@g.us`;
+        } else {
+            const num = ticket.contact.number || "";
+            if (num.startsWith("PENDING_") || num.includes("@lid")) {
+                // Contato pendente — usar remoteJid se disponível (LID é válido para fetchMessageHistory)
+                const rid = ticket.contact.remoteJid || (ticket.contact as any).lidJid;
+                if (rid) {
+                    jid = rid;
+                } else {
+                    return { synced: 0, skipped: true, reason: "Contato PENDING sem JID válido para sync" };
+                }
+            } else {
+                jid = `${num}@s.whatsapp.net`;
+            }
+        }
 
         // 5. Buscar mensagem MAIS ANTIGA do banco para usar como âncora
         // (queremos buscar mensagens ANTERIORES a esta)
@@ -92,54 +106,74 @@ const SyncChatHistoryService = async ({
             order: [["createdAt", "ASC"]]
         });
 
-        // 6. Chamar fetchMessageHistory do Baileys
+
+        // 6. Preparar âncora para fetchMessageHistory
+        let oldestKey: any = {
+            remoteJid: jid,
+            id: "",
+            fromMe: true
+        };
+        let oldestTimestamp = Math.floor(Date.now() / 1000);
+
+        if (oldestMessage && oldestMessage.dataJson) {
+            try {
+                const parsed = JSON.parse(oldestMessage.dataJson);
+                if (parsed.key) {
+                    oldestKey = parsed.key;
+                    oldestTimestamp = Number(parsed.messageTimestamp) || oldestTimestamp;
+                }
+            } catch { }
+        }
+
+        // 7. Buscar histórico via API (fetchMessageHistory)
+        // Substitui o uso de store.loadMessages que falha com Redis
         let messages: any[] = [];
-        try {
-            if (typeof wbot.fetchMessageHistory === "function") {
-                // Usar a mensagem mais antiga como âncora se existir
-                let cursor: any = undefined;
-                let timestamp: number | undefined = undefined;
+        const wbotAny = wbot as any;
 
-                if (oldestMessage?.dataJson) {
-                    try {
-                        const parsed = JSON.parse(oldestMessage.dataJson);
-                        cursor = parsed?.key;
-                        timestamp = parsed?.messageTimestamp
-                            ? Number(parsed.messageTimestamp)
-                            : undefined;
-                    } catch { }
-                }
+        if (typeof wbotAny.fetchMessageHistory === "function") {
+            try {
+                // logger.info(`[SyncChatHistory] Buscando ${messageCount} mensagens via API para jid=${jid}...`);
 
-                // Baileys fetchMessageHistory(jid, quantity, cursor.key, cursor.messageTimestamp)
-                const result = await wbot.fetchMessageHistory(jid, messageCount, cursor, timestamp);
+                messages = await new Promise<any[]>((resolve, reject) => {
+                    const timeoutId = setTimeout(() => {
+                        cleanup();
+                        resolve([]);
+                    }, 15000); // 15s timeout
 
-                // VALIDAR: fetchMessageHistory pode retornar objeto ou array
-                if (Array.isArray(result)) {
-                    messages = result;
-                } else if (result && typeof result === 'object') {
-                    // Algumas versões do Baileys retornam { messages: [...] }
-                    messages = result.messages || result.data || [];
-                } else {
-                    messages = [];
-                }
+                    const historyHandler = (event: any) => {
+                        const msgs = event?.messages || [];
+                        const relevant = msgs.filter((m: any) => m?.key?.remoteJid === jid);
 
-                if (messages?.length > 0) {
-                    logger.info(`[SyncChatHistory] Recebidas ${messages?.length} mensagens para ticketId=${ticketId}`);
-                }
-            } else {
-                // Fallback: tentar chatModify para marcar como lido e forçar sync
-                logger.warn(`[SyncChatHistory] fetchMessageHistory não disponível, usando fallback`);
+                        if (relevant.length > 0) {
+                            cleanup();
+                            clearTimeout(timeoutId);
+                            resolve(relevant);
+                        }
+                    };
 
-                // Marcar chat como lido pode ajudar a sincronizar
-                try {
-                    await wbot.chatModify({ markRead: true }, jid);
-                } catch { }
+                    const cleanup = () => {
+                        wbot.ev.off("messaging-history.set", historyHandler);
+                    };
 
-                return { synced: 0, skipped: true, reason: "fetchMessageHistory não disponível nesta versão do Baileys" };
+                    wbot.ev.on("messaging-history.set", historyHandler);
+
+                    wbotAny.fetchMessageHistory(messageCount, oldestKey, oldestTimestamp)
+                        .catch((err: any) => {
+                            clearTimeout(timeoutId);
+                            cleanup();
+                            logger.warn(`[SyncChatHistory] Falha na API fetchMessageHistory: ${err}`);
+                            resolve([]);
+                        });
+                });
+            } catch (err: any) {
+                logger.warn(`[SyncChatHistory] Erro ao buscar histórico: ${err?.message}`);
             }
-        } catch (err: any) {
-            logger.warn(`[SyncChatHistory] Erro ao buscar histórico: ${err?.message}`);
-            return { synced: 0, skipped: true, reason: `Erro ao buscar: ${err?.message}` };
+        } else {
+            // Fallback para chatModify se API não disponível (raro)
+            try {
+                await wbot.chatModify({ markRead: true }, jid);
+            } catch { }
+            return { synced: 0, skipped: true, reason: "API fetchMessageHistory não disponível" };
         }
 
         if (!messages || messages.length === 0) {

@@ -503,10 +503,10 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
 
     if (clean.length >= 10 && clean.startsWith("55")) {
       if (clean.length === 13) { // 55 11 91234 5678
-        return `+${clean.substring(0, 2)} (${clean.substring(2, 4)}) ${clean.substring(4, 9)}-${clean.substring(9)}`;
+        return `+${clean.substring(0, 2)} ${clean.substring(2, 4)} ${clean.substring(4, 9)}-${clean.substring(9)}`;
       }
       if (clean.length === 12) { // 55 11 1234 5678
-        return `+${clean.substring(0, 2)} (${clean.substring(2, 4)}) ${clean.substring(4, 8)}-${clean.substring(8)}`;
+        return `+${clean.substring(0, 2)} ${clean.substring(2, 4)} ${clean.substring(4, 8)}-${clean.substring(8)}`;
       }
     }
     return `+${clean}`;
@@ -744,7 +744,9 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
                     primary={
                       <span style={{ display: "flex", alignItems: "center" }}>
                         <span className={classes.participantName}>
-                          {participant.name === "Participante" ? formatPhoneNumber(participant.number) : participant.name}
+                          {participant.name !== "Participante" && participant.name !== participant.number
+                            ? participant.name
+                            : formatPhoneNumber(participant.number)}
                         </span>
                         {participant.isSuperAdmin && (
                           <Chip
@@ -764,9 +766,11 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
                       </span>
                     }
                     secondary={
-                      <span className={classes.participantNumber}>
-                        {formatPhoneNumber(participant.number)}
-                      </span>
+                      participant.name !== "Participante" && participant.name !== participant.number ? (
+                        <span className={classes.participantNumber}>
+                          {formatPhoneNumber(participant.number)}
+                        </span>
+                      ) : null
                     }
                   />
                   <ListItemSecondaryAction>

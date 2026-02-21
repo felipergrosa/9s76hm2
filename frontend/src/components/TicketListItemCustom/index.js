@@ -23,7 +23,6 @@ import { green, grey } from "@material-ui/core/colors";
 
 import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
-import ButtonWithSpinner from "../ButtonWithSpinner";
 import MarkdownWrapper from "../MarkdownWrapper";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import toastError from "../../errors/toastError";
@@ -319,7 +318,7 @@ const useStyles = makeStyles((theme) => ({
             margin: 2,
             padding: 3
         },
-        "& .MuiBadge-anchorOriginTopRightRectangle": {
+        "& .MuiBadge-anchorOriginTopRightRectangular": {
             transform: "scale(1) translate(0%, -40%)",
         },
     },
@@ -522,15 +521,6 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
         }
 
         history.push(`/tickets/`);
-    };
-
-    const truncate = (str, len) => {
-        if (!isNil(str)) {
-            if (str.length > len) {
-                return str.substring(0, len) + "...";
-            }
-            return str;
-        }
     };
 
     const handleCloseTransferTicketModal = useCallback(() => {

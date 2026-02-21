@@ -1,4 +1,4 @@
-import { Op, Filterable } from "sequelize";
+import { Op, Filterable, literal } from "sequelize";
 import Contact from "../../models/Contact";
 import ContactTag from "../../models/ContactTag";
 import Tag from "../../models/Tag";
@@ -56,15 +56,15 @@ const ListGroupsService = async ({
   } else {
     // Usuário comum: Só vê grupos de sua conexão primária + conexões permitidas
     const userConnections: number[] = [];
-    
+
     if (whatsappId) {
       userConnections.push(whatsappId);
     }
-    
+
     if (allowedConnectionIds.length > 0) {
       userConnections.push(...allowedConnectionIds);
     }
-    
+
     visibleWhatsappIds = [...new Set(userConnections)]; // Remove duplicados
   }
 
@@ -102,7 +102,24 @@ const ListGroupsService = async ({
       "whatsappId",
       "createdAt",
       "updatedAt",
-      "companyId"
+      "companyId",
+      [
+        literal(`(
+          SELECT COALESCE(SUM(t."unreadMessages"), 0)
+          FROM "Tickets" t
+          WHERE t."contactId" = "Contact"."id"
+          AND t."status" != 'closed'
+        )`),
+        "unreadCount"
+      ],
+      [
+        literal(`(
+          SELECT COALESCE(MAX(t."updatedAt"), "Contact"."createdAt")
+          FROM "Tickets" t
+          WHERE t."contactId" = "Contact"."id"
+        )`),
+        "lastMessageDate"
+      ]
     ],
     include: [
       {
@@ -127,7 +144,7 @@ const ListGroupsService = async ({
     ],
     limit: pageLimit,
     offset,
-    order: [["name", "ASC"]]
+    order: [[literal('"lastMessageDate"'), "DESC"]]
   });
 
   const hasMore = count > offset + groups.length;

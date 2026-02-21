@@ -182,9 +182,9 @@ const wbotMonitor = async (
           await createOrUpdateBaileysService({
             whatsappId: whatsapp.id,
             contacts: filteredContacts,
-    });
+          });
 
-  } catch (err) {
+        } catch (err) {
           logger.error(`Error in createOrUpdateBaileysService: ${err.message}`);
           Sentry.captureException(err);
           console.log("Filtered Contacts:", filteredContacts); // Debug output
@@ -237,10 +237,10 @@ const wbotMonitor = async (
           const color = it?.color ?? it?.colorHex ?? it?.backgroundColor;
           const predefinedId = it?.predefinedId;
           const deleted = it?.deleted === true;
-          
+
           // 1. Atualizar cache em memória (comportamento existente)
           upsertLabel(whatsapp.id, { id, name, color, predefinedId, deleted });
-          
+
           // 2. NOVO: Persistir no banco de dados
           try {
             const colorNum = typeof color === 'number' ? color : (typeof color === 'string' ? parseInt(color, 10) || 0 : 0);
@@ -271,7 +271,7 @@ const wbotMonitor = async (
           } catch (dbErr: any) {
             logger.warn(`[wbotMonitor] Falha ao persistir label ${id} no banco: ${dbErr?.message}`);
           }
-          
+
           count++;
         }
         if (count === 0) {
@@ -354,21 +354,21 @@ const wbotMonitor = async (
             try {
               const ContactWhatsappLabel = (await import("../../models/ContactWhatsappLabel")).default;
               const Contact = (await import("../../models/Contact")).default;
-              
+
               // Extrair número do chatId (formato: 5511999999999@c.us)
               const number = chatId.split('@')[0];
-              
+
               // Buscar contato pelo número
-              const contact = await Contact.findOne({ 
-                where: { number, companyId } 
+              const contact = await Contact.findOne({
+                where: { number, companyId }
               });
-              
+
               if (contact) {
                 // Buscar label no banco
                 const dbLabel = await WhatsappLabel.findOne({
                   where: { whatsappLabelId: labelId, whatsappId: whatsapp.id }
                 });
-                
+
                 if (dbLabel) {
                   if (labeled) {
                     // Adicionar associação
@@ -456,9 +456,8 @@ const wbotMonitor = async (
                 companyId,
                 isGroup: false,
                 [Op.or]: [
-                  { lidJid: lidJid },
-                  { number: `PENDING_${lidJid}` },
-                  { remoteJid: lidJid }
+                  { remoteJid: lidJid },
+                  { lidJid: lidJid }
                 ]
               }
             });
@@ -515,6 +514,13 @@ const wbotMonitor = async (
                 remoteJid: `${phoneNumber}@s.whatsapp.net`,
                 lidJid: lidJid
               });
+
+              // Buscar profile picture usando o JID real recém-resolvido
+              try {
+                const pic = await wbot.profilePictureUrl(`${phoneNumber}@s.whatsapp.net`, "image");
+                if (pic) await pendingContact.update({ profilePicUrl: pic });
+              } catch (e) { /* privacidade ou indisponível */ }
+
               reconciledCount++;
               logger.info("[wbotMonitor] Contato PENDING_ promovido a real", {
                 contactId: pendingContact.id,

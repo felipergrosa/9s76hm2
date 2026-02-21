@@ -1,30 +1,49 @@
 import { getWbot } from "../libs/wbot";
 import { handleMessage } from "../services/WbotServices/wbotMessageListener";
+import logger from "../utils/logger";
 
 export default {
-    key: `${process.env.DB_NAME}-handleMessage`,
+  key: `${process.env.DB_NAME}-handleMessage`,
 
-    async handle({ data }) {
-        try {
-            const { message, wbot, companyId } = data;
+  async handle({ data }) {
+    const { message, wbot, companyId } = data || {};
 
-            if (message === undefined || wbot === undefined || companyId === undefined) {
-                console.log("message, wbot, companyId", message, wbot, companyId)
-            }
+    if (!message || wbot === undefined || companyId === undefined) {
+      const error = new Error("[handleMessageQueue] Payload inválido");
+      logger.error(
+        {
+          messageExists: Boolean(message),
+          wbot,
+          companyId
+        },
+        error.message
+      );
+      throw error;
+    }
 
-            const w = getWbot(wbot);
+    const wid = message?.key?.id;
+    const remoteJid = message?.key?.remoteJid;
+    const fromMe = Boolean(message?.key?.fromMe);
 
-            if (!w) {
-                console.log("wbot not found", wbot)
-            }
+    try {
+      const w = getWbot(wbot);
+      await handleMessage(message, w, companyId);
+    } catch (error: any) {
+      logger.error(
+        {
+          error: error?.message || error,
+          stack: error?.stack,
+          wid,
+          remoteJid,
+          fromMe,
+          wbot,
+          companyId
+        },
+        "[handleMessageQueue] Falha ao processar mensagem"
+      );
 
-            try {
-                await handleMessage(message, w, companyId);
-            } catch (error) {
-                console.log(error)
-            }
-        } catch (error) {
-            console.log("error", error)
-        }
-    },
+      // CRITICO: relançar para Bull aplicar retry/backoff e não perder mensagem.
+      throw error;
+    }
+  }
 };

@@ -1,0 +1,23 @@
+# Whaticket Project Rules & Standards
+
+## 🛠️ Build & Stability Rules
+- **Mandatory Build Check**: ALWAYS run `pnpm run build` in the `backend` directory before completing any task.
+- **Strict Typing**: No `any` unless absolutely necessary and documented.
+- **Sequelize Standard**: 
+  - Functions like `fn`, `col`, `Op`, `literal` MUST be imported from the base `"sequelize"` package.
+  - DO NOT use the `sequelize` instance methods (e.g. `sequelize.fn`) as they lose type safety in this project's configuration.
+
+## 📱 Phone Number Normalization
+- **Library**: Use `libphonenumber-js`.
+- **Hybrid Strategy**: 
+  - Standard phones -> E.164.
+  - Meta/WhatsApp IDs (10-20 digits) -> Preserve digits.
+- **Validation**: Allow up to 20 digits for phone-like identifiers.
+
+## 📂 Project Structure
+- **Markdown Docs**: Save all `.md` artifacts and flow maps in the `/markdown` folder.
+- **Language**: Responses and documentation must be in **Portuguese (BR)**.
+
+## 🔄 Contact Merging
+- Use `AutoMergeDuplicateContactsService.ts` for handling historical duplicates.
+- Always check for existing contacts by `canonicalNumber` or `lidJid` before creating new ones.

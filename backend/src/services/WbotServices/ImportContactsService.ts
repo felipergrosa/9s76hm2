@@ -8,6 +8,8 @@ import CreateContactService from "../ContactServices/CreateContactService";
 import { isString, isArray } from "lodash";
 import path from "path";
 import fs from 'fs';
+import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { Op } from "sequelize";
 
 const ImportContactsService = async (companyId: number): Promise<void> => {
   const defaultWhatsapp = await GetDefaultWhatsApp(undefined, companyId);
@@ -20,7 +22,7 @@ const ImportContactsService = async (companyId: number): Promise<void> => {
     phoneContacts = JSON.parse(JSON.stringify(contactsString.contacts));
 
     const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
-    const beforeFilePath = path.join(publicFolder,`company${companyId}`, 'contatos_antes.txt');
+    const beforeFilePath = path.join(publicFolder, `company${companyId}`, 'contatos_antes.txt');
     fs.writeFile(beforeFilePath, JSON.stringify(phoneContacts, null, 2), (err) => {
       if (err) {
         logger.error(`Failed to write contacts to file: ${err}`);
@@ -35,7 +37,7 @@ const ImportContactsService = async (companyId: number): Promise<void> => {
   }
 
   const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
-  const afterFilePath = path.join(publicFolder,`company${companyId}`, 'contatos_depois.txt');
+  const afterFilePath = path.join(publicFolder, `company${companyId}`, 'contatos_depois.txt');
   fs.writeFile(afterFilePath, JSON.stringify(phoneContacts, null, 2), (err) => {
     if (err) {
       logger.error(`Failed to write contacts to file: ${err}`);
@@ -51,11 +53,21 @@ const ImportContactsService = async (companyId: number): Promise<void> => {
   if (isArray(phoneContactsList)) {
     for (const item of phoneContactsList) {
       const { id, name, notify } = item as any;
-      if (!id || id === "status@broadcast" || String(id).includes("g.us")) continue;
-      const number = String(id).replace(/\D/g, "");
+      if (!id || id === "status@broadcast" || String(id).includes("g.us") || String(id).includes("@lid")) continue;
+      const rawDigits = String(id).replace(/\D/g, "");
+      const { canonical } = safeNormalizePhoneNumber(rawDigits);
+      const number = canonical || rawDigits;
 
       try {
-        const existingContact = await Contact.findOne({ where: { number, companyId } });
+        const existingContact = await Contact.findOne({
+          where: {
+            companyId,
+            [Op.or]: [
+              { canonicalNumber: number },
+              { number }
+            ]
+          }
+        });
         const phoneName = (name || notify || "").trim();
 
         if (existingContact) {
@@ -66,12 +78,15 @@ const ImportContactsService = async (companyId: number): Promise<void> => {
             // Atualiza nome principal quando vazio/igual ao número e armazena também em contactName
             await existingContact.update({
               name: phoneName || number,
-              contactName: phoneName || null
+              contactName: phoneName || null,
+              remoteJid: id
             });
           } else {
             // Nome já curado pelo usuário: não sobrescrever; apenas guarda referência em contactName
             if (phoneName) {
-              await existingContact.update({ contactName: phoneName });
+              await existingContact.update({ contactName: phoneName, remoteJid: id });
+            } else {
+              await existingContact.update({ remoteJid: id });
             }
           }
         } else {
@@ -84,7 +99,8 @@ const ImportContactsService = async (companyId: number): Promise<void> => {
             // contactName espelha o nome de origem do aparelho na criação
             // florder permanece default false
             // @ts-ignore: parâmetro extra suportado pelo serviço
-            contactName: phoneName || null
+            contactName: phoneName || null,
+            remoteJid: id
           } as any);
         }
       } catch (error) {

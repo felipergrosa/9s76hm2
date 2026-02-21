@@ -1,6 +1,7 @@
 import { Op, WhereOptions, fn, col, where as sequelizeWhere, literal } from "sequelize";
 import Contact from "../../models/Contact";
-import { COUNTRY_METADATA, resolveCountryMetadata, safeNormalizePhoneNumber } from "../../utils/phone";
+import { parsePhoneNumber } from "libphonenumber-js";
+import { formatPhoneNumber, safeNormalizePhoneNumber } from "../../utils/phone";
 
 interface ListParams {
   companyId: number;
@@ -48,128 +49,39 @@ interface ListResult {
 
 const getDigits = (value: string | null | undefined): string => String(value ?? "").replace(/\D/g, "");
 
-interface ResolvedCountry {
-  metadata?: typeof COUNTRY_METADATA[string];
-  national: string;
-  ddi: string;
-}
-
-const resolveCountry = (digits: string): ResolvedCountry => {
-  const resolved = resolveCountryMetadata(digits);
-  return {
-    metadata: resolved.metadata,
-    national: resolved.national,
-    ddi: resolved.ddi ?? digits.slice(0, 3)
-  };
-};
-
-const formatSubscriber = (value: string): string => {
-  if (value.length <= 4) return value;
-  const splitIndex = value.length - 4;
-  return `${value.slice(0, splitIndex)}-${value.slice(splitIndex)}`;
-};
-
 const formatCanonicalDisplay = (value: string | null | undefined): string | null => {
   if (!value) return null;
-
-  const digits = getDigits(value);
-  if (!digits) return null;
-
-  const { metadata, national, ddi } = resolveCountry(digits);
-
-  if (!metadata) {
-    return `+${digits}`;
-  }
-
-  if (!national) {
-    return `${metadata.iso} +${metadata.ddi}`;
-  }
-
-  let nationalDisplay = national;
-  if (metadata.mobileIndicatorPrefix && nationalDisplay.startsWith(metadata.mobileIndicatorPrefix)) {
-    nationalDisplay = nationalDisplay.slice(metadata.mobileIndicatorPrefix.length);
-  }
-
-  const areaLength = metadata.areaCodeLength ?? 0;
-  let areaCode = "";
-  let subscriber = nationalDisplay;
-
-  if (areaLength > 0 && nationalDisplay.length > areaLength) {
-    areaCode = nationalDisplay.slice(0, areaLength);
-    subscriber = nationalDisplay.slice(areaLength);
-  }
-
-  if (!subscriber) {
-    subscriber = nationalDisplay;
-  }
-
-  const formattedSubscriber = formatSubscriber(subscriber);
-
-  if (areaCode) {
-    return `${metadata.iso} (${areaCode}) ${formattedSubscriber}`;
-  }
-
-  return `${metadata.iso} ${formattedSubscriber}`;
+  return formatPhoneNumber(value);
 };
 
 // Detecta se o número parece ser um LID (Linked Device ID) do WhatsApp
-// LIDs são números muito longos (>15 dígitos) ou que não seguem padrão de telefone
 const isLidNumber = (digits: string): boolean => {
   if (!digits) return false;
-  // LIDs geralmente têm mais de 15 dígitos
-  if (digits.length > 15) return true;
-  // LIDs com 14+ dígitos que não começam com 55 (Brasil)
-  if (digits.length > 13 && !digits.startsWith("55")) return true;
-  return false;
+  return digits.length > 15 || (digits.length > 13 && !digits.startsWith("55"));
 };
 
 const classifyPhoneNumber = (value: string | null | undefined): PhoneClassification => {
   const digitsOnly = getDigits(value);
-  if (!digitsOnly) {
-    return "invalid";
+  if (!digitsOnly) return "invalid";
+  if (isLidNumber(digitsOnly)) return "lid_jid";
+  if (digitsOnly.length < 8) return "shortcode";
+
+  try {
+    const parsed = parsePhoneNumber(digitsOnly.startsWith("+") ? digitsOnly : `+${digitsOnly}`, "BR");
+    if (parsed && parsed.isValid()) {
+      const type = parsed.getType();
+      if (type === "MOBILE") return "mobile";
+      if (type === "FIXED_LINE" || type === "FIXED_LINE_OR_MOBILE") return "landline";
+      return "international";
+    }
+  } catch (err) {
+    // Fallback
   }
 
-  // Detectar LIDs primeiro (números muito longos que são JIDs @lid)
-  if (isLidNumber(digitsOnly)) {
-    return "lid_jid";
-  }
-
-  if (digitsOnly.length < 8) {
-    return "shortcode";
-  }
-
-  if (digitsOnly.length > 15) {
-    return "invalid";
-  }
-
-  const { metadata, national } = resolveCountry(digitsOnly);
-
-  if (!metadata) {
-    return "international";
-  }
-
-  const rawNational = national;
-  let trimmed = rawNational;
-  if (metadata.mobileIndicatorPrefix && trimmed.startsWith(metadata.mobileIndicatorPrefix)) {
-    trimmed = trimmed.slice(metadata.mobileIndicatorPrefix.length);
-  }
-
-  if (metadata.mobileNationalLengths?.includes(rawNational.length) || metadata.mobileNationalLengths?.includes(trimmed.length)) {
-    return "mobile";
-  }
-
-  if (metadata.landlineNationalLengths?.includes(rawNational.length) || metadata.landlineNationalLengths?.includes(trimmed.length)) {
-    return "landline";
-  }
-
-  if (trimmed.length < 4) {
-    return "shortcode";
-  }
-
-  return "international";
+  return digitsOnly.length > 15 ? "invalid" : "international";
 };
 
-const isValidCanonicalLength = (digits: string): boolean => digits.length === 12 || digits.length === 13;
+const isValidCanonicalLength = (digits: string): boolean => digits.length >= 10 && digits.length <= 20;
 
 const detectIssues = (contact: Contact): NormalizationIssue[] => {
   const issues: NormalizationIssue[] = [];
@@ -180,14 +92,13 @@ const detectIssues = (contact: Contact): NormalizationIssue[] => {
   }
 
   const numberDigits = getDigits(contact.number);
-  
-  // Detectar LIDs (números muito longos que são JIDs @lid do WhatsApp)
+
   if (isLidNumber(numberDigits)) {
-    issues.push({ 
-      type: "lid_jid_number", 
-      details: `Número LID (${numberDigits.length} dígitos) - não é telefone real` 
+    issues.push({
+      type: "lid_jid_number",
+      details: `Número LID (${numberDigits.length} dígitos) - não é telefone real`
     });
-    return issues; // LIDs precisam de tratamento especial, não verificar outras regras
+    return issues;
   }
 
   const canonical = contact.canonicalNumber;
@@ -203,11 +114,8 @@ const detectIssues = (contact: Contact): NormalizationIssue[] => {
       issues.push({ type: "invalid_chars" });
     }
 
-    if (digitsOnly.length >= 2) {
-      const ddi = digitsOnly.slice(0, 2);
-      if (ddi !== "55" && !COUNTRY_METADATA[digitsOnly.slice(0, 1)] && !COUNTRY_METADATA[digitsOnly.slice(0, 2)] && !COUNTRY_METADATA[digitsOnly.slice(0, 3)]) {
-        issues.push({ type: "missing_country_code" });
-      }
+    if (digitsOnly.length < 10) {
+      issues.push({ type: "missing_country_code" });
     }
   }
 
@@ -233,18 +141,16 @@ const buildBaseWhere = (companyId: number): WhereOptions => {
     // Números canônicos muito curtos (<8 dígitos)
     sequelizeWhere(fn("length", fn("COALESCE", col("canonicalNumber"), "")), { [Op.lt]: 8 }),
     // Números canônicos muito longos (>15 dígitos) - possíveis LIDs
-    sequelizeWhere(fn("length", fn("COALESCE", col("canonicalNumber"), "")), { [Op.gt]: 15 }),
+    sequelizeWhere(fn("length", fn("COALESCE", col("canonicalNumber"), "")), { [Op.gt]: 20 }),
     // Incluir contatos onde number != canonicalNumber (possível desatualização)
     literal('COALESCE("number", \'\') != COALESCE("canonicalNumber", \'\')')
   ];
 
-  // Condições adicionais para detectar LIDs no campo "number"
-  // LIDs são números muito longos (>15 dígitos) que não são telefones reais
   const lidConditions: WhereOptions[] = [
-    // Números com mais de 15 dígitos (LIDs)
+    // Números com mais de 20 dígitos (LIDs longos/inválidos)
     sequelizeWhere(
       fn("length", fn("REGEXP_REPLACE", col("number"), literal("'[^0-9]'"), literal("''"), literal("'g'"))),
-      { [Op.gt]: 15 }
+      { [Op.gt]: 20 }
     ),
     // Números com 14+ dígitos que não começam com 55 (Brasil)
     literal(`
@@ -267,7 +173,6 @@ const ListContactsPendingNormalizationService = async ({
   offset = 0
 }: ListParams): Promise<ListResult> => {
   const baseWhere = buildBaseWhere(companyId);
-
   const shouldPaginate = typeof limit === "number" && limit > 0;
 
   const queryOptions: any = {
@@ -292,7 +197,6 @@ const ListContactsPendingNormalizationService = async ({
   }
 
   const total = shouldPaginate ? await Contact.count({ where: baseWhere }) : contacts.length;
-
   const groupsMap = new Map<string, NormalizationGroup>();
 
   contacts.forEach(contact => {
@@ -345,9 +249,8 @@ const ListContactsPendingNormalizationService = async ({
         existing.displayLabel = displayLabel;
       }
 
-      const currentIssues = issues;
-      currentIssues.forEach(issue => {
-        if (!existing.issues.find(existingIssue => existingIssue.type === issue.type && existingIssue.details === issue.details)) {
+      issues.forEach(issue => {
+        if (!existing.issues.find(ei => ei.type === issue.type && ei.details === issue.details)) {
           existing.issues.push(issue);
         }
       });

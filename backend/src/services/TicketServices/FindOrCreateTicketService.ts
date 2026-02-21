@@ -48,7 +48,7 @@ const FindOrCreateTicketService = async (
       settings.enableLGPD === "enabled" &&
       settings.lgpdMessage !== "" &&
       (settings.lgpdConsent === "enabled" ||
-        (settings.lgpdConsent === "disabled" && isNil(contact?.lgpdAcceptedAt)));
+        (settings.lgpdConsent === "disabled" && (!contact || isNil(contact?.lgpdAcceptedAt))));
   }
 
   const io = getIO();
@@ -93,7 +93,7 @@ const FindOrCreateTicketService = async (
         status: {
           [Op.or]: ["open", "pending", "group", "nps", "lgpd", "bot", "campaign"]
         },
-        contactId: contact.id,
+        contactId: contact?.id,
         companyId,
         whatsappId: whatsapp.id
       },
@@ -216,7 +216,14 @@ const FindOrCreateTicketService = async (
         // @ts-ignore: Unreachable code error 
         || (queueId !== 0 && Number(ticket?.queueId) !== Number(queueId) && queueId !== "" && queueId !== "0" && !isNil(queueId))) {
         throw new AppError(
-          `Ticket em outro atendimento. Atendente: ${ticket?.user?.name} - Fila: ${ticket?.queue?.name}`
+          JSON.stringify({
+            id: ticket.id,
+            uuid: ticket.uuid,
+            userId: ticket.userId,
+            status: ticket.status,
+            user: ticket.user ? { id: ticket.user.id, name: ticket.user.name } : null,
+            queue: ticket.queue ? { id: ticket.queue.id, name: ticket.queue.name } : null
+          })
         );
       }
     }
@@ -378,7 +385,7 @@ const FindOrCreateTicketService = async (
       isActiveDemand: false,
     };
 
-    if (DirectTicketsToWallets && contact.id && !groupContact) {
+    if (DirectTicketsToWallets && contact?.id && !groupContact) {
       const wallet: any = contact;
       const wallets = await wallet.getWallets();
       if (wallets && wallets[0]?.id) {

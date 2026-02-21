@@ -75,7 +75,6 @@ const ContactListItems = lazy(() => import("../pages/ContactListItems"));
 // FlowBuilder (pesado - sempre lazy)
 const FlowBuilder = lazy(() => import("../pages/FlowBuilder"));
 const FlowBuilderConfig = lazy(() => import("../pages/FlowBuilderConfig").then(m => ({ default: m.FlowBuilderConfig })));
-const FlowDefault = lazy(() => import("../pages/FlowDefault"));
 
 // IA
 const AISettings = lazy(() => import("../components/AISettings"));
@@ -110,9 +109,6 @@ const FinanceiroTutorial = lazy(() => import("../pages/Helps/FinanceiroTutorial"
 const FacebookTutorial = lazy(() => import("../pages/Helps/FacebookTutorial"));
 const InstagramTutorial = lazy(() => import("../pages/Helps/InstagramTutorial"));
 const WebChatTutorial = lazy(() => import("../pages/Helps/WebChatTutorial"));
-
-// Outros
-const Subscription = lazy(() => import("../pages/Subscription"));
 
 
 const Routes = () => {

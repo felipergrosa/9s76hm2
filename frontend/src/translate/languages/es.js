@@ -465,13 +465,13 @@ const messages = {
           cancel: "Cancelar"
         },
         success: "Contacto guardado con éxito."
-        },
-       flowbuilder: {
+      },
+      flowbuilder: {
         title: "Flowbuilder",
         subMenus: {
           campaign: "Flujo de Campaña",
           conversation: "Flujo de Conversación"
-        } 
+        }
       },
       flowbuilderModal: {
         flowNotIdPhrase: "Flujo predeterminado"
@@ -1254,10 +1254,10 @@ const messages = {
         queueData: "Datos"
       },
       queueSelect: {
-  inputLabel: "Colas",
-  inputLabelRO: "Colas de solo lectura",
-  withoutQueue: "Sin cola",
-  undefined: "Cola no encontrada",
+        inputLabel: "Colas",
+        inputLabelRO: "Colas de solo lectura",
+        withoutQueue: "Sin cola",
+        undefined: "Cola no encontrada",
       },
       reports: {
         title: "Informes de Atendimientos",
@@ -1704,7 +1704,7 @@ const messages = {
         ERR_FETCH_WAPP_MSG: "Error al buscar el mensaje en WhatsApp, tal vez sea demasiado antiguo.",
         ERR_QUEUE_COLOR_ALREADY_EXISTS: "Esta color ya está en uso, elija otra.",
         ERR_WAPP_GREETING_REQUIRED: "El mensaje de bienvenida es obligatorio cuando hay más de una cola.",
-        ERR_OUT_OF_HOURS: "¡Fuera del Horario de Expediente!"
+        ERR_OUT_OF_HOURS: "¡Fuera del Horario de Expediente! "
       }
     }
   }

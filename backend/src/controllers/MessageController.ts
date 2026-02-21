@@ -13,7 +13,6 @@ import Whatsapp from "../models/Whatsapp";
 import path from "path";
 import { isNil } from "lodash";
 import { Mutex } from "async-mutex";
-import logger from "../utils/logger";
 import { Op } from "sequelize";
 
 import ListMessagesService from "../services/MessageServices/ListMessagesService";
@@ -42,21 +41,8 @@ import TranscribeAudioMessageService from "../services/MessageServices/Transcrib
 import ShowMessageService, { GetWhatsAppFromMessage } from "../services/MessageServices/ShowMessageService";
 import SyncChatHistoryService from "../services/MessageServices/SyncChatHistoryService";
 import ImportContactHistoryService from "../services/MessageServices/ImportContactHistoryService";
-import ExportChatService from "../services/MessageServices/ExportChatService";
-import MessageStatsService from "../services/MessageServices/MessageStatsService";
-
-// Função para obter nome e extensão do arquivo
-function obterNomeEExtensaoDoArquivo(url: string): string {
-  const urlObj = new URL(url);
-  const pathname = urlObj.pathname;
-  const filename = pathname.split("/").pop() || "";
-  const parts = filename.split(".");
-
-  const nomeDoArquivo = parts[0];
-  const extensao = parts[1] || "";
-
-  return `${nomeDoArquivo}.${extensao}`;
-}
+import ClearTicketMessagesService from "../services/MessageServices/ClearTicketMessagesService";
+import ResyncTicketMessagesService from "../services/MessageServices/ResyncTicketMessagesService";
 
 type IndexQuery = {
   pageNumber: string;
@@ -771,8 +757,25 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     user: user!,
   });
 
+  if (ticket.channel === "whatsapp" && ticket.whatsappId) {
+    await SetTicketMessagesAsRead(ticket);
+  }
+
   return res.json({ count, messages, ticket, hasMore });
 };
+
+// Função para obter nome e extensão do arquivo
+function obterNomeEExtensaoDoArquivo(url: string): string {
+  const urlObj = new URL(url);
+  const pathname = urlObj.pathname;
+  const filename = pathname.split("/").pop() || "";
+  const parts = filename.split(".");
+
+  const nomeDoArquivo = parts[0];
+  const extensao = parts[1] || "";
+
+  return `${nomeDoArquivo}.${extensao}`;
+}
 
 // Armazenar mensagem
 export const store = async (req: Request, res: Response): Promise<Response> => {
@@ -1716,76 +1719,37 @@ export const listSharedMedia = async (req: Request, res: Response): Promise<Resp
   }
 };
 
-export const markAsRead = async (req: Request, res: Response): Promise<Response> => {
+/**
+ * Ressincronizar mensagens de um ticket (sem apagar histórico)
+ * DELETE /messages/:ticketId/clear
+ */
+export const clearTicketMessages = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
   const { companyId } = req.user;
+  const { periodMonths = 0 } = req.body;
 
   try {
-    const ticket = await Ticket.findOne({
-      where: { id: ticketId, companyId }
+    const result = await ResyncTicketMessagesService({ 
+      ticketId, 
+      companyId, 
+      periodMonths 
     });
-
-    if (!ticket) {
-      throw new AppError("ERR_NO_TICKET_FOUND", 404);
-    }
-
-    if (ticket.channel === "whatsapp" && ticket.whatsappId) {
-      await SetTicketMessagesAsRead(ticket);
-    }
-
-    return res.status(204).send();
-  } catch (err) {
-    logger.error("Erro ao marcar ticket como lido:", err);
-    throw new AppError("ERR_MARK_AS_READ", 500);
-  }
-};
-
-export const exportChat = async (req: Request, res: Response): Promise<Response> => {
-  const { ticketId } = req.params;
-  const { format = "json", includeMedia = false } = req.query;
-  const { companyId } = req.user;
-
-  try {
-    const result = await ExportChatService({
-      ticketId,
-      companyId,
-      format: format as "json" | "csv" | "txt",
-      includeMedia: includeMedia === "true"
-    });
-
+    
     if (!result.success) {
-      throw new AppError(result.error || "Erro ao exportar conversa", 400);
+      return res.status(400).json({
+        success: false,
+        error: result.error
+      });
     }
 
-    return res.status(200).json(result);
-  } catch (err: any) {
-    logger.error("Erro ao exportar conversa:", err);
-    if (err instanceof AppError) {
-      return res.status(err.statusCode).json({ message: err.message });
-    }
-    return res.status(500).json({ message: "Erro ao exportar conversa" });
-  }
-};
-
-export const getMessageStats = async (req: Request, res: Response): Promise<Response> => {
-  const { ticketId, contactId, period = 30, includeMedia = true } = req.query;
-  const { companyId } = req.user;
-
-  try {
-    const result = await MessageStatsService({
-      ticketId: ticketId ? Number(ticketId) : undefined,
-      contactId: contactId ? Number(contactId) : undefined,
-      companyId,
-      period: Number(period),
-      includeMedia: includeMedia === "true"
+    return res.json({
+      success: true,
+      existing: result.existing,
+      message: result.message
     });
 
-    return res.status(200).json(result);
-  } catch (err: any) {
-    logger.error("Erro ao gerar estatísticas:", err);
-    return res.status(500).json({ 
-      message: "Erro ao gerar estatísticas de mensagens",
-      error: err.message 
-    });
+  } catch (error: any) {
+    console.error("[clearTicketMessages] Erro:", error);
+    return res.status(500).json({ error: error.message || "Erro ao ressincronizar mensagens" });
   }
 };

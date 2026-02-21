@@ -66,9 +66,21 @@ class Contact extends Model<Contact> {
   @Column
   canonicalNumber: string;
 
+  @Column
+  notify: string;
+
+  @Column
+  pushName: string;
+
+  @Column
+  verifiedName: string;
+
   @Default("")
   @Column
   profilePicUrl: string;
+
+  @Column(DataType.TEXT)
+  profilePicUrlHD: string;
 
   @Default(false)
   @Column
@@ -132,6 +144,68 @@ class Contact extends Model<Contact> {
     allowNull: true
   })
   contactName: string;
+
+  // Dados de Perfil e Business
+  @Column(DataType.TEXT)
+  about: string;
+
+  @Column
+  aboutTag: string;
+
+  @Column
+  isBusiness: boolean;
+
+  @Column
+  businessCategory: string;
+
+  @Column(DataType.TEXT)
+  businessDescription: string;
+
+  @Column
+  businessAddress: string;
+
+  @Column
+  businessEmail: string;
+
+  @Column(DataType.JSON)
+  businessWebsite: string[];
+
+  @Column(DataType.JSON)
+  businessHours: any;
+
+  @Column
+  businessVerifiedLevel: string;
+
+  @Column(DataType.JSON)
+  businessCatalog: any;
+
+  // Metadados adicionais
+  @Column({ defaultValue: false })
+  isBlocked: boolean;
+
+  @Column({ defaultValue: false })
+  isMyContact: boolean;
+
+  @Column({ defaultValue: false })
+  isPremium: boolean;
+
+  @Column({ defaultValue: false })
+  isEnterprise: boolean;
+
+  @Column(DataType.BIGINT)
+  lastSeen: number;
+
+  @Column({ defaultValue: false })
+  isOnline: boolean;
+
+  @Column(DataType.JSON)
+  privacySettings: any;
+
+  @Column
+  lastDiscoveryAt: Date;
+
+  @Column(DataType.JSON)
+  rawData: any;
 
   @Default(false)
   @Column
@@ -280,6 +354,31 @@ class Contact extends Model<Contact> {
       return version ? `${base}?v=${version}` : base;
     }
     return null;
+  }
+
+  @Column(DataType.VIRTUAL)
+  get displayName(): string {
+    const name = (this.getDataValue("name") || "").trim();
+    const verifiedName = (this.getDataValue("verifiedName") || "").trim();
+    const pushName = (this.getDataValue("pushName") || "").trim();
+    const notify = (this.getDataValue("notify") || "").trim();
+    const number = this.getDataValue("number");
+
+    // 1. Nome salvo manualmente (não pode ser igual ao número)
+    const isNameNumber = name.replace(/\D/g, "") === String(number).replace(/\D/g, "");
+    if (name && !isNameNumber) return name;
+
+    // 2. Nome verificado (Business)
+    if (verifiedName) return verifiedName;
+
+    // 3. pushName (notificação/webhook)
+    if (pushName) return pushName;
+
+    // 4. notify (agenda do wbot)
+    if (notify) return notify;
+
+    // 5. Fallback: Número
+    return String(number);
   }
 
   @BelongsToMany(() => User, () => ContactWallet, "contactId", "walletId")

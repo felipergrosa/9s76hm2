@@ -1,5 +1,4 @@
 const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
-const path = require("path");
 
 const getRemoveConsolePlugin = () => {
   if (process.env.NODE_ENV !== "production") return [];
@@ -26,11 +25,18 @@ module.exports = {
       ],
     },
   },
-  eslint: {
-    enable: false, // Desabilita ESLint no webpack
-  },
   webpack: {
-    configure: (webpackConfig) => {
+    configure: (webpackConfig, { env }) => {
+      // Desabilita ESLint e ForkTsChecker em produção para acelerar o build
+      const pluginsToFilter = ['ESLintWebpackPlugin'];
+      if (env === 'production') {
+        pluginsToFilter.push('ForkTsCheckerWebpackPlugin');
+      }
+
+      webpackConfig.plugins = webpackConfig.plugins.filter(plugin =>
+        !pluginsToFilter.includes(plugin.constructor.name)
+      );
+
       webpackConfig.resolve.fallback = {
         ...webpackConfig.resolve.fallback,
         path: "path-browserify",
@@ -43,6 +49,29 @@ module.exports = {
           fullySpecified: false // Permite imports sem extensão .js
         }
       });
+
+      // Otimização de chunks para reduzir tamanho e melhorar cache
+      if (env === 'production') {
+        webpackConfig.optimization = {
+          ...webpackConfig.optimization,
+          splitChunks: {
+            chunks: 'all',
+            cacheGroups: {
+              vendor: {
+                test: /[\\/]node_modules[\\/]/,
+                name: 'vendors',
+                chunks: 'all',
+              },
+              materialUI: {
+                test: /[\\/]node_modules[\\/](@material-ui|@mui)[\\/]/,
+                name: 'material-ui',
+                chunks: 'all',
+                priority: 20,
+              },
+            },
+          },
+        };
+      }
 
       webpackConfig.plugins = [
         ...(webpackConfig.plugins || []),

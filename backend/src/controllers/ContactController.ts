@@ -48,8 +48,7 @@ import ListDuplicateContactsService from "../services/ContactServices/ListDuplic
 import ProcessDuplicateContactsService from "../services/ContactServices/ProcessDuplicateContactsService";
 import ProcessDuplicateContactsByNameService from "../services/ContactServices/ProcessDuplicateContactsByNameService";
 import ListContactsPendingNormalizationService from "../services/ContactServices/ListContactsPendingNormalizationService";
-import FindDuplicatesService from "../services/ContactServices/FindDuplicatesService";
-import AdvancedMergeContactsService from "../services/ContactServices/AdvancedMergeContactsService";
+import ValidateContactNameService from "../services/ContactServices/ValidateContactNameService";
 import ProcessContactsNormalizationService from "../services/ContactServices/ProcessContactsNormalizationService";
 import BackfillWalletsAndPersonalTagsService from "../services/ContactServices/BackfillWalletsAndPersonalTagsService";
 import SyncContactWalletsAndPersonalTagsService from "../services/ContactServices/SyncContactWalletsAndPersonalTagsService";
@@ -64,16 +63,17 @@ import ContactTag from "../models/ContactTag";
 import ContactTagImportPreset from "../models/ContactTagImportPreset";
 import logger from "../utils/logger";
 import ValidateContactService from "../services/ContactServices/ValidateContactService";
+import ValidateContactNumbersService from "../services/ContactServices/ValidateContactNumbersService";
 import { isValidCPF, isValidCNPJ } from "../utils/validators";
 import GetDeviceTagsService from "../services/WbotServices/GetDeviceTagsService";
 import GetDeviceLabelsService from "../services/WbotServices/GetDeviceLabelsService";
 import ShowBaileysService from "../services/BaileysServices/ShowBaileysService";
 import { getLabels, getAllChatLabels } from "../libs/labelCache";
-import { 
-  isLid, 
-  resolveLidToRealNumber, 
+import {
+  isLid,
+  resolveLidToRealNumber,
   mergeDuplicateLidContacts,
-  findAndMergeLidDuplicates 
+  findAndMergeLidDuplicates
 } from "../services/ContactServices/ResolveLidToRealNumber";
 import ForceAppStateSyncService from "../services/WbotServices/ForceAppStateSyncService";
 import { getWbot } from "../libs/wbot";
@@ -1135,13 +1135,13 @@ export const update = async (
       delete (contactData as any).tagIds;
       logger.info(`[Contacts.update] Usuário ${req.user.id} tentou alterar tags sem permissão. Tags removidas do payload.`);
     }
-    
+
     // Se usuário não tem permissão para editar wallets, remove do body
     if (!hasPermission(user, "contacts.edit-wallets")) {
       delete (contactData as any).wallets;
       logger.info(`[Contacts.update] Usuário ${req.user.id} tentou alterar wallets sem permissão. Wallets removidas do payload.`);
     }
-    
+
     // Se usuário não tem permissão para editar representative, remove do body
     if (!hasPermission(user, "contacts.edit-representative")) {
       delete (contactData as any).representativeCode;
@@ -1652,7 +1652,7 @@ export const resolveLid = async (req: AuthenticatedRequest, res: Response): Prom
 
       if (realContact) {
         const merged = await mergeDuplicateLidContacts(companyId, contact.id, realContact.id);
-        
+
         return res.status(200).json({
           success: true,
           merged: true,
@@ -1664,7 +1664,7 @@ export const resolveLid = async (req: AuthenticatedRequest, res: Response): Prom
         });
       } else {
         await contact.update({ number: resolution.realNumber });
-        
+
         return res.status(200).json({
           success: true,
           merged: false,
@@ -2238,11 +2238,11 @@ export const findDuplicateLidContacts = async (req: Request, res: Response): Pro
 };
 
 // Mesclar dois contatos (LID para número real)
-export const advancedMergeContacts = async (req: Request, res: Response): Promise<Response> => {
+export const mergeContacts = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const { primaryContactId, secondaryContactId } = req.body as { 
-    primaryContactId: number; 
-    secondaryContactId: number; 
+  const { primaryContactId, secondaryContactId } = req.body as {
+    primaryContactId: number;
+    secondaryContactId: number;
   };
 
   if (!primaryContactId || !secondaryContactId) {
@@ -2281,7 +2281,7 @@ export const groups = async (req: AuthenticatedRequest, res: Response): Promise<
     pageNumber: string;
     limit: string;
   };
-  
+
   const { id: userId, companyId, profile } = req.user;
 
   try {
@@ -2331,7 +2331,7 @@ export const groups = async (req: AuthenticatedRequest, res: Response): Promise<
     return res.json(result);
   } catch (error: any) {
     logger.error(`[ContactController.groups] Erro: ${error.message}`);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: error.message || "Erro ao listar grupos",
       groups: [],
       count: 0,
@@ -2340,59 +2340,165 @@ export const groups = async (req: AuthenticatedRequest, res: Response): Promise<
   }
 };
 
-export const findDuplicates = async (req: Request, res: Response): Promise<Response> => {
+/**
+ * POST /contacts/validate-whatsapp
+ * Valida números de contatos brasileiros via wbot.onWhatsApp().
+ * Se inválido e tiver dígito 9, tenta sem ele e atualiza o banco.
+ */
+export const validateNumbers = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const { criteria = "both", contactId } = req.query;
+  const {
+    whatsappId,
+    contactIds,
+    mode = "nine_digit",
+    offset = 0
+  } = req.body as {
+    whatsappId: number;
+    contactIds?: number[];
+    mode?: "nine_digit" | "all" | "no_name";
+    offset?: number;
+  };
+
+  if (!whatsappId) {
+    throw new AppError("whatsappId é obrigatório", 400);
+  }
 
   try {
-    const result = await FindDuplicatesService({
+    const result = await ValidateContactNumbersService({
+      whatsappId,
       companyId,
-      criteria: criteria as "number" | "name" | "both",
-      contactId: contactId ? Number(contactId) : undefined
+      contactIds,
+      mode,
+      offset
     });
 
     return res.json(result);
-  } catch (error: any) {
-    logger.error(`[ContactController.findDuplicates] Erro: ${error.message}`);
-    return res.status(500).json({ 
-      error: error.message || "Erro ao buscar duplicados",
-      duplicateGroups: [],
-      totalDuplicates: 0,
-      suggestions: []
+  } catch (err: any) {
+    logger.error({ err: err?.message, companyId, whatsappId }, "[ContactController.validateNumbers] Erro");
+    return res.status(500).json({
+      error: err?.message || "Erro ao validar contatos"
     });
   }
 };
 
-export const bulkMergeContacts = async (req: Request, res: Response): Promise<Response> => {
+/**
+ * GET /contacts/validate-whatsapp/pending
+ * Retorna contatos BR pendentes de validação (isWhatsappValid IS NULL).
+ */
+export const getValidationPending = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const { primaryContactId, contactIdsToMerge, preserveData } = req.body;
+  const mode = (req.query.mode as string) || "nine_digit";
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 500;
+  const offset = (page - 1) * limit;
+
+  const { Op, literal } = require("sequelize");
+
+  const whereClause: any = {
+    companyId,
+    isGroup: false,
+    number: { [Op.not]: null, [Op.ne]: "" },
+    isWhatsappValid: { [Op.is]: null as any }
+  };
+
+  if (mode === "nine_digit") {
+    whereClause.number = {
+      ...whereClause.number,
+      [Op.regexp]: '^55[0-9]{2}9[6-9][0-9]{7}$'
+    };
+  } else if (mode === "all") {
+    whereClause.number = {
+      ...whereClause.number,
+      [Op.regexp]: '^55[0-9]{10,11}$'
+    };
+  } else if (mode === "no_name") {
+    // No modo no_name queremos atualizar dados mesmo que já tenham sido validados
+    delete whereClause.isWhatsappValid;
+    // Contatos onde o nome é igual ao número ou nulo/vazio
+    // Para PostgreSQL, usar literal para comparar colunas
+    // Para outros bancos, faremos o filtro em memória após buscar
+    if (process.env.DB_DIALECT === 'postgres') {
+      whereClause[Op.or] = [
+        {
+          name: { [Op.eq]: null }
+        },
+        {
+          name: { [Op.eq]: '' }
+        },
+        literal('name = number')
+      ];
+    } else {
+      // Para outros bancos, buscar apenas nulos/vazios e filtrar em memória
+      whereClause[Op.or] = [
+        {
+          name: { [Op.eq]: null }
+        },
+        {
+          name: { [Op.eq]: '' }
+        }
+      ];
+    }
+    // Manter apenas números BR
+    whereClause.number = {
+      ...whereClause.number,
+      [Op.regexp]: '^55[0-9]{10,11}$'
+    };
+  }
+
+  const { count, rows } = await Contact.findAndCountAll({
+    where: whereClause,
+    attributes: ["id", "name", "number", "isWhatsappValid"],
+    order: [["name", "ASC"]],
+    limit,
+    offset
+  });
+
+  // Se não for PostgreSQL e o modo for "no_name", filtrar em memória
+  let filteredRows = rows;
+  if (mode === "no_name" && process.env.DB_DIALECT !== 'postgres') {
+    filteredRows = rows.filter(contact => {
+      const name = (contact.name || '').trim();
+      const number = (contact.number || '').trim();
+      return name === '' || name === null || name === number;
+    });
+  }
+
+  return res.json({
+    contacts: filteredRows,
+    count: mode === "no_name" && process.env.DB_DIALECT !== 'postgres' ? filteredRows.length : count,
+    hasMore: offset + filteredRows.length < (mode === "no_name" && process.env.DB_DIALECT !== 'postgres' ? filteredRows.length : count)
+  });
+};
+
+/**
+ * Valida o nome de um contato buscando na API WhatsApp
+ * POST /contacts/:contactId/validate-name
+ */
+export const validateContactName = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { contactId } = req.params;
+  const { companyId } = req.user;
 
   try {
-    if (!primaryContactId || !contactIdsToMerge || !Array.isArray(contactIdsToMerge)) {
-      return res.status(400).json({ 
-        error: "primaryContactId e contactIdsToMerge são obrigatórios" 
+    const result = await ValidateContactNameService({ 
+      contactId, 
+      companyId 
+    });
+    
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error
       });
     }
 
-    if (contactIdsToMerge.length === 0) {
-      return res.status(400).json({ 
-        error: "É necessário informar pelo menos um contato para mesclar" 
-      });
-    }
-
-    const result = await AdvancedMergeContactsService({
-      companyId,
-      primaryContactId: Number(primaryContactId),
-      contactIdsToMerge: contactIdsToMerge.map(id => Number(id)),
-      preserveData
+    return res.json({
+      success: true,
+      name: result.name,
+      message: `Nome validado: ${result.name}`
     });
 
-    return res.json(result);
   } catch (error: any) {
-    logger.error(`[ContactController.bulkMergeContacts] Erro: ${error.message}`);
-    return res.status(500).json({ 
-      error: error.message || "Erro ao mesclar contatos",
-      success: false
-    });
+    console.error("[validateContactName] Erro:", error);
+    return res.status(500).json({ error: error.message || "Erro ao validar nome do contato" });
   }
 };

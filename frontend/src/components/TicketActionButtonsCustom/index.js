@@ -16,6 +16,8 @@ import {
     Trash2 as DeleteForeverIcon,
     Search as SearchIcon,
     Download as DownloadIcon,
+    DeleteSweep,
+    RefreshCw,
 } from "lucide-react";
 
 import { v4 as uuidv4 } from "uuid";
@@ -49,7 +51,7 @@ import ShowTicketLogModal from "../ShowTicketLogModal";
 import TicketMessagesDialog from "../TicketMessagesDialog";
 import { useTheme } from "@material-ui/styles";
 import ImportHistoryModal from "../ImportHistoryModal";
-import ExportChatModal from "../ExportChatModal";
+import ClearConversationDialog from "../ClearConversationDialog";
 
 const useStyles = makeStyles(theme => ({
     actionButtons: {
@@ -113,7 +115,7 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
     const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
     const [disableBot, setDisableBot] = useState(ticket.contact.disableBot);
     const [importHistoryModalOpen, setImportHistoryModalOpen] = useState(false);
-    const [exportChatModalOpen, setExportChatModalOpen] = useState(false);
+    const [resyncConversationOpen, setResyncConversationOpen] = useState(false);
 
     const [showSchedules, setShowSchedules] = useState(false);
     const [enableIntegration, setEnableIntegration] = useState(ticket.useIntegration);
@@ -620,14 +622,16 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                         <PictureAsPdf style={{ color: '#c62828', marginRight: 10 }} />
                         {i18n.t("ticketsList.buttons.exportAsPDF")}
                     </MenuItem>
-                    <MenuItem onClick={() => { handleCloseMenu(); setExportChatModalOpen(true); }}>
-                        <DownloadIcon style={{ color: '#2e7d32', marginRight: 10 }} />
-                        Exportar Conversa
-                    </MenuItem>
                     {ticket.channel === "whatsapp" && (
                         <MenuItem onClick={() => { handleCloseMenu(); setImportHistoryModalOpen(true); }}>
                             <DownloadIcon style={{ color: '#00838f', marginRight: 10 }} />
                             Importar Histórico
+                        </MenuItem>
+                    )}
+                    {ticket.channel === "whatsapp" && (
+                        <MenuItem onClick={() => { handleCloseMenu(); setResyncConversationOpen(true); }}>
+                            <RefreshCw style={{ color: '#ff9800', marginRight: 10 }} />
+                            Ressincronizar Conversa
                         </MenuItem>
                     )}
                 </Menu>
@@ -677,10 +681,14 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                 onClose={() => setImportHistoryModalOpen(false)}
                 ticketId={ticket.id}
             />
-            <ExportChatModal
-                open={exportChatModalOpen}
-                onClose={() => setExportChatModalOpen(false)}
+            <ClearConversationDialog
+                open={resyncConversationOpen}
+                onClose={() => setResyncConversationOpen(false)}
                 ticketId={ticket.id}
+                onCleared={(existing) => {
+                    // Atualizar UI se necessário
+                    console.log(`Conversa ressincronizada: ${existing} mensagens existentes preservadas`);
+                }}
             />
         </>
     );

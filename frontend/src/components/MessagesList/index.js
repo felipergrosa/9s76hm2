@@ -11,6 +11,7 @@ import {
   makeStyles,
   Dialog,
   DialogContent,
+  Avatar,
 } from "@material-ui/core";
 
 import {
@@ -128,6 +129,16 @@ const useStyles = makeStyles((theme) => ({
       mask: '50% calc(-1*var(--b))/var(--_g) exclude, 50%/var(--_g)',
       WebkitMask: '50% calc(-1*var(--b))/var(--_g) exclude, 50%/var(--_g)',
     },
+  },
+  messageAvatar: {
+    width: 30,
+    height: 30,
+    marginRight: 8,
+    // alignSelf: "flex-end", // Removido para alinhar ao topo (ao lado do nome)
+    // marginBottom: 5,
+    marginTop: 2, // Ajuste fino para alinhar com o topo do balão
+    fontSize: 14,
+    fontWeight: "bold",
   },
 
   currentTicktText: {
@@ -693,14 +704,11 @@ const reducer = (state, action) => {
 
   if (action.type === "ADD_MESSAGE") {
     const newMessage = action.payload;
-    console.log("[MessagesList REDUCER] ADD_MESSAGE chamado para:", newMessage.id);
     const messageIndex = state.findIndex((m) => m.id === newMessage.id);
 
     if (messageIndex !== -1) {
-      console.log("[MessagesList REDUCER] Mensagem atualizada:", newMessage.id);
       state[messageIndex] = newMessage;
     } else {
-      console.log("[MessagesList REDUCER] Mensagem adicionada:", newMessage.id);
       state.push(newMessage);
     }
 
@@ -770,6 +778,7 @@ const MessagesList = ({
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshCounter, setRefreshCounter] = useState(0);
   const history = useHistory();
   const lastMessageRef = useRef();
 
@@ -894,6 +903,13 @@ const MessagesList = ({
       const c = msg?.contact;
       const hasPic = !!(c?.urlPicture || c?.profilePicUrl || c?.contact?.urlPicture || c?.contact?.profilePicUrl);
       if (hasPic) return c;
+
+      // Se for grupo, NÃO fazer fallback para o ticketContact (que é a foto do grupo)
+      // Queremos que apareça o avatar (ou iniciais) do PARTICIPANTE
+      // Check both component prop and message/ticket data
+      const messageIsGroup = isGroup || msg?.ticket?.isGroup || msg?.chat?.isGroup;
+
+      if (messageIsGroup) return c;
 
       // tenta pegar do próprio msg.ticket ou do fallback informado
       const ticketContact = msg?.ticket?.contact || fallbackTicketContact;
@@ -1055,22 +1071,14 @@ const MessagesList = ({
           const firstMsg = data?.messages?.[0];
           const firstMsgUuid = firstMsg?.ticket?.uuid || null;
           const newRoomId = ticketUuid || firstMsgUuid || null;
-          console.log("[MessagesList] ===== DADOS DO TICKET =====");
-          console.log("[MessagesList] ticketId da URL:", ticketId);
-          console.log("[MessagesList] ticket.uuid:", ticketUuid);
-          console.log("[MessagesList] firstMsg.ticket.uuid:", firstMsgUuid);
-          console.log("[MessagesList] newRoomId (para joinRoom):", newRoomId);
           if (newRoomId) {
             currentRoomIdRef.current = newRoomId;
             // Reforço: garante que estamos na sala (o Ticket/index.js é o dono principal)
             try {
               if (typeof socket.joinRoom === "function") {
-                console.log("[MessagesList] Chamando socket.joinRoom com:", newRoomId);
                 socket.joinRoom(newRoomId);
               }
             } catch { }
-          } else {
-            console.error("[MessagesList] ***** ERRO: newRoomId é nulo! Não é possível entrar na sala *****");
           }
         }
 
@@ -1096,7 +1104,23 @@ const MessagesList = ({
     };
 
     fetchMessages();
-  }, [pageNumber, ticketId, selectedQueuesMessage]);
+  }, [pageNumber, ticketId, selectedQueuesMessage, refreshCounter]);
+
+  // Listener para evento de refresh de mensagens (importação de histórico)
+  useEffect(() => {
+    const handleRefreshMessages = () => {
+      console.log("[MessagesList] Evento refreshMessages recebido - recarregando mensagens");
+      // Incrementa counter para disparar o useEffect de busca
+      setRefreshCounter(prev => prev + 1);
+      setPageNumber(1);
+    };
+
+    window.addEventListener('refreshMessages', handleRefreshMessages);
+
+    return () => {
+      window.removeEventListener('refreshMessages', handleRefreshMessages);
+    };
+  }, [ticketId, selectedQueuesMessage]);
 
   // Garante que, quando o composer sinalizar que está pronto, a lista role ao final
   useEffect(() => {
@@ -1154,8 +1178,7 @@ const MessagesList = ({
         const currentUuid = (currentRoomIdRef.current || ticketUuidFromUrl || "").toString().trim();
         const urlIsUuid = Boolean(ticketUuidFromUrl);
 
-        console.log("[MessagesList] ===== MENSAGEM RECEBIDA =====");
-        console.log("[MessagesList] appMessage", {
+        console.debug("[MessagesList] appMessage", {
           action: data?.action,
           evtUuid,
           evtTicketId,
@@ -1164,16 +1187,6 @@ const MessagesList = ({
           currentTicketId: ticketId,
           currentUuid,
           msgId: data?.message?.id,
-          messageBody: data?.message?.body
-        });
-
-        // Log adicional para debug
-        console.log("[MessagesList] DEBUG - Mensagem recebida:", {
-          message: data?.message?.body,
-          ticketUuid: data?.message?.ticket?.uuid,
-          ticketId: data?.message?.ticketId,
-          urlUuid: ticketUuidFromUrl,
-          currentRoomId: currentRoomIdRef.current
         });
 
         // CRÍTICO: Sempre verificar se a mensagem pertence ao ticket atual
@@ -1183,33 +1196,26 @@ const MessagesList = ({
         // Preferência: comparar UUID quando disponível (rota em uuid ou sala em uuid)
         if (hasUuid && currentUuid && String(evtUuid) === String(currentUuid)) {
           shouldHandle = true;
-          console.log("[MessagesList] UUID bateu - shouldHandle = true");
         } else if (!urlIsUuid && evtTicketId && String(evtTicketId) === String(ticketId)) {
           // Compatibilidade: quando a rota ainda é numérica, compara ticketId
           shouldHandle = true;
-          console.log("[MessagesList] TicketId bateu - shouldHandle = true");
         }
 
         if (!shouldHandle) {
-          console.log("[MessagesList] ***** REJEITANDO MENSAGEM DE OUTRO TICKET *****", {
+          console.debug("[MessagesList] Rejeitando mensagem de outro ticket", {
             evtUuid,
             evtTicketId,
             currentRoom: currentRoomIdRef.current,
             currentUuid,
-            ticketId,
-            hasUuid,
-            urlIsUuid
+            ticketId
           });
           return;
         }
 
-        console.log("[MessagesList] ***** PROCESSANDO MENSAGEM *****", { action: data.action });
-
         if (data.action === "create") {
-          console.log("[MessagesList] Executando ADD_MESSAGE para mensagem:", data.message.id);
           dispatch({ type: "ADD_MESSAGE", payload: data.message });
           scrollToBottom();
-          
+
           // Last Event ID: guardar ID da última mensagem recebida
           if (data.message?.id) {
             try {
@@ -1219,7 +1225,12 @@ const MessagesList = ({
         }
 
         if (data.action === "update") {
-          dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
+          // Se a mensagem foi deletada (isDeleted=true), remove do chat
+          if (data.message?.isDeleted) {
+            dispatch({ type: "DELETE_MESSAGE", payload: data.message.id });
+          } else {
+            dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
+          }
         }
 
         if (data.action === "delete") {
@@ -1241,9 +1252,9 @@ const MessagesList = ({
         const lastMessageId = localStorage.getItem(`lastMessageId-${ticketId}`);
         if (lastMessageId && socket?.connected) {
           console.log("[MessagesList] Tentando recuperar mensagens perdidas desde ID:", lastMessageId);
-          socket.emit("recoverMissedMessages", { 
-            ticketId: ticketId, 
-            lastMessageId: parseInt(lastMessageId, 10) 
+          socket.emit("recoverMissedMessages", {
+            ticketId: ticketId,
+            lastMessageId: parseInt(lastMessageId, 10)
           }, (result) => {
             if (result?.success && result?.messages?.length > 0) {
               console.log(`[MessagesList] Recuperadas ${result.count} mensagens perdidas`);
@@ -1342,7 +1353,7 @@ const MessagesList = ({
               dispatch({ type: "ADD_MESSAGE", payload: msg });
             });
             scrollToBottom();
-            
+
             // Guardar último ID para Last Event ID pattern
             const lastMsg = newMessages[newMessages.length - 1];
             if (lastMsg?.id) {
@@ -1355,7 +1366,7 @@ const MessagesList = ({
             lastMessageIdRef.current = data.messages[data.messages.length - 1]?.id;
           }
         }
-        
+
         consecutiveFailsRef.current = 0; // Reset falhas após sucesso
       } catch (err) {
         consecutiveFailsRef.current++;
@@ -1372,7 +1383,7 @@ const MessagesList = ({
 
       // Determina intervalo baseado no estado - MAIS AGRESSIVO para garantir realtime
       let intervalMs = 30000; // Default: 30s quando socket conectado
-      
+
       if (!socket?.connected) {
         intervalMs = 5000; // 5s quando socket desconectado (mais agressivo)
         console.log("[MessagesList] Polling adaptativo: 5s (socket desconectado)");
@@ -1394,7 +1405,7 @@ const MessagesList = ({
       console.log("[MessagesList] Socket reconectado - ajustando polling");
       setupAdaptivePolling();
     };
-    
+
     const onDisconnect = () => {
       console.log("[MessagesList] Socket desconectado - aumentando frequência de polling");
       setupAdaptivePolling();
@@ -2009,6 +2020,18 @@ const MessagesList = ({
                 <SelectMessageCheckbox message={message} />
               </div>
             )}
+
+            {isGroup && !message.fromMe && (
+              <Avatar
+                src={getAvatarContactForMessage(message)?.urlPicture}
+                className={classes.messageAvatar}
+                style={{ backgroundColor: getParticipantColor(message), color: "#fff" }}
+                alt={getAvatarContactForMessage(message)?.name}
+              >
+                {(getAvatarContactForMessage(message)?.name || "P").charAt(0).toUpperCase()}
+              </Avatar>
+            )}
+
             <div className={classes.messageRowContent}>
               <div
                 className={bubbleClass}

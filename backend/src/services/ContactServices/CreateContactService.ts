@@ -165,6 +165,14 @@ const CreateContactService = async ({
     throw new AppError("ERR_INVALID_PHONE_NUMBER");
   }
 
+  // Validação: Bloquear LIDs ou números muito longos que não sejam grupos
+  const numberDigits = canonical.replace(/\D/g, "");
+  if (numberDigits.length >= 14 && !number.includes("@g.us")) {
+    // LIDs tem 15 dígitos, BR tem max 13 (55+2+9).
+    // Permitir apenas se for um grupo explicitamente.
+    throw new AppError("ERR_INVALID_PHONE_NUMBER_LID");
+  }
+
   const existingContact = await Contact.findOne({
     where: { companyId, canonicalNumber: canonical }
   });
@@ -358,7 +366,7 @@ const CreateContactService = async ({
     active: boolean;
     extraInfo: ExtraInfo[];
     companyId: number;
-    remoteJid: string;
+    remoteJid: string | null;
     cpfCnpj: string | null;
     representativeCode: string | null;
     city: string | null;
@@ -389,7 +397,7 @@ const CreateContactService = async ({
     active: active !== undefined ? active : true,
     extraInfo: extraInfo || [],
     companyId,
-    remoteJid: remoteJid || '',
+    remoteJid: remoteJid || null,
 
     // Novos campos com tratamento para valores vazios
     cpfCnpj: emptyToNull(cpfCnpj),

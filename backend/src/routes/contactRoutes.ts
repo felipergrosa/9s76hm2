@@ -24,7 +24,6 @@ contactRoutes.get("/groups", isAuth, ContactController.groups);
 
 contactRoutes.get("/contacts", isAuth, ContactController.index);
 contactRoutes.get("/contacts/duplicates", isAuth, ContactController.listDuplicates);
-contactRoutes.get("/contacts/find-duplicates", isAuth, ContactController.findDuplicates);
 contactRoutes.get("/contacts/pending-normalization", isAuth, ContactController.listPendingNormalization);
 contactRoutes.get("/contacts/list", isAuth, ContactController.list);
 contactRoutes.get("/contacts/segments", isAuth, ContactController.segments);
@@ -41,7 +40,6 @@ contactRoutes.post(
   isAuth,
   ContactController.processDuplicatesByName
 );
-contactRoutes.post("/contacts/merge", isAuth, ContactController.bulkMergeContacts);
 contactRoutes.post("/contacts/normalization/process", isAuth, ContactController.processNormalization);
 contactRoutes.post(
   "/contacts/backfill-wallets-tags",
@@ -49,6 +47,7 @@ contactRoutes.post(
   checkPermission("settings.view"),
   ContactController.backfillWalletsAndPersonalTags
 );
+contactRoutes.post("/contacts/:contactId/validate-name", isAuth, ContactController.validateContactName);
 
 // Mova a rota de deleção em massa ANTES da rota de deleção de ID único.
 contactRoutes.delete("/contacts/batch-delete", isAuth, ContactController.bulkRemove); // <-- MOVA ESTA LINHA PARA CIMA
@@ -82,6 +81,10 @@ contactRoutes.post("/contacts/force-appstate-sync", isAuth, ContactController.fo
 contactRoutes.post("/contacts/test-create-label", isAuth, ContactController.testCreateLabel);
 contactRoutes.post("/contacts/normalize-numbers", isAuth, ContactController.normalizeNumbers);
 contactRoutes.post("/contacts/check-existing", isAuth, ContactController.checkExistingNumbers);
+
+// ========== VALIDAÇÃO DE NÚMEROS VIA WHATSAPP ==========
+contactRoutes.get("/contacts/validate-whatsapp/pending", isAuth, ContactController.getValidationPending);
+contactRoutes.post("/contacts/validate-whatsapp", isAuth, ContactController.validateNumbers);
 
 // ========== ROTAS DE GERENCIAMENTO DE CONTATOS LID ==========
 contactRoutes.get("/contacts/lid-list", isAuth, ContactController.listLidContacts);

@@ -445,16 +445,10 @@ const Contacts = () => {
         } catch (_) { /* ignore */ }
     }, [location.pathname, location.search, history]);
 
-    useEffect(() => {
-        // Só reseta a lista quando mudar de página ou de itens por página
-        const shouldReset = prevPageRef.current !== pageNumber || prevLimitRef.current !== contactsPerPage;
-        if (shouldReset) {
-            dispatch({ type: "RESET" });
-        }
-        setLoading(true);
+    // Função para buscar contatos (movida para fora do useEffect)
+    const fetchContacts = async () => {
         // Garante que respostas antigas sejam ignoradas
         const currentId = ++requestIdRef.current;
-        const fetchContacts = async () => {
             try {
                 const { data } = await api.get("/contacts/", {
                     params: {
@@ -466,7 +460,7 @@ const Contacts = () => {
                         order: sortDirection,
                         segment: segmentFilter,
                         ...appliedFilters, // Inclui todos os filtros aplicados
-                        contactTag: appliedFilters.tags ? JSON.stringify(appliedFilters.tags).replace(/\\/g, '\\\\') : undefined, // Tags precisam ser stringified e escapmente escapadas
+                    contactTag: appliedFilters.tags ? JSON.stringify(appliedFilters.tags).replace(/\\/g, '\\\\') : undefined, // Tags precisam ser stringified e escapadas
                     },
                 });
                 // Ignora respostas de solicitações antigas
@@ -492,6 +486,14 @@ const Contacts = () => {
                 prevLimitRef.current = contactsPerPage;
             }
         };
+
+    useEffect(() => {
+        // Só reseta a lista quando mudar de página ou de itens por página
+        const shouldReset = prevPageRef.current !== pageNumber || prevLimitRef.current !== contactsPerPage;
+        if (shouldReset) {
+            dispatch({ type: "RESET" });
+        }
+        setLoading(true);
         fetchContacts();
     }, [
         debouncedSearchParam,
@@ -1095,26 +1097,23 @@ const Contacts = () => {
 
                     {/* Barra de Ações e Filtros - Desktop (1 linha) */}
                     <div className="hidden min-[1200px]:flex items-center gap-3 flex-nowrap mb-4">
-                        {/* Filtros e Busca (Esquerda) */}
-                        <div className="w-full flex items-center gap-2 flex-1 min-w-0 justify-start">
-                            {/* Busca com largura limitada */}
-                            <div className="relative flex-1 ">
-                                <input
-                                    type="text"
-                                    placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
-                                    value={searchParam}
-                                    onChange={handleSearch}
-                                    className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                {isSearching && (
-                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
-                                )}
-                            </div>
+                        {/* Busca ocupando todo o espaço disponível */}
+                        <div className="relative flex-1">
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome, telefone, cidade, cnpj/cpf, cod. representante ou email..."
+                                value={searchParam}
+                                onChange={handleSearch}
+                                className="w-full h-10 pl-10 pr-4 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            {isSearching && (
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">Buscando...</span>
+                            )}
                         </div>
 
                         {/* Ações Principais (Direita) */}
-                        <div className="w-full md:w-auto flex flex-row gap-2 flex-none whitespace-nowrap items-center ">
+                        <div className="flex flex-row gap-2 flex-none whitespace-nowrap items-center justify-end">
                             {/* NOVO BOTÃO DE FILTRO (DESKTOP) */}
                             <Tooltip {...CustomTooltipProps} title="Filtrar Contatos">
                                 <button
@@ -1222,7 +1221,7 @@ const Contacts = () => {
 
                     {/* Tabela de Contatos (Desktop) */}
                     <div className="hidden min-[1200px]:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-                        <div className="overflow-x-hidden">
+                        <div className="overflow-x-auto">
                             <table className="w-full table-fixed text-sm text-left text-gray-500 dark:text-gray-400">
                                 <thead className="uppercase text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400 tracking-wider">
                                     <tr>

@@ -131,7 +131,8 @@ const CreateMessageService = async ({
 
   // Se é campanha, NÃO emite nada (evita aparecer na tela do atendente)
   // A mensagem será visível apenas ao abrir o ticket específico
-  if (!messageData?.ticketImported) {
+  // NOTA: Mensagens importadas (ticketImported) DEVEM ser emitidas para atualizar o chat
+  if (!messageData?.isCampaign) {
     const roomId = message.ticket.uuid;
     const eventName = `company-${companyId}-appMessage`;
     const payload = {
@@ -141,13 +142,7 @@ const CreateMessageService = async ({
       contact: message.ticket.contact
     };
     
-    console.log(`[CreateMessageService] Emitindo mensagem para sala ${roomId}, companyId=${companyId}, msgId=${message.id}, ticketId=${message.ticketId}`);
-    
-    // Verificar clientes na sala (debug) - usar namespace correto
-    const io = getIO();
-    const ns = io.of(`/workspace-${companyId}`);
-    const clients = (ns.adapter as any).rooms.get(roomId);
-    console.log(`[CreateMessageService] Clientes na sala ${roomId}:`, clients?.size || 0);
+    console.log(`[CreateMessageService] Emitindo mensagem para sala ${roomId}, companyId=${companyId}, msgId=${message.id}, ticketId=${message.ticketId}, imported=${!!messageData?.ticketImported}`);
     
     // Usa fila persistente se SOCKET_USE_QUEUE=true (mais robusto)
     // Caso contrário, usa emissão direta com retry
