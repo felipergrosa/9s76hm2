@@ -33,6 +33,8 @@ export interface ContactResolutionResult {
   isNew: boolean;
   /** Se é um contato pendente (sem número real) */
   isPending: boolean;
+  /** Se precisa de resolução de LID (contato não foi criado) */
+  needsLidResolution?: boolean;
 }
 
 /**
@@ -287,22 +289,42 @@ export async function resolveMessageContact(
   }
 
   if (!newContact && isLidOnly) {
-    // CASO B: Só temos LID, sem PN → criar contato com LID como
-    // identificador interno, mas NUNCA colocar dígitos do LID no campo number.
-    // Usar pushName como nome. O número será preenchido quando o PN for descoberto.
-    const contactName = ids.pushName || ids.lidJid;
-
+    // =================================================================
+    // BAILEYS v7: Aceitar LID como identificador válido
+    // =================================================================
+    // Documentação oficial: "THE GOAL OF YOUR PROGRAM SHOULDN'T BE TO 
+    // RESTORE THE PN JID ANYMORE, MIGRATE TO LIDs"
+    // 
+    // Quando um cliente nos chama, o WhatsApp pode enviar apenas LID
+    // (sem número) em alguns casos:
+    // - Usuário com privacidade restrita
+    // - Usuário não está na agenda do celular
+    // - Sessão nova sem mapeamento sincronizado
+    //
+    // SOLUÇÃO: Criar contato com LID como identificador temporário.
+    // O número será revelado quando:
+    // 1. Evento lid-mapping.update chegar (automático)
+    // 2. Usuário compartilhar número (sharePhoneNumber)
+    // 3. Enviarmos requestPhoneNumber e usuário aceitar
+    // =================================================================
+    
+    const contactName = ids.pushName || ids.lidJid?.replace("@lid", "") || "Contato";
+    
     logger.info({
       lidJid: ids.lidJid,
       contactName,
-      strategy: "LID-direct-create"
-    }, "[ContactResolver] Criando contato via LID (sem PN disponível) — número será preenchido quando descoberto");
+      strategy: "LID-accept"
+    }, "[ContactResolver] Criando contato com LID como identificador temporário (aguardando número real)");
 
     try {
       const CompaniesSettings = (await import("../../models/CompaniesSettings")).default;
       const settings = await CompaniesSettings.findOne({ where: { companyId } });
       const acceptAudioMessageContact = (settings as any)?.acceptAudioMessageContact === "enabled";
 
+      // Criar contato com LID como identificador
+      // number = pushName (nome do contato, não dígitos de LID)
+      // remoteJid = LID (para buscas futuras)
+      // lidJid = LID (para reconciliação)
       newContact = await Contact.findOrCreate({
         where: {
           companyId,
@@ -310,7 +332,7 @@ export async function resolveMessageContact(
         },
         defaults: {
           name: contactName,
-          number: contactName, // pushName como number (não dígitos do LID)
+          number: contactName, // pushName como number temporário
           isGroup: false,
           companyId,
           remoteJid: ids.lidJid,
@@ -320,6 +342,13 @@ export async function resolveMessageContact(
           whatsappId: wbot.id
         }
       }).then(([c]) => c);
+      
+      logger.info({
+        contactId: newContact?.id,
+        lidJid: ids.lidJid,
+        contactName
+      }, "[ContactResolver] Contato criado com LID - número será atualizado quando revelado");
+      
     } catch (createErr: any) {
       logger.error({ err: createErr?.message, lidJid: ids.lidJid }, "[ContactResolver] Falha ao criar contato LID");
       throw new Error(`LID_CREATION_FAILED: Não foi possível criar contato para ${ids.lidJid}`);

@@ -10,13 +10,16 @@ import { isValidMsg, getTypeMessage, getBodyMessage } from "../WbotServices/wbot
 
 // Cache para throttling (evita sync repetido em curto período)
 const lastSyncTime = new Map<string, number>();
-const SYNC_THROTTLE_MS = 5 * 60 * 1000; // 5 minutos
+const SYNC_THROTTLE_MS = 30 * 1000; // 30 segundos (reduzido de 5 minutos)
 
 interface SyncChatHistoryParams {
     ticketId: string | number;
     companyId: number;
     messageCount?: number;
     forceSync?: boolean;
+    // Novos parâmetros para sincronização completa
+    syncAll?: boolean;  // Se true, busca todas as mensagens disponíveis
+    maxPages?: number;  // Número máximo de páginas (50 mensagens por página)
 }
 
 interface SyncResult {
@@ -32,8 +35,10 @@ interface SyncResult {
 const SyncChatHistoryService = async ({
     ticketId,
     companyId,
-    messageCount = 50,
-    forceSync = false
+    messageCount = 100,  // Aumentado de 50 para 100
+    forceSync = false,
+    syncAll = false,     // Novo: sincronização completa
+    maxPages = 5         // Novo: até 5 páginas (500 mensagens)
 }: SyncChatHistoryParams): Promise<SyncResult> => {
     try {
         // 1. Buscar ticket com informações necessárias
@@ -181,12 +186,77 @@ const SyncChatHistoryService = async ({
             return { synced: 0, skipped: false, reason: "Nenhuma mensagem nova encontrada" };
         }
 
+        // =====================================================================
+        // SINCRONIZAÇÃO COM MÚLTIPLAS PÁGINAS (se syncAll=true)
+        // =====================================================================
+        let allMessages = [...messages];
+        
+        if (syncAll && messages.length >= messageCount) {
+            let currentPage = 1;
+            let oldestKeyInBatch = messages.length > 0 ? messages[messages.length - 1].key : oldestKey;
+            let oldestTimestampInBatch = messages.length > 0 
+                ? Number(messages[messages.length - 1].messageTimestamp) || Math.floor(Date.now() / 1000)
+                : oldestTimestamp;
+
+            while (currentPage < maxPages) {
+                try {
+                    const batchMessages = await new Promise<any[]>((resolve, reject) => {
+                        const timeoutId = setTimeout(() => {
+                            cleanup();
+                            resolve([]);
+                        }, 15000);
+
+                        const historyHandler = (event: any) => {
+                            const msgs = event?.messages || [];
+                            const relevant = msgs.filter((m: any) => m?.key?.remoteJid === jid);
+                            if (relevant.length > 0) {
+                                cleanup();
+                                clearTimeout(timeoutId);
+                                resolve(relevant);
+                            }
+                        };
+
+                        const cleanup = () => {
+                            wbot.ev.off("messaging-history.set", historyHandler);
+                        };
+
+                        wbot.ev.on("messaging-history.set", historyHandler);
+                        wbotAny.fetchMessageHistory(messageCount, oldestKeyInBatch, oldestTimestampInBatch)
+                            .catch((err: any) => {
+                                clearTimeout(timeoutId);
+                                cleanup();
+                                resolve([]);
+                            });
+                    });
+
+                    if (!batchMessages || batchMessages.length === 0) break;
+                    
+                    allMessages = [...allMessages, ...batchMessages];
+                    currentPage++;
+                    
+                    // Atualizar âncora para próxima página
+                    oldestKeyInBatch = batchMessages[batchMessages.length - 1].key;
+                    oldestTimestampInBatch = Number(batchMessages[batchMessages.length - 1].messageTimestamp);
+                    
+                    // Parar se recebeu menos que o esperado (fim do histórico)
+                    if (batchMessages.length < messageCount) break;
+                    
+                } catch (batchErr: any) {
+                    logger.warn(`[SyncChatHistory] Erro na página ${currentPage}: ${batchErr?.message}`);
+                    break;
+                }
+            }
+            
+            logger.info(`[SyncChatHistory] Total de mensagens buscadas: ${allMessages.length} (${currentPage} páginas)`);
+        }
+        // =====================================================================
+
         // 7. Processar e salvar mensagens novas
         let syncedCount = 0;
         const io = getIO();
 
         // Filtrar mensagens válidas (remover undefined/null que podem vir do Baileys)
-        const validMessages = messages.filter(m => m && m.key && m.key.id);
+        const validMessages = allMessages.filter(m => m && m.key && m.key.id);
 
         for (const msg of validMessages) {
             try {
