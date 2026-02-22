@@ -50,28 +50,48 @@ export async function resolveMessageContact(
   const ids = extractMessageIdentifiers(msg, wbot);
 
   // ─── CAMADA 0: Verificação de Self-LID (Correção de "Novo Grupo") ───
-  // Se o LID for do próprio bot, forçar isFromMe=true para evitar criar contato "self"
-  if (ids.lidJid && !ids.isFromMe) {
-    const botId = wbot.user?.id;
-    const botLid = botId?.includes("@lid") ? jidNormalizedUser(botId) : null;
+  // Se o LID for do próprio bot, NÃO criar contato - é mensagem do próprio bot
+  const botId = wbot.user?.id;
+  const botLid = botId?.includes("@lid") ? jidNormalizedUser(botId) : null;
 
-    // Se o bot não sabe seu próprio LID, tentar descobrir nos keys
-    let myLid = botLid;
-    if (!myLid) {
-      const authState = (wbot as any).authState;
-      myLid = authState?.creds?.me?.lid;
-    }
+  // Se o bot não sabe seu próprio LID, tentar descobrir nos keys
+  let myLid = botLid;
+  if (!myLid) {
+    const authState = (wbot as any).authState;
+    myLid = authState?.creds?.me?.lid;
+  }
 
-    if (myLid && jidNormalizedUser(myLid) === ids.lidJid) {
-      logger.info({
-        lidJid: ids.lidJid,
-        myLid,
-        originalFromMe: ids.isFromMe
-      }, "[resolveMessageContact] LID identificado como sendo o próprio bot. Forçando isFromMe=true.");
-      ids.isFromMe = true;
-      // Se isFromMe=true, o extractMessageIdentifiers já deve ter lidado com pnJid se possível,
-      // mas podemos garantir que ele não tente resolver como "outro contato".
-    }
+  // Verificar se o remoteJid/LID é do próprio bot
+  const isSelfMessage = myLid && jidNormalizedUser(myLid) === ids.lidJid;
+
+  if (ids.lidJid && !ids.isFromMe && isSelfMessage) {
+    // Mensagem recebida de outro dispositivo do próprio bot
+    logger.info({
+      lidJid: ids.lidJid,
+      myLid,
+      originalFromMe: ids.isFromMe
+    }, "[resolveMessageContact] LID identificado como sendo o próprio bot. Forçando isFromMe=true.");
+    ids.isFromMe = true;
+  }
+
+  // Se é mensagem do próprio bot (fromMe=true e remoteJid é LID do bot), IGNORAR
+  // Não deve criar contato para o próprio bot
+  if (ids.isFromMe && isSelfMessage) {
+    logger.info({
+      lidJid: ids.lidJid,
+      myLid,
+      isFromMe: ids.isFromMe
+    }, "[resolveMessageContact] Mensagem do próprio bot para si mesmo. Ignorando criação de contato.");
+    
+    // Retornar null para indicar que não deve processar esta mensagem
+    // O chamador deve verificar e ignorar
+    return {
+      contact: null as any,
+      identifiers: ids,
+      isNew: false,
+      isPending: true,
+      needsLidResolution: false
+    };
   }
 
   // ─── CAMADA 1.3: Busca por ticket existente via lidJid ───

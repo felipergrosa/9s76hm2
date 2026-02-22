@@ -5021,6 +5021,13 @@ const handleMessage = async (
 
     // Usar novo ContactResolverService para resolver o contato da mensagem
     const contactResolution = await resolveMessageContact(msg, wbot, companyId);
+    
+    // Se contact é null, é mensagem do próprio bot para si mesmo - ignorar
+    if (!contactResolution.contact) {
+      logger.info("[handleMessage] Mensagem do próprio bot ignorada (self-message)");
+      return;
+    }
+    
     contact = contactResolution.contact;
 
     // Se é grupo, também precisamos garantir que o contato do GRUPO exista
@@ -6098,7 +6105,14 @@ const verifyCampaignMessageAndCloseTicket = async (
 
   if (message.key.fromMe && isCampaign) {
     const campaignResolution = await resolveMessageContact(message, wbot, companyId);
-    const contact = campaignResolution?.contact;
+    
+    // Se contact é null, é mensagem do próprio bot - ignorar
+    if (!campaignResolution?.contact) {
+      logger.info("[handleMessageAck] Mensagem de campanha do próprio bot ignorada");
+      return;
+    }
+    
+    const contact = campaignResolution.contact;
 
     const messageRecord = await Message.findOne({
       where: {
