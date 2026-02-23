@@ -259,9 +259,9 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
           const originalTimestamp = (msg.messageTimestamp as number) * 1000;
           const originalDate = new Date(originalTimestamp);
 
-          // PROTEÇÃO: Usar contactId seguro (verificar se não é null)
-          const safeContactId = fromMe ? undefined : (contact?.id || null);
-          
+          // PROTEÇÃO: Usar contactId seguro - sempre usar contact.id (nunca undefined)
+          const safeContactId = contact?.id || null;
+
           const messageData = {
             wid: msg.key.id,
             ticketId: ticket.id,

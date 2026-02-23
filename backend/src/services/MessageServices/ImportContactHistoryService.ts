@@ -493,7 +493,7 @@ const ImportContactHistoryService = async ({
                 const messageData = {
                     wid: msg.key.id,
                     ticketId: ticket.id,
-                    contactId: msg.key.fromMe ? undefined : ticket.contactId,
+                    contactId: ticket.contactId, // SEMPRE usar ticket.contactId (nunca undefined)
                     body: messageBody || (mediaUrl ? "Mídia" : ""),
                     fromMe: msg.key.fromMe || false,
                     mediaType: mediaUrl ? finalMediaType : (messageBody ? "chat" : messageType),

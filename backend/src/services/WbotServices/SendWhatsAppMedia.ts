@@ -316,7 +316,7 @@ const SendWhatsAppMedia = async ({
       const messageData = {
         wid: `PVT${companyId}${ticket.id}${body.substring(0, 6)}`,
         ticketId: ticket.id,
-        contactId: undefined,
+        contactId: ticket.contactId, // SEMPRE usar contactId do ticket (nunca undefined)
         body: bodyMedia,
         fromMe: true,
         mediaUrl: media.filename,

@@ -1724,7 +1724,7 @@ export const verifyMediaMessage = async (
         //mensagem de texto
         wid: msg.key.id,
         ticketId: ticket.id,
-        contactId: msg.key.fromMe ? undefined : ticket.contactId,
+        contactId: ticket.contactId, // SEMPRE usar ticket.contactId (nunca undefined)
         body,
         reactionMessage: msg.message?.reactionMessage,
         fromMe: msg.key.fromMe,
@@ -1907,7 +1907,7 @@ export const verifyMediaMessage = async (
     const messageData = {
       wid: msg.key.id,
       ticketId: ticket.id,
-      contactId: msg.key.fromMe ? undefined : contact.id,
+      contactId: contact.id, // SEMPRE usar contact.id (nunca undefined)
       body: body || media.filename,
       fromMe: msg.key.fromMe,
       read: msg.key.fromMe,
@@ -2026,7 +2026,7 @@ export const verifyMessage = async (
   const messageData = {
     wid: msg.key.id,
     ticketId: ticket.id,
-    contactId: msg.key.fromMe ? undefined : contact.id,
+    contactId: contact.id, // SEMPRE usar o contact.id passado (nunca undefined)
     body,
     fromMe: msg.key.fromMe,
     mediaType: getTypeMessage(msg),

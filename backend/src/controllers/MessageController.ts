@@ -884,7 +884,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
         const messageData = {
           wid: `PVT${ticket.updatedAt.toString().replace(" ", "")}`,
           ticketId: ticket.id,
-          contactId: undefined,
+          contactId: ticket.contactId, // SEMPRE usar contactId do ticket (nunca undefined)
           body,
           fromMe: true,
           mediaType: !isNil(vCard) ? "contactMessage" : "extendedTextMessage",

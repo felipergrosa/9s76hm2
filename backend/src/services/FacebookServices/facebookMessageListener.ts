@@ -116,7 +116,7 @@ export const verifyMessageFace = async (
   const messageData = {
     wid: msg.mid || msg.message_id,
     ticketId: ticket.id,
-    contactId: fromMe ? undefined : msg.is_echo ? undefined : contact.id,
+    contactId: contact.id, // SEMPRE usar contact.id (nunca undefined)
     body: msg.text || body,
     fromMe: fromMe ? fromMe : msg.is_echo ? true : false,
     read: fromMe ? fromMe : msg.is_echo,
@@ -165,12 +165,12 @@ export const verifyMessageMedia = async (
   const messageData = {
     wid: msg.mid,
     ticketId: ticket.id,
-    contactId: fromMe ? undefined : msg.is_echo ? undefined : contact.id,
+    contactId: contact.id, // SEMPRE usar contact.id (nunca undefined)
     body: msg.text || fileName,
     fromMe: fromMe ? fromMe : msg.is_echo ? true : false,
+    read: fromMe ? fromMe : msg.is_echo,
     mediaType: msg.attachments[0].type,
     mediaUrl: fileName,
-    read: fromMe ? fromMe : msg.is_echo,
     quotedMsgId: null,
     ack: 3,
     dataJson: JSON.stringify(msg),

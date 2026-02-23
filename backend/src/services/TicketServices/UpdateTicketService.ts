@@ -358,7 +358,7 @@ const UpdateTicketService = async ({
           const messageData = {
             wid: `PVT${newTicketTransfer.updatedAt.toString().replace(' ', '')}`,
             ticketId: newTicketTransfer.id,
-            contactId: undefined,
+            contactId: newTicketTransfer.contactId, // SEMPRE usar contactId do ticket (nunca undefined)
             body: msgTransfer,
             fromMe: true,
             mediaType: 'extendedTextMessage',
@@ -549,7 +549,7 @@ const UpdateTicketService = async ({
           const messageData = {
             wid: `PVT${ticket.updatedAt.toString().replace(' ', '')}`,
             ticketId: ticket.id,
-            contactId: undefined,
+            contactId: ticket.contactId, // SEMPRE usar contactId do ticket (nunca undefined)
             body: msgTransfer,
             fromMe: true,
             mediaType: 'extendedTextMessage',
