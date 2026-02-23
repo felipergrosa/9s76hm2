@@ -4,10 +4,16 @@ import { FormatMask } from './FormatMask';
 const formatSerializedId = (serializedId) => {
   if (!serializedId) return null;
   
+  // Tratar números PENDING_ (LID não resolvido)
+  if (typeof serializedId === 'string' && serializedId.startsWith('PENDING_')) {
+    return '⏳ Aguardando número...';
+  }
+  
   const formatMask = new FormatMask();
-  const number = serializedId.replace('@c.us', '');
+  const number = serializedId.replace('@c.us', '').replace('@s.whatsapp.net', '');
 
-  return formatMask.setPhoneFormatMask(number)?.replace('+55', '🇧🇷');
+  const formatted = formatMask.setPhoneFormatMask(number);
+  return formatted?.replace('+55', '🇧🇷') || serializedId;
 };
 
 // Função para verificar se o número está em um formato que pode ser tratado

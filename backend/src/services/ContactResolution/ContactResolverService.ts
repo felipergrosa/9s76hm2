@@ -321,15 +321,74 @@ export async function resolveMessageContact(
     // - Usuário não está na agenda do celular
     // - Sessão nova sem mapeamento sincronizado
     //
-    // SOLUÇÃO: Criar contato com LID como identificador temporário.
-    // O número será revelado quando:
-    // 1. Evento lid-mapping.update chegar (automático)
-    // 2. Usuário compartilhar número (sharePhoneNumber)
-    // 3. Enviarmos requestPhoneNumber e usuário aceitar
+    // SOLUÇÃO: Tentar resolver LID proativamente antes de criar PENDING_
     // =================================================================
     
     const contactName = ids.pushName || ids.lidJid?.replace("@lid", "") || "Contato";
     
+    logger.info({
+      lidJid: ids.lidJid,
+      contactName,
+      strategy: "LID-proactive-resolution"
+    }, "[ContactResolver] Tentando resolver LID proativamente...");
+
+    // ═══════════════════════════════════════════════════════════════════
+    // TENTAR RESOLVER LID PROATIVAMENTE via LidResolverService
+    // ═══════════════════════════════════════════════════════════════════
+    try {
+      const LidResolverService = (await import("./LidResolverService")).default;
+      const resolution = await LidResolverService.resolveLidToPhoneNumber(
+        ids.lidJid!,
+        wbot,
+        companyId,
+        contactName
+      );
+
+      if (resolution.success && resolution.phoneNumber) {
+        logger.info({
+          lidJid: ids.lidJid,
+          phoneNumber: resolution.phoneNumber,
+          strategy: resolution.strategy
+        }, "[ContactResolver] LID resolvido proativamente!");
+
+        // Criar contato com número real
+        newContact = await CreateOrUpdateContactService({
+          name: contactName,
+          number: resolution.phoneNumber,
+          isGroup: false,
+          companyId,
+          remoteJid: resolution.pnJid,
+          lidJid: ids.lidJid,
+          pushName: contactName,
+          whatsappId: wbot.id,
+          wbot
+        });
+
+        if (newContact) {
+          logger.info({
+            contactId: newContact.id,
+            phoneNumber: resolution.phoneNumber,
+            strategy: resolution.strategy
+          }, "[ContactResolver] Contato criado com número real via resolução proativa");
+
+          return {
+            contact: newContact,
+            identifiers: ids,
+            isNew: true,
+            isPending: false
+          };
+        }
+      }
+    } catch (resolveErr: any) {
+      logger.warn({
+        err: resolveErr?.message,
+        lidJid: ids.lidJid
+      }, "[ContactResolver] Resolução proativa falhou, criando contato PENDING_");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // FALLBACK: Criar contato PENDING_ (aguardando resolução futura)
+    // ═══════════════════════════════════════════════════════════════════
     logger.info({
       lidJid: ids.lidJid,
       contactName,
@@ -342,17 +401,23 @@ export async function resolveMessageContact(
       const acceptAudioMessageContact = (settings as any)?.acceptAudioMessageContact === "enabled";
 
       // Criar contato com LID como identificador
-      // number = pushName (nome do contato, não dígitos de LID)
+      // number = PENDING_<lid> (identificador temporário até descobrir o número real)
       // remoteJid = LID (para buscas futuras)
       // lidJid = LID (para reconciliação)
+      const pendingNumber = `PENDING_${ids.lidJid}`;
+      
       newContact = await Contact.findOrCreate({
         where: {
           companyId,
-          remoteJid: ids.lidJid
+          [Op.or]: [
+            { remoteJid: ids.lidJid },
+            { lidJid: ids.lidJid },
+            { number: pendingNumber }
+          ]
         },
         defaults: {
           name: contactName,
-          number: contactName, // pushName como number temporário
+          number: pendingNumber, // PENDING_<lid> como identificador temporário
           isGroup: false,
           companyId,
           remoteJid: ids.lidJid,

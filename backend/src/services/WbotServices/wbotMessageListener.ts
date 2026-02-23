@@ -6604,10 +6604,29 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         console.log(`[contacts.update] Usando notify da agenda: ${finalName}`);
       }
 
+      // VALIDAÇÃO ROBUSTA: Determinar se é grupo ou indivíduo
+      // Grupos terminam com @g.us
+      // Indivíduos terminam com @s.whatsapp.net ou @lid
+      const contactId = contact.id || "";
+      const isGroupId = contactId.endsWith("@g.us");
+      const isIndividualId = contactId.endsWith("@s.whatsapp.net") || contactId.endsWith("@lid");
+      
+      // Se não é grupo nem indivíduo claro, verificar padrão
+      // Números individuais longos com hífen são IDs de grupo (ex: 5519996068787-1521901710@g.us)
+      const isGroupByPattern = contactId.includes("-") && contactId.endsWith("@g.us");
+      
+      const isGroup = isGroupId || isGroupByPattern;
+      
+      // NÃO processar grupos no evento contacts.update - grupos são tratados em groups.update
+      if (isGroup) {
+        console.log(`[contacts.update] Ignorando grupo ${contactId} - tratado em groups.update`);
+        return;
+      }
+
       const contactData = {
         name: finalName,
         number: numero,
-        isGroup: contact.id.includes("@g.us") ? true : false,
+        isGroup: false, // Indivíduo
         companyId: companyId,
         remoteJid: contact.id,
         profilePicUrl: newUrl,

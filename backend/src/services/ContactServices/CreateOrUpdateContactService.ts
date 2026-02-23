@@ -70,6 +70,7 @@ interface Request {
   channel?: string;
   extraInfo?: ExtraInfo[];
   remoteJid?: string;
+  lidJid?: string; // LID para contatos com identificador LID
   whatsappId?: number;
   wbot?: any;
   userId?: string | number;
@@ -137,6 +138,7 @@ const CreateOrUpdateContactService = async ({
   companyId,
   extraInfo = [],
   remoteJid,
+  lidJid,
   whatsappId,
   wbot,
   userId,
@@ -182,6 +184,22 @@ const CreateOrUpdateContactService = async ({
 
     // Para LID, não bloquear pela canonical: usa rawNumberDigits ou remoteJid como fallback
     let number = (isGroup || isLinkedDevice) ? rawNumberDigits : canonical;
+
+    // =================================================================
+    // VALIDAÇÃO CRÍTICA: Detectar inconsistência isGroup vs número
+    // =================================================================
+    // Se isGroup=false mas número parece ser de grupo (@g.us), REJEITAR
+    // Isso previne contatos individuais sendo salvos como grupos
+    if (!isGroup && number && number.includes("@g.us")) {
+      logger.error("[CreateOrUpdateContact] BLOQUEADO: isGroup=false mas número tem @g.us", {
+        number,
+        isGroup,
+        remoteJid,
+        companyId,
+        name
+      });
+      return null as any;
+    }
 
     // =================================================================
     // VALIDAÇÃO ROBUSTA DE GRUPOS: Garantir que grupos tenham @g.us
@@ -315,6 +333,8 @@ const CreateOrUpdateContactService = async ({
       isGroup,
       companyId,
       profilePicUrl: profilePicUrl || undefined,
+      remoteJid: remoteJid || undefined,
+      lidJid: lidJid || undefined,
       cpfCnpj: sanitizedCpfCnpj,
       representativeCode: representativeCode || undefined,
       city: city || undefined,
