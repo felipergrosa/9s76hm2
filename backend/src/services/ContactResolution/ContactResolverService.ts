@@ -272,9 +272,14 @@ export async function resolveMessageContact(
 
   let newContact: Contact | null = null;
 
+  // IMPORTANTE: Para mensagens fromMe, o pushName é do REMETENTE (usuário), não do DESTINATÁRIO
+  // Não usar pushName para nomear contato em mensagens enviadas pelo próprio usuário
+  const effectivePushName = ids.isFromMe ? null : ids.pushName;
+
   if (!isLidOnly) {
     // CASO A: Temos o número real (PN) → criar contato normalmente
-    const contactName = ids.pushName || ids.pnDigits;
+    // Para fromMe, usar número como nome se não houver outra fonte
+    const contactName = effectivePushName || ids.pnDigits;
     const contactNumber = ids.pnDigits || "";
 
     logger.info({
@@ -311,7 +316,9 @@ export async function resolveMessageContact(
     // SOLUÇÃO: Tentar resolver LID proativamente antes de criar PENDING_
     // =================================================================
     
-    const contactName = ids.pushName || ids.lidJid?.replace("@lid", "") || "Contato";
+    // Para mensagens fromMe, o pushName é do REMETENTE, não do destinatário
+    // Usar um nome genérico baseado no LID ou número
+    const contactName = effectivePushName || ids.lidJid?.replace("@lid", "") || "Contato";
     
     logger.info({
       lidJid: ids.lidJid,
@@ -346,7 +353,7 @@ export async function resolveMessageContact(
           companyId,
           remoteJid: resolution.pnJid,
           lidJid: ids.lidJid,
-          pushName: contactName,
+          pushName: effectivePushName || contactName,  // Não usar pushName do remetente para fromMe
           whatsappId: wbot.id,
           wbot
         });
@@ -823,7 +830,8 @@ async function resolveLidToPN(
 
       // 2. Tentar busca por nome no store (iterar todos)
       // Se onWhatsApp falhou, talvez o store tenha o PN com o mesmo nome
-      if (ids.pushName) {
+      // IMPORTANTE: Não usar para mensagens fromMe (pushName é do remetente, não do destinatário)
+      if (ids.pushName && !ids.isFromMe) {
         const cleanName = ids.pushName.trim().toLowerCase();
         const allContacts = Object.values(store.contacts) as any[];
 

@@ -55,6 +55,16 @@ const SendWhatsAppMediaUnified = async ({
     // Resolver JID correto para envio (trata LIDs → número real)
     const number = await ResolveSendJid(contact, ticket.isGroup, ticket.whatsappId);
 
+    // VALIDAÇÃO: Verificar se o número é válido (não PENDING_)
+    if (!number || number.includes("PENDING_") || number.includes("@lid@s.whatsapp.net")) {
+      logger.error(`[SendMediaUnified] Número inválido para envio: ${number}`);
+      throw new AppError(
+        "Não é possível enviar mídia: contato ainda não foi vinculado a um número de telefone válido. " +
+        "Aguarde o contato enviar uma mensagem primeiro ou atualize o contato manualmente.",
+        400
+      );
+    }
+
     // Determinar tipo de mídia baseado no mimetype
     let mediaType: "image" | "audio" | "video" | "document" = "document";
     

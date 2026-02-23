@@ -1304,16 +1304,49 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   };
 
   const handleUploadMedia = async (mediasUpload) => {
-    setLoading(true);
     // e.preventDefault();
 
     // Certifique-se de que a variável medias esteja preenchida antes de continuar
     if (!mediasUpload.length) {
       console.log("Nenhuma mídia selecionada.");
-      setLoading(false);
       return;
     }
 
+    // ===== OPTIMISTIC UI: Adicionar mensagem visual imediatamente =====
+    // Criar mensagens otimísticas para cada mídia
+    const optimisticTempIds = [];
+    
+    mediasUpload.forEach((media) => {
+      const mediaType = media.file.type.startsWith('image') ? 'image'
+        : media.file.type.startsWith('video') ? 'video'
+        : media.file.type.startsWith('audio') ? 'audio'
+        : 'document';
+      
+      // Criar preview URL para imagens
+      const previewUrl = mediaType === 'image' ? URL.createObjectURL(media.file) : null;
+      
+      const tempId = addOptimisticMessage(ticketId, {
+        body: media.caption || media.file.name,
+        fromMe: true,
+        read: 1,
+        mediaType,
+        mediaUrl: previewUrl,
+        _pendingMedia: true,
+        _fileName: media.file.name,
+        _fileSize: media.file.size,
+        contactId,
+      });
+      
+      optimisticTempIds.push(tempId);
+    });
+
+    // Fechar modal imediatamente (UX responsiva)
+    setMediasUpload([]);
+    setShowModalMedias(false);
+    setPrivateMessage(false);
+    setPrivateMessageInputVisible(false);
+
+    // ===== ENVIAR PARA O SERVIDOR (em background) =====
     const formData = new FormData();
     formData.append("fromMe", true);
     formData.append("isPrivate", privateMessage ? "true" : "false");
@@ -1323,16 +1356,28 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
     });
 
     try {
-      await api.post(`/messages/${ticketId}`, formData);
+      const { data } = await api.post(`/messages/${ticketId}`, formData, {
+        // Callback de progresso para feedback visual futuro
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          // Poderia atualizar estado de progresso aqui se necessário
+          console.log(`[Upload] Progresso: ${percentCompleted}%`);
+        }
+      });
+      
+      // Confirmar mensagens otimísticas (remover do estado pendente)
+      // O servidor vai emitir a mensagem real via socket, então removemos as otimísticas
+      optimisticTempIds.forEach(tempId => {
+        confirmOptimisticMessage(ticketId, tempId, null);
+      });
+      
     } catch (err) {
       toastError(err);
+      // Marcar mensagens como falha
+      optimisticTempIds.forEach(tempId => {
+        failOptimisticMessage(ticketId, tempId, err.message);
+      });
     }
-
-    setLoading(false);
-    setMediasUpload([]);
-    setShowModalMedias(false);
-    setPrivateMessage(false);
-    setPrivateMessageInputVisible(false)
   };
 
   const handleSendContatcMessage = async (vcard) => {

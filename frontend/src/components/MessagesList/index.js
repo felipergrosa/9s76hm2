@@ -535,6 +535,21 @@ const useStyles = makeStyles((theme) => ({
     overflow: "hidden",
   },
 
+  // Overlay de loading para mensagens de mídia pendentes (upload em andamento)
+  mediaLoadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+    borderRadius: 8,
+  },
+
   hdBadge: {
     position: "absolute",
     top: 6,
@@ -1521,11 +1536,13 @@ const MessagesList = ({
       );
     } else if (message.mediaType === "image") {
       return (
-        <div
-          style={{ cursor: "pointer" }}
-          onClick={() => handleOpenMediaModal(message)}
-        >
+        <div className={classes.mediaWrapper} style={{ cursor: "pointer" }} onClick={() => !message._pendingMedia && handleOpenMediaModal(message)}>
           <ModalImageCors imageUrl={message.mediaUrl} />
+          {message._pendingMedia && (
+            <div className={classes.mediaLoadingOverlay}>
+              <CircularProgress size={40} style={{ color: '#fff' }} />
+            </div>
+          )}
         </div>
       );
     } else if (message.mediaType === "audio") {
@@ -1580,12 +1597,17 @@ const MessagesList = ({
       );
     } else if (message.mediaType === "video") {
       return (
-        <div onClick={(e) => { e.preventDefault(); handleOpenMediaModal(message); }} style={{ display: 'inline-block', cursor: 'pointer' }}>
+        <div className={classes.mediaWrapper} onClick={(e) => { e.preventDefault(); !message._pendingMedia && handleOpenMediaModal(message); }} style={{ display: 'inline-block', cursor: 'pointer' }}>
           <VideoWithHdBadge
             className={classes.messageMedia}
             src={message.mediaUrl}
             isGif={/\.gif(\?.*)?$/i.test(message.mediaUrl || "")}
           />
+          {message._pendingMedia && (
+            <div className={classes.mediaLoadingOverlay}>
+              <CircularProgress size={40} style={{ color: '#fff' }} />
+            </div>
+          )}
         </div>
       );
     } else if ((message.mediaType === "application" || message.mediaType === "document") && /\.pdf($|\?)/i.test(message.mediaUrl)) {
@@ -1598,8 +1620,8 @@ const MessagesList = ({
 
       return (
         <div
-          className={classes.fileFrame}
-          onClick={(e) => { e.preventDefault(); setPdfDialog({ open: true, url: message.mediaUrl }); }}
+          className={classes.mediaWrapper}
+          onClick={(e) => { e.preventDefault(); !message._pendingMedia && setPdfDialog({ open: true, url: message.mediaUrl }); }}
           style={{ cursor: 'pointer', padding: 0, border: 'none', boxShadow: 'none' }}
         >
           {pdfThumbUrl && (
@@ -1620,27 +1642,39 @@ const MessagesList = ({
               }}
             />
           )}
+          {message._pendingMedia && (
+            <div className={classes.mediaLoadingOverlay}>
+              <CircularProgress size={40} style={{ color: '#fff' }} />
+            </div>
+          )}
         </div>
       );
     } else if (message.mediaType === "application" || message.mediaType === "document") {
       return (
-        <>
+        <div className={classes.mediaWrapper} style={{ position: 'relative' }}>
           <div className={classes.fileFrame}>
             <div>
               <GetApp color="primary" />
-              <div className={classes.fileName}>{getFileNameFromUrl(message.mediaUrl) || 'arquivo'}</div>
-              <Button
-                startIcon={<GetApp />}
-                variant="outlined"
-                href={message.mediaUrl}
-                onClick={(e) => { e.preventDefault(); handleDirectDownload(message.mediaUrl); }}
-              >
-                Download
-              </Button>
+              <div className={classes.fileName}>{getFileNameFromUrl(message.mediaUrl) || message._fileName || 'arquivo'}</div>
+              {!message._pendingMedia && (
+                <Button
+                  startIcon={<GetApp />}
+                  variant="outlined"
+                  href={message.mediaUrl}
+                  onClick={(e) => { e.preventDefault(); handleDirectDownload(message.mediaUrl); }}
+                >
+                  Download
+                </Button>
+              )}
             </div>
           </div>
+          {message._pendingMedia && (
+            <div className={classes.mediaLoadingOverlay}>
+              <CircularProgress size={40} style={{ color: '#fff' }} />
+            </div>
+          )}
           <Divider />
-        </>
+        </div>
       );
     } else {
       return null;
@@ -1692,7 +1726,17 @@ const MessagesList = ({
   }, [messagesList, ticketId, getOptimisticMessages]);
 
   const renderMessageAck = (message) => {
-    if (message.ack === 0) {
+    // Mensagem com falha de envio
+    if (message._failed || message.ack === -1) {
+      return (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <AccessTime fontSize="small" className={classes.ackIcons} style={{ color: '#f44336' }} />
+          <span style={{ fontSize: 10, color: '#f44336' }}>Falhou</span>
+        </span>
+      );
+    }
+    // Mensagem pendente (enviando) - inclui mensagens otimísticas com _pendingMedia
+    if (message.ack === 0 || message._pending || message._pendingMedia) {
       return <AccessTime fontSize="small" className={classes.ackIcons} />;
     } else if (message.ack === 1) {
       return <Done fontSize="small" className={classes.ackIcons} />;
