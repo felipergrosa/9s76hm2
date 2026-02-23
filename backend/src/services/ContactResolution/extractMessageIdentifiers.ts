@@ -181,14 +181,8 @@ export function extractMessageIdentifiers(
       }
     }
 
-    // Estratégia 6: pushName contendo número válido (último recurso)
-    if (!pnJid && msg.pushName) {
-      const { canonical } = safeNormalizePhoneNumber(msg.pushName);
-      if (canonical) {
-        pnJid = `${canonical}@s.whatsapp.net`;
-        logger.info({ lidJid: primaryJid, pnJid, pushName: msg.pushName, strategy: "pushName" }, "[extractIdentifiers] LID→PN via pushName (safeNormalize)");
-      }
-    }
+    // Estratégia 6: REMOVIDA - pushName não deve ser usado para identificação
+    // pushName é apenas informativo e só deve ser preenchido quando name == number
   } else if (isPn) {
     pnJid = primaryJid;
     // Não temos LID neste caso (pode ser preenchido depois via lid-mapping.update)

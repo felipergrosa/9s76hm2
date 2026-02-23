@@ -13,7 +13,9 @@
  * 4. wbot.onWhatsApp() (consulta direta ao WhatsApp)
  * 5. USync Query (protocolo de sincronização)
  * 6. store.contacts (cache local)
- * 7. Match por pushName (quando nome bate com contato conhecido)
+ * 7. Busca por número parcial no banco (últimos 8 dígitos do LID)
+ * 
+ * NOTA: pushName NÃO é usado para busca de contatos, apenas para exibição
  */
 
 import { jidNormalizedUser } from "@whiskeysockets/baileys";
@@ -252,67 +254,59 @@ export async function resolveLidToPhoneNumber(
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // ESTRATÉGIA 7: Match por pushName (quando nome bate com contato conhecido)
+  // ESTRATÉGIA 7: REMOVIDA - pushName não deve ser usado para busca
   // ═══════════════════════════════════════════════════════════════════
-  if (pushName && pushName.trim().length > 2) {
-    try {
-      const cleanName = pushName.trim().toLowerCase();
+  // pushName é apenas informativo e só deve ser preenchido quando name == number
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ESTRATÉGIA 8: Busca por número parcial no banco (último recurso)
+  // ═══════════════════════════════════════════════════════════════════
+  // Extrai dígitos do LID e tenta encontrar número que contenha esses dígitos
+  try {
+    const lidDigits = lidJid.replace(/\D/g, "");
+    
+    // Só tentar se tiver pelo menos 8 dígitos (suficiente para identificar número)
+    if (lidDigits.length >= 8) {
+      logger.info({ lidJid, lidDigits }, "[LidResolver] Tentando busca por número parcial no banco...");
       
-      // 7a: Buscar no store por nome
-      const store = wbot.store;
-      if (store?.contacts) {
-        const allContacts = Object.values(store.contacts) as any[];
-        const match = allContacts.find(c => {
-          const names = [c.name, c.notify, c.verifiedName].filter(n => n).map(n => n.toLowerCase());
-          return names.some(n => n === cleanName) && c.id?.includes("@s.whatsapp.net");
-        });
-        
-        if (match) {
-          const digits = match.id.replace(/\D/g, "");
-          if (isRealPhoneNumber(digits)) {
-            await persistMapping(lidJid, digits, companyId, wbot.id, "pushName.store");
-            
-            logger.info({ lidJid, phoneNumber: digits, pushName, strategy: "pushName.store" }, "[LidResolver] LID resolvido via match de nome no store");
-            return {
-              success: true,
-              phoneNumber: digits,
-              pnJid: match.id,
-              strategy: "pushName.store"
-            };
-          }
-        }
-      }
-      
-      // 7b: Buscar no banco por nome
-      const contactByName = await Contact.findOne({
+      // Buscar contatos cujo número contenha os dígitos do LID
+      const contactByPartialNumber = await Contact.findOne({
         where: {
           companyId,
           isGroup: false,
-          [Op.or]: [
-            { name: { [Op.iLike]: pushName.trim() } },
-            { pushName: { [Op.iLike]: pushName.trim() } }
-          ],
-          number: { [Op.notLike]: "PENDING_%" }
-        }
+          number: { 
+            [Op.and]: [
+              { [Op.notLike]: "PENDING_%" },
+              { [Op.like]: `%${lidDigits.slice(-8)}%` } // Últimos 8 dígitos
+            ]
+          }
+        },
+        order: [["updatedAt", "DESC"]]
       });
       
-      if (contactByName?.number) {
-        const digits = contactByName.number.replace(/\D/g, "");
+      if (contactByPartialNumber?.number) {
+        const digits = contactByPartialNumber.number.replace(/\D/g, "");
         if (isRealPhoneNumber(digits)) {
-          await persistMapping(lidJid, digits, companyId, wbot.id, "pushName.database");
+          await persistMapping(lidJid, digits, companyId, wbot.id, "partialNumber.database");
           
-          logger.info({ lidJid, phoneNumber: digits, pushName, strategy: "pushName.database" }, "[LidResolver] LID resolvido via match de nome no banco");
+          logger.info({ 
+            lidJid, 
+            phoneNumber: digits, 
+            contactName: contactByPartialNumber.name,
+            strategy: "partialNumber.database" 
+          }, "[LidResolver] LID resolvido via busca por número parcial no banco");
+          
           return {
             success: true,
             phoneNumber: digits,
             pnJid: `${digits}@s.whatsapp.net`,
-            strategy: "pushName.database"
+            strategy: "partialNumber.database"
           };
         }
       }
-    } catch (err: any) {
-      logger.warn({ err: err?.message, lidJid, pushName }, "[LidResolver] Erro no match por pushName");
     }
+  } catch (err: any) {
+    logger.warn({ err: err?.message, lidJid }, "[LidResolver] Erro na busca por número parcial");
   }
 
   // ═══════════════════════════════════════════════════════════════════

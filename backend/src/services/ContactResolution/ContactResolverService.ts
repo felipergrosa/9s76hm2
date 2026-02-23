@@ -218,21 +218,8 @@ export async function resolveMessageContact(
       }
     }
 
-    // Atualizar pushName se necessário (sem sobrescrever nome personalizado)
-    if (ids.pushName && existingContact.name !== ids.pushName) {
-      const currentName = (existingContact.name || "").trim();
-      const currentNumber = (existingContact.number || "").replace(/\D/g, "");
-      const currentIsNumber = currentName === currentNumber || currentName === "";
-
-      // Só atualizar se nome atual é vazio ou é o próprio número
-      if (currentIsNumber) {
-        try {
-          await existingContact.update({ name: ids.pushName });
-        } catch {
-          // Não bloquear fluxo por falha de atualização de nome
-        }
-      }
-    }
+    // pushName NÃO é usado para atualizar contatos existentes
+    // pushName só deve ser preenchido quando name == number (tratado no CreateOrUpdateContactService)
 
     // CORREÇÃO CRÍTICA: Se descobrimos o PN agora (via LidMapping ou USync),
     // mas o contato foi encontrado pelo LID (e tem number = LID ou PENDING),

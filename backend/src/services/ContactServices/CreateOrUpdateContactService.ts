@@ -412,22 +412,28 @@ const CreateOrUpdateContactService = async ({
         (contact as any).vlUltCompra = vlUltCompraValue;
       }
 
-      // Atualizar pushName e verifiedName se fornecidos
+      // Atualizar pushName SOMENTE se nome atual for igual ao número
       if (pushName) {
-        contact.pushName = pushName;
-        // Se nome atual é o próprio número (ou vazio), substituir pelo pushName
         const currentNameClean = (contact.name || "").replace(/\D/g, "");
-        const isNameJustNumber = !contact.name || currentNameClean === String(number);
-        if (isNameJustNumber) {
+        const numberClean = String(number).replace(/\D/g, "");
+        const isNameEqualNumber = !contact.name || currentNameClean === numberClean;
+        
+        if (isNameEqualNumber) {
+          contact.pushName = pushName;
+          // Substituir nome pelo pushName quando nome é igual ao número
           (contactData as any).name = pushName;
         }
+        // Se nome já é personalizado, NÃO preencher pushName
       }
+      
+      // verifiedName tem prioridade e sempre atualiza quando nome é igual ao número
       if (verifiedName) {
         contact.verifiedName = verifiedName;
-        // verifiedName também substitui nome-número (prioridade sobre pushName)
         const currentNameClean = (contact.name || "").replace(/\D/g, "");
-        const isNameJustNumber = !contact.name || currentNameClean === String(number);
-        if (isNameJustNumber) {
+        const numberClean = String(number).replace(/\D/g, "");
+        const isNameEqualNumber = !contact.name || currentNameClean === numberClean;
+        
+        if (isNameEqualNumber) {
           (contactData as any).name = verifiedName;
         }
       }
