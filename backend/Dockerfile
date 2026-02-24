@@ -38,6 +38,13 @@ RUN set -eux; \
 
 # Copia o restante do código
 COPY . .
+
+RUN set -eux; \
+  if [ -d ./scripts ]; then \
+    find ./scripts -maxdepth 1 -type f -name "*.sh" -print0 | xargs -0 -r sed -i 's/\r$//' || true; \
+    find ./scripts -maxdepth 1 -type f -name "*.sh" -print0 | xargs -0 -r chmod +x || true; \
+  fi
+
 # Build info (gera arquivos .git-commit e .build-date no estágio de build)
 ARG GIT_COMMIT
 ARG BUILD_DATE

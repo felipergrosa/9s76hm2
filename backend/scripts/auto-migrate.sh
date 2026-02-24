@@ -14,17 +14,17 @@ ATTEMPTS=${DB_WAIT_ATTEMPTS:-30}
 SLEEP_SECONDS=${DB_WAIT_SLEEP_SECONDS:-5}
 
 i=1
-while [ $i -le $ATTEMPTS ]; do
+while [ "$i" -le "$ATTEMPTS" ]; do
   if npx sequelize db:migrate:status >/dev/null 2>&1; then
     echo "[auto-migrate] Banco acessível."
     break
   fi
   echo "[auto-migrate] Banco ainda não acessível ($i/$ATTEMPTS). Tentando novamente em ${SLEEP_SECONDS}s..."
-  i=$((i+1))
-  sleep $SLEEP_SECONDS
+  i=$((i + 1))
+  sleep "$SLEEP_SECONDS"
 done
 
-if [ $i -gt $ATTEMPTS ]; then
+if [ "$i" -gt "$ATTEMPTS" ]; then
   echo "[auto-migrate] Aviso: Banco não respondeu após $ATTEMPTS tentativas. Prosseguindo mesmo assim."
 fi
 
@@ -32,7 +32,7 @@ fi
 echo "[auto-migrate] Executando migrations..."
 if ! npx sequelize db:migrate; then
   echo "[auto-migrate] ERRO: Falha ao aplicar migrations."
-  npx sequelize db:migrate # Executa novamente para exibir o erro no log
+  npx sequelize db:migrate
   echo "[auto-migrate] Verifique logs/variáveis de ambiente. Prosseguindo com start do servidor."
 fi
 
