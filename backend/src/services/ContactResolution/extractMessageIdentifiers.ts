@@ -1,5 +1,5 @@
 import { proto, jidNormalizedUser, WASocket } from "@whiskeysockets/baileys";
-import { safeNormalizePhoneNumber, MAX_PHONE_DIGITS, isRealPhoneNumber } from "../../utils/phone";
+import { safeNormalizePhoneNumber, MAX_PHONE_DIGITS, isRealPhoneNumber, isLidEcho } from "../../utils/phone";
 import logger from "../../utils/logger";
 
 /**
@@ -83,9 +83,12 @@ export function extractMessageIdentifiers(
     // Estratégia 1: usar altJid se for PN válido
     if (altJid && altJid.includes("@s.whatsapp.net")) {
       const altDigits = altJid.replace(/\D/g, "");
-      if (isRealPhoneNumber(altDigits)) {
+      // GUARD: Rejeitar se altJid é apenas eco do LID
+      if (isRealPhoneNumber(altDigits) && !isLidEcho(altDigits, primaryJid)) {
         pnJid = jidNormalizedUser(altJid);
         logger.info({ lidJid: primaryJid, pnJid, strategy: "altJid" }, "[extractIdentifiers] LID→PN via altJid");
+      } else if (isLidEcho(altDigits, primaryJid)) {
+        logger.warn({ lidJid: primaryJid, altJid, strategy: "altJid" }, "[extractIdentifiers] REJEITADO: altJid é eco do LID");
       }
     }
 

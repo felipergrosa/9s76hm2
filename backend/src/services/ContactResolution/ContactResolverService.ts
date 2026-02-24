@@ -8,7 +8,7 @@ import logger from "../../utils/logger";
 import { extractMessageIdentifiers, ExtractedIdentifiers } from "./extractMessageIdentifiers";
 import { resolveContact } from "./resolveContact";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
-import { safeNormalizePhoneNumber, isRealPhoneNumber } from "../../utils/phone";
+import { safeNormalizePhoneNumber, isRealPhoneNumber, isLidEcho } from "../../utils/phone";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
 
 /**
@@ -776,7 +776,8 @@ async function resolveLidToPN(
       if (result.jid && result.jid.includes("@s.whatsapp.net")) {
         const pnJid = jidNormalizedUser(result.jid);
         const digits = pnJid.replace(/\D/g, "");
-        if (isRealPhoneNumber(digits)) {
+        // GUARD: Rejeitar se onWhatsApp apenas ecoou os dígitos do LID de volta
+        if (isRealPhoneNumber(digits) && !isLidEcho(digits, lidJid)) {
           ids.pnJid = pnJid;
           ids.pnDigits = digits;
           const { canonical } = safeNormalizePhoneNumber(digits);

@@ -35,7 +35,7 @@ import Message from "../../models/Message";
 import { Mutex } from "async-mutex";
 import { getIO } from "../../libs/socket";
 import CreateMessageService from "../MessageServices/CreateMessageService";
-import { safeNormalizePhoneNumber, isRealPhoneNumber, MAX_PHONE_DIGITS } from "../../utils/phone";
+import { safeNormalizePhoneNumber, isRealPhoneNumber, isLidEcho, MAX_PHONE_DIGITS } from "../../utils/phone";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
 import { resolveMessageContact, resolveGroupContact } from "../ContactResolution/ContactResolverService";
@@ -657,7 +657,8 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   // Se temos remoteJidAlt com PN válido e o remoteJid é LID, usar o Alt
   if (isLid && remoteJidAlt && remoteJidAlt.includes("@s.whatsapp.net")) {
     const altDigits = remoteJidAlt.replace(/\D/g, "");
-    if (altDigits.length >= 10 && altDigits.length <= 13) {
+    // GUARD: Rejeitar se altJid é apenas eco dos dígitos do LID
+    if (altDigits.length >= 10 && altDigits.length <= 13 && !isLidEcho(altDigits, remoteJid)) {
       debugLog("[getContactMessage] Usando remoteJidAlt (PN) ao invés de LID", {
         originalLid: remoteJid,
         remoteJidAlt,
@@ -1591,7 +1592,8 @@ const verifyContact = async (
   }
 
   // VALIDAÇÃO RIGOROSA: só cria contato se não for grupo e o número tiver entre 10 e 13 dígitos
-  const isPhoneLike = !isGroup && cleaned.length >= 10 && cleaned.length <= 13;
+  // GUARD CRÍTICO: Se o JID original é @lid, os dígitos NÃO são telefone real mesmo com 10-13 chars
+  const isPhoneLike = !isGroup && cleaned.length >= 10 && cleaned.length <= 13 && !isLinkedDevice;
   if (!isPhoneLike && !isGroup) {
     // Para não-grupos com número inválido, tentar buscar existente
     const existing = await Contact.findOne({ where: { remoteJid: normalizedJid, companyId } });

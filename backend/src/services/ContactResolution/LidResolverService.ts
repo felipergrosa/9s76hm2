@@ -24,7 +24,7 @@ import Contact from "../../models/Contact";
 import LidMapping from "../../models/LidMapping";
 import Ticket from "../../models/Ticket";
 import logger from "../../utils/logger";
-import { safeNormalizePhoneNumber, isRealPhoneNumber } from "../../utils/phone";
+import { safeNormalizePhoneNumber, isRealPhoneNumber, isLidEcho } from "../../utils/phone";
 
 type Session = any; // WASocket
 
@@ -148,7 +148,8 @@ export async function resolveLidToPhoneNumber(
         const pnJid = jidNormalizedUser(result.jid);
         const digits = pnJid.replace(/\D/g, "");
         
-        if (isRealPhoneNumber(digits)) {
+        // GUARD: Rejeitar se onWhatsApp apenas ecoou os dígitos do LID de volta
+        if (isRealPhoneNumber(digits) && !isLidEcho(digits, lidJid)) {
           await persistMapping(lidJid, digits, companyId, wbot.id, "onWhatsApp");
           
           logger.info({ lidJid, phoneNumber: digits, strategy: "onWhatsApp" }, "[LidResolver] LID resolvido via onWhatsApp");

@@ -24,6 +24,27 @@ export const isRealPhoneNumber = (value: string | null | undefined): boolean => 
 };
 
 /**
+ * Detecta se um número "resolvido" é apenas o eco dos dígitos do LID original.
+ * Ex: LID "2809646841981@lid" → onWhatsApp retorna "2809646841981@s.whatsapp.net"
+ * Isso NÃO é resolução real — é o Baileys ecoando o LID de volta.
+ *
+ * @param resolvedDigits - Dígitos do número supostamente resolvido
+ * @param lidJid - JID @lid original (ex: "2809646841981@lid")
+ * @returns true se o número resolvido é apenas eco do LID
+ */
+export const isLidEcho = (resolvedDigits: string, lidJid: string | null | undefined): boolean => {
+  if (!lidJid || !resolvedDigits) return false;
+  const lidDigits = lidJid.replace(/\D/g, "");
+  // Eco direto: dígitos idênticos
+  if (resolvedDigits === lidDigits) return true;
+  // Eco parcial: dígitos resolvidos são prefixo ou sufixo do LID (>= 10 chars overlap)
+  if (lidDigits.length > 13 && resolvedDigits.length >= 10) {
+    if (lidDigits.startsWith(resolvedDigits) || lidDigits.endsWith(resolvedDigits)) return true;
+  }
+  return false;
+};
+
+/**
  * Normaliza um número de telefone usando libphonenumber-js.
  * - Prioriza formato E.164 (sem o +)
  * - NÃO aceita LIDs ou IDs internos da Meta como canonical válido
