@@ -15,7 +15,7 @@ import makeWASocket, {
 import { FindOptions } from "sequelize/types";
 import Whatsapp from "../models/Whatsapp";
 import logger from "../utils/logger";
-import MAIN_LOGGER from "@whiskeysockets/baileys/lib/Utils/logger";
+import pino from "pino";
 import { useMultiFileAuthState } from "../helpers/useMultiFileAuthState";
 import { Boom } from "@hapi/boom";
 import AppError from "../errors/AppError";
@@ -48,8 +48,33 @@ const msgCache = new NodeCache({
   useClones: false
 });
 
-const loggerBaileys = MAIN_LOGGER.child({});
-loggerBaileys.level = "error";
+const loggerBaileys = pino({
+  level: "error",
+  hooks: {
+    logMethod(args: any[], method: (...a: any[]) => void) {
+      const shouldSuppress = args.some(arg => {
+        if (!arg) return false;
+
+        const msg = typeof arg === "string" ? arg : String(arg?.msg || "");
+        const errMsg =
+          typeof arg === "object"
+            ? String(arg?.err?.message || "") + " " + String(arg?.err?.stack || "")
+            : "";
+
+        const combined = (msg + " " + errMsg).toLowerCase();
+        return (
+          combined.includes("failed to decrypt message") ||
+          combined.includes("bad mac") ||
+          combined.includes("no matching sessions") ||
+          combined.includes("no session found")
+        );
+      });
+
+      if (shouldSuppress) return;
+      return method.apply(this, args as any);
+    }
+  }
+});
 
 type Session = WASocket & {
   id?: number;

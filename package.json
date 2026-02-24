@@ -1,0 +1,17 @@
+{
+  "name": "whaticket",
+  "version": "1.0.0",
+  "description": "WhatApp Ticket System",
+  "scripts": {
+    "docker:build:frontend": "cd frontend && docker build -t felipergrosa/whaticket-frontend:latest .",
+    "docker:build:backend": "cd backend && docker build -t felipergrosa/whaticket-backend:latest .",
+    "docker:push:frontend": "docker push felipergrosa/whaticket-frontend:latest",
+    "docker:push:backend": "docker push felipergrosa/whaticket-backend:latest",
+    "docker:build:all": "npm run docker:build:frontend && npm run docker:build:backend",
+    "docker:push:all": "npm run docker:push:frontend && npm run docker:push:backend",
+    "docker:deploy": "npm run docker:build:all && npm run docker:push:all"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
+  }
+}
