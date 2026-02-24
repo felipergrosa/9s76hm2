@@ -40,6 +40,12 @@ const SendWhatsAppMediaImage = async ({
     // Resolver JID correto para envio (trata LIDs → número real)
     const number = await ResolveSendJid(contactNumber, ticket.isGroup, ticket.whatsappId);
 
+    // VALIDAÇÃO: Se não conseguiu resolver o JID, não enviar
+    if (!number) {
+      logger.error(`[SendMediaImage] ❌ Não foi possível resolver JID para envio. Contact: ${contactNumber?.id}, Ticket: ${ticket.id}`);
+      throw new AppError("Não foi possível resolver o número de destino. Contato pode ter número inválido ou não estar sincronizado.", 400);
+    }
+
     try {
         wbot.sendPresenceUpdate('available');
         await delay(msdelay)

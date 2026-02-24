@@ -948,6 +948,21 @@ const MessagesList = ({
     }
   };
 
+  // Helper para formatar tamanho de arquivo
+  const formatFileSize = (bytes) => {
+    if (!bytes || bytes === 0) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  // Helper para extrair nome limpo do arquivo (sem timestamp prefix)
+  const getCleanFileName = (url = "", fallback = "") => {
+    const raw = getFileNameFromUrl(url) || fallback;
+    // Remove timestamp prefix: 1771880053372_nome.pdf → nome.pdf
+    return raw.replace(/^\d{13}_/, "") || raw;
+  };
+
   // Força download via fetch+blob para evitar abrir na mesma aba
   const handleDirectDownload = async (url) => {
     try {
@@ -1610,70 +1625,125 @@ const MessagesList = ({
           )}
         </div>
       );
-    } else if ((message.mediaType === "application" || message.mediaType === "document") && /\.pdf($|\?)/i.test(message.mediaUrl)) {
-      const pdfThumbUrl = message.mediaUrl
+    } else if (message.mediaType === "application" || message.mediaType === "document") {
+      const isPdf = /\.pdf($|\?)/i.test(message.mediaUrl || "");
+      const pdfThumbUrl = isPdf && message.mediaUrl
         ? message.mediaUrl.replace(/(\.pdf)(\?.*)?$/i, '-thumb.png$2')
         : null;
-      const pdfThumbUrlAlt = message.mediaUrl
+      const pdfThumbUrlAlt = isPdf && message.mediaUrl
         ? message.mediaUrl.replace(/(\.pdf)(\?.*)?$/i, '-thumb.1.png$2')
         : null;
 
+      const cleanName = getCleanFileName(message.mediaUrl, message._fileName || 'arquivo');
+      const ext = (cleanName.split('.').pop() || 'FILE').toUpperCase();
+      // _fileSize = otimístico (frontend), mediaFileSize = persistido (backend)
+      const fileSize = formatFileSize(message._fileSize || message.mediaFileSize);
+      const displayName = cleanName.length > 40 ? cleanName.substring(0, 37) + '...' : cleanName;
+
       return (
-        <div
-          className={classes.mediaWrapper}
-          onClick={(e) => { e.preventDefault(); !message._pendingMedia && setPdfDialog({ open: true, url: message.mediaUrl }); }}
-          style={{ cursor: 'pointer', padding: 0, border: 'none', boxShadow: 'none' }}
-        >
-          {pdfThumbUrl && (
-            <img
-              src={pdfThumbUrl}
-              alt="PDF preview"
-              style={{ maxWidth: 200, maxHeight: 200, display: 'block', borderRadius: 6 }}
-              data-fallback-step="0"
-              onError={(e) => {
-                const el = e.currentTarget;
-                const step = Number(el.dataset.fallbackStep || "0");
-                if (step === 0 && pdfThumbUrlAlt) {
-                  el.src = pdfThumbUrlAlt;
-                  el.dataset.fallbackStep = "1";
-                } else {
-                  el.style.display = "none";
-                }
+        <div style={{ position: 'relative', width: 280 }}>
+          {/* Thumbnail da primeira página (só para PDF) - metade superior estilo WhatsApp */}
+          {isPdf && pdfThumbUrl && (
+            <div
+              onClick={(e) => { e.preventDefault(); !message._pendingMedia && setPdfDialog({ open: true, url: message.mediaUrl }); }}
+              style={{ 
+                cursor: 'pointer', 
+                height: 160, // Metade do card
+                overflow: 'hidden',
+                borderRadius: '8px 8px 0 0',
+                backgroundColor: '#f5f5f5',
               }}
-            />
-          )}
-          {message._pendingMedia && (
-            <div className={classes.mediaLoadingOverlay}>
-              <CircularProgress size={40} style={{ color: '#fff' }} />
+            >
+              <img
+                src={pdfThumbUrl}
+                alt="PDF preview"
+                style={{ 
+                  width: '100%', 
+                  height: '100%',
+                  objectFit: 'cover',
+                  objectPosition: 'top center',
+                }}
+                data-fallback-step="0"
+                onError={(e) => {
+                  const el = e.currentTarget;
+                  const step = Number(el.dataset.fallbackStep || "0");
+                  if (step === 0 && pdfThumbUrlAlt) {
+                    el.src = pdfThumbUrlAlt;
+                    el.dataset.fallbackStep = "1";
+                  } else {
+                    el.style.display = "none";
+                  }
+                }}
+              />
             </div>
           )}
-        </div>
-      );
-    } else if (message.mediaType === "application" || message.mediaType === "document") {
-      return (
-        <div className={classes.mediaWrapper} style={{ position: 'relative' }}>
-          <div className={classes.fileFrame}>
-            <div>
-              <GetApp color="primary" />
-              <div className={classes.fileName}>{getFileNameFromUrl(message.mediaUrl) || message._fileName || 'arquivo'}</div>
-              {!message._pendingMedia && (
-                <Button
-                  startIcon={<GetApp />}
-                  variant="outlined"
-                  href={message.mediaUrl}
-                  onClick={(e) => { e.preventDefault(); handleDirectDownload(message.mediaUrl); }}
-                >
-                  Download
-                </Button>
-              )}
+          {/* Card de informações do arquivo - parte inferior */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 12px',
+            background: message.fromMe ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.04)',
+            borderRadius: isPdf && pdfThumbUrl ? '0 0 8px 8px' : 8,
+          }}>
+            {/* Ícone do tipo de arquivo */}
+            <div style={{
+              width: 40, height: 40,
+              background: '#e53935',
+              borderRadius: 4,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <span style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>{ext}</span>
+            </div>
+            {/* Nome + metadados */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 14,
+                fontWeight: 500,
+                color: 'inherit',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                lineHeight: 1.3,
+              }}>
+                {displayName}
+              </div>
+              <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                {fileSize ? `PDF · ${fileSize}` : 'PDF'}
+              </div>
             </div>
           </div>
+          {/* Botões Abrir / Salvar como */}
+          {!message._pendingMedia && (
+            <div style={{
+              display: 'flex',
+              borderTop: '1px solid rgba(0,0,0,0.08)',
+            }}>
+              <Button
+                size="small"
+                style={{ flex: 1, borderRadius: 0, fontSize: 13, textTransform: 'none', color: '#1976d2' }}
+                onClick={(e) => { e.preventDefault(); window.open(message.mediaUrl, '_blank'); }}
+              >
+                Abrir
+              </Button>
+              <div style={{ width: 1, background: 'rgba(0,0,0,0.08)' }} />
+              <Button
+                size="small"
+                style={{ flex: 1, borderRadius: 0, fontSize: 13, textTransform: 'none', color: '#1976d2' }}
+                onClick={(e) => { e.preventDefault(); handleDirectDownload(message.mediaUrl); }}
+              >
+                Salvar como...
+              </Button>
+            </div>
+          )}
           {message._pendingMedia && (
             <div className={classes.mediaLoadingOverlay}>
               <CircularProgress size={40} style={{ color: '#fff' }} />
             </div>
           )}
-          <Divider />
         </div>
       );
     } else {

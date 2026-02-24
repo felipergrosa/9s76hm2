@@ -761,7 +761,16 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     await SetTicketMessagesAsRead(ticket);
   }
 
-  return res.json({ count, messages, ticket, hasMore });
+  // Adicionar mediaFileSize em mensagens de documento/application
+  const messagesWithSize = messages.map(msg => {
+    const plain = (msg as any).toJSON ? (msg as any).toJSON() : { ...msg };
+    if (plain.mediaType === "application" || plain.mediaType === "document") {
+      plain.mediaFileSize = (msg as any).mediaFileSize ?? null;
+    }
+    return plain;
+  });
+
+  return res.json({ count, messages: messagesWithSize, ticket, hasMore });
 };
 
 // Função para obter nome e extensão do arquivo

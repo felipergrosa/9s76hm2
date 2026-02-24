@@ -78,7 +78,12 @@ const ResolveSendJid = async (
       logger.warn(`[ResolveSendJid] Erro ao consultar LidMapping: ${err}`);
     }
 
-    // 3. signalRepository.lidMapping.getPNForLID() — API do Baileys (socket ativo)
+    // 3. Se o número é inválido (não é numérico ou está vazio), tentar resolver via Baileys primeiro
+    if (!looksPhoneLike(contactNumber)) {
+      logger.warn(`[ResolveSendJid] Número inválido para LID ${lidJid}: "${contactNumber}". Tentando resolver via Baileys...`);
+    } else if (contactNumber.startsWith("PENDING_")) {
+      logger.warn(`[ResolveSendJid] Número PENDING_ para LID ${lidJid}. Tentando resolver via Baileys...`);
+    }
     if (!whatsappId) {
       logger.warn(`[ResolveSendJid] whatsappId não informado, não é possível consultar Baileys socket`);
     }
@@ -158,16 +163,30 @@ const ResolveSendJid = async (
       logger.warn(`[ResolveSendJid] Erro ao resolver via Baileys socket: ${err?.message}`);
     }
 
-    // 4. Tentar resolver via canonicalNumber do contato
+    // 5. Tentar resolver via canonicalNumber do contato
     if (contact.canonicalNumber && looksPhoneLike(contact.canonicalNumber)) {
       const resolvedJid = `${contact.canonicalNumber}@s.whatsapp.net`;
       logger.info(`[ResolveSendJid] LID ${lidJid} → via canonicalNumber: ${resolvedJid}`);
+      
+      // Atualizar contato
+      try {
+        await contact.update({
+          number: contact.canonicalNumber,
+          remoteJid: resolvedJid,
+          lidJid: lidJid
+        });
+      } catch { /* não bloquear */ }
+      
       return resolvedJid;
     }
 
-    // 5. Fallback: usar o LID mesmo (pode falhar com Bad MAC)
-    logger.warn(`[ResolveSendJid] Não foi possível resolver LID ${lidJid} para número real. Usando LID como fallback.`);
-    return lidJid;
+    // 6. Fallback: ERRO - não usar LID diretamente (causa Bad MAC)
+    logger.error(`[ResolveSendJid] ❌ Não foi possível resolver LID ${lidJid} para número real!`);
+    logger.error(`[ResolveSendJid] Contact ID: ${contact.id}, Name: ${contact.name}, Number: ${contact.number}`);
+    logger.error(`[ResolveSendJid] A mensagem NÃO será enviada para evitar erro "Bad MAC".`);
+    
+    // Retornar null para indicar falha - o serviço de envio deve tratar isso
+    return null;
   }
 
   // Sem remoteJid ou remoteJid inválido: construir a partir do número

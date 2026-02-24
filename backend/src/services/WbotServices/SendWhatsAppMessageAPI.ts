@@ -31,6 +31,12 @@ const SendWhatsAppMessage = async ({
   // Resolver JID correto para envio (trata LIDs → número real)
   const number = await ResolveSendJid(contact, contact.isGroup, whatsappId);
 
+  // VALIDAÇÃO: Se não conseguiu resolver o JID, não enviar
+  if (!number) {
+    logger.error(`[SendMessageAPI] ❌ Não foi possível resolver JID para envio. Contact: ${contact?.id}`);
+    throw new AppError("Não foi possível resolver o número de destino. Contato pode ter número inválido ou não estar sincronizado.", 400);
+  }
+
   // Atualiza nome proativamente se ainda estiver vazio/igual ao número (antes do primeiro envio)
   if (!contact.isGroup) {
     const currentName = (contact.name || "").trim();

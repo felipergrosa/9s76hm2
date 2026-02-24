@@ -57,13 +57,6 @@ class Message extends Model<Message> {
       if (/^https?:\/\//i.test(fileRel)) {
         return fileRel;
       }
-      const be = (process.env.BACKEND_URL || '').trim();
-      const fe = (process.env.FRONTEND_URL || '').trim();
-      const proxyPort = (process.env.PROXY_PORT || '').trim();
-      const devFallback = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8080';
-      const origin = be
-        ? `${be}${proxyPort ? `:${proxyPort}` : ''}`
-        : (fe || devFallback);
 
       // Determinar caminho relativo do arquivo
       let filePath: string;
@@ -90,16 +83,54 @@ class Message extends Model<Message> {
         }
       }
 
-      const base = origin
-        ? `${origin}/public/company${this.companyId}/${filePath}`
-        : `/public/company${this.companyId}/${filePath}`;
-      return base;
+      // Construir URL baseada no ambiente
+      const isDev = process.env.NODE_ENV !== 'production';
+      
+      if (isDev) {
+        // Em desenvolvimento: sempre usar localhost:8080
+        return `http://localhost:8080/public/company${this.companyId}/${filePath}`;
+      } else {
+        // Em produção: usar BACKEND_URL configurado
+        const be = (process.env.BACKEND_URL || '').trim();
+        const proxyPort = (process.env.PROXY_PORT || '').trim();
+        const origin = be
+          ? `${be}${proxyPort ? `:${proxyPort}` : ''}`
+          : '';
+        
+        if (origin) {
+          return `${origin}/public/company${this.companyId}/${filePath}`;
+        }
+        // Fallback: caminho relativo (proxy nginx pode resolver)
+        return `/public/company${this.companyId}/${filePath}`;
+      }
     }
     return null;
   }
 
   @Column
   mediaType: string;
+
+  // Campo virtual: retorna tamanho do arquivo em bytes lendo do disco
+  get mediaFileSize(): number | null {
+    const fileRel = this.getDataValue("mediaUrl");
+    if (!fileRel || /^https?:\/\//i.test(fileRel)) return null;
+    try {
+      const fs = require('fs');
+      const pathModule = require('path');
+      const companyDir = pathModule.resolve(__dirname, '..', '..', 'public', `company${this.companyId}`);
+      // Tentar subpasta contact primeiro, depois raiz
+      const candidates = [
+        pathModule.join(companyDir, fileRel),
+        fileRel.includes('/') ? pathModule.join(companyDir, fileRel.split('/').pop()) : null,
+      ].filter(Boolean);
+      for (const p of candidates) {
+        if (fs.existsSync(p)) {
+          return fs.statSync(p).size;
+        }
+      }
+    } catch { }
+    return null;
+  }
 
   @Default(false)
   @Column

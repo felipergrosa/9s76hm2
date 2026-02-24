@@ -367,21 +367,24 @@ const useStyles = makeStyles((theme) => ({
     opacity: "70%",
   },
   uploadProgressContainer: {
-    display: "flex",
-    alignItems: "center",
-    padding: "8px 16px",
-    backgroundColor: "#f5f5f5",
-    borderBottom: "1px solid #e0e0e0",
+    position: "absolute",
+    top: -3, // Colada no topo do input
+    left: 0,
+    right: 0,
+    zIndex: 1,
   },
   uploadProgressBar: {
-    flexGrow: 1,
-    marginRight: 12,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#e0e0e0",
+    height: 3, // Barra fina de 3px
+    borderRadius: 0,
+    backgroundColor: "transparent", // Sem fundo
+    boxShadow: "none",
     "& .MuiLinearProgress-bar": {
-      borderRadius: 4,
-      backgroundColor: green[500],
+      borderRadius: "2px 2px 0 0",
+      backgroundColor: theme.palette.primary.main, // Cor primária do tema
+      transition: "transform 0.2s ease",
+    },
+    "&.MuiLinearProgress-root": {
+      backgroundColor: "rgba(0,0,0,0.05)", // Fundo quase transparente
     },
   },
   uploadProgressText: {
@@ -637,6 +640,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   const [inputMessage, setInputMessage] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false); // true apenas para upload de arquivos
   const [uploadProgress, setUploadProgress] = useState(0);
   const [recording, setRecording] = useState(false);
   const [quickAnswers, setQuickAnswer] = useState([]);
@@ -1367,6 +1371,11 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
       optimisticTempIds.push(tempId);
     });
 
+    // Ativar loading ANTES de fechar o modal - só para upload de arquivo
+    setLoading(true);
+    setUploadingFile(true); // Indica que é upload de arquivo (para mostrar progress bar)
+    setUploadProgress(0);
+
     // Fechar modal imediatamente (UX responsiva)
     setMediasUpload([]);
     setShowModalMedias(false);
@@ -1383,8 +1392,6 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
     });
 
     try {
-      setLoading(true);
-      setUploadProgress(0);
       
       const { data } = await api.post(`/messages/${ticketId}`, formData, {
         onUploadProgress: (progressEvent) => {
@@ -1408,6 +1415,12 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
       optimisticTempIds.forEach(tempId => {
         failOptimisticMessage(ticketId, tempId, err.message);
       });
+    } finally {
+      if (isMounted.current) {
+        setLoading(false);
+        setUploadingFile(false); // Reset do flag de upload de arquivo
+        setUploadProgress(0);
+      }
     }
   };
 
@@ -1818,15 +1831,14 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
           className={classes.messageInputWrapper}
           onDrop={(e) => handleInputDrop(e)}
         >
-          {/* Barra de progresso de upload */}
-          {loading && uploadProgress > 0 && uploadProgress < 100 && (
+          {/* Barra de progresso de upload - minimalista, apenas para arquivos */}
+          {uploadingFile && (
             <div className={classes.uploadProgressContainer}>
               <LinearProgress 
-                variant="determinate" 
-                value={uploadProgress} 
+                variant={uploadProgress > 0 ? "determinate" : "indeterminate"}
+                value={uploadProgress > 0 ? uploadProgress : undefined} 
                 className={classes.uploadProgressBar}
               />
-              <span className={classes.uploadProgressText}>{uploadProgress}%</span>
             </div>
           )}
           <input

@@ -223,11 +223,14 @@ const SendWhatsAppMediaUnified = async ({
       messageId = `${Date.now()}`;
     }
     
-    // Determinar mediaType
+    // Determinar mediaType para salvar no banco
+    // O frontend usa "application" para PDFs e "document" para outros documentos
     let mediaTypeDb = "document";
     if (mediaType === "image") mediaTypeDb = "image";
     else if (mediaType === "video") mediaTypeDb = "video";
     else if (mediaType === "audio") mediaTypeDb = "audio";
+    else if (media.mimetype === "application/pdf") mediaTypeDb = "application";
+    else if (media.mimetype.startsWith("application/")) mediaTypeDb = "application";
     
     // Salvar no banco
     await CreateMessageService({

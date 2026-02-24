@@ -78,8 +78,20 @@ const SendWhatsAppMessageUnified = async ({
       throw new AppError("ERR_CONTACT_NOT_FOUND", 404);
     }
 
+    // Debug: Logar informações do contato
+    logger.info(`[SendMessageUnified] Contato obtido: id=${contactNumber.id}, number=${contactNumber.number}, remoteJid=${contactNumber.remoteJid}, lidJid=${contactNumber.lidJid}`);
+
     // Resolver JID correto para envio (trata LIDs → número real)
     const number = await ResolveSendJid(contactNumber, ticket.isGroup, ticket.whatsappId);
+    
+    // Debug: Logar resultado da resolução
+    logger.info(`[SendMessageUnified] ResolveSendJid resultado: ${number}`);
+
+    // VALIDAÇÃO: Se não conseguiu resolver o JID, não enviar
+    if (!number) {
+      logger.error(`[SendMessageUnified] ❌ Não foi possível resolver JID para envio. Contact: ${contactNumber.id}, Ticket: ${ticket.id}`);
+      throw new AppError("Não foi possível resolver o número de destino. Contato pode ter número inválido ou não estar sincronizado.", 400);
+    }
 
     // Atualizar nome/avatar proativamente se necessário
     if (!ticket.isGroup && channelType === "baileys") {
