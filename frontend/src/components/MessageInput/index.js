@@ -16,6 +16,7 @@ import {
   Divider,
   Tooltip,
   Fab,
+  LinearProgress,
 } from "@material-ui/core";
 import {
   blue,
@@ -365,6 +366,31 @@ const useStyles = makeStyles((theme) => ({
     color: green[500],
     opacity: "70%",
   },
+  uploadProgressContainer: {
+    display: "flex",
+    alignItems: "center",
+    padding: "8px 16px",
+    backgroundColor: "#f5f5f5",
+    borderBottom: "1px solid #e0e0e0",
+  },
+  uploadProgressBar: {
+    flexGrow: 1,
+    marginRight: 12,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#e0e0e0",
+    "& .MuiLinearProgress-bar": {
+      borderRadius: 4,
+      backgroundColor: green[500],
+    },
+  },
+  uploadProgressText: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#666",
+    minWidth: 40,
+    textAlign: "right",
+  },
   recorderWrapper: {
     display: "flex",
     alignItems: "center",
@@ -611,6 +637,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   const [inputMessage, setInputMessage] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [recording, setRecording] = useState(false);
   const [quickAnswers, setQuickAnswer] = useState([]);
   const [typeBar, setTypeBar] = useState(false);
@@ -1356,14 +1383,18 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
     });
 
     try {
+      setLoading(true);
+      setUploadProgress(0);
+      
       const { data } = await api.post(`/messages/${ticketId}`, formData, {
-        // Callback de progresso para feedback visual futuro
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          // Poderia atualizar estado de progresso aqui se necessário
+          setUploadProgress(percentCompleted);
           console.log(`[Upload] Progresso: ${percentCompleted}%`);
         }
       });
+      
+      setUploadProgress(100);
       
       // Confirmar mensagens otimísticas (remover do estado pendente)
       // O servidor vai emitir a mensagem real via socket, então removemos as otimísticas
@@ -1787,6 +1818,17 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
           className={classes.messageInputWrapper}
           onDrop={(e) => handleInputDrop(e)}
         >
+          {/* Barra de progresso de upload */}
+          {loading && uploadProgress > 0 && uploadProgress < 100 && (
+            <div className={classes.uploadProgressContainer}>
+              <LinearProgress 
+                variant="determinate" 
+                value={uploadProgress} 
+                className={classes.uploadProgressBar}
+              />
+              <span className={classes.uploadProgressText}>{uploadProgress}%</span>
+            </div>
+          )}
           <input
             multiple
             type="file"

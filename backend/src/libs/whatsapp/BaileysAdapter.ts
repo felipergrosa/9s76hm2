@@ -357,36 +357,57 @@ export class BaileysAdapter implements IWhatsAppAdapter {
       }
       // Mensagem com mídia
       else if (mediaPath || mediaUrl) {
-        const mediaData = mediaPath
-          ? { url: mediaPath }
-          : { url: mediaUrl };
+        // Baileys espera:
+        // - Buffer diretamente para arquivos locais
+        // - { url: "https://..." } para URLs remotas
+        let mediaData: any;
+        if (mediaPath) {
+          const fsModule = require("fs");
+          if (fsModule.existsSync(mediaPath)) {
+            // Ler arquivo e passar Buffer diretamente
+            mediaData = fsModule.readFileSync(mediaPath);
+            logger.debug(`[BaileysAdapter] Arquivo lido: ${mediaPath}, tamanho: ${mediaData.length} bytes`);
+          } else {
+            throw new WhatsAppAdapterError(`Arquivo não encontrado: ${mediaPath}`, "FILE_NOT_FOUND");
+          }
+        } else {
+          mediaData = { url: mediaUrl };
+          logger.debug(`[BaileysAdapter] Usando URL: ${mediaUrl}`);
+        }
+        
+        logger.debug(`[BaileysAdapter] mediaType: ${mediaType}, mediaData type: ${typeof mediaData}`);
 
         switch (mediaType) {
           case "image":
+            // Imagem: passar mimetype explicitamente
             content = {
               image: mediaData,
-              caption: caption || ""
+              caption: caption || "",
+              mimetype: options.mimetype || "image/jpeg"
             };
             break;
           case "video":
             content = {
               video: mediaData,
-              caption: caption || ""
+              caption: caption || "",
+              mimetype: options.mimetype || "video/mp4",
+              fileName: options.filename
             };
             break;
           case "audio":
           case "ptt":
             content = {
               audio: mediaData,
-              mimetype: "audio/mp4",
+              mimetype: options.mimetype || "audio/mp4",
               ptt: mediaType === "ptt"
             };
             break;
           case "document":
             content = {
               document: mediaData,
-              mimetype: "application/pdf",
-              fileName: options.filename || "documento.pdf"
+              mimetype: options.mimetype || "application/octet-stream",
+              fileName: options.filename || "documento",
+              caption: caption || ""
             };
             break;
           default:
@@ -403,9 +424,14 @@ export class BaileysAdapter implements IWhatsAppAdapter {
       return this.convertBaileysToNormalized(sentMsg);
 
     } catch (error) {
+      // Log detalhado para debug (sem serializar data que pode ser base64)
       logger.error(`[BaileysAdapter] Erro ao enviar mensagem: ${error.message}`);
+      logger.error(`[BaileysAdapter] Código: ${error.code || 'N/A'}`);
+      logger.error(`[BaileysAdapter] StatusCode: ${error.statusCode || 'N/A'}`);
+      logger.error(`[BaileysAdapter] Stack: ${error.stack}`);
+      
       throw new WhatsAppAdapterError(
-        "Falha ao enviar mensagem",
+        `Falha ao enviar mensagem: ${error.message}`,
         "SEND_MESSAGE_ERROR",
         error
       );

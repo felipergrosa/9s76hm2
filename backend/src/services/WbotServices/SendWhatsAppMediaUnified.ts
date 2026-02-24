@@ -38,22 +38,29 @@ const SendWhatsAppMediaUnified = async ({
 }: Request): Promise<IWhatsAppMessage | any> => {
   
   try {
-    logger.info(`[SendMediaUnified] Enviando mídia para ticket ${ticket.id}`);
+    logger.info(`[SendMediaUnified] ========== INÍCIO ENVIO MÍDIA ==========`);
+    logger.info(`[SendMediaUnified] Ticket: ${ticket.id}, ContactId: ${ticket.contactId}, CompanyId: ${ticket.companyId}`);
+    logger.info(`[SendMediaUnified] Media: ${media.originalname}, Mimetype: ${media.mimetype}, Size: ${media.size}`);
     
     // Obter adapter apropriado
+    logger.debug(`[SendMediaUnified] Obtendo adapter...`);
     const adapter = await GetTicketAdapter(ticket);
     const channelType = adapter.channelType;
-    
-    logger.debug(`[SendMediaUnified] Tipo: ${media.mimetype}, Canal: ${channelType}`);
+    logger.info(`[SendMediaUnified] Adapter obtido: channelType=${channelType}`);
     
     // Obter contato
+    logger.debug(`[SendMediaUnified] Buscando contato ${ticket.contactId}...`);
     const contact = await Contact.findByPk(ticket.contactId);
     if (!contact) {
+      logger.error(`[SendMediaUnified] Contato não encontrado: ${ticket.contactId}`);
       throw new AppError("ERR_CONTACT_NOT_FOUND", 404);
     }
+    logger.info(`[SendMediaUnified] Contato: id=${contact.id}, number=${contact.number}, remoteJid=${contact.remoteJid}`);
 
     // Resolver JID correto para envio (trata LIDs → número real)
+    logger.debug(`[SendMediaUnified] Resolvendo JID...`);
     const number = await ResolveSendJid(contact, ticket.isGroup, ticket.whatsappId);
+    logger.info(`[SendMediaUnified] JID resolvido: ${number}`);
 
     // VALIDAÇÃO: Verificar se o número é válido (não PENDING_)
     if (!number || number.includes("PENDING_") || number.includes("@lid@s.whatsapp.net")) {
@@ -63,6 +70,17 @@ const SendWhatsAppMediaUnified = async ({
         "Aguarde o contato enviar uma mensagem primeiro ou atualize o contato manualmente.",
         400
       );
+    }
+
+    // Validar mimetype
+    if (!media.mimetype) {
+      logger.error(`[SendMediaUnified] Mimetype undefined! Media: ${JSON.stringify({
+        originalname: media.originalname,
+        filename: media.filename,
+        size: media.size,
+        mimetype: media.mimetype
+      })}`);
+      throw new AppError("Tipo de arquivo não identificado (mimetype ausente)", 400);
     }
 
     // Determinar tipo de mídia baseado no mimetype
@@ -75,6 +93,8 @@ const SendWhatsAppMediaUnified = async ({
     } else if (media.mimetype.startsWith("video/")) {
       mediaType = "video";
     }
+    
+    logger.info(`[SendMediaUnified] Mimetype: ${media.mimetype}, MediaType: ${mediaType}`);
 
     // Formatar corpo da mensagem (caption)
     const formattedBody = body ? formatBody(body, ticket) : undefined;
@@ -83,6 +103,8 @@ const SendWhatsAppMediaUnified = async ({
 
     // ===== BAILEYS: Envia arquivo local =====
     if (channelType === "baileys") {
+      logger.info(`[SendMediaUnified] Usando Baileys para envio...`);
+      
       // Caminho completo do arquivo (com contact{id}/ se necessário)
       let publicPath = path.join(
         process.cwd(),
@@ -90,6 +112,7 @@ const SendWhatsAppMediaUnified = async ({
         `company${ticket.companyId}`,
         media.filename
       );
+      logger.debug(`[SendMediaUnified] Caminho primário: ${publicPath}, existe: ${fs.existsSync(publicPath)}`);
       
       // Se arquivo não existe, tentar com contact{id}/ prefixo
       if (!fs.existsSync(publicPath)) {
@@ -100,11 +123,14 @@ const SendWhatsAppMediaUnified = async ({
           `contact${contact.id}`,
           media.filename
         );
+        logger.debug(`[SendMediaUnified] Caminho alternativo: ${publicPath}, existe: ${fs.existsSync(publicPath)}`);
       }
 
       if (!fs.existsSync(publicPath)) {
+        logger.error(`[SendMediaUnified] Arquivo não encontrado em nenhum caminho`);
         throw new AppError(`Arquivo não encontrado: ${publicPath}`, 404);
       }
+      logger.info(`[SendMediaUnified] Arquivo encontrado: ${publicPath}`);
 
       // Gerar thumbnail se for PDF
       if (media.mimetype === "application/pdf") {
@@ -115,26 +141,19 @@ const SendWhatsAppMediaUnified = async ({
         }
       }
 
-      // Ler arquivo
-      const fileBuffer = fs.readFileSync(publicPath);
-      const base64File = fileBuffer.toString("base64");
-      const dataUri = `data:${media.mimetype};base64,${base64File}`;
+      logger.info(`[SendMediaUnified] Enviando via caminho local: ${publicPath}`);
 
+      // Baileys aceita caminho local via Buffer (não data URI)
       sentMessage = await adapter.sendMessage({
         to: number.split("@")[0],
-        mediaUrl: dataUri,
+        mediaPath: publicPath,
         mediaType,
         caption: formattedBody,
-        filename: media.originalname
+        filename: media.originalname,
+        mimetype: media.mimetype
       });
       
-      logger.info(`[SendMediaUnified] Baileys - Mensagem enviada: ${JSON.stringify({
-        to: number.split("@")[0],
-        mediaType,
-        filename: media.originalname,
-        caption: formattedBody,
-        messageId: (sentMessage as any)?.key?.id || sentMessage?.id || 'unknown'
-      })}`);
+      logger.info(`[SendMediaUnified] Baileys - Mensagem enviada para ${number.split("@")[0]}, ID: ${(sentMessage as any)?.key?.id || sentMessage?.id || 'unknown'}`);
     } 
     // ===== OFFICIAL API: Precisa de URL pública =====
     else if (channelType === "official") {
@@ -186,14 +205,7 @@ const SendWhatsAppMediaUnified = async ({
         filename: media.originalname
       });
       
-      logger.info(`[SendMediaUnified] Official API - Mensagem enviada: ${JSON.stringify({
-        to: number.split("@")[0],
-        mediaUrl,
-        mediaType,
-        filename: media.originalname,
-        caption: formattedBody,
-        messageId: sentMessage?.id || 'unknown'
-      })}`);
+      logger.info(`[SendMediaUnified] Official API - Mensagem enviada para ${number.split("@")[0]}, ID: ${sentMessage?.id || 'unknown'}`);
     } else {
       throw new AppError(`Tipo de canal não suportado: ${channelType}`, 400);
     }
@@ -249,7 +261,12 @@ const SendWhatsAppMediaUnified = async ({
 
   } catch (error: any) {
     Sentry.captureException(error);
+    
+    // Log detalhado para debug (sem serializar data que pode ser base64)
     logger.error(`[SendMediaUnified] Erro ao enviar mídia: ${error.message}`);
+    logger.error(`[SendMediaUnified] Código: ${error.code || 'N/A'}`);
+    logger.error(`[SendMediaUnified] StatusCode: ${error.statusCode || 'N/A'}`);
+    logger.error(`[SendMediaUnified] Stack: ${error.stack}`);
     
     if (error instanceof AppError) {
       throw error;

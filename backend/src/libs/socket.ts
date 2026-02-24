@@ -31,9 +31,10 @@ const validateJWTPayload = (payload: any): { userId: string; iat?: number; exp?:
 };
 
 // Origens CORS permitidas
+// IMPORTANTE: Deve incluir a URL do FRONTEND, não do backend
 const ALLOWED_ORIGINS = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(",").map((url) => url.trim())
-  : ["http://localhost:3000", "https://chatsapi.nobreluminarias.com.br"];
+  : ["http://localhost:3000", "https://chats.nobreluminarias.com.br"];
 
 // Ajuste da classe AppError para compatibilidade com Error
 class SocketCompatibleAppError extends Error {

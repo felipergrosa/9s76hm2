@@ -53,6 +53,7 @@ export interface ISendMessageOptions {
   mentionedJidList?: string[];
   vcard?: string;
   filename?: string;
+  mimetype?: string;
 }
 
 /**

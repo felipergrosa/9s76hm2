@@ -805,10 +805,29 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   }
 
   try {
+    console.log(`[MessageController.store] Iniciando fluxo de envio de mensagem para ticket ${ticketId}`);
+    console.log(`[MessageController.store] Ticket channel: ${ticket.channel}, whatsappId: ${ticket.whatsappId}`);
+
     if (medias) {
+      console.log(`[MessageController.store] Enviando ${medias.length} mídia(s) para ticket ${ticketId}`);
+      
+      // Log detalhado de cada arquivo
+      medias.forEach((media: Express.Multer.File, index) => {
+        console.log(`[MessageController.store] Mídia ${index + 1}:`, {
+          originalname: media.originalname,
+          filename: media.filename,
+          mimetype: media.mimetype,
+          size: media.size,
+          path: media.path
+        });
+      });
+      
       await Promise.all(
         medias.map(async (media: Express.Multer.File, index) => {
+          console.log(`[MessageController.store] Processando mídia ${index + 1}/${medias.length}: ${media.originalname}`);
+          
           if (ticket.channel === "whatsapp") {
+            console.log(`[MessageController.store] Chamando SendWhatsAppMediaUnified...`);
             await SendWhatsAppMediaUnified({
               media,
               ticket,
@@ -816,6 +835,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
               isPrivate: isPrivate === "true",
               isForwarded: false
             });
+            console.log(`[MessageController.store] SendWhatsAppMediaUnified concluído com sucesso`);
           }
 
           if (["facebook", "instagram"].includes(ticket.channel)) {
@@ -910,9 +930,22 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       }
     }
     return res.status(200).json({ message: "Mensagem enviada com sucesso" });
-  } catch (error) {
+  } catch (error: any) {
+    // Log detalhado para debug
     console.error("Erro ao armazenar mensagem:", error);
-    return res.status(400).json({ error: error.message });
+    console.error("Stack:", error.stack);
+    console.error("Erro completo:", JSON.stringify({
+      message: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      name: error.name,
+      data: error.data
+    }));
+    
+    return res.status(error.statusCode || 400).json({ 
+      error: error.message,
+      code: error.code || "UNKNOWN_ERROR"
+    });
   }
 };
 

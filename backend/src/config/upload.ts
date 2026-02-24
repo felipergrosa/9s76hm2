@@ -28,6 +28,9 @@ export default {
   directory: publicFolder,
   storage: multer.diskStorage({
     destination: async function (req: UploadRequest, file, cb) {
+      console.log(`[Upload] Iniciando upload. File: ${file.originalname}, mimetype: ${file.mimetype}`);
+      console.log(`[Upload] publicFolder: ${publicFolder}`);
+      
       let companyId: number | undefined;
 
       // Verificação segura de usuário e companyId
@@ -133,11 +136,13 @@ export default {
 
       // Criar pasta de forma segura
       try {
+        console.log(`[Upload] Criando pasta: ${folder}`);
         fs.mkdirSync(folder, { recursive: true });
         fs.chmodSync(folder, 0o777);
+        console.log(`[Upload] Pasta criada com sucesso. Callback com folder: ${folder}`);
         return cb(null, folder);
       } catch (error) {
-        console.error("Erro ao criar pasta:", error);
+        console.error("[Upload] Erro ao criar pasta:", error);
         return cb(error as Error, null);
       }
     },

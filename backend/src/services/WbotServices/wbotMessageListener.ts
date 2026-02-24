@@ -8,6 +8,7 @@ import { isNil, isNull } from "lodash";
 import { REDIS_URI_MSG_CONN } from "../../config/redis";
 import axios from "axios";
 import { generatePdfThumbnail } from "../../helpers/PdfThumbnailGenerator";
+import logger, { sanitizeMessageForLog } from "../../utils/logger";
 
 import {
   downloadMediaMessage,
@@ -34,7 +35,6 @@ import Message from "../../models/Message";
 import { Mutex } from "async-mutex";
 import { getIO } from "../../libs/socket";
 import CreateMessageService from "../MessageServices/CreateMessageService";
-import logger from "../../utils/logger";
 import { safeNormalizePhoneNumber, isRealPhoneNumber, MAX_PHONE_DIGITS } from "../../utils/phone";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
@@ -491,7 +491,10 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
   try {
     let type = getTypeMessage(msg);
 
-    if (type === undefined) console.log(JSON.stringify(msg));
+    // Log resumido para debug (evita dump de base64 no terminal)
+    if (type === undefined) {
+      logger.warn(`[getBodyMessage] Tipo de mensagem indefinido. Key: ${msg?.key?.id}`);
+    }
 
     const types = {
       conversation: msg.message?.conversation,
@@ -567,9 +570,9 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
 
     if (!objKey) {
       logger.warn(
-        `#### Nao achou o type 152: ${type} ${JSON.stringify(msg.message)}`
+        `#### Nao achou o type 152: ${type} ${JSON.stringify(sanitizeMessageForLog(msg.message))}`
       );
-      Sentry.setExtra("Mensagem", { BodyMsg: msg.message, msg, type });
+      Sentry.setExtra("Mensagem", { BodyMsg: msg.message, msg: sanitizeMessageForLog(msg), type });
       Sentry.captureException(
         new Error("Novo Tipo de Mensagem em getTypeMessage")
       );
