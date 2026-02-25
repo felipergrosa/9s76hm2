@@ -171,3 +171,6 @@ backend/private/sessions/
 back-up-limpo/
 backup-*/
 backups/
+
+# Docker build cache
+.docker-cache/
