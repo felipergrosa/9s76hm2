@@ -7,6 +7,12 @@ import logger from "../../utils/logger";
 import { getIO } from "../../libs/socket";
 import CreateMessageService from "./CreateMessageService";
 import { isValidMsg, getTypeMessage, getBodyMessage } from "../WbotServices/wbotMessageListener";
+import {
+  registerHistoryHandler,
+  unregisterHistoryHandler,
+  startFetchRequest,
+  cancelFetchRequest
+} from "../../libs/messageHistoryHandler";
 
 // Cache para throttling (evita sync repetido em curto período)
 const lastSyncTime = new Map<string, number>();
@@ -137,39 +143,68 @@ const SyncChatHistoryService = async ({
 
         if (typeof wbotAny.fetchMessageHistory === "function") {
             try {
-                // logger.info(`[SyncChatHistory] Buscando ${messageCount} mensagens via API para jid=${jid}...`);
+                logger.info(`[SyncChatHistory] Buscando ${messageCount} mensagens via API para jid=${jid}...`);
 
-                messages = await new Promise<any[]>((resolve, reject) => {
-                    const timeoutId = setTimeout(() => {
-                        cleanup();
-                        resolve([]);
-                    }, 15000); // 15s timeout
-
-                    const historyHandler = (event: any) => {
-                        const msgs = event?.messages || [];
-                        const relevant = msgs.filter((m: any) => m?.key?.remoteJid === jid);
-
-                        if (relevant.length > 0) {
-                            cleanup();
-                            clearTimeout(timeoutId);
-                            resolve(relevant);
-                        }
-                    };
-
-                    const cleanup = () => {
-                        wbot.ev.off("messaging-history.set", historyHandler);
-                    };
-
-                    wbot.ev.on("messaging-history.set", historyHandler);
-
-                    wbotAny.fetchMessageHistory(messageCount, oldestKey, oldestTimestamp)
-                        .catch((err: any) => {
-                            clearTimeout(timeoutId);
-                            cleanup();
-                            logger.warn(`[SyncChatHistory] Falha na API fetchMessageHistory: ${err}`);
-                            resolve([]);
-                        });
+                // Emitir progresso inicial
+                io.of(`/workspace-${companyId}`).emit(`ticket-${ticketId}-sync-progress`, {
+                    progress: 0,
+                    state: "FETCHING",
+                    message: "Solicitando histórico ao WhatsApp..."
                 });
+
+                // Usar handler centralizado para receber mensagens
+                const fetchId = registerFetchRequest(jid);
+                const fetchPromise = startFetchRequest(fetchId, jid, 60000); // 60s timeout
+
+                // Registrar handler temporário para este JID
+                const tempHandler = (msgs: any[], event: any) => {
+                    logger.debug(`[SyncChatHistory] Handler recebeu ${msgs.length} mensagens para jid=${jid}`);
+                    messages.push(...msgs);
+                };
+
+                registerHistoryHandler(jid, tempHandler);
+
+                try {
+                    // Disparar o fetch
+                    await wbotAny.fetchMessageHistory(messageCount, oldestKey, oldestTimestamp);
+
+                    // Aguardar resultado
+                    const result = await fetchPromise;
+                    messages = result.messages;
+
+                    logger.info(`[SyncChatHistory] Recebido ${messages.length} mensagens, isLatest=${result.isLatest}, progress=${result.progress}`);
+
+                    // Emitir progresso final
+                    io.of(`/workspace-${companyId}`).emit(`ticket-${ticketId}-sync-progress`, {
+                        progress: result.progress || 100,
+                        state: "COMPLETED",
+                        message: `${messages.length} mensagens sincronizadas`
+                    });
+
+                } catch (err: any) {
+                    logger.warn(`[SyncChatHistory] Erro na API fetchMessageHistory: ${err}`);
+                    
+                    // Retry uma vez após 2s
+                    try {
+                        logger.info(`[SyncChatHistory] Tentando retry após 2s...`);
+                        await new Promise(r => setTimeout(r, 2000));
+                        
+                        const retryPromise = startFetchRequest(fetchId, jid, 60000);
+                        await wbotAny.fetchMessageHistory(messageCount, oldestKey, oldestTimestamp);
+                        
+                        const retryResult = await retryPromise;
+                        messages = retryResult.messages;
+                        
+                        logger.info(`[SyncChatHistory] Retry bem-sucedido: ${messages.length} mensagens`);
+                    } catch (retryErr: any) {
+                        logger.warn(`[SyncChatHistory] Retry falhou: ${retryErr}`);
+                    }
+                } finally {
+                    // Limpar handler
+                    unregisterHistoryHandler(jid, tempHandler);
+                    cancelFetchRequest(fetchId);
+                }
+
             } catch (err: any) {
                 logger.warn(`[SyncChatHistory] Erro ao buscar histórico: ${err?.message}`);
             }
@@ -200,46 +235,48 @@ const SyncChatHistoryService = async ({
 
             while (currentPage < maxPages) {
                 try {
-                    const batchMessages = await new Promise<any[]>((resolve, reject) => {
-                        const timeoutId = setTimeout(() => {
-                            cleanup();
-                            resolve([]);
-                        }, 15000);
-
-                        const historyHandler = (event: any) => {
-                            const msgs = event?.messages || [];
-                            const relevant = msgs.filter((m: any) => m?.key?.remoteJid === jid);
-                            if (relevant.length > 0) {
-                                cleanup();
-                                clearTimeout(timeoutId);
-                                resolve(relevant);
-                            }
-                        };
-
-                        const cleanup = () => {
-                            wbot.ev.off("messaging-history.set", historyHandler);
-                        };
-
-                        wbot.ev.on("messaging-history.set", historyHandler);
-                        wbotAny.fetchMessageHistory(messageCount, oldestKeyInBatch, oldestTimestampInBatch)
-                            .catch((err: any) => {
-                                clearTimeout(timeoutId);
-                                cleanup();
-                                resolve([]);
-                            });
+                    // Emitir progresso de paginação
+                    io.of(`/workspace-${companyId}`).emit(`ticket-${ticketId}-sync-progress`, {
+                        progress: Math.round((currentPage / maxPages) * 100),
+                        state: "PAGINATING",
+                        message: `Buscando página ${currentPage + 1} de ${maxPages}...`
                     });
 
-                    if (!batchMessages || batchMessages.length === 0) break;
+                    const fetchId = registerFetchRequest(jid);
+                    const fetchPromise = startFetchRequest(fetchId, jid, 60000);
                     
-                    allMessages = [...allMessages, ...batchMessages];
-                    currentPage++;
+                    const tempHandler = (msgs: any[]) => {
+                        batchMessages.push(...msgs);
+                    };
                     
-                    // Atualizar âncora para próxima página
-                    oldestKeyInBatch = batchMessages[batchMessages.length - 1].key;
-                    oldestTimestampInBatch = Number(batchMessages[batchMessages.length - 1].messageTimestamp);
-                    
-                    // Parar se recebeu menos que o esperado (fim do histórico)
-                    if (batchMessages.length < messageCount) break;
+                    let batchMessages: any[] = [];
+                    registerHistoryHandler(jid, tempHandler);
+
+                    try {
+                        await wbotAny.fetchMessageHistory(messageCount, oldestKeyInBatch, oldestTimestampInBatch);
+                        
+                        const result = await fetchPromise;
+                        batchMessages = result.messages;
+                        
+                        if (!batchMessages || batchMessages.length === 0) break;
+                        
+                        allMessages = [...allMessages, ...batchMessages];
+                        currentPage++;
+                        
+                        // Atualizar âncora para próxima página
+                        oldestKeyInBatch = batchMessages[batchMessages.length - 1].key;
+                        oldestTimestampInBatch = Number(batchMessages[batchMessages.length - 1].messageTimestamp);
+                        
+                        // Parar se recebeu menos que o esperado (fim do histórico)
+                        if (batchMessages.length < messageCount) break;
+                        
+                    } catch (batchErr: any) {
+                        logger.warn(`[SyncChatHistory] Erro na página ${currentPage}: ${batchErr?.message}`);
+                        break;
+                    } finally {
+                        unregisterHistoryHandler(jid, tempHandler);
+                        cancelFetchRequest(fetchId);
+                    }
                     
                 } catch (batchErr: any) {
                     logger.warn(`[SyncChatHistory] Erro na página ${currentPage}: ${batchErr?.message}`);

@@ -12,9 +12,6 @@
 	<link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
 	<link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
 	<link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-	<!-- Prefetch para páginas principais -->
-	<link rel="prefetch" href="/static/js/main.chunk.js" as="script" />
-	<link rel="prefetch" href="/static/js/0.chunk.js" as="script" />
 	<meta name="theme-color" content="#000000" />
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
 	<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -77,6 +74,15 @@
 	</style>
 	<script>
 		if (!crossOriginIsolated) SharedArrayBuffer = ArrayBuffer;
+		
+		// Suprimir aviso aria-hidden do Material-UI (não afeta funcionalidade)
+		const originalConsoleError = console.error;
+		console.error = function(...args) {
+			if (args[0]?.includes?.('aria-hidden') || args[0]?.includes?.('Blocked aria-hidden')) {
+				return; // Ignora avisos aria-hidden
+			}
+			originalConsoleError.apply(console, args);
+		};
 	</script>
 </head>
 
@@ -91,7 +97,6 @@
 	<div id="root"></div>
 	<noscript>Você precisa habilitar o JavaScript para executar este app.</noscript>
 
-	<script src="https://cdn.tailwindcss.com" defer></script>
 	<script>
 		let progress = 0;
 		const progressBar = document.getElementById('progress-bar');

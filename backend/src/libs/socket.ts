@@ -63,8 +63,10 @@ export const initIO = (httpServer: Server): SocketIO => {
       credentials: true,
     },
     maxHttpBufferSize: 1e6, // Limita payload a 1MB
-    pingTimeout: 20000,
+    pingTimeout: 60000, // Aumentado de 20s para 60s (match com frontend)
     pingInterval: 25000,
+    upgradeTimeout: 30000, // Timeout para upgrade de polling para websocket
+    allowUpgrades: true, // Permite upgrade de transporte
 
     // Connection State Recovery: recupera eventos perdidos durante desconexões temporárias
     // Funciona para desconexões de até 2 minutos (configurable)

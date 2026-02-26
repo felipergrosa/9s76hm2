@@ -34,6 +34,7 @@ import fs from "fs";
 import path from "path";
 import createOrUpdateBaileysService from "../services/BaileysServices/CreateOrUpdateBaileysService";
 import { releaseLeadership } from "./wbotLeaderService";
+import { handleMessagingHistorySet } from "./messageHistoryHandler";
 
 const msgRetryCounterCache = new NodeCache({
   stdTTL: 600,
@@ -784,79 +785,10 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             }
           });
 
+          // Handler centralizado de messaging-history.set
+          // Este handler processa todos os eventos de history sync e distribui para handlers registrados
           wsocket.ev.on("messaging-history.set", async (messageSet: any) => {
-            try {
-              const wppId = whatsapp.id;
-
-              // ══════════════════════════════════════════════════════════════
-              // CAPTURA LID↔PN: HistorySync envia mapeamentos completos
-              // ══════════════════════════════════════════════════════════════
-              const lidMappings = Array.isArray(messageSet?.phoneNumberToLidMappings)
-                ? messageSet.phoneNumberToLidMappings
-                : [];
-              if (lidMappings.length) {
-                logger.info(`[wbot] HistorySync: ${lidMappings.length} mapeamentos LID↔PN recebidos para whatsappId=${wppId}`);
-                try {
-                  const LidMapping = (await import("../models/LidMapping")).default;
-                  let saved = 0;
-                  for (const mapping of lidMappings) {
-                    const pnJid = mapping?.pnJid || mapping?.phoneNumber;
-                    const lidJid = mapping?.lidJid || mapping?.lid;
-                    if (!pnJid || !lidJid) continue;
-                    const pnDigits = String(pnJid).replace(/\D/g, "");
-                    if (pnDigits.length < 10 || pnDigits.length > 20) continue;
-                    try {
-                      await LidMapping.upsert({
-                        lid: String(lidJid).includes("@") ? String(lidJid) : `${lidJid}@lid`,
-                        phoneNumber: pnDigits,
-                        companyId: whatsapp.companyId,
-                        whatsappId: wppId,
-                        source: "history-sync",
-                        verified: true
-                      });
-                      saved++;
-                    } catch { }
-                  }
-                  if (saved > 0) {
-                    logger.info(`[wbot] HistorySync: ${saved} mapeamentos LID↔PN salvos na tabela LidMapping`);
-                  }
-                } catch (e: any) {
-                  logger.warn(`[wbot] Falha ao processar phoneNumberToLidMappings: ${e?.message}`);
-                }
-              }
-
-              const labels = Array.isArray(messageSet?.labels) ? messageSet.labels : [];
-              const chats = Array.isArray(messageSet?.chats) ? messageSet.chats : [];
-              if (labels.length) {
-                labels.forEach((l: any) => {
-                  if (l?.id) upsertLabel(wppId, { id: String(l.id), name: String(l.name || l.id), color: l.color });
-                });
-              }
-              if (chats.length) {
-                for (const c of chats) {
-                  const jid = String(c?.id || c?.jid || "");
-                  const clabels: string[] = Array.isArray(c?.labels) ? c.labels.map((x: any) => String(x)) : [];
-                  if (jid && clabels.length) {
-                    for (const lid of clabels) {
-                      addChatLabelAssociation(wppId, jid, lid, true);
-                    }
-                  }
-                }
-                // Persistir labels por chat em Baileys.chats
-                try {
-                  const batch = chats
-                    .map((c: any) => ({ id: String(c?.id || c?.jid || ""), labels: Array.isArray(c?.labels) ? c.labels.map((x: any) => String(x)) : [] }))
-                    .filter((x: any) => x.id && x.labels.length);
-                  if (batch.length) {
-                    await createOrUpdateBaileysService({ whatsappId: whatsapp.id, chats: batch.map((b: any) => ({ ...b, labelsAbsolute: true })) });
-                  }
-                } catch (e: any) {
-                  logger.warn(`[wbot] persist from messaging-history.set failed: ${e?.message}`);
-                }
-              }
-            } catch (e: any) {
-              logger.warn(`[wbot] messaging-history.set label extract failed: ${e?.message}`);
-            }
+            await handleMessagingHistorySet(messageSet);
           });
 
           // Processamento em tempo real de labels vindas por updates de chats

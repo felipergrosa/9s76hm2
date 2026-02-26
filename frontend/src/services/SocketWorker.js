@@ -49,13 +49,17 @@ class SocketWorker {
     const nsUrl = `${backendUrl}/workspace-${this?.companyId}`;
     // Importante: o backend valida namespaces como /workspace-<id> e exige query.token (JWT)
     this.socket = io(nsUrl, {
-      transports: ["polling", "websocket"],
+      transports: ["websocket", "polling"], // Prioriza websocket, fallback para polling
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
       reconnectionAttempts: Infinity,
-      pingTimeout: 20000,
+      timeout: 20000, // Timeout de conexão inicial
+      pingTimeout: 60000, // Aumentado de 20s para 60s
       pingInterval: 25000,
+      upgrade: true, // Permite upgrade de polling para websocket
+      rememberUpgrade: true, // Lembra que websocket funciona
       query: token ? { token, userId: String(this.userId) } : { userId: String(this.userId) }
       // auth: token ? { token } : undefined, // opcional, backend lê de query.token
     });

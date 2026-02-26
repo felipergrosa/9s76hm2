@@ -13,6 +13,13 @@ import fs from "fs";
 import { promisify } from "util";
 import CreateMessageService from "./CreateMessageService";
 import { invalidateTicketMessagesCache } from "./MessageCacheService";
+import {
+  registerHistoryHandler,
+  unregisterHistoryHandler,
+  registerFetchRequest,
+  startFetchRequest,
+  cancelFetchRequest
+} from "../../libs/messageHistoryHandler";
 
 const writeFileAsync = promisify(fs.writeFile);
 
@@ -221,7 +228,7 @@ const ImportContactHistoryService = async ({
         });
 
         // Deduplicar e ordenar
-        const allMessages = deduplicateAndSort(contactMessages);
+        let allMessages = deduplicateAndSort(contactMessages);
 
         logger.info(`[ImportHistory] ${allMessages.length} mensagens encontradas para o contato (de ${rawMessages.length} total em cache)`);
 
@@ -267,48 +274,27 @@ const ImportContactHistoryService = async ({
                 try {
                     emitProgress(0, -1, "FETCHING", "Solicitando histórico ao WhatsApp...");
 
-                    const fetchedMessages = await new Promise<any[]>((resolve, reject) => {
-                        const timeoutId = setTimeout(() => {
-                            cleanup();
-                            resolve([]);
-                        }, 20000); // 20s timeout
+                    // Usar handler centralizado
+                    const fetchId = registerFetchRequest(mainJid);
+                    const fetchPromise = startFetchRequest(fetchId, mainJid, 60000); // 60s timeout
+                    
+                    const tempHandler = (msgs: any[]) => {
+                        allMessages.push(...msgs);
+                    };
+                    
+                    registerHistoryHandler(mainJid, tempHandler);
 
-                        const historyHandler = (event: any) => {
-                            // O evento traz { messages: [...], isLatest: boolean, ... }
-                            const msgs = event?.messages || [];
-                            // Filtrar apenas do JID que queremos
-                            const relevant = msgs.filter((m: any) => m?.key?.remoteJid === mainJid);
-
-                            if (relevant.length > 0) {
-                                logger.info(`[ImportHistory] Recebido history sync: ${relevant.length} mensagens relevantes.`);
-                                cleanup();
-                                clearTimeout(timeoutId);
-                                resolve(relevant);
-                            }
-                        };
-
-                        const cleanup = () => {
-                            wbot.ev.off("messaging-history.set", historyHandler);
-                        };
-
-                        wbot.ev.on("messaging-history.set", historyHandler);
-
-                        // Disparar o fetch
-                        // fetchMessageHistory(count, oldestMsgKey, oldestMsgTimestamp)
-                        wbotAny.fetchMessageHistory(50, oldestKey, oldestTimestamp)
+                    try {
+                        // Disparar o fetch - buscar 200 mensagens em vez de 50
+                        await wbotAny.fetchMessageHistory(200, oldestKey, oldestTimestamp)
                             .catch((err: any) => {
-                                clearTimeout(timeoutId);
-                                cleanup();
                                 logger.warn(`[ImportHistory] Falha ao chamar API fetchMessageHistory: ${err}`);
-                                resolve([]);
+                                throw err;
                             });
-                    });
-
-                    // Adicionar ao allMessages
-                    if (fetchedMessages.length > 0) {
-                        for (const msg of fetchedMessages) {
-                            allMessages.push(msg);
-                        }
+                        
+                        const result = await fetchPromise;
+                        allMessages = result.messages;
+                        
                         // Repassar dedup
                         const uniqueFetched = deduplicateAndSort(allMessages);
                         allMessages.length = 0; // limpar original
@@ -318,11 +304,41 @@ const ImportContactHistoryService = async ({
 
                         // Opcional: Popular o cache dataMessages com o que veio
                         if (!dataMessages[whatsappId]) dataMessages[whatsappId] = [];
-                        dataMessages[whatsappId].unshift(...fetchedMessages);
+                        dataMessages[whatsappId].unshift(...allMessages);
+
+                    } catch (fetchErr: any) {
+                        logger.warn(`[ImportHistory] Erro na Fase 2: ${fetchErr}`);
+                        
+                        // Retry uma vez após 3s
+                        try {
+                            logger.info("[ImportHistory] Tentando retry após 3s...");
+                            await new Promise(r => setTimeout(r, 3000));
+                            
+                            const retryPromise = startFetchRequest(fetchId, mainJid, 60000);
+                            await wbotAny.fetchMessageHistory(200, oldestKey, oldestTimestamp);
+                            
+                            const retryResult = await retryPromise;
+                            allMessages = retryResult.messages;
+                            
+                            const uniqueFetched = deduplicateAndSort(allMessages);
+                            allMessages.length = 0;
+                            allMessages.push(...uniqueFetched);
+                            
+                            logger.info(`[ImportHistory] Retry bem-sucedido: ${allMessages.length} mensagens`);
+                            
+                            if (!dataMessages[whatsappId]) dataMessages[whatsappId] = [];
+                            dataMessages[whatsappId].unshift(...allMessages);
+                            
+                        } catch (retryErr: any) {
+                            logger.warn(`[ImportHistory] Retry falhou: ${retryErr}`);
+                        }
+                    } finally {
+                        unregisterHistoryHandler(mainJid, tempHandler);
+                        cancelFetchRequest(fetchId);
                     }
 
-                } catch (fetchErr) {
-                    logger.warn(`[ImportHistory] Erro na Fase 2: ${fetchErr}`);
+                } catch (err: any) {
+                    logger.warn(`[ImportHistory] Erro geral na Fase 2: ${err}`);
                 }
             } else {
                 logger.warn("[ImportHistory] fetchMessageHistory não disponível nesta versão do Baileys.");
