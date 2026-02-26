@@ -17,6 +17,8 @@ import fs from "fs";
 import formatBody from "../../helpers/Mustache";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
+import CreateMessageService from "../MessageServices/CreateMessageService";
+import logger from "../../utils/logger";
 
 interface TemplateButton {
   index: number;
@@ -144,6 +146,25 @@ const SendWhatsAppMessage = async ({
         lastMessage: formatBody(vcard, ticket),
         imported: null,
       });
+
+      // Salvar mensagem no banco para aparecer no chat
+      const messageId = sentMessage?.key?.id || `${Date.now()}`;
+      await CreateMessageService({
+        messageData: {
+          wid: messageId,
+          ticketId: ticket.id,
+          contactId: ticket.contactId,
+          body: vcard,
+          fromMe: true,
+          mediaType: "contactMessage",
+          read: true,
+          ack: 1,
+          remoteJid: contactNumber?.remoteJid,
+          dataJson: JSON.stringify(sentMessage),
+        },
+        companyId: ticket.companyId
+      });
+
       return sentMessage as WAMessage;
     } catch (err) {
       Sentry.captureException(err);
@@ -196,6 +217,25 @@ const SendWhatsAppMessage = async ({
       );
 
       await ticket.update({ lastMessage: formattedBody, imported: null });
+
+      // Salvar mensagem com botões no banco para aparecer no chat
+      const messageId = sentMessage?.key?.id || `${Date.now()}`;
+      await CreateMessageService({
+        messageData: {
+          wid: messageId,
+          ticketId: ticket.id,
+          contactId: ticket.contactId,
+          body: formattedBody,
+          fromMe: true,
+          mediaType: "extendedTextMessage",
+          read: true,
+          ack: 1,
+          remoteJid: contactNumber?.remoteJid,
+          dataJson: JSON.stringify(sentMessage),
+        },
+        companyId: ticket.companyId
+      });
+
       return sentMessage as WAMessage;
     } catch (err) {
       console.log(
@@ -225,6 +265,25 @@ const SendWhatsAppMessage = async ({
         lastMessage: formatBody(body, ticket),
         imported: null,
       });
+
+      // Salvar mensagem de texto no banco para aparecer no chat
+      const messageId = sentMessage?.key?.id || `${Date.now()}`;
+      await CreateMessageService({
+        messageData: {
+          wid: messageId,
+          ticketId: ticket.id,
+          contactId: ticket.contactId,
+          body: body || "",
+          fromMe: true,
+          mediaType: "extendedTextMessage",
+          read: true,
+          ack: 1,
+          remoteJid: contactNumber?.remoteJid,
+          dataJson: JSON.stringify(sentMessage),
+        },
+        companyId: ticket.companyId
+      });
+
       return sentMessage as WAMessage;
     } catch (err) {
       Sentry.captureException(err);

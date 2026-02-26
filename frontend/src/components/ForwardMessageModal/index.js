@@ -74,7 +74,7 @@ const ForwardMessageModal = ({ messages, onClose, modalOpen }) => {
 				setMessageSending(message.id);
 				const response = await api.post('/message/forward', {messageId: message.id, contactId: contactL.id, signMessage: signMessage});
 				responseList.push(response);
-				sleep(900);
+				await sleep(900); // CORREÇÃO: aguardar o delay entre mensagens
 			} catch (error) {
 				toastError(error);
 			}		

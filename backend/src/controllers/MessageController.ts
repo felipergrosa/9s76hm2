@@ -1030,8 +1030,45 @@ export const forwardMessage = async (req: Request, res: Response): Promise<Respo
   });
 
   let body = message.body;
+  let sentMessage: any;
+  let messageData: any;
+
   if (message.mediaType === "conversation" || message.mediaType === "extendedTextMessage") {
-    await SendWhatsAppMessage({ body, ticket: createTicket, quotedMsg, isForwarded: !message.fromMe });
+    sentMessage = await SendWhatsAppMessage({ body, ticket: createTicket, quotedMsg, isForwarded: !message.fromMe });
+    
+    // Extrair ID da mensagem enviada
+    let messageId: string;
+    if ('id' in sentMessage) {
+      messageId = sentMessage.id;
+    } else if (sentMessage.key?.id) {
+      messageId = sentMessage.key.id;
+    } else {
+      messageId = `${Date.now()}`;
+    }
+    
+    // Salvar mensagem encaminhada no banco
+    messageData = {
+      wid: messageId,
+      ticketId: createTicket.id,
+      contactId: createTicket.contactId,
+      body: body || "",
+      fromMe: true,
+      mediaType: "extendedTextMessage",
+      read: true,
+      quotedMsgId: quotedMsg?.id || null,
+      ack: 1,
+      remoteJid: createTicket.contact?.remoteJid,
+      dataJson: JSON.stringify(sentMessage),
+      ticketTrakingId: createTicket.ticketTrakingId,
+      companyId: createTicket.companyId,
+      isPrivate: false,
+      isEdited: false,
+      isForwarded: !message.fromMe,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    await CreateMessageService({ messageData, companyId: createTicket.companyId });
   } else {
     const mediaUrl = message.mediaUrl.replace(`:${process.env.PORT}`, "");
     const fileName = obterNomeEExtensaoDoArquivo(mediaUrl);
@@ -1056,8 +1093,46 @@ export const forwardMessage = async (req: Request, res: Response): Promise<Respo
       path: filePath,
     } as Express.Multer.File;
 
-    await SendWhatsAppMedia({ media: mediaSrc, ticket: createTicket, body, isForwarded: !message.fromMe });
+    sentMessage = await SendWhatsAppMedia({ media: mediaSrc, ticket: createTicket, body, isForwarded: !message.fromMe });
+    
+    // Extrair ID da mensagem enviada
+    let messageId: string;
+    if ('id' in sentMessage) {
+      messageId = sentMessage.id;
+    } else if (sentMessage.key?.id) {
+      messageId = sentMessage.key.id;
+    } else {
+      messageId = `${Date.now()}`;
+    }
+    
+    // Salvar mensagem com mídia encaminhada no banco
+    messageData = {
+      wid: messageId,
+      ticketId: createTicket.id,
+      contactId: createTicket.contactId,
+      body: body || "",
+      fromMe: true,
+      mediaType: message.mediaType || "document",
+      mediaUrl: message.mediaUrl, // Preservar URL original da mídia
+      read: true,
+      quotedMsgId: quotedMsg?.id || null,
+      ack: 1,
+      remoteJid: createTicket.contact?.remoteJid,
+      dataJson: JSON.stringify(sentMessage),
+      ticketTrakingId: createTicket.ticketTrakingId,
+      companyId: createTicket.companyId,
+      isPrivate: false,
+      isEdited: false,
+      isForwarded: !message.fromMe,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    await CreateMessageService({ messageData, companyId: createTicket.companyId });
   }
+
+  // Atualizar ticket com a última mensagem
+  await createTicket.update({ lastMessage: body || "[Mídia]" });
 
   return res.status(200).json({ message: "Mensagem encaminhada com sucesso" });
 };
@@ -1393,20 +1468,30 @@ export const forwardToExternalNumber = async (req: Request, res: Response): Prom
 
     // Encaminhar mensagem
     let body = message.body;
+    let sentMessage: any;
 
     if (message.mediaType === "conversation" || message.mediaType === "extendedTextMessage") {
       // Mensagem de texto
-      await SendWhatsAppMessage({
+      sentMessage = await SendWhatsAppMessage({
         body,
         ticket,
         quotedMsg: null,
         isForwarded: true
       });
     } else if (message.mediaUrl) {
-      // Mensagem com mídia
+      // Mensagem com mídia - corrigir path
       const publicFolder = path.resolve(__dirname, "..", "..", "public");
       const fileName = message.mediaUrl.split("/").pop() || "arquivo";
-      const filePath = path.join(publicFolder, `company${companyId}`, message.mediaUrl);
+      
+      // CORREÇÃO: Extrair apenas o caminho relativo da URL completa
+      let relativePath = message.mediaUrl;
+      if (message.mediaUrl.includes("/public/")) {
+        relativePath = message.mediaUrl.split("/public/")[1];
+      } else if (message.mediaUrl.startsWith("/")) {
+        relativePath = message.mediaUrl.substring(1);
+      }
+      
+      const filePath = path.join(publicFolder, relativePath);
 
       // Verificar se arquivo existe
       if (fs.existsSync(filePath)) {
@@ -1419,7 +1504,7 @@ export const forwardToExternalNumber = async (req: Request, res: Response): Prom
           path: filePath
         } as Express.Multer.File;
 
-        await SendWhatsAppMedia({
+        sentMessage = await SendWhatsAppMedia({
           media: mediaSrc,
           ticket,
           body: body !== fileName ? body : "",
@@ -1427,7 +1512,7 @@ export const forwardToExternalNumber = async (req: Request, res: Response): Prom
         });
       } else {
         // Se arquivo não existe localmente, enviar apenas o texto
-        await SendWhatsAppMessage({
+        sentMessage = await SendWhatsAppMessage({
           body: body || "[Mídia não disponível]",
           ticket,
           quotedMsg: null,
@@ -1436,13 +1521,51 @@ export const forwardToExternalNumber = async (req: Request, res: Response): Prom
       }
     } else {
       // Outros tipos (location, contact, etc)
-      await SendWhatsAppMessage({
+      sentMessage = await SendWhatsAppMessage({
         body,
         ticket,
         quotedMsg: null,
         isForwarded: true
       });
     }
+
+    // Extrair ID da mensagem enviada
+    let sentMessageId: string;
+    if ('id' in sentMessage) {
+      sentMessageId = sentMessage.id;
+    } else if (sentMessage.key?.id) {
+      sentMessageId = sentMessage.key.id;
+    } else {
+      sentMessageId = `${Date.now()}`;
+    }
+
+    // Salvar mensagem encaminhada no banco para aparecer no chat
+    const messageData = {
+      wid: sentMessageId,
+      ticketId: ticket.id,
+      contactId: ticket.contactId,
+      body: body || "[Mídia]",
+      fromMe: true,
+      mediaType: message.mediaType || "extendedTextMessage",
+      mediaUrl: message.mediaUrl || null,
+      read: true,
+      quotedMsgId: null,
+      ack: 1,
+      remoteJid: ticket.contact?.remoteJid,
+      dataJson: JSON.stringify(sentMessage),
+      ticketTrakingId: ticket.ticketTrakingId,
+      companyId: ticket.companyId,
+      isPrivate: false,
+      isEdited: false,
+      isForwarded: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    await CreateMessageService({ messageData, companyId: ticket.companyId });
+
+    // Atualizar ticket com a última mensagem
+    await ticket.update({ lastMessage: body || "[Mídia]" });
 
     return res.status(200).json({
       message: "Mensagem encaminhada com sucesso",

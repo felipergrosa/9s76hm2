@@ -16,6 +16,7 @@ import { getWbot } from "../../libs/wbot";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import formatBody from "../../helpers/Mustache";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
+import logger from "../../utils/logger";
 interface Request {
   media: Express.Multer.File;
   ticket: Ticket;
@@ -355,6 +356,25 @@ const SendWhatsAppMedia = async ({
     );
 
     await ticket.update({ lastMessage: body !== media.filename ? body : bodyMedia, imported: null });
+
+    // Salvar mensagem de mídia no banco para aparecer no chat
+    const messageId = sentMessage?.key?.id || `${Date.now()}`;
+    await CreateMessageService({
+      messageData: {
+        wid: messageId,
+        ticketId: ticket.id,
+        contactId: ticket.contactId,
+        body: body || bodyMedia || "",
+        fromMe: true,
+        mediaType: media.mimetype.split("/")[0] || "document",
+        mediaUrl: media.filename,
+        read: true,
+        ack: 1,
+        remoteJid: contactNumber?.remoteJid,
+        dataJson: JSON.stringify(sentMessage),
+      },
+      companyId: ticket.companyId
+    });
 
     return sentMessage;
   } catch (err) {
