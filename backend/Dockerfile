@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM node:20-bullseye AS build
 WORKDIR /app
 ENV NODE_ENV=development
@@ -20,21 +21,14 @@ RUN apt-get update \
        graphicsmagick ghostscript \
   && rm -rf /var/lib/apt/lists/*
 
-# Instala dependências baseadas no package-lock (mais reprodutível) com diagnóstico detalhado e fallback
-RUN set -eux; \
+# Instala dependências com cache mount para acelerar builds subsequentes
+RUN --mount=type=cache,target=/root/.npm \
+  set -eux; \
   node -v; npm -v; \
   npm config set fund false; \
   npm config set audit false; \
-  npm config set fetch-retries 5; \
-  npm config set fetch-timeout 120000; \
-  npm ci --legacy-peer-deps --no-audit --no-fund --loglevel=verbose \
-  || npm install --legacy-peer-deps --no-audit --no-fund --no-optional --loglevel=verbose \
-  || { \
-    echo 'npm install failed, dumping npm logs'; \
-    ls -lah /root/.npm/_logs || true; \
-    for f in /root/.npm/_logs/*; do echo "==== $f ===="; sed -n '1,200p' "$f" || true; echo '---- tail ----'; tail -n 200 "$f" || true; done; \
-    exit 1; \
-  }
+  npm ci --legacy-peer-deps --no-audit --no-fund \
+  || npm install --legacy-peer-deps --no-audit --no-fund
 
 # Copia o restante do código
 COPY . .
@@ -65,24 +59,12 @@ ENV NODE_ENV=production
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 # Dependências de runtime necessárias (FFmpeg, Chromium, e libs para canvas/PDF thumbnails)
-RUN set -eux; \
-    for i in 1 2 3; do \
-      apt-get update && \
-      apt-get install -y --no-install-recommends --fix-missing \
-        ffmpeg \
-        chromium \
-        libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libjpeg62-turbo libgif7 librsvg2-2 \
-        graphicsmagick ghostscript && \
-      break || { \
-        if [ $i -lt 3 ]; then \
-          echo "Tentativa $i falhou. Tentando novamente em 5 segundos..."; \
-          sleep 5; \
-        else \
-          echo "Todas as tentativas de apt-get falharam."; \
-          exit 1; \
-        fi; \
-      }; \
-    done; \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      ffmpeg \
+      chromium \
+      libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libjpeg62-turbo libgif7 librsvg2-2 \
+      graphicsmagick ghostscript && \
     rm -rf /var/lib/apt/lists/*
 
 # Build info injection

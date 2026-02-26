@@ -4390,10 +4390,6 @@ const flowbuilderIntegration = async (
     // Eventos Socket.IO já emitidos pelo UpdateTicketService via TicketEventBus
   }
 
-  if (msg.key.fromMe) {
-    return;
-  }
-
   const whatsapp = await ShowWhatsAppService(wbot.id!, companyId);
 
   const listPhrase = await FlowCampaignModel.findAll({
@@ -4865,19 +4861,37 @@ const handleMessage = async (
     return;
   }
 
+  // =================================================================
+  // SELFCHAT DETECTION: Processar mensagens selfchat com ticket fixo
+  // =================================================================
+  // Selfchat é quando você envia mensagens para o próprio número (usado para anotações)
+  // Para exibir em todos os dispositivos, sempre usamos o mesmo ticket
+  const me = getMeSocket(wbot);
+  const remoteJidNormalized = jidNormalizedUser(msg.key.remoteJid);
+  let isSelfChat = false;
+
+  // Verifica se remoteJid é o próprio número do usuário (com ou sem @s.whatsapp.net)
+  if (msg.key.fromMe && remoteJidNormalized === me.id) {
+    isSelfChat = true;
+    logger.debug({
+      msgId: msg.key.id,
+      remoteJid: msg.key.remoteJid,
+    }, "[handleMessage] Selfchat detectado - Usando ticket fixo.");
+  }
+
   // Sincronização de LIDs: Se a mensagem for "fromMe" e o remoteJid for o próprio LID do bot,
   // isso geralmente é uma mensagem de sincronização interna (Note to Self / Sync).
-  // Se processarmos, criaremos um Ticket fantasma.
   if (msg.key.fromMe && msg.key.remoteJid && msg.key.remoteJid.includes("@lid")) {
     const wbotUser = wbot.user?.id || "";
     if (wbotUser.includes(msg.key.remoteJid)) {
-      logger.warn({
+      isSelfChat = true;
+      logger.debug({
         msgId: msg.key.id,
         remoteJid: msg.key.remoteJid,
-      }, "[handleMessage] DETECTADO Self-LID (Sync/NoteToSelf) - Mensagem pode criar Ghost Chat se processada.");
-      // Opcional: return; se confirmarmos que isso nunca deve virar ticket
+      }, "[handleMessage] Self-LID (Sync/NoteToSelf) detectado - Usando ticket fixo.");
     }
   }
+  // =================================================================
 
   try {
     let queueId: number = null;
@@ -5130,7 +5144,8 @@ const handleMessage = async (
         settings,
         false,
         false,
-        Boolean(msg?.key?.fromMe)
+        Boolean(msg?.key?.fromMe),
+        isSelfChat
       );
       console.log(`[wbotMessageListener] Ticket obtido: id=${result.id}, uuid=${result.uuid}, status=${result.status}`);
       return result;
@@ -5152,7 +5167,8 @@ const handleMessage = async (
           settings,
           false,
           false,
-          Boolean(msg?.key?.fromMe)
+          Boolean(msg?.key?.fromMe),
+          isSelfChat
         );
       }
       throw err;

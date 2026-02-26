@@ -112,7 +112,8 @@ const findOrphanTicketWhatsappIds = async (companyId: number): Promise<number[]>
        LEFT JOIN "Whatsapps" w ON t."whatsappId" = w.id
        WHERE w.id IS NULL
          AND t."whatsappId" IS NOT NULL
-         AND t."companyId" = :companyId`,
+         AND t."companyId" = :companyId
+         AND COALESCE(t."channel", 'whatsapp') = 'whatsapp'`,
       {
         replacements: { companyId },
         type: QueryTypes.SELECT
@@ -153,6 +154,16 @@ export const onConnectionOpen = async (
     oldWhatsappIds: []
   };
 
+  const currentWhatsapp = await Whatsapp.findByPk(whatsappId, {
+    attributes: ["id", "companyId", "channelType", "channel", "name"]
+  });
+  const currentChannelType = (currentWhatsapp as any)?.channelType || (currentWhatsapp as any)?.channel || "baileys";
+  const isCurrentOfficial = currentChannelType === "official" || currentChannelType === "whatsapp_official";
+  if (isCurrentOfficial) {
+    logger.warn(`[ConnectionGuard] onConnectionOpen ignorado para conexão official whatsappId=${whatsappId}`);
+    return result;
+  }
+
   const normalized = normalizePhone(phoneNumber);
   if (!normalized) {
     logger.debug(`[ConnectionGuard] Número vazio para whatsappId=${whatsappId}, ignorando.`);
@@ -169,7 +180,30 @@ export const onConnectionOpen = async (
   const orphanIds = await findOrphanTicketWhatsappIds(companyId);
 
   // Unir: conexões antigas conhecidas + tickets órfãos
-  const allOldIds = [...new Set([...oldIds, ...orphanIds])].filter(id => id !== whatsappId);
+  const allOldIdsRaw = [...new Set([...oldIds, ...orphanIds])].filter(id => id !== whatsappId);
+
+  // FILTRO CRÍTICO: não migrar entre providers diferentes (ex: official/facebook/instagram/webchat)
+  // Apenas migra conexões do MESMO channelType do atual.
+  const oldWhatsappRows = await Whatsapp.findAll({
+    attributes: ["id", "channelType", "channel"],
+    where: {
+      id: { [Op.in]: allOldIdsRaw },
+      companyId
+    }
+  });
+  const allowedOldIds = new Set<number>();
+  for (const w of oldWhatsappRows) {
+    const ch = (w as any).channelType || (w as any).channel || "baileys";
+    const isOfficial = ch === "official" || ch === "whatsapp_official";
+    const isFacebook = ch === "facebook";
+    const isInstagram = ch === "instagram";
+    const isWebchat = ch === "webchat";
+    if (isOfficial || isFacebook || isInstagram || isWebchat) continue;
+    if (ch !== currentChannelType) continue;
+    allowedOldIds.add(w.id);
+  }
+
+  const allOldIds = allOldIdsRaw.filter(id => allowedOldIds.has(id));
 
   if (allOldIds.length === 0) {
     logger.debug(`[ConnectionGuard] Nenhuma conexão antiga ou ticket órfão para migrar (whatsappId=${whatsappId}, número=${normalized}).`);
@@ -186,7 +220,8 @@ export const onConnectionOpen = async (
       `UPDATE "Tickets"
        SET "whatsappId" = :newId
        WHERE "whatsappId" IN (:oldIds)
-         AND "companyId" = :companyId`,
+         AND "companyId" = :companyId
+         AND COALESCE("channel", 'whatsapp') = 'whatsapp'`,
       {
         replacements: { newId: whatsappId, oldIds: allOldIds, companyId }
       }

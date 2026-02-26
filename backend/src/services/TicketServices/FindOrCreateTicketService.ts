@@ -33,7 +33,8 @@ const FindOrCreateTicketService = async (
   settings?: any,
   isTransfered?: boolean,
   isCampaign: boolean = false,
-  isFromMe: boolean = false
+  isFromMe: boolean = false,
+  isSelfChat: boolean = false
 ): Promise<Ticket> => {
   // try {
   // let isCreated = false;
@@ -54,6 +55,48 @@ const FindOrCreateTicketService = async (
   const io = getIO();
 
   const DirectTicketsToWallets = settings?.DirectTicketsToWallets;
+
+  // =================================================================
+  // SELFCHAT: Usar sempre o mesmo ticket com UUID fixo
+  // =================================================================
+  if (isSelfChat) {
+    // UUID fixo baseado no número do usuário para garantir consistência em todos os dispositivos
+    const selfChatNumber = contact?.number || whatsapp?.number || "selfchat";
+    const selfChatUuid = `selfchat-${selfChatNumber}-${companyId}`;
+
+    // Buscar ticket existente com esse UUID
+    let ticket = await Ticket.findOne({
+      where: {
+        uuid: selfChatUuid,
+        companyId
+      }
+    });
+
+    if (ticket) {
+      // Atualizar ticket existente
+      await ticket.update({ unreadMessages });
+      ticket = await ShowTicketService(ticket.id, companyId);
+      logger.info(`[FindOrCreateTicket] Selfchat ticket reutilizado: id=${ticket.id}, uuid=${ticket.uuid}`);
+      return ticket;
+    }
+
+    // Criar novo ticket selfchat com UUID fixo
+    const { v4: uuidv4 } = await import("uuid");
+    ticket = await Ticket.create({
+      uuid: selfChatUuid,
+      status: "open",
+      contactId: contact.id,
+      companyId,
+      whatsappId: whatsapp.id,
+      isGroup: false,
+      unreadMessages: 0,
+      lastMessage: ""
+    });
+
+    logger.info(`[FindOrCreateTicket] Selfchat ticket criado: id=${ticket.id}, uuid=${ticket.uuid}`);
+    return ticket;
+  }
+  // =================================================================
 
   // Para GRUPOS: buscar ticket mais recente independente de status (incluindo closed)
   // Isso garante que um grupo WhatsApp = um único ticket para sempre
