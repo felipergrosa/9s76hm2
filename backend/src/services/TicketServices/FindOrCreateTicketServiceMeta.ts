@@ -19,6 +19,7 @@ const FindOrCreateTicketServiceMeta = async (
   companyId: number,
   channel: string
 ): Promise<Ticket> => {
+  // Buscar ticket específico desta conexão (whatsappId) para não misturar canais
   let ticket = await Ticket.findOne({
     where: {
       status: {
@@ -26,7 +27,8 @@ const FindOrCreateTicketServiceMeta = async (
       },
       contactId: contact.id,
       companyId,
-      channel
+      channel,
+      whatsappId  // CRÍTICO: separar tickets por conexão (API Oficial vs Baileys)
     },
     order: [["id", "DESC"]]
   });
@@ -112,10 +114,11 @@ const FindOrCreateTicketServiceMeta = async (
       whatsappId,
       userId: ticket.userId
     });
-
-  } else {
-    await ticket.update({ whatsappId });
   }
+
+  // IMPORTANTE: Não atualizar whatsappId de ticket existente de outra conexão
+  // Cada conexão (Baileys vs Official) deve manter seu próprio ticket
+  // Removido: await ticket.update({ whatsappId });
 
   ticket = await ShowTicketService(ticket.id, companyId);
 
