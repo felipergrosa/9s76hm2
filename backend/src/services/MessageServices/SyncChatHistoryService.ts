@@ -10,6 +10,7 @@ import { isValidMsg, getTypeMessage, getBodyMessage } from "../WbotServices/wbot
 import {
   registerHistoryHandler,
   unregisterHistoryHandler,
+  registerFetchRequest,
   startFetchRequest,
   cancelFetchRequest
 } from "../../libs/messageHistoryHandler";
@@ -46,6 +47,7 @@ const SyncChatHistoryService = async ({
     syncAll = false,     // Novo: sincronização completa
     maxPages = 5         // Novo: até 5 páginas (500 mensagens)
 }: SyncChatHistoryParams): Promise<SyncResult> => {
+    const io = getIO();
     try {
         // 1. Buscar ticket com informações necessárias
         const ticket = await Ticket.findByPk(ticketId, {
@@ -290,7 +292,6 @@ const SyncChatHistoryService = async ({
 
         // 7. Processar e salvar mensagens novas
         let syncedCount = 0;
-        const io = getIO();
 
         // Filtrar mensagens válidas (remover undefined/null que podem vir do Baileys)
         const validMessages = allMessages.filter(m => m && m.key && m.key.id);
