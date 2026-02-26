@@ -22,7 +22,7 @@ module.exports = {
       mode: "extends",
       loaderOptions: (postcssLoaderOptions) => {
         postcssLoaderOptions.postcssOptions.plugins = [
-          require('tailwindcss'),
+          require('@tailwindcss/postcss'),
           require('autoprefixer'),
         ];
         return postcssLoaderOptions;
