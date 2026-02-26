@@ -4,6 +4,7 @@
   "nomeEmpresa": "Sua empresa",
   "versionSystem": "2.0.0",
   "private": true,
+  "homepage": "/",
   "dependencies": {
     "@date-io/date-fns": "^2.16.0",
     "@emotion/react": "^11.10.5",
