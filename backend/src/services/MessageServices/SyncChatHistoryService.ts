@@ -2,6 +2,7 @@ import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
 import Whatsapp from "../../models/Whatsapp";
 import Contact from "../../models/Contact";
+import { Op } from "sequelize";
 import { getWbot } from "../../libs/wbot";
 import logger from "../../utils/logger";
 import { getIO } from "../../libs/socket";
@@ -14,6 +15,105 @@ import {
   startFetchRequest,
   cancelFetchRequest
 } from "../../libs/messageHistoryHandler";
+import { downloadMediaMessage, getContentType, extractMessageContent } from "@whiskeysockets/baileys";
+import * as fs from "fs";
+import * as path from "path";
+import { promisify } from "util";
+
+const writeFileAsync = promisify(fs.writeFile);
+
+// Tipos de mídia que podem ser baixados
+const DOWNLOADABLE_MEDIA_TYPES = ["image", "video", "audio", "sticker", "document"];
+
+/**
+ * Baixa mídia de uma mensagem do history sync e salva no disco.
+ * Reutiliza a mesma lógica de verifyMediaMessage/downloadMedia do wbotMessageListener.
+ * Retorna null se o download falhar (mídia expirada, indisponível, etc).
+ */
+const downloadSyncMedia = async (
+    msg: any,
+    wbot: any,
+    companyId: number,
+    contactId: number
+): Promise<{ mediaUrl: string; filename: string } | null> => {
+    if (!msg?.message) return null;
+
+    // Extrair informações de mídia
+    const content = extractMessageContent(msg.message);
+    if (!content) return null;
+
+    const contentType = getContentType(content);
+    if (!contentType) return null;
+
+    // Verificar se é tipo de mídia baixável
+    const mediaMessage = (content as any)[contentType];
+    if (!mediaMessage || !mediaMessage.mimetype) return null;
+
+    // Download do buffer via Baileys
+    let buffer: Buffer;
+    try {
+        buffer = await downloadMediaMessage(
+            msg,
+            "buffer",
+            {},
+            {
+                logger,
+                reuploadRequest: wbot.updateMediaMessage
+            }
+        ) as Buffer;
+    } catch (err: any) {
+        // Mídia provavelmente expirada ou indisponível
+        logger.debug(`[SyncMedia] Download falhou para ${msg.key.id}: ${err?.message}`);
+        return null;
+    }
+
+    if (!buffer || buffer.length === 0) return null;
+
+    // Determinar nome do arquivo
+    const mimetype = mediaMessage.mimetype as string;
+    let filename = mediaMessage.fileName || "";
+    if (!filename) {
+        const ext = mimetype.split("/")[1]?.split(";")[0] || "bin";
+        filename = `${Date.now()}.${ext}`;
+    } else {
+        const ext = filename.split(".").pop() || "";
+        const name = filename
+            .split(".")
+            .slice(0, -1)
+            .join(".")
+            .replace(/\s/g, "_")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+        filename = `${name.trim()}_${Date.now()}.${ext}`;
+    }
+
+    // Salvar no disco (mesma estrutura de verifyMediaMessage)
+    const contactFolder = contactId ? `contact${contactId}` : `contact_sync_${Date.now()}`;
+    const folder = path.resolve(
+        __dirname,
+        "..",
+        "..",
+        "..",
+        "public",
+        `company${companyId}`,
+        contactFolder
+    );
+
+    if (!fs.existsSync(folder)) {
+        fs.mkdirSync(folder, { recursive: true });
+        try { fs.chmodSync(folder, 0o777); } catch { }
+    }
+
+    await writeFileAsync(
+        path.join(folder, filename),
+        buffer
+    );
+
+    const mediaUrl = `${contactFolder}/${filename}`;
+    logger.debug(`[SyncMedia] Mídia salva: ${mediaUrl} (${buffer.length} bytes)`);
+
+    return { mediaUrl, filename };
+};
 
 // Cache para throttling (evita sync repetido em curto período)
 const lastSyncTime = new Map<string, number>();
@@ -220,7 +320,33 @@ const SyncChatHistoryService = async ({
 
         if (!messages || messages.length === 0) {
             lastSyncTime.set(throttleKey, now);
+            logger.info(`[SyncChatHistory] Nenhuma mensagem recebida para ticketId=${ticketId} jid=${jid}`);
+
+            // Tentar download retroativo de mídias pendentes (mensagens salvas sem mediaUrl)
+            try {
+                logger.info(`[SyncChatHistory] Iniciando downloadPendingMedia para ticketId=${ticketId}`);
+                const retroCount = await downloadPendingMedia(ticket, wbot, companyId);
+                if (retroCount > 0) {
+                    logger.info(`[SyncChatHistory] Download retroativo: ${retroCount} mídias baixadas para ticketId=${ticketId}`);
+                    return { synced: retroCount, skipped: false };
+                } else {
+                    logger.info(`[SyncChatHistory] Nenhuma mídia pendente para baixar no ticketId=${ticketId}`);
+                }
+            } catch (retroErr: any) {
+                logger.warn(`[SyncChatHistory] Erro no download retroativo: ${retroErr?.message}`);
+            }
+
             return { synced: 0, skipped: false, reason: "Nenhuma mensagem nova encontrada" };
+        }
+
+        // Log diagnóstico: estrutura das mensagens recebidas
+        logger.info(`[SyncChatHistory] Recebidas ${messages.length} mensagens para processar`);
+        for (let i = 0; i < Math.min(5, messages.length); i++) {
+            const m = messages[i];
+            const hasMsg = !!m?.message;
+            const msgKeys = hasMsg ? Object.keys(m.message) : [];
+            const body = hasMsg ? getBodyMessage(m) : null;
+            logger.info(`[SyncChatHistory] Diag msg[${i}]: id=${m?.key?.id?.substring(0,12)} hasMessage=${hasMsg} types=[${msgKeys.join(',')}] body=${body ? body.substring(0, 50) : 'NULL'} ts=${m?.messageTimestamp}`);
         }
 
         // =====================================================================
@@ -319,12 +445,50 @@ const SyncChatHistoryService = async ({
 
                 // Validar mensagem
                 if (!isValidMsg(msg)) {
+                    logger.debug(`[SyncChatHistory] Mensagem ${msg.key.id} rejeitada por isValidMsg`);
                     continue;
                 }
 
-                // Extrair dados da mensagem
+                // Verificar se msg.message existe (não é placeholder)
+                if (!msg.message) {
+                    logger.debug(`[SyncChatHistory] Mensagem ${msg.key.id} é placeholder (sem .message), pulando`);
+                    continue;
+                }
+
+                // Extrair tipo da mensagem
                 const messageType = getTypeMessage(msg);
+
+                // Pular tipos de mensagem que não devem ser exibidos como balões
+                const skipTypes = ["protocolMessage", "senderKeyDistributionMessage"];
+                if (skipTypes.includes(messageType)) {
+                    continue;
+                }
+
                 const messageBody = getBodyMessage(msg) || "";
+
+                // Mapear tipo Baileys → tipo frontend (o frontend espera image/video/audio, não imageMessage/videoMessage/audioMessage)
+                const mediaTypeMap: Record<string, string> = {
+                    imageMessage: "image",
+                    videoMessage: "video",
+                    audioMessage: "audio",
+                    ptvMessage: "video",
+                    documentMessage: "document",
+                    documentWithCaptionMessage: "document",
+                    stickerMessage: "sticker",
+                    contactMessage: "contactMessage",
+                    contactsArrayMessage: "contactMessage",
+                    locationMessage: "locationMessage",
+                    liveLocationMessage: "locationMessage",
+                    reactionMessage: "reactionMessage",
+                    protocolMessage: "protocolMessage",
+                    ephemeralMessage: "ephemeralMessage",
+                };
+                const finalMediaType = mediaTypeMap[messageType] || messageType;
+
+                // Log de diagnóstico para mensagens sem body
+                if (!messageBody && !["sticker", "audio", "image", "video", "document"].includes(finalMediaType)) {
+                    logger.warn(`[SyncChatHistory] Mensagem ${msg.key.id} sem body: type=${messageType} -> ${finalMediaType} msgKeys=[${Object.keys(msg.message || {}).join(',')}]`);
+                }
 
                 // Validar timestamp
                 const timestamp = msg.messageTimestamp
@@ -333,13 +497,32 @@ const SyncChatHistoryService = async ({
                         : Number(msg.messageTimestamp))
                     : Math.floor(Date.now() / 1000);
 
+                // Tentar baixar mídia se for tipo suportado
+                let mediaUrl: string | null = null;
+                if (DOWNLOADABLE_MEDIA_TYPES.includes(finalMediaType)) {
+                    try {
+                        const downloaded = await downloadSyncMedia(msg, wbot, companyId, ticket.contactId);
+                        if (downloaded) {
+                            mediaUrl = downloaded.mediaUrl;
+                            // Atualizar body se documento sem caption
+                            if (!messageBody && downloaded.filename) {
+                                // Manter body vazio — o frontend mostra o arquivo
+                            }
+                        }
+                    } catch (dlErr: any) {
+                        logger.debug(`[SyncChatHistory] Falha no download da mídia ${msg.key.id}: ${dlErr?.message}`);
+                        // Continua sem mídia — placeholder será exibido no frontend
+                    }
+                }
+
                 const messageData = {
                     wid: msg.key.id,
                     ticketId: ticket.id,
                     contactId: ticket.contactId,
                     body: messageBody,
                     fromMe: msg.key.fromMe || false,
-                    mediaType: messageType,
+                    mediaType: finalMediaType,
+                    mediaUrl,
                     read: true,
                     ack: msg.status || 0,
                     remoteJid: msg.key.remoteJid || ticket.contact?.remoteJid,
@@ -371,12 +554,78 @@ const SyncChatHistoryService = async ({
             logger.info(`[SyncChatHistory] Sincronizadas ${syncedCount} mensagens para ticketId=${ticketId}`);
         }
 
+        // 10. Download retroativo de mídias pendentes (mensagens já salvas sem mediaUrl)
+        if (forceSync) {
+            try {
+                const retroCount = await downloadPendingMedia(ticket, wbot, companyId);
+                if (retroCount > 0) {
+                    syncedCount += retroCount;
+                    logger.info(`[SyncChatHistory] Download retroativo: ${retroCount} mídias baixadas para ticketId=${ticketId}`);
+                }
+            } catch (retroErr: any) {
+                logger.warn(`[SyncChatHistory] Erro no download retroativo: ${retroErr?.message}`);
+            }
+        }
+
         return { synced: syncedCount, skipped: false };
 
     } catch (err: any) {
         logger.error(`[SyncChatHistory] Erro geral: ${err?.message}`);
         return { synced: 0, skipped: true, reason: `Erro: ${err?.message}` };
     }
+};
+
+/**
+ * Busca mensagens de mídia já salvas no banco sem mediaUrl e tenta baixar
+ * usando o dataJson salvo + downloadMediaMessage do Baileys.
+ */
+const downloadPendingMedia = async (
+    ticket: Ticket,
+    wbot: any,
+    companyId: number
+): Promise<number> => {
+    // Buscar mensagens de mídia sem mediaUrl para este ticket
+    const pendingMessages = await Message.findAll({
+        where: {
+            ticketId: ticket.id,
+            mediaType: { [Op.in]: DOWNLOADABLE_MEDIA_TYPES },
+            [Op.or]: [
+                { mediaUrl: null },
+                { mediaUrl: "" }
+            ],
+            dataJson: { [Op.not]: null }
+        },
+        order: [["createdAt", "DESC"]],
+        limit: 50 // Limitar para não sobrecarregar
+    });
+
+    if (pendingMessages.length === 0) return 0;
+
+    logger.info(`[DownloadPendingMedia] ${pendingMessages.length} mídias pendentes para ticketId=${ticket.id}`);
+
+    let downloadedCount = 0;
+
+    for (const dbMsg of pendingMessages) {
+        try {
+            // Parsear o dataJson para reconstruir a mensagem original do Baileys
+            const originalMsg = JSON.parse(dbMsg.dataJson);
+            if (!originalMsg?.message) continue;
+
+            // Tentar download
+            const result = await downloadSyncMedia(originalMsg, wbot, companyId, ticket.contactId);
+            if (result) {
+                // Atualizar mensagem no banco com a mediaUrl
+                await dbMsg.update({ mediaUrl: result.mediaUrl });
+                downloadedCount++;
+                logger.debug(`[DownloadPendingMedia] Mídia baixada: msgId=${dbMsg.id} -> ${result.mediaUrl}`);
+            }
+        } catch (err: any) {
+            // Silencioso: mídia pode estar expirada
+            logger.debug(`[DownloadPendingMedia] Falha msgId=${dbMsg.id}: ${err?.message}`);
+        }
+    }
+
+    return downloadedCount;
 };
 
 export default SyncChatHistoryService;

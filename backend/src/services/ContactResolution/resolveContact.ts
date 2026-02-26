@@ -231,6 +231,110 @@ export async function resolveContact(
   }
 
   // ─────────────────────────────────────────────────
+  // BUSCA 6: por pushName + ticket ativo na mesma conexão
+  // Quando só temos LID e todas as buscas anteriores falharam,
+  // procurar contato com ticket ativo/recente na mesma conexão (whatsappId)
+  // cujo nome coincida com o pushName da mensagem.
+  // SEGURANÇA: só aceita se encontrar EXATAMENTE 1 candidato (sem ambiguidade).
+  // ─────────────────────────────────────────────────
+  if (ids.lidJid && !ids.pnCanonical && ids.pushName && ids.pushName.trim().length > 1 && !ids.isFromMe) {
+    try {
+      const cleanPushName = ids.pushName.trim();
+
+      // Buscar contatos com ticket ativo na mesma empresa que tenham nome igual ao pushName
+      // e que NÃO sejam PENDING_ (são contatos reais com número válido)
+      const candidates = await Contact.findAll({
+        where: {
+          companyId,
+          isGroup: false,
+          name: cleanPushName,
+          number: { [Op.notLike]: "PENDING_%" },
+          // Excluir contatos que já têm esse lidJid (já seriam encontrados na BUSCA 2)
+          [Op.or]: [
+            { lidJid: null },
+            { lidJid: "" },
+            { lidJid: { [Op.ne]: ids.lidJid } }
+          ]
+        },
+        limit: 5
+      });
+
+      if (candidates.length === 1) {
+        const candidate = candidates[0];
+
+        logger.info({
+          contactId: candidate.id,
+          contactName: candidate.name,
+          contactNumber: candidate.number,
+          lidJid: ids.lidJid,
+          strategy: "pushName-unique-match"
+        }, "[resolveContact] Contato encontrado via pushName (match único)");
+
+        // Preencher lidJid no contato encontrado para futuras resoluções
+        if (!candidate.lidJid) {
+          try {
+            await candidate.update({ lidJid: ids.lidJid });
+            lidJidUpdated = true;
+            logger.info({
+              contactId: candidate.id,
+              lidJid: ids.lidJid
+            }, "[resolveContact] lidJid preenchido em contato existente via pushName");
+          } catch (err: any) {
+            logger.warn({ err: err?.message, lidJid: ids.lidJid }, "[resolveContact] Falha ao preencher lidJid via pushName");
+          }
+        }
+
+        return { contact: candidate, lidJidUpdated, pnFromMapping };
+      } else if (candidates.length > 1) {
+        // Ambiguidade: múltiplos contatos com mesmo nome
+        // Tentar desambiguar por ticket recente na mesma conexão (whatsappId)
+        logger.info({
+          lidJid: ids.lidJid,
+          pushName: cleanPushName,
+          candidateCount: candidates.length
+        }, "[resolveContact] Múltiplos contatos com mesmo pushName, tentando desambiguar por ticket recente...");
+
+        // Importar Ticket para busca de desambiguação
+        const Ticket = (await import("../../models/Ticket")).default;
+
+        for (const candidate of candidates) {
+          const recentTicket = await Ticket.findOne({
+            where: {
+              contactId: candidate.id,
+              companyId,
+              status: { [Op.in]: ["open", "pending", "bot", "nps", "lgpd"] }
+            },
+            order: [["updatedAt", "DESC"]]
+          });
+
+          if (recentTicket) {
+            logger.info({
+              contactId: candidate.id,
+              contactNumber: candidate.number,
+              ticketId: recentTicket.id,
+              lidJid: ids.lidJid,
+              strategy: "pushName-ticket-disambiguate"
+            }, "[resolveContact] Contato desambiguado via ticket ativo");
+
+            if (!candidate.lidJid) {
+              try {
+                await candidate.update({ lidJid: ids.lidJid });
+                lidJidUpdated = true;
+              } catch (err: any) {
+                logger.warn({ err: err?.message }, "[resolveContact] Falha ao preencher lidJid via desambiguação");
+              }
+            }
+
+            return { contact: candidate, lidJidUpdated, pnFromMapping };
+          }
+        }
+      }
+    } catch (err: any) {
+      logger.warn({ err: err?.message, lidJid: ids.lidJid }, "[resolveContact] Erro na busca por pushName");
+    }
+  }
+
+  // ─────────────────────────────────────────────────
   // BUSCA 5 (grupo): por number = groupJid
   // ─────────────────────────────────────────────────
   if (ids.isGroup && ids.groupJid) {

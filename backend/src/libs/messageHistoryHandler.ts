@@ -92,11 +92,39 @@ export const cancelFetchRequest = (fetchId: string): void => {
  */
 export const handleMessagingHistorySet = async (event: any): Promise<void> => {
   try {
-    const { messages = [], isLatest, progress, syncType } = event || {};
+    const { messages = [], chats = [], contacts = [], isLatest, progress, syncType, peerDataRequestSessionId } = event || {};
 
-    logger.debug(`[HistoryHandler] messaging-history.set recebido: ${messages.length} mensagens, isLatest=${isLatest}, progress=${progress}, syncType=${syncType}`);
+    // ON_DEMAND sync: syncType=6 (ON_DEMAND) OU peerDataRequestSessionId presente
+    // O Baileys pode retornar isLatest=false ou undefined para ON_DEMAND — nunca true
+    const isOnDemand = syncType === 6 || !!peerDataRequestSessionId;
+    logger.info(`[HistoryHandler] messaging-history.set recebido: msgs=${messages.length} chats=${chats.length} contacts=${contacts.length} isLatest=${isLatest} progress=${progress} syncType=${syncType} peerSessionId=${peerDataRequestSessionId || 'N/A'} isOnDemand=${isOnDemand}`);
+
+    // Log diagnóstico: estrutura das primeiras 3 mensagens
+    if (messages.length > 0) {
+      for (let i = 0; i < Math.min(3, messages.length); i++) {
+        const m = messages[i];
+        const hasMessage = !!m?.message;
+        const msgKeys = hasMessage ? Object.keys(m.message) : [];
+        logger.info(`[HistoryHandler] msg[${i}]: key.id=${m?.key?.id} remoteJid=${m?.key?.remoteJid} fromMe=${m?.key?.fromMe} hasMessage=${hasMessage} msgTypes=[${msgKeys.join(',')}] ts=${m?.messageTimestamp}`);
+      }
+    }
 
     if (messages.length === 0) {
+      // Resolver fetches pendentes se isLatest=true OU se é resposta ON_DEMAND vazia
+      if (isLatest === true || isOnDemand) {
+        for (const [fetchId, fetch] of activeFetches) {
+          clearTimeout(fetch.timeoutId);
+          activeFetches.delete(fetchId);
+          const elapsed = Date.now() - fetch.startTime;
+          logger.info(`[HistoryHandler] Requisição ${fetchId} concluída (vazia, isLatest=${isLatest} isOnDemand=${!!isOnDemand}) em ${elapsed}ms`);
+          fetch.resolve({
+            messages: fetch.messages,
+            isLatest: true,
+            progress: progress || 100,
+            syncType
+          });
+        }
+      }
       return;
     }
 
@@ -130,23 +158,60 @@ export const handleMessagingHistorySet = async (event: any): Promise<void> => {
 
     // Verificar requisições fetchMessageHistory ativas
     for (const [fetchId, fetch] of activeFetches) {
-      const [fetchJid] = fetchId.split('_');
+      // Extrair JID do fetchId — formato: jid_timestamp_random
+      // JIDs podem conter '@' mas nunca '_' seguido de número (timestamps)
+      const parts = fetchId.split('_');
+      // Reconstruir JID (tudo antes do timestamp numérico)
+      let fetchJid = parts[0];
+      for (let i = 1; i < parts.length; i++) {
+        if (/^\d{10,}$/.test(parts[i])) break; // Encontrou o timestamp
+        fetchJid += '_' + parts[i];
+      }
       
       // Verificar se há mensagens para este JID
       const relevantMessages = messages.filter((m: any) => m?.key?.remoteJid === fetchJid);
       
-      if (relevantMessages.length > 0) {
-        logger.debug(`[HistoryHandler] Requisição ${fetchId} recebeu ${relevantMessages.length} mensagens`);
+      logger.info(`[HistoryHandler] Verificando fetch ${fetchId}: fetchJid=${fetchJid}, msgs encontradas=${relevantMessages.length}, total msgs no evento=${messages.length}`);
+      
+      // Se não encontrou por JID exato, tentar match parcial (LID vs s.whatsapp.net)
+      let finalMessages = relevantMessages;
+      if (finalMessages.length === 0 && messages.length > 0) {
+        // Listar JIDs únicos das mensagens recebidas para debug
+        const uniqueJids = [...new Set(messages.map((m: any) => m?.key?.remoteJid).filter(Boolean))];
+        logger.info(`[HistoryHandler] JIDs nas mensagens recebidas: [${uniqueJids.join(', ')}]`);
         
-        fetch.messages.push(...relevantMessages);
+        // Se temos apenas um fetch ativo e as mensagens são de um JID diferente,
+        // pode ser que o WhatsApp respondeu com um JID diferente (LID vs número)
+        if (activeFetches.size === 1 && uniqueJids.length > 0) {
+          logger.info(`[HistoryHandler] Apenas 1 fetch ativo, atribuindo ${messages.length} mensagens ao fetch ${fetchId}`);
+          finalMessages = messages;
+        }
+      }
+      
+      if (finalMessages.length > 0) {
+        // Filtrar apenas mensagens com conteúdo real (não placeholders)
+        const validMessages = finalMessages.filter((m: any) => {
+          if (!m?.message) {
+            logger.debug(`[HistoryHandler] Mensagem sem conteúdo: key.id=${m?.key?.id} remoteJid=${m?.key?.remoteJid}`);
+            return false;
+          }
+          return true;
+        });
         
-        // Se isLatest === true ou não mais mensagens, resolver
-        if (isLatest === true || (isLatest === undefined && relevantMessages.length < 50)) {
+        logger.info(`[HistoryHandler] Requisição ${fetchId}: ${finalMessages.length} msgs totais, ${validMessages.length} com conteúdo`);
+        
+        fetch.messages.push(...validMessages);
+        
+        // Resolver: se isLatest=true, ou se é resposta ON_DEMAND (isLatest=undefined + peerDataRequestSessionId)
+        // IMPORTANTE: Para ON_DEMAND syncs, o Baileys seta isLatest=undefined (nunca true)
+        const shouldResolve = isLatest === true || isOnDemand;
+          
+        if (shouldResolve) {
           clearTimeout(fetch.timeoutId);
           activeFetches.delete(fetchId);
           
           const elapsed = Date.now() - fetch.startTime;
-          logger.info(`[HistoryHandler] Requisição ${fetchId} concluída em ${elapsed}ms (${fetch.messages.length} mensagens)`);
+          logger.info(`[HistoryHandler] Requisição ${fetchId} concluída em ${elapsed}ms (${fetch.messages.length} mensagens com conteúdo)`);
           
           fetch.resolve({
             messages: fetch.messages,
@@ -154,6 +219,8 @@ export const handleMessagingHistorySet = async (event: any): Promise<void> => {
             progress: progress || 100,
             syncType
           });
+        } else {
+          logger.info(`[HistoryHandler] Requisição ${fetchId}: aguardando mais mensagens (isLatest=${isLatest})`);
         }
       }
     }

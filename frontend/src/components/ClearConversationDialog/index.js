@@ -82,24 +82,33 @@ const ClearConversationDialog = ({ open, onClose, ticketId, onCleared }) => {
                 console.log(`[ResyncDialog] Evento recebido:`, data);
 
                 if (data.action === "update") {
+                    const state = data.status?.state || "";
+                    const current = data.status?.this || 0;
+                    const total = data.status?.all || 0;
+
                     setProgress({
-                        current: data.status?.this || 0,
-                        total: data.status?.all || 0,
-                        state: data.status?.state || "",
+                        current,
+                        total,
+                        state,
                         date: data.status?.date || ""
                     });
 
-                    if (data.status?.state === "COMPLETED") {
-                        if (data.status?.this > 0) {
-                            toast.success(`Ressincronização concluída! ${data.status.this} mensagens sincronizadas.`);
-                            window.dispatchEvent(new CustomEvent("refreshMessages"));
+                    if (state === "COMPLETED") {
+                        setLoading(false);
+                        if (current > 0) {
+                            toast.success(`Ressincronização concluída! ${current} mensagens sincronizadas.`);
                         } else {
                             toast.info("Nenhuma mensagem nova encontrada.");
                         }
+                        window.dispatchEvent(new CustomEvent("refreshMessages"));
                         setTimeout(() => {
                             onClose();
                             setProgress({ current: 0, total: 0, state: "", date: "" });
-                        }, 2000);
+                        }, 2500);
+                    } else if (state === "ERROR") {
+                        setLoading(false);
+                        toast.error(data.status?.date || "Erro ao ressincronizar histórico.");
+                        setProgress({ current: 0, total: 0, state: "ERROR", date: data.status?.date || "" });
                     }
                 } else if (data.action === "refresh") {
                     window.dispatchEvent(new CustomEvent("refreshMessages"));
@@ -120,14 +129,30 @@ const ClearConversationDialog = ({ open, onClose, ticketId, onCleared }) => {
         });
     }, [open, user, ticketId, onClose]);
 
+    // Safety timeout: se o socket nunca emitir COMPLETED/ERROR, desligar loading após 90s
+    useEffect(() => {
+        if (!loading) return;
+        const safetyTimer = setTimeout(() => {
+            console.warn("[ResyncDialog] Safety timeout: loading ativo por mais de 90s");
+            setLoading(false);
+            setProgress(prev => {
+                if (prev.state === "FETCHING" || prev.state === "PREPARING") {
+                    toast.warn("Tempo esgotado. Verifique os logs do sistema.");
+                    return { current: 0, total: 0, state: "ERROR", date: "Timeout - sem resposta do servidor" };
+                }
+                return prev;
+            });
+        }, 90000);
+        return () => clearTimeout(safetyTimer);
+    }, [loading]);
+
     const handleResync = async () => {
         setLoading(true);
-        setProgress({ current: 0, total: 0, state: "PREPARING", date: "" });
+        setProgress({ current: 0, total: -1, state: "FETCHING", date: "Buscando mensagens do WhatsApp..." });
 
         try {
             console.log(`[ResyncDialog] Ressincronizando histórico do ticket: ${ticketId}, período: ${periodMonths} meses`);
 
-            // Usar endpoint de resync que usa SyncChatHistoryService com forceSync
             const response = await api.post(`/messages/${ticketId}/resync`, {
                 periodMonths
             });
@@ -135,23 +160,25 @@ const ClearConversationDialog = ({ open, onClose, ticketId, onCleared }) => {
             console.log(`[ResyncDialog] Resposta do backend:`, response.data);
 
             if (response.data.started) {
-                toast.success("Ressincronização iniciada! Acompanhe o progresso.");
+                // Loading permanece ativo — será desligado pelo socket ao receber COMPLETED/ERROR
+                toast.info("Ressincronização iniciada...");
             } else if (response.data.success) {
                 toast.success(response.data.message);
                 if (onCleared) {
                     onCleared(response.data.synced || 0);
                 }
+                setLoading(false);
                 onClose();
                 window.dispatchEvent(new CustomEvent("refreshMessages"));
             } else {
                 toast.error("Falha ao ressincronizar histórico.");
+                setLoading(false);
             }
 
         } catch (err) {
             console.error("[ResyncDialog] Erro:", err);
             toastError(err);
             setProgress({ current: 0, total: 0, state: "", date: "" });
-        } finally {
             setLoading(false);
         }
     };
@@ -220,28 +247,43 @@ const ClearConversationDialog = ({ open, onClose, ticketId, onCleared }) => {
                             justifyContent: 'space-between',
                             marginBottom: 4
                         }}>
-                            <span>{progress.state === 'FETCHING' ? 'Buscando' : progress.state}</span>
+                            <span style={{ fontWeight: 500 }}>
+                                {progress.state === 'FETCHING' ? 'Buscando no WhatsApp...' 
+                                    : progress.state === 'COMPLETED' ? 'Concluído!' 
+                                    : progress.state === 'ERROR' ? 'Erro' 
+                                    : progress.state === 'PREPARING' ? 'Preparando...'
+                                    : progress.state}
+                            </span>
                             <span>
-                                {progress.total > 0 ? (
-                                    `${progress.current} / ${progress.total} (${Math.round((progress.current / progress.total) * 100)}%)`
-                                ) : progress.total === -1 ? (
-                                    `${progress.current} localizadas...`
+                                {progress.state === 'COMPLETED' && progress.current > 0 ? (
+                                    `${progress.current} mensagens sincronizadas`
+                                ) : progress.state === 'COMPLETED' ? (
+                                    'Nenhuma mensagem nova'
+                                ) : progress.total > 0 ? (
+                                    `${progress.current} / ${progress.total}`
                                 ) : (
-                                    progress.current
+                                    ''
                                 )}
                             </span>
                         </div>
                         <div className={classes.progressBar}>
                             <div className={classes.progressFill} style={{
-                                width: progress.total > 0 ? `${(progress.current / progress.total) * 100}%` : progress.total === -1 ? '100%' : '0%',
-                                opacity: progress.total === -1 ? 0.6 : 1
+                                width: progress.state === 'COMPLETED' ? '100%' 
+                                    : progress.total > 0 ? `${(progress.current / progress.total) * 100}%` 
+                                    : '100%',
+                                opacity: progress.state === 'FETCHING' ? 0.7 : 1,
+                                backgroundColor: progress.state === 'COMPLETED' ? '#4caf50' 
+                                    : progress.state === 'ERROR' ? '#f44336' 
+                                    : '#1976d2',
+                                animation: progress.state === 'FETCHING' ? 'pulse 1.5s ease-in-out infinite' : 'none',
                             }} />
                         </div>
-                        {progress.date && (
-                            <Typography variant="caption" color="textSecondary">
-                                Data: {progress.date}
+                        {progress.date && progress.state !== 'COMPLETED' && (
+                            <Typography variant="caption" color="textSecondary" style={{ marginTop: 4, display: 'block' }}>
+                                {progress.date}
                             </Typography>
                         )}
+                        <style>{`@keyframes pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }`}</style>
                     </div>
                 </DialogContent>
             )}

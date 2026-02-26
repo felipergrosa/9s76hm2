@@ -381,6 +381,113 @@ export async function resolveMessageContact(
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // ÚLTIMA TENTATIVA: Buscar contato existente pelo pushName antes de criar PENDING_
+    // Evita duplicação quando contato real existe mas não tem lidJid preenchido
+    // ═══════════════════════════════════════════════════════════════════
+    if (effectivePushName && effectivePushName.trim().length > 1) {
+      try {
+        const existingByName = await Contact.findAll({
+          where: {
+            companyId,
+            isGroup: false,
+            name: effectivePushName.trim(),
+            number: { [Op.notLike]: "PENDING_%" }
+          },
+          limit: 5
+        });
+
+        if (existingByName.length === 1) {
+          const found = existingByName[0];
+          logger.info({
+            contactId: found.id,
+            contactName: found.name,
+            contactNumber: found.number,
+            lidJid: ids.lidJid,
+            strategy: "last-resort-pushName"
+          }, "[ContactResolver] Contato encontrado pelo pushName ANTES de criar PENDING_ — evitando duplicação!");
+
+          // Preencher lidJid para futuras resoluções
+          if (!found.lidJid) {
+            try {
+              await found.update({ lidJid: ids.lidJid });
+            } catch { /* constraint unique — ok */ }
+          }
+
+          // Persistir LidMapping se temos o número real
+          const foundDigits = String(found.number || "").replace(/\D/g, "");
+          if (isRealPhoneNumber(foundDigits)) {
+            try {
+              await LidMapping.upsert({
+                lid: ids.lidJid!,
+                phoneNumber: foundDigits,
+                companyId,
+                whatsappId: wbot.id,
+                verified: false
+              });
+            } catch { /* ok */ }
+          }
+
+          return {
+            contact: found,
+            identifiers: ids,
+            isNew: false,
+            isPending: false
+          };
+        } else if (existingByName.length > 1) {
+          // Múltiplos — tentar desambiguar por ticket ativo
+          for (const candidate of existingByName) {
+            const activeTicket = await Ticket.findOne({
+              where: {
+                contactId: candidate.id,
+                companyId,
+                status: { [Op.in]: ["open", "pending", "bot", "nps", "lgpd"] }
+              },
+              order: [["updatedAt", "DESC"]]
+            });
+
+            if (activeTicket) {
+              logger.info({
+                contactId: candidate.id,
+                contactNumber: candidate.number,
+                ticketId: activeTicket.id,
+                lidJid: ids.lidJid,
+                strategy: "last-resort-pushName-disambiguate"
+              }, "[ContactResolver] Contato desambiguado por ticket ativo — evitando PENDING_!");
+
+              if (!candidate.lidJid) {
+                try {
+                  await candidate.update({ lidJid: ids.lidJid });
+                } catch { /* ok */ }
+              }
+
+              const candDigits = String(candidate.number || "").replace(/\D/g, "");
+              if (isRealPhoneNumber(candDigits)) {
+                try {
+                  await LidMapping.upsert({
+                    lid: ids.lidJid!,
+                    phoneNumber: candDigits,
+                    companyId,
+                    whatsappId: wbot.id,
+                    verified: false
+                  });
+                } catch { /* ok */ }
+              }
+
+              return {
+                contact: candidate,
+                identifiers: ids,
+                isNew: false,
+                isPending: false
+              };
+            }
+          }
+        }
+      } catch (lastResortErr: any) {
+        logger.warn({ err: lastResortErr?.message, lidJid: ids.lidJid }, "[ContactResolver] Erro na busca last-resort por pushName");
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // FALLBACK: Criar contato PENDING_ (aguardando resolução futura)
     // ═══════════════════════════════════════════════════════════════════
     logger.info({

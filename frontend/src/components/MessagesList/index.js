@@ -2220,9 +2220,10 @@ const MessagesList = ({
                       // Stickers/GIFs: nunca exibir texto
                       if (message.mediaType === "sticker" || message.mediaType === "gif") return null;
 
-                      // Remover texto apenas de áudios (que têm player inline), arquivos, e mensagens especiais
+                      // Remover texto de áudios COM player inline, arquivos, e mensagens especiais
+                      // Para áudio sem mediaUrl (history sync), NÃO filtrar - deixar cair no placeholder abaixo
                       if (
-                        message.mediaType === "audio" ||
+                        (message.mediaType === "audio" && message.mediaUrl) ||
                         message.mediaType === "application" ||
                         message.mediaType === "document" ||
                         message.mediaType === "reactionMessage" ||
@@ -2232,12 +2233,29 @@ const MessagesList = ({
                         return null;
                       }
 
-                      // Para imagens e vídeos: não exibir se o body é apenas o nome do arquivo
+                      // Para imagens e vídeos: placeholder quando mídia não disponível
                       if (message.mediaType === "image" || message.mediaType === "video") {
-                        const fileName = getFileNameFromUrl(message.mediaUrl) || "";
-                        // Se body é vazio OU é igual ao nome do arquivo, não exibir
-                        if (!bodyTrim || bodyTrim === fileName.trim()) {
-                          return null;
+                        if (!message.mediaUrl) {
+                          // Mídia do history sync sem arquivo baixado
+                          if (!bodyTrim) {
+                            const icon = message.mediaType === "image" ? "📷" : "🎥";
+                            const label = message.mediaType === "image" ? "Imagem" : "Vídeo";
+                            return <span style={{ color: '#999', fontStyle: 'italic', fontSize: 13 }}>{icon} {label} não disponível</span>;
+                          }
+                          // Se tem caption (body), exibir normalmente abaixo
+                        } else {
+                          const fileName = getFileNameFromUrl(message.mediaUrl) || "";
+                          // Se body é vazio OU é igual ao nome do arquivo, não exibir
+                          if (!bodyTrim || bodyTrim === fileName.trim()) {
+                            return null;
+                          }
+                        }
+                      }
+
+                      // Áudio sem mediaUrl (history sync)
+                      if (message.mediaType === "audio" || message.mediaType === "audioMessage") {
+                        if (!message.mediaUrl && !bodyTrim) {
+                          return <span style={{ color: '#999', fontStyle: 'italic', fontSize: 13 }}>🎵 Áudio não disponível</span>;
                         }
                       }
 
