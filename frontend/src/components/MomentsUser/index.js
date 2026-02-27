@@ -469,7 +469,7 @@ const MomentsUser = ({ onPanStart }) => {
           {icon}
           {title}
         </div>
-        <Badge badgeContent={items.length} color="primary" max={99}>
+        <Badge badgeContent={items.length} color="primary" max={99} overlap="rectangular">
           <Box width={10} />
         </Badge>
       </div>
@@ -531,7 +531,7 @@ const MomentsUser = ({ onPanStart }) => {
                 </span>
               </div>
             </div>
-            <Badge badgeContent={group.tickets.length} color="primary" max={99}>
+            <Badge badgeContent={group.tickets.length} color="primary" max={99} overlap="rectangular">
               <Box width={10} />
             </Badge>
           </div>

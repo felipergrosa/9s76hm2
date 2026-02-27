@@ -463,7 +463,13 @@ const Companies = () => {
                             </div>
                         </Card>
                     ))}
-                    {loading && <TableRowSkeleton columns={4} />}
+                    {loading && (
+                        <Table>
+                            <TableBody>
+                                <TableRowSkeleton columns={4} />
+                            </TableBody>
+                        </Table>
+                    )}
                 </div>
 
                 {/* Desktop table */}
@@ -498,13 +504,13 @@ const Companies = () => {
                                         <TableCell align="center">{company?.plan?.name}</TableCell> {/* Acesso seguro a plan.name */}
                                         <TableCell align="center">R$ {renderPlanValue(company)}</TableCell>
                                         <TableCell align="center">{dateToClient(company.createdAt)}</TableCell>
-                                        <TableCell align="center">{dateToClient(company.dueDate)}<br /><span>{company.recurrence}</span></TableCell>
+                                        <TableCell align="center">{dateToClient(company.dueDate)}<br/>{company.recurrence}</TableCell>
                                         <TableCell align="center">{datetimeToClient(company.lastLogin)}</TableCell>
                                         <TableCell align="center">{company.folderSize}</TableCell>
                                         <TableCell align="center">{company.numberFileFolder}</TableCell>
                                         <TableCell align="center">{datetimeToClient(company.updatedAtFolder)}</TableCell>
-                                        {/* Descomentado os botões de ação */}
                                         <TableCell align="center">
+                                            {/* Descomentado os botões de ação */}
                                             <IconButton
                                                 size="small"
                                                 onClick={() => handleEditCompany(company)} //

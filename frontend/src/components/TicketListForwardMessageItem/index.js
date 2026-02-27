@@ -156,6 +156,7 @@ const TicketListForwardMessageItem = ({ ticket, selectedTicket, sendData }) => {
                                     className={classes.closedBadge}
                                     badgeContent={"closed"}
                                     color="primary"
+                                    overlap="rectangular"
                                 />
                             )}
                             {ticket.lastMessage && (
@@ -196,6 +197,7 @@ const TicketListForwardMessageItem = ({ ticket, selectedTicket, sendData }) => {
                                 classes={{
                                     badge: classes.badgeStyle,
                                 }}
+                                overlap="rectangular"
                             />
                         </span>
                     }

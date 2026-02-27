@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useContext, useCallback } from "react";
+import logger from "../../utils/logger";
 import { parseISO, format, isSameDay, isYesterday } from "date-fns";
 import clsx from "clsx";
 import { useHistory, useParams } from "react-router-dom";
@@ -432,9 +433,9 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
     const { get: getSetting } = useCompanySettings();
 
     useEffect(() => {
-        console.log("======== TicketListItemCustom ===========")
-        console.log(ticket)
-        console.log("=========================================")
+        logger.log("======== TicketListItemCustom ===========")
+        logger.log(ticket)
+        logger.log("=========================================")
     }, [ticket]);
 
     useEffect(() => {
@@ -846,6 +847,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                                                         ? "#4267B2"
                                                         : "#E1306C"
                                         }}
+                                        overlap="rectangular"
                                     >
                                         {ticket.whatsapp?.name.toUpperCase()}
                                     </Badge>
@@ -853,13 +855,13 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
 
                                 {/* Badge de fila - não exibe para grupos */}
                                 {!ticket.isGroup && (
-                                    <Badge style={{ backgroundColor: ticket.queue?.color || "#7c7c7c" }} className={classes.connectionTag}>
+                                    <Badge style={{ backgroundColor: ticket.queue?.color || "#7c7c7c" }} className={classes.connectionTag} overlap="rectangular">
                                         {ticket.queueId ? ticket.queue?.name.toUpperCase() : ticket.status === "lgpd" ? "LGPD" : "SEM FILA"}
                                     </Badge>
                                 )}
 
                                 {ticket?.user && (
-                                    <Badge style={{ backgroundColor: "#000000" }} className={classes.connectionTag}>
+                                    <Badge style={{ backgroundColor: "#000000" }} className={classes.connectionTag} overlap="rectangular">
                                         {ticket.user?.name.toUpperCase()}
                                     </Badge>
                                 )}
@@ -871,36 +873,8 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                         </span>
                     }
                 />
-                <ListItemSecondaryAction className={classes.rightMetaAction}>
-                    {(ticket.lastMessage || ticket.updatedAt) && (
-                        <div className={classes.rightSideMeta}>
-                            <Typography
-                                className={Number(ticket.unreadMessages) > 0 ? classes.lastMessageTimeUnread : classes.lastMessageTime}
-                                component="span"
-                                variant="body2"
-                            >
-                                {(() => {
-                                    const d = parseISO(ticket.updatedAt);
-                                    if (isSameDay(d, new Date())) return format(d, "HH:mm");
-                                    if (isYesterday(d)) return "Ontem";
-                                    return format(d, "dd/MM/yy");
-                                })()}
-                            </Typography>
 
-                            <Badge
-                                className={`${classes.newMessagesCount} ${classes.unreadBelowDate} ${Number(ticket.unreadMessages) > 0 ? "" : classes.unreadPlaceholder}`}
-                                badgeContent={ticket.unreadMessages}
-                                classes={{
-                                    badge: classes.badgeStyle,
-                                }}
-                            >
-                                <span className={classes.rightBadgeDummy} />
-                            </Badge>
-                        </div>
-                    )}
-
-                </ListItemSecondaryAction>
-
+                {/* Botões de ação - devem vir ANTES do ListItemSecondaryAction */}
                 <div
                     className={classes.ticketActionButtons}
                     style={{
@@ -1041,6 +1015,37 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                         </Tooltip>
                     )}
                 </div>
+
+                <ListItemSecondaryAction className={classes.rightMetaAction}>
+                    {(ticket.lastMessage || ticket.updatedAt) && (
+                        <div className={classes.rightSideMeta}>
+                            <Typography
+                                className={Number(ticket.unreadMessages) > 0 ? classes.lastMessageTimeUnread : classes.lastMessageTime}
+                                component="span"
+                                variant="body2"
+                            >
+                                {(() => {
+                                    const d = parseISO(ticket.updatedAt);
+                                    if (isSameDay(d, new Date())) return format(d, "HH:mm");
+                                    if (isYesterday(d)) return "Ontem";
+                                    return format(d, "dd/MM/yy");
+                                })()}
+                            </Typography>
+
+                            <Badge
+                                className={`${classes.newMessagesCount} ${classes.unreadBelowDate} ${Number(ticket.unreadMessages) > 0 ? "" : classes.unreadPlaceholder}`}
+                                badgeContent={ticket.unreadMessages}
+                                classes={{
+                                    badge: classes.badgeStyle,
+                                }}
+                                overlap="rectangular"
+                            >
+                                <span className={classes.rightBadgeDummy} />
+                            </Badge>
+                        </div>
+                    )}
+
+                </ListItemSecondaryAction>
             </ListItem>
             {/* <Divider variant="inset" component="li" /> */}
         </React.Fragment>

@@ -1,5 +1,6 @@
 import io from "socket.io-client";
 import { getBackendUrl } from "../config";
+import logger from "../utils/logger";
 
 class SocketWorker {
   constructor(companyId, userId) {
@@ -73,9 +74,9 @@ class SocketWorker {
     } catch { }
 
     this.socket.on("connect", () => {
-      console.log("[SocketWorker] Socket conectado! Namespace:", nsUrl);
-      console.log("[SocketWorker] Salas ativas para rejoin:", Array.from(this.activeRooms));
-      console.log("[SocketWorker] Buffer de joins pendentes:", Array.from(this.joinBuffer));
+      logger.log("[SocketWorker] Socket conectado! Namespace:", nsUrl);
+      logger.log("[SocketWorker] Salas ativas para rejoin:", Array.from(this.activeRooms));
+      logger.log("[SocketWorker] Buffer de joins pendentes:", Array.from(this.joinBuffer));
       
       // Sempre refaz joins das salas ativas após qualquer conexão
       // (mesmo recovered, pois o servidor pode ter perdido o estado)
@@ -85,12 +86,12 @@ class SocketWorker {
         this.activeRooms.forEach((room) => {
           try {
             rejoinCount++;
-            console.log(`[SocketWorker] Rejoin ${rejoinCount}/${this.activeRooms.size} na sala:`, room);
+            logger.log(`[SocketWorker] Rejoin ${rejoinCount}/${this.activeRooms.size} na sala:`, room);
             this.socket.emit("joinChatBox", room, (err) => {
               if (err) {
                 console.error(`[SocketWorker] ERRO ao refazer join na sala ${room}:`, err);
               } else {
-                console.log(`[SocketWorker] ✓ Rejoin bem-sucedido na sala ${room}`);
+                logger.log(`[SocketWorker] ✓ Rejoin bem-sucedido na sala ${room}`);
               }
             });
           } catch (e) {
@@ -103,11 +104,11 @@ class SocketWorker {
         this.joinBuffer.forEach((room) => {
           try {
             bufferCount++;
-            console.log(`[SocketWorker] Processando buffer ${bufferCount}/${this.joinBuffer.size}:`, room);
+            logger.log(`[SocketWorker] Processando buffer ${bufferCount}/${this.joinBuffer.size}:`, room);
             this.socket.emit("joinChatBox", room, (err) => {
               if (!err) {
                 this.activeRooms.add(room); // Adiciona às salas ativas
-                console.log(`[SocketWorker] ✓ Join do buffer bem-sucedido, adicionado a activeRooms:`, room);
+                logger.log(`[SocketWorker] ✓ Join do buffer bem-sucedido, adicionado a activeRooms:`, room);
               } else {
                 console.error(`[SocketWorker] ERRO ao processar join do buffer:`, room, err);
               }
@@ -117,7 +118,7 @@ class SocketWorker {
           }
         });
         
-        console.log(`[SocketWorker] Resumo: ${rejoinCount} rejoins, ${bufferCount} do buffer`);
+        logger.log(`[SocketWorker] Resumo: ${rejoinCount} rejoins, ${bufferCount} do buffer`);
       } finally {
         this.joinBuffer.clear();
       }
@@ -125,20 +126,20 @@ class SocketWorker {
 
     this.socket.on("disconnect", (reason) => {
       console.warn("[SocketWorker] Socket desconectado. Motivo:", reason);
-      console.log("[SocketWorker] Salas ativas serão reconectadas:", Array.from(this.activeRooms));
+      logger.log("[SocketWorker] Salas ativas serão reconectadas:", Array.from(this.activeRooms));
       this.reconnectAfterDelay();
     });
 
     // Evento customizado: sessão do WhatsApp desconectou (emitido pelo backend)
     this.socket.on("wa-conn-lost", (data) => {
-      console.log("[SocketWorker] wa-conn-lost", data);
+      logger.log("[SocketWorker] wa-conn-lost", data);
       try {
         if (typeof window !== "undefined") {
           const evt = new CustomEvent("wa-conn-lost", { detail: data });
           window.dispatchEvent(evt);
         }
       } catch (e) {
-        console.log("[SocketWorker] wa-conn-lost dispatch error", e);
+        logger.log("[SocketWorker] wa-conn-lost dispatch error", e);
       }
     });
 
@@ -177,27 +178,27 @@ class SocketWorker {
         return cb?.("invalid room");
       }
       
-      console.log("[SocketWorker] joinRoom solicitado:", normalized);
-      console.log("[SocketWorker] Socket conectado?", this.connected);
+      logger.log("[SocketWorker] joinRoom solicitado:", normalized);
+      logger.log("[SocketWorker] Socket conectado?", this.connected);
       
       // Sempre adiciona às salas ativas para rejoin após reconexão
       this.activeRooms.add(normalized);
-      console.log("[SocketWorker] Room adicionada a activeRooms. Total:", this.activeRooms.size);
+      logger.log("[SocketWorker] Room adicionada a activeRooms. Total:", this.activeRooms.size);
       
       if (this.connected) {
-        console.log("[SocketWorker] Socket conectado, emitindo joinChatBox para:", normalized);
+        logger.log("[SocketWorker] Socket conectado, emitindo joinChatBox para:", normalized);
         this.socket.emit("joinChatBox", normalized, (err) => {
           if (err) {
-            console.error(`[SocketWorker] ERRO ao entrar na sala ${normalized}:`, err);
+            logger.error(`[SocketWorker] ERRO ao entrar na sala ${normalized}:`, err);
           } else {
-            console.log(`[SocketWorker] ✓ Entrou com sucesso na sala ${normalized}`);
+            logger.log(`[SocketWorker] ✓ Entrou com sucesso na sala ${normalized}`);
           }
           cb?.(err);
         });
       } else {
-        console.warn("[SocketWorker] Socket desconectado, adicionando ao buffer:", normalized);
+        logger.warn("[SocketWorker] Socket desconectado, adicionando ao buffer:", normalized);
         this.joinBuffer.add(normalized);
-        console.log("[SocketWorker] Buffer size:", this.joinBuffer.size);
+        logger.log("[SocketWorker] Buffer size:", this.joinBuffer.size);
         cb?.();
       }
     } catch (e) {
@@ -279,7 +280,7 @@ class SocketWorker {
   // Inicia health check periódico para verificar se está na sala
   startHealthCheck(room, intervalMs = 30000) {
     this.stopHealthCheck();
-    console.log(`[SocketWorker] Iniciando health check para sala ${room} a cada ${intervalMs}ms`);
+    logger.log(`[SocketWorker] Iniciando health check para sala ${room} a cada ${intervalMs}ms`);
     
     this.healthCheckInterval = setInterval(() => {
       if (!this.connected) {
@@ -295,7 +296,7 @@ class SocketWorker {
           console.warn(`[SocketWorker] Health check: não está na sala ${room}, refazendo join...`);
           this.joinRoom(room, (err) => {
             if (err) console.error(`[SocketWorker] Health check: erro ao refazer join na sala ${room}:`, err);
-            else console.log(`[SocketWorker] Health check: rejoin bem-sucedido na sala ${room}`);
+            else logger.log(`[SocketWorker] Health check: rejoin bem-sucedido na sala ${room}`);
           });
         } else {
           console.debug(`[SocketWorker] Health check OK na sala ${room}, sockets na sala: ${res.count}`);
@@ -309,7 +310,7 @@ class SocketWorker {
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
       this.healthCheckInterval = null;
-      console.log("[SocketWorker] Health check parado");
+        logger.log("[SocketWorker] Health check parado");
     }
   }
 

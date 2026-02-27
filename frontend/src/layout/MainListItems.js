@@ -549,7 +549,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
           to="/chats"
           primary={i18n.t("mainDrawer.listItems.chats")}
           icon={
-            <Badge color="secondary" variant="dot" invisible={invisible}>
+            <Badge color="secondary" variant="dot" invisible={invisible} overlap="rectangular">
               <ForumIcon />
             </Badge>
           }

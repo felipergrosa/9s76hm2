@@ -1,0 +1,48 @@
+version: "3.8"
+services:
+  # Banco de Dados (PostgreSQL)
+  postgres:
+    image: postgres:14-alpine
+    container_name: whaticket-postgres-dev
+    restart: always
+    environment:
+      POSTGRES_DB: whaticket
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASS:-efe487b6a861100fb704ad9f5c160cb8}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data-dev:/var/lib/postgresql/data
+    networks:
+      - whaticket-dev-net
+
+  # Cache e Filas (Redis)
+  redis:
+    image: redis:6.2-alpine
+    container_name: whaticket-redis-dev
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data-dev:/data
+    networks:
+      - whaticket-dev-net
+
+  # Interface visual para o Banco (Opcional - roda na porta 8081)
+  adminer:
+    image: adminer
+    container_name: whaticket-adminer-dev
+    restart: always
+    ports:
+      - "8081:8080"
+    networks:
+      - whaticket-dev-net
+
+networks:
+  whaticket-dev-net:
+    driver: bridge
+
+volumes:
+  postgres-data-dev:
+  redis-data-dev:

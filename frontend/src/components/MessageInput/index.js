@@ -2088,8 +2088,8 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                           : i18n.t("messagesInput.placeholderClosed")
                       }
                       multiline
-                      rows={1}
-                      rowsMax={isMobile ? 4 : 6}
+                      minRows={1}
+                      maxRows={isMobile ? 4 : 6}
                       value={inputMessage}
                       onChange={handleChangeInput}
                       disabled={disableOption()}
@@ -2140,8 +2140,8 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       className={classes.messageInput}
                       placeholder={placeholderText}
                       multiline
-                      rows={1}
-                      rowsMax={isMobile ? 4 : 6}
+                      minRows={1}
+                      maxRows={isMobile ? 4 : 6}
                       value={inputMessage}
                       onChange={handleChangeInput}
                       disabled={disableOption()}

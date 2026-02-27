@@ -259,3 +259,44 @@
     line-height: 2.25rem !important;
   }
 }
+
+/* Ajustes de bordas para tabelas - manter visual sutil original */
+table {
+  border-collapse: collapse !important;
+}
+
+table tbody tr {
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+table tbody tr:last-child {
+  border-bottom: none !important;
+}
+
+table thead th {
+  border-bottom: 1px solid #d1d5db !important;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  table tbody tr {
+    border-bottom: 1px solid #374151 !important;
+  }
+  
+  table thead th {
+    border-bottom: 1px solid #4b5563 !important;
+  }
+}
+
+/* Garantir que classes Tailwind de borda não sobrecrevam */
+tr.border-b,
+tr[class*="border-b"] {
+  border-bottom-color: #e5e7eb !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  tr.border-b,
+  tr[class*="border-b"] {
+    border-bottom-color: #374151 !important;
+  }
+}

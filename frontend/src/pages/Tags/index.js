@@ -352,7 +352,13 @@ const Tags = () => {
               {renderTagTable(categorized.group, "👥 Tags de Grupo")}
               {renderTagTable(categorized.region, "🌎 Tags de Região")}
               {renderTagTable(categorized.transactional, "🔖 Tags Transacionais")}
-              {loading && <TableRowSkeleton key="skeleton" columns={4} />}
+              {loading && (
+                <Table>
+                  <TableBody>
+                    <TableRowSkeleton key="skeleton" columns={4} />
+                  </TableBody>
+                </Table>
+              )}
             </>
           );
         })()}

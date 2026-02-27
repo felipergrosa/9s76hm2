@@ -848,7 +848,11 @@ const Connections = () => {
             {/* Mobile cards */}
             <div className={classes.mobileList}>
               {loading ? (
-                <TableRowSkeleton columns={1} />
+                <Table>
+                  <TableBody>
+                    <TableRowSkeleton columns={1} />
+                  </TableBody>
+                </Table>
               ) : (
                 whatsApps?.map((whatsApp) => (
                   <div key={whatsApp.id} className={classes.card}>

@@ -760,6 +760,7 @@ const TicketsManagerTabs = () => {
                     }
                     badgeContent={"Todos"}
                     classes={{ badge: classes.tabsBadge }}
+                    overlap="rectangular"
                   >
                     <ToggleButton
                       onMouseEnter={() => setIsHoveredAll(true)}
@@ -819,6 +820,7 @@ const TicketsManagerTabs = () => {
                 }
                 badgeContent={i18n.t("tickets.inbox.newTicket")}
                 classes={{ badge: classes.tabsBadge }}
+                overlap="rectangular"
               >
                 <IconButton
                   onMouseEnter={() => handleHover("new")}
@@ -844,6 +846,7 @@ const TicketsManagerTabs = () => {
                 }
                 badgeContent={i18n.t("tickets.inbox.bulkProcess")}
                 classes={{ badge: classes.tabsBadge }}
+                overlap="rectangular"
               >
                 <IconButton
                   onMouseEnter={() => handleHover("bulk")}
@@ -870,6 +873,7 @@ const TicketsManagerTabs = () => {
                   }
                   badgeContent={i18n.t("tickets.inbox.closedAll")}
                   classes={{ badge: classes.tabsBadge }}
+                  overlap="rectangular"
                 >
                   <IconButton
                     onMouseEnter={() => handleHover("resolve")}
@@ -896,6 +900,7 @@ const TicketsManagerTabs = () => {
                 }
                 badgeContent={i18n.t("tickets.inbox.open")}
                 classes={{ badge: classes.tabsBadge }}
+                overlap="rectangular"
               >
                 <IconButton
                   onMouseEnter={() => {
@@ -960,6 +965,7 @@ const TicketsManagerTabs = () => {
                 }
                 badgeContent={i18n.t("tickets.inbox.resolverd")}
                 classes={{ badge: classes.tabsBadge }}
+                overlap="rectangular"
               >
                 <IconButton
                   onMouseEnter={() => {
@@ -1022,6 +1028,7 @@ const TicketsManagerTabs = () => {
                   }
                   badgeContent={!sortTickets ? "Crescente" : "Decrescente"}
                   classes={{ badge: classes.tabsBadge }}
+                  overlap="rectangular"
                 >
                   <ToggleButton
                     onMouseEnter={() => handleHover("sort")}

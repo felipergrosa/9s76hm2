@@ -973,7 +973,7 @@ export default function Options(props) {
                   name="lgpdMessage"
                   margin="dense"
                   multiline
-                  rows={3}
+                  minRows={3}
                   label={i18n.t("settings.settings.LGPD.welcome")}
                   variant="outlined"
                   value={lgpdMessage}
@@ -1078,7 +1078,7 @@ export default function Options(props) {
               name="transferMessage"
               margin="dense"
               multiline
-              rows={3}
+              minRows={3}
               label={i18n.t("settings.settings.customMessages.transferMessage")}
               variant="outlined"
               value={transferMessage}
@@ -1101,7 +1101,7 @@ export default function Options(props) {
               name="greetingAcceptedMessage"
               margin="dense"
               multiline
-              rows={3}
+              minRows={3}
               label={i18n.t("settings.settings.customMessages.greetingAcceptedMessage")}
               variant="outlined"
               value={greetingAcceptedMessage}
@@ -1124,7 +1124,7 @@ export default function Options(props) {
               name="AcceptCallWhatsappMessage"
               margin="dense"
               multiline
-              rows={3}
+              minRows={3}
               label={i18n.t("settings.settings.customMessages.AcceptCallWhatsappMessage")}
               variant="outlined"
               required={AcceptCallWhatsapp === "disabled"}
@@ -1148,7 +1148,7 @@ export default function Options(props) {
               margin="dense"
               multiline
               required={sendQueuePosition === "enabled"}
-              rows={3}
+              minRows={3}
               label={i18n.t("settings.settings.customMessages.sendQueuePositionMessage")}
               variant="outlined"
               value={sendQueuePositionMessage}

@@ -471,30 +471,28 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                             {i18n.t("messagesList.header.buttons.reopen")}
                         </ButtonWithSpinner>
                     )}
-                    {(ticket.status === "open" || ticket.status === "group") && !ticket.isGroup && (
-                        <>
-                            <IconButton className={classes.bottomButtonVisibilityIcon}>
-                                <Tooltip title={i18n.t("messagesList.header.buttons.resolve")}>
-                                    <HighlightOffIcon onClick={handleCloseTicket} />
-                                </Tooltip>
-                            </IconButton>
-                            <IconButton className={classes.bottomButtonVisibilityIcon}>
-                                <Tooltip title={i18n.t("tickets.buttons.returnQueue")}>
-                                    <UndoIcon onClick={(e) => handleUpdateTicketStatus(e, "pending", null)} />
-                                </Tooltip>
-                            </IconButton>
-                            <IconButton className={classes.bottomButtonVisibilityIcon}>
-                                <Tooltip title="Transferir Ticket">
-                                    <SwapHorizOutlined onClick={handleOpenTransferModal} />
-                                </Tooltip>
-                            </IconButton>
-                            <MenuItem className={classes.bottomButtonVisibilityIcon}>
-                                <Tooltip title={i18n.t("contactModal.form.chatBotContact")}>
-                                    <Switch size="small" checked={disableBot} onChange={() => handleContactToggleDisableBot()} />
-                                </Tooltip>
-                            </MenuItem>
-                        </>
-                    )}
+                    {(ticket.status === "open" || ticket.status === "group") && !ticket.isGroup && [
+                        <IconButton key="close" className={classes.bottomButtonVisibilityIcon}>
+                            <Tooltip title={i18n.t("messagesList.header.buttons.resolve")}>
+                                <HighlightOffIcon onClick={handleCloseTicket} />
+                            </Tooltip>
+                        </IconButton>,
+                        <IconButton key="return" className={classes.bottomButtonVisibilityIcon}>
+                            <Tooltip title={i18n.t("tickets.buttons.returnQueue")}>
+                                <UndoIcon onClick={(e) => handleUpdateTicketStatus(e, "pending", null)} />
+                            </Tooltip>
+                        </IconButton>,
+                        <IconButton key="transfer" className={classes.bottomButtonVisibilityIcon}>
+                            <Tooltip title="Transferir Ticket">
+                                <SwapHorizOutlined onClick={handleOpenTransferModal} />
+                            </Tooltip>
+                        </IconButton>,
+                        <MenuItem key="bot" className={classes.bottomButtonVisibilityIcon}>
+                            <Tooltip title={i18n.t("contactModal.form.chatBotContact")}>
+                                <Switch size="small" checked={disableBot} onChange={() => handleContactToggleDisableBot()} />
+                            </Tooltip>
+                        </MenuItem>
+                    ]}
                 </Hidden>
 
                 {confirmationOpen && (
@@ -573,26 +571,24 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                     open={menuOpen}
                     onClose={handleCloseMenu}
                 >
-                    {(ticket.status === "open" || ticket.status === "group") && !ticket.isGroup && (
-                        <>
-                            <MenuItem onClick={() => { handleCloseMenu(); handleClickOpen(); }}>
-                                <HighlightOffIcon style={{ color: '#e53935', marginRight: 10 }} />
-                                {i18n.t("messagesList.header.buttons.resolve")}
-                            </MenuItem>
-                            <MenuItem onClick={() => { handleCloseMenu(); handleUpdateTicketStatus(null, "pending", null); }}>
-                                <UndoIcon style={{ color: '#fb8c00', marginRight: 10 }} />
-                                {i18n.t("tickets.buttons.returnQueue")}
-                            </MenuItem>
-                            <MenuItem onClick={() => { handleCloseMenu(); handleOpenTransferModal(); }}>
-                                <SwapHorizOutlined style={{ color: '#1e88e5', marginRight: 10 }} />
-                                {i18n.t("ticketsList.buttons.transfer") || "Transferir ticket"}
-                            </MenuItem>
-                            <MenuItem onClick={() => { handleCloseMenu(); handleContactToggleDisableBot(); }}>
-                                <DeviceHubOutlined style={{ color: '#8e24aa', marginRight: 10 }} />
-                                {i18n.t("contactModal.form.chatBotContact")} {disableBot ? "(desligado)" : "(ligado)"}
-                            </MenuItem>
-                        </>
-                    )}
+                    {(ticket.status === "open" || ticket.status === "group") && !ticket.isGroup && [
+                        <MenuItem key="resolve" onClick={() => { handleCloseMenu(); handleClickOpen(); }}>
+                            <HighlightOffIcon style={{ color: '#e53935', marginRight: 10 }} />
+                            {i18n.t("messagesList.header.buttons.resolve")}
+                        </MenuItem>,
+                        <MenuItem key="return" onClick={() => { handleCloseMenu(); handleUpdateTicketStatus(null, "pending", null); }}>
+                            <UndoIcon style={{ color: '#fb8c00', marginRight: 10 }} />
+                            {i18n.t("tickets.buttons.returnQueue")}
+                        </MenuItem>,
+                        <MenuItem key="transfer" onClick={() => { handleCloseMenu(); handleOpenTransferModal(); }}>
+                            <SwapHorizOutlined style={{ color: '#1e88e5', marginRight: 10 }} />
+                            {i18n.t("ticketsList.buttons.transfer") || "Transferir ticket"}
+                        </MenuItem>,
+                        <MenuItem key="bot" onClick={() => { handleCloseMenu(); handleContactToggleDisableBot(); }}>
+                            <DeviceHubOutlined style={{ color: '#8e24aa', marginRight: 10 }} />
+                            {i18n.t("contactModal.form.chatBotContact")} {disableBot ? "(desligado)" : "(ligado)"}
+                        </MenuItem>
+                    ]}
                     {ticket.isGroup && (
                         <MenuItem onClick={() => { handleCloseMenu(); handleCloseTicket(); }}>
                             <HighlightOffIcon style={{ color: '#546e7a', marginRight: 10 }} />

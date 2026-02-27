@@ -333,7 +333,7 @@ const QueueTemplateGallery = ({ open, onClose, onTemplatesSelected }) => {
                   onClick={() => handleTemplateSelect(template)}
                 >
                   {selectedTemplates.find(t => t.id === template.id) && (
-                    <Badge className={classes.successBadge}>
+                    <Badge className={classes.successBadge} overlap="rectangular">
                       <CheckIcon />
                     </Badge>
                   )}
