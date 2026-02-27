@@ -5,7 +5,6 @@
 *.log
 coverage
 docs
-scripts
 node_modules
 dist
 public
