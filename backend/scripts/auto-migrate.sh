@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 echo "[auto-migrate] Inicializando startup com auto-migration..."

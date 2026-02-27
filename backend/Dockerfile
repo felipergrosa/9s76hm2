@@ -58,9 +58,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
-# Dependências de runtime necessárias (FFmpeg, Chromium, e libs para canvas/PDF thumbnails)
+# Dependências de runtime necessárias (FFmpeg, Chromium, bash para scripts, e libs para canvas/PDF thumbnails)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+      bash \
       ffmpeg \
       chromium \
       libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libjpeg62-turbo libgif7 librsvg2-2 \
@@ -75,13 +76,17 @@ ENV BUILD_DATE=$BUILD_DATE
 ENV GIT_COMMIT=$GIT_COMMIT
 ENV BACKEND_VERSION=$BACKEND_VERSION
 
-# Copia manifestos, dependências já instaladas e artefatos compilados
+# Copia apenas manifestos primeiro
 COPY --from=build /app/package*.json ./
-COPY --from=build /app/node_modules ./node_modules
+
+# Instala APENAS production dependencies (sem devDependencies)
+RUN npm ci --omit=dev --legacy-peer-deps --no-audit --no-fund && \
+    npm cache clean --force
+
+# Copia artefatos compilados e arquivos necessários
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/public ./public
 COPY --from=build /app/certs ./certs
-# Build info files (presentes em runtime para fallback)
 COPY --from=build /app/.git-commit ./.git-commit
 COPY --from=build /app/.build-date ./.build-date
 COPY --from=build /app/scripts ./scripts
