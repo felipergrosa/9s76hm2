@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useContext } from "react";
+import logger from "../../utils/logger";
 
 import { useHistory, useParams } from "react-router-dom";
 import { parseISO, format, isSameDay } from "date-fns";
@@ -244,9 +245,9 @@ const TicketListItem = ({ ticket }) => {
     const { setCurrentTicket, setTabOpen } = useContext(TicketsContext);
 
     useEffect(() => {
-        console.log("======== TicketListItemCustom ===========")
-        console.log(ticket)
-        console.log("=========================================")
+        logger.log("======== TicketListItemCustom ===========")
+        logger.log(ticket)
+        logger.log("=========================================")
     }, [ticket])
 
 

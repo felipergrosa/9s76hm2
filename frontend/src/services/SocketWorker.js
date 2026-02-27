@@ -89,13 +89,13 @@ class SocketWorker {
             logger.log(`[SocketWorker] Rejoin ${rejoinCount}/${this.activeRooms.size} na sala:`, room);
             this.socket.emit("joinChatBox", room, (err) => {
               if (err) {
-                console.error(`[SocketWorker] ERRO ao refazer join na sala ${room}:`, err);
+              logger.error(`[SocketWorker] ERRO ao refazer join na sala ${room}:`, err);
               } else {
                 logger.log(`[SocketWorker] ✓ Rejoin bem-sucedido na sala ${room}`);
               }
             });
           } catch (e) {
-            console.error(`[SocketWorker] Exceção ao refazer join na sala ${room}:`, e);
+          logger.error(`[SocketWorker] Exceção ao refazer join na sala ${room}:`, e);
           }
         });
         
@@ -110,11 +110,11 @@ class SocketWorker {
                 this.activeRooms.add(room); // Adiciona às salas ativas
                 logger.log(`[SocketWorker] ✓ Join do buffer bem-sucedido, adicionado a activeRooms:`, room);
               } else {
-                console.error(`[SocketWorker] ERRO ao processar join do buffer:`, room, err);
+              logger.error(`[SocketWorker] ERRO ao processar join do buffer:`, room, err);
               }
             });
           } catch (e) {
-            console.error(`[SocketWorker] Exceção ao processar buffer:`, room, e);
+          logger.error(`[SocketWorker] Exceção ao processar buffer:`, room, e);
           }
         });
         
@@ -125,7 +125,7 @@ class SocketWorker {
     });
 
     this.socket.on("disconnect", (reason) => {
-      console.warn("[SocketWorker] Socket desconectado. Motivo:", reason);
+      logger.warn("[SocketWorker] Socket desconectado. Motivo:", reason);
       logger.log("[SocketWorker] Salas ativas serão reconectadas:", Array.from(this.activeRooms));
       this.reconnectAfterDelay();
     });
@@ -174,7 +174,7 @@ class SocketWorker {
     try {
       const normalized = (room || "").toString().trim();
       if (!normalized || normalized === "undefined") {
-        console.error("[SocketWorker] joinRoom chamado com room inválida:", room);
+        logger.error("[SocketWorker] joinRoom chamado com room inválida:", room);
         return cb?.("invalid room");
       }
       
@@ -202,7 +202,7 @@ class SocketWorker {
         cb?.();
       }
     } catch (e) {
-      console.error("[SocketWorker] Exceção em joinRoom:", e);
+      logger.error("[SocketWorker] Exceção em joinRoom:", e);
       cb?.(e?.message || String(e));
     }
   }
@@ -251,7 +251,7 @@ class SocketWorker {
       this.socket.disconnect();
       this.socket = null
       this.instance = null
-      console.log("Socket desconectado manualmente");
+      logger.log("Socket desconectado manualmente");
     }
   }
 
@@ -284,22 +284,22 @@ class SocketWorker {
     
     this.healthCheckInterval = setInterval(() => {
       if (!this.connected) {
-        console.warn(`[SocketWorker] Health check: socket desconectado, tentando reconectar...`);
+        logger.warn(`[SocketWorker] Health check: socket desconectado, tentando reconectar...`);
         this.connect();
         return;
       }
       
       this.checkRoom(room, (res) => {
         if (res?.error) {
-          console.error(`[SocketWorker] Health check erro na sala ${room}:`, res.error);
+          logger.error(`[SocketWorker] Health check erro na sala ${room}:`, res.error);
         } else if (!res?.present) {
-          console.warn(`[SocketWorker] Health check: não está na sala ${room}, refazendo join...`);
+          logger.warn(`[SocketWorker] Health check: não está na sala ${room}, refazendo join...`);
           this.joinRoom(room, (err) => {
-            if (err) console.error(`[SocketWorker] Health check: erro ao refazer join na sala ${room}:`, err);
+            if (err) logger.error(`[SocketWorker] Health check: erro ao refazer join na sala ${room}:`, err);
             else logger.log(`[SocketWorker] Health check: rejoin bem-sucedido na sala ${room}`);
           });
         } else {
-          console.debug(`[SocketWorker] Health check OK na sala ${room}, sockets na sala: ${res.count}`);
+          logger.debug(`[SocketWorker] Health check OK na sala ${room}, sockets na sala: ${res.count}`);
         }
       });
     }, intervalMs);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import logger from "../../utils/logger";
 import {
     Dialog,
     DialogTitle,
@@ -69,11 +70,11 @@ const ImportHistoryModal = ({ open, onClose, ticketId }) => {
 
             const eventName = `importHistory-${ticketId}`;
 
-            console.log(`[ImportHistoryModal] Escutando eventos: ${eventName}`);
-            console.log(`[ImportHistoryModal] SocketWorker conectado:`, socketWorker.connected);
+            logger.log(`[ImportHistoryModal] Escutando eventos: ${eventName}`);
+            logger.log(`[ImportHistoryModal] SocketWorker conectado:`, socketWorker.connected);
 
             const handleImportUpdate = (data) => {
-                console.log(`[ImportHistoryModal] Evento recebido:`, data);
+                logger.log(`[ImportHistoryModal] Evento recebido:`, data);
 
                 if (data.action === "update") {
                     setProgress({
@@ -100,7 +101,7 @@ const ImportHistoryModal = ({ open, onClose, ticketId }) => {
                     }
                 } else if (data.action === "refresh") {
                     // Forçar refresh da lista de mensagens
-                    console.log("[ImportHistoryModal] Evento refresh recebido");
+                    logger.log("[ImportHistoryModal] Evento refresh recebido");
                     window.dispatchEvent(new CustomEvent("refreshMessages"));
                 }
             };
@@ -116,7 +117,7 @@ const ImportHistoryModal = ({ open, onClose, ticketId }) => {
                 }
             };
         }).catch(err => {
-            console.error("[ImportHistoryModal] Erro ao importar SocketWorker:", err);
+            logger.error("[ImportHistoryModal] Erro ao importar SocketWorker:", err);
         });
     }, [open, user, ticketId]);
 
@@ -125,13 +126,13 @@ const ImportHistoryModal = ({ open, onClose, ticketId }) => {
         setProgress({ current: 0, total: 0, state: "PREPARING", date: "" });
 
         try {
-            console.log(`[ImportHistoryModal] Iniciando importação - ticketId: ${ticketId}, periodMonths: ${periodMonths}`);
+            logger.log(`[ImportHistoryModal] Iniciando importação - ticketId: ${ticketId}, periodMonths: ${periodMonths}`);
 
             const response = await api.post(`/messages/${ticketId}/import-history`, {
                 periodMonths: Number(periodMonths),
             });
 
-            console.log(`[ImportHistoryModal] Resposta do backend:`, response.data);
+            logger.log(`[ImportHistoryModal] Resposta do backend:`, response.data);
 
             if (response.data.started) {
                 toast.success("Importação iniciada! Acompanhe o progresso.");
@@ -148,7 +149,7 @@ const ImportHistoryModal = ({ open, onClose, ticketId }) => {
             }, 2000);
 
         } catch (err) {
-            console.error("[ImportHistoryModal] Erro na importação:", err);
+            logger.error("[ImportHistoryModal] Erro na importação:", err);
             toastError(err);
             setProgress({ current: 0, total: 0, state: "", date: "" });
         } finally {

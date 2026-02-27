@@ -9,6 +9,7 @@ import TicketsListSkeleton from "../TicketsListSkeleton";
 
 import useTickets from "../../hooks/useTickets";
 import { i18n } from "../../translate/i18n";
+import logger from "../../utils/logger";
 import { AuthContext } from "../../context/Auth/AuthContext";
 
 const useStyles = makeStyles((theme) => ({
@@ -94,7 +95,7 @@ const ticketSortDesc = (a, b) => {
 }
 
 const reducer = (state, action) => {
-    console.log(`[Reducer DEBUG] action=${action.type} status=${action.status || ''} payloadCount=${Array.isArray(action.payload) ? action.payload.length : (action.payload?.id || action.payload)} stateCount=${state.length}`);
+    logger.log(`[Reducer DEBUG] action=${action.type} status=${action.status || ''} payloadCount=${Array.isArray(action.payload) ? action.payload.length : (action.payload?.id || action.payload)} stateCount=${state.length}`);
     const sortDir = action.sortDir;
 
     if (action.type === "LOAD_TICKETS") {
@@ -339,7 +340,7 @@ const TicketsListCustom = (props) => {
 
             if (data.action === "update" || data.action === "delete" || data.action === "create") {
                 const t = data.ticket;
-                console.log(`[TicketsList] aba="${status}" evento="${data.action}" ticketId=${data.ticketId || t?.id} ticketStatus="${t?.status}" oldStatus="${data.oldStatus}" statusMatch=${t?.status === status} userId=${t?.userId} myId=${_user?.id}`);
+                logger.log(`[TicketsList] aba="${status}" evento="${data.action}" ticketId=${data.ticketId || t?.id} ticketStatus="${t?.status}" oldStatus="${data.oldStatus}" statusMatch=${t?.status === status} userId=${t?.userId} myId=${_user?.id}`);
             }
 
             if (data.action === "updateUnread") {

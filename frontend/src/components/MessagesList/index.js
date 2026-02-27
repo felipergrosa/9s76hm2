@@ -55,6 +55,7 @@ import ButtonsPreview from "../ButtonsPreview";
 
 import { useParams, useHistory } from 'react-router-dom';
 import { getBackendUrl } from "../../config";
+import logger from "../../utils/logger";
 
 const useStyles = makeStyles((theme) => ({
   messagesListWrapper: {
@@ -1418,12 +1419,12 @@ const MessagesList = ({
 
       if (!socket?.connected) {
         intervalMs = 5000; // 5s quando socket desconectado (mais agressivo)
-        console.log("[MessagesList] Polling adaptativo: 5s (socket desconectado)");
+        logger.log("[MessagesList] Polling adaptativo: 5s (socket desconectado)");
       } else if (consecutiveFailsRef.current > 5) {
         intervalMs = 60000; // 60s após muitas falhas (backoff)
-        console.log("[MessagesList] Polling adaptativo: 60s (backoff após falhas)");
+        logger.log("[MessagesList] Polling adaptativo: 60s (backoff após falhas)");
       } else {
-        console.log("[MessagesList] Polling adaptativo: 30s (socket conectado)");
+        logger.log("[MessagesList] Polling adaptativo: 30s (socket conectado)");
       }
 
       pollIntervalRef.current = setInterval(pollNewMessages, intervalMs);
