@@ -1,0 +1,8 @@
+.docker-cache
+.wwebjs_auth
+.wwebjs_cache
+.git
+*.log
+coverage
+docs
+scripts

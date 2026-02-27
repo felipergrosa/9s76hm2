@@ -1,0 +1,4 @@
+.docker-cache
+.git
+*.log
+docs

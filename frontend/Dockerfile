@@ -17,8 +17,8 @@ ENV REACT_APP_BACKEND_URL=https://chatsapi.nobreluminarias.com.br
 ARG REACT_APP_FRONTEND_VERSION
 ENV REACT_APP_FRONTEND_VERSION=$REACT_APP_FRONTEND_VERSION
 
-# Build da aplicação React
-RUN NODE_OPTIONS=--max-old-space-size=6144 npm run build
+# Build da aplicação React (memória otimizada para Docker Desktop)
+RUN NODE_OPTIONS=--max-old-space-size=3072 npm run build
 
 # Remove node_modules após build (não precisa mais)
 RUN rm -rf node_modules
