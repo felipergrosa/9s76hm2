@@ -36,6 +36,7 @@ import createOrUpdateBaileysService from "../services/BaileysServices/CreateOrUp
 import { releaseLeadership } from "./wbotLeaderService";
 import { handleMessagingHistorySet } from "./messageHistoryHandler";
 import SignalErrorHandler from "../services/WbotServices/SignalErrorHandler";
+import SignalCleanupService from "../services/WbotServices/SignalCleanupService";
 
 const msgRetryCounterCache = new NodeCache({
   stdTTL: 600,
@@ -716,6 +717,25 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 retriesQrCodeMap.delete(id);
               } else {
                 logger.info(`Session QRCode Generate ${name}`);
+                
+                // LIMPEZA SIGNAL: Na primeira geração de QR (nova conexão), limpar chaves antigas
+                // Isso garante uma "renovação completa" da sessão, evitando Bad MAC de chaves corrompidas
+                const isFirstQr = !retriesQrCodeMap.has(id);
+                if (isFirstQr) {
+                  logger.info(`[SignalCleanup] Primeiro QR Code detectado para ${name} - limpando Signal keys antigos...`);
+                  SignalCleanupService.cleanupSession(id, companyId)
+                    .then(result => {
+                      if (result.success) {
+                        logger.info(`[SignalCleanup] ✅ Sessão renovada: ${result.deleted} arquivos Signal limpos, ${result.preserved} preservados (creds/app-state)`);
+                      } else {
+                        logger.warn(`[SignalCleanup] ⚠️  Limpeza falhou: ${result.error}`);
+                      }
+                    })
+                    .catch(err => {
+                      logger.error(`[SignalCleanup] ❌ Erro inesperado: ${err?.message}`);
+                    });
+                }
+                
                 retriesQrCodeMap.set(id, (retriesQrCode += 1));
 
                 await whatsapp.update({
