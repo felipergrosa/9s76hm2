@@ -1,165 +1,274 @@
 /**
- * SIGNAL ERROR HANDLER - Auto-Recovery Robusto
- * Detecta erros Signal, limpa sessão corrompida e reconecta automaticamente
+ * SIGNAL ERROR HANDLER - Auto-Recovery Robusto v2
+ *
+ * Detecta erros de decriptação Signal (Bad MAC, SessionError) e
+ * faz auto-recovery PRESERVANDO creds + app-state (sem precisar QR Code).
+ *
+ * Estratégia:
+ *   1. O loggerBaileys detecta erros de decriptação e chama `trackDecryptError`
+ *   2. Quando o threshold é atingido (N erros em X segundos), aciona recovery
+ *   3. Recovery: deleta APENAS session-*, sender-key-*, pre-key-* do FS
+ *   4. Desconecta e reconecta — Baileys renegocia chaves automaticamente
+ *   5. NÃO deleta creds nem app-state → sem necessidade de escanear QR
  */
 import logger from "../../utils/logger";
 import { releaseWbotLock } from "../../libs/wbotMutex";
-import DeleteBaileysService from "../BaileysServices/DeleteBaileysService";
-import cacheLayer from "../../libs/cache";
 import path from "path";
 import fs from "fs";
 
-// Contador de erros Signal por whatsappId para evitar loop infinito
-const signalErrorCount = new Map<number, { count: number; lastError: number }>();
-const MAX_SIGNAL_ERRORS = 3; // Máximo de erros antes de parar auto-recovery
-const ERROR_WINDOW_MS = 60000; // Janela de 1 minuto para contar erros
+// Rastreamento de erros por whatsappId
+const errorTrackers = new Map<number, {
+  count: number;
+  firstError: number;
+  lastError: number;
+  recovering: boolean;
+  recoveryCount: number;
+  lastRecovery: number;
+}>();
+
+// Thresholds configuráveis via env
+const DECRYPT_ERROR_THRESHOLD = parseInt(process.env.SIGNAL_ERROR_THRESHOLD || "5", 10);
+const DECRYPT_ERROR_WINDOW_MS = parseInt(process.env.SIGNAL_ERROR_WINDOW_MS || "30000", 10);
+const MAX_RECOVERIES_PER_HOUR = parseInt(process.env.SIGNAL_MAX_RECOVERIES_HOUR || "2", 10);
+const RECOVERY_DELAY_MS = parseInt(process.env.SIGNAL_RECOVERY_DELAY_MS || "5000", 10);
+
+// Padrões de erro Signal conhecidos
+const SIGNAL_ERROR_PATTERNS = [
+  "bad mac",
+  "no matching sessions",
+  "no session found",
+  "verifymac",
+  "decryptwithsessions",
+  "failed to decrypt",
+  "invalid prekey id",
+];
 
 class SignalErrorHandler {
   /**
-   * Detecta erros Signal críticos (Bad MAC, SessionError)
+   * Verifica se uma string contém padrão de erro Signal
    */
   static isSignalError(error: any): boolean {
     if (!error) return false;
-    
-    const errorStr = ((error.message || '') + ' ' + (error.stack || '')).toLowerCase();
-    
-    return errorStr.includes('bad mac') ||
-           errorStr.includes('no matching sessions') ||
-           errorStr.includes('no session found') ||
-           errorStr.includes('verifymac') ||
-           errorStr.includes('decryptwithsessions') ||
-           errorStr.includes('failed to decrypt') ||
-           error.type === 'SessionError' ||
-           error.type === 'PreKeyError';
+    const errorStr = ((error.message || "") + " " + (error.stack || "")).toLowerCase();
+    return SIGNAL_ERROR_PATTERNS.some(p => errorStr.includes(p)) ||
+           error.type === "SessionError" ||
+           error.type === "PreKeyError";
   }
 
   /**
-   * Verifica se deve tentar auto-recovery (evita loop infinito)
+   * Chamado pelo loggerBaileys quando detecta erro de decriptação.
+   * Acumula erros e aciona recovery quando threshold é atingido.
    */
-  static shouldAttemptRecovery(whatsappId: number): boolean {
+  static trackDecryptError(whatsappId: number, companyId?: number): void {
+    if (!whatsappId) return;
+
     const now = Date.now();
-    const record = signalErrorCount.get(whatsappId);
-    
-    if (!record) {
-      signalErrorCount.set(whatsappId, { count: 1, lastError: now });
-      return true;
+    let tracker = errorTrackers.get(whatsappId);
+
+    if (!tracker) {
+      tracker = {
+        count: 0,
+        firstError: now,
+        lastError: now,
+        recovering: false,
+        recoveryCount: 0,
+        lastRecovery: 0,
+      };
+      errorTrackers.set(whatsappId, tracker);
     }
-    
-    // Se passou mais de 1 minuto desde o último erro, resetar contador
-    if (now - record.lastError > ERROR_WINDOW_MS) {
-      signalErrorCount.set(whatsappId, { count: 1, lastError: now });
-      return true;
+
+    // Se a janela expirou, resetar contagem
+    if (now - tracker.firstError > DECRYPT_ERROR_WINDOW_MS) {
+      tracker.count = 0;
+      tracker.firstError = now;
     }
-    
-    // Incrementar contador
-    record.count++;
-    record.lastError = now;
-    
-    // Se excedeu o máximo, não tentar auto-recovery
-    if (record.count > MAX_SIGNAL_ERRORS) {
-      logger.warn(`[SignalError] Limite de erros Signal excedido para whatsappId=${whatsappId}. Auto-recovery desabilitado temporariamente.`);
-      return false;
+
+    tracker.count++;
+    tracker.lastError = now;
+
+    // Se já está em recovery, ignorar
+    if (tracker.recovering) return;
+
+    // Verificar se atingiu threshold
+    if (tracker.count >= DECRYPT_ERROR_THRESHOLD) {
+      logger.warn(
+        `[SignalError] Threshold atingido: ${tracker.count} erros de decriptação em ` +
+        `${Math.round((now - tracker.firstError) / 1000)}s para whatsappId=${whatsappId}. ` +
+        `Iniciando auto-recovery...`
+      );
+      this.triggerRecovery(whatsappId, companyId);
     }
-    
-    return true;
   }
 
   /**
-   * Limpeza de sessão completa quando detectado erro Signal crítico
-   * COM auto-recovery automático
+   * Aciona o processo de recovery: limpa sessões Signal e reconecta
    */
-  static async handleSignalError(whatsappId: number, error: any, companyId?: number): Promise<boolean> {
-    if (!this.isSignalError(error)) return false;
+  private static async triggerRecovery(whatsappId: number, companyId?: number): Promise<void> {
+    const tracker = errorTrackers.get(whatsappId);
+    if (!tracker) return;
 
-    logger.warn(`[SignalError] Detectado erro Signal para whatsappId=${whatsappId}: ${error.message || error}`);
-
-    // Verificar se deve tentar auto-recovery
-    if (!this.shouldAttemptRecovery(whatsappId)) {
-      logger.warn(`[SignalError] Auto-recovery desabilitado para whatsappId=${whatsappId}. Necessário intervenção manual.`);
-      return false;
+    // Verificar limite de recoveries por hora
+    const now = Date.now();
+    if (now - tracker.lastRecovery < 3600000) {
+      if (tracker.recoveryCount >= MAX_RECOVERIES_PER_HOUR) {
+        logger.error(
+          `[SignalError] Limite de ${MAX_RECOVERIES_PER_HOUR} recoveries/hora atingido para ` +
+          `whatsappId=${whatsappId}. Intervenção manual necessária.`
+        );
+        return;
+      }
+    } else {
+      // Resetar contador de recoveries (nova hora)
+      tracker.recoveryCount = 0;
     }
+
+    tracker.recovering = true;
+    tracker.recoveryCount++;
+    tracker.lastRecovery = now;
 
     try {
-      // Importar dinamicamente apenas quando necessário
-      const { default: Whatsapp } = require('../../models/Whatsapp');
+      const { default: Whatsapp } = require("../../models/Whatsapp");
       const whatsapp = await Whatsapp.findByPk(whatsappId);
-      
-      if (!whatsapp) return false;
+      if (!whatsapp) {
+        tracker.recovering = false;
+        return;
+      }
 
       const actualCompanyId = companyId || whatsapp.companyId;
 
-      // 1. Liberar lock Redis
-      try {
-        await releaseWbotLock(whatsappId);
-        logger.info(`[SignalError] Lock liberado para whatsappId=${whatsappId}`);
-      } catch (lockErr) {
-        logger.warn(`[SignalError] Erro ao liberar lock: ${lockErr}`);
-      }
-
-      // 2. Marcar como desconectado
-      await whatsapp.update({ status: 'DISCONNECTED' });
-      logger.info(`[SignalError] WhatsApp ${whatsappId} marcado como DISCONNECTED`);
-
-      // 3. Limpar cache de sessão
-      try {
-        await cacheLayer.delFromPattern(`sessions:${whatsappId}:*`);
-        logger.info(`[SignalError] Cache de sessão limpo para whatsappId=${whatsappId}`);
-      } catch (cacheErr) {
-        logger.warn(`[SignalError] Erro ao limpar cache: ${cacheErr}`);
-      }
-
-      // 4. Limpar arquivos de sessão local
-      const sessionPath = path.join(
+      // 1. Construir caminho da sessão
+      const sessionDir = path.resolve(
         process.cwd(),
-        process.env.SESSIONS_DIR || 'private/sessions',
-        String(whatsapp.companyId || '1'),
+        process.env.SESSIONS_DIR || "private/sessions",
+        String(actualCompanyId || "1"),
         String(whatsappId)
       );
-      
-      if (fs.existsSync(sessionPath)) {
-        fs.rmSync(sessionPath, { recursive: true, force: true });
-        logger.info(`[SignalError] Sessão local removida: ${sessionPath}`);
-      }
 
-      // 5. Limpar sessão via DeleteBaileysService (limpa auth e dados)
+      // 2. Limpar APENAS arquivos Signal (preservar creds + app-state)
+      const deleted = this.cleanSignalFiles(sessionDir);
+      logger.info(
+        `[SignalError] Arquivos Signal removidos para whatsappId=${whatsappId}: ${JSON.stringify(deleted)}`
+      );
+
+      // 3. Desconectar a sessão atual
       try {
-        await DeleteBaileysService(whatsappId);
-        logger.info(`[SignalError] DeleteBaileysService executado para whatsappId=${whatsappId}`);
-      } catch (deleteErr) {
-        logger.warn(`[SignalError] Erro no DeleteBaileysService: ${deleteErr}`);
+        const { removeWbot } = require("../../libs/wbot");
+        await removeWbot(whatsappId, false);
+        logger.info(`[SignalError] Sessão removida do pool para whatsappId=${whatsappId}`);
+      } catch (e: any) {
+        logger.warn(`[SignalError] Erro ao remover sessão: ${e?.message}`);
       }
 
-      // 6. Agendar reconexão automática após delay
-      const delay = 10000; // 10 segundos
-      logger.info(`[SignalError] Agendando reconexão em ${delay/1000}s para whatsappId=${whatsappId}`);
-      
+      // 4. Liberar lock Redis
+      try {
+        await releaseWbotLock(whatsappId);
+      } catch { /* ignorar */ }
+
+      // 5. Marcar como OPENING (mostra no frontend que está reconectando)
+      await whatsapp.update({ status: "OPENING" });
+
+      // 6. Agendar reconexão
+      logger.info(
+        `[SignalError] Reconexão agendada em ${RECOVERY_DELAY_MS / 1000}s para whatsappId=${whatsappId}`
+      );
+
       setTimeout(async () => {
         try {
-          const { StartWhatsAppSessionUnified } = require('./StartWhatsAppSessionUnified');
-          await whatsapp.update({ status: 'OPENING' });
-          logger.info(`[SignalError] Iniciando reconexão automática para whatsappId=${whatsappId}`);
+          const { StartWhatsAppSessionUnified } = require("./StartWhatsAppSessionUnified");
           await StartWhatsAppSessionUnified(whatsapp, actualCompanyId);
-        } catch (reconnectErr) {
-          logger.error(`[SignalError] Erro na reconexão automática: ${reconnectErr}`);
-          // Se falhar, marcar como PENDING para usuário escanear QR
-          await whatsapp.update({ status: 'PENDING' });
+          logger.info(`[SignalError] ✅ Reconexão automática iniciada para whatsappId=${whatsappId}`);
+        } catch (reconnectErr: any) {
+          logger.error(
+            `[SignalError] Erro na reconexão automática: ${reconnectErr?.message}`
+          );
+          // NÃO marca como PENDING — a conta ainda está autenticada
+          // O HealthCheck ou o usuário pode tentar novamente
+          try {
+            const { default: Whatsapp } = require("../../models/Whatsapp");
+            await Whatsapp.update(
+              { status: "DISCONNECTED" },
+              { where: { id: whatsappId } }
+            );
+          } catch { /* ignorar */ }
+        } finally {
+          tracker.recovering = false;
+          tracker.count = 0;
         }
-      }, delay);
+      }, RECOVERY_DELAY_MS);
 
-      return true;
-
-    } catch (err) {
-      logger.error(`[SignalError] Falha na recuperação para whatsappId=${whatsappId}: ${err}`);
-      return false;
+    } catch (err: any) {
+      logger.error(`[SignalError] Falha no recovery para whatsappId=${whatsappId}: ${err?.message}`);
+      tracker.recovering = false;
     }
+  }
+
+  /**
+   * Remove APENAS arquivos Signal corrompidos, preservando creds e app-state.
+   * Retorna contagem de arquivos removidos por tipo.
+   */
+  static cleanSignalFiles(sessionDir: string): { sessions: number; senderKeys: number; preKeys: number } {
+    const result = { sessions: 0, senderKeys: 0, preKeys: 0 };
+
+    if (!fs.existsSync(sessionDir)) return result;
+
+    try {
+      const files = fs.readdirSync(sessionDir);
+
+      for (const file of files) {
+        let shouldDelete = false;
+
+        if (file.startsWith("session-")) {
+          shouldDelete = true;
+          result.sessions++;
+        } else if (file.startsWith("sender-key-")) {
+          shouldDelete = true;
+          result.senderKeys++;
+        } else if (file.startsWith("pre-key-")) {
+          shouldDelete = true;
+          result.preKeys++;
+        }
+
+        if (shouldDelete) {
+          try {
+            fs.unlinkSync(path.join(sessionDir, file));
+          } catch { /* ignorar arquivo individual */ }
+        }
+      }
+    } catch (err: any) {
+      logger.error(`[SignalError] Erro ao limpar arquivos Signal: ${err?.message}`);
+    }
+
+    return result;
   }
 
   /**
    * Resetar contador de erros (chamado quando sessão conecta com sucesso)
    */
   static resetErrorCount(whatsappId: number): void {
-    signalErrorCount.delete(whatsappId);
+    const tracker = errorTrackers.get(whatsappId);
+    if (tracker) {
+      tracker.count = 0;
+      tracker.recovering = false;
+      // NÃO reseta recoveryCount/lastRecovery — proteção por hora mantida
+    }
     logger.info(`[SignalError] Contador de erros resetado para whatsappId=${whatsappId}`);
+  }
+
+  /**
+   * Retorna estatísticas para monitoramento
+   */
+  static getStats(): Record<number, any> {
+    const stats: Record<number, any> = {};
+    for (const [id, tracker] of errorTrackers) {
+      stats[id] = {
+        errors: tracker.count,
+        recovering: tracker.recovering,
+        recoveriesThisHour: tracker.recoveryCount,
+        lastError: tracker.lastError ? new Date(tracker.lastError).toISOString() : null,
+        lastRecovery: tracker.lastRecovery ? new Date(tracker.lastRecovery).toISOString() : null,
+      };
+    }
+    return stats;
   }
 }
 

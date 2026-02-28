@@ -5984,10 +5984,10 @@ const handleMessage = async (
 
     await ticket.reload();
   } catch (err) {
-    // SIGNAL RECOVERY: Detecção otimizada de erros Signal sem overhead
+    // SIGNAL RECOVERY: Detecção de erros Signal — acumula no tracker para auto-recovery
     if (wbot?.id && SignalErrorHandler.isSignalError(err)) {
-      SignalErrorHandler.handleSignalError(wbot.id, err, companyId);
-      logger.warn(`[handleMessage] Erro Signal detectado para whatsappId=${wbot.id}, iniciando auto-recovery`);
+      SignalErrorHandler.trackDecryptError(wbot.id, companyId);
+      logger.warn(`[handleMessage] Erro Signal detectado para whatsappId=${wbot.id}`);
     }
     
     Sentry.captureException(err);

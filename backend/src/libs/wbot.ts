@@ -35,6 +35,7 @@ import path from "path";
 import createOrUpdateBaileysService from "../services/BaileysServices/CreateOrUpdateBaileysService";
 import { releaseLeadership } from "./wbotLeaderService";
 import { handleMessagingHistorySet } from "./messageHistoryHandler";
+import SignalErrorHandler from "../services/WbotServices/SignalErrorHandler";
 
 const msgRetryCounterCache = new NodeCache({
   stdTTL: 600,
@@ -53,7 +54,7 @@ const loggerBaileys = pino({
   level: "error",
   hooks: {
     logMethod(args: any[], method: (...a: any[]) => void) {
-      const shouldSuppress = args.some(arg => {
+      const isDecryptError = args.some(arg => {
         if (!arg) return false;
 
         const msg = typeof arg === "string" ? arg : String(arg?.msg || "");
@@ -71,7 +72,15 @@ const loggerBaileys = pino({
         );
       });
 
-      if (shouldSuppress) return;
+      if (isDecryptError) {
+        // Rastrear erros de decriptação para auto-recovery
+        for (const s of sessions) {
+          if (s.id) {
+            SignalErrorHandler.trackDecryptError(s.id);
+          }
+        }
+        return; // Suprimir do log (já rastreado pelo handler)
+      }
       return method.apply(this, args as any);
     }
   }

@@ -128,7 +128,7 @@ export const tryBecomeLeader = async (phoneNumber: string, whatsappId: number): 
 
   try {
     // Script Lua para atomicidade
-    // Só define se não existe ou se o atual está morto
+    // Assume se: (a) não existe, (b) líder morto, (c) mesmo whatsappId (hot-reload)
     const script = `
       local current = redis.call("get", KEYS[1])
       if current == nil or current == false then
@@ -137,16 +137,24 @@ export const tryBecomeLeader = async (phoneNumber: string, whatsappId: number): 
         return 1
       end
       
-      -- Verificar se líder está morto
+      -- Parsear líder atual: "instanceId:whatsappId:timestamp"
       local parts = {}
       for part in string.gmatch(current, "([^:]+)") do
         table.insert(parts, part)
       end
       
       if #parts >= 3 then
+        local leaderWhatsappId = parts[2]
         local timestamp = tonumber(parts[3]) or 0
         local now = tonumber(ARGV[3]) or 0
         local threshold = tonumber(ARGV[4]) or 60000
+        local myWhatsappId = ARGV[5]
+        
+        -- Mesmo whatsappId = mesma conexão lógica (ex: hot-reload mudou PID)
+        if leaderWhatsappId == myWhatsappId then
+          redis.call("set", KEYS[1], ARGV[1], "EX", ARGV[2])
+          return 3
+        end
         
         if now - timestamp > threshold then
           -- Líder morto, assumir
@@ -155,7 +163,7 @@ export const tryBecomeLeader = async (phoneNumber: string, whatsappId: number): 
         end
       end
       
-      -- Já existe líder ativo
+      -- Já existe líder ativo de outro whatsappId
       return 0
     `;
 
@@ -166,7 +174,8 @@ export const tryBecomeLeader = async (phoneNumber: string, whatsappId: number): 
       value,
       LEADER_TTL_SECONDS,
       now,
-      LEADER_DEAD_THRESHOLD_MS
+      LEADER_DEAD_THRESHOLD_MS,
+      String(whatsappId)
     );
 
     if (result === 1) {
@@ -175,6 +184,10 @@ export const tryBecomeLeader = async (phoneNumber: string, whatsappId: number): 
       return true;
     } else if (result === 2) {
       logger.info(`[LeaderService] ✅ Assumi como LÍDER para ${phoneNumber} (líder anterior morreu)`);
+      startLeaderRenewal(phoneNumber, whatsappId);
+      return true;
+    } else if (result === 3) {
+      logger.info(`[LeaderService] ✅ Reassumi como LÍDER para ${phoneNumber} (mesmo whatsappId=${whatsappId}, novo PID)`);
       startLeaderRenewal(phoneNumber, whatsappId);
       return true;
     } else {
