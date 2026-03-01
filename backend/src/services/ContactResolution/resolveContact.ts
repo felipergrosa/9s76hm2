@@ -335,6 +335,131 @@ export async function resolveContact(
   }
 
   // ─────────────────────────────────────────────────
+  // BUSCA 7: Ticket recente na mesma conexão WhatsApp
+  // Cenário: usuário enviou mensagens pelo celular para um contato,
+  // o contato respondeu via LID. O ticket existe e foi atualizado recentemente.
+  // Se encontrar EXATAMENTE 1 ticket ativo/pendente recente (< 30 min),
+  // associar o LID a esse contato.
+  // SEGURANÇA: Só aceita se o ticket foi atualizado nos últimos 30 minutos
+  // e se o contato NÃO é PENDING_ (é um contato real com número válido).
+  // ─────────────────────────────────────────────────
+  if (ids.lidJid && !ids.pnCanonical && !ids.isFromMe) {
+    try {
+      const Ticket = (await import("../../models/Ticket")).default;
+      const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+      // Buscar tickets ativos/pendentes recentes na mesma empresa
+      // que NÃO sejam de contatos PENDING_ e que foram atualizados recentemente
+      const recentTickets = await Ticket.findAll({
+        where: {
+          companyId,
+          isGroup: false,
+          status: { [Op.in]: ["open", "pending", "bot", "nps", "lgpd"] },
+          updatedAt: { [Op.gte]: thirtyMinAgo }
+        },
+        include: [{
+          model: Contact,
+          as: "contact",
+          where: {
+            isGroup: false,
+            number: { [Op.notLike]: "PENDING_%" },
+            // Contatos sem lidJid (senão já teriam sido encontrados na BUSCA 2)
+            [Op.or]: [
+              { lidJid: null },
+              { lidJid: "" }
+            ]
+          },
+          required: true
+        }],
+        order: [["updatedAt", "DESC"]],
+        limit: 5
+      });
+
+      if (recentTickets.length === 1) {
+        const ticket = recentTickets[0];
+        const contact = ticket.contact;
+
+        logger.info({
+          contactId: contact.id,
+          contactName: contact.name,
+          contactNumber: contact.number,
+          ticketId: ticket.id,
+          ticketStatus: ticket.status,
+          lidJid: ids.lidJid,
+          strategy: "recent-ticket-single"
+        }, "[resolveContact] Contato encontrado via ticket recente único — vinculando LID");
+
+        // Preencher lidJid para futuras resoluções
+        try {
+          await contact.update({ lidJid: ids.lidJid });
+          lidJidUpdated = true;
+        } catch (err: any) {
+          logger.warn({ err: err?.message }, "[resolveContact] Falha ao preencher lidJid via ticket recente");
+        }
+
+        // Persistir LidMapping se temos número real
+        const contactDigits = String(contact.number || "").replace(/\D/g, "");
+        if (contactDigits.length >= 10 && contactDigits.length <= 13) {
+          try {
+            await LidMapping.upsert({
+              lid: ids.lidJid,
+              phoneNumber: contactDigits,
+              companyId,
+              source: "recent_ticket_match",
+              confidence: 0.85,
+              verified: false
+            });
+          } catch { /* ok */ }
+        }
+
+        return { contact, lidJidUpdated, pnFromMapping };
+      } else if (recentTickets.length > 1 && ids.pushName && ids.pushName.trim().length > 1) {
+        // Múltiplos tickets recentes — desambiguar pelo pushName
+        const cleanPush = ids.pushName.trim().toLowerCase();
+        const matched = recentTickets.find(t =>
+          t.contact?.name?.toLowerCase() === cleanPush
+        );
+
+        if (matched?.contact) {
+          logger.info({
+            contactId: matched.contact.id,
+            contactName: matched.contact.name,
+            contactNumber: matched.contact.number,
+            ticketId: matched.id,
+            lidJid: ids.lidJid,
+            strategy: "recent-ticket-pushName-disambiguate"
+          }, "[resolveContact] Contato desambiguado via ticket recente + pushName");
+
+          try {
+            await matched.contact.update({ lidJid: ids.lidJid });
+            lidJidUpdated = true;
+          } catch (err: any) {
+            logger.warn({ err: err?.message }, "[resolveContact] Falha ao preencher lidJid via desambiguação");
+          }
+
+          const matchedDigits = String(matched.contact.number || "").replace(/\D/g, "");
+          if (matchedDigits.length >= 10 && matchedDigits.length <= 13) {
+            try {
+              await LidMapping.upsert({
+                lid: ids.lidJid,
+                phoneNumber: matchedDigits,
+                companyId,
+                source: "recent_ticket_pushname_match",
+                confidence: 0.80,
+                verified: false
+              });
+            } catch { /* ok */ }
+          }
+
+          return { contact: matched.contact, lidJidUpdated, pnFromMapping };
+        }
+      }
+    } catch (err: any) {
+      logger.warn({ err: err?.message, lidJid: ids.lidJid }, "[resolveContact] Erro na busca por ticket recente");
+    }
+  }
+
+  // ─────────────────────────────────────────────────
   // BUSCA 5 (grupo): por number = groupJid
   // ─────────────────────────────────────────────────
   if (ids.isGroup && ids.groupJid) {

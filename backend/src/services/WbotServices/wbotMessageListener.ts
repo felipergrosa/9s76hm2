@@ -867,112 +867,188 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
         : remoteJid;
   }
 
-  // CORREÇÃO: Para mensagens fromMe=true com LID, tentar resolver o número real
-  // O WhatsApp às vezes usa LID ao invés do número real quando enviamos pelo celular
-  if (msg.key.fromMe && isLid && !isGroup) {
-    // Log detalhado para debug de mensagens fromMe com LID
-    logger.info("[getContactMessage] Mensagem fromMe=true com LID - tentando resolver", {
+  // =================================================================
+  // RESOLUÇÃO DE LID PARA CONVERSAS DIRETAS (fromMe=true OU fromMe=false)
+  // Sem isso, mensagens recebidas via LID criam contatos duplicados
+  // =================================================================
+  if (isLid && !isGroup) {
+    logger.info("[getContactMessage] Mensagem com LID detectada - tentando resolver", {
       remoteJid,
+      fromMe: msg.key.fromMe,
       remoteJidAlt: (msg.key as any).remoteJidAlt,
       participantAlt: (msg.key as any).participantAlt,
       senderPn: (msg as any).senderPn,
       pushName: msg.pushName,
-      verifiedBizName: (msg as any).verifiedBizName,
-      messageKeys: Object.keys(msg.key || {}),
-      messageTopLevelKeys: Object.keys(msg || {}).filter(k => !['message', 'key'].includes(k))
+      verifiedBizName: (msg as any).verifiedBizName
     });
 
-    // Tentar obter o número real do store/cache do Baileys
-    try {
-      const sock = wbot as any;
+    const sock = wbot as any;
+    const companyId = sock.companyId || 1;
 
-      // 0. PRIORIDADE MÁXIMA: Usar signalRepository.lidMapping.getPNForLID() do Baileys
+    // ESTRATÉGIA 1: signalRepository.lidMapping.getPNForLID() do Baileys
+    try {
       const lidStore = sock.signalRepository?.lidMapping;
       if (lidStore?.getPNForLID) {
         const lidId = remoteJid.replace("@lid", "");
-        try {
-          const resolvedPN = await lidStore.getPNForLID(lidId);
-          if (resolvedPN) {
-            const pnDigits = resolvedPN.replace(/\D/g, "");
-            if (looksPhoneLike(pnDigits)) {
-              contactJid = resolvedPN.includes("@") ? resolvedPN : `${pnDigits}@s.whatsapp.net`;
-              logger.info("[getContactMessage] LID resolvido via signalRepository.lidMapping.getPNForLID", {
-                originalLid: remoteJid,
-                resolvedPN,
-                resolvedJid: contactJid
+        const resolvedPN = await lidStore.getPNForLID(lidId);
+        if (resolvedPN) {
+          const pnDigits = resolvedPN.replace(/\D/g, "");
+          if (looksPhoneLike(pnDigits)) {
+            contactJid = resolvedPN.includes("@") ? resolvedPN : `${pnDigits}@s.whatsapp.net`;
+            logger.info("[getContactMessage] LID resolvido via signalRepository.getPNForLID", {
+              originalLid: remoteJid,
+              resolvedJid: contactJid
+            });
+            // Salvar mapeamento
+            try {
+              const LidMapping = require("../../models/LidMapping").default;
+              await LidMapping.upsert({
+                lid: remoteJid, phoneNumber: pnDigits, companyId,
+                whatsappId: wbot.id, source: "baileys_signal_repository", confidence: 0.95
               });
-
-              // Salvar mapeamento para uso futuro
-              try {
-                const LidMapping = require("../../models/LidMapping").default;
-                const companyId = sock.companyId || 1;
-                await LidMapping.upsert({
-                  lid: remoteJid,
-                  phoneNumber: pnDigits,
-                  companyId,
-                  whatsappId: wbot.id
-                });
-              } catch (e) { }
-            }
+            } catch (e) { }
           }
-        } catch (e) {
-          debugLog("[getContactMessage] Erro ao usar getPNForLID", { err: (e as any)?.message });
         }
       }
+    } catch (e) {
+      debugLog("[getContactMessage] Erro ao usar getPNForLID", { err: (e as any)?.message });
+    }
 
-      // 0.5. Consultar tabela LidMappings (cache persistente)
-      if (contactJid === remoteJid) {
-        try {
-          const LidMapping = require("../../models/LidMapping").default;
-          const companyId = sock.companyId || 1;
-          const savedMapping = await LidMapping.findOne({
-            where: { lid: remoteJid, companyId }
-          });
-          if (savedMapping?.phoneNumber) {
-            const pnDigits = savedMapping.phoneNumber.replace(/\D/g, "");
-            if (looksPhoneLike(pnDigits)) {
-              contactJid = `${pnDigits}@s.whatsapp.net`;
-              logger.info("[getContactMessage] LID resolvido via tabela LidMappings", {
-                originalLid: remoteJid,
-                phoneNumber: savedMapping.phoneNumber,
-                resolvedJid: contactJid
-              });
-            }
-          }
-        } catch (e) {
-          debugLog("[getContactMessage] Erro ao consultar LidMappings", { err: (e as any)?.message });
-        }
-      }
-
-      // 2. phoneNumber no Contact (presente em alguns contatos)
-      if (contactJid === remoteJid && sock.store?.contacts?.[remoteJid]) {
-        const storedContact = sock.store.contacts[remoteJid];
-        if (storedContact.phoneNumber) {
-          const pnDigits = storedContact.phoneNumber.replace(/\D/g, "");
+    // ESTRATÉGIA 2: Tabela LidMappings (cache persistente)
+    if (contactJid === remoteJid) {
+      try {
+        const LidMapping = require("../../models/LidMapping").default;
+        const savedMapping = await LidMapping.findOne({
+          where: { lid: remoteJid, companyId }
+        });
+        if (savedMapping?.phoneNumber) {
+          const pnDigits = savedMapping.phoneNumber.replace(/\D/g, "");
           if (looksPhoneLike(pnDigits)) {
             contactJid = `${pnDigits}@s.whatsapp.net`;
-            debugLog("[getContactMessage] LID resolvido via phoneNumber do Contact", {
+            logger.info("[getContactMessage] LID resolvido via tabela LidMappings", {
+              originalLid: remoteJid, resolvedJid: contactJid
+            });
+          }
+        }
+      } catch (e) {
+        debugLog("[getContactMessage] Erro ao consultar LidMappings", { err: (e as any)?.message });
+      }
+    }
+
+    // ESTRATÉGIA 3: phoneNumber no store.contacts do Baileys
+    if (contactJid === remoteJid) {
+      try {
+        if (sock.store?.contacts?.[remoteJid]) {
+          const storedContact = sock.store.contacts[remoteJid];
+          if (storedContact.phoneNumber) {
+            const pnDigits = storedContact.phoneNumber.replace(/\D/g, "");
+            if (looksPhoneLike(pnDigits)) {
+              contactJid = `${pnDigits}@s.whatsapp.net`;
+              debugLog("[getContactMessage] LID resolvido via phoneNumber do store", {
+                originalLid: remoteJid, resolvedJid: contactJid
+              });
+            }
+          } else if (storedContact.id?.includes("@s.whatsapp.net")) {
+            contactJid = storedContact.id;
+            debugLog("[getContactMessage] LID resolvido via store.contacts.id", {
+              originalLid: remoteJid, resolvedJid: contactJid
+            });
+          }
+        }
+      } catch (e) {
+        debugLog("[getContactMessage] Erro ao consultar store.contacts", { err: (e as any)?.message });
+      }
+    }
+
+    // ESTRATÉGIA 4 (NOVA): Buscar contato existente no banco do Whaticket pelo remoteJid/lidJid
+    // Se o LID já foi associado a um contato antes, evita duplicação
+    if (contactJid === remoteJid) {
+      try {
+        const normalizedLid = jidNormalizedUser(remoteJid);
+        const existingContact = await Contact.findOne({
+          where: {
+            companyId,
+            isGroup: false,
+            [Op.or]: [
+              { remoteJid: normalizedLid },
+              { lidJid: normalizedLid }
+            ]
+          }
+        });
+        if (existingContact?.number) {
+          const existingDigits = existingContact.number.replace(/\D/g, "");
+          if (looksPhoneLike(existingDigits)) {
+            contactJid = `${existingDigits}@s.whatsapp.net`;
+            logger.info("[getContactMessage] LID resolvido via contato existente no banco (remoteJid/lidJid)", {
               originalLid: remoteJid,
-              phoneNumber: storedContact.phoneNumber,
+              contactId: existingContact.id,
+              contactName: existingContact.name,
+              resolvedJid: contactJid
+            });
+            // Salvar mapeamento para futuro
+            try {
+              const LidMapping = require("../../models/LidMapping").default;
+              await LidMapping.upsert({
+                lid: remoteJid, phoneNumber: existingDigits, companyId,
+                whatsappId: wbot.id, source: "whaticket_contact_match", confidence: 0.90
+              });
+            } catch (e) { }
+          }
+        }
+      } catch (e) {
+        debugLog("[getContactMessage] Erro ao buscar contato existente pelo LID", { err: (e as any)?.message });
+      }
+    }
+
+    // ESTRATÉGIA 5 (NOVA): Buscar ticket recente com esse LID para encontrar contato existente
+    // Se já houve conversa prévia com esse LID, o ticket aponta para o contato correto
+    if (contactJid === remoteJid) {
+      try {
+        const normalizedLid = jidNormalizedUser(remoteJid);
+        const recentTicket = await Ticket.findOne({
+          where: {
+            companyId,
+            isGroup: false
+          },
+          include: [{
+            model: Contact,
+            as: "contact",
+            where: {
+              isGroup: false,
+              [Op.or]: [
+                { remoteJid: normalizedLid },
+                { lidJid: normalizedLid }
+              ]
+            },
+            required: true
+          }],
+          order: [["updatedAt", "DESC"]]
+        });
+        if (recentTicket?.contact?.number) {
+          const ticketDigits = recentTicket.contact.number.replace(/\D/g, "");
+          if (looksPhoneLike(ticketDigits)) {
+            contactJid = `${ticketDigits}@s.whatsapp.net`;
+            logger.info("[getContactMessage] LID resolvido via ticket recente", {
+              originalLid: remoteJid,
+              ticketId: recentTicket.id,
+              contactId: recentTicket.contact.id,
               resolvedJid: contactJid
             });
           }
         }
+      } catch (e) {
+        debugLog("[getContactMessage] Erro ao buscar ticket recente pelo LID", { err: (e as any)?.message });
       }
+    }
 
-      // 3. Baileys pode ter o mapeamento LID -> número real no store
-      if (contactJid === remoteJid && sock.store?.contacts) {
-        const lidContact = sock.store.contacts[remoteJid];
-        if (lidContact?.id && lidContact.id.includes("@s.whatsapp.net")) {
-          contactJid = lidContact.id;
-          debugLog("[getContactMessage] LID resolvido via store.contacts", {
-            originalLid: remoteJid,
-            resolvedJid: contactJid
-          });
-        }
-      }
-    } catch (err) {
-      debugLog("[getContactMessage] Erro ao tentar resolver LID", { err, remoteJid });
+    // Log final se LID não foi resolvido
+    if (contactJid === remoteJid) {
+      logger.warn("[getContactMessage] LID NÃO RESOLVIDO - contato pode ser duplicado", {
+        remoteJid,
+        fromMe: msg.key.fromMe,
+        pushName: msg.pushName,
+        estrategiasTentadas: ["signalRepository", "LidMappings", "store.contacts", "banco_whaticket", "ticket_recente"]
+      });
     }
   }
 
@@ -1639,38 +1715,92 @@ const verifyContact = async (
     });
     return null as any;
   }
-  // CORREÇÃO: Para mensagens de outros (fromMe=false), buscar nome real do contato via store
-  // Evita usar pushName (nome do remetente) como nome do contato destinatário
-  let nomeContato = msgContact.name;
-  if (msg && !msg.key.fromMe && !isGroup) {
+
+  // =================================================================
+  // LÓGICA DE NOME DO CONTATO - PRIORIDADE ESTRITA
+  // =================================================================
+  // 1. Verificar se contato já existe no banco com nome válido
+  // 2. Se não existe: buscar nome da agenda (verifiedName > notify)
+  // 3. Se não tem nome na agenda: usar pushName
+  // 4. Se não tem nada: usar número
+  // =================================================================
+
+  let nomeContato: string | null = null;
+  let pushName: string | undefined;
+  let verifiedName: string | undefined;
+
+  // Buscar contato existente PRIMEIRO
+  const existingContact = await Contact.findOne({
+    where: {
+      companyId,
+      [Op.or]: [
+        { canonicalNumber: cleaned },
+        { number: cleaned },
+        { remoteJid: normalizedJid }
+      ]
+    }
+  });
+
+  // PRIORIDADE 1: Contato existe no banco e tem nome válido
+  if (existingContact?.name) {
+    const currentNameClean = existingContact.name.replace(/\D/g, "");
+    const isNameEqualNumber = currentNameClean === cleaned;
+    
+    // Se nome no banco NÃO é apenas o número, manter ele
+    if (!isNameEqualNumber && existingContact.name.trim() !== "") {
+      nomeContato = existingContact.name;
+      logger.info(`[verifyContact] Usando nome do banco: "${nomeContato}" para ${cleaned}`);
+    }
+  }
+
+  // Se não achou nome válido no banco, buscar fontes externas
+  if (!nomeContato) {
+    // Buscar dados do Baileys store
+    let baileysContact: any = null;
     try {
       const store = (wbot as any).store;
       if (store?.contacts) {
-        const baileysContact = store.contacts[msgContact.id] || store.contacts[normalizedJid];
-        if (baileysContact?.name || baileysContact?.notify) {
-          nomeContato = baileysContact.name || baileysContact.notify;
-        }
+        baileysContact = store.contacts[msgContact.id] || store.contacts[normalizedJid];
       }
     } catch (e) {
-      // Ignora erro e continua com pushName como fallback
-    }
-  }
-  if (!isGroup) {
-    // Se nome está vazio ou igual ao número, usa número, senão mantém nome
-    if (!nomeContato || nomeContato === cleaned) {
-      nomeContato = cleaned;
+      // Ignora erro
     }
 
-    // Buscar profilePicture do Baileys para contatos com JID real
-    if (normalizedJid.includes("@s.whatsapp.net")) {
-      try {
-        const pic = await wbot.profilePictureUrl(normalizedJid, "image");
-        if (pic) profilePicUrl = pic;
-      } catch (e) {
-        // Privacidade ou indisponível — profilePicUrl permanece vazio
+    // PRIORIDADE 2: Nome da agenda do WhatsApp (verifiedName ou notify)
+    // verifiedName = nome salvo na agenda do celular
+    // notify = nome exibido pelo WhatsApp
+    verifiedName = baileysContact?.verifiedName || baileysContact?.notify;
+    if (verifiedName && verifiedName.trim() !== "" && verifiedName.replace(/\D/g, "") !== cleaned) {
+      nomeContato = verifiedName.trim();
+      logger.info(`[verifyContact] Usando nome da agenda: "${nomeContato}" para ${cleaned}`);
+    }
+
+    // PRIORIDADE 3: pushName (nome definido pelo usuário no WhatsApp)
+    if (!nomeContato) {
+      pushName = msg?.pushName || msgContact?.name;
+      if (pushName && pushName.trim() !== "" && pushName.replace(/\D/g, "") !== cleaned) {
+        nomeContato = pushName.trim();
+        logger.info(`[verifyContact] Usando pushName: "${nomeContato}" para ${cleaned}`);
       }
     }
+
+    // PRIORIDADE 4: Fallback para número
+    if (!nomeContato) {
+      nomeContato = cleaned;
+      logger.info(`[verifyContact] Usando número como nome: ${cleaned}`);
+    }
   }
+
+  // Buscar profilePicture do Baileys para contatos com JID real
+  if (!isGroup && normalizedJid.includes("@s.whatsapp.net")) {
+    try {
+      const pic = await wbot.profilePictureUrl(normalizedJid, "image");
+      if (pic) profilePicUrl = pic;
+    } catch (e) {
+      // Privacidade ou indisponível — profilePicUrl permanece vazio
+    }
+  }
+
   const contactData = {
     name: nomeContato,
     number: cleaned,
@@ -1680,8 +1810,8 @@ const verifyContact = async (
     remoteJid: normalizedJid,
     whatsappId: wbot.id,
     wbot,
-    pushName: (msg as any)?.pushName || undefined,
-    verifiedName: (msg as any)?.verifiedBizName || undefined
+    pushName: pushName || msg?.pushName || undefined,
+    verifiedName: verifiedName || (msg as any)?.verifiedBizName || undefined
   };
 
   const contact = await CreateOrUpdateContactService(contactData);
@@ -6544,7 +6674,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
           }
 
           // Atualizar nome de contatos LID existentes
-          const existingLidContact = await Contact.findOne({
+          let existingLidContact = await Contact.findOne({
             where: {
               companyId,
               [Op.or]: [
@@ -6553,6 +6683,38 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
               ]
             }
           });
+
+          // Se não encontrou por remoteJid/lidJid, tentar via LidMapping
+          // Cenário: contato real existe mas ainda não tem lidJid preenchido
+          if (!existingLidContact) {
+            try {
+              const LidMappingModel = (await import("../../models/LidMapping")).default;
+              const mapping = await LidMappingModel.findOne({
+                where: { lid: contact.id, companyId }
+              });
+              if (mapping?.phoneNumber) {
+                existingLidContact = await Contact.findOne({
+                  where: {
+                    companyId,
+                    isGroup: false,
+                    [Op.or]: [
+                      { canonicalNumber: mapping.phoneNumber },
+                      { number: mapping.phoneNumber }
+                    ]
+                  }
+                });
+                if (existingLidContact) {
+                  // Preencher lidJid para futuras buscas diretas
+                  if (!existingLidContact.lidJid) {
+                    await existingLidContact.update({ lidJid: contact.id });
+                    logger.info(`[contacts.update] lidJid preenchido via LidMapping: contato ${existingLidContact.id} → LID ${contact.id}`);
+                  }
+                }
+              }
+            } catch (e) {
+              // Ignorar — fallback não essencial
+            }
+          }
 
           if (existingLidContact) {
             if (contactName) {
