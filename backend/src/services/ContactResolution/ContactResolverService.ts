@@ -490,61 +490,31 @@ export async function resolveMessageContact(
     // ═══════════════════════════════════════════════════════════════════
     // FALLBACK: Criar contato PENDING_ (aguardando resolução futura)
     // ═══════════════════════════════════════════════════════════════════
-    logger.info({
+    // CRÍTICO: NÃO criar contato se LID não foi resolvido
+    // Isso evita que o frontend mostre o número do LID (ex: 3810206466207) 
+    // ao invés do número real (ex: +554138911718)
+    // O contato só deve ser criado quando o número real for descoberto
+    logger.warn({
       lidJid: ids.lidJid,
       contactName,
-      strategy: "LID-accept"
-    }, "[ContactResolver] Criando contato com LID como identificador temporário (aguardando número real)");
+      strategy: "LID-BLOCKED"
+    }, "[ContactResolver] LID não resolvido — BLOQUEANDO criação de contato (aguardando lid-mapping.update)");
 
-    try {
-      const CompaniesSettings = (await import("../../models/CompaniesSettings")).default;
-      const settings = await CompaniesSettings.findOne({ where: { companyId } });
-      const acceptAudioMessageContact = (settings as any)?.acceptAudioMessageContact === "enabled";
-
-      // Criar contato com LID como identificador
-      // number = PENDING_<lid> (identificador temporário até descobrir o número real)
-      // remoteJid = LID (para buscas futuras)
-      // lidJid = LID (para reconciliação)
-      const pendingNumber = `PENDING_${ids.lidJid}`;
-      
-      newContact = await Contact.findOrCreate({
-        where: {
-          companyId,
-          [Op.or]: [
-            { remoteJid: ids.lidJid },
-            { lidJid: ids.lidJid },
-            { number: pendingNumber }
-          ]
-        },
-        defaults: {
-          name: contactName,
-          number: pendingNumber, // PENDING_<lid> como identificador temporário
-          isGroup: false,
-          companyId,
-          remoteJid: ids.lidJid,
-          lidJid: ids.lidJid,
-          channel: "whatsapp",
-          acceptAudioMessage: acceptAudioMessageContact,
-          whatsappId: wbot.id
-        }
-      }).then(([c]) => c);
-      
-      logger.info({
-        contactId: newContact?.id,
-        lidJid: ids.lidJid,
-        contactName
-      }, "[ContactResolver] Contato criado com LID - número será atualizado quando revelado");
-      
-    } catch (createErr: any) {
-      logger.error({ err: createErr?.message, lidJid: ids.lidJid }, "[ContactResolver] Falha ao criar contato LID");
-      throw new Error(`LID_CREATION_FAILED: Não foi possível criar contato para ${ids.lidJid}`);
-    }
+    // Retornar indicando que precisa de resolução de LID
+    // O chamador deve ignorar esta mensagem ou aguardar resolução
+    return {
+      contact: null as any,
+      identifiers: ids,
+      isNew: false,
+      isPending: true,
+      needsLidResolution: true
+    };
   }
 
   if (!newContact) {
-    // Fallback final: CreateOrUpdateContactService retornou null por outro motivo
+    // Fallback final: Não conseguiu criar contato
     logger.error({ ids }, "[ContactResolver] Não foi possível criar contato por nenhuma estratégia");
-    throw new Error(`CONTACT_CREATION_FAILED: Sem PN e sem LID para criar contato`);
+    throw new Error(`CONTACT_CREATION_FAILED: Sem PN e sem LID resolvido para criar contato`);
   }
 
   // Refresh Avatar (async throttle) - O Service já faz, mas mal não faz garantir

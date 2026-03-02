@@ -1040,22 +1040,33 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
       }
     }
 
-    // Log final se LID não foi resolvido
+  // Log final se LID não foi resolvido
     if (contactJid === remoteJid) {
-      logger.warn("[getContactMessage] LID NÃO RESOLVIDO - contato pode ser duplicado", {
+      logger.warn("[getContactMessage] LID NÃO RESOLVIDO - bloqueando criação de contato", {
         remoteJid,
         fromMe: msg.key.fromMe,
         pushName: msg.pushName,
         estrategiasTentadas: ["signalRepository", "LidMappings", "store.contacts", "banco_whaticket", "ticket_recente"]
       });
+      // CRÍTICO: Retornar null para evitar que verifyContact crie contato com LID
+      return null;
     }
   }
 
   const contactRawNumber = contactJid.replace(/\D/g, "");
   const isLidContact = contactJid.includes("@lid") || remoteJid?.includes("@lid");
 
-  // Validação final: número deve ter tamanho válido OU ser um @lid (que será tratado por verifyContact)
-  if (!looksPhoneLike(contactRawNumber) && !isLidContact) {
+  // Validação final: se ainda é @lid após todas as tentativas, bloquear
+  if (isLidContact) {
+    logger.warn("[getContactMessage] LID NÃO RESOLVIDO (isLidContact=true) - bloqueando", {
+      contactJid,
+      remoteJid
+    });
+    return null;
+  }
+
+  // Validação final: número deve ter tamanho válido
+  if (!looksPhoneLike(contactRawNumber)) {
     debugLog("[getContactMessage] ERRO FINAL: Número com tamanho inválido", {
       contactJid,
       contactRawNumber,
@@ -2289,6 +2300,7 @@ const isValidMsg = (msg: proto.IWebMessageInfo): boolean => {
       msgType === "documentMessage" ||
       msgType === "stickerMessage" ||
       msgType === "buttonsResponseMessage" ||
+      msgType === "templateButtonReplyMessage" ||
       msgType === "buttonsMessage" ||
       msgType === "messageContextInfo" ||
       msgType === "locationMessage" ||
