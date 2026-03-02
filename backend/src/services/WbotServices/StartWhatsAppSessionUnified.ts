@@ -33,43 +33,16 @@ export const StartWhatsAppSessionUnified = async (
       // ===== BAILEYS (não oficial) =====
       logger.info(`[StartSession] Usando Baileys para whatsappId=${whatsapp.id}`);
 
-      // 1. Tenta adquirir o Lock (Leader Election)
-      // Embora o initWASocket chame o acquireWbotLock, precisamos controlar o heartbeat aqui
-      // Se não conseguirmos o lock aqui, nem tentamos iniciar o socket
-      const hasLock = await acquireWbotLock(whatsapp.id, "StartWhatsAppSessionUnified-Baileys");
-      if (!hasLock) {
-        logger.info(`[StartSession] Sessão Baileys ${whatsapp.name} (#${whatsapp.id}) já gerenciada por outra instância. Pulando.`);
-        return;
-      }
+      // NOTA: Lock simplificado para single-instance - sempre retorna true
+      // A flag reconnectingWhatsapps em wbot.ts previne reconexões duplicadas
+      await acquireWbotLock(whatsapp.id, "StartWhatsAppSessionUnified-Baileys");
 
       await whatsapp.update({ status: "OPENING" });
 
-      let wbot: any = null;
-
-      // Intervalo de heartbeat para manter o lock ativo (CRÍTICO para evitar que o HealthCheck derrube)
-      let baileysHeartbeat: NodeJS.Timeout | null = setInterval(async () => {
-        const renewed = await renewWbotLock(whatsapp.id);
-        if (!renewed) {
-          logger.warn(`[StartSession] Baileys: Perda de lock para whatsappId=${whatsapp.id}. Forçando desconexão.`);
-          // Se perdemos o lock, outra instância assumiu ou o Redis expirou.
-          // Devemos matar o socket imediatamente para evitar "Zombie Writes".
-          if (wbot) {
-            try {
-              wbot.end(new Error("Lock lost - Zombie Fencing"));
-            } catch (e) {
-              logger.error(`[StartSession] Erro ao matar wbot sem lock: ${e}`);
-            }
-          }
-          if (baileysHeartbeat) clearInterval(baileysHeartbeat);
-        }
-      }, 20000); // 20s (mesmo valor do wbotMutex default, mas aqui hardboded para 20s para garantir)
-
-      wbot = await initWASocket(whatsapp);
+      const wbot = await initWASocket(whatsapp);
 
       // se retornou null, é pq houve algum erro na inicialização
       if (!wbot) {
-        if (baileysHeartbeat) clearInterval(baileysHeartbeat);
-        await releaseWbotLock(whatsapp.id);
         return;
       }
 
@@ -81,7 +54,8 @@ export const StartWhatsAppSessionUnified = async (
         // =================================================================
         // EVENTO CRÍTICO: lid-mapping.update - Persistir mapeamentos LID→PN
         // =================================================================
-        wbot.ev.on("lid-mapping.update", async (update: any) => {
+        // @ts-ignore - evento não tipado no Baileys mas existe em runtime
+        wbot.ev.on("lid-mapping.update" as any, async (update: any) => {
           try {
             const LidMapping = require("../../models/LidMapping").default;
             
@@ -134,48 +108,21 @@ export const StartWhatsAppSessionUnified = async (
         });
         logger.info(`[StartSession] Evento lid-mapping.update registrado para whatsappId=${whatsapp.id}`);
 
-        // Monitorar fechamento para limpar heartbeat e lock
-        wbot.ev.on("connection.update", (update: any) => {
-          const { connection } = update;
-          if (connection === "close") {
-            if (baileysHeartbeat) clearInterval(baileysHeartbeat);
-            // Libera o lock explicitamente ao fechar
-            // Isso permite que o HealthCheck ou retry reinicie mais rápido
-            releaseWbotLock(whatsapp.id);
-          }
-        });
+        // NOTA: Lock simplificado para single-instance - não precisa de heartbeat
+        // A flag reconnectingWhatsapps em wbot.ts previne reconexões duplicadas
 
         logger.info(`[StartSession] Baileys iniciado com sucesso: ${wbot.user?.id}`);
-      } else {
-        // Casos raros onde wbot é criado mas sem ID (falha parcial)
-        if (baileysHeartbeat) clearInterval(baileysHeartbeat);
-        releaseWbotLock(whatsapp.id);
       }
+      // Casos raros onde wbot é criado mas sem ID (falha parcial) - não precisa de ação especial
 
     } else if (channelType === "official") {
       // ===== WHATSAPP BUSINESS API OFICIAL =====
       logger.info(`[StartSession] Usando Official API para whatsappId=${whatsapp.id}`);
 
-      // 1. Tenta adquirir o Lock (Leader Election)
-      const hasLock = await acquireWbotLock(whatsapp.id);
-      if (!hasLock) {
-        logger.info(`[StartSession] Sessão Official ${whatsapp.name} (#${whatsapp.id}) já gerenciada por outra instância. Pulando.`);
-        return;
-      }
+      // NOTA: Lock simplificado para single-instance - sempre retorna true
+      await acquireWbotLock(whatsapp.id, "StartWhatsAppSessionUnified-Official");
 
       await whatsapp.update({ status: "OPENING" });
-
-      // Intervalo de heartbeat para manter o lock ativo
-      let lockHeartbeat: NodeJS.Timeout | null = setInterval(async () => {
-        const renewed = await renewWbotLock(whatsapp.id);
-        if (!renewed) {
-          logger.warn(`[StartSession] Perda de lock para sessão Official ${whatsapp.id}.`);
-          // Para API oficial, talvez devêssemos desconectar? 
-          // Mas como é webhook, não tem "conexão" persistente da mesma forma.
-          // Vamos limpar o intervalo e deixar que o novo dono assuma.
-          if (lockHeartbeat) clearInterval(lockHeartbeat);
-        }
-      }, 7000); // 7s
 
       try {
         // Criar adapter da API oficial
@@ -193,8 +140,6 @@ export const StartWhatsAppSessionUnified = async (
             whatsapp.update({ status: "CONNECTED" });
           } else if (status === "disconnected") {
             whatsapp.update({ status: "DISCONNECTED" });
-            if (lockHeartbeat) clearInterval(lockHeartbeat);
-            releaseWbotLock(whatsapp.id);
           }
 
           // Emitir evento via Socket.IO
@@ -227,8 +172,6 @@ export const StartWhatsAppSessionUnified = async (
           });
 
       } catch (err) {
-        if (lockHeartbeat) clearInterval(lockHeartbeat);
-        await releaseWbotLock(whatsapp.id);
         throw err;
       }
 

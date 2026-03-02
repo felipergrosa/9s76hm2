@@ -343,21 +343,37 @@ const GetGroupParticipantsService = async ({
 
     // Determinar nome: 1) resolvido anteriormente, 2) contato do sistema, 3) pushName do WhatsApp, 4) nome direto do Baileys, 5) número formatado
     let contactName: string;
+    
+    logger.info(`[GetGroupParticipants] Resolvendo nome para ${participantJid}:`, {
+      resolvedName,
+      contactRecordName: contactRecord?.name,
+      pName: p.name,
+      pNotify: p.notify,
+      isValidPhoneNumber,
+      participantNumber
+    });
+    
     if (resolvedName) {
       contactName = resolvedName;
+      logger.info(`[GetGroupParticipants] Usando resolvedName: "${contactName}"`);
     } else if (contactRecord?.name) {
       contactName = contactRecord.name;
+      logger.info(`[GetGroupParticipants] Usando contactRecord.name: "${contactName}"`);
     } else if (p.name) {
       // Nome direto do participante no metadata do grupo
       contactName = p.name;
+      logger.info(`[GetGroupParticipants] Usando p.name: "${contactName}"`);
     } else if (p.notify) {
       // pushName do WhatsApp (campo "notify" no Baileys)
       contactName = p.notify;
+      logger.info(`[GetGroupParticipants] Usando p.notify: "${contactName}"`);
     } else if (isValidPhoneNumber) {
       contactName = `+${participantNumber}`;
+      logger.info(`[GetGroupParticipants] Usando número: "${contactName}"`);
     } else {
       // Fallback final: Se for LID ou inválido, não exibir o número
       contactName = "Participante";
+      logger.warn(`[GetGroupParticipants] FALLBACK para "Participante" - participantJid: ${participantJid}`);
     }
 
     // Número exibido: preferir número real formatado com DDI

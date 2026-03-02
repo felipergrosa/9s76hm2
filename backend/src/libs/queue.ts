@@ -16,10 +16,21 @@ const queueOptions = {
     },
     removeOnFail: false,
     removeOnComplete: true,
+    // Timeout de 30 segundos por job (evita jobs infinitos)
+    timeout: parseInt(process.env.BULL_JOB_TIMEOUT_MS || "30000"),
   },
   limiter: {
     max: config.webhook.limiter.max,
     duration: config.webhook.limiter.duration,
+  },
+  // Configurações para detectar jobs stalled
+  settings: {
+    // Intervalo para verificar jobs stalled (15 segundos)
+    stalledInterval: parseInt(process.env.BULL_STALLED_INTERVAL_MS || "15000"),
+    // Máximo de vezes que um job pode ser marcado como stalled antes de falhar
+    maxStalledCount: parseInt(process.env.BULL_MAX_STALLED_COUNT || "3"),
+    // Tempo máximo para um job completar antes de ser considerado stalled
+    stallDuration: parseInt(process.env.BULL_STALL_DURATION_MS || "30000"),
   },
 };
 

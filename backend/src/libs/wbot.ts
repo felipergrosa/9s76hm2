@@ -105,6 +105,11 @@ export const getWbotIsReconnecting = (whatsappId: number): boolean => {
   return !!reconnectingWhatsapps.get(whatsappId);
 };
 
+// Helper para expor IDs das sessões ativas (para checkOrphanedSessionsCron)
+export const getWbotSessionIds = (): number[] => {
+  return sessions.map(s => s.id);
+};
+
 // Map para contar conflitos consecutivos (para backoff exponencial)
 const conflictCountMap = new Map<number, number>();
 // Constantes de tempo para reconexão
@@ -225,29 +230,45 @@ const triggerSessionRecovery = async (whatsappId: number): Promise<void> => {
       return;
     }
     
+    logger.info(`[triggerSessionRecovery] Iniciando recovery para whatsappId=${whatsappId}`);
     reconnectingWhatsapps.set(whatsappId, true);
+    
+    // TIMEOUT DE SEGURANÇA: Limpar flag após 60s se a reconexão não acontecer
+    // Isso evita que a flag fique presa para sempre em caso de falha silenciosa
+    const safetyTimeout = setTimeout(() => {
+      if (reconnectingWhatsapps.get(whatsappId)) {
+        logger.warn(`[triggerSessionRecovery] Timeout de segurança (60s) - limpando flag para ${whatsappId}`);
+        reconnectingWhatsapps.delete(whatsappId);
+      }
+    }, 60000);
     
     // Buscar WhatsApp no banco
     const whatsapp = await Whatsapp.findByPk(whatsappId);
     if (!whatsapp) {
       logger.error(`[triggerSessionRecovery] WhatsApp ${whatsappId} não encontrado no banco`);
       reconnectingWhatsapps.delete(whatsappId);
+      clearTimeout(safetyTimeout);
       return;
     }
+
+    logger.info(`[triggerSessionRecovery] WhatsApp ${whatsappId} encontrado: status=${whatsapp.status}, channel=${whatsapp.channel}, name=${whatsapp.name}`);
 
     // Verificar se deve estar conectado
     if (whatsapp.status === "DISCONNECTED" || whatsapp.channel !== "whatsapp") {
       logger.info(`[triggerSessionRecovery] WhatsApp ${whatsappId} status=${whatsapp.status}, channel=${whatsapp.channel}. Não recuperando.`);
       reconnectingWhatsapps.delete(whatsappId);
+      clearTimeout(safetyTimeout);
       return;
     }
 
-    logger.info(`[triggerSessionRecovery] Iniciando sessão ${whatsappId} (${whatsapp.name})`);
+    logger.info(`[triggerSessionRecovery] Chamando StartWhatsAppSession para ${whatsappId} (${whatsapp.name})`);
     
     // Importar dinamicamente para evitar dependência circular
     const { StartWhatsAppSession } = await import("../services/WbotServices/StartWhatsAppSessionUnified");
     await StartWhatsAppSession(whatsapp, whatsapp.companyId);
     
+    logger.info(`[triggerSessionRecovery] StartWhatsAppSession completado para ${whatsappId}`);
+    clearTimeout(safetyTimeout);
     // NOTA: A flag reconnectingWhatsapps será limpa quando connection === "open"
   } catch (err: any) {
     logger.error(`[triggerSessionRecovery] Erro ao recuperar sessão ${whatsappId}: ${err?.message}`);
@@ -579,8 +600,13 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 // NOTA: NÃO limpar reconnectingWhatsapps aqui! A flag deve permanecer ativa
                 // até a conexão ser efetivamente restaurada (connection === "open").
                 // Isso evita a janela crítica onde sessão está ausente mas flag indica PARADO.
-                setTimeout(() => {
-                  StartWhatsAppSession(whatsapp, whatsapp.companyId);
+                setTimeout(async () => {
+                  try {
+                    await StartWhatsAppSession(whatsapp, whatsapp.companyId);
+                  } catch (err: any) {
+                    logger.error(`[wbot] Erro na reconexão agendada para ${name}: ${err?.message}`);
+                    reconnectingWhatsapps.delete(id);
+                  }
                 }, delay);
 
                 return;
@@ -625,8 +651,13 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 // await releaseWbotLock(id); // REMOVIDO: Manter o lock
                 removeWbot(id, false);
                 // NOTA: NÃO limpar reconnectingWhatsapps aqui! Flag permanece ativa até connection===open
-                setTimeout(() => {
-                  StartWhatsAppSession(whatsapp, whatsapp.companyId);
+                setTimeout(async () => {
+                  try {
+                    await StartWhatsAppSession(whatsapp, whatsapp.companyId);
+                  } catch (err: any) {
+                    logger.error(`[wbot] Erro na reconexão (restart) para ${name}: ${err?.message}`);
+                    reconnectingWhatsapps.delete(id);
+                  }
                 }, 5000);
                 return;
               }
@@ -642,8 +673,13 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 // await releaseWbotLock(id); // REMOVIDO: Manter o lock se vamos reconectar para evitar que o Cron assuma
                 removeWbot(id, false);
                 // NOTA: NÃO limpar reconnectingWhatsapps aqui! Flag permanece ativa até connection===open
-                setTimeout(() => {
-                  StartWhatsAppSession(whatsapp, whatsapp.companyId);
+                setTimeout(async () => {
+                  try {
+                    await StartWhatsAppSession(whatsapp, whatsapp.companyId);
+                  } catch (err: any) {
+                    logger.error(`[wbot] Erro na reconexão (disconnect) para ${name}: ${err?.message}`);
+                    reconnectingWhatsapps.delete(id);
+                  }
                 }, 5000);
               } else {
                 // Limpar flag de reconexão - logout, não vai reconectar automaticamente

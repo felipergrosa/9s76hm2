@@ -147,7 +147,6 @@ import {
 } from "microsoft-cognitiveservices-speech-sdk";
 import typebotListener from "../TypebotServices/typebotListener";
 import Tag from "../../models/Tag";
-import { isLeader, isLeaderCached, tryBecomeLeader, releaseLeadership } from "../../libs/wbotLeaderService";
 import TicketTag from "../../models/TicketTag";
 import ContactTag from "../../models/ContactTag";
 import pino from "pino";
@@ -2021,9 +2020,12 @@ export const verifyMediaMessage = async (
       finalMediaType = "gif";
     }
 
-    // BUSCAR NOME DO REMETENTE: prioridade 1) pushName da mensagem, 2) store do Baileys
+    // BUSCAR NOME DO REMETENTE: prioridade 1) pushName da mensagem, 2) store do Baileys, 3) contato do banco
     const participantJid = msg.key.participant || msg.participant;
     let senderName = msg.pushName;
+  
+    logger.info(`[verifyMediaMessage] Capturando senderName - pushName: "${msg.pushName || 'vazio'}" | participantJid: ${participantJid || 'vazio'}`);
+  
     if (!senderName && participantJid && wbot) {
       try {
         const store = (wbot as any).store;
@@ -2031,13 +2033,41 @@ export const verifyMediaMessage = async (
           const contactData = store.contacts[participantJid];
           senderName = contactData?.notify || contactData?.name || contactData?.verifiedName;
           if (senderName) {
-            logger.debug(`[verifyMediaMessage] Nome do participante ${participantJid} obtido do store: "${senderName}"`);
+            logger.info(`[verifyMediaMessage] Nome do participante ${participantJid} obtido do store: "${senderName}"`);
           }
         }
       } catch (err) {
-        // Silencioso: não falhar por erro ao buscar no store
+        logger.debug(`[verifyMediaMessage] Erro ao buscar no store: ${err}`);
       }
     }
+  
+    // FALLBACK: Buscar nome do contato no banco se ainda não temos senderName
+    if (!senderName && participantJid) {
+      try {
+        const participantNumber = participantJid.replace(/@.*/, "");
+        const participantContact = await Contact.findOne({
+          where: {
+            companyId: ticket.companyId,
+            isGroup: false,
+            [Op.or]: [
+              { remoteJid: participantJid },
+              { lidJid: participantJid },
+              { number: participantNumber },
+              { canonicalNumber: participantNumber }
+            ]
+          }
+        });
+        
+        if (participantContact && participantContact.name && participantContact.name !== participantNumber) {
+          senderName = participantContact.name;
+          logger.info(`[verifyMediaMessage] Nome do participante ${participantJid} obtido do banco: "${senderName}"`);
+        }
+      } catch (err) {
+        logger.debug(`[verifyMediaMessage] Erro ao buscar contato no banco: ${err}`);
+      }
+    }
+  
+    logger.info(`[verifyMediaMessage] senderName final: "${senderName || 'vazio'}"`);
 
     const messageData = {
       wid: msg.key.id,
@@ -2141,8 +2171,11 @@ export const verifyMessage = async (
 
   const participantJid = msg.key.participant || msg.participant;
 
-  // BUSCAR NOME DO REMETENTE: prioridade 1) pushName da mensagem, 2) store do Baileys
+  // BUSCAR NOME DO REMETENTE: prioridade 1) pushName da mensagem, 2) store do Baileys, 3) contato do banco
   let senderName = msg.pushName;
+  
+  logger.info(`[verifyMessage] Capturando senderName - pushName: "${msg.pushName || 'vazio'}" | participantJid: ${participantJid || 'vazio'}`);
+  
   if (!senderName && participantJid && wbot) {
     try {
       const store = (wbot as any).store;
@@ -2150,13 +2183,41 @@ export const verifyMessage = async (
         const contactData = store.contacts[participantJid];
         senderName = contactData?.notify || contactData?.name || contactData?.verifiedName;
         if (senderName) {
-          logger.debug(`[verifyMessage] Nome do participante ${participantJid} obtido do store: "${senderName}"`);
+          logger.info(`[verifyMessage] Nome do participante ${participantJid} obtido do store: "${senderName}"`);
         }
       }
     } catch (err) {
-      // Silencioso: não falhar por erro ao buscar no store
+      logger.debug(`[verifyMessage] Erro ao buscar no store: ${err}`);
     }
   }
+  
+  // FALLBACK: Buscar nome do contato no banco se ainda não temos senderName
+  if (!senderName && participantJid) {
+    try {
+      const participantNumber = participantJid.replace(/@.*/, "");
+      const participantContact = await Contact.findOne({
+        where: {
+          companyId: ticket.companyId,
+          isGroup: false,
+          [Op.or]: [
+            { remoteJid: participantJid },
+            { lidJid: participantJid },
+            { number: participantNumber },
+            { canonicalNumber: participantNumber }
+          ]
+        }
+      });
+      
+      if (participantContact && participantContact.name && participantContact.name !== participantNumber) {
+        senderName = participantContact.name;
+        logger.info(`[verifyMessage] Nome do participante ${participantJid} obtido do banco: "${senderName}"`);
+      }
+    } catch (err) {
+      logger.debug(`[verifyMessage] Erro ao buscar contato no banco: ${err}`);
+    }
+  }
+  
+  logger.info(`[verifyMessage] senderName final: "${senderName || 'vazio'}"`);
 
   const messageData = {
     wid: msg.key.id,
@@ -6317,19 +6378,6 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
   
   logger.info(`[wbotMessageListener] Iniciado para whatsappId=${wbot.id}, companyId=${companyId}, userJid=${wbotUserJid}, phoneNumber=${phoneNumber}`);
   
-  // Tentar se tornar líder para este número
-  if (phoneNumber && phoneNumber.length >= 10) {
-    tryBecomeLeader(phoneNumber, wbot.id).then(isNowLeader => {
-      if (isNowLeader) {
-        logger.info(`[wbotMessageListener] ✅ Esta conexão é LÍDER para ${phoneNumber}`);
-      } else {
-        logger.info(`[wbotMessageListener] ⚠️ Esta conexão é FOLLOWER para ${phoneNumber} (apenas sincroniza histórico)`);
-      }
-    }).catch(err => {
-      logger.error(`[wbotMessageListener] Erro ao verificar liderança: ${err?.message}`);
-    });
-  }
-  
   wbot.ev.on("messages.upsert", async (messageUpsert: ImessageUpsert) => {
     logger.info(`[messages.upsert] Evento recebido: ${messageUpsert.messages?.length || 0} mensagens, type=${messageUpsert.type}, whatsappId=${wbot.id}`);
     
@@ -6342,47 +6390,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
 
     if (!messages || messages.length === 0) return;
 
-    // =================================================================
-    // VERIFICAÇÃO DE LÍDER - MULTI-DEVICE WHATSAPP
-    // =================================================================
-    // Se não somos o líder para este número, NÃO processamos mensagens
-    // Apenas sincronizamos histórico (o líder é responsável pelo processamento)
-    const isCurrentLeader = phoneNumber ? isLeaderCached(phoneNumber) : true;
-    
-    if (!isCurrentLeader) {
-      // Verificar novamente com Redis (cache pode estar desatualizado)
-      const isReallyLeader = await isLeader(phoneNumber, wbot.id);
-      
-      if (!isReallyLeader) {
-        logger.debug(`[messages.upsert] ⚠️ FOLLOWER: Ignorando processamento para ${phoneNumber} (não sou líder)`);
-        // Followers ainda salvam mensagens no banco para histórico, mas não processam
-        // (não criam tickets, não disparam automações, etc.)
-        // O líder é responsável pelo processamento completo
-        
-        // =================================================================
-        // FOLLOWER: Apenas salva mensagens para histórico (deduplicado)
-        // =================================================================
-        for (const message of messages) {
-          try {
-            // Verificar se mensagem já existe (deduplicação)
-            const messageExists = await Message.count({
-              where: { wid: message.key.id!, companyId }
-            });
-            
-            if (!messageExists) {
-              // Salvar mensagem sem processar (sem criar ticket, sem automações)
-              // Isso garante que o histórico esteja sincronizado
-              logger.debug(`[FOLLOWER] Salvando mensagem ${message.key.id} para histórico (sem processamento)`);
-              // Nota: A mensagem será salva pelo handleMessage, mas com flags para não processar
-            }
-          } catch (err: any) {
-            logger.error(`[FOLLOWER] Erro ao salvar mensagem: ${err?.message}`);
-          }
-        }
-        return; // Followers não processam além de salvar histórico
-      }
-    }
-    // =================================================================
+    // Single-instance: sempre processa todas as mensagens
 
     if (!messages) return;
 

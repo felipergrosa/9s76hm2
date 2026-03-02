@@ -2,12 +2,17 @@ import { Op } from "sequelize";
 import Whatsapp from "../models/Whatsapp";
 import logger from "../utils/logger";
 import { StartWhatsAppSessionUnified } from "../services/WbotServices/StartWhatsAppSessionUnified";
-import { getLockKey } from "../libs/wbotMutex";
-import cacheLayer from "../libs/cache";
-import { getWbotIsReconnecting } from "../libs/wbot";
+import { getWbotIsReconnecting, getWbotSessionIds } from "../libs/wbot";
 
+/**
+ * checkOrphanedSessionsCron - VERSÃO SIMPLIFICADA PARA AMBIENTE SINGLE-INSTANCE
+ * 
+ * Verifica se sessões marcadas como CONNECTED no banco estão realmente ativas.
+ * Em ambiente single-instance, não precisamos de Redis lock - basta verificar
+ * se a sessão existe no array `sessions` em memória.
+ */
 export const checkOrphanedSessionsCron = () => {
-    // Intervalo de verificação: 10 segundos
+    // Intervalo de verificação: 30 segundos (aumentado para evitar conflitos)
     setInterval(async () => {
         try {
             const whatsapps = await Whatsapp.findAll({
@@ -19,29 +24,28 @@ export const checkOrphanedSessionsCron = () => {
 
             if (whatsapps.length === 0) return;
 
-            const redis = cacheLayer.getRedisInstance();
-            if (!redis) return; // Se não tem redis, não tem como checar lock
+            // Obter IDs das sessões ativas em memória
+            const activeSessionIds = getWbotSessionIds();
 
             for (const whatsapp of whatsapps) {
-                // CORREÇÃO: Verificar se sessão já está em processo de reconexão
-                // Isso evita race condition onde OrphanedCron tenta assumir durante delay de reconexão
+                // Verificar se sessão já está em processo de reconexão
                 if (getWbotIsReconnecting(whatsapp.id)) {
                     logger.debug(`[OrphanedCron] Sessão ${whatsapp.name} (#${whatsapp.id}) já está reconectando. Pulando.`);
                     continue;
                 }
 
-                const key = getLockKey(whatsapp.id);
-                const owner = await redis.get(key);
+                // Verificar se a sessão está ativa em memória
+                const isActive = activeSessionIds.includes(whatsapp.id);
 
-                // Se NÃO tem dono (lock expirou ou foi apagado), mas o status é CONNECTED no banco,
-                // significa que o nó que cuidava caiu. Tenta assumir.
-                if (!owner) {
-                    logger.info(`[OrphanedCron] Sessão ${whatsapp.name} (#${whatsapp.id}) parece órfã (sem lock). Tentando assumir...`);
+                // Se NÃO está ativa em memória, mas o status é CONNECTED no banco,
+                // significa que a sessão foi perdida. Tenta reconectar.
+                if (!isActive) {
+                    logger.info(`[OrphanedCron] Sessão ${whatsapp.name} (#${whatsapp.id}) parece órfã (não está em memória). Tentando reconectar...`);
                     StartWhatsAppSessionUnified(whatsapp, whatsapp.companyId);
                 }
             }
         } catch (err) {
             logger.error(`[OrphanedCron] Erro: ${err}`);
         }
-    }, 10000); // 10s
+    }, 30000); // 30s (aumentado de 10s para evitar conflitos)
 };

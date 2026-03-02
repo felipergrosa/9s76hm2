@@ -38,6 +38,7 @@ import tagRulesRecentContactsCron from "./cron/tagRulesRecentContactsCron";
 import { checkOrphanedSessionsCron } from "./cron/checkOrphanedSessionsCron";
 import { sessionWindowRenewalCron } from "./cron/sessionWindowRenewalCron";
 import { clearSessionLocks } from "./libs/wbotMutex";
+import { bullQueueMonitor } from "./jobs/BullQueueMonitor";
 
 const ENV_PROFILE = process.env.APP_ENV || process.env.NODE_ENV || "development";
 const isProduction = ENV_PROFILE === "production";
@@ -196,6 +197,19 @@ const server = app.listen(port, async () => {
   const hasRedisQueues = Boolean((process.env.REDIS_URI_ACK && process.env.REDIS_URI_ACK !== '') || (process.env.REDIS_URI && process.env.REDIS_URI !== ''));
   if (hasRedisQueues) {
     BullQueue.process();
+    
+    // Registrar filas no monitor automático
+    BullQueue.queues.forEach(q => {
+      bullQueueMonitor.registerQueue(q.name, q.bull);
+    });
+    
+    // Limpar jobs antigos no startup
+    bullQueueMonitor.cleanAllOnStartup().catch(err => {
+      logger.error(`[BullMonitor] Erro ao limpar jobs no startup: ${err?.message}`);
+    });
+    
+    // Iniciar monitoramento periódico
+    bullQueueMonitor.start();
   } else {
     logger.warn("BullQueue desabilitado: defina REDIS_URI ou REDIS_URI_ACK para habilitar processamento de filas.");
   }
