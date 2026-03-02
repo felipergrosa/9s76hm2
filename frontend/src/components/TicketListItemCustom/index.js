@@ -31,6 +31,7 @@ import { TicketsContext } from "../../context/Tickets/TicketsContext";
 
 import ContactTag from "../ContactTag";
 import ContactAvatar from "../ContactAvatar";
+import SessionWindowCounter from "../SessionWindowCounter";
 import { v4 as uuidv4 } from "uuid";
 
 import {
@@ -864,6 +865,17 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                                     <Badge style={{ backgroundColor: "#000000" }} className={classes.connectionTag} overlap="rectangular">
                                         {ticket.user?.name.toUpperCase()}
                                     </Badge>
+                                )}
+
+                                {/* Contador de janela 24h para API Oficial */}
+                                {!ticket.isGroup && (
+                                    <SessionWindowCounter
+                                        ticketId={ticket.id}
+                                        channelType={ticket.channel}
+                                        isOfficial={ticket.whatsapp?.channelType === "official"}
+                                        sessionWindowExpiresAt={ticket.sessionWindowExpiresAt}
+                                        size="small"
+                                    />
                                 )}
 
                                 {ticket.tags?.map((tag) => (

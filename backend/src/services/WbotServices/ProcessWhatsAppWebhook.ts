@@ -11,6 +11,7 @@ import CreateMessageService from "../MessageServices/CreateMessageService";
 import { getIO } from "../../libs/socket";
 import DownloadOfficialMediaService from "./DownloadOfficialMediaService";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
+import { UpdateSessionWindow } from "../TicketServices/UpdateSessionWindowService";
 
 /**
  * Interface para mudança (change) do webhook Meta
@@ -634,6 +635,10 @@ async function processIncomingMessage(
   });
 
   logger.info(`[WebhookProcessor] Mensagem criada: ${createdMessage.id}`);
+
+  // Atualizar janela de sessão de 24h (API Oficial)
+  // Quando o cliente envia uma mensagem, abre-se uma janela de 24h para responder gratuitamente
+  await UpdateSessionWindow(ticket.id, whatsapp.id);
 
   // Emitir evento via Socket.IO apenas para a sala do ticket específico
   const io = getIO();

@@ -186,6 +186,11 @@ class Ticket extends Model<Ticket> {
 
   @Column
   typebotSessionTime: Date
+
+  // Data de expiração da janela de 24h (API Oficial WhatsApp Business)
+  // Quando o cliente envia uma mensagem, abre-se uma janela de 24h para responder gratuitamente
+  @Column
+  sessionWindowExpiresAt: Date;
 }
 
 export default Ticket;

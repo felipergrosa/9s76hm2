@@ -117,7 +117,7 @@ const ListTicketsService = async ({
     {
       model: Whatsapp,
       as: "whatsapp",
-      attributes: ["id", "name", "expiresTicket", "groupAsTicket"]
+      attributes: ["id", "name", "expiresTicket", "groupAsTicket", "channelType"]
     },
   ];
 
@@ -663,7 +663,7 @@ const ListTicketsService = async ({
   const { count, rows: tickets } = await Ticket.findAndCountAll({
     where: whereCondition,
     include: includeCondition,
-    attributes: ["id", "uuid", "userId", "queueId", "isGroup", "channel", "status", "contactId", "useIntegration", "lastMessage", "updatedAt", "unreadMessages"],
+    attributes: ["id", "uuid", "userId", "queueId", "isGroup", "channel", "status", "contactId", "useIntegration", "lastMessage", "updatedAt", "unreadMessages", "sessionWindowExpiresAt"],
     distinct: true,
     limit,
     offset,

@@ -4,6 +4,7 @@ import { CardHeader } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
 import Tooltip from "@material-ui/core/Tooltip";
 import ContactAvatar from "../ContactAvatar";
+import SessionWindowCounter from "../SessionWindowCounter";
 import api from "../../services/api";
 import ConnectionIcon from "../ConnectionIcon";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -194,6 +195,16 @@ const TicketInfo = ({ contact, ticket, onClick }) => {
 									<span className={classes.tagDot} style={{ backgroundColor: tag.color || '#999' }} />
 								</Tooltip>
 							))}
+							{/* Contador de janela 24h para API Oficial */}
+							{!contact?.isGroup && (
+								<SessionWindowCounter
+									ticketId={ticket?.id}
+									channelType={ticket?.channel}
+									isOfficial={ticket?.whatsapp?.channelType === "official"}
+									sessionWindowExpiresAt={ticket?.sessionWindowExpiresAt}
+									size="normal"
+								/>
+							)}
 						</div>
 					</div>
 				)}

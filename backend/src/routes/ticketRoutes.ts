@@ -39,4 +39,7 @@ ticketRoutes.get("/tickets/duplicate-check", isAuth, TicketMergeController.check
 
 ticketRoutes.post("/tickets/merge-duplicates", isAuth, TicketMergeController.mergeDuplicateTickets);
 
+// Rota para status da janela de sessão 24h (API Oficial)
+ticketRoutes.get("/tickets/:ticketId/session-window", isAuth, TicketController.getSessionWindow);
+
 export default ticketRoutes;

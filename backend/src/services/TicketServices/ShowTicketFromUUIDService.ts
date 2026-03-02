@@ -37,7 +37,8 @@ const ShowTicketUUIDService = async (uuid: string,
       "userId",
       "amountUsedBotQueuesNPS",
       "lgpdSendMessageAt",
-      "isBot"
+      "isBot",
+      "sessionWindowExpiresAt"
     ],
     include: [
       {
@@ -94,7 +95,7 @@ const ShowTicketUUIDService = async (uuid: string,
       {
         model: Whatsapp,
         as: "whatsapp",
-        attributes: ["id", "name", "groupAsTicket", "greetingMediaAttachment", "facebookUserToken", "facebookUserId"]
+        attributes: ["id", "name", "groupAsTicket", "greetingMediaAttachment", "facebookUserToken", "facebookUserId", "channelType"]
       },
       {
         model: Company,

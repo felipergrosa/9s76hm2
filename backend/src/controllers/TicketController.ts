@@ -12,6 +12,7 @@ import ShowTicketUUIDService from "../services/TicketServices/ShowTicketFromUUID
 import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import UpdateTicketService from "../services/TicketServices/UpdateTicketService";
 import ListTicketsServiceKanban from "../services/TicketServices/ListTicketsServiceKanban";
+import { GetSessionWindowStatus } from "../services/TicketServices/UpdateSessionWindowService";
 
 import CreateLogTicketService from "../services/TicketServices/CreateLogTicketService";
 import ShowLogTicketService from "../services/TicketServices/ShowLogTicketService";
@@ -597,14 +598,27 @@ export const closeAll = async (req: Request, res: Response): Promise<Response> =
       status: "closed",
       userId: ticket.userId || null,
       queueId: ticket.queueId || null,
-      unreadMessages: 0,
-      amountUsedBotQueues: 0,
-      sendFarewellMessage: false
     };
 
-    await UpdateTicketService({ ticketData, ticketId: ticket.id, companyId })
+    await ticket.update(ticketData);
 
   });
 
   return res.status(200).json();
+};
+
+/**
+ * Retorna o status da janela de sessão de 24h (API Oficial WhatsApp Business)
+ * Usado para exibir o contador no frontend
+ */
+export const getSessionWindow = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+
+  const sessionStatus = await GetSessionWindowStatus(Number(ticketId));
+
+  return res.status(200).json(sessionStatus);
 };
