@@ -217,7 +217,11 @@ const ListContactsService = async ({
     const nameConditions = nameSearchWords.length > 0
       ? {
           [Op.and]: nameSearchWords.map(word => ({
-            nameNormalized: { [Op.iLike]: `%${word}%` }
+            name: where(
+              fn("LOWER", fn("unaccent", col("Contact.name"))),
+              "LIKE",
+              `%${word}%`
+            )
           }))
         }
       : null;

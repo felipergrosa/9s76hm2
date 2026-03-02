@@ -906,10 +906,12 @@ const MessagesList = ({
 
   // Helper para decidir qual contato exibir no avatar do áudio
   const backendUrl = getBackendUrl();
-  const getAvatarContactForMessage = (msg, fallbackTicketContact = null) => {
+  // Helper para determinar qual contato usar para avatar
+  const getAvatarContactForMessage = (msg) => {
     try {
-      // Mensagens enviadas por mim: usar avatar do usuário logado
+      // Mensagens enviadas: usar avatar do usuário logado
       if (msg?.fromMe) {
+        const user = currentUser || {};
         const imageName = user?.profileImage;
         const url = imageName
           ? `${backendUrl}/public/company${companyId}/${imageName}`
@@ -917,17 +919,32 @@ const MessagesList = ({
         return { name: user?.name, urlPicture: url };
       }
 
-      // Mensagens recebidas: preferir contact com imagem; caso não tenha, usar ticket.contact
-      const c = msg?.contact;
-      const hasPic = !!(c?.urlPicture || c?.profilePicUrl || c?.contact?.urlPicture || c?.contact?.profilePicUrl);
-      if (hasPic) return c;
-
-      // Se for grupo, NÃO fazer fallback para o ticketContact (que é a foto do grupo)
-      // Queremos que apareça o avatar (ou iniciais) do PARTICIPANTE
       // Check both component prop and message/ticket data
       const messageIsGroup = isGroup || msg?.ticket?.isGroup || msg?.chat?.isGroup;
 
-      if (messageIsGroup) return c;
+      // CORREÇÃO: Em grupos, buscar avatar do PARTICIPANTE individual, não do grupo
+      if (messageIsGroup) {
+        const c = msg?.contact;
+        
+        // Se o contact não é o grupo (isGroup=false), usar ele (é o participante individual)
+        if (c && !c.isGroup) {
+          return c;
+        }
+        
+        // Fallback: criar objeto com dados do participante para exibir iniciais
+        // Usar senderName (pushName) como nome do participante
+        return {
+          name: msg.senderName || msg.participant?.replace(/@.*/, "") || "Participante",
+          number: msg.participant,
+          urlPicture: null, // Sem foto, vai usar iniciais coloridas
+          profilePicUrl: null
+        };
+      }
+
+      // Mensagens recebidas (não-grupo): preferir contact com imagem; caso não tenha, usar ticket.contact
+      const c = msg?.contact;
+      const hasPic = !!(c?.urlPicture || c?.profilePicUrl || c?.contact?.urlPicture || c?.contact?.profilePicUrl);
+      if (hasPic) return c;
 
       // tenta pegar do próprio msg.ticket ou do fallback informado
       const ticketContact = msg?.ticket?.contact || fallbackTicketContact;
@@ -2140,7 +2157,7 @@ const MessagesList = ({
 
             {isGroup && !message.fromMe && (
               <Avatar
-                src={getAvatarContactForMessage(message)?.urlPicture}
+                src={getAvatarContactForMessage(message)?.profilePicUrl || getAvatarContactForMessage(message)?.urlPicture}
                 className={classes.messageAvatar}
                 style={{ backgroundColor: getParticipantColor(message), color: "#fff" }}
                 alt={getAvatarContactForMessage(message)?.name}

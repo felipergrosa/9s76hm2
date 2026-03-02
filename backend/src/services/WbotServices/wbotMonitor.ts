@@ -10,10 +10,13 @@ import {
 import * as Sentry from "@sentry/node";
 import fs from "fs";
 import path from "path";
+import { Op } from "sequelize";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
 import WhatsappLabel from "../../models/WhatsappLabel";
+import LidMapping from "../../models/LidMapping";
+import Message from "../../models/Message";
 import logger from "../../utils/logger";
 import { upsertLabel, addChatLabelAssociation, getChatLabelIds } from "../../libs/labelCache";
 import createOrUpdateBaileysService from "../BaileysServices/CreateOrUpdateBaileysService";
@@ -547,6 +550,100 @@ const wbotMonitor = async (
         Sentry.captureException(err);
       }
     });
+
+    // =================================================================
+    // POLLING PERIÓDICO: Resolver LIDs pendentes via signalRepository
+    // Executa a cada 5 minutos para LIDs sem phoneNumber
+    // =================================================================
+    const LID_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutos
+    
+    const pollUnresolvedLids = async () => {
+      try {
+        const signalRepo = (wbot as any).signalRepository;
+        if (!signalRepo?.lidMapping?.getPNForLID) {
+          logger.debug("[wbotMonitor] signalRepository não disponível para polling de LIDs");
+          return;
+        }
+
+        // Buscar LIDs sem phoneNumber resolvido
+        const unresolvedLids = await Contact.findAll({
+          attributes: ["id", "remoteJid", "lidJid", "name"],
+          where: {
+            companyId,
+            isGroup: false,
+            lidJid: { [Op.ne]: null },
+            number: { [Op.or]: [null, ""] }
+          },
+          limit: 50
+        });
+
+        if (unresolvedLids.length === 0) return;
+
+        logger.info(`[wbotMonitor] Polling de ${unresolvedLids.length} LIDs pendentes...`);
+
+        let resolvedCount = 0;
+        for (const contact of unresolvedLids) {
+          const lidJid = contact.lidJid || contact.remoteJid;
+          if (!lidJid || !lidJid.includes("@lid")) continue;
+
+          const lidId = lidJid.replace("@lid", "");
+          
+          try {
+            const resolvedPN = await signalRepo.lidMapping.getPNForLID(lidId);
+            
+            if (resolvedPN) {
+              const pnDigits = resolvedPN.replace(/\D/g, "");
+              
+              if (pnDigits.length >= 10 && pnDigits.length <= 15) {
+                // Salvar mapeamento
+                await LidMapping.upsert({
+                  lid: lidJid,
+                  phoneNumber: pnDigits,
+                  companyId,
+                  whatsappId: whatsapp.id,
+                  source: "polling_signalRepository",
+                  confidence: 1.0,
+                  verified: true
+                });
+
+                // Atualizar contato
+                await contact.update({
+                  number: pnDigits,
+                  canonicalNumber: pnDigits,
+                  remoteJid: `${pnDigits}@s.whatsapp.net`
+                });
+
+                // Atualizar mensagens
+                await Message.update(
+                  { senderName: contact.name },
+                  { where: { participant: lidJid, senderName: null } }
+                );
+
+                resolvedCount++;
+                logger.info(`[wbotMonitor] LID ${lidJid} resolvido via polling → ${pnDigits}`);
+              }
+            }
+          } catch (e) {
+            // Ignorar erros individuais
+          }
+        }
+
+        if (resolvedCount > 0) {
+          logger.info(`[wbotMonitor] Polling resolveu ${resolvedCount} LIDs`);
+        }
+      } catch (err: any) {
+        logger.error("[wbotMonitor] Erro no polling de LIDs", { err: err?.message });
+      }
+    };
+
+    // Executar polling a cada 5 minutos
+    const pollInterval = setInterval(pollUnresolvedLids, LID_POLL_INTERVAL);
+    
+    // Executar imediatamente após 30 segundos (dar tempo para sessão estabilizar)
+    setTimeout(pollUnresolvedLids, 30000);
+
+    // Armazenar interval para limpeza se necessário
+    (wbot as any)._lidPollInterval = pollInterval;
 
   } catch (err) {
     logger.error(`Error in wbotMonitor: ${err.message}`);

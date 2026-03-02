@@ -6637,6 +6637,48 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         try {
           // Se Baileys enviou phoneNumber junto com o LID, salvar mapeamento
           const pnFromEvent = contact.phoneNumber || contact.pn || contact.number;
+          
+          // LOG DETALHADO: Verificar se phoneNumber está disponível
+          logger.info(`[contacts.update] LID ${contact.id} - Verificando phoneNumber:`, {
+            phoneNumber: contact.phoneNumber,
+            pn: contact.pn,
+            number: contact.number,
+            notify: contact.notify,
+            verifiedName: contact.verifiedName,
+            allKeys: Object.keys(contact)
+          });
+          
+          // VERIFICAR STORE DO BAILEYS para esse LID
+          const store = (wbot as any).store;
+          if (store?.contacts?.[contact.id]) {
+            const storeContact = store.contacts[contact.id];
+            logger.info(`[contacts.update] LID ${contact.id} - Dados no STORE:`, {
+              id: storeContact.id,
+              name: storeContact.name,
+              notify: storeContact.notify,
+              verifiedName: storeContact.verifiedName,
+              phoneNumber: storeContact.phoneNumber,
+              allKeys: Object.keys(storeContact)
+            });
+          } else {
+            logger.info(`[contacts.update] LID ${contact.id} - NÃO encontrado no store`);
+          }
+          
+          // VERIFICAR signalRepository.lidMapping
+          try {
+            const signalRepo = (wbot as any).signalRepository;
+            if (signalRepo?.lidMapping?.get) {
+              const lidMapping = signalRepo.lidMapping.get(contact.id);
+              if (lidMapping) {
+                logger.info(`[contacts.update] LID ${contact.id} - Encontrado no signalRepository.lidMapping:`, lidMapping);
+              } else {
+                logger.info(`[contacts.update] LID ${contact.id} - NÃO encontrado no signalRepository.lidMapping`);
+              }
+            }
+          } catch (signalErr) {
+            logger.debug(`[contacts.update] Erro ao acessar signalRepository: ${signalErr}`);
+          }
+          
           if (pnFromEvent) {
             const pnDigits = String(pnFromEvent).replace(/\D/g, "");
             if (isRealPhoneNumber(pnDigits)) {
@@ -6651,6 +6693,29 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
                   verified: true
                 });
                 logger.info(`[contacts.update] LID ${contact.id} → PN ${pnDigits} salvo via contacts.update`);
+
+                // NOVO: Associar automaticamente LID a contato existente por número
+                const existingContact = await Contact.findOne({
+                  where: {
+                    companyId,
+                    isGroup: false,
+                    [Op.or]: [
+                      { number: pnDigits },
+                      { canonicalNumber: pnDigits }
+                    ]
+                  }
+                });
+                
+                if (existingContact && !existingContact.lidJid) {
+                  await existingContact.update({ lidJid: contact.id });
+                  logger.info(`[contacts.update] LID ${contact.id} associado ao contato ${existingContact.name} (${pnDigits})`);
+                  
+                  // Atualizar senderName das mensagens
+                  await Message.update(
+                    { senderName: existingContact.name },
+                    { where: { participant: contact.id, senderName: null } }
+                  );
+                }
 
                 // Atualizar contato LID existente com o número real
                 const lidContact = await Contact.findOne({
@@ -6732,6 +6797,27 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
                 await existingLidContact.update({ name: contactName });
                 logger.info(`[contacts.update] LID ${contact.id} → nome atualizado para "${contactName}" (contactId=${existingLidContact.id})`);
               }
+            }
+          }
+
+          // NOVO: Atualizar senderName das mensagens existentes para esse LID
+          if (contactName) {
+            try {
+              const Message = (await import("../../models/Message")).default;
+              const result = await Message.update(
+                { senderName: contactName },
+                {
+                  where: {
+                    participant: contact.id,
+                    senderName: null
+                  }
+                }
+              );
+              if (result[0] > 0) {
+                logger.info(`[contacts.update] LID ${contact.id} → senderName atualizado em ${result[0]} mensagens`);
+              }
+            } catch (msgErr: any) {
+              logger.debug(`[contacts.update] Erro ao atualizar senderName das mensagens: ${msgErr?.message}`);
             }
           }
         } catch (err: any) {

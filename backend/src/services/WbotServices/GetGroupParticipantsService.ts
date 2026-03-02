@@ -158,6 +158,8 @@ const GetGroupParticipantsService = async ({
     .filter((p: any) => p.id.includes("@lid"))
     .map((p: any) => p.id);
 
+  logger.info(`[GetGroupParticipants] Total de participantes LID: ${lidParticipantJids.length}`);
+
   const lidContactMap = new Map<string, Contact>();
   if (lidParticipantJids.length > 0) {
     try {
@@ -168,19 +170,91 @@ const GetGroupParticipantsService = async ({
       });
       const ticketIds = groupTickets.map(t => t.id);
 
+      logger.info(`[GetGroupParticipants] Tickets do grupo: ${ticketIds.length}`);
+
       if (ticketIds.length > 0) {
-        // Buscar o contactId mais recente para cada participant @lid
-        // usando as mensagens salvas (mesma fonte que o chat)
+        // Buscar senderName diretamente das mensagens (não depende do contactId)
+        // Isso resolve o problema de mensagens salvas com contactId do grupo
         const sequelize = Contact.sequelize!;
-        const mappings: any[] = await sequelize.query(`
+        
+        // PRIMEIRA BUSCA: Apenas no grupo atual
+        const senderMappings: any[] = await sequelize.query(`
+          SELECT DISTINCT ON (m.participant)
+            m.participant,
+            m."senderName"
+          FROM "Messages" m
+          WHERE m."ticketId" IN (:ticketIds)
+            AND m."fromMe" = false
+            AND m.participant IN (:participants)
+            AND m."senderName" IS NOT NULL
+            AND m."senderName" != ''
+          ORDER BY m.participant, m.id DESC
+        `, {
+          replacements: { ticketIds, participants: lidParticipantJids },
+          type: QueryTypes.SELECT
+        });
+
+        logger.info(`[GetGroupParticipants] senderName no grupo atual: ${senderMappings.length}`);
+        senderMappings.forEach(m => {
+          logger.info(`[GetGroupParticipants] senderName: ${m.participant} → "${m.senderName}"`);
+        });
+
+        // Salvar senderNames no mapa para uso posterior
+        for (const row of senderMappings) {
+          if (row.senderName) {
+            lidContactMap.set(row.participant, {
+              name: row.senderName,
+              number: null,
+              canonicalNumber: null,
+              profilePicUrl: null
+            } as any);
+          }
+        }
+
+        // SEGUNDA BUSCA: Buscar senderName em TODOS os grupos da empresa para LIDs não encontrados
+        const missingLids = lidParticipantJids.filter((lid: string) => !lidContactMap.has(lid));
+        if (missingLids.length > 0) {
+          logger.info(`[GetGroupParticipants] Buscando ${missingLids.length} LIDs em outros grupos da empresa...`);
+          
+          const globalSenderMappings: any[] = await sequelize.query(`
+            SELECT DISTINCT ON (m.participant)
+              m.participant,
+              m."senderName"
+            FROM "Messages" m
+            JOIN "Tickets" t ON t.id = m."ticketId"
+            WHERE t."companyId" = :companyId
+              AND t."isGroup" = true
+              AND m."fromMe" = false
+              AND m.participant IN (:participants)
+              AND m."senderName" IS NOT NULL
+              AND m."senderName" != ''
+            ORDER BY m.participant, m.id DESC
+          `, {
+            replacements: { companyId, participants: missingLids },
+            type: QueryTypes.SELECT
+          });
+
+          logger.info(`[GetGroupParticipants] senderName em outros grupos: ${globalSenderMappings.length}`);
+          globalSenderMappings.forEach(m => {
+            logger.info(`[GetGroupParticipants] senderName global: ${m.participant} → "${m.senderName}"`);
+            lidContactMap.set(m.participant, {
+              name: m.senderName,
+              number: null,
+              canonicalNumber: null,
+              profilePicUrl: null
+            } as any);
+          });
+        }
+
+        // Buscar também contatos individuais via contactId (para ter número real)
+        const contactMappings: any[] = await sequelize.query(`
           SELECT DISTINCT ON (m.participant)
             m.participant,
             m."contactId",
             c.name,
             c.number,
             c."canonicalNumber",
-            c."profilePicUrl",
-            c."isGroup" as "contactIsGroup"
+            c."profilePicUrl"
           FROM "Messages" m
           JOIN "Contacts" c ON c.id = m."contactId"
           WHERE m."ticketId" IN (:ticketIds)
@@ -193,8 +267,13 @@ const GetGroupParticipantsService = async ({
           type: QueryTypes.SELECT
         });
 
-        for (const row of mappings) {
-          // Criar um objeto Contact-like para o mapa
+        logger.info(`[GetGroupParticipants] Contatos individuais encontrados: ${contactMappings.length}`);
+        contactMappings.forEach(m => {
+          logger.info(`[GetGroupParticipants] Contato: ${m.participant} → ${m.name} (${m.number})`);
+        });
+
+        // Sobrescrever com contatos reais (têm mais dados)
+        for (const row of contactMappings) {
           const contact = await Contact.findByPk(row.contactId);
           if (contact) {
             lidContactMap.set(row.participant, contact);
@@ -217,14 +296,17 @@ const GetGroupParticipantsService = async ({
           ]
         }
       });
+      logger.info(`[GetGroupParticipants] Contatos com LID no banco: ${lidContacts.length}`);
       for (const c of lidContacts) {
         if (c.lidJid && !lidContactMap.has(c.lidJid)) lidContactMap.set(c.lidJid, c);
         if (c.remoteJid && !lidContactMap.has(c.remoteJid)) lidContactMap.set(c.remoteJid, c);
       }
-    } catch {
-      // Ignorar
+    } catch (err) {
+      logger.warn(`[GetGroupParticipants] Erro ao buscar contatos por LID: ${err}`);
     }
   }
+
+  logger.info(`[GetGroupParticipants] lidContactMap final: ${lidContactMap.size} entradas`);
 
   for (const p of groupMetadata.participants || []) {
     const participantJid = p.id;
@@ -242,12 +324,24 @@ const GetGroupParticipantsService = async ({
       // CORREÇÃO BAILEYS V7: Verificar phoneNumber DIRETAMENTE no objeto do participante
       // Quando id é LID, o Baileys v7 inclui phoneNumber diretamente no participante
       const baileysPhoneNumber = (p as any).phoneNumber;
+      
+      // LOG DETALHADO: Mostrar objeto completo do participante
+      logger.info(`[GetGroupParticipants] LID ${participantJid} - Dados do participante:`, {
+        id: p.id,
+        phoneNumber: (p as any).phoneNumber,
+        name: p.name,
+        notify: p.notify,
+        admin: p.admin,
+        // Mostrar todas as propriedades disponíveis
+        allKeys: Object.keys(p)
+      });
+      
       if (baileysPhoneNumber && typeof baileysPhoneNumber === 'string') {
         const { canonical } = normalizePhoneNumber(baileysPhoneNumber);
         if (canonical) {
           participantNumber = canonical;
           isValidPhoneNumber = true;
-          logger.debug(`[GetGroupParticipants] LID ${participantJid} resolvido via phoneNumber direto: ${participantNumber}`);
+          logger.info(`[GetGroupParticipants] LID ${participantJid} resolvido via phoneNumber direto: ${participantNumber}`);
         }
       }
 
@@ -256,6 +350,11 @@ const GetGroupParticipantsService = async ({
         contactRecord = lidContactMap.get(participantJid) || null;
 
         if (contactRecord) {
+          logger.info(`[GetGroupParticipants] LID ${participantJid} encontrado no lidContactMap:`, {
+            name: contactRecord.name,
+            number: contactRecord.number,
+            canonicalNumber: contactRecord.canonicalNumber
+          });
           // Usar número real do contato encontrado
           const contactNum = (contactRecord.canonicalNumber || contactRecord.number || "").replace(/\D/g, "");
           if (contactNum.length >= 7 && contactNum.length <= 15) {
@@ -263,6 +362,8 @@ const GetGroupParticipantsService = async ({
             isValidPhoneNumber = true;
           }
           resolvedName = contactRecord.name || null;
+        } else {
+          logger.info(`[GetGroupParticipants] LID ${participantJid} NÃO encontrado no lidContactMap`);
         }
       }
     } else {
@@ -284,6 +385,15 @@ const GetGroupParticipantsService = async ({
           const baileysContact = allContacts.find(c => c.id === participantJid);
 
           if (baileysContact) {
+            logger.info(`[GetGroupParticipants] LID ${participantJid} encontrado no store:`, {
+              id: baileysContact.id,
+              name: baileysContact.name,
+              notify: baileysContact.notify,
+              verifiedName: baileysContact.verifiedName,
+              phoneNumber: baileysContact.phoneNumber,
+              allKeys: Object.keys(baileysContact)
+            });
+            
             // Capturar phoneNumber do store (fallback para quando não veio diretamente no participante)
             if (isLid && !isValidPhoneNumber) {
               const realNumber = baileysContact.phoneNumber ||
@@ -291,7 +401,7 @@ const GetGroupParticipantsService = async ({
               if (realNumber && realNumber.length >= 7 && realNumber.length <= 15) {
                 participantNumber = realNumber;
                 isValidPhoneNumber = true;
-                logger.debug(`[GetGroupParticipants] LID ${participantJid} resolvido via store: ${participantNumber}`);
+                logger.info(`[GetGroupParticipants] LID ${participantJid} resolvido via store: ${participantNumber}`);
               }
             }
 
@@ -300,11 +410,18 @@ const GetGroupParticipantsService = async ({
               resolvedName = baileysContact.name ||
                 baileysContact.notify ||
                 baileysContact.verifiedName || null;
+              if (resolvedName) {
+                logger.info(`[GetGroupParticipants] LID ${participantJid} nome resolvido via store: ${resolvedName}`);
+              }
             }
+          } else {
+            logger.info(`[GetGroupParticipants] LID ${participantJid} NÃO encontrado no store (total contatos: ${allContacts.length})`);
           }
+        } else {
+          logger.warn(`[GetGroupParticipants] Store não disponível ou sem contatos`);
         }
       } catch (err) {
-        logger.debug(`[GetGroupParticipants] Erro ao acessar store para ${participantJid}: ${err}`);
+        logger.warn(`[GetGroupParticipants] Erro ao acessar store para ${participantJid}: ${err}`);
       }
     }
 

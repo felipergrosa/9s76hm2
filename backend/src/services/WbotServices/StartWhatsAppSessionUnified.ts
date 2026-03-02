@@ -144,8 +144,13 @@ export const StartWhatsAppSessionUnified = async (
         await adapter.initialize();
 
         // Registrar callback de conexão
+        let lastLoggedStatus: string | null = null;
         adapter.onConnectionUpdate((status) => {
-          logger.info(`[StartSession] Official API status changed: ${status}`);
+          // Evitar logs repetitivos do mesmo status
+          if (status !== lastLoggedStatus) {
+            logger.info(`[StartSession] Official API status changed: ${status}`);
+            lastLoggedStatus = status;
+          }
 
           // Atualizar status no banco
           if (status === "connected") {
