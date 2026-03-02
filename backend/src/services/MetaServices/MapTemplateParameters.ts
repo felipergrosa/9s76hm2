@@ -168,6 +168,15 @@ export const MapTemplateParameters = (
                     );
                 }
 
+                // CRÍTICO: Meta API NÃO aceita valores vazios ou undefined
+                // Se valor for vazio, usar fallback seguro
+                if (!value || value.trim() === "") {
+                    value = contact.name || "Cliente";
+                    logger.warn(
+                        `[MapTemplateParameters] Param ${param.index} estava vazio, usando fallback: "${value}"`
+                    );
+                }
+
                 // Meta API NÃO aceita o campo param_name
                 // Parâmetros devem ser enviados em ordem sequencial
                 return { type: "text", text: value };
@@ -189,6 +198,14 @@ export const MapTemplateParameters = (
                     value = resolveVariable(config, contact);
                 } else {
                     value = contact.name || "Cliente";
+                }
+
+                // CRÍTICO: Meta API NÃO aceita valores vazios
+                if (!value || value.trim() === "") {
+                    value = contact.name || "Cliente";
+                    logger.warn(
+                        `[MapTemplateParameters] Header param ${param.index} estava vazio, usando fallback: "${value}"`
+                    );
                 }
 
                 logger.debug(
@@ -214,6 +231,13 @@ export const MapTemplateParameters = (
                     value = resolveVariable(config, contact);
                 } else {
                     value = autoDetectValue(param, contact);
+                }
+                // CRÍTICO: Meta API NÃO aceita valores vazios
+                if (!value || value.trim() === "") {
+                    value = contact.name || "Cliente";
+                    logger.warn(
+                        `[MapTemplateParameters] Button param ${param.index} estava vazio, usando fallback: "${value}"`
+                    );
                 }
                 return { type: "text", text: value };
             });
