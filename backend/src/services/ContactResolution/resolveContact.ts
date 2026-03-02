@@ -27,7 +27,8 @@ export interface ResolveResult {
 
 export async function resolveContact(
   ids: ExtractedIdentifiers,
-  companyId: number
+  companyId: number,
+  wbot?: any
 ): Promise<ResolveResult> {
   let lidJidUpdated = false;
   let pnFromMapping: string | null = null;
@@ -554,6 +555,73 @@ export async function resolveContact(
         pushName: cleanPushName,
         matchCount: pushNameMatches.length
       }, "[resolveContact] Múltiplos contatos com mesmo pushName — ambiguidade");
+    }
+  }
+
+  // ─────────────────────────────────────────────────
+  // BUSCA 9: Via signalRepository.lidMapping (Baileys v7)
+  // Quando temos LID mas não temos PN, consultar o repositório Signal
+  // do Baileys que mantém mapeamento LID↔PN em memória.
+  // ─────────────────────────────────────────────────
+  if (ids.lidJid && !ids.pnCanonical && wbot) {
+    try {
+      const signalRepo = (wbot as any).authState?.keys?.signalRepository;
+      if (signalRepo?.getPNForLID) {
+        const lidId = ids.lidJid.replace("@lid", "");
+        const resolvedPN = signalRepo.getPNForLID(ids.lidJid) || signalRepo.getPNForLID(lidId);
+        
+        if (resolvedPN) {
+          const pnDigits = String(resolvedPN).replace(/\D/g, "");
+          if (pnDigits.length >= 10 && pnDigits.length <= 13) {
+            // Buscar contato pelo PN resolvido
+            const contact = await Contact.findOne({
+              where: {
+                companyId,
+                isGroup: false,
+                [Op.or]: [
+                  { canonicalNumber: pnDigits },
+                  { number: pnDigits }
+                ]
+              }
+            });
+
+            if (contact) {
+              logger.info({
+                contactId: contact.id,
+                lidJid: ids.lidJid,
+                resolvedPN: pnDigits,
+                strategy: "signalRepository"
+              }, "[resolveContact] Contato encontrado via signalRepository.lidMapping");
+
+              // Vincular LID ao contato
+              if (!contact.lidJid) {
+                try {
+                  await contact.update({ lidJid: ids.lidJid });
+                  lidJidUpdated = true;
+                } catch (err: any) {
+                  logger.warn({ err: err?.message }, "[resolveContact] Falha ao vincular LID via signalRepository");
+                }
+              }
+
+              // Persistir no LidMapping
+              try {
+                await LidMapping.upsert({
+                  lid: ids.lidJid,
+                  phoneNumber: pnDigits,
+                  companyId,
+                  source: "signal_repository",
+                  confidence: 0.95,
+                  verified: true
+                });
+              } catch { /* ok */ }
+
+              return { contact, lidJidUpdated, pnFromMapping: pnDigits };
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      logger.debug({ err: err?.message }, "[resolveContact] signalRepository não disponível");
     }
   }
 

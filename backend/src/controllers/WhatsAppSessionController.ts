@@ -43,7 +43,7 @@ const update = async (req: Request, res: Response): Promise<Response> => {
 
   const channelType = (whatsapp as any)?.channelType || "baileys";
   if (clearAuth && (whatsapp as any)?.channel === "whatsapp" && channelType === "baileys") {
-    const hasLock = await acquireWbotLock(whatsapp.id);
+    const hasLock = await acquireWbotLock(whatsapp.id, "WhatsAppSessionController");
     if (!hasLock) {
       return res.status(409).json({
         error: "Sessão já está sendo gerenciada por outra instância. Tente novamente em alguns segundos."

@@ -28,12 +28,13 @@ export const getSessionLockToken = (whatsappId: number | string): string | undef
  * Suporta reentrância: se já sou o dono, renova e retorna true.
  * Gera um novo token de sessão (UUID) para identificar esta aquisição.
  */
-export const acquireWbotLock = async (whatsappId: number | string): Promise<boolean> => {
+export const acquireWbotLock = async (whatsappId: number | string, caller?: string): Promise<boolean> => {
     const key = getLockKey(whatsappId);
     const redis = cacheLayer.getRedisInstance();
+    const callerInfo = caller ? ` (caller=${caller})` : "";
 
     if (!redis) {
-        logger.warn(`[WbotMutex] Redis indisponível, assumindo lock local para ${whatsappId}`);
+        logger.warn(`[WbotMutex] Redis indisponível, assumindo lock local para ${whatsappId}${callerInfo}`);
         return true;
     }
 
@@ -43,6 +44,14 @@ export const acquireWbotLock = async (whatsappId: number | string): Promise<bool
     const ownerId = `${baseId}:${sessionToken}`;
 
     try {
+        // Verificar valor atual no Redis ANTES de tentar adquirir (debug)
+        const currentBeforeAcquire = await redis.get(key);
+        if (currentBeforeAcquire) {
+            logger.info(`[WbotMutex] ANTES de adquirir: chave=${key} valor atual=${currentBeforeAcquire}`);
+        } else {
+            logger.info(`[WbotMutex] ANTES de adquirir: chave=${key} valor atual=null (livre)`);
+        }
+
         // Lua script para atomicidade e reentrância.
         // NOTA: Reentrância agora compara APENAS o prefixo (HOSTNAME).
         // Se o prefixo bater, ATUALIZA o valor para o novo token e renova o TTL.
@@ -77,7 +86,12 @@ export const acquireWbotLock = async (whatsappId: number | string): Promise<bool
             return true;
         } else {
             const currentOwner = await redis.get(key);
-            logger.debug(`[WbotMutex] Lock NEGADO para whatsappId=${whatsappId}. Dono atual: ${currentOwner}`);
+            const currentHost = currentOwner ? currentOwner.split(":")[0] : "null";
+            const myHost = baseId;
+            logger.warn(`[WbotMutex] Lock NEGADO para whatsappId=${whatsappId}. ` +
+                `Dono atual: ${currentOwner} (host=${currentHost}). ` +
+                `Meu host: ${myHost}. ` +
+                `Token atual no map: ${sessionLockTokens.get(whatsappId) || "null"}`);
             return false;
         }
     } catch (err) {
@@ -155,9 +169,12 @@ export const releaseWbotLock = async (whatsappId: number | string): Promise<void
         const result = await redis.eval(script, 1, key, ownerId);
         if (result === 1) {
             sessionLockTokens.delete(whatsappId);
-            logger.info(`[WbotMutex] Lock liberado para whatsappId=${whatsappId}`);
+            logger.info(`[WbotMutex] Lock liberado para whatsappId=${whatsappId} (token=${ownerId})`);
         } else {
-            logger.debug(`[WbotMutex] Lock NÃO liberado para ${whatsappId} (token não bateu - outra sessão é dona).`);
+            const currentOwner = await redis.get(key);
+            logger.warn(`[WbotMutex] Lock NÃO liberado para ${whatsappId}. ` +
+                `Token esperado: ${ownerId}. ` +
+                `Dono atual no Redis: ${currentOwner || "null"}`);
         }
     } catch (err) {
         logger.error(`[WbotMutex] Erro ao liberar lock: ${err}`);

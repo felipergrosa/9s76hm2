@@ -7,7 +7,7 @@ import Ticket from "../../models/Ticket";
 
 import formatBody from "../../helpers/Mustache";
 import Contact from "../../models/Contact";
-import { getWbot } from "../../libs/wbot";
+import { getWbot, getWbotOrRecover } from "../../libs/wbot";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
 
@@ -27,7 +27,11 @@ const SendWhatsAppMessage = async ({
   msdelay
 }: Request): Promise<WAMessage> => {
   let options = {};
-  const wbot = await getWbot(whatsappId);
+  // Obter sessão com auto-recovery (aguarda até 30s se estiver reconectando)
+  const wbot = await getWbotOrRecover(whatsappId, 30000);
+  if (!wbot) {
+    throw new AppError("Sessão WhatsApp não disponível. Tente novamente em alguns segundos.");
+  }
   // Resolver JID correto para envio (trata LIDs → número real)
   const number = await ResolveSendJid(contact, contact.isGroup, whatsappId);
 

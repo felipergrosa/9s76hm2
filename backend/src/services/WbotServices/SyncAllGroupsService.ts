@@ -1,4 +1,4 @@
-import { getWbot } from "../../libs/wbot";
+import { getWbot, getWbotOrRecover } from "../../libs/wbot";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
@@ -41,8 +41,11 @@ const SyncAllGroupsService = async ({
     throw new Error("Conexão WhatsApp não está ativa");
   }
 
-  // Obter instância do Baileys
-  const wbot = getWbot(whatsappId);
+  // Obter instância do Baileys com auto-recovery
+  const wbot = await getWbotOrRecover(whatsappId, 30000);
+  if (!wbot) {
+    throw new Error("Sessão WhatsApp não disponível. Tente novamente.");
+  }
   if (!wbot?.groupFetchAllParticipating) {
     throw new Error("Sessão não suporta listagem de grupos");
   }

@@ -201,7 +201,7 @@ export async function resolveMessageContact(
   }
 
   // ─── CAMADA 2: Resolução (busca, sem criação) ───
-  const { contact: existingContact, pnFromMapping } = await resolveContact(ids, companyId);
+  const { contact: existingContact, pnFromMapping } = await resolveContact(ids, companyId, wbot);
 
   if (existingContact) {
     if (ids.lidJid && ids.pnDigits) {

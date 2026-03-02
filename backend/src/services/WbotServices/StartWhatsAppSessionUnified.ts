@@ -36,7 +36,7 @@ export const StartWhatsAppSessionUnified = async (
       // 1. Tenta adquirir o Lock (Leader Election)
       // Embora o initWASocket chame o acquireWbotLock, precisamos controlar o heartbeat aqui
       // Se não conseguirmos o lock aqui, nem tentamos iniciar o socket
-      const hasLock = await acquireWbotLock(whatsapp.id);
+      const hasLock = await acquireWbotLock(whatsapp.id, "StartWhatsAppSessionUnified-Baileys");
       if (!hasLock) {
         logger.info(`[StartSession] Sessão Baileys ${whatsapp.name} (#${whatsapp.id}) já gerenciada por outra instância. Pulando.`);
         return;

@@ -25,18 +25,18 @@ const lastReconnectAttempt = new Map<number, number>();
  * Verifica se o WebSocket de uma sessão está realmente conectado
  * Compatível com Baileys v6/v7
  */
-function isSocketHealthy(whatsappId: number): { healthy: boolean; reason: string } {
+function isSocketHealthy(whatsappId: number): { healthy: boolean; reason: string; missing: boolean } {
     try {
         const session = getWbot(whatsappId);
 
         if (!session) {
-            return { healthy: false, reason: "sessão não encontrada" };
+            return { healthy: false, reason: "sessão não encontrada", missing: true };
         }
 
         // No Baileys v6/v7, se session.user existe, a conexão está ativa
         const user = (session as any).user;
         if (user && user.id) {
-            return { healthy: true, reason: `conectado como ${user.id}` };
+            return { healthy: true, reason: `conectado como ${user.id}`, missing: false };
         }
 
         // Verificar estado do WebSocket interno (fallback)
@@ -47,21 +47,22 @@ function isSocketHealthy(whatsappId: number): { healthy: boolean; reason: string
             const readyState = socket?.readyState;
 
             if (readyState === 1) {
-                return { healthy: true, reason: "WebSocket aberto" };
+                return { healthy: true, reason: "WebSocket aberto", missing: false };
             }
 
             if (typeof readyState === "number") {
                 const stateNames = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"];
-                return { healthy: false, reason: `WebSocket ${stateNames[readyState] || readyState}` };
+                return { healthy: false, reason: `WebSocket ${stateNames[readyState] || readyState}`, missing: false };
             }
         }
 
         // Se chegou aqui, não conseguimos determinar - assumir saudável se houver sessão
         // O sistema de eventos do Baileys vai detectar desconexões automaticamente
-        return { healthy: true, reason: "sessão existe (estado indeterminado)" };
+        return { healthy: true, reason: "sessão existe (estado indeterminado)", missing: false };
 
     } catch (error: any) {
-        return { healthy: false, reason: error.message || "erro desconhecido" };
+        const isMissing = error.message === "ERR_WAPP_NOT_INITIALIZED";
+        return { healthy: false, reason: error.message || "erro desconhecido", missing: isMissing };
     }
 }
 
@@ -71,7 +72,7 @@ const reconnectingIds = new Set<number>();
 /**
  * Verifica se podemos tentar reconectar (respeitando cooldown e verificando se já está reconectando)
  */
-function canAttemptReconnect(whatsappId: number): boolean {
+function canAttemptReconnect(whatsappId: number, isMissing: boolean = false): boolean {
     // Se já está reconectando, não tentar novamente
     if (reconnectingIds.has(whatsappId)) {
         logger.debug(`[WhatsAppHealthCheck] whatsappId=${whatsappId} já está em processo de reconexão`);
@@ -84,6 +85,12 @@ function canAttemptReconnect(whatsappId: number): boolean {
         return false;
     }
 
+    // Se a sessão está ausente da memória (ERR_WAPP_NOT_INITIALIZED), 
+    // ignoramos o cooldown de 5 minutos para restaurar a funcionalidade o mais rápido possível.
+    if (isMissing) {
+        logger.warn(`[WhatsAppHealthCheck] whatsappId=${whatsappId} AUSENTE da memória. Ignorando cooldown para restauração imediata.`);
+        return true;
+    }
 
     const lastAttempt = lastReconnectAttempt.get(whatsappId);
     if (!lastAttempt) return true;
@@ -204,8 +211,8 @@ async function runHealthCheck(): Promise<void> {
                 logger.warn(`[WhatsAppHealthCheck] whatsappId=${id} (${name}): não saudável - ${check.reason} (Owner: ${lockOwner || "Nenhum"})`);
 
                 // REABILITADO: Reconexão automática com proteções de cooldown (5 min) e verificação de conflito
-                // As proteções já existem em canAttemptReconnect() e attemptReconnect()
-                if (canAttemptReconnect(id)) {
+                // Passamos check.missing para ignorar o cooldown se a sessão não existir na memória
+                if (canAttemptReconnect(id, check.missing)) {
                     const reconnected = await attemptReconnect(whatsapp);
                     if (reconnected) {
                         reconnectedCount++;

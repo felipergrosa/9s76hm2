@@ -1,5 +1,5 @@
 import { Op, QueryTypes } from "sequelize";
-import { getWbot } from "../../libs/wbot";
+import { getWbot, getWbotOrRecover } from "../../libs/wbot";
 import Contact from "../../models/Contact";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
@@ -74,8 +74,12 @@ const GetGroupParticipantsService = async ({
     throw new Error("Conexão WhatsApp não está ativa");
   }
 
-  // Obter instância do Baileys
-  const wbot = getWbot(whatsappId);
+  // Obter instância do Baileys com auto-recovery
+  // Aguarda até 30s pela sessão se estiver sendo recuperada
+  const wbot = await getWbotOrRecover(whatsappId, 30000);
+  if (!wbot) {
+    throw new Error("Não foi possível obter a sessão WhatsApp. Tente novamente em alguns segundos.");
+  }
 
   // Buscar metadados do grupo via Baileys
   let groupMetadata: any;
@@ -235,17 +239,31 @@ const GetGroupParticipantsService = async ({
     let resolvedName: string | null = null;
 
     if (isLid) {
-      // Buscar contato pelo mapeamento das mensagens salvas
-      contactRecord = lidContactMap.get(participantJid) || null;
-
-      if (contactRecord) {
-        // Usar número real do contato encontrado
-        const contactNum = (contactRecord.canonicalNumber || contactRecord.number || "").replace(/\D/g, "");
-        if (contactNum.length >= 7 && contactNum.length <= 15) {
-          participantNumber = contactNum;
+      // CORREÇÃO BAILEYS V7: Verificar phoneNumber DIRETAMENTE no objeto do participante
+      // Quando id é LID, o Baileys v7 inclui phoneNumber diretamente no participante
+      const baileysPhoneNumber = (p as any).phoneNumber;
+      if (baileysPhoneNumber && typeof baileysPhoneNumber === 'string') {
+        const { canonical } = normalizePhoneNumber(baileysPhoneNumber);
+        if (canonical) {
+          participantNumber = canonical;
           isValidPhoneNumber = true;
+          logger.debug(`[GetGroupParticipants] LID ${participantJid} resolvido via phoneNumber direto: ${participantNumber}`);
         }
-        resolvedName = contactRecord.name || null;
+      }
+
+      // Buscar contato pelo mapeamento das mensagens salvas (se ainda não temos número)
+      if (!isValidPhoneNumber) {
+        contactRecord = lidContactMap.get(participantJid) || null;
+
+        if (contactRecord) {
+          // Usar número real do contato encontrado
+          const contactNum = (contactRecord.canonicalNumber || contactRecord.number || "").replace(/\D/g, "");
+          if (contactNum.length >= 7 && contactNum.length <= 15) {
+            participantNumber = contactNum;
+            isValidPhoneNumber = true;
+          }
+          resolvedName = contactRecord.name || null;
+        }
       }
     } else {
       // Participante com número real (@s.whatsapp.net)
@@ -257,7 +275,8 @@ const GetGroupParticipantsService = async ({
 
     // NOVO: Tentar resolver via store do Baileys (chats/contacts) para TODOS os tipos de participantes
     // O store mantém mapeamento LID -> phoneNumber e também pushNames (notify)
-    if (!resolvedName || !isValidPhoneNumber) {
+    // NOTA: Para Baileys v7, phoneNumber já vem diretamente no objeto do participante quando é LID
+    if (!resolvedName) {
       try {
         const store = (wbot as any).store;
         if (store && store.contacts) {
@@ -265,13 +284,14 @@ const GetGroupParticipantsService = async ({
           const baileysContact = allContacts.find(c => c.id === participantJid);
 
           if (baileysContact) {
-            // Se for LID,phoneNumber contém o número real
+            // Capturar phoneNumber do store (fallback para quando não veio diretamente no participante)
             if (isLid && !isValidPhoneNumber) {
               const realNumber = baileysContact.phoneNumber ||
                 baileysContact.id?.split("@")[0]?.replace(/\D/g, "");
               if (realNumber && realNumber.length >= 7 && realNumber.length <= 15) {
                 participantNumber = realNumber;
                 isValidPhoneNumber = true;
+                logger.debug(`[GetGroupParticipants] LID ${participantJid} resolvido via store: ${participantNumber}`);
               }
             }
 

@@ -1,4 +1,4 @@
-import { getWbot } from "../../libs/wbot";
+import { getWbot, getWbotOrRecover } from "../../libs/wbot";
 import Contact from "../../models/Contact";
 import Whatsapp from "../../models/Whatsapp";
 import logger from "../../utils/logger";
@@ -46,7 +46,10 @@ const getGroupContext = async (contactId: number, companyId: number) => {
     throw new Error("Conexão WhatsApp não está ativa");
   }
 
-  const wbot = getWbot(whatsappId);
+  const wbot = await getWbotOrRecover(whatsappId, 30000);
+  if (!wbot) {
+    throw new Error("Sessão WhatsApp não disponível. Tente novamente em alguns segundos.");
+  }
   return { wbot, groupJid, groupContact };
 };
 

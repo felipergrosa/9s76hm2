@@ -144,10 +144,116 @@ export const getWbot = (whatsappId: number): Session => {
 
   if (sessionIndex === -1) {
     const availableSessions = sessions.map(s => s.id);
-    logger.error(`[getWbot] Sessão não encontrada para whatsappId=${whatsappId}. Sessões disponíveis: ${JSON.stringify(availableSessions)}`);
+    const isReconnecting = reconnectingWhatsapps.get(whatsappId);
+    
+    logger.error(`[getWbot] Sessão NÃO encontrada para whatsappId=${whatsappId}. ` +
+      `Disponíveis: [${availableSessions.join(", ")}]. ` +
+      `Status Reconexão: ${isReconnecting ? "EM ANDAMENTO" : "PARADO"}. ` +
+      `Process ID: ${process.pid}`);
+    
+    // AUTO-RECOVERY: Se não está reconectando, disparar recovery em background
+    // Isso permite que a próxima chamada encontre a sessão
+    if (!isReconnecting) {
+      logger.warn(`[getWbot] Disparando AUTO-RECOVERY para whatsappId=${whatsappId}`);
+      triggerSessionRecovery(whatsappId).catch(err => {
+        logger.error(`[getWbot] Erro no auto-recovery: ${err?.message}`);
+      });
+    }
+    
     throw new AppError("ERR_WAPP_NOT_INITIALIZED");
   }
   return sessions[sessionIndex];
+};
+
+/**
+ * Versão assíncrona do getWbot que aguarda a sessão estar disponível.
+ * Se a sessão não existe, dispara recovery e aguarda até 30s.
+ * Retorna null se não conseguir recuperar.
+ */
+export const getWbotOrRecover = async (
+  whatsappId: number,
+  maxWaitMs: number = 30000
+): Promise<Session | null> => {
+  // Se já existe, retornar imediatamente
+  const existingIndex = sessions.findIndex(s => s.id === whatsappId);
+  if (existingIndex !== -1) {
+    return sessions[existingIndex];
+  }
+
+  const isReconnecting = reconnectingWhatsapps.get(whatsappId);
+  
+  logger.info(`[getWbotOrRecover] Sessão ${whatsappId} não encontrada. ` +
+    `Reconectando: ${isReconnecting ? "SIM" : "NÃO"}. Aguardando até ${maxWaitMs}ms.`);
+
+  // Se não está reconectando, disparar recovery
+  if (!isReconnecting) {
+    await triggerSessionRecovery(whatsappId);
+  }
+
+  // Aguardar a sessão ficar disponível
+  const startTime = Date.now();
+  const checkInterval = 1000; // 1s
+  let attempts = 0;
+
+  while (Date.now() - startTime < maxWaitMs) {
+    attempts++;
+    const sessionIndex = sessions.findIndex(s => s.id === whatsappId);
+    
+    if (sessionIndex !== -1) {
+      logger.info(`[getWbotOrRecover] Sessão ${whatsappId} recuperada após ${attempts} tentativas ` +
+        `(${Date.now() - startTime}ms)`);
+      return sessions[sessionIndex];
+    }
+
+    // Aguardar antes de checar novamente
+    await new Promise(resolve => setTimeout(resolve, checkInterval));
+  }
+
+  logger.error(`[getWbotOrRecover] Timeout aguardando sessão ${whatsappId} após ${attempts} tentativas`);
+  return null;
+};
+
+/**
+ * Dispara o processo de recovery de uma sessão.
+ * Busca o WhatsApp no banco e inicia a sessão.
+ */
+const triggerSessionRecovery = async (whatsappId: number): Promise<void> => {
+  try {
+    // Marcar como reconectando ANTES de iniciar
+    if (reconnectingWhatsapps.get(whatsappId)) {
+      logger.debug(`[triggerSessionRecovery] ${whatsappId} já está em processo de reconexão`);
+      return;
+    }
+    
+    reconnectingWhatsapps.set(whatsappId, true);
+    
+    // Buscar WhatsApp no banco
+    const whatsapp = await Whatsapp.findByPk(whatsappId);
+    if (!whatsapp) {
+      logger.error(`[triggerSessionRecovery] WhatsApp ${whatsappId} não encontrado no banco`);
+      reconnectingWhatsapps.delete(whatsappId);
+      return;
+    }
+
+    // Verificar se deve estar conectado
+    if (whatsapp.status === "DISCONNECTED" || whatsapp.channel !== "whatsapp") {
+      logger.info(`[triggerSessionRecovery] WhatsApp ${whatsappId} status=${whatsapp.status}, channel=${whatsapp.channel}. Não recuperando.`);
+      reconnectingWhatsapps.delete(whatsappId);
+      return;
+    }
+
+    logger.info(`[triggerSessionRecovery] Iniciando sessão ${whatsappId} (${whatsapp.name})`);
+    
+    // Importar dinamicamente para evitar dependência circular
+    const { StartWhatsAppSession } = await import("../services/WbotServices/StartWhatsAppSessionUnified");
+    await StartWhatsAppSession(whatsapp, whatsapp.companyId);
+    
+    // NOTA: A flag reconnectingWhatsapps será limpa quando connection === "open"
+  } catch (err: any) {
+    logger.error(`[triggerSessionRecovery] Erro ao recuperar sessão ${whatsappId}: ${err?.message}`);
+    // Limpar flag em caso de erro
+    reconnectingWhatsapps.delete(whatsappId);
+  }
 };
 
 export const restartWbot = async (
@@ -470,11 +576,10 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 removeWbot(id, false);
 
                 // Agendar reconexão com delay calculado
+                // NOTA: NÃO limpar reconnectingWhatsapps aqui! A flag deve permanecer ativa
+                // até a conexão ser efetivamente restaurada (connection === "open").
+                // Isso evita a janela crítica onde sessão está ausente mas flag indica PARADO.
                 setTimeout(() => {
-                  // Liberar o mutex antes de tentar reconectar (para permitir que StartSession renove/adquira)
-                  // Não, StartSession vai tentar adquirir. Se já temos, ok (reentrante).
-
-                  reconnectingWhatsapps.delete(id);
                   StartWhatsAppSession(whatsapp, whatsapp.companyId);
                 }, delay);
 
@@ -482,6 +587,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               }
 
               if (isForbidden) {
+                // Limpar flag de reconexão - erro fatal, não vai reconectar
+                reconnectingWhatsapps.delete(id);
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
                 await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
@@ -505,7 +612,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 return;
               }
 
-              // Restart required: reconectar com delay moderado
+              // Restart required: reconectar com delay curto
               if (isRestartRequired) {
                 // Verificar se já está reconectando
                 if (reconnectingWhatsapps.get(id)) {
@@ -513,14 +620,14 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   removeWbot(id, false);
                   return;
                 }
-                logger.info(`[wbot] Restart necessário para ${name}. Reconectando em 15s.`);
+                logger.info(`[wbot] Restart necessário para ${name}. Reconectando em 5s.`);
                 reconnectingWhatsapps.set(id, true);
                 // await releaseWbotLock(id); // REMOVIDO: Manter o lock
                 removeWbot(id, false);
+                // NOTA: NÃO limpar reconnectingWhatsapps aqui! Flag permanece ativa até connection===open
                 setTimeout(() => {
-                  reconnectingWhatsapps.delete(id);
                   StartWhatsAppSession(whatsapp, whatsapp.companyId);
-                }, 15000);
+                }, 5000);
                 return;
               }
 
@@ -534,11 +641,13 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 reconnectingWhatsapps.set(id, true);
                 // await releaseWbotLock(id); // REMOVIDO: Manter o lock se vamos reconectar para evitar que o Cron assuma
                 removeWbot(id, false);
+                // NOTA: NÃO limpar reconnectingWhatsapps aqui! Flag permanece ativa até connection===open
                 setTimeout(() => {
-                  reconnectingWhatsapps.delete(id);
                   StartWhatsAppSession(whatsapp, whatsapp.companyId);
-                }, 10000);
+                }, 5000);
               } else {
+                // Limpar flag de reconexão - logout, não vai reconectar automaticamente
+                reconnectingWhatsapps.delete(id);
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
                 await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
