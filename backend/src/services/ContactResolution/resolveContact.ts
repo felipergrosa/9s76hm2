@@ -344,36 +344,57 @@ export async function resolveContact(
   // e se o contato NÃO é PENDING_ (é um contato real com número válido).
   // ─────────────────────────────────────────────────
   if (ids.lidJid && !ids.pnCanonical && !ids.isFromMe) {
+    const searchStart = Date.now();
     try {
       const Ticket = (await import("../../models/Ticket")).default;
       const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
 
+      logger.debug({
+        lidJid: ids.lidJid,
+        companyId,
+        strategy: "busca7-start"
+      }, "[resolveContact] Iniciando BUSCA 7 (ticket recente)");
+
       // Buscar tickets ativos/pendentes recentes na mesma empresa
       // que NÃO sejam de contatos PENDING_ e que foram atualizados recentemente
-      const recentTickets = await Ticket.findAll({
-        where: {
-          companyId,
-          isGroup: false,
-          status: { [Op.in]: ["open", "pending", "bot", "nps", "lgpd"] },
-          updatedAt: { [Op.gte]: thirtyMinAgo }
-        },
-        include: [{
-          model: Contact,
-          as: "contact",
+      // TIMEOUT: 5 segundos para evitar stall do Bull
+      const recentTickets = await Promise.race([
+        Ticket.findAll({
           where: {
+            companyId,
             isGroup: false,
-            number: { [Op.notLike]: "PENDING_%" },
-            // Contatos sem lidJid (senão já teriam sido encontrados na BUSCA 2)
-            [Op.or]: [
-              { lidJid: null },
-              { lidJid: "" }
-            ]
+            status: { [Op.in]: ["open", "pending", "bot", "nps", "lgpd"] },
+            updatedAt: { [Op.gte]: thirtyMinAgo }
           },
-          required: true
-        }],
-        order: [["updatedAt", "DESC"]],
-        limit: 5
-      });
+          include: [{
+            model: Contact,
+            as: "contact",
+            where: {
+              isGroup: false,
+              number: { [Op.notLike]: "PENDING_%" },
+              // Contatos sem lidJid (senão já teriam sido encontrados na BUSCA 2)
+              [Op.or]: [
+                { lidJid: null },
+                { lidJid: "" }
+              ]
+            },
+            required: true
+          }],
+          order: [["updatedAt", "DESC"]],
+          limit: 5
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("BUSCA7_TIMEOUT")), 5000)
+        )
+      ]) as any[];
+
+      const searchTime = Date.now() - searchStart;
+      logger.debug({
+        lidJid: ids.lidJid,
+        resultCount: recentTickets.length,
+        searchTimeMs: searchTime,
+        strategy: "busca7-complete"
+      }, "[resolveContact] BUSCA 7 concluída");
 
       if (recentTickets.length === 1) {
         const ticket = recentTickets[0];
@@ -455,7 +476,84 @@ export async function resolveContact(
         }
       }
     } catch (err: any) {
-      logger.warn({ err: err?.message, lidJid: ids.lidJid }, "[resolveContact] Erro na busca por ticket recente");
+      const searchTime = Date.now() - searchStart;
+      if (err?.message === "BUSCA7_TIMEOUT") {
+        logger.warn({
+          lidJid: ids.lidJid,
+          companyId,
+          searchTimeMs: searchTime,
+          strategy: "busca7-timeout"
+        }, "[resolveContact] BUSCA 7 timeout após 5s — continuando sem resultado");
+      } else {
+        logger.warn({ err: err?.message, lidJid: ids.lidJid, searchTimeMs: searchTime }, "[resolveContact] Erro na busca por ticket recente");
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────
+  // BUSCA 8: Por pushName direto no contato (sem ticket)
+  // Cenário: Participante de grupo com LID que já tem contato salvo
+  // mas não tem ticket recente (nunca conversou direto).
+  // SEGURANÇA: Só aceita se encontrar EXATAMENTE 1 contato com esse nome.
+  // ─────────────────────────────────────────────────
+  if (ids.lidJid && !ids.pnCanonical && ids.pushName && ids.pushName.trim().length > 1) {
+    const cleanPushName = ids.pushName.trim();
+    
+    const pushNameMatches = await Contact.findAll({
+      where: {
+        companyId,
+        isGroup: false,
+        name: cleanPushName,
+        number: { [Op.notLike]: "PENDING_%" },
+        [Op.or]: [
+          { lidJid: null },
+          { lidJid: "" }
+        ]
+      },
+      limit: 3
+    });
+
+    if (pushNameMatches.length === 1) {
+      const matched = pushNameMatches[0];
+      logger.info({
+        contactId: matched.id,
+        contactName: matched.name,
+        contactNumber: matched.number,
+        lidJid: ids.lidJid,
+        pushName: cleanPushName,
+        strategy: "pushName-direct-match"
+      }, "[resolveContact] Contato encontrado via pushName direto (match único)");
+
+      // Vincular LID ao contato
+      try {
+        await matched.update({ lidJid: ids.lidJid });
+        lidJidUpdated = true;
+      } catch (err: any) {
+        logger.warn({ err: err?.message }, "[resolveContact] Falha ao vincular LID via pushName direto");
+      }
+
+      // Persistir LidMapping
+      const matchedDigits = String(matched.number || "").replace(/\D/g, "");
+      if (matchedDigits.length >= 10 && matchedDigits.length <= 13) {
+        try {
+          await LidMapping.upsert({
+            lid: ids.lidJid,
+            phoneNumber: matchedDigits,
+            companyId,
+            source: "pushname_direct_match",
+            confidence: 0.75,
+            verified: false
+          });
+        } catch { /* ok */ }
+      }
+
+      return { contact: matched, lidJidUpdated, pnFromMapping };
+    } else if (pushNameMatches.length > 1) {
+      logger.debug({
+        lidJid: ids.lidJid,
+        pushName: cleanPushName,
+        matchCount: pushNameMatches.length
+      }, "[resolveContact] Múltiplos contatos com mesmo pushName — ambiguidade");
     }
   }
 
