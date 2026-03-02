@@ -1,4 +1,4 @@
-import { initWASocket } from "../../libs/wbot";
+import { initWASocket, getWbotIsReconnecting, getWbotSessionExists } from "../../libs/wbot";
 import { acquireWbotLock, renewWbotLock, releaseWbotLock } from "../../libs/wbotMutex";
 import { WhatsAppFactory } from "../../libs/whatsapp";
 import Whatsapp from "../../models/Whatsapp";
@@ -17,6 +17,18 @@ export const StartWhatsAppSessionUnified = async (
   companyId: number
 ): Promise<void> => {
   const channelType = whatsapp.channelType || "baileys";
+
+  // PROTEÇÃO: Evitar inicialização duplicada
+  if (getWbotIsReconnecting(whatsapp.id)) {
+    logger.warn(`[StartSession] whatsappId=${whatsapp.id} já está sendo iniciado/reconectado. Ignorando chamada duplicada.`);
+    return;
+  }
+
+  // PROTEÇÃO: Verificar se sessão já está ativa
+  if (getWbotSessionExists(whatsapp.id)) {
+    logger.warn(`[StartSession] whatsappId=${whatsapp.id} já está conectado. Ignorando chamada duplicada.`);
+    return;
+  }
 
   logger.info(`[StartSession] Iniciando ${channelType} para whatsappId=${whatsapp.id}`);
 

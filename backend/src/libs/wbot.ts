@@ -33,7 +33,6 @@ import { Store } from "./store";
 import fs from "fs";
 import path from "path";
 import createOrUpdateBaileysService from "../services/BaileysServices/CreateOrUpdateBaileysService";
-import { releaseLeadership } from "./wbotLeaderService";
 import { handleMessagingHistorySet } from "./messageHistoryHandler";
 import SignalErrorHandler from "../services/WbotServices/SignalErrorHandler";
 import SignalCleanupService from "../services/WbotServices/SignalCleanupService";
@@ -100,14 +99,28 @@ const retriesQrCodeMap = new Map<number, number>();
 // Map para rastrear quais whatsappIds estão no processo de reconexão
 const reconnectingWhatsapps = new Map<number, boolean>();
 
+// Timeout máximo para flag de reconexão (evita deadlock se reconexão falhar)
+const RECONNECT_FLAG_TIMEOUT_MS = 60_000; // 60 segundos
+
 // Helper para expor estado de reconexão para outros módulos (ex: HealthCheck)
 export const getWbotIsReconnecting = (whatsappId: number): boolean => {
   return !!reconnectingWhatsapps.get(whatsappId);
 };
 
+// Helper para limpar flag de reconexão (usado em timeout e quando conexão estabelecida)
+const clearReconnectingFlag = (whatsappId: number) => {
+  reconnectingWhatsapps.delete(whatsappId);
+  logger.debug(`[wbot] Flag de reconexão limpa para whatsappId=${whatsappId}`);
+};
+
 // Helper para expor IDs das sessões ativas (para checkOrphanedSessionsCron)
 export const getWbotSessionIds = (): number[] => {
   return sessions.map(s => s.id);
+};
+
+// Helper para verificar se sessão já existe (para evitar inicialização duplicada)
+export const getWbotSessionExists = (whatsappId: number): boolean => {
+  return sessions.findIndex(s => s.id === whatsappId) !== -1;
 };
 
 // Map para contar conflitos consecutivos (para backoff exponencial)
@@ -502,28 +515,11 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               }`
             );
 
-            // ZOMBIE CHECK 1: Same-Process Zombie
-            // Se o token desta sessão não for o último gerado para este ID, significa que uma nova sessão já foi iniciada neste processo.
-            // Esta instância é um Zumbi local. Devemos parar tudo.
-            if (sessionTokens.get(whatsapp.id) !== mySessionToken) {
-              logger.warn(`[wbot] Sessão ZUMBI local detectada para ${name} (Token mismatch). Encerrando handler silenciosamente.`);
-              if (wsocket) {
-                wsocket.ev.removeAllListeners("connection.update");
-                wsocket.ws.close();
-              }
-              return;
-            }
+            // Single-instance: sem verificação de zumbi
 
             if (connection === "close") {
               const errorMsg = lastDisconnect?.error?.message || "";
               console.log("DESCONECTOU", JSON.stringify(lastDisconnect, null, 2))
-
-              // ZOMBIE CHECK 2: Suicide Pact verification
-              if (errorMsg.includes("Zombie Fencing")) {
-                logger.warn(`[wbot] Conexão fechada por Fencing (Suicídio). Não tentaremos reconectar.`);
-                removeWbot(id, false);
-                return;
-              }
 
               logger.info(
                 `Socket  ${name} Connection Update ${connection || ""} ${errorMsg}`
@@ -550,25 +546,9 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 } catch { }
               }
 
-              // Conflito: outra sessão está ativa. NÃO reconectar imediatamente para evitar loop
+              // Conflito: outra sessão está ativa. Aguardar antes de reconectar
               if (isConflict) {
-                logger.warn(`[wbot] Conflito detectado (440) para ${name}. Verificando propriedade do Lock...`);
-
-                // ZOMBIE CHECK 3: Distributed Zombie
-                // Se não somos o dono do lock (Redis), fomos substituídos por outra instância (ou reconexão).
-                // Devemos aceitar a morte e NÃO tentar reconectar.
-                const isOwner = await checkWbotLock(id);
-                if (!isOwner) {
-                  logger.warn(`[wbot] NÃO somos o dono do lock para ${name}. Assumindo papel de Zumbi e encerrando sem reconexão.`);
-                  removeWbot(id, false);
-                  // Limpar token para evitar efeitos colaterais
-                  if (sessionTokens.get(id) === mySessionToken) {
-                    sessionTokens.delete(id);
-                  }
-                  return;
-                }
-
-                logger.info(`[wbot] Somos o dono do lock, mas houve conflito. Tentando recuperar...`);
+                logger.warn(`[wbot] Conflito detectado (440) para ${name}. Aguardando antes de reconectar...`);
 
                 // CORREÇÃO: Verificar se já existe uma tentativa de reconexão em andamento
                 if (reconnectingWhatsapps.get(id)) {
@@ -588,6 +568,14 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
                 // Marcar como "reconectando" para bloquear novas tentativas
                 reconnectingWhatsapps.set(id, true);
+                
+                // TIMEOUT DE SEGURANÇA: Limpar flag após 60s se reconexão falhar
+                setTimeout(() => {
+                  if (reconnectingWhatsapps.get(id) && !sessions.find(s => s.id === id)) {
+                    logger.warn(`[wbot] Timeout de segurança (60s) - limpando flag para ${id}`);
+                    reconnectingWhatsapps.delete(id);
+                  }
+                }, RECONNECT_FLAG_TIMEOUT_MS);
 
                 // NOTA: Se somos o dono e vamos reconectar, NÃO devemos liberar o lock!
                 // Devemos mantê-lo para que ninguém mais assuma.
@@ -648,6 +636,15 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 }
                 logger.info(`[wbot] Restart necessário para ${name}. Reconectando em 5s.`);
                 reconnectingWhatsapps.set(id, true);
+                
+                // TIMEOUT DE SEGURANÇA: Limpar flag após 60s se reconexão falhar
+                setTimeout(() => {
+                  if (reconnectingWhatsapps.get(id) && !sessions.find(s => s.id === id)) {
+                    logger.warn(`[wbot] Timeout de segurança (60s) - limpando flag para ${id}`);
+                    reconnectingWhatsapps.delete(id);
+                  }
+                }, RECONNECT_FLAG_TIMEOUT_MS);
+                
                 // await releaseWbotLock(id); // REMOVIDO: Manter o lock
                 removeWbot(id, false);
                 // NOTA: NÃO limpar reconnectingWhatsapps aqui! Flag permanece ativa até connection===open
@@ -672,6 +669,15 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 reconnectingWhatsapps.set(id, true);
                 // await releaseWbotLock(id); // REMOVIDO: Manter o lock se vamos reconectar para evitar que o Cron assuma
                 removeWbot(id, false);
+                
+                // TIMEOUT DE SEGURANÇA: Limpar flag após 60s se reconexão falhar
+                setTimeout(() => {
+                  if (reconnectingWhatsapps.get(id) && !sessions.find(s => s.id === id)) {
+                    logger.warn(`[wbot] Timeout de segurança (60s) - limpando flag para ${id}`);
+                    reconnectingWhatsapps.delete(id);
+                  }
+                }, RECONNECT_FLAG_TIMEOUT_MS);
+                
                 // NOTA: NÃO limpar reconnectingWhatsapps aqui! Flag permanece ativa até connection===open
                 setTimeout(async () => {
                   try {
@@ -687,21 +693,6 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
                 await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
-                
-                // =================================================================
-                // LIBERAR LIDERANÇA - MULTI-DEVICE WHATSAPP
-                // =================================================================
-                // Extrair número do WhatsApp do user JID para liberar liderança
-                const phoneNumber = wsocket?.user?.id?.split("@")[0] || "";
-                if (phoneNumber && phoneNumber.length >= 10) {
-                  try {
-                    await releaseLeadership(phoneNumber, whatsapp.id);
-                    logger.info(`[wbot] Liderança liberada para ${phoneNumber} (whatsappId=${whatsapp.id})`);
-                  } catch (err: any) {
-                    logger.error(`[wbot] Erro ao liberar liderança: ${err?.message}`);
-                  }
-                }
-                // =================================================================
                 
                 // remove sessão em filesystem se existir
                 try {

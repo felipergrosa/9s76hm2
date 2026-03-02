@@ -7,16 +7,15 @@
 
 import Whatsapp from "../models/Whatsapp";
 import { getWbot, removeWbot, getWbotIsReconnecting } from "../libs/wbot";
-import { getWbotLockOwner, getCurrentInstanceId } from "../libs/wbotMutex";
 import { StartWhatsAppSessionUnified as StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSessionUnified";
 import { getIO } from "../libs/socket";
 import logger from "../utils/logger";
 
-// Intervalo de verificação em milissegundos (2 minutos)
-const HEALTH_CHECK_INTERVAL_MS = 2 * 60 * 1000;
+// Intervalo de verificação em milissegundos (5 minutos)
+const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
-// Tempo mínimo entre reconexões da mesma sessão (5 minutos)
-const MIN_RECONNECT_INTERVAL_MS = 5 * 60 * 1000;
+// Tempo mínimo entre reconexões da mesma sessão (10 minutos)
+const MIN_RECONNECT_INTERVAL_MS = 10 * 60 * 1000;
 
 // Mapa para controlar última tentativa de reconexão por whatsappId
 const lastReconnectAttempt = new Map<number, number>();
@@ -197,21 +196,11 @@ async function runHealthCheck(): Promise<void> {
                 healthyCount++;
                 logger.debug(`[WhatsAppHealthCheck] whatsappId=${id} (${name}): saudável`);
             } else {
-                // Verificar se a sessão está ativa em OUTRO nó (Sharding)
-                const lockOwner = await getWbotLockOwner(id);
-                const myId = getCurrentInstanceId();
-
-                if (lockOwner && lockOwner !== myId) {
-                    logger.debug(`[WhatsAppHealthCheck] whatsappId=${id} (${name}): saudável (REMOTO em ${lockOwner})`);
-                    healthyCount++; // Conta como saudável pois está rodando no cluster
-                    continue; // Não tenta reconectar
-                }
-
+                // Single-instance: não verificar lock owner
                 unhealthyCount++;
-                logger.warn(`[WhatsAppHealthCheck] whatsappId=${id} (${name}): não saudável - ${check.reason} (Owner: ${lockOwner || "Nenhum"})`);
+                logger.warn(`[WhatsAppHealthCheck] whatsappId=${id} (${name}): não saudável - ${check.reason}`);
 
-                // REABILITADO: Reconexão automática com proteções de cooldown (5 min) e verificação de conflito
-                // Passamos check.missing para ignorar o cooldown se a sessão não existir na memória
+                // Reconexão automática com proteções de cooldown (5 min)
                 if (canAttemptReconnect(id, check.missing)) {
                     const reconnected = await attemptReconnect(whatsapp);
                     if (reconnected) {
@@ -241,13 +230,13 @@ async function runHealthCheck(): Promise<void> {
 export function startWhatsAppHealthCheckJob(): void {
     logger.info(`[WhatsAppHealthCheck] Job iniciado - verificando a cada ${HEALTH_CHECK_INTERVAL_MS / 1000}s`);
 
-    // Executar primeira verificação após 30 segundos (dar tempo para sessões iniciarem)
+    // Executar primeira verificação após 2 minutos (dar tempo para sessões estabilizarem)
     setTimeout(() => {
         runHealthCheck();
 
         // Agendar execução periódica
         setInterval(runHealthCheck, HEALTH_CHECK_INTERVAL_MS);
-    }, 30000);
+    }, 120000);
 }
 
 export default startWhatsAppHealthCheckJob;

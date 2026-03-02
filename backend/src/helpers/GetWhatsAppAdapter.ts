@@ -20,17 +20,13 @@ const GetWhatsAppAdapter = async (
     // Verificar se está conectado
     const status = adapter.getConnectionStatus();
     if (status !== "connected") {
-      logger.warn(`[GetWhatsAppAdapter] Adapter não conectado: ${status}. Tentando inicializar...`);
-      
-      try {
-        await adapter.initialize();
-      } catch (initError: any) {
-        logger.error(`[GetWhatsAppAdapter] Erro ao inicializar adapter: ${initError.message}`);
-        throw new AppError(
-          `WhatsApp não está conectado. Status: ${status}. Erro: ${initError.message}`,
-          404
-        );
-      }
+      // NÃO tentar inicializar automaticamente - isso pode causar conflitos
+      // A inicialização deve ser feita pelo sistema de sessões (StartWhatsAppSession)
+      logger.warn(`[GetWhatsAppAdapter] Adapter não conectado: ${status}. Lançando erro.`);
+      throw new AppError(
+        `WhatsApp não está conectado. Status: ${status}`,
+        404
+      );
     }
     
     return adapter;
