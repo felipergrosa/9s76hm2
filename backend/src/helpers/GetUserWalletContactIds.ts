@@ -11,6 +11,16 @@ interface GetUserWalletResult {
   supervisorViewMode: "include" | "exclude";
 }
 
+// Cache em memória com TTL de 5 minutos (performance)
+const walletCache = new Map<string, { data: GetUserWalletResult; expires: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
+// Função para invalidar cache (chamar quando usuário atualizar allowedContactTags)
+export const invalidateWalletCache = (userId: number, companyId: number) => {
+  const key = `${userId}:${companyId}`;
+  walletCache.delete(key);
+};
+
 /**
  * Retorna os IDs de contatos que estão na "carteira" do usuário.
  * Carteira = contatos que têm pelo menos uma tag pessoal (#) do usuário.
@@ -28,6 +38,13 @@ const GetUserWalletContactIds = async (
   userId: number,
   companyId: number
 ): Promise<GetUserWalletResult> => {
+  // Verifica cache primeiro
+  const cacheKey = `${userId}:${companyId}`;
+  const cached = walletCache.get(cacheKey);
+  if (cached && Date.now() < cached.expires) {
+    return cached.data;
+  }
+
   try {
     const user = await User.findByPk(userId, {
       attributes: ["id", "profile", "allowedContactTags", "managedUserIds", "supervisorViewMode"]
@@ -45,18 +62,22 @@ const GetUserWalletContactIds = async (
 
     // Admin sem usuários gerenciados = sem restrição (vê tudo)
     if (user.profile === "admin" && managedUserIds.length === 0) {
-      return { contactIds: [], hasWalletRestriction: false, managedUserIds: [], excludedUserIds: [], supervisorViewMode };
+      const result = { contactIds: [], hasWalletRestriction: false, managedUserIds: [], excludedUserIds: [], supervisorViewMode };
+      walletCache.set(cacheKey, { data: result, expires: Date.now() + CACHE_TTL_MS });
+      return result;
     }
 
     // Modo EXCLUDE: admin vê tudo EXCETO os usuários selecionados
     if (user.profile === "admin" && supervisorViewMode === "exclude" && managedUserIds.length > 0) {
-      return { 
+      const result = { 
         contactIds: [], 
         hasWalletRestriction: false, 
         managedUserIds: [], 
         excludedUserIds: managedUserIds,
         supervisorViewMode 
       };
+      walletCache.set(cacheKey, { data: result, expires: Date.now() + CACHE_TTL_MS });
+      return result;
     }
 
     // Coleta todas as tags pessoais: do próprio usuário + dos usuários gerenciados
@@ -122,7 +143,9 @@ const GetUserWalletContactIds = async (
 
     if (allPersonalTagIds.length === 0) {
       // Sem tags pessoais = sem carteira
-      return { contactIds: [], hasWalletRestriction: true, managedUserIds, excludedUserIds: [], supervisorViewMode };
+      const result = { contactIds: [], hasWalletRestriction: true, managedUserIds, excludedUserIds: [], supervisorViewMode };
+      walletCache.set(cacheKey, { data: result, expires: Date.now() + CACHE_TTL_MS });
+      return result;
     }
 
     // Busca contatos que têm pelo menos uma tag pessoal permitida
@@ -134,7 +157,9 @@ const GetUserWalletContactIds = async (
 
     const contactIds = contactsWithTag.map((ct: any) => ct.contactId);
 
-    return { contactIds, hasWalletRestriction: true, managedUserIds, excludedUserIds: [], supervisorViewMode };
+    const result = { contactIds, hasWalletRestriction: true, managedUserIds, excludedUserIds: [], supervisorViewMode };
+    walletCache.set(cacheKey, { data: result, expires: Date.now() + CACHE_TTL_MS });
+    return result;
   } catch (error) {
     console.error("[GetUserWalletContactIds] Erro:", error);
     return { contactIds: [], hasWalletRestriction: true, managedUserIds: [], excludedUserIds: [], supervisorViewMode: "include" };

@@ -285,6 +285,64 @@ const OfficialAPIFields = ({ values, errors, touched }) => {
         </Grid>
       </Grid>
 
+      <Divider className={classes.divider} />
+
+      {/* Renovação Automática de Janela 24h */}
+      <Typography variant="h6" className={classes.sectionTitle}>
+        Renovação Automática de Janela 24h
+        <Tooltip
+          title="Quando a janela de 24h está prestes a expirar, o sistema envia automaticamente uma mensagem para o contato. Se ele responder, uma nova janela de 24h é aberta. Isso ajuda a manter conversas ativas sem custos de template."
+        >
+          <IconButton size="small" className={classes.helpButton}>
+            <Info fontSize="small" color="primary" />
+          </IconButton>
+        </Tooltip>
+      </Typography>
+
+      <Grid container spacing={2}>
+        {/* Mensagem de Renovação */}
+        <Grid item xs={12}>
+          <Field
+            as={TextField}
+            label="Mensagem para Renovar Janela 24h"
+            name="sessionWindowRenewalMessage"
+            error={touched.sessionWindowRenewalMessage && Boolean(errors.sessionWindowRenewalMessage)}
+            helperText={
+              touched.sessionWindowRenewalMessage && errors.sessionWindowRenewalMessage
+                ? errors.sessionWindowRenewalMessage
+                : "Mensagem enviada automaticamente quando a janela está prestes a expirar. Deixe vazio para desativar."
+            }
+            variant="outlined"
+            margin="dense"
+            fullWidth
+            multiline
+            rows={3}
+            placeholder="Ex: Olá! Ainda estamos aqui. Posso ajudar com algo mais?"
+          />
+        </Grid>
+
+        {/* Minutos antes de expirar */}
+        <Grid item xs={12} md={6}>
+          <Field
+            as={TextField}
+            label="Minutos antes de expirar"
+            name="sessionWindowRenewalMinutes"
+            type="number"
+            error={touched.sessionWindowRenewalMinutes && Boolean(errors.sessionWindowRenewalMinutes)}
+            helperText={
+              touched.sessionWindowRenewalMinutes && errors.sessionWindowRenewalMinutes
+                ? errors.sessionWindowRenewalMinutes
+                : "Quantos minutos antes de expirar a mensagem será enviada (padrão: 60)"
+            }
+            variant="outlined"
+            margin="dense"
+            fullWidth
+            placeholder="60"
+            inputProps={{ min: 1, max: 1440 }}
+          />
+        </Grid>
+      </Grid>
+
       {/* Dica agora exibida no tooltip do ícone (i) ao lado do título */}
     </>
   );

@@ -55,6 +55,9 @@ interface WhatsappData {
   instagramAccountId?: string;
   contactTagId?: number;
   syncOnTicketOpen?: boolean;
+  // Mensagem de renovação de janela 24h (API Oficial)
+  sessionWindowRenewalMessage?: string;
+  sessionWindowRenewalMinutes?: number;
 }
 
 interface Request {
@@ -127,7 +130,10 @@ const UpdateWhatsAppService = async ({
     metaWebhookVerifyToken,
     instagramAccountId,
     contactTagId,
-    syncOnTicketOpen
+    syncOnTicketOpen,
+    // Mensagem de renovação de janela 24h (API Oficial)
+    sessionWindowRenewalMessage,
+    sessionWindowRenewalMinutes
   } = whatsappData;
 
   try {
@@ -205,7 +211,10 @@ const UpdateWhatsAppService = async ({
     metaWebhookVerifyToken,
     instagramAccountId,
     contactTagId,
-    syncOnTicketOpen
+    syncOnTicketOpen,
+    // Mensagem de renovação de janela 24h (API Oficial)
+    sessionWindowRenewalMessage,
+    sessionWindowRenewalMinutes
   });
 
   if (!requestQR) {

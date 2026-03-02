@@ -867,17 +867,6 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                                     </Badge>
                                 )}
 
-                                {/* Contador de janela 24h para API Oficial */}
-                                {!ticket.isGroup && (
-                                    <SessionWindowCounter
-                                        ticketId={ticket.id}
-                                        channelType={ticket.channel}
-                                        isOfficial={ticket.whatsapp?.channelType === "official"}
-                                        sessionWindowExpiresAt={ticket.sessionWindowExpiresAt}
-                                        size="small"
-                                    />
-                                )}
-
                                 {ticket.tags?.map((tag) => (
                                     <ContactTag tag={tag} key={`ticket-contact-tag-${ticket.id}-${tag.id}`} />
                                 ))}
@@ -1031,18 +1020,31 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                 <ListItemSecondaryAction className={classes.rightMetaAction}>
                     {(ticket.lastMessage || ticket.updatedAt) && (
                         <div className={classes.rightSideMeta}>
-                            <Typography
-                                className={Number(ticket.unreadMessages) > 0 ? classes.lastMessageTimeUnread : classes.lastMessageTime}
-                                component="span"
-                                variant="body2"
-                            >
-                                {(() => {
-                                    const d = parseISO(ticket.updatedAt);
-                                    if (isSameDay(d, new Date())) return format(d, "HH:mm");
-                                    if (isYesterday(d)) return "Ontem";
-                                    return format(d, "dd/MM/yy");
-                                })()}
-                            </Typography>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                <Typography
+                                    className={Number(ticket.unreadMessages) > 0 ? classes.lastMessageTimeUnread : classes.lastMessageTime}
+                                    component="span"
+                                    variant="body2"
+                                >
+                                    {(() => {
+                                        const d = parseISO(ticket.updatedAt);
+                                        if (isSameDay(d, new Date())) return format(d, "HH:mm");
+                                        if (isYesterday(d)) return "Ontem";
+                                        return format(d, "dd/MM/yy");
+                                    })()}
+                                </Typography>
+
+                                {/* Contador de janela 24h para API Oficial - modo compacto ao lado da hora */}
+                                {!ticket.isGroup && ticket.whatsapp?.channelType === "official" && (
+                                    <SessionWindowCounter
+                                        ticketId={ticket.id}
+                                        channelType={ticket.channel}
+                                        isOfficial={ticket.whatsapp?.channelType === "official"}
+                                        sessionWindowExpiresAt={ticket.sessionWindowExpiresAt}
+                                        compact={true}
+                                    />
+                                )}
+                            </div>
 
                             <Badge
                                 className={`${classes.newMessagesCount} ${classes.unreadBelowDate} ${Number(ticket.unreadMessages) > 0 ? "" : classes.unreadPlaceholder}`}

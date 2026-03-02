@@ -142,7 +142,7 @@ const Contacts = () => {
 
     const [loading, setLoading] = useState(false);
     const [searchParam, setSearchParam] = useState("");
-    const debouncedSearchParam = useDebounce(searchParam, 400);
+    const debouncedSearchParam = useDebounce(searchParam, 700);
     const isSearching = searchParam !== debouncedSearchParam;
     const [contacts, dispatch] = useReducer(reducer, []);
     const [refreshTick, setRefreshTick] = useState(0);
@@ -511,26 +511,8 @@ const Contacts = () => {
         dispatch({ type: "UPDATE_CONTACTS", payload: updatedContact });
     });
 
-    // Atualização silenciosa de avatares ao carregar a página
-    useEffect(() => {
-        const refreshAvatars = async () => {
-            if (contacts.length > 0) {
-                try {
-                    const contactIds = contacts.map(c => c.id);
-                    await api.post('/contacts/bulk-refresh-avatars', {
-                        contactIds: contactIds.slice(0, 20) // Limita a 20 contatos por vez
-                    });
-                } catch (error) {
-                    // Falha silenciosa - não mostra erro ao usuário
-                    console.log('Falha na atualização silenciosa de avatares:', error);
-                }
-            }
-        };
-
-        // Executa após 2 segundos da página carregar
-        const timer = setTimeout(refreshAvatars, 2000);
-        return () => clearTimeout(timer);
-    }, [contacts.length > 0]); // Executa quando contatos são carregados
+    // Atualização de avatar movida para ao abrir ticket (performance)
+    // Removido: atualização silenciosa causava lentidão na listagem
 
     useEffect(() => {
         const companyId = user.companyId;

@@ -15,21 +15,49 @@ const useStyles = makeStyles((theme) => ({
     fontWeight: 500,
     fontFamily: "monospace",
   },
+  // Modo compacto - ao lado da hora do ticket
+  compact: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 2,
+    fontSize: "0.7rem",
+    fontWeight: 600,
+    fontFamily: "inherit",
+    padding: "1px 4px",
+    borderRadius: 3,
+  },
+  compactIcon: {
+    width: 10,
+    height: 10,
+  },
   // Cores baseadas no tempo restante
   green: {
     backgroundColor: "rgba(34, 197, 94, 0.15)",
     color: "#16a34a",
     border: "1px solid rgba(34, 197, 94, 0.3)",
   },
+  compactGreen: {
+    backgroundColor: "#22c55e",
+    color: "#ffffff",
+  },
   yellow: {
     backgroundColor: "rgba(234, 179, 8, 0.15)",
     color: "#ca8a04",
     border: "1px solid rgba(234, 179, 8, 0.3)",
   },
+  compactYellow: {
+    backgroundColor: "#eab308",
+    color: "#ffffff",
+  },
   red: {
     backgroundColor: "rgba(239, 68, 68, 0.15)",
     color: "#dc2626",
     border: "1px solid rgba(239, 68, 68, 0.3)",
+    animation: "$pulse 1.5s ease-in-out infinite",
+  },
+  compactRed: {
+    backgroundColor: "#ef4444",
+    color: "#ffffff",
     animation: "$pulse 1.5s ease-in-out infinite",
   },
   expired: {
@@ -40,6 +68,11 @@ const useStyles = makeStyles((theme) => ({
   icon: {
     width: 12,
     height: 12,
+  },
+  compactOnlyIcon: {
+    width: 14,
+    height: 14,
+    color: "#9ca3af",
   },
   "@keyframes pulse": {
     "0%, 100%": {
@@ -61,6 +94,7 @@ const useStyles = makeStyles((theme) => ({
  * @param {Date|string} props.sessionWindowExpiresAt - Data de expiração da janela (opcional, evita chamada de API)
  * @param {string} props.size - Tamanho do contador: 'small' (lista) ou 'normal' (chat)
  * @param {boolean} props.showTooltip - Mostrar tooltip explicativo
+ * @param {boolean} props.compact - Modo compacto: mostra badge ao lado da hora (padrão: false)
  */
 const SessionWindowCounter = ({
   ticketId,
@@ -69,6 +103,7 @@ const SessionWindowCounter = ({
   sessionWindowExpiresAt: propExpiresAt,
   size = "small",
   showTooltip = true,
+  compact = false,
 }) => {
   const classes = useStyles();
   const [sessionStatus, setSessionStatus] = useState(null);
@@ -175,12 +210,18 @@ const SessionWindowCounter = ({
 
   // Determinar classe de cor baseada no tempo restante
   const getColorClass = () => {
-    if (!sessionStatus.hasOpenSession) return classes.expired;
+    if (!sessionStatus.hasOpenSession) return compact ? null : classes.expired;
 
     const remaining = calculateRemaining(sessionStatus.sessionWindowExpiresAt);
-    if (!remaining || remaining.expired) return classes.expired;
+    if (!remaining || remaining.expired) return compact ? null : classes.expired;
 
     const hours = remaining.hours + remaining.minutes / 60;
+
+    if (compact) {
+      if (hours >= 12) return classes.compactGreen;
+      if (hours >= 4) return classes.compactYellow;
+      return classes.compactRed;
+    }
 
     if (hours >= 12) return classes.green; // > 12h: verde
     if (hours >= 4) return classes.yellow; // 4-12h: amarelo
@@ -191,9 +232,16 @@ const SessionWindowCounter = ({
   const getIcon = () => {
     const remaining = calculateRemaining(sessionStatus.sessionWindowExpiresAt);
     if (!remaining || remaining.expired || remaining.hours < 4) {
-      return <AlertIcon className={classes.icon} />;
+      return <AlertIcon className={compact ? classes.compactIcon : classes.icon} />;
     }
-    return <ClockIcon className={classes.icon} />;
+    return <ClockIcon className={compact ? classes.compactIcon : classes.icon} />;
+  };
+
+  // Formatar tempo no modo compacto (ex: "22h30" ou "5h15")
+  const getCompactTime = () => {
+    const remaining = calculateRemaining(sessionStatus.sessionWindowExpiresAt);
+    if (!remaining || remaining.expired) return null;
+    return `${remaining.hours}h${String(remaining.minutes).padStart(2, "0")}`;
   };
 
   // Tooltip explicativo
@@ -217,6 +265,37 @@ const SessionWindowCounter = ({
     return `URGENTE: Janela fecha em ${hours}h ${minutes}min! Após isso, só é possível enviar templates.`;
   };
 
+  // Renderização modo compacto (ao lado da hora)
+  if (compact) {
+    // Janela fechada: mostra apenas ícone de atenção cinza
+    if (!sessionStatus.hasOpenSession) {
+      const iconOnly = (
+        <AlertIcon className={classes.compactOnlyIcon} />
+      );
+      return showTooltip ? (
+        <Tooltip title={getTooltipText()} placement="top" arrow>
+          {iconOnly}
+        </Tooltip>
+      ) : iconOnly;
+    }
+
+    // Janela aberta: mostra badge verde com tempo
+    const colorClass = getColorClass();
+    const compactContent = (
+      <span className={`${classes.compact} ${colorClass}`}>
+        <ClockIcon className={classes.compactIcon} />
+        <span>{getCompactTime()}</span>
+      </span>
+    );
+
+    return showTooltip ? (
+      <Tooltip title={getTooltipText()} placement="top" arrow>
+        {compactContent}
+      </Tooltip>
+    ) : compactContent;
+  }
+
+  // Modo normal (badge abaixo das tags)
   const content = (
     <div className={`${classes.container} ${getColorClass()}`}>
       {getIcon()}

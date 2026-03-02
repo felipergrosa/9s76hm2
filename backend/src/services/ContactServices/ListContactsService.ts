@@ -209,14 +209,11 @@ const ListContactsService = async ({
     whereCondition = {
       ...whereCondition,
       [Op.or]: [
-        // Para busca por nome, usar unaccent apenas se não for número puro
+        // BUSCA OTIMIZADA: usar coluna nameNormalized (com índice)
         ...(isPureNumber ? [] : [{
-          name: where(
-            fn("LOWER", fn("unaccent", col("Contact.name"))),
-            "LIKE",
-            `%${sanitizedSearchParam}%`
-          )
+          nameNormalized: { [Op.iLike]: `%${sanitizedSearchParam.replace(/[^a-z0-9]/g, '')}%` }
         }]),
+        // Fallback para contactName (menos comum)
         ...(isPureNumber ? [] : [{
           contactName: where(
             fn("LOWER", fn("unaccent", col("Contact.contactName"))),
@@ -224,22 +221,11 @@ const ListContactsService = async ({
             `%${sanitizedSearchParam}%`
           )
         }]),
-        // Para números, buscar diretamente sem tratamento
+        // Para números, buscar diretamente
         { number: { [Op.like]: `%${trimmedSearchParam}%` } },
-        ...(isPureNumber ? [{
-          name: where(
-            fn("LOWER", col("Contact.name")),
-            "LIKE",
-            `%${trimmedSearchParam.toLowerCase()}%`
-          )
-        }] : []),
-        ...(isPureNumber ? [{
-          contactName: where(
-            fn("LOWER", col("Contact.contactName")),
-            "LIKE",
-            `%${trimmedSearchParam.toLowerCase()}%`
-          )
-        }] : []),
+        // BUSCA OTIMIZADA: CPF/CNPJ normalizado (com índice)
+        { cpfCnpjNormalized: { [Op.like]: `%${trimmedSearchParam.replace(/\D/g, '')}%` } },
+        // Fallback para CPF/CNPJ original
         {
           cpfCnpj: where(
             fn("LOWER", fn("unaccent", col("Contact.cpfCnpj"))),
@@ -298,10 +284,6 @@ const ListContactsService = async ({
               { name: { [Op.ne]: "" } }
             ]
           }
-        ] : []),
-        // Condição especial para encontrar contatos onde o nome é um número
-        ...(isPureNumber ? [
-          literal(`REGEXP_REPLACE("Contact"."name", '[^0-9]', '') = "Contact"."name" AND LOWER("Contact"."name") LIKE '%${trimmedSearchParam.toLowerCase()}%'`)
         ] : [])
       ]
     };

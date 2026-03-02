@@ -36,6 +36,7 @@ import { startQueueProcess } from "./queues";
 import tagRulesCron from "./cron/tagRulesCron";
 import tagRulesRecentContactsCron from "./cron/tagRulesRecentContactsCron";
 import { checkOrphanedSessionsCron } from "./cron/checkOrphanedSessionsCron";
+import { sessionWindowRenewalCron } from "./cron/sessionWindowRenewalCron";
 import { clearSessionLocks } from "./libs/wbotMutex";
 
 const ENV_PROFILE = process.env.APP_ENV || process.env.NODE_ENV || "development";
@@ -243,6 +244,9 @@ startWhatsAppHealthCheckJob(); // Verifica a cada 2 minutos e reconecta automati
 
 // Inicializa cron de verificação de sessões órfãs (HA para Replicas)
 checkOrphanedSessionsCron();
+
+// Inicializa cron de renovação automática de janela 24h (API Oficial)
+sessionWindowRenewalCron();
 
 // Inicializa job de verificação de contatos e grupos (diário às 03:00)
 import { startVerifyContactsJob } from "./jobs/VerifyContactsJob";

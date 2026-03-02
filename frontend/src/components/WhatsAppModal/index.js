@@ -185,7 +185,10 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
     metaPageAccessToken: "",
     metaWebhookVerifyToken: "",
     instagramAccountId: "",
-    contactTagId: ""
+    contactTagId: "",
+    // Mensagem de renovação de janela 24h (API Oficial)
+    sessionWindowRenewalMessage: "",
+    sessionWindowRenewalMinutes: 60
   };
   const [whatsApp, setWhatsApp] = useState(initialState);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);

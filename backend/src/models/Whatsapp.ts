@@ -307,6 +307,17 @@ class Whatsapp extends Model<Whatsapp> {
   @Default(false)
   @Column
   syncOnTicketOpen: boolean;
+
+  // Mensagem automática para renovar janela de 24h (API Oficial)
+  // Enviada quando a janela está prestes a expirar (últimos 5 minutos)
+  @AllowNull(true)
+  @Column(DataType.TEXT)
+  sessionWindowRenewalMessage: string;
+
+  // Minutos antes de expirar para enviar a mensagem de renovação (padrão: 60 = 1 hora)
+  @Default(60)
+  @Column
+  sessionWindowRenewalMinutes: number;
 }
 
 export default Whatsapp;

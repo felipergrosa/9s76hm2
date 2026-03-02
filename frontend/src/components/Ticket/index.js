@@ -168,6 +168,12 @@ const Ticket = () => {
             if (["pending", "open", "group"].includes(data.status)) {
               setTabOpen(data.status);
             }
+            // Atualiza avatar do contato ao abrir ticket (performance)
+            if (data.contact?.id) {
+              api.post('/contacts/bulk-refresh-avatars', {
+                contactIds: [data.contact.id]
+              }).catch(() => { /* silencioso */ });
+            }
             setLoading(false);
           }
         } catch (err) {
