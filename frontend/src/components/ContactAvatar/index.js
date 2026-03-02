@@ -1,5 +1,6 @@
-import React, { useState, useEffect, memo } from "react";
+import React, { useState, useEffect, memo, useCallback } from "react";
 import { Avatar } from "@material-ui/core";
+import api from "../../services/api";
 
 // Extrair iniciais do nome para avatar (até 2 caracteres)
 const getInitials = (name, number) => {
@@ -32,17 +33,52 @@ const getAvatarColor = (seed) => {
 };
 
 // Componente de avatar com otimização de desempenho (memoizado)
-const ContactAvatar = memo(({ contact, ...props }) => {
+const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) => {
   const [imageError, setImageError] = useState(false);
+  const [fetchedUrl, setFetchedUrl] = useState(null);
+  const [isFetching, setIsFetching] = useState(false);
 
   // Reset error quando contato muda
   useEffect(() => {
     setImageError(false);
+    setFetchedUrl(null);
   }, [contact]);
 
-  const handleImageError = () => {
+  // Buscar avatar em tempo real quando não estiver disponível
+  useEffect(() => {
+    if (!enableRealtimeFetch || !contact || isFetching) return;
+
+    const hasImage = contact?.profilePicUrl || contact?.urlPicture || 
+                     contact?.contact?.profilePicUrl || contact?.contact?.urlPicture;
+    
+    // Se já tem imagem, não busca
+    if (hasImage) return;
+
+    const contactId = contact?.id || contact?.contact?.id;
+    if (!contactId) return;
+
+    // Buscar avatar em tempo real
+    const fetchAvatar = async () => {
+      setIsFetching(true);
+      try {
+        const { data } = await api.post(`/contacts/${contactId}/refresh-avatar`);
+        if (data.success && data.profilePicUrl) {
+          setFetchedUrl(data.profilePicUrl);
+          console.log(`[ContactAvatar] Avatar atualizado para ${contact.name}: ${data.profilePicUrl}`);
+        }
+      } catch (err) {
+        console.debug(`[ContactAvatar] Erro ao buscar avatar: ${err?.message}`);
+      } finally {
+        setIsFetching(false);
+      }
+    };
+
+    fetchAvatar();
+  }, [contact, enableRealtimeFetch, isFetching]);
+
+  const handleImageError = useCallback(() => {
     setImageError(true);
-  };
+  }, []);
 
   // Se não tem contato, usa fallback
   if (!contact) {
@@ -54,19 +90,19 @@ const ContactAvatar = memo(({ contact, ...props }) => {
   }
 
   // Determina a URL da imagem e dados do contato
-  let imageUrl = null;
+  let imageUrl = fetchedUrl; // Prioridade para URL buscada em tempo real
   let contactName = contact.name;
   let contactNumber = contact.number;
 
   // Se tem contact.contact (estrutura de ContactListItems)
   if (contact.contact) {
     // CORREÇÃO: Priorizar profilePicUrl (URL do WhatsApp) sobre urlPicture (caminho local)
-    imageUrl = contact.contact.profilePicUrl || contact.contact.urlPicture;
+    imageUrl = imageUrl || contact.contact.profilePicUrl || contact.contact.urlPicture;
     contactName = contact.contact.name || contact.name;
     contactNumber = contact.contact.number || contact.number;
   } else {
     // CORREÇÃO: Priorizar profilePicUrl (URL do WhatsApp) sobre urlPicture (caminho local)
-    imageUrl = contact.profilePicUrl || contact.urlPicture;
+    imageUrl = imageUrl || contact.profilePicUrl || contact.urlPicture;
   }
 
   // Se houve erro ou não tem imagem, usa avatar colorido com iniciais

@@ -204,6 +204,56 @@ const ListMessagesService = async ({
 
   logger.info(`[ListMessages] ticketId=${ticket.id} isGroup=${ticket.isGroup} tickets=${JSON.stringify(tickets)} count=${count} messages=${messages.length} offset=${offset}`);
 
+  // CORREÇÃO: Para grupos, enriquecer mensagens com profilePicUrl do participante individual
+  if (ticket.isGroup) {
+    const participantJids = messages
+      .filter(m => !m.fromMe && m.participant)
+      .map(m => m.participant)
+      .filter((v, i, a) => a.indexOf(v) === i); // unique
+
+    if (participantJids.length > 0) {
+      // Buscar contatos individuais por participant ou lidJid
+      const participantContacts = await Contact.findAll({
+        where: {
+          companyId,
+          isGroup: false,
+          [Op.or]: [
+            { remoteJid: { [Op.in]: participantJids } },
+            { lidJid: { [Op.in]: participantJids } }
+          ]
+        },
+        attributes: ["id", "name", "number", "profilePicUrl", "urlPicture", "remoteJid", "lidJid"]
+      });
+
+      // Criar mapa participant → contact
+      const participantMap = new Map();
+      participantContacts.forEach(c => {
+        if (c.remoteJid) participantMap.set(c.remoteJid, c);
+        if (c.lidJid) participantMap.set(c.lidJid, c);
+      });
+
+      // Enriquecer mensagens com dados do participante
+      messages.forEach((msg: any) => {
+        if (!msg.fromMe && msg.participant) {
+          const participantContact = participantMap.get(msg.participant);
+          if (participantContact) {
+            // Substituir contact do grupo pelo contact do participante individual
+            msg.contact = {
+              id: participantContact.id,
+              name: participantContact.name || msg.senderName,
+              isGroup: false,
+              profilePicUrl: participantContact.profilePicUrl,
+              urlPicture: participantContact.urlPicture,
+              number: participantContact.number
+            };
+          }
+        }
+      });
+
+      logger.info(`[ListMessages] Enriquecidas ${messages.filter((m: any) => !m.fromMe && m.participant).length} mensagens de grupo com profilePicUrl dos participantes`);
+    }
+  }
+
   let hasMore = count > offset + messages.length;
 
   // Armazenar página 1 no cache para acessos futuros

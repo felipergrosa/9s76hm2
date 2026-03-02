@@ -228,90 +228,63 @@ const ListContactsService = async ({
     
     whereCondition = {
       ...whereCondition,
-      [Op.or]: [
-        // BUSCA POR NOME: todas as palavras devem estar presentes
-        ...(isPureNumber ? [] : (nameConditions ? [nameConditions] : [])),
-        // Fallback para contactName (menos comum)
-        ...(isPureNumber ? [] : [{
-          contactName: where(
-            fn("LOWER", fn("unaccent", col("Contact.contactName"))),
-            "LIKE",
-            `%${sanitizedSearchParam}%`
-          )
-        }]),
-        // Para números, buscar diretamente
-        { number: { [Op.like]: `%${trimmedSearchParam}%` } },
-        // BUSCA OTIMIZADA: CPF/CNPJ normalizado (com índice)
-        { cpfCnpjNormalized: { [Op.like]: `%${trimmedSearchParam.replace(/\D/g, '')}%` } },
-        // Fallback para CPF/CNPJ original
-        {
-          cpfCnpj: where(
-            fn("LOWER", fn("unaccent", col("Contact.cpfCnpj"))),
-            "LIKE",
-            `%${sanitizedSearchParam}%`
-          )
-        },
-        // BUSCA POR CÓDIGO DO CLIENTE (clientCode)
-        {
-          clientCode: where(
-            fn("LOWER", col("Contact.clientCode")),
-            "LIKE",
-            `%${trimmedSearchParam.toLowerCase()}%`
-          )
-        },
-        {
-          representativeCode: where(
-            fn("LOWER", fn("unaccent", col("Contact.representativeCode"))),
-            "LIKE",
-            `%${sanitizedSearchParam}%`
-          )
-        },
-        {
-          fantasyName: where(
-            fn("LOWER", fn("unaccent", col("Contact.fantasyName"))),
-            "LIKE",
-            `%${sanitizedSearchParam}%`
-          )
-        },
-        {
-          city: where(
-            fn("LOWER", fn("unaccent", col("Contact.city"))),
-            "LIKE",
-            `%${sanitizedSearchParam}%`
-          )
-        },
-        {
-          segment: where(
-            fn("LOWER", fn("unaccent", col("Contact.segment"))),
-            "LIKE",
-            `%${sanitizedSearchParam}%`
-          )
-        },
-        {
-          bzEmpresa: where(
-            fn("LOWER", fn("unaccent", col("Contact.bzEmpresa"))),
-            "LIKE",
-            `%${sanitizedSearchParam}%`
-          )
-        },
-        {
-          email: where(
-            fn("LOWER", col("Contact.email")),
-            "LIKE",
-            `%${sanitizedSearchParam.toLowerCase()}%`
-          )
-        },
-        // Condição especial para encontrar contatos não validados (number == name)
-        ...(sanitizedSearchParam.includes("sem nome") || sanitizedSearchParam.includes("nao validados") ? [
-          {
-            [Op.and]: [
-              where(col("Contact.number"), col("Contact.name")),
-              { name: { [Op.ne]: null } },
-              { name: { [Op.ne]: "" } }
-            ]
-          }
-        ] : [])
-      ]
+      [Op.or]: isPureNumber
+        ? [
+            // Busca apenas em campos numéricos quando é número puro
+            { number: { [Op.like]: `%${trimmedSearchParam}%` } },
+            { cpfCnpjNormalized: { [Op.like]: `%${trimmedSearchParam.replace(/\D/g, '')}%` } },
+            {
+              cpfCnpj: where(
+                fn("LOWER", fn("unaccent", col("Contact.cpfCnpj"))),
+                "LIKE",
+                `%${sanitizedSearchParam}%`
+              )
+            },
+            {
+              clientCode: where(
+                fn("LOWER", col("Contact.clientCode")),
+                "LIKE",
+                `%${trimmedSearchParam.toLowerCase()}%`
+              )
+            }
+          ]
+        : [
+            // Busca em campos de nome/texto quando não é número
+            // BUSCA POR NOME: todas as palavras devem estar presentes
+            ...(nameConditions ? [nameConditions] : []),
+            // Fallback para contactName
+            {
+              contactName: where(
+                fn("LOWER", fn("unaccent", col("Contact.contactName"))),
+                "LIKE",
+                `%${sanitizedSearchParam}%`
+              )
+            },
+            {
+              fantasyName: where(
+                fn("LOWER", fn("unaccent", col("Contact.fantasyName"))),
+                "LIKE",
+                `%${sanitizedSearchParam}%`
+              )
+            },
+            {
+              email: where(
+                fn("LOWER", col("Contact.email")),
+                "LIKE",
+                `%${sanitizedSearchParam.toLowerCase()}%`
+              )
+            },
+            // Condição especial para encontrar contatos não validados
+            ...(sanitizedSearchParam.includes("sem nome") || sanitizedSearchParam.includes("nao validados") ? [
+              {
+                [Op.and]: [
+                  where(col("Contact.number"), col("Contact.name")),
+                  { name: { [Op.ne]: null } },
+                  { name: { [Op.ne]: "" } }
+                ]
+              }
+            ] : [])
+          ]
     };
   }
 

@@ -9,6 +9,7 @@ import uploadConfig from "../config/upload";
 import * as ContactController from "../controllers/ContactController";
 import * as ImportPhoneContactsController from "../controllers/ImportPhoneContactsController";
 import * as GroupController from "../controllers/GroupController";
+import * as RefreshContactAvatarController from "../controllers/RefreshContactAvatarController";
 
 const contactRoutes = express.Router();
 const upload = multer(uploadConfig);
@@ -68,6 +69,10 @@ contactRoutes.get("/contactTags/:contactId", isAuth, ContactController.getContac
 contactRoutes.put("/contacts/toggleDisableBot/:contactId", isAuth, ContactController.toggleDisableBot);
 contactRoutes.put("/contact-wallet/:contactId", isAuth, ContactController.updateContactWallet);
 contactRoutes.post("/contacts/bulk-refresh-avatars", isAuth, ContactController.bulkRefreshAvatars);
+
+// ========== ROTA PARA ATUALIZAÇÃO DE AVATAR EM TEMPO REAL ==========
+contactRoutes.post("/contacts/:contactId(\d+)/refresh-avatar", isAuth, RefreshContactAvatarController.refreshContactAvatar);
+
 contactRoutes.get("/contacts/device-tags", isAuth, ContactController.getDeviceTags);
 contactRoutes.get("/contacts/device-tags/refresh", isAuth, ContactController.refreshDeviceTags);
 contactRoutes.get("/contacts/device-contacts", isAuth, ContactController.getDeviceContacts);

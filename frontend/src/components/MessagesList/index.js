@@ -28,6 +28,7 @@ import {
 
 import MarkdownWrapper from "../MarkdownWrapper";
 import VcardPreview from "../VcardPreview";
+import ContactAvatar from "../ContactAvatar";
 import LocationPreview from "../LocationPreview";
 import ModalImageCors from "../ModalImageCors";
 import MediaModal from "../MediaModal";
@@ -2156,14 +2157,12 @@ const MessagesList = ({
             )}
 
             {isGroup && !message.fromMe && (
-              <Avatar
-                src={getAvatarContactForMessage(message)?.profilePicUrl || getAvatarContactForMessage(message)?.urlPicture}
+              <ContactAvatar
+                contact={getAvatarContactForMessage(message)}
+                enableRealtimeFetch={true}
                 className={classes.messageAvatar}
                 style={{ backgroundColor: getParticipantColor(message), color: "#fff" }}
-                alt={getAvatarContactForMessage(message)?.name}
-              >
-                {(getAvatarContactForMessage(message)?.name || "P").charAt(0).toUpperCase()}
-              </Avatar>
+              />
             )}
 
             <div className={classes.messageRowContent}>
