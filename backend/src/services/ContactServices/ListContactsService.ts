@@ -233,6 +233,14 @@ const ListContactsService = async ({
             `%${sanitizedSearchParam}%`
           )
         },
+        // BUSCA POR CÓDIGO DO CLIENTE (clientCode)
+        {
+          clientCode: where(
+            fn("LOWER", col("Contact.clientCode")),
+            "LIKE",
+            `%${trimmedSearchParam.toLowerCase()}%`
+          )
+        },
         {
           representativeCode: where(
             fn("LOWER", fn("unaccent", col("Contact.representativeCode"))),
@@ -536,6 +544,7 @@ const ListContactsService = async ({
       // Adiciona novos campos aos atributos
       "contactName",
       "cpfCnpj",
+      "clientCode",
       "representativeCode",
       "city",
       "instagram",

@@ -52,6 +52,15 @@ module.exports = {
       // Índice já existe
     }
 
+    // Índice para busca por código do cliente
+    try {
+      await queryInterface.addIndex("Contacts", ["clientCode", "companyId"], {
+        name: "idx_contacts_clientcode_company"
+      });
+    } catch (e) {
+      // Índice já existe
+    }
+
     // Cria trigger para manter colunas atualizadas
     await queryInterface.sequelize.query(`
       CREATE OR REPLACE FUNCTION normalize_contact_search_fields()

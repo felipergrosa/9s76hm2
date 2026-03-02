@@ -180,31 +180,34 @@ const TicketInfo = ({ contact, ticket, onClick }) => {
 				title={`${contact?.name || '(sem contato)'} #${ticket.id}`}
 				subheader={(
 					<div className={classes.subheaderRoot}>
-						{presenceStatus ? (
-							<span style={{ color: "#25d366", fontSize: 13, fontWeight: 500 }}>
-								{presenceStatus === "recording" ? "gravando áudio..." : "digitando..."}
-							</span>
-						) : (
-							<span className={classes.subheaderText}>
-								{ticket.user && `${i18n.t("messagesList.header.assignedTo")} ${ticket.user.name}`}
-							</span>
-						)}
+						<div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+							{presenceStatus ? (
+								<span style={{ color: "#25d366", fontSize: 13, fontWeight: 500 }}>
+									{presenceStatus === "recording" ? "gravando áudio..." : "digitando..."}
+								</span>
+							) : (
+								<span className={classes.subheaderText}>
+									{ticket.user && `${i18n.t("messagesList.header.assignedTo")} ${ticket.user.name}`}
+								</span>
+							)}
+
+							{/* Contador de janela 24h para API Oficial - modo compacto ao lado */}
+							{!contact?.isGroup && ticket?.whatsapp?.channelType === "official" && (
+								<SessionWindowCounter
+									ticketId={ticket?.id}
+									channelType={ticket?.channel}
+									isOfficial={ticket?.whatsapp?.channelType === "official"}
+									sessionWindowExpiresAt={ticket?.sessionWindowExpiresAt}
+									compact={true}
+								/>
+							)}
+						</div>
 						<div className={classes.tagsRow}>
 							{(Array.isArray(tags) ? tags.slice(0, 8) : []).map((tag) => (
 								<Tooltip key={tag.id || tag.name} title={tag.name} placement="top">
 									<span className={classes.tagDot} style={{ backgroundColor: tag.color || '#999' }} />
 								</Tooltip>
 							))}
-							{/* Contador de janela 24h para API Oficial */}
-							{!contact?.isGroup && (
-								<SessionWindowCounter
-									ticketId={ticket?.id}
-									channelType={ticket?.channel}
-									isOfficial={ticket?.whatsapp?.channelType === "official"}
-									sessionWindowExpiresAt={ticket?.sessionWindowExpiresAt}
-									size="normal"
-								/>
-							)}
 						</div>
 					</div>
 				)}
