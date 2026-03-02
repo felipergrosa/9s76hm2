@@ -270,7 +270,9 @@ const SessionWindowCounter = ({
     // Janela fechada: mostra apenas ícone de atenção cinza
     if (!sessionStatus.hasOpenSession) {
       const iconOnly = (
-        <AlertIcon className={classes.compactOnlyIcon} />
+        <span className={classes.compact}>
+          <AlertIcon className={classes.compactOnlyIcon} />
+        </span>
       );
       return showTooltip ? (
         <Tooltip title={getTooltipText()} placement="top" arrow>

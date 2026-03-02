@@ -206,13 +206,27 @@ const ListContactsService = async ({
     // Verificar se é um número puro (telefone, CPF/CNPJ, etc.)
     const isPureNumber = /^\d+$/.test(trimmedSearchParam);
     
+    // BUSCA POR NOME: separar palavras e buscar cada uma (AND)
+    // Ex: "Felipe Rosa" -> busca nomes que contenham "felipe" AND "rosa"
+    const nameSearchWords = sanitizedSearchParam
+      .split(/\s+/)
+      .filter(word => word.length > 0)
+      .map(word => word.replace(/[^a-z0-9]/g, ''));
+    
+    // Constrói condição AND para cada palavra do nome
+    const nameConditions = nameSearchWords.length > 0
+      ? {
+          [Op.and]: nameSearchWords.map(word => ({
+            nameNormalized: { [Op.iLike]: `%${word}%` }
+          }))
+        }
+      : null;
+    
     whereCondition = {
       ...whereCondition,
       [Op.or]: [
-        // BUSCA OTIMIZADA: usar coluna nameNormalized (com índice)
-        ...(isPureNumber ? [] : [{
-          nameNormalized: { [Op.iLike]: `%${sanitizedSearchParam.replace(/[^a-z0-9]/g, '')}%` }
-        }]),
+        // BUSCA POR NOME: todas as palavras devem estar presentes
+        ...(isPureNumber ? [] : (nameConditions ? [nameConditions] : [])),
         // Fallback para contactName (menos comum)
         ...(isPureNumber ? [] : [{
           contactName: where(

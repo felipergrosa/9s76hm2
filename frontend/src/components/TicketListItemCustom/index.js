@@ -1021,6 +1021,17 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                     {(ticket.lastMessage || ticket.updatedAt) && (
                         <div className={classes.rightSideMeta}>
                             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                {/* Contador de janela 24h para API Oficial - modo compacto ao lado da hora (ESQUERDO) */}
+                                {!ticket.isGroup && ticket.whatsapp?.channelType === "official" && (
+                                    <SessionWindowCounter
+                                        ticketId={ticket.id}
+                                        channelType={ticket.channel}
+                                        isOfficial={ticket.whatsapp?.channelType === "official"}
+                                        sessionWindowExpiresAt={ticket.sessionWindowExpiresAt}
+                                        compact={true}
+                                    />
+                                )}
+                                
                                 <Typography
                                     className={Number(ticket.unreadMessages) > 0 ? classes.lastMessageTimeUnread : classes.lastMessageTime}
                                     component="span"
@@ -1033,17 +1044,6 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                                         return format(d, "dd/MM/yy");
                                     })()}
                                 </Typography>
-
-                                {/* Contador de janela 24h para API Oficial - modo compacto ao lado da hora */}
-                                {!ticket.isGroup && ticket.whatsapp?.channelType === "official" && (
-                                    <SessionWindowCounter
-                                        ticketId={ticket.id}
-                                        channelType={ticket.channel}
-                                        isOfficial={ticket.whatsapp?.channelType === "official"}
-                                        sessionWindowExpiresAt={ticket.sessionWindowExpiresAt}
-                                        compact={true}
-                                    />
-                                )}
                             </div>
 
                             <Badge
