@@ -30,4 +30,11 @@ whatsappSessionRoutes.post(
   WhatsAppSessionController.clearContactSession
 );
 
+// Limpar apenas arquivos da sessão (mantém conexão no banco)
+whatsappSessionRoutes.post(
+  "/whatsappsession/:whatsappId/clear-files",
+  isAuth,
+  WhatsAppSessionController.clearWhatsAppSession
+);
+
 export default whatsappSessionRoutes;

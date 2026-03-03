@@ -6,8 +6,9 @@ import DeleteBaileysService from "../services/BaileysServices/DeleteBaileysServi
 import cacheLayer from "../libs/cache";
 import Whatsapp from "../models/Whatsapp";
 import ClearContactSessionService from "../services/WbotServices/ClearContactSessionService";
-import { acquireWbotLock } from "../libs/wbotMutex";
+import AppError from "../errors/AppError";
 import logger from "../utils/logger";
+import { acquireWbotLock } from "../libs/wbotMutex";
 
 const store = async (req: Request, res: Response): Promise<Response> => {
   const { whatsappId } = req.params;
@@ -129,4 +130,57 @@ const clearContactSession = async (req: Request, res: Response): Promise<Respons
   }
 };
 
-export default { store, remove, update, clearContactSession };
+export const clearWhatsAppSession = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { whatsappId } = req.params;
+  const { companyId, profile } = req.user;
+  const io = getIO();
+
+  if (profile !== "admin") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
+  const whatsapp = await ShowWhatsAppService(whatsappId, companyId);
+
+  if (whatsapp.channel === "whatsapp") {
+    // Limpar APENAS arquivos da sessão, mantendo conexão no banco
+    await DeleteBaileysService(whatsappId, { 
+      clearFilesOnly: true, 
+      keepDatabase: true 
+    });
+
+    // Atualizar status para PENDING (força novo QR Code)
+    await whatsapp.update({ 
+      status: "PENDING", 
+      session: "",
+      qrcode: "" 
+    });
+
+    // Remover da memória ativa
+    try {
+      await removeWbot(Number(whatsappId), true);
+    } catch { }
+
+    // Garantir limpeza do Redis
+    await cacheLayer.delFromPattern(`sessions:${whatsappId}:*`);
+
+    // Emitir evento para frontend
+    io.of(`/workspace-${companyId}`)
+      .emit(`company-${companyId}-whatsappSession`, {
+        action: "update",
+        session: whatsapp
+      });
+
+    logger.info(`[clearWhatsAppSession] Sessão ${whatsappId} limpa (arquivos apenas), mantendo conexão no banco`);
+  }
+
+  return res.status(200).json({ 
+    message: "Sessão limpa com sucesso. Conexão mantida no banco.",
+    whatsappId: whatsapp.id,
+    status: "PENDING"
+  });
+};
+
+export default { store, remove, update, clearContactSession, clearWhatsAppSession };
