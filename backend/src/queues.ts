@@ -41,7 +41,6 @@ import CreateLogTicketService from "./services/TicketServices/CreateLogTicketSer
 import formatBody from "./helpers/Mustache";
 import TicketTag from "./models/TicketTag";
 import Tag from "./models/Tag";
-import { delay } from "@whiskeysockets/baileys";
 import Plan from "./models/Plan";
 import GetWhatsAppAdapter from "./helpers/GetWhatsAppAdapter";
 import SendTemplateToContact from "./services/MetaServices/SendTemplateToContact";
@@ -546,9 +545,12 @@ async function handleVerifyCampaigns(job) {
     return;
   }
 
+  // delay removido na v7 - implementação própria
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
   isProcessing = true;
   try {
-    await new Promise(r => setTimeout(r, 1500));
+    await delay(1500);
 
     const campaigns: { id: number; scheduledAt: string }[] =
       await sequelize.query(

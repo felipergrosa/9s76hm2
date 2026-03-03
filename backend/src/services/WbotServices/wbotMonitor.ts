@@ -5,8 +5,13 @@ import {
   Chat,
   isJidBroadcast,
   isJidStatusBroadcast,
-  isJidUser,
 } from "@whiskeysockets/baileys";
+
+// isJidUser removido na v7 - usar verificação manual
+const isJidUser = (jid: string | undefined): boolean => {
+  if (!jid) return false;
+  return jid.endsWith("@s.whatsapp.net");
+};
 import * as Sentry from "@sentry/node";
 import fs from "fs";
 import path from "path";

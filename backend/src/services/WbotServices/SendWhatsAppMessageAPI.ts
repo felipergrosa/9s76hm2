@@ -1,4 +1,3 @@
-import { delay, WAMessage } from "@whiskeysockets/baileys";
 import * as Sentry from "@sentry/node";
 import AppError from "../../errors/AppError";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
@@ -10,6 +9,9 @@ import Contact from "../../models/Contact";
 import { getWbot, getWbotOrRecover } from "../../libs/wbot";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
+
+// delay removido na v7 - implementação própria
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 interface Request {
   body: string;
@@ -25,14 +27,14 @@ const SendWhatsAppMessage = async ({
   contact,
   quotedMsg,
   msdelay
-}: Request): Promise<WAMessage> => {
+}: Request): Promise<any> => {
   let options = {};
   // Obter sessão com auto-recovery (aguarda até 30s se estiver reconectando)
   const wbot = await getWbotOrRecover(whatsappId, 30000);
   if (!wbot) {
     throw new AppError("Sessão WhatsApp não disponível. Tente novamente em alguns segundos.");
   }
-  // Resolver JID correto para envio (trata LIDs → número real)
+  // Resolver JID correto
   const number = await ResolveSendJid(contact, contact.isGroup, whatsappId);
 
   // VALIDAÇÃO: Se não conseguiu resolver o JID, não enviar

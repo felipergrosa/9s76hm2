@@ -626,36 +626,30 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 return;
               }
 
-              // Restart required: reconectar com delay curto
+              // Restart required: reconectar com delay MAIOR após QR scan (erro 515)
+              // Este erro é NORMAL após escanear QR code - o WhatsApp reinicia a conexão
+              // IMPORTANTE: NÃO deletar arquivos de sessão! O pareamento é válido.
+              // Baileys v7 usa nomes como creds-HASH.json, não creds.json
               if (isRestartRequired) {
-                // Verificar se já está reconectando
-                if (reconnectingWhatsapps.get(id)) {
-                  logger.warn(`[wbot] Já existe uma tentativa de reconexão em andamento para ${name}. Ignorando restart.`);
-                  removeWbot(id, false);
-                  return;
-                }
-                logger.info(`[wbot] Restart necessário para ${name}. Reconectando em 5s.`);
-                reconnectingWhatsapps.set(id, true);
+                // SEMPRE limpar flag primeiro para garantir que reconexão possa ocorrer
+                reconnectingWhatsapps.delete(id);
                 
-                // TIMEOUT DE SEGURANÇA: Limpar flag após 60s se reconexão falhar
-                setTimeout(() => {
-                  if (reconnectingWhatsapps.get(id) && !sessions.find(s => s.id === id)) {
-                    logger.warn(`[wbot] Timeout de segurança (60s) - limpando flag para ${id}`);
-                    reconnectingWhatsapps.delete(id);
-                  }
-                }, RECONNECT_FLAG_TIMEOUT_MS);
+                logger.info(`[wbot] Restart necessário (515) para ${name}. Reconectando em 3s (preservando sessão)...`);
                 
-                // await releaseWbotLock(id); // REMOVIDO: Manter o lock
+                // NÃO limpar arquivos de sessão — o pareamento recém-feito está nos creds
+                
                 removeWbot(id, false);
-                // NOTA: NÃO limpar reconnectingWhatsapps aqui! Flag permanece ativa até connection===open
+                
+                // Delay curto (3s) — o pareamento já foi feito, só precisa reconectar
                 setTimeout(async () => {
                   try {
+                    reconnectingWhatsapps.delete(id);
                     await StartWhatsAppSession(whatsapp, whatsapp.companyId);
                   } catch (err: any) {
-                    logger.error(`[wbot] Erro na reconexão (restart) para ${name}: ${err?.message}`);
+                    logger.error(`[wbot] Erro na reconexão (restart 515) para ${name}: ${err?.message}`);
                     reconnectingWhatsapps.delete(id);
                   }
-                }, 5000);
+                }, 3000);
                 return;
               }
 
@@ -761,7 +755,12 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
               // BLINDAGEM: Detectar reconexão com mesmo número e migrar histórico
               try {
-                const connNumber = whatsapp.number;
+                // Usar o número diretamente do socket (wsocket.user.id) ao invés de whatsapp.number
+                // pois o objeto whatsapp em memória pode estar desatualizado
+                const connNumber = wsocket.type === "md" && (wsocket as WASocket).user?.id
+                  ? jidNormalizedUser((wsocket as WASocket).user.id).split("@")[0]
+                  : whatsapp.number;
+                
                 if (connNumber && connNumber !== "-") {
                   const { onConnectionOpen } = require("../services/WhatsappService/WhatsappConnectionGuardService");
                   const migrationResult = await onConnectionOpen(whatsapp.id, companyId, connNumber);
@@ -770,7 +769,11 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                       `[wbot] BLINDAGEM: Migrados ${migrationResult.ticketsMigrated} tickets ` +
                       `(de conexões [${migrationResult.oldWhatsappIds.join(",")}]) para #${whatsapp.id} (${connNumber})`
                     );
+                  } else {
+                    logger.info(`[wbot] BLINDAGEM: Nenhum ticket para migrar para #${whatsapp.id} (${connNumber})`);
                   }
+                } else {
+                  logger.warn(`[wbot] BLINDAGEM: Número vazio ou inválido, migração ignorada para #${whatsapp.id}`);
                 }
               } catch (guardErr: any) {
                 logger.error(`[wbot] Erro na blindagem ConnectionGuard: ${guardErr?.message}`);

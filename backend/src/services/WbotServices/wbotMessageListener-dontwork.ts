@@ -519,7 +519,7 @@ const downloadMedia = async (msg: proto.IWebMessageInfo, isImported: Date = null
   let buffer
   try {
     buffer = await downloadMediaMessage(
-      msg,
+      msg as any,
       'buffer',
       {},
       {
@@ -2691,7 +2691,7 @@ export const handleMessageIntegration = async (
         await sendDialogflowAwswer(
           wbot,
           ticket,
-          msg,
+          msg as any,
           ticket.contact,
           inputAudio,
           companyId,
@@ -3542,7 +3542,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
             jobId: `${wbot.id}-handleMessageAck-${message.key.id}`
           })
         } else {
-          handleMsgAck(message, 2)
+          handleMsgAck(message as any, 2)
         }
       }
 
@@ -3587,7 +3587,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         })
       }
       else {
-        handleMsgAck(message, ack);
+        handleMsgAck(message as any, ack);
       }
     });
   });

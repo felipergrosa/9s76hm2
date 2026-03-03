@@ -1275,7 +1275,7 @@ const downloadMedia = async (msg: proto.IWebMessageInfo, isImported: Date = null
   let buffer;
   try {
     buffer = await downloadMediaMessage(
-      msg,
+      msg as any,
       "buffer",
       {},
       {
@@ -4946,7 +4946,7 @@ export const handleMessageIntegration = async (
         await sendDialogflowAwswer(
           wbot,
           ticket,
-          msg,
+          msg as any,
           ticket.contact,
           inputAudio,
           companyId,
@@ -6363,7 +6363,7 @@ const verifyCampaignMessageAndCloseTicket = async (
   }
 };
 
-const filterMessages = (msg: WAMessage): boolean => {
+const filterMessages = (msg: any): boolean => {
   msgDB.save(msg);
 
   if (msg.message?.protocolMessage?.editedMessage) return true;
@@ -6507,10 +6507,10 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
               "[messages.upsert] Falha no enqueue do handleMessageAck, usando fallback direto"
             );
 
-            handleMsgAck(message, 2);
+            handleMsgAck(message as any, 2);
           }
         } else {
-          handleMsgAck(message, 2);
+          handleMsgAck(message as any, 2);
         }
       }
     });
@@ -6586,10 +6586,10 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
             "[messages.update] Falha no enqueue do handleMessageAck, usando fallback direto"
           );
 
-          handleMsgAck(message, ack);
+          handleMsgAck(message as any, ack);
         }
       } else {
-        handleMsgAck(message, ack);
+        handleMsgAck(message as any, ack);
       }
     });
   });

@@ -1,13 +1,16 @@
 import axios from "axios";
 import Ticket from "../../models/Ticket";
 import QueueIntegrations from "../../models/QueueIntegrations";
-import { WASocket, delay, proto } from "@whiskeysockets/baileys";
+import { WASocket, proto } from "@whiskeysockets/baileys";
 import { getBodyMessage } from "../WbotServices/wbotMessageListener";
 import logger from "../../utils/logger";
 import { isNil } from "lodash";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
 import moment from "moment";
 import formatBody from "../../helpers/Mustache";
+
+// delay removido na v7 - implementação própria
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 type Session = WASocket & {
     id?: number;

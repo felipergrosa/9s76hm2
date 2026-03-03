@@ -192,7 +192,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
       }
 
       logger.info(`[BaileysAdapter] Mensagem enviada com ID: ${result.key.id}`);
-      return result;
+      return result as any;
       
     } catch (error) {
       const isConnectionError = error.message && (
@@ -224,7 +224,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
               throw new WhatsAppAdapterError("Falha no retry: ID inválido", "RETRY_INVALID_ID");
             }
             
-            return retryResult;
+            return retryResult as any;
           } catch (retryError) {
             logger.error(`[BaileysAdapter] Falha no retry: ${retryError.message}`);
             throw new WhatsAppAdapterError(

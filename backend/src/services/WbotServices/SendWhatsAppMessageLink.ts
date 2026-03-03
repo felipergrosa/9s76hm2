@@ -1,5 +1,6 @@
-import { delay, WAMessage, AnyMessageContent } from "@whiskeysockets/baileys";
+import { WAMessage, AnyMessageContent } from "@whiskeysockets/baileys";
 import AppError from "../../errors/AppError";
+import logger from "../../utils/logger";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import Ticket from "../../models/Ticket";
 import fs from "fs";
@@ -7,6 +8,9 @@ import path from "path";
 import Contact from "../../models/Contact";
 import { getWbot } from "../../libs/wbot";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
+
+// delay removido na v7 - implementação própria
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 interface Request {
   whatsappId: number;

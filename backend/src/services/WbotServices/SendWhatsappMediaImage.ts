@@ -1,4 +1,4 @@
-import { delay, WAMessage } from "@whiskeysockets/baileys";
+import { WAMessage } from "@whiskeysockets/baileys";
 import AppError from "../../errors/AppError";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import Message from "../../models/Message";
@@ -8,6 +8,9 @@ import Contact from "../../models/Contact";
 import path from "path";
 import fs from "fs";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
+
+// delay removido na v7 - implementação própria
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 interface Request {
     body: string;
