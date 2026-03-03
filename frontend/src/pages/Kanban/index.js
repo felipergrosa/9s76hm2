@@ -4,6 +4,7 @@ import api from "../../services/api";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import KanbanLane from "./KanbanLane";
+import { debounce } from 'lodash';
 
 import ColorModeContext from "../../layout/themeContext";
 import { i18n } from "../../translate/i18n";
@@ -219,7 +220,20 @@ const Kanban = () => {
     }
   }, [viewingUserId]);
 
+  // Cache para tickets - evitar requisições repetidas
+  const ticketsCache = useRef(new Map());
+  const CACHE_TTL = 30000; // 30 segundos
+
   const fetchTickets = useCallback(async () => {
+    const cacheKey = `${jsonString}-${startDate}-${endDate}-${viewingUserId}`;
+    const cached = ticketsCache.current.get(cacheKey);
+    
+    // Retornar do cache se ainda válido
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      setTickets(cached.data);
+      return cached.data;
+    }
+    
     try {
       const { data } = await api.get("/ticket/kanban", {
         params: {
@@ -229,6 +243,13 @@ const Kanban = () => {
           viewingUserId
         }
       });
+      
+      // Salvar no cache
+      ticketsCache.current.set(cacheKey, { 
+        data: data.tickets, 
+        timestamp: Date.now() 
+      });
+      
       setTickets(data.tickets);
       return data.tickets;
     } catch (err) {
@@ -246,25 +267,32 @@ const Kanban = () => {
     fetchTickets();
   }, [fetchTickets]);
 
+  // Debounce para evitar múltiplas chamadas rápidas
+  const debouncedFetchTickets = useRef(
+    debounce(() => {
+      // Limpar cache para forçar atualização
+      ticketsCache.current.clear();
+      fetchTickets();
+    }, 500)
+  ).current;
+
   useEffect(() => {
     const companyId = user.companyId;
     const onAppMessage = (data) => {
       if (data.action === "create" || data.action === "update" || data.action === "delete") {
-        fetchTickets();
+        debouncedFetchTickets();
       }
     };
+    
     socket.on(`company-${companyId}-ticket`, onAppMessage);
     socket.on(`company-${companyId}-appMessage`, onAppMessage);
 
     return () => {
       socket.off(`company-${companyId}-ticket`, onAppMessage);
       socket.off(`company-${companyId}-appMessage`, onAppMessage);
+      debouncedFetchTickets.cancel();
     };
-  }, [socket, user.companyId, fetchTickets]);
-
-  useEffect(() => {
-    fetchTickets();
-  }, [fetchTickets]);
+  }, [socket, user.companyId, debouncedFetchTickets]);
 
   const handleCardClick = useCallback(async (ticket) => {
     // Verificar se o ticket pertence a outro usuário

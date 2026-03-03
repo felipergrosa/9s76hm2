@@ -14,6 +14,7 @@ import useDebounce from "../../hooks/useDebounce";
 import { toast } from "react-toastify";
 import { useHistory, useLocation } from "react-router-dom";
 import useContactUpdates from "../../hooks/useContactUpdates";
+import { debounce } from 'lodash';
 
 import {
     Search,
@@ -514,11 +515,19 @@ const Contacts = () => {
     // Atualização de avatar movida para ao abrir ticket (performance)
     // Removido: atualização silenciosa causava lentidão na listagem
 
+    // Debounce para evitar múltiplas atualizações rápidas de contatos
+    const debouncedContactUpdate = useRef(
+        debounce((contact) => {
+            dispatch({ type: "UPDATE_CONTACTS", payload: contact });
+        }, 300)
+    ).current;
+
     useEffect(() => {
         const companyId = user.companyId;
         const onContactEvent = (data) => {
             if (data.action === "update" || data.action === "create") {
-                dispatch({ type: "UPDATE_CONTACTS", payload: data.contact });
+                // Usar debounce para evitar múltiplas atualizações rápidas
+                debouncedContactUpdate(data.contact);
             }
 
             if (data.action === "delete") {
@@ -530,12 +539,14 @@ const Contacts = () => {
                 );
             }
         };
+        
         socket.on(`company-${companyId}-contact`, onContactEvent);
 
         return () => {
             socket.off(`company-${companyId}-contact`, onContactEvent);
+            debouncedContactUpdate.cancel();
         };
-    }, [socket]);
+    }, [socket, debouncedContactUpdate]);
 
     const handleSelectTicket = (ticket) => {
         const code = uuidv4();

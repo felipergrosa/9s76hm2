@@ -475,11 +475,11 @@ const Campaigns = () => {
                   <div className={classes.cardMeta}>
                     <div>
                       <div className={classes.metaLabel}>{i18n.t("campaigns.table.contactList")}</div>
-                      <div className={classes.metaValue}>{campaign.contactListId ? campaign.contactList.name : "Não definida"}</div>
+                      <div className={classes.metaValue}>{campaign.contactListId ? campaign.contactList?.name || "Não definida" : "Não definida"}</div>
                     </div>
                     <div>
                       <div className={classes.metaLabel}>{i18n.t("campaigns.table.whatsapp")}</div>
-                      <div className={classes.metaValue}>{campaign.whatsappId ? campaign.whatsapp.name : "Não definido"}</div>
+                      <div className={classes.metaValue}>{campaign.whatsappId ? campaign.whatsapp?.name || "Não definido" : "Não definido"}</div>
                     </div>
                     <div>
                       <div className={classes.metaLabel}>{i18n.t("campaigns.table.scheduledAt")}</div>
@@ -604,12 +604,12 @@ const Campaigns = () => {
                           </TableCell>
                           <TableCell align="center">
                             {campaign.contactListId
-                              ? campaign.contactList.name
+                              ? campaign.contactList?.name || "Não definida"
                               : "Não definida"}
                           </TableCell>
                           <TableCell align="center">
                             {campaign.whatsappId
-                              ? campaign.whatsapp.name
+                              ? campaign.whatsapp?.name || "Não definido"
                               : "Não definido"}
                           </TableCell>
                           <TableCell align="center">

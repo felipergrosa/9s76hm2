@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useRef, useState, useCallback } from "react";
 import { useTheme } from "@material-ui/core/styles";
 import { useHistory } from "react-router-dom";
 import {
@@ -460,17 +460,21 @@ const TicketsManagerTabs = () => {
     setForceSearch(!forceSearch);
   }, [tab]);
 
-  let searchTimeout;
+  const handleFilter = () => {
+    if (filter) {
+      setFilter(false);
+      setTab("open");
+    } else setFilter(true);
+    setTab("search");
+  };
 
-  const handleSearch = (e) => {
+  // Otimizar busca com useCallback para evitar re-renders
+  const handleSearch = useCallback((e) => {
     const searchedTerm = e.target.value.toLowerCase();
-
-    clearTimeout(searchTimeout);
 
     if (searchedTerm === "") {
       setSearchParam(searchedTerm);
-      setForceSearch(!forceSearch);
-      // setFilter(false);
+      setForceSearch(prev => !prev);
       setTab("open");
       return;
     } else if (tab !== "search") {
@@ -478,11 +482,15 @@ const TicketsManagerTabs = () => {
       setTab("search");
     }
 
-    searchTimeout = setTimeout(() => {
+    // Debounce para evitar múltiplas buscas rápidas
+    const timeout = setTimeout(() => {
       setSearchParam(searchedTerm);
-      setForceSearch(!forceSearch);
-    }, 500);
-  };
+      setForceSearch(prev => !prev);
+    }, 300);
+
+    // Limpar timeout anterior
+    return () => clearTimeout(timeout);
+  }, [tab, handleFilter]);
 
   const handleBack = () => {
 
@@ -598,14 +606,6 @@ const TicketsManagerTabs = () => {
       setSelectedStatus(statusFilter);
       setForceSearch(!forceSearch);
     }, 500);
-  };
-
-  const handleFilter = () => {
-    if (filter) {
-      setFilter(false);
-      setTab("open");
-    } else setFilter(true);
-    setTab("search");
   };
 
   const [open, setOpen] = React.useState(false);
