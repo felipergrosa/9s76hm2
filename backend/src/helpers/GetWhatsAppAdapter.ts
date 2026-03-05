@@ -7,22 +7,50 @@ import logger from "../utils/logger";
 /**
  * Obtém o adapter apropriado para o WhatsApp (Baileys ou Official API)
  * Similar ao GetTicketWbot, mas retorna IWhatsAppAdapter unificado
+ * Agora com retry automático e reinicialização inteligente
  */
 const GetWhatsAppAdapter = async (
-  whatsapp: Whatsapp
+  whatsapp: Whatsapp,
+  retryCount: number = 0
 ): Promise<IWhatsAppAdapter> => {
+  const MAX_RETRIES = 2;
+  
   try {
-    logger.debug(`[GetWhatsAppAdapter] Obtendo adapter para whatsappId=${whatsapp.id}, channelType=${whatsapp.channelType}`);
+    logger.debug(`[GetWhatsAppAdapter] Obtendo adapter para whatsappId=${whatsapp.id}, retry=${retryCount}`);
     
     // Criar ou retornar adapter do cache
     const adapter = await WhatsAppFactory.createAdapter(whatsapp);
     
-    // Verificar se está conectado
-    const status = adapter.getConnectionStatus();
+    // Verificar status
+    let status = adapter.getConnectionStatus();
+    logger.debug(`[GetWhatsAppAdapter] Status atual: ${status}`);
+    
+    // Se não conectado, tentar reinicializar
     if (status !== "connected") {
-      // NÃO tentar inicializar automaticamente - isso pode causar conflitos
-      // A inicialização deve ser feita pelo sistema de sessões (StartWhatsAppSession)
-      logger.warn(`[GetWhatsAppAdapter] Adapter não conectado: ${status}. Lançando erro.`);
+      logger.warn(`[GetWhatsAppAdapter] Status ${status}, tentando reinicializar...`);
+      
+      try {
+        await adapter.initialize();
+        status = adapter.getConnectionStatus();
+        logger.info(`[GetWhatsAppAdapter] Reinicializado com sucesso, novo status: ${status}`);
+      } catch (initError: any) {
+        logger.error(`[GetWhatsAppAdapter] Falha ao reinicializar: ${initError.message}`);
+        
+        // Se falhou e ainda temos retries, tentar novamente
+        if (retryCount < MAX_RETRIES) {
+          logger.info(`[GetWhatsAppAdapter] Tentando novamente em 2s... (${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Limpar adapter do cache para forçar recriação
+          WhatsAppFactory.removeAdapter(whatsapp.id);
+          
+          return GetWhatsAppAdapter(whatsapp, retryCount + 1);
+        }
+      }
+    }
+    
+    // Verificar status final
+    if (status !== "connected") {
       throw new AppError(
         `WhatsApp não está conectado. Status: ${status}`,
         404
