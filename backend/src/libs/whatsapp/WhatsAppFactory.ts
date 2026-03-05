@@ -113,6 +113,15 @@ export class WhatsAppFactory {
         );
     }
 
+    // Inicializar adapter para sincronizar status
+    try {
+      await adapter.initialize();
+      logger.info(`[WhatsAppFactory] Adapter inicializado: whatsappId=${whatsappId}, status=${adapter.getConnectionStatus()}`);
+    } catch (error: any) {
+      logger.warn(`[WhatsAppFactory] Falha ao inicializar adapter ${whatsappId}: ${error.message}`);
+      // Não lançar erro - adapter pode ser inicializado depois
+    }
+
     // Armazenar no cache
     this.adapters.set(whatsappId, adapter);
 
