@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import { sub } from "date-fns";
+import { v5 as uuidv5 } from "uuid";
 
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
@@ -13,6 +14,9 @@ import CompaniesSettings from "../../models/CompaniesSettings";
 import CreateLogTicketService from "./CreateLogTicketService";
 import AppError from "../../errors/AppError";
 import UpdateTicketService from "./UpdateTicketService";
+
+// Namespace fixo para gerar UUIDs v5 determinísticos para selfchat
+const SELFCHAT_UUID_NAMESPACE = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 
 // interface Response {
 //   ticket: Ticket;
@@ -57,20 +61,42 @@ const FindOrCreateTicketService = async (
   const DirectTicketsToWallets = settings?.DirectTicketsToWallets;
 
   // =================================================================
-  // SELFCHAT: Usar sempre o mesmo ticket com UUID fixo
+  // SELFCHAT: Usar sempre o mesmo ticket com UUID determinístico
   // =================================================================
   if (isSelfChat) {
-    // UUID fixo baseado no número do usuário para garantir consistência em todos os dispositivos
+    // UUID v5 determinístico: mesmo input gera sempre o mesmo UUID válido
     const selfChatNumber = contact?.number || whatsapp?.number || "selfchat";
-    const selfChatUuid = `selfchat-${selfChatNumber}-${companyId}`;
+    const selfChatSeed = `selfchat-${selfChatNumber}-${companyId}`;
+    const selfChatUuid = uuidv5(selfChatSeed, SELFCHAT_UUID_NAMESPACE);
 
-    // Buscar ticket existente com esse UUID
+    // Buscar ticket existente pelo UUID determinístico
     let ticket = await Ticket.findOne({
       where: {
         uuid: selfChatUuid,
         companyId
       }
     });
+
+    // Fallback: buscar por contactId (para tickets criados antes desta correção)
+    if (!ticket) {
+      ticket = await Ticket.findOne({
+        where: {
+          contactId: contact.id,
+          companyId,
+          whatsappId: whatsapp.id,
+          isGroup: false
+        },
+        order: [["id", "DESC"]]
+      });
+
+      // Se encontrou ticket antigo, atualizar o UUID para o formato válido
+      if (ticket) {
+        await ticket.update({ uuid: selfChatUuid, unreadMessages });
+        ticket = await ShowTicketService(ticket.id, companyId);
+        logger.info(`[FindOrCreateTicket] Selfchat ticket migrado: id=${ticket.id}, uuid=${selfChatUuid}`);
+        return ticket;
+      }
+    }
 
     if (ticket) {
       // Atualizar ticket existente
@@ -80,8 +106,7 @@ const FindOrCreateTicketService = async (
       return ticket;
     }
 
-    // Criar novo ticket selfchat com UUID fixo
-    const { v4: uuidv4 } = await import("uuid");
+    // Criar novo ticket selfchat com UUID válido
     ticket = await Ticket.create({
       uuid: selfChatUuid,
       status: "open",
@@ -93,7 +118,7 @@ const FindOrCreateTicketService = async (
       lastMessage: ""
     });
 
-    logger.info(`[FindOrCreateTicket] Selfchat ticket criado: id=${ticket.id}, uuid=${ticket.uuid}`);
+    logger.info(`[FindOrCreateTicket] Selfchat ticket criado: id=${ticket.id}, uuid=${selfChatUuid}`);
     return ticket;
   }
   // =================================================================

@@ -147,6 +147,17 @@ const SyncChatHistoryService = async ({
     syncAll = false,     // Novo: sincronização completa
     maxPages = 5         // Novo: até 5 páginas (500 mensagens)
 }: SyncChatHistoryParams): Promise<SyncResult> => {
+    // =====================================================================
+    // DESABILITADO: fetchMessageHistory causa xml-not-well-formed
+    // Múltiplas chamadas concorrentes ao fetchMessageHistory corrompem o
+    // websocket do Baileys, fazendo o servidor WhatsApp retornar
+    // stream:error xml-not-well-formed e derrubar a conexão.
+    // As mensagens continuam chegando normalmente via messages.upsert.
+    // Referência: logs de produção 2026-03-05 13:35-13:38 UTC-3
+    // =====================================================================
+    logger.debug(`[SyncChatHistory] DESABILITADO - ticketId=${ticketId} (fetchMessageHistory causa xml-not-well-formed)`);
+    return { synced: 0, skipped: true, reason: "fetchMessageHistory desabilitado (causa xml-not-well-formed)" };
+
     const io = getIO();
     try {
         // 1. Buscar ticket com informações necessárias
