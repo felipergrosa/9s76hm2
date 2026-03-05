@@ -717,9 +717,15 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             }
 
             if (connection === "open") {
+              // Gerar hash de conexão se qrcode estiver vazio
+              const currentQrcode = whatsapp.qrcode;
+              const connectionHash = currentQrcode && currentQrcode.trim() !== "" 
+                ? currentQrcode 
+                : `connected_${Date.now()}`;
+              
               await whatsapp.update({
                 status: "CONNECTED",
-                qrcode: "",
+                qrcode: connectionHash,
                 retries: 0,
                 number:
                   wsocket.type === "md"
