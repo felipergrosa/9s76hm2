@@ -6,12 +6,26 @@ import {
 } from "@whiskeysockets/baileys";
 import { initAuthCreds } from "@whiskeysockets/baileys";
 import { BufferJSON } from "@whiskeysockets/baileys";
+import { Mutex } from "async-mutex";
 import cacheLayer from "../libs/cache";
 import { checkWbotLock } from "../libs/wbotMutex";
 import Whatsapp from "../models/Whatsapp";
 import fs from "fs";
 import path from "path";
 import * as crypto from "crypto";
+
+// Mutex por arquivo para evitar race conditions em operações de I/O concorrentes
+// Ref: https://github.com/WhiskeySockets/Baileys/issues/794
+const fileLocks = new Map<string, Mutex>();
+
+const getFileLock = (filePath: string): Mutex => {
+  let mutex = fileLocks.get(filePath);
+  if (!mutex) {
+    mutex = new Mutex();
+    fileLocks.set(filePath, mutex);
+  }
+  return mutex;
+};
 
 export const useMultiFileAuthState = async (
   whatsapp: Whatsapp,
@@ -57,63 +71,84 @@ export const useMultiFileAuthState = async (
   const fsPathFor = (file: string) => path.join(baseDir, `${sanitizeFileName(file)}.json`);
 
   const writeData = async (data: any, file: string) => {
-    try {
-      if (driver === "redis") {
-        // Write Fencing: Antes de escrever, verifica se ainda somos o dono da sessão
-        // Isso impede que réplicas "zumbi" corrompam a sessão de uma instância nova
-        const isOwner = await checkWbotLock(whatsapp.id);
-        if (!isOwner) {
-          console.error(`[BaileysAuth] FENCING: Bloqueando escrita de ZUMBI para whatsappId=${whatsapp.id} (file=${file}). Lock perdido.`);
-          if (onZombie) {
-            console.error(`[BaileysAuth] Executando callback onZombie para matar conexão de whatsappId=${whatsapp.id}`);
-            onZombie();
-          }
-          return null;
-        }
+    const lockKey = driver === "redis"
+      ? `sessions:${whatsapp.id}:${file}`
+      : fsPathFor(file);
+    const mutex = getFileLock(lockKey);
 
-        await cacheLayer.set(
-          `sessions:${whatsapp.id}:${file}`,
-          JSON.stringify(data, BufferJSON.replacer)
-        );
-      } else {
-        await ensureDir();
-        const p = fsPathFor(file);
-        await fs.promises.writeFile(p, JSON.stringify(data, BufferJSON.replacer), "utf-8");
+    return mutex.runExclusive(async () => {
+      try {
+        if (driver === "redis") {
+          // Write Fencing: Antes de escrever, verifica se ainda somos o dono da sessão
+          // Isso impede que réplicas "zumbi" corrompam a sessão de uma instância nova
+          const isOwner = await checkWbotLock(whatsapp.id);
+          if (!isOwner) {
+            console.error(`[BaileysAuth] FENCING: Bloqueando escrita de ZUMBI para whatsappId=${whatsapp.id} (file=${file}). Lock perdido.`);
+            if (onZombie) {
+              console.error(`[BaileysAuth] Executando callback onZombie para matar conexão de whatsappId=${whatsapp.id}`);
+              onZombie();
+            }
+            return null;
+          }
+
+          await cacheLayer.set(
+            `sessions:${whatsapp.id}:${file}`,
+            JSON.stringify(data, BufferJSON.replacer)
+          );
+        } else {
+          await ensureDir();
+          const p = fsPathFor(file);
+          await fs.promises.writeFile(p, JSON.stringify(data, BufferJSON.replacer), "utf-8");
+        }
+      } catch (error) {
+        console.log("writeData error", error);
+        return null;
       }
-    } catch (error) {
-      console.log("writeData error", error);
-      return null;
-    }
+    });
   };
 
   const readData = async (file: string) => {
-    try {
-      if (driver === "redis") {
-        const data = await cacheLayer.get(`sessions:${whatsapp.id}:${file}`);
-        return data ? JSON.parse(data, BufferJSON.reviver) : null;
-      } else {
-        const p = fsPathFor(file);
-        try {
-          const raw = await fs.promises.readFile(p, "utf-8");
-          return JSON.parse(raw, BufferJSON.reviver);
-        } catch {
-          return null;
+    const lockKey = driver === "redis"
+      ? `sessions:${whatsapp.id}:${file}`
+      : fsPathFor(file);
+    const mutex = getFileLock(lockKey);
+
+    return mutex.runExclusive(async () => {
+      try {
+        if (driver === "redis") {
+          const data = await cacheLayer.get(`sessions:${whatsapp.id}:${file}`);
+          return data ? JSON.parse(data, BufferJSON.reviver) : null;
+        } else {
+          const p = fsPathFor(file);
+          try {
+            const raw = await fs.promises.readFile(p, "utf-8");
+            return JSON.parse(raw, BufferJSON.reviver);
+          } catch {
+            return null;
+          }
         }
+      } catch (error) {
+        return null;
       }
-    } catch (error) {
-      return null;
-    }
+    });
   };
 
   const removeData = async (file: string) => {
-    try {
-      if (driver === "redis") {
-        await cacheLayer.del(`sessions:${whatsapp.id}:${file}`);
-      } else {
-        const p = fsPathFor(file);
-        await fs.promises.unlink(p).catch(() => { });
-      }
-    } catch { }
+    const lockKey = driver === "redis"
+      ? `sessions:${whatsapp.id}:${file}`
+      : fsPathFor(file);
+    const mutex = getFileLock(lockKey);
+
+    return mutex.runExclusive(async () => {
+      try {
+        if (driver === "redis") {
+          await cacheLayer.del(`sessions:${whatsapp.id}:${file}`);
+        } else {
+          const p = fsPathFor(file);
+          await fs.promises.unlink(p).catch(() => { });
+        }
+      } catch { }
+    });
   };
 
   const rawStoredCreds = await readData("creds");

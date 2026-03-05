@@ -493,7 +493,11 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               let filteredMessages = messageSet.messages;
               let filteredDateMessages = [];
               filteredMessages.forEach(msg => {
-                const timestampMsg = Math.floor(msg.messageTimestamp["low"] * 1000);
+                // Baileys v7: messageTimestamp pode ser number ou Long (objeto com .low)
+                const rawTs = msg.messageTimestamp;
+                const tsSeconds = typeof rawTs === "number" ? rawTs
+                  : (rawTs?.low ?? rawTs?.toNumber?.() ?? Number(rawTs) ?? 0);
+                const timestampMsg = Math.floor(tsSeconds * 1000);
                 if (isValidMsg(msg) && dateOldLimit < timestampMsg && dateRecentLimit > timestampMsg) {
                   filteredDateMessages.push(msg);
                 }
@@ -587,11 +591,19 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 // Marcar como "reconectando" para bloquear novas tentativas
                 reconnectingWhatsapps.set(id, Date.now());
                 
-                // TIMEOUT DE SEGURANÇA: Limpar flag após 60s se reconexão falhar
-                setTimeout(() => {
+                // TIMEOUT DE SEGURANÇA: Limpar flag E disparar reconexão após 60s se sessão não voltou
+                setTimeout(async () => {
                   if (reconnectingWhatsapps.get(id) && !sessions.find(s => s.id === id)) {
-                    logger.warn(`[wbot] Timeout de segurança (60s) - limpando flag para ${id}`);
+                    logger.warn(`[wbot] Timeout de segurança (60s) para conflito ${name} - sessão não voltou. Disparando recovery.`);
                     reconnectingWhatsapps.delete(id);
+                    try {
+                      const freshWa = await Whatsapp.findByPk(id);
+                      if (freshWa && freshWa.status !== "PENDING") {
+                        await StartWhatsAppSession(freshWa, freshWa.companyId);
+                      }
+                    } catch (recoveryErr: any) {
+                      logger.error(`[wbot] Erro no recovery após timeout conflito para ${name}: ${recoveryErr?.message}`);
+                    }
                   }
                 }, RECONNECT_FLAG_TIMEOUT_MS);
 
@@ -673,24 +685,42 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
               if (!isLoggedOut) {
                 // Verificar se já está reconectando (limpa flags stale > 2min)
-                if (getWbotIsReconnecting(id)) {
+                const alreadyReconnecting = getWbotIsReconnecting(id);
+                const sessionStillExists = sessions.some(s => s.id === id);
+                
+                if (alreadyReconnecting && sessionStillExists) {
+                  // Flag ativa E sessão existe = reconexão genuinamente em andamento
                   logger.warn(`[wbot] Já existe uma tentativa de reconexão em andamento para ${name}. Ignorando.`);
                   removeWbot(id, false);
                   return;
                 }
+                
+                if (alreadyReconnecting && !sessionStillExists) {
+                  // Flag ativa MAS sessão morreu = reconexão anterior falhou silenciosamente
+                  logger.warn(`[wbot] Flag de reconexão ativa para ${name}, mas sessão inexistente. Forçando nova tentativa.`);
+                  reconnectingWhatsapps.delete(id);
+                }
+                
                 reconnectingWhatsapps.set(id, Date.now());
-                // await releaseWbotLock(id); // REMOVIDO: Manter o lock se vamos reconectar para evitar que o Cron assuma
                 removeWbot(id, false);
                 
-                // TIMEOUT DE SEGURANÇA: Limpar flag após 60s se reconexão falhar
-                setTimeout(() => {
+                // TIMEOUT DE SEGURANÇA: Limpar flag E disparar reconexão após 60s se sessão não voltou
+                setTimeout(async () => {
                   if (reconnectingWhatsapps.get(id) && !sessions.find(s => s.id === id)) {
-                    logger.warn(`[wbot] Timeout de segurança (60s) - limpando flag para ${id}`);
+                    logger.warn(`[wbot] Timeout de segurança (60s) para ${name} - sessão não voltou. Limpando flag e disparando recovery.`);
                     reconnectingWhatsapps.delete(id);
+                    try {
+                      const freshWhatsapp = await Whatsapp.findByPk(id);
+                      if (freshWhatsapp && freshWhatsapp.status !== "PENDING") {
+                        await StartWhatsAppSession(freshWhatsapp, freshWhatsapp.companyId);
+                      }
+                    } catch (recoveryErr: any) {
+                      logger.error(`[wbot] Erro no recovery após timeout (60s) para ${name}: ${recoveryErr?.message}`);
+                    }
                   }
                 }, RECONNECT_FLAG_TIMEOUT_MS);
                 
-                // NOTA: NÃO limpar reconnectingWhatsapps aqui! Flag permanece ativa até connection===open
+                // Reconexão com delay de 5s
                 setTimeout(async () => {
                   try {
                     await StartWhatsAppSession(whatsapp, whatsapp.companyId);
