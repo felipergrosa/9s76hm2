@@ -5263,11 +5263,23 @@ const handleMessage = async (
         groupSubject = cachedMetadata.subject || groupSubject;
       } else if (!shouldBackoffGroupMetadata(groupJid)) {
         try {
-          const grupoMeta = await wbot.groupMetadata(groupJid);
+          // PROTEÇÃO: Timeout de 5s para prevenir travamento do websocket
+          const grupoMeta = await Promise.race([
+            wbot.groupMetadata(groupJid),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('groupMetadata timeout')), 5000)
+            )
+          ]) as any;
+          
           groupSubject = grupoMeta?.subject || groupSubject;
           setGroupMetadataCache(groupJid, groupSubject);
-        } catch (error) {
+        } catch (error: any) {
+          // Rate limit: registrar backoff se for erro persistente
+          if (isRateLimitError(error) || error.message?.includes('timeout')) {
+            registerGroupMetadataBackoff(groupJid);
+          }
           // Ignorar erros de metadados, usar JID como nome
+          logger.debug(`[handleMessage] Erro ao buscar metadados do grupo ${groupJid}: ${error.message}`);
         }
       }
 

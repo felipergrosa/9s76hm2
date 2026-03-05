@@ -82,11 +82,25 @@ const GetGroupParticipantsService = async ({
   }
 
   // Buscar metadados do grupo via Baileys
+  // PROTEÇÃO: Timeout para prevenir travamento do websocket
   let groupMetadata: any;
   try {
-    groupMetadata = await wbot.groupMetadata(groupJid);
+    const TIMEOUT_MS = 10000; // 10 segundos timeout
+    
+    groupMetadata = await Promise.race([
+      wbot.groupMetadata(groupJid),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout ao buscar metadados do grupo')), TIMEOUT_MS)
+      )
+    ]);
   } catch (error: any) {
     logger.error(`[GetGroupParticipants] Erro ao buscar metadados do grupo ${groupJid}: ${error.message}`);
+    
+    // Verificar se é erro de grupo inexistente/saiu do grupo
+    if (error.message?.includes('bad-request') || error.message?.includes('not-authorized')) {
+      throw new Error("Grupo não encontrado ou você não é mais participante deste grupo.");
+    }
+    
     throw new Error("Não foi possível obter dados do grupo. Verifique se a conexão está ativa.");
   }
 
@@ -320,9 +334,16 @@ const GetGroupParticipantsService = async ({
     let contactRecord: Contact | null = null;
     let resolvedName: string | null = null;
 
+    // =====================================================================
+    // BAILEYS V7 COMPATIBILITY: GroupMetadata.participants structure changed
+    // =====================================================================
+    // Baileys v7: When id is LID, phoneNumber field is present
+    // Baileys v7: When id is PN, lid field is present
+    // Ref: https://baileys.wiki/docs/migration/to-v7.0.0
+    // =====================================================================
+    
     if (isLid) {
-      // CORREÇÃO BAILEYS V7: Verificar phoneNumber DIRETAMENTE no objeto do participante
-      // Quando id é LID, o Baileys v7 inclui phoneNumber diretamente no participante
+      // BAILEYS V7: Quando id é LID, phoneNumber vem no próprio participante
       const baileysPhoneNumber = (p as any).phoneNumber;
       
       // LOG DETALHADO: Mostrar objeto completo do participante

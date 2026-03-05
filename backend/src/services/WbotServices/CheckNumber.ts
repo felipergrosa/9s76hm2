@@ -27,7 +27,14 @@ const CheckContactNumber = async (
   let numberArray;
 
   if (isGroup) {
-    const grupoMeta = await wbot.groupMetadata(number);
+    // PROTEÇÃO: Timeout para prevenir travamento do websocket
+    const grupoMeta = await Promise.race([
+      wbot.groupMetadata(number),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout ao verificar grupo')), 10000)
+      )
+    ]) as any;
+    
     numberArray = [
       {
         jid: grupoMeta.id,

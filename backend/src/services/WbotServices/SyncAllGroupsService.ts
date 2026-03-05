@@ -51,7 +51,14 @@ const SyncAllGroupsService = async ({
   }
 
   // Buscar todos os grupos do WhatsApp
-  const groupsMap = await wbot.groupFetchAllParticipating();
+  // PROTEÇÃO: Timeout para prevenir travamento do websocket
+  const groupsMap = await Promise.race([
+    wbot.groupFetchAllParticipating(),
+    new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout ao buscar lista de grupos')), 30000)
+    )
+  ]) as any;
+  
   const groups = Object.values(groupsMap || {});
   result.total = groups.length;
 
