@@ -97,14 +97,29 @@ const retriesQrCodeMap = new Map<number, number>();
 
 // ========== CONTROLE DE RECONEXÃO (evita loops e race conditions) ==========
 // Map para rastrear quais whatsappIds estão no processo de reconexão
-const reconnectingWhatsapps = new Map<number, boolean>();
+// VALOR = timestamp (Date.now()) de quando a flag foi ativada, para detectar deadlocks
+const reconnectingWhatsapps = new Map<number, number>();
 
 // Timeout máximo para flag de reconexão (evita deadlock se reconexão falhar)
 const RECONNECT_FLAG_TIMEOUT_MS = 60_000; // 60 segundos
 
+// Tempo máximo que a flag pode ficar ativa antes de ser considerada "stale" (morta)
+const RECONNECT_STALE_THRESHOLD_MS = 120_000; // 2 minutos
+
 // Helper para expor estado de reconexão para outros módulos (ex: HealthCheck)
 export const getWbotIsReconnecting = (whatsappId: number): boolean => {
-  return !!reconnectingWhatsapps.get(whatsappId);
+  const ts = reconnectingWhatsapps.get(whatsappId);
+  if (!ts) return false;
+  
+  // Se a flag está ativa há mais de 2 minutos, considerar deadlock e limpar
+  const age = Date.now() - ts;
+  if (age > RECONNECT_STALE_THRESHOLD_MS) {
+    logger.warn(`[wbot] Flag de reconexão STALE para whatsappId=${whatsappId} (${Math.round(age / 1000)}s). Limpando deadlock.`);
+    reconnectingWhatsapps.delete(whatsappId);
+    return false;
+  }
+  
+  return true;
 };
 
 // Helper para limpar flag de reconexão (usado em timeout e quando conexão estabelecida)
@@ -162,7 +177,8 @@ export const getWbot = (whatsappId: number): Session => {
 
   if (sessionIndex === -1) {
     const availableSessions = sessions.map(s => s.id);
-    const isReconnecting = reconnectingWhatsapps.get(whatsappId);
+    // Usa getWbotIsReconnecting() que detecta e limpa flags stale (> 2min)
+    const isReconnecting = getWbotIsReconnecting(whatsappId);
     
     logger.error(`[getWbot] Sessão NÃO encontrada para whatsappId=${whatsappId}. ` +
       `Disponíveis: [${availableSessions.join(", ")}]. ` +
@@ -238,13 +254,14 @@ export const getWbotOrRecover = async (
 const triggerSessionRecovery = async (whatsappId: number): Promise<void> => {
   try {
     // Marcar como reconectando ANTES de iniciar
-    if (reconnectingWhatsapps.get(whatsappId)) {
+    // getWbotIsReconnecting() limpa flags stale (> 2min) automaticamente
+    if (getWbotIsReconnecting(whatsappId)) {
       logger.debug(`[triggerSessionRecovery] ${whatsappId} já está em processo de reconexão`);
       return;
     }
     
     logger.info(`[triggerSessionRecovery] Iniciando recovery para whatsappId=${whatsappId}`);
-    reconnectingWhatsapps.set(whatsappId, true);
+    reconnectingWhatsapps.set(whatsappId, Date.now());
     
     // TIMEOUT DE SEGURANÇA: Limpar flag após 60s se a reconexão não acontecer
     // Isso evita que a flag fique presa para sempre em caso de falha silenciosa
@@ -551,7 +568,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 logger.warn(`[wbot] Conflito detectado (440) para ${name}. Aguardando antes de reconectar...`);
 
                 // CORREÇÃO: Verificar se já existe uma tentativa de reconexão em andamento
-                if (reconnectingWhatsapps.get(id)) {
+                // getWbotIsReconnecting() limpa flags stale (> 2min)
+                if (getWbotIsReconnecting(id)) {
                   logger.warn(`[wbot] Já existe uma tentativa de reconexão em andamento para ${name} (id=${id}). Ignorando nova tentativa.`);
                   removeWbot(id, false);
                   return;
@@ -567,7 +585,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 logger.warn(`[wbot] Conflito de sessão #${conflictCount} para ${name}. Aguardando ${delay / 1000}s antes de tentar reconectar.`);
 
                 // Marcar como "reconectando" para bloquear novas tentativas
-                reconnectingWhatsapps.set(id, true);
+                reconnectingWhatsapps.set(id, Date.now());
                 
                 // TIMEOUT DE SEGURANÇA: Limpar flag após 60s se reconexão falhar
                 setTimeout(() => {
@@ -654,13 +672,13 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               }
 
               if (!isLoggedOut) {
-                // Verificar se já está reconectando
-                if (reconnectingWhatsapps.get(id)) {
+                // Verificar se já está reconectando (limpa flags stale > 2min)
+                if (getWbotIsReconnecting(id)) {
                   logger.warn(`[wbot] Já existe uma tentativa de reconexão em andamento para ${name}. Ignorando.`);
                   removeWbot(id, false);
                   return;
                 }
-                reconnectingWhatsapps.set(id, true);
+                reconnectingWhatsapps.set(id, Date.now());
                 // await releaseWbotLock(id); // REMOVIDO: Manter o lock se vamos reconectar para evitar que o Cron assuma
                 removeWbot(id, false);
                 
