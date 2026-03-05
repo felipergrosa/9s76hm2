@@ -1229,7 +1229,7 @@ const MessagesList = ({
         const currentUuid = (currentRoomIdRef.current || ticketUuidFromUrl || "").toString().trim();
         const urlIsUuid = Boolean(ticketUuidFromUrl);
 
-        console.debug("[MessagesList] appMessage", {
+        console.log("[MessagesList] 📨 appMessage recebido", {
           action: data?.action,
           evtUuid,
           evtTicketId,
@@ -1238,6 +1238,7 @@ const MessagesList = ({
           currentTicketId: ticketId,
           currentUuid,
           msgId: data?.message?.id,
+          body: data?.message?.body?.substring(0, 50),
         });
 
         // CRÍTICO: Sempre verificar se a mensagem pertence ao ticket atual
@@ -1253,7 +1254,7 @@ const MessagesList = ({
         }
 
         if (!shouldHandle) {
-          console.debug("[MessagesList] Rejeitando mensagem de outro ticket", {
+          console.warn("[MessagesList] ❌ Rejeitando mensagem de outro ticket", {
             evtUuid,
             evtTicketId,
             currentRoom: currentRoomIdRef.current,
@@ -1263,7 +1264,10 @@ const MessagesList = ({
           return;
         }
 
+        console.log("[MessagesList] ✅ Processando mensagem do ticket atual");
+
         if (data.action === "create") {
+          console.log("[MessagesList] ➕ Adicionando nova mensagem:", data.message?.id);
           dispatch({ type: "ADD_MESSAGE", payload: data.message });
           scrollToBottom();
 
