@@ -414,7 +414,11 @@ const useStyles = makeStyles((theme) => ({
 
   textContentItem: {
     overflowWrap: "break-word",
+    wordWrap: "break-word",
+    wordBreak: "break-word",
     padding: "3px 80px 6px 6px",
+    maxWidth: "100%",
+    boxSizing: "border-box",
   },
 
   // Versão compacta do balão quando não há texto exibido (ex.: PDF sem legenda)
@@ -1801,16 +1805,18 @@ const MessagesList = ({
 
     messagesList.forEach((msg) => {
       if (msg.mediaType === "reactionMessage") {
-        // Se for reação, agrupa pelo quotedMsgId (que é o ID da mensagem alvo)
+        // Se for reação, agrupa pelo quotedMsgId (ID da mensagem que recebeu a reação)
         if (msg.quotedMsgId) {
           if (!reactions[msg.quotedMsgId]) {
             reactions[msg.quotedMsgId] = [];
           }
-          // Evitar duplicatas da mesma reação do mesmo usuário? 
-          // O WhatsApp substitui, mas aqui vamos apenas listar. O backend deveria tratar unicidade se necessário.
-          // Mas para visualização, geralmente mostra a última ou todas agrupadas.
-          // Vamos adicionar todas para garantir.
-          reactions[msg.quotedMsgId].push(msg);
+          // Evita adicionar duplicatas exatas (mesmo body e participant)
+          const isDuplicate = reactions[msg.quotedMsgId].some(
+            r => r.body === msg.body && r.participant === msg.participant
+          );
+          if (!isDuplicate) {
+            reactions[msg.quotedMsgId].push(msg);
+          }
         }
       } else {
         filtered.push(msg);
@@ -2222,10 +2228,10 @@ const MessagesList = ({
                   </span>
                 )}
 
-                {/* Reação em bolha sobreposta - usa wid (ID WhatsApp) para corresponder ao quotedMsgId */}
-                {(messageReactions[message.wid] || messageReactions[message.id]) && (messageReactions[message.wid]?.length > 0 || messageReactions[message.id]?.length > 0) && (
+                {/* Reação em bolha sobreposta - busca reações que têm esta mensagem como alvo (quotedMsgId) */}
+                {messageReactions[message.id] && messageReactions[message.id].length > 0 && (
                   <div className={classes.messageReaction}>
-                    {(messageReactions[message.wid] || messageReactions[message.id] || []).map((reaction, rIndex) => (
+                    {messageReactions[message.id].map((reaction, rIndex) => (
                       <span key={rIndex} className={classes.messageReactionSpan}>{reaction.body}</span>
                     ))}
                   </div>
