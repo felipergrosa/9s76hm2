@@ -1,6 +1,7 @@
 import { getWbot } from "../libs/wbot";
 import { handleMessage } from "../services/WbotServices/wbotMessageListener";
 import logger from "../utils/logger";
+import pTimeout from "p-timeout";
 
 export default {
   key: `${process.env.DB_NAME}-handleMessage`,
@@ -24,11 +25,18 @@ export default {
     const wid = message?.key?.id;
     const remoteJid = message?.key?.remoteJid;
     const fromMe = Boolean(message?.key?.fromMe);
+    const isGroup = remoteJid?.endsWith("@g.us");
 
     try {
       const w = getWbot(wbot);
-      await handleMessage(message, w, companyId);
+      
+      // PROTEÇÃO CRÍTICA: Timeout de 25s para prevenir travamento do websocket
+      // Mensagens de grupo com operações bloqueantes podem travar indefinidamente
+      // e corromper o websocket Baileys (xml-not-well-formed)
+      await pTimeout(handleMessage(message, w, companyId), 25000);
     } catch (error: any) {
+      const isTimeout = error?.message?.includes('Timeout');
+      
       logger.error(
         {
           error: error?.message || error,
@@ -36,11 +44,23 @@ export default {
           wid,
           remoteJid,
           fromMe,
+          isGroup,
+          isTimeout,
           wbot,
           companyId
         },
         "[handleMessageQueue] Falha ao processar mensagem"
       );
+
+      // TIMEOUT ou ERR_WAPP_NOT_INITIALIZED: NÃO fazer retry
+      // Evita loop infinito de mensagens problemáticas crashando websocket
+      if (isTimeout || error?.message?.includes('ERR_WAPP_NOT_INITIALIZED')) {
+        logger.warn(
+          { wid, remoteJid, isGroup, error: error?.message },
+          "[handleMessageQueue] Mensagem descartada (timeout ou sessão morta) - não será reprocessada"
+        );
+        return; // Sucesso artificial - Bull não faz retry
+      }
 
       // CRITICO: relançar para Bull aplicar retry/backoff e não perder mensagem.
       throw error;
