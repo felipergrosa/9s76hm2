@@ -116,11 +116,17 @@ const GetGroupParticipantsService = async ({
   }
 
   // Buscar foto do grupo
+  // PROTEÇÃO: Timeout para prevenir travamento do websocket
   let groupPicUrl: string | undefined;
   try {
-    groupPicUrl = await wbot.profilePictureUrl(groupJid, "image");
+    groupPicUrl = await Promise.race([
+      wbot.profilePictureUrl(groupJid, "image"),
+      new Promise<string>((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout ao buscar foto do grupo')), 5000)
+      )
+    ]);
   } catch {
-    // Grupo pode não ter foto
+    // Grupo pode não ter foto ou timeout
   }
 
   // Mapear participantes

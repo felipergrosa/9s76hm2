@@ -524,10 +524,16 @@ const wbotMonitor = async (
               });
 
               // Buscar profile picture usando o JID real recém-resolvido
+              // PROTEÇÃO: Timeout para prevenir travamento do websocket
               try {
-                const pic = await wbot.profilePictureUrl(`${phoneNumber}@s.whatsapp.net`, "image");
+                const pic = await Promise.race([
+                  wbot.profilePictureUrl(`${phoneNumber}@s.whatsapp.net`, "image"),
+                  new Promise<string>((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout')), 5000)
+                  )
+                ]);
                 if (pic) await pendingContact.update({ profilePicUrl: pic });
-              } catch (e) { /* privacidade ou indisponível */ }
+              } catch (e) { /* privacidade, indisponível ou timeout */ }
 
               reconciledCount++;
               logger.info("[wbotMonitor] Contato PENDING_ promovido a real", {

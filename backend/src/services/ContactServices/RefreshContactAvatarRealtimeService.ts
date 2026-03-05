@@ -86,12 +86,18 @@ export const RefreshContactAvatarService = async ({
     }
 
     // Buscar foto do perfil via Baileys
+    // PROTEÇÃO: Timeout para prevenir travamento do websocket durante HTTP request
     let profilePicUrl: string | null = null;
     try {
-      profilePicUrl = await wbot.profilePictureUrl(targetJid, "image");
+      profilePicUrl = await Promise.race([
+        wbot.profilePictureUrl(targetJid, "image"),
+        new Promise<string>((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout ao buscar foto de perfil')), 5000)
+        )
+      ]);
       logger.info(`[RefreshAvatar] Foto obtida para ${targetJid}: ${profilePicUrl ? "OK" : "N/A"}`);
     } catch (err: any) {
-      // Erro comum quando o contato tem privacidade ativada
+      // Erro comum quando o contato tem privacidade ativada ou timeout
       logger.debug(`[RefreshAvatar] Erro ao buscar foto de ${targetJid}: ${err?.message}`);
     }
 

@@ -19,10 +19,16 @@ const GetProfilePicUrl = async (
 
   let profilePicUrl: string;
   try {
-    profilePicUrl = await wbot.profilePictureUrl(
-      contact && contact.isGroup ? contact.remoteJid : `${number}@s.whatsapp.net`,
-      "image"
-    );
+    // PROTEÇÃO: Timeout para prevenir travamento do websocket durante HTTP request
+    profilePicUrl = await Promise.race([
+      wbot.profilePictureUrl(
+        contact && contact.isGroup ? contact.remoteJid : `${number}@s.whatsapp.net`,
+        "image"
+      ),
+      new Promise<string>((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout ao buscar foto de perfil')), 5000)
+      )
+    ]);
   } catch (error) {
     profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
   }

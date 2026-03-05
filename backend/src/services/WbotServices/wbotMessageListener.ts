@@ -1802,12 +1802,18 @@ const verifyContact = async (
   }
 
   // Buscar profilePicture do Baileys para contatos com JID real
+  // PROTEÇÃO: Timeout para prevenir travamento do websocket
   if (!isGroup && normalizedJid.includes("@s.whatsapp.net")) {
     try {
-      const pic = await wbot.profilePictureUrl(normalizedJid, "image");
+      const pic = await Promise.race([
+        wbot.profilePictureUrl(normalizedJid, "image"),
+        new Promise<string>((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 5000)
+        )
+      ]);
       if (pic) profilePicUrl = pic;
     } catch (e) {
-      // Privacidade ou indisponível — profilePicUrl permanece vazio
+      // Privacidade, indisponível ou timeout — profilePicUrl permanece vazio
     }
   }
 
@@ -1865,6 +1871,19 @@ export const verifyMediaMessage = async (
     if (!media && ticket.imported) {
       const body =
         "*System:* \nFalha no download da mídia verifique no dispositivo";
+      
+      // Se for reação, buscar mensagem alvo pelo WID para obter ID interno
+      let reactionQuotedMsgId = quotedMsg?.id;
+      if (!reactionQuotedMsgId && msg.message?.reactionMessage?.key?.id) {
+        const targetWid = msg.message.reactionMessage.key.id;
+        const targetMsg = await Message.findOne({
+          where: { wid: targetWid, companyId: companyId }
+        });
+        if (targetMsg) {
+          reactionQuotedMsgId = targetMsg.id;
+        }
+      }
+      
       const messageData = {
         //mensagem de texto
         wid: msg.key.id,
@@ -1875,7 +1894,7 @@ export const verifyMediaMessage = async (
         fromMe: msg.key.fromMe,
         mediaType: getTypeMessage(msg),
         read: msg.key.fromMe,
-        quotedMsgId: quotedMsg?.id || msg.message?.reactionMessage?.key?.id,
+        quotedMsgId: reactionQuotedMsgId,
         ack: msg.status,
         companyId: companyId,
         remoteJid: msg.key.remoteJid,
@@ -2230,6 +2249,21 @@ export const verifyMessage = async (
   
   logger.info(`[verifyMessage] senderName final: "${senderName || 'vazio'}"`);
 
+  // Se for reação, buscar mensagem alvo pelo WID para obter ID interno
+  let reactionQuotedMsgId = quotedMsg?.id;
+  if (!reactionQuotedMsgId && msg.message?.reactionMessage?.key?.id) {
+    const targetWid = msg.message.reactionMessage.key.id;
+    const targetMsg = await Message.findOne({
+      where: { wid: targetWid, companyId: companyId }
+    });
+    if (targetMsg) {
+      reactionQuotedMsgId = targetMsg.id;
+      logger.info(`[verifyMessage] Reação: mensagem alvo encontrada - WID: ${targetWid} → ID interno: ${targetMsg.id}`);
+    } else {
+      logger.warn(`[verifyMessage] Reação: mensagem alvo NÃO encontrada para WID: ${targetWid}`);
+    }
+  }
+
   const messageData = {
     wid: msg.key.id,
     ticketId: ticket.id,
@@ -2238,7 +2272,7 @@ export const verifyMessage = async (
     fromMe: msg.key.fromMe,
     mediaType: getTypeMessage(msg),
     read: msg.key.fromMe,
-    quotedMsgId: quotedMsg?.id,
+    quotedMsgId: reactionQuotedMsgId,
     ack:
       Number(String(msg.status).replace("PENDING", "2").replace("NaN", "1")) ||
       2,
@@ -6947,7 +6981,13 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
 
       let profilePicUrl: string = "";
       try {
-        profilePicUrl = await wbot.profilePictureUrl(group.id, "image");
+        // PROTEÇÃO: Timeout para prevenir travamento do websocket
+        profilePicUrl = await Promise.race([
+          wbot.profilePictureUrl(group.id, "image"),
+          new Promise<string>((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 5000)
+          )
+        ]);
       } catch (e) {
         Sentry.captureException(e);
         profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;

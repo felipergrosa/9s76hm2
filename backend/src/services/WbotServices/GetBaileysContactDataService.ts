@@ -40,8 +40,14 @@ const GetBaileysContactDataService = async (
         }
 
         // 2. Buscar Foto de Perfil
+        // PROTEÇÃO: Timeout para prevenir travamento do websocket
         try {
-            data.profilePicture = await wbot.profilePictureUrl(jid, "image");
+            data.profilePicture = await Promise.race([
+                wbot.profilePictureUrl(jid, "image"),
+                new Promise<string>((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout')), 5000)
+                )
+            ]);
         } catch (err) {
             data.profilePicture = null;
         }

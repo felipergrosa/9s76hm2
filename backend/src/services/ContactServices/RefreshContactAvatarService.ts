@@ -148,13 +148,26 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
           : contact.isGroup
             ? `${contact.number}@g.us`
             : `${contact.number}@s.whatsapp.net`;
-        newProfileUrl = await wbot.profilePictureUrl(jid, "image");
+        
+        // PROTEÇÃO: Timeout para prevenir travamento do websocket durante HTTP request
+        newProfileUrl = await Promise.race([
+          wbot.profilePictureUrl(jid, "image"),
+          new Promise<string>((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout ao buscar foto de perfil')), 5000)
+          )
+        ]);
 
         // Atualiza também o nome do grupo se permitido
         if (contact.isGroup && allowGroupMetadata) {
           let groupName = "Grupo desconhecido";
           try {
-            const groupMeta = await wbot.groupMetadata(jid);
+            // PROTEÇÃO: Timeout para prevenir travamento do websocket
+            const groupMeta = await Promise.race([
+              wbot.groupMetadata(jid),
+              new Promise<any>((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout ao buscar metadados do grupo')), 5000)
+              )
+            ]);
             if (groupMeta && groupMeta.subject && groupMeta.subject.trim() !== "") {
               groupName = groupMeta.subject;
             }
