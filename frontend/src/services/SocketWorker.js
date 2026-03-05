@@ -151,20 +151,24 @@ class SocketWorker {
     });
   }
 
-  // Adiciona um ouvinte de eventos com otimização para evitar duplicação
+  // Adiciona um ouvinte de eventos permitindo múltiplos listeners por evento
+  // Evita apenas duplicata do MESMO callback (referência idêntica)
   on(event, callback) {
     this.connect();
     
-    // Limpar listeners antigos para este evento (evitar duplicação em reconexões)
-    if (this.eventListeners[event]) {
-      this.eventListeners[event].forEach(cb => {
-        this.socket.off(event, cb);
-      });
+    if (!this.eventListeners[event]) {
       this.eventListeners[event] = [];
     }
     
+    // Evitar duplicata: se o mesmo callback já está registrado, remove antes de re-adicionar
+    const idx = this.eventListeners[event].indexOf(callback);
+    if (idx !== -1) {
+      this.socket.off(event, callback);
+      this.eventListeners[event].splice(idx, 1);
+    }
+    
     this.socket.on(event, callback);
-    this.eventListeners[event] = [callback];
+    this.eventListeners[event].push(callback);
   }
 
   // Emite um evento
