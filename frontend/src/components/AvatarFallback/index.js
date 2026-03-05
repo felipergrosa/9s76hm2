@@ -62,7 +62,7 @@ const AvatarFallback = ({
   if (contact) {
     displayName = contact.name || contact.pushName || '';
     displayNumber = contact.number || '';
-    // Busca a imagem nas propriedades do contato
+    // Priorizar urlPicture (local) sobre profilePicUrl (WhatsApp externo que expira)
     if (!imageSrc) {
       imageSrc = contact.urlPicture || contact.profilePicUrl || null;
     }

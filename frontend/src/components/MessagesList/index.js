@@ -808,6 +808,7 @@ const MessagesList = ({
   const { ticketId } = useParams();
 
   const currentTicketId = useRef(ticketId);
+  const currentTicketNumericId = useRef(null); // NOVO: Armazena o ID numérico real do ticket
   const { getAll } = useCompanySettings();
   const [dragActive, setDragActive] = useState(false);
 
@@ -908,16 +909,16 @@ const MessagesList = ({
   // Helper para decidir qual contato exibir no avatar do áudio
   const backendUrl = getBackendUrl();
   // Helper para determinar qual contato usar para avatar
-  const getAvatarContactForMessage = (msg) => {
+  const getAvatarContactForMessage = (msg, fallbackTicketContact = null) => {
     try {
       // Mensagens enviadas: usar avatar do usuário logado
       if (msg?.fromMe) {
-        const user = currentUser || {};
-        const imageName = user?.profileImage;
+        const currentUser = user || {};
+        const imageName = currentUser?.profileImage;
         const url = imageName
           ? `${backendUrl}/public/company${companyId}/${imageName}`
           : null; // Retorna null para AvatarFallback mostrar iniciais
-        return { name: user?.name, urlPicture: url };
+        return { name: currentUser?.name, urlPicture: url };
       }
 
       // Check both component prop and message/ticket data
@@ -1119,9 +1120,16 @@ const MessagesList = ({
 
           // Atualiza ref do UUID do ticket (usado para filtrar eventos)
           const ticketUuid = data?.ticket?.uuid || null;
+          const ticketNumericId = data?.ticket?.id || null;
           const firstMsg = data?.messages?.[0];
           const firstMsgUuid = firstMsg?.ticket?.uuid || null;
           const newRoomId = ticketUuid || firstMsgUuid || null;
+          
+          // NOVO: Armazenar ID numérico real do ticket para comparação
+          if (ticketNumericId) {
+            currentTicketNumericId.current = ticketNumericId;
+          }
+          
           if (newRoomId) {
             currentRoomIdRef.current = newRoomId;
             // Reforço: garante que estamos na sala (o Ticket/index.js é o dono principal)
@@ -1241,16 +1249,24 @@ const MessagesList = ({
           body: data?.message?.body?.substring(0, 50),
         });
 
-        // CRÍTICO: Sempre verificar se a mensagem pertence ao ticket atual
-        // Se não houver UUID, verificar pelo ticketId
-        // Se nenhum dos dois bater, REJEITAR a mensagem
+        // CRÍTICO: Verificar se a mensagem pertence ao ticket atual
+        // Suporta múltiplas conexões com tickets separados para o mesmo contato
         let shouldHandle = false;
-        // Preferência: comparar UUID quando disponível (rota em uuid ou sala em uuid)
+        
+        // 1. Se UUID bate, aceitar
         if (hasUuid && currentUuid && String(evtUuid) === String(currentUuid)) {
           shouldHandle = true;
-        } else if (!urlIsUuid && evtTicketId && String(evtTicketId) === String(ticketId)) {
-          // Compatibilidade: quando a rota ainda é numérica, compara ticketId
+        } 
+        // 2. Se ticketId numérico bate com o ticketId da URL (quando rota é numérica)
+        else if (!urlIsUuid && evtTicketId && String(evtTicketId) === String(ticketId)) {
           shouldHandle = true;
+        }
+        // 3. Se a rota está em UUID, comparar ticketId numérico real
+        else if (urlIsUuid && evtTicketId && currentTicketNumericId.current) {
+          // Comparar ID numérico real do ticket atual com o ID da mensagem
+          if (String(evtTicketId) === String(currentTicketNumericId.current)) {
+            shouldHandle = true;
+          }
         }
 
         if (!shouldHandle) {
@@ -1259,6 +1275,7 @@ const MessagesList = ({
             evtTicketId,
             currentRoom: currentRoomIdRef.current,
             currentUuid,
+            currentNumericId: currentTicketNumericId.current,
             ticketId
           });
           return;

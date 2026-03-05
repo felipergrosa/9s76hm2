@@ -158,10 +158,10 @@ const LazyContactAvatar = ({ contact, className, style, ...props }) => {
 
   // Se tem contact.contact (estrutura de ContactListItems)
   if (contact.contact) {
-    // Prefira sempre urlPicture (servida pelo backend), depois profilePicUrl (externa)
+    // Priorizar urlPicture (local) sobre profilePicUrl (WhatsApp externo que expira)
     imageUrl = contact.contact.urlPicture || contact.contact.profilePicUrl;
   } else {
-    // Estrutura normal de contatos: prefira urlPicture
+    // Priorizar urlPicture (local) sobre profilePicUrl (WhatsApp externo que expira)
     imageUrl = contact.urlPicture || contact.profilePicUrl;
   }
 
