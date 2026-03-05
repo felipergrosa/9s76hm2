@@ -121,6 +121,17 @@ const ImportContactHistoryService = async ({
     companyId,
     periodMonths
 }: ImportContactHistoryParams): Promise<ImportResult> => {
+    // =====================================================================
+    // DESABILITADO: fetchMessageHistory causa xml-not-well-formed
+    // Múltiplas chamadas concorrentes ao fetchMessageHistory corrompem o
+    // websocket do Baileys, fazendo o servidor WhatsApp retornar
+    // stream:error xml-not-well-formed e derrubar a conexão.
+    // As mensagens continuam chegando normalmente via messages.upsert.
+    // Referência: logs de produção 2026-03-05 14:54 UTC-3
+    // =====================================================================
+    logger.warn(`[ImportHistory] DESABILITADO - ticketId=${ticketId} (fetchMessageHistory causa xml-not-well-formed)`);
+    return { synced: 0, skipped: true, reason: "fetchMessageHistory desabilitado (causa xml-not-well-formed)" };
+
     const io = getIO();
     const eventName = `importHistory-${ticketId}`;
     const namespace = `/workspace-${companyId}`;
