@@ -20,6 +20,7 @@ import {
   startFetchRequest,
   cancelFetchRequest
 } from "../../libs/messageHistoryHandler";
+import { acquireFetchLock } from "../../libs/fetchHistoryMutex";
 
 const writeFileAsync = promisify(fs.writeFile);
 
@@ -121,17 +122,6 @@ const ImportContactHistoryService = async ({
     companyId,
     periodMonths
 }: ImportContactHistoryParams): Promise<ImportResult> => {
-    // =====================================================================
-    // DESABILITADO: fetchMessageHistory causa xml-not-well-formed
-    // Múltiplas chamadas concorrentes ao fetchMessageHistory corrompem o
-    // websocket do Baileys, fazendo o servidor WhatsApp retornar
-    // stream:error xml-not-well-formed e derrubar a conexão.
-    // As mensagens continuam chegando normalmente via messages.upsert.
-    // Referência: logs de produção 2026-03-05 14:54 UTC-3
-    // =====================================================================
-    logger.warn(`[ImportHistory] DESABILITADO - ticketId=${ticketId} (fetchMessageHistory causa xml-not-well-formed)`);
-    return { synced: 0, skipped: true, reason: "fetchMessageHistory desabilitado (causa xml-not-well-formed)" };
-
     const io = getIO();
     const eventName = `importHistory-${ticketId}`;
     const namespace = `/workspace-${companyId}`;
@@ -295,7 +285,15 @@ const ImportContactHistoryService = async ({
                     
                     registerHistoryHandler(mainJid, tempHandler);
 
+                    // =====================================================================
+                    // PROTEÇÃO: Mutex por whatsappId + Rate Limiting
+                    // =====================================================================
+                    let releaseLock: (() => void) | null = null;
+
                     try {
+                        // Adquirir lock ANTES de chamar fetchMessageHistory
+                        releaseLock = await acquireFetchLock(whatsappId, `ImportHistory-${ticketId}`);
+                        
                         // Disparar o fetch - buscar 200 mensagens em vez de 50
                         await wbotAny.fetchMessageHistory(200, oldestKey, oldestTimestamp)
                             .catch((err: any) => {
@@ -320,7 +318,12 @@ const ImportContactHistoryService = async ({
                     } catch (fetchErr: any) {
                         logger.warn(`[ImportHistory] Erro na Fase 2: ${fetchErr}`);
                         
-                        // Retry uma vez após 3s
+                        // Se foi erro de rate limit, propagar
+                        if (fetchErr?.message?.includes('Rate limit')) {
+                            throw fetchErr;
+                        }
+                        
+                        // Retry uma vez após 3s (sem adquirir novo lock, já temos)
                         try {
                             logger.info("[ImportHistory] Tentando retry após 3s...");
                             await new Promise(r => setTimeout(r, 3000));
@@ -344,6 +347,11 @@ const ImportContactHistoryService = async ({
                             logger.warn(`[ImportHistory] Retry falhou: ${retryErr}`);
                         }
                     } finally {
+                        // Liberar lock SEMPRE
+                        if (releaseLock) {
+                            releaseLock();
+                        }
+                        
                         unregisterHistoryHandler(mainJid, tempHandler);
                         cancelFetchRequest(fetchId);
                     }

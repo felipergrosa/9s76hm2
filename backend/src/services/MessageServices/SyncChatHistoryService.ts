@@ -15,6 +15,7 @@ import {
   startFetchRequest,
   cancelFetchRequest
 } from "../../libs/messageHistoryHandler";
+import { acquireFetchLock } from "../../libs/fetchHistoryMutex";
 import { downloadMediaMessage, getContentType, extractMessageContent } from "@whiskeysockets/baileys";
 import * as fs from "fs";
 import * as path from "path";
@@ -147,17 +148,6 @@ const SyncChatHistoryService = async ({
     syncAll = false,     // Novo: sincronização completa
     maxPages = 5         // Novo: até 5 páginas (500 mensagens)
 }: SyncChatHistoryParams): Promise<SyncResult> => {
-    // =====================================================================
-    // DESABILITADO: fetchMessageHistory causa xml-not-well-formed
-    // Múltiplas chamadas concorrentes ao fetchMessageHistory corrompem o
-    // websocket do Baileys, fazendo o servidor WhatsApp retornar
-    // stream:error xml-not-well-formed e derrubar a conexão.
-    // As mensagens continuam chegando normalmente via messages.upsert.
-    // Referência: logs de produção 2026-03-05 13:35-13:38 UTC-3
-    // =====================================================================
-    logger.debug(`[SyncChatHistory] DESABILITADO - ticketId=${ticketId} (fetchMessageHistory causa xml-not-well-formed)`);
-    return { synced: 0, skipped: true, reason: "fetchMessageHistory desabilitado (causa xml-not-well-formed)" };
-
     const io = getIO();
     try {
         // 1. Buscar ticket com informações necessárias
@@ -277,8 +267,17 @@ const SyncChatHistoryService = async ({
 
                 registerHistoryHandler(jid, tempHandler);
 
+                // =====================================================================
+                // PROTEÇÃO: Mutex por whatsappId + Rate Limiting
+                // Apenas 1 fetchMessageHistory por vez na mesma conexão
+                // =====================================================================
+                let releaseLock: (() => void) | null = null;
+
                 try {
-                    // Disparar o fetch
+                    // Adquirir lock ANTES de chamar fetchMessageHistory
+                    releaseLock = await acquireFetchLock(ticket.whatsappId, `SyncChatHistory-${ticketId}`);
+                    
+                    // Disparar o fetch (protegido por mutex)
                     await wbotAny.fetchMessageHistory(messageCount, oldestKey, oldestTimestamp);
 
                     // Aguardar resultado
@@ -297,7 +296,12 @@ const SyncChatHistoryService = async ({
                 } catch (err: any) {
                     logger.warn(`[SyncChatHistory] Erro na API fetchMessageHistory: ${err}`);
                     
-                    // Retry uma vez após 2s
+                    // Se foi erro de rate limit, propagar
+                    if (err?.message?.includes('Rate limit')) {
+                        throw err;
+                    }
+                    
+                    // Retry uma vez após 2s (sem adquirir novo lock, já temos)
                     try {
                         logger.info(`[SyncChatHistory] Tentando retry após 2s...`);
                         await new Promise(r => setTimeout(r, 2000));
@@ -313,6 +317,11 @@ const SyncChatHistoryService = async ({
                         logger.warn(`[SyncChatHistory] Retry falhou: ${retryErr}`);
                     }
                 } finally {
+                    // Liberar lock SEMPRE
+                    if (releaseLock) {
+                        releaseLock();
+                    }
+                    
                     // Limpar handler
                     unregisterHistoryHandler(jid, tempHandler);
                     cancelFetchRequest(fetchId);
@@ -390,8 +399,13 @@ const SyncChatHistoryService = async ({
                     
                     let batchMessages: any[] = [];
                     registerHistoryHandler(jid, tempHandler);
+                    
+                    // Adquirir lock para paginação
+                    let pageLock: (() => void) | null = null;
 
                     try {
+                        pageLock = await acquireFetchLock(ticket.whatsappId, `SyncChatHistory-Page${currentPage}-${ticketId}`);
+                        
                         await wbotAny.fetchMessageHistory(messageCount, oldestKeyInBatch, oldestTimestampInBatch);
                         
                         const result = await fetchPromise;
@@ -413,6 +427,10 @@ const SyncChatHistoryService = async ({
                         logger.warn(`[SyncChatHistory] Erro na página ${currentPage}: ${batchErr?.message}`);
                         break;
                     } finally {
+                        // Liberar lock da página
+                        if (pageLock) {
+                            pageLock();
+                        }
                         unregisterHistoryHandler(jid, tempHandler);
                         cancelFetchRequest(fetchId);
                     }
