@@ -18,7 +18,7 @@ import {
   ConnectionStatus,
   WhatsAppAdapterError
 } from "./IWhatsAppAdapter";
-import { getWbot } from "../wbot";
+import { getWbot, removeWbot } from "../wbot";
 import logger from "../../utils/logger";
 import Whatsapp from "../../models/Whatsapp";
 import Message from "../../models/Message";
@@ -35,7 +35,9 @@ export class BaileysAdapter implements IWhatsAppAdapter {
   private status: ConnectionStatus = "disconnected";
   private phoneNumber: string | null = null;
 
-  // Callbacks de eventos
+  // Contador de falhas consecutivas para detectar socket zumbi
+  private consecutiveFailures: number = 0;
+  private lastFailureTime: number = 0;
   private messageCallbacks: Array<(message: IWhatsAppMessage) => void> = [];
   private connectionCallbacks: Array<(status: ConnectionStatus) => void> = [];
   private qrCallbacks: Array<(qr: string) => void> = [];
@@ -105,6 +107,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
 
   /**
    * Verifica se o WebSocket está realmente conectado e funcionando
+   * Inclui detecção de socket "zumbi" (aparentemente conectado mas não funcional)
    */
   private isSocketReady(): boolean {
     if (!this.socket) return false;
@@ -113,7 +116,12 @@ export class BaileysAdapter implements IWhatsAppAdapter {
       // Verifica se o WebSocket interno está aberto
       // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
       const ws = (this.socket as any).ws;
-      if (ws && typeof ws.readyState === 'number') {
+      if (!ws) {
+        logger.warn(`[BaileysAdapter] WebSocket não encontrado no socket`);
+        return false;
+      }
+      
+      if (typeof ws.readyState === 'number') {
         if (ws.readyState !== 1) {
           logger.warn(`[BaileysAdapter] WebSocket readyState=${ws.readyState} (esperado 1=OPEN)`);
           return false;
@@ -127,6 +135,13 @@ export class BaileysAdapter implements IWhatsAppAdapter {
         return false;
       }
 
+      // Verificação adicional: socket deve ter ev (event emitter) ativo
+      const ev = (this.socket as any).ev;
+      if (!ev || typeof ev.emit !== 'function') {
+        logger.warn(`[BaileysAdapter] Socket sem event emitter válido.`);
+        return false;
+      }
+
       return true;
     } catch (error) {
       logger.error(`[BaileysAdapter] Erro ao verificar estado do socket: ${error.message}`);
@@ -136,24 +151,106 @@ export class BaileysAdapter implements IWhatsAppAdapter {
 
   /**
    * Tenta reinicializar o socket se estiver desconectado
+   * Inclui lógica para forçar recovery quando socket está em estado "zumbi"
    */
   private async tryReinitializeSocket(): Promise<boolean> {
     try {
       logger.info(`[BaileysAdapter] Tentando reinicializar socket para whatsappId=${this.whatsappId}`);
 
+      // Verificar se temos muitas falhas consecutivas (indicativo de socket zumbi)
+      const now = Date.now();
+      const timeSinceLastFailure = now - this.lastFailureTime;
+      this.lastFailureTime = now;
+      
+      // Se passaram menos de 30 segundos desde a última falha, incrementar contador
+      if (timeSinceLastFailure < 30000) {
+        this.consecutiveFailures++;
+        logger.warn(`[BaileysAdapter] Falha consecutiva #${this.consecutiveFailures} (intervalo: ${Math.floor(timeSinceLastFailure/1000)}s)`);
+      } else {
+        // Resetar contador se passou tempo suficiente
+        this.consecutiveFailures = 1;
+      }
+
+      // Se temos 3+ falhas consecutivas em curto período, forçar recovery completo
+      if (this.consecutiveFailures >= 3) {
+        logger.error(`[BaileysAdapter] Detectado socket zumbi após ${this.consecutiveFailures} falhas. Forçando recovery...`);
+        await this.triggerSessionRecovery();
+        return false;
+      }
+
       // Busca um novo socket do sistema
-      this.socket = getWbot(this.whatsappId);
+      try {
+        this.socket = getWbot(this.whatsappId);
+      } catch (err) {
+        logger.warn(`[BaileysAdapter] getWbot falhou: ${err.message}. Socket não existe.`);
+        // Socket não existe - disparar recovery
+        await this.triggerSessionRecovery();
+        return false;
+      }
 
       if (this.socket && this.isSocketReady()) {
         logger.info(`[BaileysAdapter] Socket reinicializado com sucesso`);
         this.status = "connected";
+        // Resetar contador de falhas em caso de sucesso
+        this.consecutiveFailures = 0;
         return true;
       }
 
+      // Socket existe mas não está pronto - forçar recovery
+      logger.warn(`[BaileysAdapter] Socket existe mas não está pronto, forçando recovery...`);
+      await this.triggerSessionRecovery();
       return false;
+
     } catch (error) {
       logger.error(`[BaileysAdapter] Falha ao reinicializar socket: ${error.message}`);
       return false;
+    }
+  }
+
+  /**
+   * Força o recovery completo da sessão removendo o socket antigo
+   * e disparando reinicialização via StartWhatsAppSessionUnified
+   */
+  private async triggerSessionRecovery(): Promise<void> {
+    try {
+      logger.warn(`[BaileysAdapter] Iniciando recovery completo para whatsappId=${this.whatsappId}`);
+      
+      // Limpar socket local
+      this.socket = null;
+      this.status = "disconnected";
+      
+      // Remover sessão do wbot para forçar recriação
+      try {
+        removeWbot(this.whatsappId);
+        logger.info(`[BaileysAdapter] Sessão removida do wbot`);
+      } catch (err) {
+        logger.warn(`[BaileysAdapter] Erro ao remover sessão do wbot: ${err.message}`);
+      }
+
+      // Buscar dados do whatsapp no banco
+      const whatsapp = await Whatsapp.findByPk(this.whatsappId);
+      if (!whatsapp) {
+        logger.error(`[BaileysAdapter] Whatsapp #${this.whatsappId} não encontrado no banco`);
+        return;
+      }
+
+      // Disparar reinicialização via StartWhatsAppSessionUnified
+      logger.info(`[BaileysAdapter] Disparando StartWhatsAppSessionUnified para recovery...`);
+      const { StartWhatsAppSessionUnified } = require("../services/WbotServices/StartWhatsAppSessionUnified");
+      
+      // Usar setTimeout para não bloquear e permitir que a chamada atual falhe gracefully
+      setTimeout(() => {
+        StartWhatsAppSessionUnified(whatsapp, whatsapp.companyId)
+          .then(() => {
+            logger.info(`[BaileysAdapter] ✅ Recovery concluído com sucesso para whatsappId=${this.whatsappId}`);
+          })
+          .catch((err: any) => {
+            logger.error(`[BaileysAdapter] ❌ Falha no recovery: ${err.message}`);
+          });
+      }, 100);
+
+    } catch (error) {
+      logger.error(`[BaileysAdapter] Erro no triggerSessionRecovery: ${error.message}`);
     }
   }
 
