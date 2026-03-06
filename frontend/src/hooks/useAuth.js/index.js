@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useHistory } from "react-router-dom";
 import { has, isArray } from "lodash";
 
@@ -16,8 +16,7 @@ const useAuth = () => {
   const [isAuth, setIsAuth] = useState(false);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState({});
-  const [socket, setSocket] = useState({})
- 
+  const [socket, setSocket] = useState({});
 
   api.interceptors.request.use(
     (config) => {
@@ -41,6 +40,7 @@ const useAuth = () => {
       const originalRequest = error.config;
       const status = error?.response?.status;
       const isAuthRefreshCall = originalRequest?.url?.includes("/auth/refresh_token");
+      
       if ((status === 401 || status === 403) && !originalRequest._retry && !isAuthRefreshCall) {
         originalRequest._retry = true;
         try {

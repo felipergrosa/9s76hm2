@@ -1873,14 +1873,23 @@ export const verifyMediaMessage = async (
         "*System:* \nFalha no download da mídia verifique no dispositivo";
       
       // Se for reação, buscar mensagem alvo pelo WID para obter ID interno
+      // CRÍTICO: Se handleMessage já encontrou a mensagem alvo, usar o ID injetado
       let reactionQuotedMsgId = quotedMsg?.id;
       if (!reactionQuotedMsgId && msg.message?.reactionMessage?.key?.id) {
-        const targetWid = msg.message.reactionMessage.key.id;
-        const targetMsg = await Message.findOne({
-          where: { wid: targetWid, companyId: companyId }
-        });
-        if (targetMsg) {
-          reactionQuotedMsgId = targetMsg.id;
+        const injectedTargetId = (msg as any).__targetMessageId;
+        
+        if (injectedTargetId) {
+          reactionQuotedMsgId = injectedTargetId;
+          logger.info(`[verifyMediaMessage] Reação: usando ID injetado do handleMessage - ID interno: ${injectedTargetId}`);
+        } else {
+          // Fallback: buscar no banco se não foi injetado
+          const targetWid = msg.message.reactionMessage.key.id;
+          const targetMsg = await Message.findOne({
+            where: { wid: targetWid, companyId: companyId }
+          });
+          if (targetMsg) {
+            reactionQuotedMsgId = targetMsg.id;
+          }
         }
       }
       
@@ -2252,15 +2261,25 @@ export const verifyMessage = async (
   // Se for reação, buscar mensagem alvo pelo WID para obter ID interno
   let reactionQuotedMsgId = quotedMsg?.id;
   if (!reactionQuotedMsgId && msg.message?.reactionMessage?.key?.id) {
-    const targetWid = msg.message.reactionMessage.key.id;
-    const targetMsg = await Message.findOne({
-      where: { wid: targetWid, companyId: companyId }
-    });
-    if (targetMsg) {
-      reactionQuotedMsgId = targetMsg.id;
-      logger.info(`[verifyMessage] Reação: mensagem alvo encontrada - WID: ${targetWid} → ID interno: ${targetMsg.id}`);
+    // CRÍTICO: Se handleMessage já encontrou a mensagem alvo, usar o ID injetado
+    const injectedTargetId = (msg as any).__targetMessageId;
+    const injectedTargetWid = (msg as any).__targetMessageWid;
+    
+    if (injectedTargetId) {
+      reactionQuotedMsgId = injectedTargetId;
+      logger.info(`[verifyMessage] Reação: usando ID injetado do handleMessage - ID interno: ${injectedTargetId}`);
     } else {
-      logger.warn(`[verifyMessage] Reação: mensagem alvo NÃO encontrada para WID: ${targetWid}`);
+      // Fallback: buscar no banco se não foi injetado
+      const targetWid = msg.message.reactionMessage.key.id;
+      const targetMsg = await Message.findOne({
+        where: { wid: targetWid, companyId: companyId }
+      });
+      if (targetMsg) {
+        reactionQuotedMsgId = targetMsg.id;
+        logger.info(`[verifyMessage] Reação: mensagem alvo encontrada via busca - WID: ${targetWid} → ID interno: ${targetMsg.id}`);
+      } else {
+        logger.warn(`[verifyMessage] Reação: mensagem alvo NÃO encontrada para WID: ${targetWid}`);
+      }
     }
   }
 
@@ -5187,6 +5206,9 @@ const handleMessage = async (
 
       // 4. Continuar para o fluxo normal de criação (que usará verifyMessage)
       // Mas vamos injetar os dados necessários para o verifyMessage funcionar perfeitamente
+      // CRÍTICO: Passar o ID da mensagem alvo para garantir que a reação seja vinculada corretamente
+      (msg as any).__targetMessageId = targetMessage.id;
+      (msg as any).__targetMessageWid = targetQuotedId;
     }
 
     const hasMedia =
