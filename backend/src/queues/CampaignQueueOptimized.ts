@@ -120,7 +120,7 @@ async function processCampaign(job: any): Promise<void> {
         name: "DispatchMessage",
         data: {
           campaignId: campaign.id,
-          contactId: item.contactId,
+          contactId: (item as any).contactId,
           whatsappId: campaign.whatsappId,
           messageIndex: 1,
           companyId: campaign.companyId
@@ -154,17 +154,17 @@ async function dispatchMessage(job: any): Promise<void> {
     const [campaign, contact, whatsapp] = await Promise.all([
       CacheManager.getOrSet(
         `campaign:${campaignId}`,
-        () => Campaign.findByPk(campaignId),
+        () => Campaign.findByPk(campaignId) as any,
         300
       ),
       CacheManager.getOrSet(
         `contact:${contactId}`,
-        () => Contact.findByPk(contactId),
+        () => Contact.findByPk(contactId) as any,
         300
       ),
       CacheManager.getOrSet(
         `whatsapp:${whatsappId}`,
-        () => Whatsapp.findByPk(whatsappId),
+        () => Whatsapp.findByPk(whatsappId) as any,
         300
       )
     ]);
