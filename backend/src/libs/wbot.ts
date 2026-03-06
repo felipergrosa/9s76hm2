@@ -36,6 +36,7 @@ import createOrUpdateBaileysService from "../services/BaileysServices/CreateOrUp
 import { handleMessagingHistorySet } from "./messageHistoryHandler";
 import SignalErrorHandler from "../services/WbotServices/SignalErrorHandler";
 import SignalCleanupService from "../services/WbotServices/SignalCleanupService";
+import { EventTrigger } from "../queue/EventTrigger";
 
 const msgRetryCounterCache = new NodeCache({
   stdTTL: 600,
@@ -539,6 +540,14 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             // Single-instance: sem verificação de zumbi
 
             if (connection === "close") {
+              // DISPARAR EVENTO: Sessão desconectada
+              // Isso permite que Bull Queue verifique sessões órfãs sem polling constante
+              try {
+                await EventTrigger.emitSessionDisconnected(id, lastDisconnect?.error?.message || "Connection closed");
+              } catch (err: any) {
+                logger.error(`[wbot] Erro ao emitir sessionDisconnected: ${err.message}`);
+              }
+              
               const errorMsg = lastDisconnect?.error?.message || "";
               console.log("DESCONECTOU", JSON.stringify(lastDisconnect, null, 2))
 
