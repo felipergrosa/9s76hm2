@@ -93,7 +93,7 @@ export default function ChatMessages({
   const unreadMessages = (chat) => {
     if (chat !== undefined) {
       const currentUser = chat.users.find((u) => u.userId === user.id);
-      return currentUser.unreads > 0;
+      return (currentUser?.unreads || 0) > 0;
     }
     return 0;
   };
@@ -101,7 +101,7 @@ export default function ChatMessages({
   useEffect(() => {
     if (unreadMessages(chat) > 0) {
       try {
-        api.post(`/chats/${chat.id}/read`, { userId: user.id });
+        api.post(`/chats/${chat.id}/read`);
       } catch (err) {}
     }
     scrollToBottomRef.current = scrollToBottom;

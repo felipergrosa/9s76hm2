@@ -27,6 +27,8 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import withWidth, { isWidthUp } from "@material-ui/core/withWidth";
 import { i18n } from "../../translate/i18n";
 
+const isDirectChatSelection = (users, type) => type === "new" && Array.isArray(users) && users.length === 1;
+
 const useStyles = makeStyles((theme) => ({
   mainContainer: {
     display: "flex",
@@ -66,6 +68,8 @@ export function ChatModal({
 }) {
   const [users, setUsers] = useState([]);
   const [title, setTitle] = useState("");
+  const isDirectSelection = isDirectChatSelection(users, type);
+  const isEditingDirectChat = type === "edit" && chat?.type === "direct";
 
   useEffect(() => {
     setTitle("");
@@ -95,7 +99,14 @@ export function ChatModal({
         handleLoadNewChat(data);
       }
       handleClose();
-    } catch (err) { }
+    } catch (err) {
+      console.error("Erro ao salvar chat:", err);
+      if (err.response?.data?.error) {
+        alert(`Erro: ${err.response.data.error}`);
+      } else {
+        alert("Erro ao salvar chat. Verifique os dados e tente novamente.");
+      }
+    }
   };
 
   return (
@@ -108,17 +119,19 @@ export function ChatModal({
       <DialogTitle id="alert-dialog-title">{i18n.t("chatInternal.modal.title")}</DialogTitle>
       <DialogContent>
         <Grid spacing={2} container>
-          <Grid xs={12} style={{ padding: 18 }} item>
+          {!isDirectSelection && !isEditingDirectChat && (
+            <Grid xs={12} style={{ padding: 18 }} item>
             <TextField
-              label="Título"
-              placeholder="Título"
+              label="Título do grupo"
+              placeholder="Título do grupo"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               variant="outlined"
               size="small"
               fullWidth
             />
-          </Grid>
+            </Grid>
+          )}
           <Grid xs={12} item>
             <UsersFilter
               onFiltered={(users) => setUsers(users)}
@@ -135,7 +148,11 @@ export function ChatModal({
           onClick={handleSave}
           color="primary"
           variant="contained"
-          disabled={users === undefined || users.length === 0 || title === null || title === "" || title === undefined}
+          disabled={
+            users === undefined ||
+            users.length === 0 ||
+            (!isDirectSelection && !isEditingDirectChat && (title === null || title === "" || title === undefined))
+          }
         >
           {i18n.t("chatInternal.modal.save")}
         </Button>
@@ -172,14 +189,16 @@ function Chat(props) {
   useEffect(() => {
     if (isMounted.current) {
       findChats().then((data) => {
-        const { records } = data;
+        const records = data?.records || [];
         if (records.length > 0) {
           setChats(records);
           setChatsPageInfo(data);
 
           if (id && records.length) {
             const chat = records.find((r) => r.uuid === id);
-            selectChat(chat);
+            if (chat) {
+              selectChat(chat);
+            }
           }
         }
       });
@@ -202,67 +221,106 @@ function Chat(props) {
 
   useEffect(() => {
     const companyId = user.companyId;
-    // const socket = socketConnection({ companyId, userId: user.id });
 
     const onChatUser = (data) => {
-
-      console.log(data)
       if (data.action === "create") {
-        setChats((prev) => [data.record, ...prev]);
+        setChats((prev) => {
+          const chatIndex = prev.findIndex((chat) => chat.id === data.record.id);
+
+          if (chatIndex !== -1) {
+            const updatedChats = [...prev];
+            updatedChats[chatIndex] = data.record;
+            return updatedChats;
+          }
+
+          return [data.record, ...prev];
+        });
       }
+
       if (data.action === "update") {
-        const changedChats = chats.map((chat) => {
+        setChats((prev) => prev.map((chat) => {
           if (chat.id === data.record.id) {
-            setCurrentChat(data.record);
             return {
               ...data.record,
             };
           }
+
           return chat;
+        }));
+
+        setCurrentChat((prev) => {
+          if (prev?.id === data.record.id) {
+            return data.record;
+          }
+
+          return prev;
         });
-        setChats(changedChats);
       }
-    }
+    };
+
     const onChat = (data) => {
       if (data.action === "delete") {
-        const filteredChats = chats.filter((c) => c.id !== +data.id);
-        setChats(filteredChats);
+        setChats((prev) => prev.filter((c) => c.id !== +data.id));
         setMessages([]);
         setMessagesPage(1);
         setMessagesPageInfo({ hasMore: false });
         setCurrentChat({});
         history.push("/chats");
       }
-    }
+    };
 
     const onCurrentChat = (data) => {
       if (data.action === "new-message") {
         setMessages((prev) => [...prev, data.newMessage]);
-        const changedChats = chats.map((chat) => {
+
+        setChats((prev) => prev.map((chat) => {
           if (chat.id === data.newMessage.chatId) {
             return {
               ...data.chat,
             };
           }
+
           return chat;
+        }));
+
+        setCurrentChat((prev) => {
+          if (prev?.id === data.chat?.id) {
+            return data.chat;
+          }
+
+          return prev;
         });
-        setChats(changedChats);
-        scrollToBottomRef.current();
+
+        if (typeof scrollToBottomRef.current === "function") {
+          scrollToBottomRef.current();
+        }
       }
 
       if (data.action === "update") {
-        const changedChats = chats.map((chat) => {
+
+        setChats((prev) => prev.map((chat) => {
           if (chat.id === data.chat.id) {
             return {
               ...data.chat,
             };
           }
+
           return chat;
+        }));
+
+        setCurrentChat((prev) => {
+          if (prev?.id === data.chat?.id) {
+            return data.chat;
+          }
+
+          return prev;
         });
-        setChats(changedChats);
-        scrollToBottomRef.current();
+
+        if (typeof scrollToBottomRef.current === "function") {
+          scrollToBottomRef.current();
+        }
       }
-    }
+    };
 
     socket.on(`company-${companyId}-chat-user-${user.id}`, onChatUser);
     socket.on(`company-${companyId}-chat`, onChat);
@@ -329,7 +387,11 @@ function Chat(props) {
       const { data } = await api.get("/chats");
       return data;
     } catch (err) {
-      console.log(err);
+      console.error("Erro ao carregar chats:", err);
+      if (err.response?.status === 403) {
+        console.error("Sem permissão para acessar chat interno");
+      }
+      return { records: [], count: 0, hasMore: false };
     }
   };
 

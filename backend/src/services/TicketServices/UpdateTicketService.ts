@@ -612,12 +612,6 @@ const UpdateTicketService = async ({
       }
     }
 
-    // Grupos NUNCA devem ser fechados automaticamente - sempre mantêm status "group"
-    if (ticket.isGroup && status === "closed") {
-      logger.info(`[UpdateTicketService] Grupo ${ticket.id} - impedindo fechamento, mantendo status "group"`);
-      status = "group";
-    }
-
     status = queue && queue.closeTicket && !ticket.isGroup ? "closed" : status;
 
     await ticket.update({

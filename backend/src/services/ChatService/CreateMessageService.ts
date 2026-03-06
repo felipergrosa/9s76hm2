@@ -1,4 +1,5 @@
 import { Op } from "sequelize";
+import AppError from "../../errors/AppError";
 import Chat from "../../models/Chat";
 import ChatMessage from "../../models/ChatMessage";
 import ChatUser from "../../models/ChatUser";
@@ -15,6 +16,17 @@ export default async function CreateMessageService({
   chatId,
   message
 }: ChatMessageData) {
+  const senderChatUser = await ChatUser.findOne({
+    where: {
+      chatId,
+      userId: senderId
+    }
+  });
+
+  if (!senderChatUser) {
+    throw new AppError("UNAUTHORIZED", 403);
+  }
+
   const newMessage = await ChatMessage.create({
     senderId,
     chatId,

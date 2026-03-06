@@ -445,22 +445,16 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
         };
     }, []);
 
-    const handleOpenAcceptTicketWithouSelectQueue = useCallback(() => {
-        setAcceptTicketWithouSelectQueueOpen(true);
-    }, []);
+const handleOpenAcceptTicketWithouSelectQueue = useCallback(() => {
+setAcceptTicketWithouSelectQueueOpen(true);
+}, []);
 
-    const handleCloseTicket = async (id) => {
-        // Se for grupo, apenas navega para /tickets sem tentar fechar
-        if (ticket.isGroup) {
-            history.push(`/tickets/`);
-            return;
-        }
-        
-        const setting = await getSetting(
-            {
-                "column": "requiredTag"
-            }
-        );
+const handleCloseTicket = async (id) => {
+const setting = await getSetting(
+{
+"column": "requiredTag"
+}
+);
 
         if (setting.requiredTag === "enabled") {
             //verificar se tem uma tag   

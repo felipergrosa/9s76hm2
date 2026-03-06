@@ -1,7 +1,7 @@
 import * as Yup from "yup";
 import { Request, Response } from "express";
-import { getIO } from "../libs/socket";
 import { emitToCompanyNamespace } from "../libs/socketEmit";
+import AppError from "../errors/AppError";
 
 import CreateService from "../services/ChatService/CreateService";
 import ListService from "../services/ChatService/ListService";
@@ -33,9 +33,11 @@ type FindParams = {
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { pageNumber } = req.query as unknown as IndexQuery;
+  const { companyId } = req.user;
   const ownerId = +req.user.id;
 
   const { records, count, hasMore } = await ListService({
+    companyId,
     ownerId,
     pageNumber
   });
@@ -44,30 +46,37 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
 };
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
-  const { companyId } = req.user;
-  const ownerId = +req.user.id;
-  const data = req.body as StoreData;
+  try {
+    const { companyId } = req.user;
+    const ownerId = +req.user.id;
+    const data = req.body as StoreData;
 
-  const record = await CreateService({
-    ...data,
-    ownerId,
-    companyId
-  });
+    console.log("[ChatController.store] Creating chat with data:", { ownerId, companyId, users: data.users, title: data.title });
 
-  const io = getIO();
+    const record = await CreateService({
+      ...data,
+      ownerId,
+      companyId
+    });
 
-  record.users.forEach(async user => {
-    await emitToCompanyNamespace(
-      companyId,
-      `company-${companyId}-chat-user-${user.id}`,
-      {
-        action: "create",
-        record
-      }
-    );
-  });
+    if (!(record as any).wasExisting) {
+      record.users.forEach(async user => {
+        await emitToCompanyNamespace(
+          companyId,
+          `company-${companyId}-chat-user-${user.userId}`,
+          {
+            action: "create",
+            record
+          }
+        );
+      });
+    }
 
-  return res.status(200).json(record);
+    return res.status(200).json(record);
+  } catch (error) {
+    console.error("[ChatController.store] Error creating chat:", error);
+    throw error;
+  }
 };
 
 export const update = async (
@@ -75,20 +84,21 @@ export const update = async (
   res: Response
 ): Promise<Response> => {
   const { companyId } = req.user;
+  const userId = +req.user.id;
   const data = req.body;
   const { id } = req.params;
 
   const record = await UpdateService({
     ...data,
-    id: +id
+    id: +id,
+    companyId,
+    userId
   });
-
-  const io = getIO();
 
   record.users.forEach(async user => {
     await emitToCompanyNamespace(
       companyId,
-      `company-${companyId}-chat-user-${user.id}`,
+      `company-${companyId}-chat-user-${user.userId}`,
       {
         action: "update",
         record,
@@ -102,8 +112,14 @@ export const update = async (
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
+  const userId = +req.user.id;
 
-  const record = await ShowFromUuidService(id);
+  const record = await ShowFromUuidService({
+    uuid: id,
+    userId,
+    companyId
+  });
 
   return res.status(200).json(record);
 };
@@ -114,10 +130,10 @@ export const remove = async (
 ): Promise<Response> => {
   const { id } = req.params;
   const { companyId } = req.user;
+  const userId = +req.user.id;
 
-  await DeleteService(id);
+  await DeleteService({ id, companyId, userId });
 
-  const io = getIO();
   await emitToCompanyNamespace(
     companyId,
     `company-${companyId}-chat`,
@@ -149,11 +165,10 @@ export const saveMessage = async (
   const chat = await Chat.findByPk(chatId, {
     include: [
       { model: User, as: "owner" },
-      { model: ChatUser, as: "users" }
+      { model: ChatUser, as: "users", include: [{ model: User, as: "user" }] }
     ]
   });
 
-  const io = getIO();
   await emitToCompanyNamespace(
     companyId,
     `company-${companyId}-chat-${chatId}`,
@@ -182,26 +197,36 @@ export const checkAsRead = async (
   res: Response
 ): Promise<Response> => {
   const { companyId } = req.user;
-  const { userId } = req.body;
+  const userId = +req.user.id;
   const { id } = req.params;
 
+  const existingChat = await Chat.findOne({ where: { id, companyId } });
+
+  if (!existingChat) {
+    throw new AppError("ERR_NO_CHAT_FOUND", 404);
+  }
+
   const chatUser = await ChatUser.findOne({ where: { chatId: id, userId } });
+
+  if (!chatUser) {
+    throw new AppError("UNAUTHORIZED", 403);
+  }
+
   await chatUser.update({ unreads: 0 });
 
-  const chat = await Chat.findByPk(id, {
+  const updatedChat = await Chat.findByPk(id, {
     include: [
       { model: User, as: "owner" },
-      { model: ChatUser, as: "users" }
+      { model: ChatUser, as: "users", include: [{ model: User, as: "user" }] }
     ]
   });
 
-  const io = getIO();
   await emitToCompanyNamespace(
     companyId,
     `company-${companyId}-chat-${id}`,
     {
       action: "update",
-      chat
+      chat: updatedChat
     }
   );
 
@@ -210,11 +235,11 @@ export const checkAsRead = async (
     `company-${companyId}-chat`,
     {
       action: "update",
-      chat
+      chat: updatedChat
     }
   );
 
-  return res.json(chat);
+  return res.json(updatedChat);
 };
 
 export const messages = async (
@@ -223,10 +248,12 @@ export const messages = async (
 ): Promise<Response> => {
   const { pageNumber } = req.query as unknown as IndexQuery;
   const { id: chatId } = req.params;
+  const { companyId } = req.user;
   const ownerId = +req.user.id;
 
   const { records, count, hasMore } = await FindMessages({
     chatId,
+    companyId,
     ownerId,
     pageNumber
   });

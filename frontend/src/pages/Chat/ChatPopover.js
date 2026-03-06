@@ -42,20 +42,20 @@ const useStyles = makeStyles((theme) => ({
 const reducer = (state, action) => {
   if (action.type === "LOAD_CHATS") {
     const chats = action.payload;
-    const newChats = [];
+    let nextState = [...state];
 
     if (isArray(chats)) {
       chats.forEach((chat) => {
-        const chatIndex = state.findIndex((u) => u.id === chat.id);
+        const chatIndex = nextState.findIndex((u) => u.id === chat.id);
         if (chatIndex !== -1) {
-          state[chatIndex] = chat;
+          nextState[chatIndex] = chat;
         } else {
-          newChats.push(chat);
+          nextState.push(chat);
         }
       });
     }
 
-    return [...state, ...newChats];
+    return nextState;
   }
 
   if (action.type === "UPDATE_CHATS") {
@@ -63,8 +63,9 @@ const reducer = (state, action) => {
     const chatIndex = state.findIndex((u) => u.id === chat.id);
 
     if (chatIndex !== -1) {
-      state[chatIndex] = chat;
-      return [...state];
+      const nextState = [...state];
+      nextState.splice(chatIndex, 1);
+      return [chat, ...nextState];
     } else {
       return [chat, ...state];
     }
@@ -73,11 +74,7 @@ const reducer = (state, action) => {
   if (action.type === "DELETE_CHAT") {
     const chatId = action.payload;
 
-    const chatIndex = state.findIndex((u) => u.id === chatId);
-    if (chatIndex !== -1) {
-      state.splice(chatIndex, 1);
-    }
-    return [...state];
+    return state.filter((u) => u.id !== chatId);
   }
 
   if (action.type === "RESET") {
@@ -85,13 +82,16 @@ const reducer = (state, action) => {
   }
 
   if (action.type === "CHANGE_CHAT") {
-    const changedChats = state.map((chat) => {
-      if (chat.id === action.payload.chat.id) {
-        return action.payload.chat;
-      }
-      return chat;
-    });
-    return changedChats;
+    const changedChat = action.payload.chat;
+    const chatIndex = state.findIndex((chat) => chat.id === changedChat.id);
+
+    if (chatIndex === -1) {
+      return [changedChat, ...state];
+    }
+
+    const nextState = [...state];
+    nextState.splice(chatIndex, 1);
+    return [changedChat, ...nextState];
   }
 };
 
@@ -222,6 +222,18 @@ export default function ChatPopover() {
     window.location.href = `/chats/${chat.uuid}`;
   };
 
+  const getChatDisplayName = (chat) => {
+    if (chat.type === "direct") {
+      const otherParticipant = Array.isArray(chat.users)
+        ? chat.users.find((participant) => participant.userId !== user.id)
+        : null;
+
+      return otherParticipant?.user?.name || chat.title || "Conversa direta";
+    }
+
+    return chat.title || "Grupo sem título";
+  };
+
   const open = Boolean(anchorEl);
   const id = open ? "simple-popover" : undefined;
 
@@ -275,13 +287,13 @@ export default function ChatPopover() {
                   button
                 >
                   <ListItemText
-                    primary={item.lastMessage}
+                    primary={getChatDisplayName(item)}
                     secondary={
                       <>
                         <Typography component="span" style={{ fontSize: 12 }}>
                           {datetimeToClient(item.updatedAt)}
                         </Typography>
-                        <span style={{ marginTop: 5, display: "block" }}></span>
+                        <span style={{ marginTop: 5, display: "block" }}>{item.lastMessage}</span>
                       </>
                     }
                   />

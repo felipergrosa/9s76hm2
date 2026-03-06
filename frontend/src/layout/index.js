@@ -49,6 +49,7 @@ import logoDark from "../assets/logo-black.png";
 import ChatPopover from "../pages/Chat/ChatPopover";
 
 import { useDate } from "../hooks/useDate";
+import usePermissions from "../hooks/usePermissions";
 import UserLanguageSelector from "../components/UserLanguageSelector";
 
 import ColorModeContext from "./themeContext";
@@ -373,6 +374,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
   const theme = useTheme();
   const { colorMode } = useContext(ColorModeContext);
   const { viewMode } = colorMode;
+  const { hasPermission } = usePermissions();
   const classes = useStyles({ viewMode });
   const greaterThenSm = useMediaQuery(theme.breakpoints.up("sm"));
 
@@ -697,7 +699,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
 
           <AnnouncementsPopover />
 
-          <ChatPopover />
+          {hasPermission("internal-chat.view") && <ChatPopover />}
 
           <div>
             <StyledBadge

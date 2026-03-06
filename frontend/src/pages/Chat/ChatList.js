@@ -86,11 +86,20 @@ export default function ChatList({
 
   const unreadMessages = (chat) => {
     const currentUser = chat.users.find((u) => u.userId === user.id);
-    return currentUser.unreads;
+    return currentUser?.unreads || 0;
+  };
+
+  const getChatDisplayName = (chat) => {
+    if (chat.type === "direct") {
+      const otherParticipant = chat.users.find((participant) => participant.userId !== user.id);
+      return otherParticipant?.user?.name || chat.title || "Conversa direta";
+    }
+
+    return chat.title || "Grupo sem título";
   };
 
   const getPrimaryText = (chat) => {
-    const mainText = chat.title;
+    const mainText = getChatDisplayName(chat);
     const unreads = unreadMessages(chat);
     return (
       <>
@@ -142,19 +151,21 @@ export default function ChatList({
                   />
                   {chat.ownerId === user.id && (
                     <ListItemSecondaryAction>
-                      <IconButton
-                        onClick={() => {
-                          goToMessages(chat).then(() => {
-                            handleEditChat(chat);
-                          });
-                        }}
-                        edge="end"
-                        aria-label="delete"
-                        size="small"
-                        style={{ marginRight: 5 }}
-                      >
-                        <EditIcon />
-                      </IconButton>
+                      {chat.type !== "direct" && (
+                        <IconButton
+                          onClick={() => {
+                            goToMessages(chat).then(() => {
+                              handleEditChat(chat);
+                            });
+                          }}
+                          edge="end"
+                          aria-label="delete"
+                          size="small"
+                          style={{ marginRight: 5 }}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      )}
                       <IconButton
                         onClick={() => {
                           setSelectedChat(chat);

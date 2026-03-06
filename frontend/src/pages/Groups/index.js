@@ -17,7 +17,7 @@ import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import useDebounce from "../../hooks/useDebounce";
 import ContactAvatar from "../../components/ContactAvatar";
-import { socketManager } from "../../services/socket";
+import { socketConnection } from "../../services/socket";
 
 // Cores para os headers das lanes (cicla entre elas)
 const LANE_COLORS = [
@@ -75,7 +75,7 @@ const Groups = () => {
     // Socket.IO: Atualizar lista quando mensagens chegam em grupos
     useEffect(() => {
         const companyId = user.companyId;
-        const socket = socketManager.GetSocket(companyId);
+        const socket = socketConnection({ user });
 
         const onAppMessage = (data) => {
             if (data.action === "create" && data.message?.ticket?.isGroup) {

@@ -1,4 +1,5 @@
 import AppError from "../../errors/AppError";
+import Chat from "../../models/Chat";
 import ChatMessage from "../../models/ChatMessage";
 import ChatUser from "../../models/ChatUser";
 import User from "../../models/User";
@@ -7,6 +8,7 @@ import { sortBy } from "lodash";
 
 interface Request {
   chatId: string;
+  companyId: number;
   ownerId: number;
   pageNumber?: string;
 }
@@ -19,9 +21,22 @@ interface Response {
 
 const FindMessages = async ({
   chatId,
+  companyId,
   ownerId,
   pageNumber = "1"
 }: Request): Promise<Response> => {
+  const chat = await Chat.findOne({
+    where: {
+      id: chatId,
+      companyId
+    },
+    attributes: ["id"]
+  });
+
+  if (!chat) {
+    throw new AppError("ERR_NO_CHAT_FOUND", 404);
+  }
+
   const userInChat = await ChatUser.count({
     where: { chatId, userId: ownerId }
   });

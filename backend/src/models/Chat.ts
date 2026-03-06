@@ -34,6 +34,12 @@ class Chat extends Model<Chat> {
   @Column({ defaultValue: "" })
   title: string;
 
+  @Column({ defaultValue: "group" })
+  type: string;
+
+  @Column
+  directKey: string;
+
   @ForeignKey(() => User)
   @Column
   ownerId: number;
