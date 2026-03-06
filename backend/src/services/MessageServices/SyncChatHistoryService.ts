@@ -32,8 +32,8 @@ const DOWNLOADABLE_MEDIA_TYPES = ["image", "video", "audio", "sticker", "documen
  */
 const isSocketAlive = (wbot: WASocket): boolean => {
   try {
-    // @ts-ignore - ws é uma propriedade interna do Baileys
-    const ws = wbot?.ws;
+    // @ts-ignore - ws é uma propriedade interna do Baileys, readyState é number
+    const ws = wbot?.ws as { readyState?: number } | undefined;
     if (!ws) return false;
     
     // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
