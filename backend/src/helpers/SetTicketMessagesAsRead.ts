@@ -8,6 +8,35 @@ import GetTicketWbot from "./GetTicketWbot";
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
 import { markMessagesAsReadByTicket } from "../services/MessageServices/MessageCommandService";
 
+/**
+ * Verifica se o socket Baileys está realmente conectado e funcional
+ * Não basta verificar o status no banco - precisamos verificar o WebSocket
+ */
+const isSocketAlive = (wbot: WASocket): boolean => {
+  try {
+    // @ts-ignore - ws é uma propriedade interna do Baileys
+    const ws = wbot?.ws;
+    if (!ws) return false;
+    
+    // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+    if (ws.readyState !== 1) {
+      logger.debug(`[SetTicketMessagesAsRead] WebSocket não está OPEN (readyState=${ws.readyState})`);
+      return false;
+    }
+    
+    // Verificar se tem usuário autenticado
+    if (!wbot.user?.id) {
+      logger.debug(`[SetTicketMessagesAsRead] Socket sem usuário autenticado`);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    logger.error(`[SetTicketMessagesAsRead] Erro ao verificar socket: ${error.message}`);
+    return false;
+  }
+};
+
 const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
 
   if (ticket.whatsappId) {
@@ -41,22 +70,44 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
         if (whatsapp.status === 'CONNECTED') {
           try {
             const wbot = await GetTicketWbot(ticket);
-            const getJsonMessage = await Message.findAll({
-              where: {
-                ticketId: ticket.id,
-                fromMe: false,
-                read: false
-              },
-              order: [["createdAt", "DESC"]]
-            });
-
-            if (getJsonMessage.length > 0) {
-              getJsonMessage.forEach(async message => {
-                const msg: proto.IWebMessageInfo = JSON.parse(message.dataJson);
-                if (msg.key && msg.key.fromMe === false && !ticket.isBot && (ticket.userId || ticket.isGroup)) {
-                  await wbot.readMessages([msg.key]);
-                }
+            
+            // CRÍTICO: Verificar se o socket está realmente vivo antes de usar
+            if (!isSocketAlive(wbot)) {
+              logger.warn(`[SetTicketMessagesAsRead] Socket não está vivo para whatsappId=${ticket.whatsappId}, pulando readMessages`);
+            } else {
+              const getJsonMessage = await Message.findAll({
+                where: {
+                  ticketId: ticket.id,
+                  fromMe: false,
+                  read: false
+                },
+                order: [["createdAt", "DESC"]]
               });
+
+              if (getJsonMessage.length > 0) {
+                // Usar for...of em vez de forEach para permitir await adequado
+                for (const message of getJsonMessage) {
+                  try {
+                    const msg: proto.IWebMessageInfo = JSON.parse(message.dataJson);
+                    if (msg.key && msg.key.fromMe === false && !ticket.isBot && (ticket.userId || ticket.isGroup)) {
+                      // Verificar se socket ainda está vivo antes de CADA mensagem
+                      if (!isSocketAlive(wbot)) {
+                        logger.debug(`[SetTicketMessagesAsRead] Socket morreu durante iteração, parando`);
+                        break;
+                      }
+                      await wbot.readMessages([msg.key]);
+                    }
+                  } catch (readErr: any) {
+                    // Ignorar erro de Connection Closed - socket pode ter morrido durante a iteração
+                    if (readErr?.message?.includes('Connection Closed')) {
+                      logger.debug(`[SetTicketMessagesAsRead] Connection Closed ao marcar mensagem como lida, parando`);
+                      break;
+                    } else {
+                      logger.warn(`[SetTicketMessagesAsRead] Erro ao marcar mensagem como lida: ${readErr?.message}`);
+                    }
+                  }
+                }
+              }
             }
           } catch (err) {
             logger.warn(

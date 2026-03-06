@@ -66,19 +66,11 @@ function updateFetchTime(whatsappId: number): void {
  * @throws Error se rate limit estiver ativo
  */
 export const acquireFetchLock = async (whatsappId: number, caller: string = 'unknown'): Promise<() => void> => {
-  // Verificar rate limiting ANTES de adquirir o mutex
-  if (!canFetch(whatsappId)) {
-    const last = lastFetchTime.get(whatsappId) || 0;
-    const elapsed = Date.now() - last;
-    const remaining = Math.ceil((FETCH_COOLDOWN_MS - elapsed) / 1000);
-    throw new Error(`Rate limit ativo. Aguarde ${remaining}s antes de buscar histórico novamente.`);
-  }
-  
   const mutex = getFetchMutex(whatsappId);
   
   logger.info(`[FetchMutex] ${caller} tentando adquirir lock para whatsappId=${whatsappId}`);
   
-  // Tentar adquirir o mutex com timeout
+  // PRIMEIRO: Adquirir o mutex para serializar todas as verificações
   let release: () => void;
   
   try {
@@ -88,10 +80,19 @@ export const acquireFetchLock = async (whatsappId: number, caller: string = 'unk
     throw new Error(`Não foi possível adquirir lock para buscar histórico: ${err?.message}`);
   }
   
-  logger.info(`[FetchMutex] ${caller} adquiriu lock para whatsappId=${whatsappId}`);
+  // DEPOIS: Verificar rate limiting (agora seguro pois estamos dentro do mutex)
+  if (!canFetch(whatsappId)) {
+    const last = lastFetchTime.get(whatsappId) || 0;
+    const elapsed = Date.now() - last;
+    const remaining = Math.ceil((FETCH_COOLDOWN_MS - elapsed) / 1000);
+    release(); // Liberar imediatamente se não pode fetch
+    throw new Error(`Rate limit ativo. Aguarde ${remaining}s antes de buscar histórico novamente.`);
+  }
   
-  // Atualizar timestamp do último fetch
+  // Atualizar timestamp ANTES de liberar o mutex
   updateFetchTime(whatsappId);
+  
+  logger.info(`[FetchMutex] ${caller} adquiriu lock para whatsappId=${whatsappId}`);
   
   // Retornar função de release
   return () => {

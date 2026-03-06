@@ -724,11 +724,22 @@ export class BaileysAdapter implements IWhatsAppAdapter {
    */
   async markAsRead(messageId: string): Promise<void> {
     if (!this.socket) return;
+    
+    // Verificar se socket está vivo antes de tentar marcar como lida
+    if (!this.isSocketReady()) {
+      logger.debug(`[BaileysAdapter] Socket não pronto para markAsRead, ignorando`);
+      return;
+    }
 
     try {
       await this.socket.readMessages([{ id: messageId } as any]);
     } catch (error) {
-      logger.error(`[BaileysAdapter] Erro ao marcar como lida: ${error.message}`);
+      // Ignorar erro de Connection Closed - socket pode ter morrido
+      if (error?.message?.includes('Connection Closed')) {
+        logger.debug(`[BaileysAdapter] Connection Closed ao marcar mensagem como lida`);
+      } else {
+        logger.error(`[BaileysAdapter] Erro ao marcar como lida: ${error.message}`);
+      }
     }
   }
 

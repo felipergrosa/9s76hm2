@@ -16,7 +16,7 @@ import {
   cancelFetchRequest
 } from "../../libs/messageHistoryHandler";
 import { acquireFetchLock } from "../../libs/fetchHistoryMutex";
-import { downloadMediaMessage, getContentType, extractMessageContent } from "@whiskeysockets/baileys";
+import { downloadMediaMessage, getContentType, extractMessageContent, WASocket } from "@whiskeysockets/baileys";
 import * as fs from "fs";
 import * as path from "path";
 import { promisify } from "util";
@@ -25,6 +25,35 @@ const writeFileAsync = promisify(fs.writeFile);
 
 // Tipos de mídia que podem ser baixados
 const DOWNLOADABLE_MEDIA_TYPES = ["image", "video", "audio", "sticker", "document"];
+
+/**
+ * Verifica se o socket Baileys está realmente conectado e funcional
+ * Usado antes de operações críticas como fetchMessageHistory
+ */
+const isSocketAlive = (wbot: WASocket): boolean => {
+  try {
+    // @ts-ignore - ws é uma propriedade interna do Baileys
+    const ws = wbot?.ws;
+    if (!ws) return false;
+    
+    // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+    if (ws.readyState !== 1) {
+      logger.debug(`[SyncChatHistory] WebSocket não está OPEN (readyState=${ws.readyState})`);
+      return false;
+    }
+    
+    // Verificar se tem usuário autenticado
+    if (!wbot.user?.id) {
+      logger.debug(`[SyncChatHistory] Socket sem usuário autenticado`);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    logger.error(`[SyncChatHistory] Erro ao verificar socket: ${error.message}`);
+    return false;
+  }
+};
 
 /**
  * Baixa mídia de uma mensagem do history sync e salva no disco.
@@ -277,6 +306,12 @@ const SyncChatHistoryService = async ({
                     // Adquirir lock ANTES de chamar fetchMessageHistory
                     releaseLock = await acquireFetchLock(ticket.whatsappId, `SyncChatHistory-${ticketId}`);
                     
+                    // CRÍTICO: Verificar se socket está vivo antes de chamar fetchMessageHistory
+                    if (!isSocketAlive(wbot)) {
+                        logger.warn(`[SyncChatHistory] Socket não está vivo para whatsappId=${ticket.whatsappId}, abortando fetch`);
+                        throw new Error("Socket not alive");
+                    }
+                    
                     // Disparar o fetch (protegido por mutex)
                     await wbotAny.fetchMessageHistory(messageCount, oldestKey, oldestTimestamp);
 
@@ -305,6 +340,12 @@ const SyncChatHistoryService = async ({
                     try {
                         logger.info(`[SyncChatHistory] Tentando retry após 2s...`);
                         await new Promise(r => setTimeout(r, 2000));
+                        
+                        // Verificar se socket ainda está vivo antes do retry
+                        if (!isSocketAlive(wbot)) {
+                            logger.warn(`[SyncChatHistory] Socket morreu durante espera de retry, abortando`);
+                            throw new Error("Socket not alive during retry");
+                        }
                         
                         const retryPromise = startFetchRequest(fetchId, jid, 30000);
                         await wbotAny.fetchMessageHistory(messageCount, oldestKey, oldestTimestamp);

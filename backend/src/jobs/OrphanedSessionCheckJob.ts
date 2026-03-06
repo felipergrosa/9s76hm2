@@ -1,5 +1,5 @@
 import Whatsapp from "../models/Whatsapp";
-import { getWbotSessionIds } from "../libs/wbot";
+import { getWbotSessionIds, getWbotIsReconnecting } from "../libs/wbot";
 import { WhatsAppFactory } from "../libs/whatsapp";
 import { StartWhatsAppSessionUnified } from "../services/WbotServices/StartWhatsAppSessionUnified";
 import logger from "../utils/logger";
@@ -66,6 +66,14 @@ export default {
           `[OrphanedSessionCheck] ${whatsapp.name} está ativa em memória. OK.`
         );
         return { success: true, skipped: true, reason: "Session active" };
+      }
+
+      // Verificar se já está em processo de reconexão (evita duplicatas)
+      if (getWbotIsReconnecting(whatsapp.id)) {
+        logger.info(
+          `[OrphanedSessionCheck] ${whatsapp.name} já está em processo de reconexão. Pulando.`
+        );
+        return { success: true, skipped: true, reason: "Already reconnecting" };
       }
 
       // SESSÃO ÓRFÃ DETECTADA - Recuperar
