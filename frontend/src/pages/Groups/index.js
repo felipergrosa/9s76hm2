@@ -17,6 +17,7 @@ import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import useDebounce from "../../hooks/useDebounce";
 import ContactAvatar from "../../components/ContactAvatar";
+import { socketManager } from "../../services/socket";
 
 // Cores para os headers das lanes (cicla entre elas)
 const LANE_COLORS = [
@@ -70,6 +71,63 @@ const Groups = () => {
 
         fetchGroups();
     }, [debouncedSearchParam]);
+
+    // Socket.IO: Atualizar lista quando mensagens chegam em grupos
+    useEffect(() => {
+        const companyId = user.companyId;
+        const socket = socketManager.GetSocket(companyId);
+
+        const onAppMessage = (data) => {
+            if (data.action === "create" && data.message?.ticket?.isGroup) {
+                // Atualizar grupo na lista
+                setGroups((prevGroups) => {
+                    const groupId = data.message.ticket.contactId;
+                    const existingIndex = prevGroups.findIndex(g => g.id === groupId);
+                    
+                    if (existingIndex >= 0) {
+                        // Atualizar grupo existente
+                        const updated = [...prevGroups];
+                        updated[existingIndex] = {
+                            ...updated[existingIndex],
+                            lastMessage: data.message.body,
+                            lastMessageDate: data.message.createdAt,
+                            unreadCount: data.message.ticket.unreadMessages || updated[existingIndex].unreadCount
+                        };
+                        return updated;
+                    }
+                    return prevGroups;
+                });
+            }
+        };
+
+        const onContact = (data) => {
+            if (data.action === "update" && data.contact?.isGroup) {
+                // Atualizar dados do grupo (nome, avatar)
+                setGroups((prevGroups) => {
+                    const existingIndex = prevGroups.findIndex(g => g.id === data.contact.id);
+                    if (existingIndex >= 0) {
+                        const updated = [...prevGroups];
+                        updated[existingIndex] = {
+                            ...updated[existingIndex],
+                            name: data.contact.name,
+                            profilePicUrl: data.contact.profilePicUrl,
+                            urlPicture: data.contact.urlPicture
+                        };
+                        return updated;
+                    }
+                    return prevGroups;
+                });
+            }
+        };
+
+        socket.on(`company-${companyId}-appMessage`, onAppMessage);
+        socket.on(`company-${companyId}-contact`, onContact);
+
+        return () => {
+            socket.off(`company-${companyId}-appMessage`, onAppMessage);
+            socket.off(`company-${companyId}-contact`, onContact);
+        };
+    }, [user.companyId]);
 
     // Agrupar grupos por conexão (whatsappId)
     const lanes = useMemo(() => {

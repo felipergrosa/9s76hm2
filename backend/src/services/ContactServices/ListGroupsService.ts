@@ -98,11 +98,13 @@ const ListGroupsService = async ({
       "id",
       "name",
       "number",
+      "profilePicUrl",
       "urlPicture",
       "whatsappId",
       "createdAt",
       "updatedAt",
       "companyId",
+      "isGroup",
       [
         literal(`(
           SELECT COALESCE(SUM(t."unreadMessages"), 0)
@@ -119,6 +121,17 @@ const ListGroupsService = async ({
           WHERE t."contactId" = "Contact"."id"
         )`),
         "lastMessageDate"
+      ],
+      [
+        literal(`(
+          SELECT m."body"
+          FROM "Messages" m
+          JOIN "Tickets" t ON t."id" = m."ticketId"
+          WHERE t."contactId" = "Contact"."id"
+          ORDER BY m."createdAt" DESC
+          LIMIT 1
+        )`),
+        "lastMessage"
       ]
     ],
     include: [

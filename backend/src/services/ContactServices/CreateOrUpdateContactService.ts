@@ -358,7 +358,18 @@ const CreateOrUpdateContactService = async ({
     // Busca por número/canonical E pelo remoteJid quando for LID, para evitar duplicados
     contact = await Contact.findOne({
       where: isGroup
-        ? { number, companyId }
+        ? {
+            companyId,
+            isGroup: true,
+            [Op.or]: [
+              // Buscar por remoteJid (identificador único do grupo)
+              remoteJid ? { remoteJid } : {},
+              // Buscar por number se for o remoteJid
+              remoteJid ? { number: remoteJid } : {},
+              // Fallback: buscar por number (pode ser diferente se conexão mudou)
+              { number }
+            ]
+          }
         : {
           companyId,
           [Op.or]: [
