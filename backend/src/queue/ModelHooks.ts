@@ -131,16 +131,16 @@ export function initModelHooks(sequelize: Sequelize): void {
                 include: [{ model: sequelize.models.AIAgent, as: "aiAgent" }]
               });
               
-              if (queue?.aiAgent?.status === "active" && queue.aiAgent.inactivityTimeoutMinutes > 0) {
-                const delay = queue.aiAgent.inactivityTimeoutMinutes * 60 * 1000;
+              if ((queue as any)?.aiAgent?.status === "active" && (queue as any).aiAgent.inactivityTimeoutMinutes > 0) {
+                const delay = (queue as any).aiAgent.inactivityTimeoutMinutes * 60 * 1000;
                 
                 await BullScheduler.schedule(
                   `${process.env.DB_NAME}-InactivityTimeout`,
-                  { ticketId: instance.id, agentId: queue.aiAgent.id, companyId: instance.companyId },
-                  { delay, jobId: `inactivity-${instance.id}` }
+                  { ticketId: (instance as any).id, agentId: (queue as any).aiAgent.id, companyId: (instance as any).companyId },
+                  { delay, jobId: `inactivity-${(instance as any).id}` }
                 );
                 
-                logger.debug(`[ModelHooks] InactivityTimeout agendado para ticket ${instance.id} (status mudou para bot)`);
+                logger.debug(`[ModelHooks] InactivityTimeout agendado para ticket ${(instance as any).id} (status mudou para bot)`);
               }
             }
             
@@ -148,9 +148,9 @@ export function initModelHooks(sequelize: Sequelize): void {
             if (instance.status !== "bot" && changed.includes('status')) {
               await BullScheduler.cancel(
                 `${process.env.DB_NAME}-InactivityTimeout`,
-                `inactivity-${instance.id}`
+                `inactivity-${(instance as any).id}`
               );
-              logger.debug(`[ModelHooks] InactivityTimeout cancelado para ticket ${instance.id} (status mudou de bot)`);
+              logger.debug(`[ModelHooks] InactivityTimeout cancelado para ticket ${(instance as any).id} (status mudou de bot)`);
             }
           }
         }
@@ -216,36 +216,36 @@ export function initModelHooks(sequelize: Sequelize): void {
           
           if (ticket) {
             // 1. SessionWindowRenewal (API Oficial)
-            if (ticket.whatsapp?.channelType === "official" && ticket.whatsapp?.sessionWindowRenewalMessage) {
-              const renewalMinutes = ticket.whatsapp.sessionWindowRenewalMinutes || 60;
+            if ((ticket as any).whatsapp?.channelType === "official" && (ticket as any).whatsapp?.sessionWindowRenewalMessage) {
+              const renewalMinutes = (ticket as any).whatsapp.sessionWindowRenewalMinutes || 60;
               const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
               const renewalTime = new Date(expiresAt.getTime() - renewalMinutes * 60 * 1000);
               const delay = Math.max(0, renewalTime.getTime() - Date.now());
               
               await BullScheduler.reschedule(
                 `${process.env.DB_NAME}-SessionWindowRenewal`,
-                `window-renewal-${ticket.id}`,
-                { ticketId: ticket.id, companyId: ticket.companyId },
+                `window-renewal-${(ticket as any).id}`,
+                { ticketId: (ticket as any).id, companyId: (ticket as any).companyId },
                 { delay }
               );
               
-              logger.debug(`[ModelHooks] SessionWindowRenewal reagendado para ticket ${ticket.id} (delay: ${Math.floor(delay/60000)}min)`);
+              logger.debug(`[ModelHooks] SessionWindowRenewal reagendado para ticket ${(ticket as any).id} (delay: ${Math.floor(delay/60000)}min)`);
             }
             
             // 2. InactivityTimeout (se ticket em status bot)
-            if (ticket.status === "bot" && ticket.queue?.aiAgent) {
-              const agent = ticket.queue.aiAgent;
+            if ((ticket as any).status === "bot" && (ticket as any).queue?.aiAgent) {
+              const agent = (ticket as any).queue.aiAgent;
               if (agent.status === "active" && agent.inactivityTimeoutMinutes > 0) {
                 const delay = agent.inactivityTimeoutMinutes * 60 * 1000;
                 
                 await BullScheduler.reschedule(
                   `${process.env.DB_NAME}-InactivityTimeout`,
-                  `inactivity-${ticket.id}`,
-                  { ticketId: ticket.id, agentId: agent.id, companyId: ticket.companyId },
+                  `inactivity-${(ticket as any).id}`,
+                  { ticketId: (ticket as any).id, agentId: agent.id, companyId: (ticket as any).companyId },
                   { delay }
                 );
                 
-                logger.debug(`[ModelHooks] InactivityTimeout reagendado para ticket ${ticket.id} (delay: ${agent.inactivityTimeoutMinutes}min)`);
+                logger.debug(`[ModelHooks] InactivityTimeout reagendado para ticket ${(ticket as any).id} (delay: ${agent.inactivityTimeoutMinutes}min)`);
               }
             }
           }
