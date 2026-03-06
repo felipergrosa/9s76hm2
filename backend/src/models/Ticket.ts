@@ -191,6 +191,11 @@ class Ticket extends Model<Ticket> {
   // Quando o cliente envia uma mensagem, abre-se uma janela de 24h para responder gratuitamente
   @Column
   sessionWindowExpiresAt: Date;
+
+  // Data do último envio da mensagem de renovação de janela 24h
+  // Usado para evitar envio duplicado e tracking
+  @Column
+  sessionWindowRenewalSentAt: Date;
 }
 
 export default Ticket;

@@ -12,6 +12,7 @@ import { getIO } from "../../libs/socket";
 import DownloadOfficialMediaService from "./DownloadOfficialMediaService";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import { UpdateSessionWindow } from "../TicketServices/UpdateSessionWindowService";
+import BullQueue from "../../libs/queue";
 
 /**
  * Interface para mudança (change) do webhook Meta
@@ -639,6 +640,54 @@ async function processIncomingMessage(
   // Atualizar janela de sessão de 24h (API Oficial)
   // Quando o cliente envia uma mensagem, abre-se uma janela de 24h para responder gratuitamente
   await UpdateSessionWindow(ticket.id, whatsapp.id);
+
+  // AGENDAR renovação automática via Bull Queue (zero overhead, sem polling)
+  // Agenda para 23 horas depois (1h antes de expirar a janela de 24h)
+  try {
+    const renewalMinutes = whatsapp.sessionWindowRenewalMinutes || 60;
+    const delayMs = (24 * 60 - renewalMinutes) * 60 * 1000; // 24h - renewalMinutes
+    
+    // Job ID único por ticket (evita duplicatas)
+    const jobId = `window-renewal-${ticket.id}`;
+    
+    // Remover job anterior se existir (caso janela tenha sido renovada)
+    const existingJob = await BullQueue.queues
+      .find(q => q.name === `${process.env.DB_NAME}-SessionWindowRenewal`)
+      ?.bull.getJob(jobId);
+    
+    if (existingJob) {
+      await existingJob.remove();
+      logger.info(`[WebhookProcessor] Job anterior removido: ${jobId}`);
+    }
+    
+    // Agendar novo job
+    await BullQueue.add(
+      `${process.env.DB_NAME}-SessionWindowRenewal`,
+      {
+        ticketId: ticket.id,
+        companyId: companyId
+      },
+      {
+        jobId: jobId,
+        delay: delayMs, // Ex: 23h depois se renewalMinutes=60
+        attempts: 3,
+        backoff: {
+          type: 'fixed',
+          delay: 60000 // 1 min entre retries
+        }
+      }
+    );
+    
+    logger.info(
+      `[WebhookProcessor] Agendado renovação de janela para ticket ${ticket.id} ` +
+      `(envio em ${Math.floor(delayMs / 3600000)}h se não houver resposta)`
+    );
+  } catch (scheduleError: any) {
+    logger.error(
+      `[WebhookProcessor] Erro ao agendar renovação de janela para ticket ${ticket.id}: ${scheduleError.message}`
+    );
+    // Não lançar erro - mensagem já foi processada com sucesso
+  }
 
   // Emitir evento via Socket.IO apenas para a sala do ticket específico
   const io = getIO();
