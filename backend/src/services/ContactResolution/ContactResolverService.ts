@@ -76,12 +76,14 @@ export async function resolveMessageContact(
 
   // Se é mensagem do próprio bot (fromMe=true e remoteJid é LID do bot), IGNORAR
   // Não deve criar contato para o próprio bot
-  if (ids.isFromMe && isSelfMessage) {
+  // CRÍTICO: Apenas ignorar se NÃO for grupo (em grupos, isFromMe=true é normal)
+  if (ids.isFromMe && isSelfMessage && !ids.isGroup) {
     logger.info({
       lidJid: ids.lidJid,
       myLid,
-      isFromMe: ids.isFromMe
-    }, "[resolveMessageContact] Mensagem do próprio bot para si mesmo. Ignorando criação de contato.");
+      isFromMe: ids.isFromMe,
+      isGroup: ids.isGroup
+    }, "[resolveMessageContact] Mensagem do próprio bot para si mesmo (1:1). Ignorando criação de contato.");
     
     // Retornar null para indicar que não deve processar esta mensagem
     // O chamador deve verificar e ignorar

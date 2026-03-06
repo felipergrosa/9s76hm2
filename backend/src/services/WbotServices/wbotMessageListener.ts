@@ -5275,18 +5275,10 @@ const handleMessage = async (
     let contact: Contact | null = null;
     let groupContact: Contact | undefined;
 
-    // Usar novo ContactResolverService para resolver o contato da mensagem
-    const contactResolution = await resolveMessageContact(msg, wbot, companyId);
-    
-    // Se contact é null, é mensagem do próprio bot para si mesmo - ignorar
-    if (!contactResolution.contact) {
-      logger.info("[handleMessage] Mensagem do próprio bot ignorada (self-message)");
-      return;
-    }
-    
-    contact = contactResolution.contact;
-
-    // Se é grupo, também precisamos garantir que o contato do GRUPO exista
+    // ═══════════════════════════════════════════════════════════════════
+    // PARA GRUPOS: Criar contato do grupo PRIMEIRO (antes de tentar resolver participante)
+    // Isso garante fallback caso o participante não seja resolvido
+    // ═══════════════════════════════════════════════════════════════════
     if (isGroup) {
       const groupJid = msg.key.remoteJid;
       let groupSubject = getFallbackGroupName(groupJid);
@@ -5332,11 +5324,29 @@ const handleMessage = async (
       }
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // Tentar resolver contato do participante (pode retornar null para LID não resolvido)
+    // ═══════════════════════════════════════════════════════════════════
+    const contactResolution = await resolveMessageContact(msg, wbot, companyId);
+    
+    // Se contact é null E NÃO é grupo, é mensagem do próprio bot para si mesmo - ignorar
+    // Para grupos, null é aceitável (usaremos groupContact como fallback)
+    if (!contactResolution.contact && !isGroup) {
+      logger.info("[handleMessage] Mensagem do próprio bot ignorada (self-message 1:1)");
+      return;
+    }
+    
+    contact = contactResolution.contact;
+
     // FALLBACK CRÍTICO: Se não encontrou contato do participante em grupo, usar o do grupo
     // Isso garante que a mensagem SEMPRE seja salva no ticket do grupo
     if (!contact && isGroup && groupContact) {
       contact = groupContact;
-      logger.info("[handleMessage] Usando contato do grupo como fallback (participante não encontrado/criado)");
+      logger.info({
+        groupJid: msg.key.remoteJid,
+        participant: msg.key.participant,
+        groupContactId: groupContact.id
+      }, "[handleMessage] Usando contato do grupo como fallback (participante não resolvido)");
     }
 
     // Se ainda assim não tiver contato, falhar com erro (não descartar silenciosamente)
@@ -5344,7 +5354,7 @@ const handleMessage = async (
       logger.error('[handleMessage] ERRO CRÍTICO: Contato não encontrado nem criado', {
         remoteJid: msg.key.remoteJid,
         isGroup,
-        contactId: contact?.id
+        groupContactId: groupContact?.id
       });
       return;
     }
