@@ -35,6 +35,12 @@ export const checkOrphanedSessionsCron = () => {
             const allActiveSessionIds = [...baileysSessionIds, ...officialSessionIds];
 
             for (const whatsapp of whatsapps) {
+                // IGNORAR API Oficial - não precisa de reconexão (stateless)
+                if (whatsapp.channelType === "official") {
+                    logger.debug(`[OrphanedCron] Pulando verificação de API Oficial: ${whatsapp.name} (#${whatsapp.id})`);
+                    continue;
+                }
+
                 // Verificar se sessão já está em processo de reconexão
                 if (getWbotIsReconnecting(whatsapp.id)) {
                     logger.debug(`[OrphanedCron] Sessão ${whatsapp.name} (#${whatsapp.id}) já está reconectando. Pulando.`);

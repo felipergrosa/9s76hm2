@@ -277,7 +277,7 @@ const ImportContactHistoryService = async ({
 
                     // Usar handler centralizado
                     const fetchId = registerFetchRequest(mainJid);
-                    const fetchPromise = startFetchRequest(fetchId, mainJid, 60000); // 60s timeout
+                    const fetchPromise = startFetchRequest(fetchId, mainJid, 30000); // 30s timeout
                     
                     const tempHandler = (msgs: any[]) => {
                         allMessages.push(...msgs);
@@ -328,7 +328,7 @@ const ImportContactHistoryService = async ({
                             logger.info("[ImportHistory] Tentando retry após 3s...");
                             await new Promise(r => setTimeout(r, 3000));
                             
-                            const retryPromise = startFetchRequest(fetchId, mainJid, 60000);
+                            const retryPromise = startFetchRequest(fetchId, mainJid, 30000);
                             await wbotAny.fetchMessageHistory(200, oldestKey, oldestTimestamp);
                             
                             const retryResult = await retryPromise;

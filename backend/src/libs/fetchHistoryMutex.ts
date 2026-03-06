@@ -21,7 +21,7 @@ const lastFetchTime = new Map<number, number>();
 
 // Configurações
 const FETCH_COOLDOWN_MS = 5000; // 5 segundos entre fetches da mesma conexão
-const MUTEX_TIMEOUT_MS = 180000; // 3 minutos timeout no mutex
+const MUTEX_TIMEOUT_MS = 60000; // 1 minuto timeout no mutex
 
 /**
  * Obtém ou cria o Mutex para um whatsappId

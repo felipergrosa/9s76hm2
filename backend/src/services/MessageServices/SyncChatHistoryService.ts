@@ -257,7 +257,7 @@ const SyncChatHistoryService = async ({
 
                 // Usar handler centralizado para receber mensagens
                 const fetchId = registerFetchRequest(jid);
-                const fetchPromise = startFetchRequest(fetchId, jid, 120000); // 120s timeout (aumentado para evitar timeouts prematuros)
+                const fetchPromise = startFetchRequest(fetchId, jid, 30000); // 30s timeout
 
                 // Registrar handler temporário para este JID
                 const tempHandler = (msgs: any[], event: any) => {
@@ -306,7 +306,7 @@ const SyncChatHistoryService = async ({
                         logger.info(`[SyncChatHistory] Tentando retry após 2s...`);
                         await new Promise(r => setTimeout(r, 2000));
                         
-                        const retryPromise = startFetchRequest(fetchId, jid, 120000);
+                        const retryPromise = startFetchRequest(fetchId, jid, 30000);
                         await wbotAny.fetchMessageHistory(messageCount, oldestKey, oldestTimestamp);
                         
                         const retryResult = await retryPromise;
@@ -391,7 +391,7 @@ const SyncChatHistoryService = async ({
                     });
 
                     const fetchId = registerFetchRequest(jid);
-                    const fetchPromise = startFetchRequest(fetchId, jid, 60000);
+                    const fetchPromise = startFetchRequest(fetchId, jid, 20000); // 20s timeout para paginação
                     
                     const tempHandler = (msgs: any[]) => {
                         batchMessages.push(...msgs);
