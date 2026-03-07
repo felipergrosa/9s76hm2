@@ -202,7 +202,8 @@ async function handleImportContacts(job) {
   }
 }
 
-importContactsQueue.process("ImportContacts", handleImportContacts);
+// ImportContacts pode validar números via WhatsApp - concurrency=1 por segurança
+importContactsQueue.process("ImportContacts", 1, handleImportContacts);
 
 // Limpar jobs antigos periodicamente
 importContactsQueue.on("completed", (job) => {

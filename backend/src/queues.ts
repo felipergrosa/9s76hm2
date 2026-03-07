@@ -2945,25 +2945,35 @@ handleRandomUser();
 export async function startQueueProcess() {
   logger.info("Iniciando processamento de filas");
 
-  messageQueue.process("SendMessage", handleSendMessage);
+  // CRÍTICO: concurrency=1 para evitar múltiplos jobs usando o MESMO socket Baileys
+  // simultaneamente, o que causa "Connection Closed" e corrupção do WebSocket
+  messageQueue.process("SendMessage", 1, handleSendMessage);
 
-  scheduleMonitor.process("Verify", handleVerifySchedules);
+  scheduleMonitor.process("Verify", 1, handleVerifySchedules);
 
-  sendScheduledMessages.process("SendMessage", handleSendScheduledMessage);
+  // SendScheduledMessage interage com socket - concurrency=1
+  sendScheduledMessages.process("SendMessage", 1, handleSendScheduledMessage);
 
-  campaignQueue.process("VerifyCampaignsDaatabase", handleVerifyCampaigns);
+  // VerifyCampaigns não interage com socket - pode ser paralelo
+  campaignQueue.process("VerifyCampaignsDaatabase", 3, handleVerifyCampaigns);
 
-  campaignQueue.process("ProcessCampaign", handleProcessCampaign);
+  // ProcessCampaign interage com socket - concurrency=1
+  campaignQueue.process("ProcessCampaign", 1, handleProcessCampaign);
 
-  campaignQueue.process("PrepareContact", handlePrepareContact);
+  // PrepareContact interage com socket - concurrency=1
+  campaignQueue.process("PrepareContact", 1, handlePrepareContact);
 
-  campaignQueue.process("DispatchCampaign", handleDispatchCampaign);
+  // DispatchCampaign envia mensagens via socket - concurrency=1
+  campaignQueue.process("DispatchCampaign", 1, handleDispatchCampaign);
 
-  userMonitor.process("VerifyLoginStatus", handleLoginStatus);
+  // VerifyLoginStatus não interage com socket - pode ser paralelo
+  userMonitor.process("VerifyLoginStatus", 3, handleLoginStatus);
 
-  queueMonitor.process("VerifyQueueStatus", handleVerifyQueue);
+  // VerifyQueueStatus não interage com socket - pode ser paralelo
+  queueMonitor.process("VerifyQueueStatus", 3, handleVerifyQueue);
 
-  validateWhatsappContactsQueue.process("validateWhatsappContacts", async (job) => {
+  // ValidateContacts interage com socket - concurrency=1
+  validateWhatsappContactsQueue.process("validateWhatsappContacts", 1, async (job) => {
     const validateJob = await import("./jobs/validateWhatsappContactsQueue");
     return validateJob.default.handle(job);
   });
