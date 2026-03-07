@@ -560,6 +560,15 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               const isForbidden = statusCode === 403;
               const isLoggedOut = statusCode === DisconnectReason.loggedOut;
               const isRestartRequired = statusCode === 515; // Stream Errored (restart required)
+              
+              // CORREÇÃO: Detectar xml-not-well-formed que corrompe o socket
+              const isXmlNotWellFormed = errorMsg.includes('xml-not-well-formed') || 
+                                         errorMsg.includes('XML not well-formed');
+              
+              if (isXmlNotWellFormed) {
+                logger.error(`[wbot] ERRO CRÍTICO: xml-not-well-formed detectado para ${name}. Isso indica corrupção do WebSocket.`);
+                logger.error(`[wbot] Último erro: ${JSON.stringify(lastDisconnect, null, 2)}`);
+              }
 
               // Só notifica front para exibir modal se for erro que precisa de ação do usuário
               // NÃO mostra modal para 515 (restart) pois reconecta automaticamente
@@ -697,45 +706,65 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 const alreadyReconnecting = getWbotIsReconnecting(id);
                 const sessionStillExists = sessions.some(s => s.id === id);
                 
+                // LOGS DETALHADOS para debug de reconexão
+                logger.info(`[wbot][RECONNECT] Iniciando tratamento de desconexão para ${name}. ` +
+                  `statusCode=${statusCode}, errorMsg="${errorMsg}", ` +
+                  `alreadyReconnecting=${alreadyReconnecting}, sessionStillExists=${sessionStillExists}, ` +
+                  `isXmlNotWellFormed=${isXmlNotWellFormed}`);
+                
                 if (alreadyReconnecting && sessionStillExists) {
                   // Flag ativa E sessão existe = reconexão genuinamente em andamento
-                  logger.warn(`[wbot] Já existe uma tentativa de reconexão em andamento para ${name}. Ignorando.`);
+                  logger.warn(`[wbot][RECONNECT] Já existe uma tentativa de reconexão em andamento para ${name}. Ignorando.`);
                   removeWbot(id, false);
                   return;
                 }
                 
                 if (alreadyReconnecting && !sessionStillExists) {
                   // Flag ativa MAS sessão morreu = reconexão anterior falhou silenciosamente
-                  logger.warn(`[wbot] Flag de reconexão ativa para ${name}, mas sessão inexistente. Forçando nova tentativa.`);
+                  logger.warn(`[wbot][RECONNECT] Flag de reconexão ativa para ${name}, mas sessão inexistente. Forçando nova tentativa.`);
                   reconnectingWhatsapps.delete(id);
                 }
                 
                 reconnectingWhatsapps.set(id, Date.now());
                 removeWbot(id, false);
                 
+                logger.info(`[wbot][RECONNECT] Flag de reconexão SETADA para ${name}. Agendando reconexão em 5s...`);
+                
                 // TIMEOUT DE SEGURANÇA: Limpar flag E disparar reconexão após 60s se sessão não voltou
                 setTimeout(async () => {
                   if (reconnectingWhatsapps.get(id) && !sessions.find(s => s.id === id)) {
-                    logger.warn(`[wbot] Timeout de segurança (60s) para ${name} - sessão não voltou. Limpando flag e disparando recovery.`);
+                    logger.warn(`[wbot][RECONNECT] TIMEOUT DE SEGURANÇA (60s) para ${name} - sessão não voltou. Limpando flag e disparando recovery.`);
                     reconnectingWhatsapps.delete(id);
                     try {
                       const freshWhatsapp = await Whatsapp.findByPk(id);
                       if (freshWhatsapp && freshWhatsapp.status !== "PENDING") {
+                        logger.info(`[wbot][RECONNECT] Disparando StartWhatsAppSession após timeout para ${name}`);
                         await StartWhatsAppSession(freshWhatsapp, freshWhatsapp.companyId);
+                      } else {
+                        logger.warn(`[wbot][RECONNECT] Não foi possível recuperar ${name}: status=${freshWhatsapp?.status}`);
                       }
                     } catch (recoveryErr: any) {
-                      logger.error(`[wbot] Erro no recovery após timeout (60s) para ${name}: ${recoveryErr?.message}`);
+                      logger.error(`[wbot][RECONNECT] Erro no recovery após timeout (60s) para ${name}: ${recoveryErr?.message}`);
                     }
+                  } else if (sessions.find(s => s.id === id)) {
+                    logger.info(`[wbot][RECONNECT] Timeout de segurança: sessão ${name} já recuperada. OK.`);
                   }
                 }, RECONNECT_FLAG_TIMEOUT_MS);
                 
                 // Reconexão com delay de 5s
                 setTimeout(async () => {
+                  logger.info(`[wbot][RECONNECT] Executando reconexão agendada (5s) para ${name}...`);
                   try {
-                    await StartWhatsAppSession(whatsapp, whatsapp.companyId);
-                  } catch (err: any) {
-                    logger.error(`[wbot] Erro na reconexão (disconnect) para ${name}: ${err?.message}`);
+                    // CRÍTICO: Limpar flag ANTES de chamar StartWhatsAppSession
+                    // Senão StartWhatsAppSessionUnified vai retornar silenciosamente (getWbotIsReconnecting=true)
                     reconnectingWhatsapps.delete(id);
+                    logger.info(`[wbot][RECONNECT] Flag limpa, chamando StartWhatsAppSession para ${name}...`);
+                    await StartWhatsAppSession(whatsapp, whatsapp.companyId);
+                    logger.info(`[wbot][RECONNECT] StartWhatsAppSession CONCLUÍDO com sucesso para ${name}`);
+                  } catch (err: any) {
+                    logger.error(`[wbot][RECONNECT] ERRO na StartWhatsAppSession para ${name}: ${err?.message}`);
+                    logger.error(`[wbot][RECONNECT] Stack: ${err?.stack}`);
+                    // Flag já foi limpa acima
                   }
                 }, 5000);
               } else {
