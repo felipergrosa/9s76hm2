@@ -16,8 +16,9 @@ const queueOptions = {
     },
     removeOnFail: false,
     removeOnComplete: true,
-    // Timeout de 30 segundos por job (evita jobs infinitos)
-    timeout: parseInt(process.env.BULL_JOB_TIMEOUT_MS || "30000"),
+    // Timeout global removido para evitar conflito com timeouts específicos
+    // Cada job define seu próprio timeout (ex: handleMessage usa 45s)
+    // timeout: parseInt(process.env.BULL_JOB_TIMEOUT_MS || "30000"),
   },
   limiter: {
     max: config.webhook.limiter.max,
@@ -55,11 +56,12 @@ export default {
     return queue.bull.add(data, { ...params, removeOnComplete: true });
   },
   process() {
+    // SISTEMA GLOBAL DESATIVADO - Usar apenas processamento específico em queues.ts
+    // Evita duplo processamento e conflitos de timeout
+    logger.info("[BullQueue] Sistema global desativado - usando queues.ts específico");
+    
+    // Mantém apenas error handlers globais, sem processamento
     return this.queues.forEach(queue => {
-      // CRÍTICO: concurrency=1 para proteger socket Baileys contra concorrência
-      // Múltiplos jobs simultâneos causam Connection Closed e corrupção do WebSocket
-      queue.bull.process(1, queue.handle);
-
       queue.bull.on('failed', (job, err) => {
         logger.error(
           {

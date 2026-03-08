@@ -2940,7 +2940,6 @@ handleInvoiceCreate()
 handleWhatsapp();
 handleProcessLanes();
 handleCloseTicketsAutomatic();
-handleRandomUser();
 
 export async function startQueueProcess() {
   logger.info("Iniciando processamento de filas");
@@ -2948,6 +2947,12 @@ export async function startQueueProcess() {
   // CRÍTICO: concurrency=1 para evitar múltiplos jobs usando o MESMO socket Baileys
   // simultaneamente, o que causa "Connection Closed" e corrupção do WebSocket
   messageQueue.process("SendMessage", 1, handleSendMessage);
+
+  // CRÍTICO: handleMessage também precisa de concurrency=1 para proteger socket
+  messageQueue.process("handleMessage", 1, async (job) => {
+    const handleMessageJob = await import("./jobs/handleMessageQueue");
+    return handleMessageJob.default.handle(job);
+  });
 
   scheduleMonitor.process("Verify", 1, handleVerifySchedules);
 
