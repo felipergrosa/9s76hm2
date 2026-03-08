@@ -56,7 +56,10 @@ export default {
   },
   process() {
     return this.queues.forEach(queue => {
-      queue.bull.process(queue.handle);
+      // CRÍTICO: concurrency=5 para processar múltiplas mensagens em paralelo
+      // Cada mensagem usa lock por JID (wbotMessageListener) para evitar race conditions
+      // sem bloquear mensagens de contatos diferentes
+      queue.bull.process(5, queue.handle);
 
       queue.bull.on('failed', (job, err) => {
         logger.error(
