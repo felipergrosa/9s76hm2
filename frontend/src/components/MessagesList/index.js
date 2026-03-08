@@ -1457,17 +1457,17 @@ const MessagesList = ({
         clearInterval(pollIntervalRef.current);
       }
 
-      // Determina intervalo baseado no estado - MAIS AGRESSIVO para garantir realtime
-      let intervalMs = 30000; // Default: 30s quando socket conectado
+      // Determina intervalo baseado no estado - REDUZIDO para evitar sobrecarga
+      let intervalMs = 120000; // Default: 2min (reduzido de 30s)
 
       if (!socket?.connected) {
-        intervalMs = 5000; // 5s quando socket desconectado (mais agressivo)
-        logger.log("[MessagesList] Polling adaptativo: 5s (socket desconectado)");
+        intervalMs = 30000; // 30s quando socket desconectado (reduzido de 5s)
+        logger.log("[MessagesList] Polling adaptativo: 30s (socket desconectado)");
       } else if (consecutiveFailsRef.current > 5) {
-        intervalMs = 60000; // 60s após muitas falhas (backoff)
-        logger.log("[MessagesList] Polling adaptativo: 60s (backoff após falhas)");
+        intervalMs = 300000; // 5min após muitas falhas (aumentado de 60s)
+        logger.log("[MessagesList] Polling adaptativo: 5min (backoff após falhas)");
       } else {
-        logger.log("[MessagesList] Polling adaptativo: 30s (socket conectado)");
+        logger.log("[MessagesList] Polling adaptativo: 2min (socket conectado - reduzido)");
       }
 
       pollIntervalRef.current = setInterval(pollNewMessages, intervalMs);
