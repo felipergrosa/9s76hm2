@@ -39,7 +39,8 @@ import { checkOrphanedSessionsCron } from "./cron/checkOrphanedSessionsCron";
 import { sessionWindowRenewalCron } from "./cron/sessionWindowRenewalCron";
 import { clearSessionLocks } from "./libs/wbotMutex";
 import { bullQueueMonitor } from "./jobs/BullQueueMonitor";
-import { initModelHooks, initEventTriggerCallbacks, initRecurringJobs } from "./queue/ModelHooks";
+// EVENT-TRIGGER SYSTEM DESATIVADO - Conflito com sessões WhatsApp
+// import { initModelHooks, initEventTriggerCallbacks, initRecurringJobs } from "./queue/ModelHooks";
 
 const ENV_PROFILE = process.env.APP_ENV || process.env.NODE_ENV || "development";
 const isProduction = ENV_PROFILE === "production";
@@ -230,7 +231,10 @@ const server = app.listen(port, async () => {
 
   logger.info(`Server started on port: ${port}`);
   
-  // Inicializar hooks e callbacks do EventTrigger
+  // SISTEMA EVENT-TRIGGER DESATIVADO - Conflito com sessões WhatsApp
+  // EventTrigger + Bull Queue + Baileys auto-recovery = Bad MAC Error
+  logger.info("[Server] Pulando inicialização EventTrigger para evitar conflitos");
+  /*
   logger.info("[Server] Inicializando hooks do modelo e callbacks EventTrigger...");
   initModelHooks(sequelize);
   initEventTriggerCallbacks();
@@ -239,6 +243,7 @@ const server = app.listen(port, async () => {
   await initRecurringJobs();
   
   logger.info("[Server] Hooks, callbacks e jobs recorrentes inicializados com sucesso");
+  */
 });
 
 process.on("unhandledRejection", (reason, p) => {

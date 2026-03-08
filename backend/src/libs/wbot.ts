@@ -540,13 +540,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             // Single-instance: sem verificação de zumbi
 
             if (connection === "close") {
-              // DISPARAR EVENTO: Sessão desconectada
-              // Isso permite que Bull Queue verifique sessões órfãs sem polling constante
-              try {
-                await EventTrigger.emitSessionDisconnected(id, lastDisconnect?.error?.message || "Connection closed");
-              } catch (err: any) {
-                logger.error(`[wbot] Erro ao emitir sessionDisconnected: ${err.message}`);
-              }
+              // DISPARO DE EVENTO DESATIVADO - Conflito com sessão WhatsApp
+            // EventTrigger.emitSessionDisconnected() causa Bad MAC Error
+            // ao acessar sessão simultaneamente com Baileys auto-recovery
+            /*
+            try {
+              await EventTrigger.emitSessionDisconnected(id, lastDisconnect?.error?.message || "Connection closed");
+            } catch (err: any) {
+              logger.error(`[wbot] Erro ao emitir sessionDisconnected: ${err.message}`);
+            }
+            */
               
               const errorMsg = lastDisconnect?.error?.message || "";
               console.log("DESCONECTOU", JSON.stringify(lastDisconnect, null, 2))
