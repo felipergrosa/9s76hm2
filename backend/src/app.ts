@@ -40,6 +40,9 @@ Sentry.init({ dsn: process.env.SENTRY_DSN });
 
 const app = express();
 
+// Configurar trust proxy para rate limiting funcionar atrás de reverse proxy
+app.set('trust proxy', 1);
+
 // Configuração de filas
 app.set("queues", {
   messageQueue,

@@ -14,6 +14,14 @@ export const messageRateLimit = rateLimit({
   skip: (req) => {
     return req.path.includes('/socket.io/') || 
            req.headers.upgrade === 'websocket';
+  },
+  // Usar IP real atrás de proxy
+  keyGenerator: (req) => {
+    return req.ip || 
+           req.connection.remoteAddress || 
+           req.socket.remoteAddress ||
+           (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+           'unknown';
   }
 });
 
@@ -24,5 +32,13 @@ export const listMessagesRateLimit = rateLimit({
   message: {
     error: 'Too many message list requests',
     code: 'MESSAGE_LIST_RATE_LIMIT'
+  },
+  // Usar IP real atrás de proxy
+  keyGenerator: (req) => {
+    return req.ip || 
+           req.connection.remoteAddress || 
+           req.socket.remoteAddress ||
+           (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+           'unknown';
   }
 });
