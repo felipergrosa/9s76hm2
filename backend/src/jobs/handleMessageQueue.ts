@@ -30,10 +30,9 @@ export default {
     try {
       const w = getWbot(wbot);
       
-      // PROTEÇÃO CRÍTICA: Timeout de 60s para prevenir travamento do websocket
-      // Mensagens de grupo com operações bloqueantes podem travar indefinidamente
-      // e corromper o websocket Baileys (xml-not-well-formed)
-      await pTimeout(handleMessage(message, w, companyId), 60000);
+      // PROTEÇÃO CRÍTICA: Timeout de 25s para prevenir travamento do websocket
+      // Jobs mais longos causam sobreposição e corrupção do socket
+      await pTimeout(handleMessage(message, w, companyId), 25000);
     } catch (error: any) {
       const isTimeout = error?.message?.includes('Timeout');
       

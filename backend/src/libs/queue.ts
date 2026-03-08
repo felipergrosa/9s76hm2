@@ -56,10 +56,9 @@ export default {
   },
   process() {
     return this.queues.forEach(queue => {
-      // CRÍTICO: concurrency=5 para processar múltiplas mensagens em paralelo
-      // Cada mensagem usa lock por JID (wbotMessageListener) para evitar race conditions
-      // sem bloquear mensagens de contatos diferentes
-      queue.bull.process(5, queue.handle);
+      // CRÍTICO: concurrency=1 para proteger socket Baileys contra concorrência
+      // Múltiplos jobs simultâneos causam Connection Closed e corrupção do WebSocket
+      queue.bull.process(1, queue.handle);
 
       queue.bull.on('failed', (job, err) => {
         logger.error(
