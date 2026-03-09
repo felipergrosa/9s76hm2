@@ -6433,7 +6433,11 @@ const filterMessages = (msg: any): boolean => {
   msgDB.save(msg);
 
   if (msg.message?.protocolMessage?.editedMessage) return true;
-  if (msg.message?.protocolMessage) return false;
+  
+  if (msg.message?.protocolMessage) {
+    logger.debug(`[filterMessages] Rejeitando protocolMessage: wid=${msg.key?.id}, type=${msg.message?.protocolMessage?.type}`);
+    return false;
+  }
 
   if (
     [
@@ -6442,9 +6446,12 @@ const filterMessages = (msg: any): boolean => {
       WAMessageStubType.E2E_IDENTITY_CHANGED,
       WAMessageStubType.CIPHERTEXT
     ].includes(msg.messageStubType)
-  )
+  ) {
+    logger.debug(`[filterMessages] Rejeitando messageStubType: wid=${msg.key?.id}, stubType=${msg.messageStubType}`);
     return false;
+  }
 
+  logger.debug(`[filterMessages] APROVADO: wid=${msg.key?.id}, hasMessage=${!!msg.message}, fromMe=${msg.key?.fromMe}, remoteJid=${msg.key?.remoteJid}`);
   return true;
 };
 
