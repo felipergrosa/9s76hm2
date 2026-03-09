@@ -21,6 +21,7 @@ export interface MessageData {
   mediaType?: string;
   mediaUrl?: string;
   ack?: number;
+  quotedMsgId?: string | number | null;
   queueId?: number;
   channel?: string;
   ticketTrakingId?: number;

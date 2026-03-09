@@ -212,19 +212,32 @@ export const initIO = (httpServer: Server): SocketIO => {
     socket.on("recoverMissedMessages", async (data: { ticketId: string; lastMessageId: number }, callback?: (result: any) => void) => {
       try {
         const { ticketId, lastMessageId } = data;
-        if (!ticketId || !lastMessageId) {
+        if (!ticketId || lastMessageId === undefined || lastMessageId === null || Number.isNaN(lastMessageId)) {
           callback?.({ error: "ticketId e lastMessageId são obrigatórios" });
           return;
         }
 
         // Importação dinâmica para evitar dependência circular
         const { default: Message } = await import("../models/Message");
+        const { default: Ticket } = await import("../models/Ticket");
         const { Op } = await import("sequelize");
+
+        const normalizedTicketId = String(ticketId).trim();
+        const numericTicketId = Number(normalizedTicketId);
+
+        const ticket = Number.isInteger(numericTicketId) && numericTicketId > 0
+          ? await Ticket.findByPk(numericTicketId, { attributes: ["id", "uuid"] })
+          : await Ticket.findOne({ where: { uuid: normalizedTicketId }, attributes: ["id", "uuid"] });
+
+        if (!ticket) {
+          callback?.({ error: "Ticket não encontrado" });
+          return;
+        }
 
         // Busca mensagens mais recentes que o último ID conhecido
         const missedMessages = await Message.findAll({
           where: {
-            ticketId: ticketId,
+            ticketId: ticket.id,
             id: { [Op.gt]: lastMessageId }
           },
           order: [["id", "ASC"]],
@@ -232,7 +245,7 @@ export const initIO = (httpServer: Server): SocketIO => {
           include: ["contact"]
         });
 
-        logger.info(`[SOCKET RECOVERY] Recuperando ${missedMessages.length} mensagens perdidas para ticket ${ticketId} desde ID ${lastMessageId}`);
+        logger.info(`[SOCKET RECOVERY] Recuperando ${missedMessages.length} mensagens perdidas para ticket ${ticket.uuid} desde ID ${lastMessageId}`);
 
         callback?.({
           success: true,

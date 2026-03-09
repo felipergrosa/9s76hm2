@@ -39,7 +39,6 @@ import { generateWAMessageFromContent, generateWAMessageContent, proto } from "@
 import SendWhatsAppReaction from "../services/WbotServices/SendWhatsAppReaction";
 import TranscribeAudioMessageService from "../services/MessageServices/TranscribeAudioMessageService";
 import ShowMessageService, { GetWhatsAppFromMessage } from "../services/MessageServices/ShowMessageService";
-import SyncChatHistoryService from "../services/MessageServices/SyncChatHistoryService";
 import ImportContactHistoryService from "../services/MessageServices/ImportContactHistoryService";
 import ClearTicketMessagesService from "../services/MessageServices/ClearTicketMessagesService";
 import ResyncTicketMessagesService from "../services/MessageServices/ResyncTicketMessagesService";
@@ -706,19 +705,14 @@ export const transcribeAudioMessage = async (req: Request, res: Response): Promi
         await msg.update({ audioTranscription: transcribedText.transcribedText });
 
         // CQRS: Emite update em realtime via EventBus
-        try {
-          const ticket = await Ticket.findByPk(msg.ticketId);
-          if (ticket) {
-            const { messageEventBus } = await import("../services/MessageServices/MessageEventBus");
-            messageEventBus.publishMessageUpdated(
-              companyId,
-              ticket.id,
-              ticket.uuid,
-              msg.id,
-              msg
-            );
-          }
-        } catch { }
+        const { messageEventBus } = await import("../services/MessageServices/MessageEventBus");
+        messageEventBus.publishMessageUpdated(
+          companyId,
+          msg.ticketId,
+          msg.ticket.uuid,
+          msg.id,
+          msg
+        );
       }
     } catch (persistErr) {
       console.warn("[STT] Falha ao persistir transcrição no banco", persistErr);
@@ -801,6 +795,26 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     return res.status(404).json({ error: "Ticket não encontrado" });
   }
 
+  if (ticket.channel === "whatsapp" && !ticket.whatsappId) {
+    const fallbackTicket = await Ticket.findOne({
+      where: {
+        companyId,
+        contactId: ticket.contactId,
+        channel: "whatsapp",
+        whatsappId: { [Op.ne]: null },
+        status: { [Op.in]: ["open", "pending", "bot", "group"] }
+      },
+      order: [["updatedAt", "DESC"]],
+      attributes: ["id", "whatsappId"]
+    });
+
+    if (fallbackTicket?.whatsappId) {
+      await ticket.update({ whatsappId: fallbackTicket.whatsappId });
+      ticket.whatsappId = fallbackTicket.whatsappId;
+      console.log(`[MessageController.store] whatsappId recuperado para ticket ${ticketId}: ${ticket.whatsappId} (origem ticket ${fallbackTicket.id})`);
+    }
+  }
+
   const requestUser = await User.findByPk(req.user.id);
   if (requestUser && requestUser.profile !== "admin") {
     const allowedIds = requestUser.allowedConnectionIds || [];
@@ -878,12 +892,17 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       }
 
       if (ticket.channel === "whatsapp" && isPrivate === "false") {
+        if (!ticket.whatsappId) {
+          throw new AppError("ERR_NO_WHATSAPP_CONNECTION_FOR_TICKET", 400);
+        }
+
         // ENFILEIRAR mensagem via Bull Queue para evitar concorrência no socket
         console.log(`[MessageController.store] Enfileirando mensagem via Bull Queue para ticket ${ticketId}`);
         
         await messageQueue.add(
           "SendMessage",
           {
+            ticketId: ticket.id,
             whatsappId: ticket.whatsappId,
             data: {
               number: ticket.contact.number,
@@ -1082,7 +1101,7 @@ export const forwardMessage = async (req: Request, res: Response): Promise<Respo
       encoding: "7bit",
       mimetype: message.mediaType,
       filename: fileName,
-      path: filePath,
+      path: filePath
     } as Express.Multer.File;
 
     sentMessage = await SendWhatsAppMedia({ media: mediaSrc, ticket: createTicket, body, isForwarded: !message.fromMe });
@@ -1227,8 +1246,11 @@ export const send = async (req: Request, res: Response): Promise<Response> => {
       throw new AppError("O número é obrigatório", 400);
     }
 
-    const number = messageData.number;
+    const numberToTest = messageData.number;
     const body = messageData.body;
+
+    const CheckValidNumber = await CheckContactNumber(numberToTest, whatsapp.companyId);
+    const number = CheckValidNumber.replace(/\D/g, "");
 
     if (medias) {
       await Promise.all(
@@ -1239,7 +1261,7 @@ export const send = async (req: Request, res: Response): Promise<Response> => {
               whatsappId: whatsapp.id,
               data: {
                 number,
-                body: media.originalname.replace("/", "-"),
+                body: media.originalname,
                 mediaPath: media.path,
               },
             },
@@ -1257,7 +1279,7 @@ export const send = async (req: Request, res: Response): Promise<Response> => {
             body,
           },
         },
-        { removeOnComplete: true, attempts: 3 }
+        { removeOnComplete: false, attempts: 3 }
       );
     }
     return res.status(200).json({ mensagem: "Mensagem enviada!" });
@@ -1577,10 +1599,10 @@ export const syncMessages = async (req: Request, res: Response): Promise<Respons
   const { companyId } = req.user;
 
   try {
-    const result = await SyncChatHistoryService({
+    const result = await ImportContactHistoryService({
       ticketId,
       companyId,
-      forceSync: true // Força sync mesmo se throttle ativo
+      periodMonths: 0
     });
 
     return res.status(200).json({
@@ -1726,7 +1748,13 @@ export const pinMessage = async (req: Request, res: Response): Promise<Response>
     const ticket = await Ticket.findByPk(message.ticketId);
     if (ticket) {
       const { messageEventBus: msgBus } = await import("../services/MessageServices/MessageEventBus");
-      msgBus.publishMessageUpdated(companyId, ticket.id, ticket.uuid, message.id, message);
+      msgBus.publishMessageUpdated(
+        companyId,
+        ticket.id,
+        ticket.uuid,
+        message.id,
+        message
+      );
     }
 
     return res.json({
@@ -1957,14 +1985,13 @@ export const resyncTicketHistory = async (req: Request, res: Response): Promise<
 
     emitProgress(0, -1, "FETCHING", "Buscando mensagens do WhatsApp...");
 
-    // Executar SyncChatHistoryService com forceSync em background
-    SyncChatHistoryService({
+    // Executar ImportContactHistoryService com forceSync em background
+    ImportContactHistoryService({
       ticketId: ticket.id,
       companyId,
-      messageCount: periodMonths > 0 ? periodMonths * 30 * 50 : 100, // Estimativa de mensagens
-      forceSync: true
+      periodMonths
     }).then((result) => {
-      emitProgress(result.synced, result.synced, "COMPLETED");
+      emitProgress(result.synced, result.synced, "COMPLETED", result.reason);
 
       // Atualizar ticket na UI
       io.of(namespace).emit(`company-${companyId}-ticket`, {
@@ -1975,7 +2002,7 @@ export const resyncTicketHistory = async (req: Request, res: Response): Promise<
       // Emitir refresh
       setTimeout(() => {
         io.of(namespace).emit(eventName, { action: "refresh" });
-      }, 2000);
+      }, 1000);
 
     }).catch((err: any) => {
       console.error("[resyncTicketHistory] Erro:", err);

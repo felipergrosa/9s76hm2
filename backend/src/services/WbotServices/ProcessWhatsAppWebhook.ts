@@ -12,7 +12,7 @@ import { getIO } from "../../libs/socket";
 import DownloadOfficialMediaService from "./DownloadOfficialMediaService";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import { UpdateSessionWindow } from "../TicketServices/UpdateSessionWindowService";
-import BullQueue from "../../libs/queue";
+import { sessionWindowRenewalQueue } from "../../queues";
 
 /**
  * Interface para mudança (change) do webhook Meta
@@ -651,9 +651,7 @@ async function processIncomingMessage(
     const jobId = `window-renewal-${ticket.id}`;
     
     // Remover job anterior se existir (caso janela tenha sido renovada)
-    const existingJob = await BullQueue.queues
-      .find(q => q.name === `${process.env.DB_NAME}-SessionWindowRenewal`)
-      ?.bull.getJob(jobId);
+    const existingJob = await sessionWindowRenewalQueue.getJob(jobId);
     
     if (existingJob) {
       await existingJob.remove();
@@ -661,8 +659,7 @@ async function processIncomingMessage(
     }
     
     // Agendar novo job
-    await BullQueue.add(
-      `${process.env.DB_NAME}-SessionWindowRenewal`,
+    await sessionWindowRenewalQueue.add(
       {
         ticketId: ticket.id,
         companyId: companyId

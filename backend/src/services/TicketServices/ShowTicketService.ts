@@ -10,11 +10,12 @@ import Company from "../../models/Company";
 import QueueIntegrations from "../../models/QueueIntegrations";
 import TicketTag from "../../models/TicketTag";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
-import SyncChatHistoryService from "../MessageServices/SyncChatHistoryService";
+import ImportContactHistoryService from "../MessageServices/ImportContactHistoryService";
 import logger from "../../utils/logger";
 
 // Throttle de atualização de avatar/nome por contato (24h)
 const lastAvatarCheck = new Map<string, number>();
+const lastTicketHistorySync = new Map<string, number>();
 
 const ShowTicketService = async (
   id: string | number,
@@ -281,27 +282,33 @@ const ShowTicketService = async (
     // Evita falhar a abertura do ticket por erro no refresh de avatar
   }
 
-  // Sincronizar histórico de mensagens se habilitado na conexão
-  // DESATIVADO: Estava causando concorrência com fetchMessageHistory, levando a xml-not-well-formed
-  /*
   try {
     if (ticket.whatsappId && ticket.channel === "whatsapp") {
-      // Verificar se a conexão tem sync habilitado
       const whatsapp = await Whatsapp.findByPk(ticket.whatsappId, {
-        attributes: ["id", "syncOnTicketOpen"]
+        attributes: ["id", "status", "syncOnTicketOpen"]
       });
 
-      if (whatsapp?.syncOnTicketOpen) {
-        // Executa sync em background (não bloqueia abertura do ticket)
-        SyncChatHistoryService({ ticketId: id, companyId }).catch((err: any) => {
-          logger.warn(`[ShowTicket] Erro ao sincronizar histórico: ${err?.message}`);
-        });
+      if (whatsapp?.syncOnTicketOpen && whatsapp.status === "CONNECTED") {
+        const throttleKey = `${companyId}:${ticket.id}`;
+        const now = Date.now();
+        const lastSyncAt = lastTicketHistorySync.get(throttleKey) || 0;
+
+        if (now - lastSyncAt > 30000) {
+          lastTicketHistorySync.set(throttleKey, now);
+
+          ImportContactHistoryService({
+            ticketId: id,
+            companyId,
+            periodMonths: 0
+          }).catch((err: any) => {
+            logger.warn(`[ShowTicket] Erro ao importar histórico: ${err?.message}`);
+          });
+        }
       }
     }
   } catch (e) {
-    // Evita falhar a abertura do ticket por erro no sync
+    logger.warn(`[ShowTicket] Falha ao iniciar sync on open: ${(e as Error)?.message || e}`);
   }
-  */
 
   return ticket;
 };

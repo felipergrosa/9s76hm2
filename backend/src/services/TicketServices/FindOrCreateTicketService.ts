@@ -16,7 +16,7 @@ import AppError from "../../errors/AppError";
 import UpdateTicketService from "./UpdateTicketService";
 
 // Namespace fixo para gerar UUIDs v5 determinísticos para selfchat
-const SELFCHAT_UUID_NAMESPACE = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+const SELFCHAT_UUID_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
 // interface Response {
 //   ticket: Ticket;

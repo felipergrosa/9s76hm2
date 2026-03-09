@@ -92,27 +92,20 @@ const SendWhatsAppMessage = async ({
       },
     });
 
-    if (chatMessages) {
-      const msgFound = JSON.parse(chatMessages.dataJson);
+    if (chatMessages?.dataJson) {
+      try {
+        const msgFound = JSON.parse(chatMessages.dataJson);
 
-      if (msgFound.message.extendedTextMessage !== undefined) {
-        options = {
-          quoted: {
-            key: msgFound.key,
-            message: {
-              extendedTextMessage: msgFound.message.extendedTextMessage,
+        if (msgFound?.key && msgFound?.message) {
+          options = {
+            quoted: {
+              key: msgFound.key,
+              message: msgFound.message,
             },
-          },
-        };
-      } else {
-        options = {
-          quoted: {
-            key: msgFound.key,
-            message: {
-              conversation: msgFound.message.conversation,
-            },
-          },
-        };
+          };
+        }
+      } catch (error) {
+        logger.warn(`[SendMessage] Falha ao montar quotedMsg id=${quotedMsg.id}: ${(error as Error)?.message}`);
       }
     }
   }
@@ -277,6 +270,7 @@ const SendWhatsAppMessage = async ({
           fromMe: true,
           mediaType: "extendedTextMessage",
           read: true,
+          quotedMsgId: quotedMsg?.id || null,
           ack: 1,
           remoteJid: contactNumber?.remoteJid,
           dataJson: JSON.stringify(sentMessage),

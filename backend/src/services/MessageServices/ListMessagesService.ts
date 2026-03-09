@@ -9,7 +9,7 @@ import isQueueIdHistoryBlocked from "../UserServices/isQueueIdHistoryBlocked";
 import Contact from "../../models/Contact";
 import Queue from "../../models/Queue";
 import Whatsapp from "../../models/Whatsapp";
-import SyncChatHistoryService from "./SyncChatHistoryService";
+import ImportContactHistoryService from "./ImportContactHistoryService";
 import logger from "../../utils/logger";
 import { getCachedTicketMessages, cacheTicketMessages } from "./MessageCacheService";
 
@@ -273,12 +273,10 @@ const ListMessagesService = async ({
       if (whatsapp?.status === "CONNECTED") {
         logger.info(`[ListMessages] Histórico local esgotou, buscando mais do WhatsApp para ticketId=${ticket.id}`);
 
-        // Chamar sync para buscar mensagens mais antigas
-        const syncResult = await SyncChatHistoryService({
+        const syncResult = await ImportContactHistoryService({
           ticketId: ticket.id,
           companyId,
-          messageCount: 50, // Buscar mais mensagens de uma vez
-          forceSync: true   // Ignorar throttle pois é paginação
+          periodMonths: 0
         });
 
         // Se sincronizou novas mensagens, refazer a query

@@ -295,6 +295,7 @@ export const sendScheduledMessages = new BullQueue("SendSacheduledMessages", con
 export const campaignQueue = new BullQueue("CampaignQueue", connection);
 export const queueMonitor = new BullQueue("QueueMonitor", connection);
 export const validateWhatsappContactsQueue = new BullQueue("ValidateWhatsappContacts", connection);
+export const sessionWindowRenewalQueue = new BullQueue(`${process.env.DB_NAME}-SessionWindowRenewal`, connection);
 
 export const messageQueue = new BullQueue("MessageQueue", connection, {
   limiter: {
@@ -316,6 +317,17 @@ async function handleSendMessage(job) {
     }
 
     const messageData: MessageData = data.data;
+
+    if (data.ticketId) {
+      const ticket = await ShowTicketService(data.ticketId, messageData.companyId || whatsapp.companyId);
+      await SendWhatsAppMessage({
+        body: (messageData as any).body,
+        ticket,
+        quotedMsg: (messageData as any).quotedMsg,
+        vCard: (messageData as any).vCard
+      });
+      return;
+    }
 
     await SendMessage(whatsapp, messageData);
   } catch (e: any) {
@@ -1166,12 +1178,12 @@ async function getIntervalSettings(companyId: number, isOfficialApi: boolean = f
     });
 
     // Defaults conservadores para Baileys (lê do .env)
-    let messageInterval = Number(process.env.MESSAGE_INTERVAL_SEC) || 60;       // segundos
-    let longerIntervalAfter = Number(process.env.LONGER_INTERVAL_AFTER) || 10;   // mensagens
-    let greaterInterval = Number(process.env.GREATER_INTERVAL_SEC) || 300;       // segundos
+    let messageInterval: number = 60;       // segundos
+    let longerIntervalAfter: number = 10;   // mensagens
+    let greaterInterval: number = 300;       // segundos
 
     // Defaults para API Oficial (muito mais rápidos)
-    let officialApiMessageInterval = 1; // 1 segundo padrão
+    let officialApiMessageInterval: number = 1; // 1 segundo padrão
 
     settings.forEach(s => {
       try {
@@ -1758,11 +1770,11 @@ async function handleDispatchCampaign(job) {
         { delay: deferMs, removeOnComplete: true }
       );
       await campaignShipping.update({ jobId: String(nextJob.id) });
-      logger.warn(`Cap/Backoff/Pacing ativo. Reagendando envio: Campanha=${campaignId}; Registro=${campaignShippingId}; delay=${deferMs}ms; cap=${capDelayMs}; backoff=${backoffDelayMs}; pacing=${pacingDelayMs}`);
+      logger.warn(`Cap/Backoff/Pacing ativo. Reagendando envio: Campanha=${campaignId};Registro=${campaignShippingId}; delay=${deferMs}ms; cap=${capDelayMs}; backoff=${backoffDelayMs}; pacing=${pacingDelayMs}`);
       return;
     }
     logger.info(
-      `Sem deferimento: prosseguindo com envio imediato. Campanha=${campaignId}; Registro=${campaignShippingId}; capDelayMs=${capDelayMs}; backoffDelayMs=${backoffDelayMs}; pacingDelayMs=${pacingDelayMs}`
+      `Sem deferimento: prosseguindo com envio imediato. Campanha=${campaignId};Registro=${campaignShippingId}; capDelayMs=${capDelayMs}; backoffDelayMs=${backoffDelayMs}; pacingDelayMs=${pacingDelayMs}`
     );
 
     const isGroup = Boolean(campaignShipping.contact && campaignShipping.contact.isGroup);
@@ -2263,17 +2275,19 @@ async function handleDispatchCampaign(job) {
       logger.error(err.message);
       // Atualiza estado de backoff da conexão e reagenda este job
       const campaignId = job?.data?.campaignId;
+      const currentCampaignShippingId = (job?.data as any)?.campaignShippingId;
       const campaign = campaignId ? await getCampaign(campaignId) : null;
       if (campaign) {
         // Se a campanha não está em andamento, não reagendar.
         if (campaign.status !== "EM_ANDAMENTO") {
           try {
-            const record = await CampaignShipping.findByPk((job?.data as any)?.campaignShippingId);
+            const record = currentCampaignShippingId ? await CampaignShipping.findByPk(currentCampaignShippingId) : null;
             if (record) {
               await record.update({ jobId: null });
             }
           } catch { }
           await verifyAndFinalizeCampaign(campaign);
+
           return;
         }
 
@@ -2414,6 +2428,13 @@ async function handleResumeTicketsOutOfHour(job) {
                 tickets.map(async ticket => {
                   await ticket.update({
                     queueId: idQueue
+                  });
+
+                  await CreateLogTicketService({
+                    userId: null,
+                    queueId: idQueue,
+                    ticketId: ticket.id,
+                    type: "redirect"
                   });
 
                   await ticket.reload();
@@ -2954,6 +2975,11 @@ export async function startQueueProcess() {
     return handleMessageJob.default.handle(job);
   });
 
+  messageQueue.process("handleMessageAck", 1, async (job) => {
+    const handleMessageAckJob = await import("./jobs/handleMessageAckQueue");
+    return handleMessageAckJob.default.handle(job);
+  });
+
   scheduleMonitor.process("Verify", 1, handleVerifySchedules);
 
   // SendScheduledMessage interage com socket - concurrency=1
@@ -2981,6 +3007,12 @@ export async function startQueueProcess() {
   validateWhatsappContactsQueue.process("validateWhatsappContacts", 1, async (job) => {
     const validateJob = await import("./jobs/validateWhatsappContactsQueue");
     return validateJob.default.handle(job);
+  });
+
+  // SessionWindowRenewal usa fila dedicada e não depende mais do Bull global
+  sessionWindowRenewalQueue.process(1, async (job) => {
+    const renewalJob = await import("./jobs/SessionWindowRenewalJob");
+    return renewalJob.default.handle(job);
   });
 
   scheduleMonitor.add(

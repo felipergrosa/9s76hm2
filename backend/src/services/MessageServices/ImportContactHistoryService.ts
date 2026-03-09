@@ -2,7 +2,7 @@ import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
 import Whatsapp from "../../models/Whatsapp";
 import Contact from "../../models/Contact";
-import { dataMessages, getWbot } from "../../libs/wbot";
+import { dataMessages, getWbot, getWbotIsReconnecting } from "../../libs/wbot";
 import { getIO } from "../../libs/socket";
 import logger from "../../utils/logger";
 import { getBodyMessage } from "../WbotServices/wbotMessageListener";
@@ -24,29 +24,126 @@ import { acquireFetchLock } from "../../libs/fetchHistoryMutex";
 
 const writeFileAsync = promisify(fs.writeFile);
 
+const extractFetchedMessages = (payload: any): any[] => {
+    if (!payload) return [];
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.messages)) return payload.messages;
+    if (Array.isArray(payload?.syncData?.messages)) return payload.syncData.messages;
+    if (Array.isArray(payload?.historyMessages)) return payload.historyMessages;
+    return [];
+};
+
+const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+
+const getSessionCachedMessages = async (
+    wbot: any,
+    whatsappId: number,
+    jid: string,
+    anchorKey?: any,
+    limit: number = 250
+): Promise<any[]> => {
+    const cacheMessages = (dataMessages[whatsappId] || []).filter((msg: any) => msg?.key?.remoteJid === jid);
+
+    let storeMessages: any[] = [];
+    try {
+        if (typeof wbot?.store?.loadMessages === "function") {
+            const cursor = anchorKey?.id
+                ? ({ before: { ...anchorKey, remoteJid: jid } } as any)
+                : undefined;
+            storeMessages = await wbot.store.loadMessages(jid, limit, cursor, undefined);
+        } else if (Array.isArray(wbot?.store?.messages?.[jid]?.array)) {
+            const storeArray = wbot.store.messages[jid].array;
+            if (anchorKey?.id) {
+                const anchorIndex = storeArray.findIndex((msg: any) => msg?.key?.id === anchorKey.id);
+                if (anchorIndex > 0) {
+                    const startIndex = Math.max(0, anchorIndex - limit);
+                    storeMessages = storeArray.slice(startIndex, anchorIndex);
+                } else {
+                    storeMessages = storeArray.slice(-limit);
+                }
+            } else {
+                storeMessages = storeArray.slice(-limit);
+            }
+        }
+    } catch (error) {
+        logger.debug(`[ImportHistory] Falha ao ler store para jid=${jid}: ${(error as Error)?.message}`);
+    }
+
+    const merged = [...cacheMessages, ...storeMessages];
+    return deduplicateAndSort(merged).filter((msg: any) => msg?.key?.remoteJid === jid);
+};
+
+const waitForSessionHistory = async (
+    wbot: any,
+    whatsappId: number,
+    jid: string,
+    anchorKey: any,
+    baselineIds: Set<string>,
+    timeoutMs: number = 5000,
+    intervalMs: number = 1000
+): Promise<any[]> => {
+    const maxAttempts = Math.max(1, Math.ceil(timeoutMs / intervalMs));
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (attempt > 1) {
+            await sleep(intervalMs);
+        }
+
+        const cachedMessages = await getSessionCachedMessages(wbot, whatsappId, jid, anchorKey);
+        const newMessages = cachedMessages.filter((msg: any) => {
+            const messageId = msg?.key?.id;
+            return messageId && !baselineIds.has(messageId);
+        });
+
+        if (newMessages.length > 0) {
+            logger.info(`[ImportHistory] Histórico encontrado no cache/store da sessão para jid=${jid}: ${newMessages.length} mensagens (tentativa ${attempt}/${maxAttempts})`);
+            return newMessages;
+        }
+    }
+
+    return [];
+};
+
 /**
  * Verifica se o socket Baileys está realmente conectado e funcional
  * Usado antes de operações críticas como fetchMessageHistory
  */
-const isSocketAlive = (wbot: WASocket): boolean => {
+const isSocketAlive = (wbot: WASocket, whatsappId?: number): boolean => {
   try {
     // @ts-ignore - ws é uma propriedade interna do Baileys, readyState é number
     const ws = wbot?.ws as { readyState?: number } | undefined;
-    if (!ws) return false;
-    
-    // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
-    if (ws.readyState !== 1) {
-      logger.debug(`[ImportHistory] WebSocket não está OPEN (readyState=${ws.readyState})`);
-      return false;
-    }
-    
+
     // Verificar se tem usuário autenticado
     if (!wbot.user?.id) {
       logger.debug(`[ImportHistory] Socket sem usuário autenticado`);
       return false;
     }
+
+    if (typeof whatsappId === "number" && getWbotIsReconnecting(whatsappId)) {
+      logger.debug(`[ImportHistory] Sessão em reconexão para whatsappId=${whatsappId}`);
+      return false;
+    }
+
+    if (!ws || typeof ws.readyState !== "number") {
+      logger.debug(`[ImportHistory] Socket sem ws.readyState; aceitando sessão autenticada para whatsappId=${whatsappId}`);
+      return true;
+    }
+
+    // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+    if (ws.readyState === 1) {
+      return true;
+    }
+
+    // Blindagem: se a sessão está autenticada e não está reconectando,
+    // tolerar CONNECTING momentâneo para evitar falso negativo durante eventos ativos.
+    if (ws.readyState === 0) {
+      logger.debug(`[ImportHistory] Socket CONNECTING mas autenticado; aceitando para whatsappId=${whatsappId}`);
+      return true;
+    }
+
+    logger.debug(`[ImportHistory] WebSocket não está utilizável (readyState=${ws.readyState}) para whatsappId=${whatsappId}`);
+    return false;
     
-    return true;
   } catch (error) {
     logger.error(`[ImportHistory] Erro ao verificar socket: ${error.message}`);
     return false;
@@ -284,8 +381,12 @@ const ImportContactHistoryService = async ({
 
                 const oldestInDb = await Message.findOne({
                     where: { ticketId, companyId },
-                    order: [["timestamp", "ASC"]]
+                    order: [["createdAt", "ASC"]]
                 });
+
+                if (oldestInDb?.createdAt) {
+                    oldestTimestamp = Math.floor(new Date(oldestInDb.createdAt).getTime() / 1000) || oldestTimestamp;
+                }
 
                 if (oldestInDb && oldestInDb.dataJson) {
                     try {
@@ -303,10 +404,6 @@ const ImportContactHistoryService = async ({
 
                 try {
                     emitProgress(0, -1, "FETCHING", "Solicitando histórico ao WhatsApp...");
-
-                    // Usar handler centralizado
-                    const fetchId = registerFetchRequest(mainJid);
-                    const fetchPromise = startFetchRequest(fetchId, mainJid, 30000); // 30s timeout
                     
                     const tempHandler = (msgs: any[]) => {
                         allMessages.push(...msgs);
@@ -318,26 +415,48 @@ const ImportContactHistoryService = async ({
                     // PROTEÇÃO: Mutex por whatsappId + Rate Limiting
                     // =====================================================================
                     let releaseLock: (() => void) | null = null;
+                    let activeFetchId: string | null = null;
 
                     try {
                         // Adquirir lock ANTES de chamar fetchMessageHistory
                         releaseLock = await acquireFetchLock(whatsappId, `ImportHistory-${ticketId}`);
                         
                         // CRÍTICO: Verificar se socket está vivo antes de chamar fetchMessageHistory
-                        if (!isSocketAlive(wbot)) {
+                        if (!isSocketAlive(wbot, whatsappId)) {
                             logger.warn(`[ImportHistory] Socket não está vivo para whatsappId=${whatsappId}, abortando fetch`);
                             throw new Error("Socket not alive");
                         }
+
+                        const baselineMessages = await getSessionCachedMessages(wbotAny, whatsappId, mainJid, oldestKey);
+                        const baselineIds = new Set(baselineMessages.map((msg: any) => msg?.key?.id).filter(Boolean));
+
+                        activeFetchId = registerFetchRequest(mainJid);
+                        const fetchPromise = startFetchRequest(activeFetchId, mainJid, 30000); // 30s timeout real após lock
                         
                         // Disparar o fetch - buscar 200 mensagens em vez de 50
-                        await wbotAny.fetchMessageHistory(200, oldestKey, oldestTimestamp)
+                        const fetchResponse = await wbotAny.fetchMessageHistory(200, oldestKey, oldestTimestamp)
                             .catch((err: any) => {
                                 logger.warn(`[ImportHistory] Falha ao chamar API fetchMessageHistory: ${err}`);
                                 throw err;
                             });
-                        
-                        const result = await fetchPromise;
-                        allMessages = result.messages;
+
+                        const fetchedDirectMessages = extractFetchedMessages(fetchResponse);
+                        if (fetchResponse) {
+                            const responseKeys = Array.isArray(fetchResponse) ? ["array"] : Object.keys(fetchResponse);
+                            logger.info(`[ImportHistory] fetchMessageHistory retornou resposta direta: keys=[${responseKeys.join(",")}] msgs=${fetchedDirectMessages.length}`);
+                        }
+
+                        if (fetchedDirectMessages.length > 0) {
+                            allMessages = fetchedDirectMessages;
+                        } else {
+                            const storeMessages = await waitForSessionHistory(wbotAny, whatsappId, mainJid, oldestKey, baselineIds, 5000, 1000);
+                            if (storeMessages.length > 0) {
+                                allMessages = storeMessages;
+                            } else {
+                                const result = await fetchPromise;
+                                allMessages = result.messages;
+                            }
+                        }
                         
                         // Repassar dedup
                         const uniqueFetched = deduplicateAndSort(allMessages);
@@ -364,16 +483,39 @@ const ImportContactHistoryService = async ({
                             await new Promise(r => setTimeout(r, 3000));
                             
                             // Verificar se socket ainda está vivo antes do retry
-                            if (!isSocketAlive(wbot)) {
+                            if (!isSocketAlive(wbot, whatsappId)) {
                                 logger.warn(`[ImportHistory] Socket morreu durante espera de retry, abortando`);
                                 throw new Error("Socket not alive during retry");
                             }
+
+                            const retryBaselineMessages = await getSessionCachedMessages(wbotAny, whatsappId, mainJid, oldestKey);
+                            const retryBaselineIds = new Set(retryBaselineMessages.map((msg: any) => msg?.key?.id).filter(Boolean));
+
+                            if (activeFetchId) {
+                                cancelFetchRequest(activeFetchId);
+                            }
                             
-                            const retryPromise = startFetchRequest(fetchId, mainJid, 30000);
-                            await wbotAny.fetchMessageHistory(200, oldestKey, oldestTimestamp);
-                            
-                            const retryResult = await retryPromise;
-                            allMessages = retryResult.messages;
+                            activeFetchId = registerFetchRequest(mainJid);
+                            const retryPromise = startFetchRequest(activeFetchId, mainJid, 30000);
+                            const retryResponse = await wbotAny.fetchMessageHistory(200, oldestKey, oldestTimestamp);
+                            const retryDirectMessages = extractFetchedMessages(retryResponse);
+
+                            if (retryResponse) {
+                                const retryKeys = Array.isArray(retryResponse) ? ["array"] : Object.keys(retryResponse);
+                                logger.info(`[ImportHistory] Retry fetchMessageHistory retornou resposta direta: keys=[${retryKeys.join(",")}] msgs=${retryDirectMessages.length}`);
+                            }
+
+                            if (retryDirectMessages.length > 0) {
+                                allMessages = retryDirectMessages;
+                            } else {
+                                const retryStoreMessages = await waitForSessionHistory(wbotAny, whatsappId, mainJid, oldestKey, retryBaselineIds, 5000, 1000);
+                                if (retryStoreMessages.length > 0) {
+                                    allMessages = retryStoreMessages;
+                                } else {
+                                    const retryResult = await retryPromise;
+                                    allMessages = retryResult.messages;
+                                }
+                            }
                             
                             const uniqueFetched = deduplicateAndSort(allMessages);
                             allMessages.length = 0;
@@ -394,7 +536,9 @@ const ImportContactHistoryService = async ({
                         }
                         
                         unregisterHistoryHandler(mainJid, tempHandler);
-                        cancelFetchRequest(fetchId);
+                        if (activeFetchId) {
+                            cancelFetchRequest(activeFetchId);
+                        }
                     }
 
                 } catch (err: any) {

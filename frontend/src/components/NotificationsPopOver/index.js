@@ -175,30 +175,42 @@ const NotificationsPopOver = ({ volume = 1 }) => {
     };
 
     const onCompanyAppMessageNotificationsPopover = (data) => {
+      const message = data?.message;
+      const ticket = data?.ticket;
+      const hasUnreadSignal = ticket?.unreadMessages > 0 || message?.read === false;
+      const isAssignedToCurrentUser = ticket?.userId === user?.id || !ticket?.userId;
+      const isQueueAllowed =
+        user?.queues?.some(queue => queue.id === ticket?.queueId) ||
+        (!ticket?.queueId && showTicketWithoutQueue === true);
+      const isStatusAllowed =
+        !["pending", "lgpd", "nps", "group"].includes(ticket?.status) ||
+        (ticket?.status === "pending" && showNotificationPending === true) ||
+        (ticket?.status === "group" && ticket?.whatsapp?.groupAsTicket === "enabled" && showGroupNotification === true);
+
       if (
-        data.action === "create" && !data.message.fromMe &&
-        !data.message.read &&
-        (data.ticket?.userId === user?.id || !data.ticket?.userId) &&
-        (user?.queues?.some(queue => (queue.id === data.ticket.queueId)) ||
-          !data.ticket.queueId && showTicketWithoutQueue === true) &&
-        (!["pending", "lgpd", "nps", "group"].includes(data.ticket?.status) ||
-          (data.ticket?.status === "pending" && showNotificationPending === true) ||
-          (data.ticket?.status === "group" && data.ticket?.whatsapp?.groupAsTicket === "enabled" && showGroupNotification === true))
+        data?.action === "create" &&
+        message &&
+        ticket &&
+        !message.fromMe &&
+        hasUnreadSignal &&
+        isAssignedToCurrentUser &&
+        isQueueAllowed &&
+        isStatusAllowed
       ) {
         setNotifications(prevState => {
-          const ticketIndex = prevState.findIndex(t => t.id === data.ticket.id);
+          const ticketIndex = prevState.findIndex(t => t.id === ticket.id);
           if (ticketIndex !== -1) {
-            prevState[ticketIndex] = data.ticket;
+            prevState[ticketIndex] = ticket;
             return [...prevState];
           }
-          return [data.ticket, ...prevState];
+          return [ticket, ...prevState];
         });
 
         const shouldNotNotificate =
-          (data.message.ticketId === ticketIdRef.current &&
+          (message.ticketId === ticketIdRef.current &&
             document.visibilityState === "visible") ||
-          (data.ticket.userId && data.ticket.userId !== user?.id) ||
-          (data.ticket.isGroup && data.ticket?.whatsapp?.groupAsTicket === "disabled" && showGroupNotification === false);
+          (ticket.userId && ticket.userId !== user?.id) ||
+          (ticket.isGroup && ticket?.whatsapp?.groupAsTicket === "disabled" && showGroupNotification === false);
 
 
         if (shouldNotNotificate === true) return;
@@ -277,7 +289,8 @@ const NotificationsPopOver = ({ volume = 1 }) => {
   };
 
   const handleNotifications = data => {
-    const { message, contact, ticket } = data;
+    const { message, ticket } = data;
+    const contact = data?.contact || data?.ticket?.contact || {};
 
     // Debug: verificar se notificação está sendo chamada
     console.log('[Notifications] handleNotifications chamado', {
@@ -286,34 +299,40 @@ const NotificationsPopOver = ({ volume = 1 }) => {
       hasSound: !!soundAlertRef.current
     });
 
-    const options = {
-      body: `${message.body} - ${format(new Date(), "HH:mm")}`,
-      icon: contact.urlPicture ? `${getBackendUrl()}${contact.urlPicture}` : null,
-      tag: ticket.id,
-      renotify: true,
-    };
-    const notification = new Notification(
-      `${i18n.t("tickets.notification.message")} ${contact.name}`,
-      options
-    );
+    try {
+      if ("Notification" in window && Notification.permission === "granted") {
+        const options = {
+          body: `${message.body} - ${format(new Date(), "HH:mm")}`,
+          icon: contact.urlPicture ? `${getBackendUrl()}${contact.urlPicture}` : null,
+          tag: ticket.id,
+          renotify: true,
+        };
+        const notification = new Notification(
+          `${i18n.t("tickets.notification.message")} ${contact.name || "Contato"}`,
+          options
+        );
 
-    notification.onclick = e => {
-      e.preventDefault();
-      window.focus();
-      setTabOpen(ticket.status)
-      historyRef.current.push(`/tickets/${ticket.uuid}`);
-    };
+        notification.onclick = e => {
+          e.preventDefault();
+          window.focus();
+          setTabOpen(ticket.status)
+          historyRef.current.push(`/tickets/${ticket.uuid}`);
+        };
 
-    setDesktopNotifications(prevState => {
-      const notfiticationIndex = prevState.findIndex(
-        n => n.tag === notification.tag
-      );
-      if (notfiticationIndex !== -1) {
-        prevState[notfiticationIndex] = notification;
-        return [...prevState];
+        setDesktopNotifications(prevState => {
+          const notfiticationIndex = prevState.findIndex(
+            n => n.tag === notification.tag
+          );
+          if (notfiticationIndex !== -1) {
+            prevState[notfiticationIndex] = notification;
+            return [...prevState];
+          }
+          return [notification, ...prevState];
+        });
       }
-      return [notification, ...prevState];
-    });
+    } catch (error) {
+      console.warn("[Notifications] Falha ao criar notificação desktop", error);
+    }
 
     const now = Date.now();
     const timeSinceLastSound = now - lastSoundTimeRef.current;
@@ -328,12 +347,12 @@ const NotificationsPopOver = ({ volume = 1 }) => {
       }
       soundTimeoutRef.current = setTimeout(() => {
         console.log('[Notifications] Tocando som (delayed)');
-        soundAlertRef.current();
+        soundAlertRef.current?.();
         lastSoundTimeRef.current = Date.now();
       }, MIN_SOUND_INTERVAL - timeSinceLastSound);
     } else {
       console.log('[Notifications] Tocando som imediatamente');
-      soundAlertRef.current();
+      soundAlertRef.current?.();
       lastSoundTimeRef.current = now;
     }
   };

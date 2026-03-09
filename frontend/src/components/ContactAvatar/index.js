@@ -2,6 +2,16 @@ import React, { useState, useEffect, memo, useCallback } from "react";
 import { Avatar } from "@material-ui/core";
 import api from "../../services/api";
 
+const getContactAvatarIdentity = (contact) => {
+  if (!contact) return "no-contact";
+
+  const nestedContact = contact.contact || {};
+  const contactId = contact.id || nestedContact.id || "no-id";
+  const imageUrl = nestedContact.urlPicture || nestedContact.profilePicUrl || contact.urlPicture || contact.profilePicUrl || "no-image";
+
+  return `${contactId}:${imageUrl}`;
+};
+
 // Extrair iniciais do nome para avatar (até 2 caracteres)
 const getInitials = (name, number) => {
   if (name && typeof name === 'string' && name.trim()) {
@@ -37,12 +47,13 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   const [imageError, setImageError] = useState(false);
   const [fetchedUrl, setFetchedUrl] = useState(null);
   const [isFetching, setIsFetching] = useState(false);
+  const avatarIdentity = getContactAvatarIdentity(contact);
 
   // Reset error quando contato muda
   useEffect(() => {
     setImageError(false);
     setFetchedUrl(null);
-  }, [contact]);
+  }, [avatarIdentity]);
 
   // Buscar avatar em tempo real quando não estiver disponível
   useEffect(() => {

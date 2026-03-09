@@ -6516,8 +6516,9 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
             const handleMessageJobId = `${wbot.id}-handleMessage-${message.key.id}-${queueRemoteJid}-${queueFromMe}`;
             //} && (!message.key.fromMe || (message.key.fromMe && !message.key.id.startsWith('BAE')))) {
             try {
-              await BullQueues.add(
-                `${process.env.DB_NAME}-handleMessage`,
+              const { messageQueue } = await import("../../queues");
+              await messageQueue.add(
+                "handleMessage",
                 { message, wbot: wbot.id, companyId },
                 {
                   priority: 1,
@@ -6555,10 +6556,12 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         if (REDIS_URI_MSG_CONN !== "") {
           const queueRemoteJid = (message.key.remoteJid || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
           const queueFromMe = message.key.fromMe ? "1" : "0";
-          const handleMessageAckJobId = `${wbot.id}-handleMessageAck-${message.key.id}-${queueRemoteJid}-${queueFromMe}`;
+          const ackState = "2";
+          const handleMessageAckJobId = `${wbot.id}-handleMessageAck-${message.key.id}-${queueRemoteJid}-${queueFromMe}-${ackState}`;
           try {
-            await BullQueues.add(
-              `${process.env.DB_NAME}-handleMessageAck`,
+            const { messageQueue } = await import("../../queues");
+            await messageQueue.add(
+              "handleMessageAck",
               { msg: message, chat: 2 },
               {
                 priority: 1,
@@ -6633,10 +6636,12 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       if (REDIS_URI_MSG_CONN !== "") {
         const queueRemoteJid = (message.key.remoteJid || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
         const queueFromMe = message.key.fromMe ? "1" : "0";
-        const handleMessageAckJobId = `${wbot.id}-handleMessageAck-${message.key.id}-${queueRemoteJid}-${queueFromMe}`;
+        const ackState = String(ack ?? "unknown");
+        const handleMessageAckJobId = `${wbot.id}-handleMessageAck-${message.key.id}-${queueRemoteJid}-${queueFromMe}-${ackState}`;
         try {
-          await BullQueues.add(
-            `${process.env.DB_NAME}-handleMessageAck`,
+          const { messageQueue } = await import("../../queues");
+          await messageQueue.add(
+            "handleMessageAck",
             { msg: message, chat: ack },
             {
               priority: 1,

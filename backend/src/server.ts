@@ -198,7 +198,14 @@ const server = app.listen(port, async () => {
 
   const hasRedisQueues = Boolean((process.env.REDIS_URI_ACK && process.env.REDIS_URI_ACK !== '') || (process.env.REDIS_URI && process.env.REDIS_URI !== ''));
   if (hasRedisQueues) {
-    BullQueue.process();
+    const enableGlobalBullProcessor = String(process.env.BULL_GLOBAL_PROCESSOR_ENABLED || "false").toLowerCase() === "true";
+
+    if (enableGlobalBullProcessor) {
+      BullQueue.process();
+      logger.warn("[Server] BULL_GLOBAL_PROCESSOR_ENABLED=true - processor global do Bull ativado por compatibilidade");
+    } else {
+      logger.info("[Server] Processor global do Bull desativado; usando apenas startQueueProcess() em queues.ts");
+    }
     
     // Registrar filas no monitor automático
     BullQueue.queues.forEach(q => {

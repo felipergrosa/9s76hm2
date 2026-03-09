@@ -705,21 +705,60 @@ const useStyles = makeStyles((theme) => ({
   }
 }));
 
+const getMessageIdentity = (message) => {
+  if (!message) {
+    return null;
+  }
+
+  if (message.wid) {
+    return `wid:${message.wid}`;
+  }
+
+  if (message.id) {
+    return `id:${message.id}`;
+  }
+
+  return null;
+};
+
+const upsertMessage = (state, incomingMessage) => {
+  const incomingIdentity = getMessageIdentity(incomingMessage);
+
+  if (!incomingIdentity) {
+    return [...state, incomingMessage].sort((a, b) => a.id - b.id);
+  }
+
+  const nextState = [...state];
+  const messageIndex = nextState.findIndex((message) => {
+    const currentIdentity = getMessageIdentity(message);
+    return currentIdentity && currentIdentity === incomingIdentity;
+  });
+
+  if (messageIndex !== -1) {
+    nextState[messageIndex] = {
+      ...nextState[messageIndex],
+      ...incomingMessage
+    };
+  } else {
+    nextState.push(incomingMessage);
+  }
+
+  return nextState.sort((a, b) => a.id - b.id);
+};
+
 const reducer = (state, action) => {
   if (action.type === "LOAD_MESSAGES") {
     const messages = action.payload;
     const newMessages = [];
-    const existingIds = new Set(state.map(m => m.id));
+    const existingIdentities = new Set(state.map(message => getMessageIdentity(message)).filter(Boolean));
 
     messages.forEach((message) => {
-      // Só adiciona se não existe no estado atual (evita duplicar mensagens recebidas via Socket)
-      if (!existingIds.has(message.id)) {
+      const identity = getMessageIdentity(message);
+      if (!identity || !existingIdentities.has(identity)) {
         newMessages.push(message);
       }
     });
 
-    // Merge: mensagens carregadas do banco + mensagens já existentes (Socket)
-    // Ordena por ID para manter ordem cronológica
     const merged = [...newMessages, ...state];
     merged.sort((a, b) => a.id - b.id);
     return merged;
@@ -727,29 +766,12 @@ const reducer = (state, action) => {
 
   if (action.type === "ADD_MESSAGE") {
     const newMessage = action.payload;
-    const messageIndex = state.findIndex((m) => m.id === newMessage.id);
-
-    if (messageIndex !== -1) {
-      state[messageIndex] = newMessage;
-    } else {
-      state.push(newMessage);
-    }
-
-    return [...state];
+    return upsertMessage(state, newMessage);
   }
 
   if (action.type === "UPDATE_MESSAGE") {
     const messageToUpdate = action.payload;
-    const messageIndex = state.findIndex((m) => m.id === messageToUpdate.id);
-
-    if (messageIndex !== -1) {
-      state[messageIndex] = messageToUpdate;
-    } else {
-      // Upsert: se não existe ainda (ex.: recebemos UPDATE antes do CREATE), adiciona
-      state.push(messageToUpdate);
-    }
-
-    return [...state];
+    return upsertMessage(state, messageToUpdate);
   }
 
   if (action.type === "RESET") {
