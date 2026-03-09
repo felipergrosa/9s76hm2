@@ -9,14 +9,17 @@ services:
         BACKEND_VERSION: ${BACKEND_VERSION}
     container_name: whaticket-backend
     restart: always
+    depends_on:
+      - postgres
+      - redis
     environment:
       NODE_ENV: production
       DB_DIALECT: postgres
-      DB_HOST: postgres         # nome do serviço na rede Docker, ajuste se o nome do container do banco for diferente
+      DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: whaticket        # nome do banco, já criado
-      DB_USER: postgres         # usuário padrão, ajuste conforme sua configuração
-      DB_PASS: efe487b6a861100fb704ad9f5c160cb8 # senha igual à do seu banco
+      DB_NAME: whaticket
+      DB_USER: postgres
+      DB_PASS: efe487b6a861100fb704ad9f5c160cb8
       TZ: America/Sao_Paulo
       FRONTEND_URL: ${FRONTEND_URL:-https://chats.nobreluminarias.com.br}
       BACKEND_URL: ${BACKEND_URL:-https://chatsapi.nobreluminarias.com.br}
@@ -60,6 +63,22 @@ services:
     volumes:
       - ./frontend:/app
 
+  postgres:
+    image: postgres:15-alpine
+    container_name: whaticket-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: whaticket
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: efe487b6a861100fb704ad9f5c160cb8
+      TZ: America/Sao_Paulo
+    ports:
+      - "5432:5432"
+    networks:
+      - nobreluminarias
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
   redis:
     image: redis:6.2-alpine
     container_name: whaticket-redis
@@ -77,6 +96,7 @@ networks:
     external: true
 
 volumes:
+  postgres-data:
   redis-data:
   backend-public:
   backend-private:
