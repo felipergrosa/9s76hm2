@@ -10,6 +10,7 @@ import formatBody from "../../helpers/Mustache";
 import {getBodyMessage} from "./wbotMessageListener";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
+import logger from "../../utils/logger";
 
 interface ReactionRequest {
   messageId: string;

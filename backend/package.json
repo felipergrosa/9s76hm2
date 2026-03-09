@@ -93,6 +93,7 @@
     "sequelize-typescript": "^1.1.0",
     "sharp": "^0.34.4",
     "socket.io": "^4.7.4",
+    "sqlite3": "^5.1.7",
     "tesseract.js": "^6.0.1",
     "uuid": "^8.3.2",
     "whatsapp-web.js": "^1.34.1",

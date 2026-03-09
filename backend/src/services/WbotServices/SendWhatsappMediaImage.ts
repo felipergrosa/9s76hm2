@@ -8,6 +8,7 @@ import Contact from "../../models/Contact";
 import path from "path";
 import fs from "fs";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
+import logger from "../../utils/logger";
 
 // delay removido na v7 - implementação própria
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

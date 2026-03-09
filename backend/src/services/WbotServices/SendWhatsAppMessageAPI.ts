@@ -9,6 +9,7 @@ import Contact from "../../models/Contact";
 import { getWbot, getWbotOrRecover } from "../../libs/wbot";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
+import logger from "../../utils/logger";
 
 // delay removido na v7 - implementação própria
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

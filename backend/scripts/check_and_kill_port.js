@@ -1,5 +1,9 @@
 const { exec } = require('child_process');
 const net = require('net');
+const path = require('path');
+
+// Carregar variáveis do .env
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const port = process.env.PORT || 8080; // Use a porta do .env ou 8080 como padrão
 
