@@ -561,6 +561,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
               const isConflict = statusCode === 440; // Stream Errored (conflict)
               const isForbidden = statusCode === 403;
+              const isConnectionFailure = statusCode === 405;
               const isLoggedOut = statusCode === DisconnectReason.loggedOut;
               const isRestartRequired = statusCode === 515; // Stream Errored (restart required)
               
@@ -672,6 +673,46 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                     action: "update",
                     session: whatsapp
                   });
+                await releaseWbotLock(id);
+                removeWbot(id, false);
+                return;
+              }
+
+              if (isConnectionFailure) {
+                // 405 (Connection Failure): normalmente indica sessão/handshake inválido ou bloqueado.
+                // Não adianta reconectar em loop: forçar nova autenticação via QR.
+                reconnectingWhatsapps.delete(id);
+
+                try {
+                  await whatsapp.update({ status: "DISCONNECTED", session: "" });
+                } catch { }
+
+                try {
+                  await DeleteBaileysService(whatsapp.id);
+                } catch { }
+
+                try {
+                  await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
+                } catch { }
+
+                try {
+                  const baseDir = path.resolve(
+                    process.cwd(),
+                    process.env.SESSIONS_DIR || "private/sessions",
+                    String(whatsapp.companyId || "0"),
+                    String(whatsapp.id)
+                  );
+                  await fs.promises.rm(baseDir, { recursive: true, force: true });
+                } catch { }
+
+                try {
+                  io?.of(`/workspace-${companyId}`)
+                    .emit(`company-${whatsapp.companyId}-whatsappSession`, {
+                      action: "update",
+                      session: whatsapp
+                    });
+                } catch { }
+
                 await releaseWbotLock(id);
                 removeWbot(id, false);
                 return;
