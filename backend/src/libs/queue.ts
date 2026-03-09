@@ -56,12 +56,26 @@ export default {
     return queue.bull.add(data, { ...params, removeOnComplete: true });
   },
   process() {
-    // SISTEMA GLOBAL DESATIVADO - Usar apenas processamento específico em queues.ts
-    // Evita duplo processamento e conflitos de timeout
-    logger.info("[BullQueue] Sistema global desativado - usando queues.ts específico");
-    
-    // Mantém apenas error handlers globais, sem processamento
+    // Processar cada fila com seu handler específico
     return this.queues.forEach(queue => {
+      // Registrar handler para processar jobs
+      queue.bull.process(1, async (job) => {
+        try {
+          return await queue.handle(job);
+        } catch (err: any) {
+          logger.error(
+            {
+              queueName: queue.name,
+              jobId: job?.id,
+              error: err?.message || err,
+            },
+            "[BullQueue] Job failed"
+          );
+          throw err;
+        }
+      });
+      
+      // Error handler
       queue.bull.on('failed', (job, err) => {
         logger.error(
           {
@@ -74,6 +88,6 @@ export default {
           "[BullQueue] Job failed"
         );
       });
-    })
+    });
   }
 }
