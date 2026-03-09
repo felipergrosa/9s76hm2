@@ -2940,30 +2940,45 @@ handleInvoiceCreate()
 handleWhatsapp();
 handleProcessLanes();
 handleCloseTicketsAutomatic();
-handleRandomUser();
 
 export async function startQueueProcess() {
   logger.info("Iniciando processamento de filas");
 
-  messageQueue.process("SendMessage", handleSendMessage);
+  // CRÍTICO: concurrency=1 para evitar múltiplos jobs usando o MESMO socket Baileys
+  // simultaneamente, o que causa "Connection Closed" e corrupção do WebSocket
+  messageQueue.process("SendMessage", 1, handleSendMessage);
 
-  scheduleMonitor.process("Verify", handleVerifySchedules);
+  // CRÍTICO: handleMessage também precisa de concurrency=1 para proteger socket
+  messageQueue.process("handleMessage", 1, async (job) => {
+    const handleMessageJob = await import("./jobs/handleMessageQueue");
+    return handleMessageJob.default.handle(job);
+  });
 
-  sendScheduledMessages.process("SendMessage", handleSendScheduledMessage);
+  scheduleMonitor.process("Verify", 1, handleVerifySchedules);
 
-  campaignQueue.process("VerifyCampaignsDaatabase", handleVerifyCampaigns);
+  // SendScheduledMessage interage com socket - concurrency=1
+  sendScheduledMessages.process("SendMessage", 1, handleSendScheduledMessage);
 
-  campaignQueue.process("ProcessCampaign", handleProcessCampaign);
+  // VerifyCampaigns não interage com socket - pode ser paralelo
+  campaignQueue.process("VerifyCampaignsDaatabase", 3, handleVerifyCampaigns);
 
-  campaignQueue.process("PrepareContact", handlePrepareContact);
+  // ProcessCampaign interage com socket - concurrency=1
+  campaignQueue.process("ProcessCampaign", 1, handleProcessCampaign);
 
-  campaignQueue.process("DispatchCampaign", handleDispatchCampaign);
+  // PrepareContact interage com socket - concurrency=1
+  campaignQueue.process("PrepareContact", 1, handlePrepareContact);
 
-  userMonitor.process("VerifyLoginStatus", handleLoginStatus);
+  // DispatchCampaign envia mensagens via socket - concurrency=1
+  campaignQueue.process("DispatchCampaign", 1, handleDispatchCampaign);
 
-  queueMonitor.process("VerifyQueueStatus", handleVerifyQueue);
+  // VerifyLoginStatus não interage com socket - pode ser paralelo
+  userMonitor.process("VerifyLoginStatus", 3, handleLoginStatus);
 
-  validateWhatsappContactsQueue.process("validateWhatsappContacts", async (job) => {
+  // VerifyQueueStatus não interage com socket - pode ser paralelo
+  queueMonitor.process("VerifyQueueStatus", 3, handleVerifyQueue);
+
+  // ValidateContacts interage com socket - concurrency=1
+  validateWhatsappContactsQueue.process("validateWhatsappContacts", 1, async (job) => {
     const validateJob = await import("./jobs/validateWhatsappContactsQueue");
     return validateJob.default.handle(job);
   });

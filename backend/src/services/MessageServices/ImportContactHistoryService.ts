@@ -6,7 +6,7 @@ import { dataMessages, getWbot } from "../../libs/wbot";
 import { getIO } from "../../libs/socket";
 import logger from "../../utils/logger";
 import { getBodyMessage } from "../WbotServices/wbotMessageListener";
-import { downloadMediaMessage, proto, jidNormalizedUser } from "@whiskeysockets/baileys";
+import { downloadMediaMessage, proto, jidNormalizedUser, WASocket } from "@whiskeysockets/baileys";
 import { Op } from "sequelize";
 import path from "path";
 import fs from "fs";
@@ -23,6 +23,35 @@ import {
 import { acquireFetchLock } from "../../libs/fetchHistoryMutex";
 
 const writeFileAsync = promisify(fs.writeFile);
+
+/**
+ * Verifica se o socket Baileys está realmente conectado e funcional
+ * Usado antes de operações críticas como fetchMessageHistory
+ */
+const isSocketAlive = (wbot: WASocket): boolean => {
+  try {
+    // @ts-ignore - ws é uma propriedade interna do Baileys, readyState é number
+    const ws = wbot?.ws as { readyState?: number } | undefined;
+    if (!ws) return false;
+    
+    // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+    if (ws.readyState !== 1) {
+      logger.debug(`[ImportHistory] WebSocket não está OPEN (readyState=${ws.readyState})`);
+      return false;
+    }
+    
+    // Verificar se tem usuário autenticado
+    if (!wbot.user?.id) {
+      logger.debug(`[ImportHistory] Socket sem usuário autenticado`);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    logger.error(`[ImportHistory] Erro ao verificar socket: ${error.message}`);
+    return false;
+  }
+};
 
 // ============================================================
 //  Funções Auxiliares
@@ -294,6 +323,12 @@ const ImportContactHistoryService = async ({
                         // Adquirir lock ANTES de chamar fetchMessageHistory
                         releaseLock = await acquireFetchLock(whatsappId, `ImportHistory-${ticketId}`);
                         
+                        // CRÍTICO: Verificar se socket está vivo antes de chamar fetchMessageHistory
+                        if (!isSocketAlive(wbot)) {
+                            logger.warn(`[ImportHistory] Socket não está vivo para whatsappId=${whatsappId}, abortando fetch`);
+                            throw new Error("Socket not alive");
+                        }
+                        
                         // Disparar o fetch - buscar 200 mensagens em vez de 50
                         await wbotAny.fetchMessageHistory(200, oldestKey, oldestTimestamp)
                             .catch((err: any) => {
@@ -327,6 +362,12 @@ const ImportContactHistoryService = async ({
                         try {
                             logger.info("[ImportHistory] Tentando retry após 3s...");
                             await new Promise(r => setTimeout(r, 3000));
+                            
+                            // Verificar se socket ainda está vivo antes do retry
+                            if (!isSocketAlive(wbot)) {
+                                logger.warn(`[ImportHistory] Socket morreu durante espera de retry, abortando`);
+                                throw new Error("Socket not alive during retry");
+                            }
                             
                             const retryPromise = startFetchRequest(fetchId, mainJid, 30000);
                             await wbotAny.fetchMessageHistory(200, oldestKey, oldestTimestamp);

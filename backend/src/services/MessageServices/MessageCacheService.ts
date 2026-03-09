@@ -3,8 +3,8 @@ import logger from "../../utils/logger";
 
 // TTL padrão: 5 minutos para mensagens recentes
 const MESSAGE_CACHE_TTL = 300;
-// TTL para lista de mensagens de um ticket: 2 minutos
-const TICKET_MESSAGES_TTL = 120;
+// TTL para lista de mensagens de um ticket: 5 minutos (aumentado de 2min)
+const TICKET_MESSAGES_TTL = 300;
 
 interface CachedMessage {
   id: number;

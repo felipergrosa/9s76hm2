@@ -43,6 +43,7 @@ import SyncChatHistoryService from "../services/MessageServices/SyncChatHistoryS
 import ImportContactHistoryService from "../services/MessageServices/ImportContactHistoryService";
 import ClearTicketMessagesService from "../services/MessageServices/ClearTicketMessagesService";
 import ResyncTicketMessagesService from "../services/MessageServices/ResyncTicketMessagesService";
+import { messageQueue } from "../queues";
 
 type IndexQuery = {
   pageNumber: string;
@@ -877,38 +878,29 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       }
 
       if (ticket.channel === "whatsapp" && isPrivate === "false") {
-        // Enviar mensagem
-        const sentMessage = await SendWhatsAppMessageUnified({ body, ticket, quotedMsg, vCard });
-
-        // Extrair ID da mensagem (suporta ambos os tipos)
-        let messageId: string;
-        if ('id' in sentMessage) {
-          // IWhatsAppMessage (Official API)
-          messageId = sentMessage.id;
-        } else if (sentMessage.key?.id) {
-          // WebMessageInfo (Baileys)
-          messageId = sentMessage.key.id;
-        } else {
-          // Fallback
-          messageId = `${Date.now()}`;
-        }
-
-        // Salvar a mensagem no banco para aparecer no chat
-        const messageData = {
-          wid: messageId,
-          ticketId: ticket.id,
-          contactId: ticket.contactId,
-          body: body || "",
-          fromMe: true,
-          mediaType: !isNil(vCard) ? "contactMessage" : "extendedTextMessage",
-          read: true,
-          quotedMsgId: quotedMsg?.id || null,
-          ack: 1, // Enviado
-          remoteJid: ticket.contact?.remoteJid,
-          dataJson: JSON.stringify(sentMessage),
-        };
-
-        await CreateMessageService({ messageData, companyId: ticket.companyId });
+        // ENFILEIRAR mensagem via Bull Queue para evitar concorrência no socket
+        console.log(`[MessageController.store] Enfileirando mensagem via Bull Queue para ticket ${ticketId}`);
+        
+        await messageQueue.add(
+          "SendMessage",
+          {
+            whatsappId: ticket.whatsappId,
+            data: {
+              number: ticket.contact.number,
+              body: body || "",
+              quotedMsg: quotedMsg || undefined,
+              vCard: vCard || undefined,
+              companyId: ticket.companyId
+            }
+          },
+          {
+            priority: 1, // Alta prioridade para mensagens do usuário
+            removeOnComplete: true,
+            removeOnFail: false
+          }
+        );
+        
+        console.log(`[MessageController.store] Mensagem enfileirada com sucesso`);
       } else if (ticket.channel === "whatsapp" && isPrivate === "true") {
         const messageData = {
           wid: `PVT${ticket.updatedAt.toString().replace(" ", "")}`,

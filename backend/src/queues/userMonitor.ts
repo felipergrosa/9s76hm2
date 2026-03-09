@@ -43,8 +43,10 @@ async function handleUserConnection(job) {
   }
 }
 
-userMonitor.process("UserConnection", handleUserConnection);
-userMonitor.process("VerifyLoginStatus", handleLoginStatus);
+// UserConnection não interage com socket - pode ser paralelo
+userMonitor.process("UserConnection", 3, handleUserConnection);
+// VerifyLoginStatus não interage com socket - pode ser paralelo  
+userMonitor.process("VerifyLoginStatus", 3, handleLoginStatus);
 
 export async function initUserMonitorQueues() {
   const repeatableJobs = await userMonitor.getRepeatableJobs();

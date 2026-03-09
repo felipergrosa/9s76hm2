@@ -31,7 +31,8 @@ const socketEventQueue = new Bull<SocketEventPayload>("socket-events", REDIS_URI
 });
 
 // Processador da fila
-socketEventQueue.process(async (job) => {
+// Concurrency=5: permite múltiplas emissões Socket.IO simultâneas (não usa Baileys socket)
+socketEventQueue.process(5, async (job) => {
   const { companyId, room, event, payload } = job.data;
   
   try {

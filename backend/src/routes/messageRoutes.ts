@@ -2,6 +2,7 @@ import { NextFunction, Router } from "express";
 import multer from "multer";
 import isAuth from "../middleware/isAuth";
 import uploadConfig from "../config/upload";
+import { messageRateLimit, listMessagesRateLimit } from "../middleware/rateLimit";
 
 import * as MessageController from "../controllers/MessageController";
 
@@ -31,8 +32,8 @@ messageRoutes.post('/messages/:messageId/pin', isAuth, MessageController.pinMess
 messageRoutes.post('/messages/:ticketId/clear', isAuth, MessageController.clearTicketMessages);
 
 // Rotas genéricas com parâmetros dinâmicos devem vir por último
-messageRoutes.get("/messages/:ticketId", isAuth, MessageController.index);
-messageRoutes.post("/messages/:ticketId", isAuth, upload.array("medias"), MessageController.store);
+messageRoutes.get("/messages/:ticketId", listMessagesRateLimit, isAuth, MessageController.index);
+messageRoutes.post("/messages/:ticketId", messageRateLimit, isAuth, upload.array("medias"), MessageController.store);
 messageRoutes.delete("/messages/:messageId", isAuth, MessageController.remove);
 
 export default messageRoutes;

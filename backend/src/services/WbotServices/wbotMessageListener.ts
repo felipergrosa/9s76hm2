@@ -2336,11 +2336,21 @@ export const verifyMessage = async (
 };
 
 const isValidMsg = (msg: proto.IWebMessageInfo): boolean => {
+  // CRÍTICO: Verificar se msg existe antes de acessar propriedades
+  if (!msg || typeof msg !== 'object') {
+    logger.debug('[isValidMsg] Mensagem inválida: msg é null/undefined');
+    return false;
+  }
+  if (!msg.key || typeof msg.key !== 'object') {
+    logger.debug('[isValidMsg] Mensagem inválida: msg.key é null/undefined');
+    return false;
+  }
+  
   if (msg.key.remoteJid === "status@broadcast") return false;
   try {
     const msgType = getTypeMessage(msg);
     if (!msgType) {
-      return;
+      return false;
     }
 
     const ifType =
@@ -5405,12 +5415,13 @@ const handleMessage = async (
       order: [["id", "DESC"]]
     });
 
-    // Usa mutex global compartilhado para evitar race conditions na criação de tickets
-    const mutex = getTicketMutex(companyId);
-    console.log(`[wbotMessageListener] Processando mensagem para companyId=${companyId}, contactId=${contact.id}, mutex=${mutex ? "ativo" : "inativo"}`);
-
-    let ticket = await mutex.runExclusive(async () => {
-      console.log(`[wbotMessageListener] Dentro do mutex - criando/buscando ticket para contactId=${contact.id}`);
+    // Usa lock por JID para evitar race conditions na criação de contatos
+    // (o mutex por companyId foi removido pois serializava todas as mensagens,
+    // criando gargalo quando há muitas mensagens - 73+ na fila)
+    const contactJid = contact.number ? `${contact.number}@s.whatsapp.net` : msg.key.remoteJid;
+    
+    let ticket = await withJidLock(contactJid, async () => {
+      console.log(`[wbotMessageListener] Dentro do lock JID - criando/buscando ticket para contactId=${contact.id}`);
       const result = await FindOrCreateTicketService(
         contact,
         whatsapp,
@@ -5430,29 +5441,6 @@ const handleMessage = async (
       );
       console.log(`[wbotMessageListener] Ticket obtido: id=${result.id}, uuid=${result.uuid}, status=${result.status}`);
       return result;
-    }).catch(err => {
-      // Fallback em caso de timeout do mutex
-      if (err?.message === 'mutex timeout' || err?.code === 'E_TIMEOUT') {
-        logger.warn(`[wbotMessageListener] Mutex timeout para companyId=${companyId} - Executando sem lock`);
-        return FindOrCreateTicketService(
-          contact,
-          whatsapp,
-          unreadMessages,
-          companyId,
-          queueId,
-          userId,
-          groupContact,
-          "whatsapp",
-          isImported,
-          false,
-          settings,
-          false,
-          false,
-          Boolean(msg?.key?.fromMe),
-          isSelfChat
-        );
-      }
-      throw err;
     });
 
     // Se o ticket está em status "campaign" e o contato respondeu, mover para fluxo normal

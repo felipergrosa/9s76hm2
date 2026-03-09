@@ -282,6 +282,8 @@ const ShowTicketService = async (
   }
 
   // Sincronizar histórico de mensagens se habilitado na conexão
+  // DESATIVADO: Estava causando concorrência com fetchMessageHistory, levando a xml-not-well-formed
+  /*
   try {
     if (ticket.whatsappId && ticket.channel === "whatsapp") {
       // Verificar se a conexão tem sync habilitado
@@ -299,6 +301,7 @@ const ShowTicketService = async (
   } catch (e) {
     // Evita falhar a abertura do ticket por erro no sync
   }
+  */
 
   return ticket;
 };
