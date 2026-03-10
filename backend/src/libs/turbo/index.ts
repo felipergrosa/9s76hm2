@@ -7,3 +7,5 @@
 export * from "./ITurboEngine";
 export { EngineOrchestrator } from "./EngineOrchestrator";
 export { BaileysAdapter } from "./BaileysAdapter";
+export { WebJSAdapter } from "./WebJSAdapter";
+export { TurboFactory } from "./TurboFactory";
