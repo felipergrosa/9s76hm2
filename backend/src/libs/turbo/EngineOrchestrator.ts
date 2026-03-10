@@ -380,6 +380,13 @@ export class EngineOrchestrator {
     for (const [type, entry] of this.engines) {
       if (!entry.enabled) continue;
       
+      // Ignorar engines não conectados (não contar como falha)
+      const status = entry.engine.getStatus();
+      if (status === "disconnected" || status === "connecting") {
+        logger.debug(`[TurboOrchestrator] Engine ${type} não conectado (${status}), pulando health check`);
+        continue;
+      }
+      
       try {
         const isHealthy = await entry.engine.ping();
         
