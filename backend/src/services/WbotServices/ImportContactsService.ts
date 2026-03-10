@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/node";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import Contact from "../../models/Contact";
 import logger from "../../utils/logger";
 import ShowBaileysService from "../BaileysServices/ShowBaileysService";
@@ -13,7 +13,12 @@ import { Op } from "sequelize";
 
 const ImportContactsService = async (companyId: number): Promise<void> => {
   const defaultWhatsapp = await GetDefaultWhatsApp(undefined, companyId);
-  const wbot = getWbot(defaultWhatsapp.id);
+  // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+  const wbot = await getWbotOrRecover(defaultWhatsapp.id, 30000);
+  if (!wbot) {
+    logger.warn(`[ImportContacts] Sessão não disponível para company=${companyId}`);
+    return;
+  }
 
   let phoneContacts;
 

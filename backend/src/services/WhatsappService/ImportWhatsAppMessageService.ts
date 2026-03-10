@@ -6,7 +6,7 @@ import Message from "../../models/Message";
 import { Op } from "sequelize";
 import { add } from "date-fns";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
-import { dataMessages, getWbot } from "../../libs/wbot";
+import { dataMessages, getWbotOrRecover } from "../../libs/wbot";
 import moment from "moment";
 import { addLogs } from "../../helpers/addLogs";
 import logger from "../../utils/logger";
@@ -68,7 +68,11 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
   //     // return; // Comentado para permitir retry manual se travar, mas idealmente deveria bloquear
   // }
 
-  const wbot = getWbot(whatsApp.id);
+  // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+  const wbot = await getWbotOrRecover(whatsApp.id, 30000);
+  if (!wbot) {
+    throw new AppError("ERR_WAPP_NOT_INITIALIZED");
+  }
 
   try {
     const io = getIO();

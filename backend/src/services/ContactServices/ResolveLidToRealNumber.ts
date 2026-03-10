@@ -1,6 +1,6 @@
 import logger from "../../utils/logger";
 import Contact from "../../models/Contact";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import { Op } from "sequelize";
 
 /**
@@ -44,7 +44,8 @@ export const resolveLidToRealNumber = async (
 
     logger.info(`[ResolveLID] Tentando resolver LID: ${lidJid} para whatsappId=${whatsappId}`);
 
-    const wbot = getWbot(whatsappId);
+    // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+    const wbot = await getWbotOrRecover(whatsappId, 30000);
     
     if (!wbot) {
       logger.warn(`[ResolveLID] WBOT não encontrado para whatsappId=${whatsappId}`);

@@ -1,5 +1,5 @@
 import { WASocket } from "@whiskeysockets/baileys";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import logger from "../../utils/logger";
 
 interface BaileysContactData {
@@ -16,7 +16,11 @@ const GetBaileysContactDataService = async (
     whatsappId: number | string,
     number: string
 ): Promise<BaileysContactData> => {
-    const wbot = getWbot(Number(whatsappId));
+    // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+    const wbot = await getWbotOrRecover(Number(whatsappId), 30000);
+    if (!wbot) {
+        throw new Error("ERR_WAPP_NOT_INITIALIZED");
+    }
     const digits = number.replace(/\D/g, "");
     const jid = `${digits}@s.whatsapp.net`;
 

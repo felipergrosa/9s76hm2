@@ -1,5 +1,5 @@
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import logger from "../../utils/logger";
 import { ALL_WA_PATCH_NAMES } from "@whiskeysockets/baileys";
 import { getLabels } from "../../libs/labelCache";
@@ -8,8 +8,8 @@ const ForceAppStateSyncService = async (companyId: number, whatsappId?: number) 
   const defaultWhatsapp = await GetDefaultWhatsApp(whatsappId, companyId);
   logger.info(`[ForceAppStateSyncService] Forçando resync de App State para whatsappId=${defaultWhatsapp.id}`);
 
-  const wbot = getWbot(defaultWhatsapp.id) as any;
-
+  // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+  const wbot = await getWbotOrRecover(defaultWhatsapp.id, 30000) as any;
   if (!wbot || typeof wbot.resyncAppState !== 'function') {
     throw new Error("Função resyncAppState não disponível no socket atual");
   }

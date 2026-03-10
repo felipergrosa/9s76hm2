@@ -1,6 +1,6 @@
 import AppError from "../../errors/AppError";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import Contact from "../../models/Contact";
 import FindCompaniesWhatsappService from "../CompanyService/FindCompaniesWhatsappService";
 
@@ -57,8 +57,12 @@ const BlockUnblockContactService = async ({
 
             const whatsappCompany = null;
 
-            const wbot = getWbot(whatsappCompany.id);
-
+            // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+            const wbot = whatsappCompany ? await getWbotOrRecover(whatsappCompany.id, 30000) : null;
+            if (!wbot) {
+                console.log('Sessão não disponível para desbloquear');
+                return contact;
+            }
             const jid = createJid(contact.number);
 
             await wbot.updateBlockStatus(jid, "unblock");
@@ -76,8 +80,12 @@ const BlockUnblockContactService = async ({
 
             const whatsappCompany = null;
             
-            const wbot = getWbot(whatsappCompany.id);
-
+            // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+            const wbot = whatsappCompany ? await getWbotOrRecover(whatsappCompany.id, 30000) : null;
+            if (!wbot) {
+                console.log('Sessão não disponível para bloquear');
+                return contact;
+            }
             const jid = createJid(contact.number);
 
             await wbot.updateBlockStatus(jid, "block");

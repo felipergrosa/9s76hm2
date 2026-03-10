@@ -1,8 +1,9 @@
-import { getWbot } from "../libs/wbot";
+import { getWbotOrRecover } from "../libs/wbot";
 import Whatsapp from "../models/Whatsapp";
 
 const GetWhatsappWbot = async (whatsapp: Whatsapp) => {
-  const wbot = await getWbot(whatsapp.id);
+  // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+  const wbot = await getWbotOrRecover(whatsapp.id, 30000);
   return wbot;
 };
 

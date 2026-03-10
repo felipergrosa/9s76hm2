@@ -8,7 +8,7 @@ import * as Sentry from "@sentry/node";
 import logger from "../../utils/logger";
 import Contact from "../../models/Contact";
 import { getIO } from "../../libs/socket";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import axios from "axios";
 import { buildContactAvatarPath, buildGroupAvatarPath, sanitizeFileName } from "../../utils/publicPath";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
@@ -144,7 +144,11 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
 
     if (contact.channel === "whatsapp" && resolvedWhatsappId) {
       try {
-        const wbot = getWbot(resolvedWhatsappId);
+        // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+        const wbot = await getWbotOrRecover(resolvedWhatsappId, 30000);
+        if (!wbot) {
+          return contact;
+        }
         const jid = contact.remoteJid
           ? contact.remoteJid
           : contact.isGroup

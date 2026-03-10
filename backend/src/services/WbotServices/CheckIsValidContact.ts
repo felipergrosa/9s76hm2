@@ -1,12 +1,16 @@
 import { WASocket } from "@whiskeysockets/baileys";
 import AppError from "../../errors/AppError";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 
 const CheckIsValidContact = async (number: string, companyId: number): Promise<void> => {
   const defaultWhatsapp = await GetDefaultWhatsApp(undefined, companyId);
 
-  const wbot = getWbot(defaultWhatsapp.id);
+  // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+  const wbot = await getWbotOrRecover(defaultWhatsapp.id, 30000);
+  if (!wbot) {
+    throw new AppError("ERR_WAPP_NOT_INITIALIZED");
+  }
   try {
     const [result] = await (wbot as WASocket).onWhatsApp(
       `${number}@s.whatsapp.net`

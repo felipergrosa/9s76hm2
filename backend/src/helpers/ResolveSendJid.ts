@@ -1,7 +1,7 @@
 import Contact from "../models/Contact";
 import LidMapping from "../models/LidMapping";
 import logger from "../utils/logger";
-import { getWbot } from "../libs/wbot";
+import { getWbotOrRecover } from "../libs/wbot";
 
 /**
  * Resolve o JID correto para envio de mensagens.
@@ -88,7 +88,8 @@ const ResolveSendJid = async (
       logger.warn(`[ResolveSendJid] whatsappId não informado, não é possível consultar Baileys socket`);
     }
     try {
-      const wbot = whatsappId ? getWbot(whatsappId) : null;
+      // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+      const wbot = whatsappId ? await getWbotOrRecover(whatsappId, 30000) : null;
       if (wbot) {
         const sock = wbot as any;
 

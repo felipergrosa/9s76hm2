@@ -3,7 +3,7 @@ import WhatsappLabel from "../../models/WhatsappLabel";
 import ContactWhatsappLabel from "../../models/ContactWhatsappLabel";
 import Contact from "../../models/Contact";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import logger from "../../utils/logger";
 
 interface LabelStats {
@@ -164,7 +164,8 @@ class WhatsAppLabelsService {
     whatsappId?: number
   ): Promise<void> {
     const defaultWhatsapp = await GetDefaultWhatsApp(whatsappId, companyId);
-    const wbot = getWbot(defaultWhatsapp.id) as any;
+    // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+    const wbot = await getWbotOrRecover(defaultWhatsapp.id, 30000) as any;
     
     if (!wbot || typeof wbot.addChatLabel !== 'function') {
       throw new Error("Função addChatLabel não disponível no socket atual");
@@ -186,7 +187,8 @@ class WhatsAppLabelsService {
     whatsappId?: number
   ): Promise<void> {
     const defaultWhatsapp = await GetDefaultWhatsApp(whatsappId, companyId);
-    const wbot = getWbot(defaultWhatsapp.id) as any;
+    // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+    const wbot = await getWbotOrRecover(defaultWhatsapp.id, 30000) as any;
     
     if (!wbot || typeof wbot.removeChatLabel !== 'function') {
       throw new Error("Função removeChatLabel não disponível no socket atual");
@@ -208,7 +210,8 @@ class WhatsAppLabelsService {
     whatsappId?: number
   ): Promise<string> {
     const defaultWhatsapp = await GetDefaultWhatsApp(whatsappId, companyId);
-    const wbot = getWbot(defaultWhatsapp.id) as any;
+    // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+    const wbot = await getWbotOrRecover(defaultWhatsapp.id, 30000) as any;
     
     if (!wbot || typeof wbot.addLabel !== 'function') {
       throw new Error("Função addLabel não disponível no socket atual");

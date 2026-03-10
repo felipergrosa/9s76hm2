@@ -2,7 +2,7 @@ import Contact from "../../models/Contact";
 import Whatsapp from "../../models/Whatsapp";
 import { getIO } from "../../libs/socket";
 import logger from "../../utils/logger";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 
 interface ValidateContactNameParams {
   contactId: string | number;
@@ -47,7 +47,8 @@ const ValidateContactNameService = async ({
     }
 
     // 3. Buscar informações do contato na API WhatsApp
-    const wbot = getWbot(whatsapp.id);
+    // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+    const wbot = await getWbotOrRecover(whatsapp.id, 30000);
     
     if (!wbot) {
       return { success: false, error: "WhatsApp não está conectado" };

@@ -2,7 +2,7 @@ import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
 import Whatsapp from "../../models/Whatsapp";
 import Contact from "../../models/Contact";
-import { dataMessages, getWbot, getWbotIsReconnecting } from "../../libs/wbot";
+import { dataMessages, getWbotOrRecover, getWbotIsReconnecting } from "../../libs/wbot";
 import { getIO } from "../../libs/socket";
 import logger from "../../utils/logger";
 import { getBodyMessage } from "../WbotServices/wbotMessageListener";
@@ -434,7 +434,12 @@ const ImportContactHistoryService = async ({
         // 2. Obter sessão Baileys
         let wbot: WASocket;
         try {
-            wbot = getWbot(whatsappId);
+            // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+            wbot = await getWbotOrRecover(whatsappId, 30000) as WASocket;
+            if (!wbot) {
+                logger.warn(`[ImportHistory] Sessão não recuperada após 30s para whatsappId=${whatsappId}`);
+                return { synced: 0, skipped: true, reason: "SESSION_NOT_READY" };
+            }
         } catch (err: any) {
             logger.error(`[ImportHistory] Wbot não disponível: ${err.message}`);
             if (String(err?.message || "").includes("ERR_WAPP_NOT_INITIALIZED")) {

@@ -1,5 +1,5 @@
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import Contact from "../../models/Contact";
 
 const GetProfilePicUrl = async (
@@ -15,7 +15,11 @@ const GetProfilePicUrl = async (
     return `${process.env.FRONTEND_URL}/nopicture.png`;
   }
 
-  const wbot = getWbot(defaultWhatsapp.id);
+  // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+  const wbot = await getWbotOrRecover(defaultWhatsapp.id, 30000);
+  if (!wbot) {
+    return `${process.env.FRONTEND_URL}/nopicture.png`;
+  }
 
   let profilePicUrl: string;
   try {

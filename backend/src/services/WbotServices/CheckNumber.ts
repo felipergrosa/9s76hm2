@@ -1,6 +1,6 @@
 import AppError from "../../errors/AppError";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 
 const CheckContactNumber = async (
@@ -22,7 +22,11 @@ const CheckContactNumber = async (
   }
 
   // Fluxo padrão Baileys (Web)
-  const wbot = getWbot(whatsapp.id);
+  // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+  const wbot = await getWbotOrRecover(whatsapp.id, 30000);
+  if (!wbot) {
+    throw new AppError("ERR_WAPP_NOT_INITIALIZED");
+  }
 
   let numberArray;
 

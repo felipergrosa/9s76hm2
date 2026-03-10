@@ -1,4 +1,4 @@
-import { getWbot } from "../libs/wbot";
+import { getWbotOrRecover } from "../libs/wbot";
 import { handleMessage } from "../services/WbotServices/wbotMessageListener";
 import logger from "../utils/logger";
 import pTimeout from "p-timeout";
@@ -28,8 +28,15 @@ export default {
     const isGroup = remoteJid?.endsWith("@g.us");
 
     try {
-      const w = getWbot(wbot);
-      
+      // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+      // Isso evita ERR_WAPP_NOT_INITIALIZED quando sessão está em processo de reconexão
+      const w = await getWbotOrRecover(wbot, 30000); // Aguarda até 30s
+
+      if (!w) {
+        logger.warn({ wbot }, "[handleMessageQueue] Sessão não recuperada após 30s - descartando mensagem");
+        return; // Descartar mensagem - Bull não faz retry
+      }
+
       // PROTEÇÃO CRÍTICA: Timeout de 45s para dar mais tempo para processamento
       // Aumentado de 25s para evitar falhas em mensagens complexas com mídia
       await pTimeout(handleMessage(message, w, companyId), 45000);

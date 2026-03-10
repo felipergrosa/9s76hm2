@@ -12,7 +12,7 @@ import AppError from "../../errors/AppError";
 import Ticket from "../../models/Ticket";
 import mime from "mime-types";
 import Contact from "../../models/Contact";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import formatBody from "../../helpers/Mustache";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
@@ -221,7 +221,11 @@ const SendWhatsAppMedia = async ({
   isForwarded = false
 }: Request): Promise<WAMessage> => {
   try {
-    const wbot = await getWbot(ticket.whatsappId);
+    // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+    const wbot = await getWbotOrRecover(ticket.whatsappId, 30000);
+    if (!wbot) {
+      throw new AppError("ERR_WAPP_NOT_INITIALIZED");
+    }
     const companyId = ticket.companyId.toString()
 
     const pathMedia = media.path;

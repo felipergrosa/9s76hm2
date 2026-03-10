@@ -6,7 +6,7 @@ import Ticket from "../../models/Ticket";
 import fs from "fs";
 import path from "path";
 import Contact from "../../models/Contact";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import ResolveSendJid from "../../helpers/ResolveSendJid";
 
 // delay removido na v7 - implementação própria
@@ -39,7 +39,11 @@ const SendWhatsAppMessageLink = async ({
   caption,
   msdelay
 }: Request): Promise<WAMessage> => {
-  const wbot = await getWbot(whatsappId);
+  // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+  const wbot = await getWbotOrRecover(whatsappId, 30000);
+  if (!wbot) {
+    throw new AppError("ERR_WAPP_NOT_INITIALIZED");
+  }
   // Resolver JID correto para envio (trata LIDs → número real)
   const number = await ResolveSendJid(contact, contact.isGroup, whatsappId);
 

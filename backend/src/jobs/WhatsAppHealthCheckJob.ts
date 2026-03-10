@@ -6,7 +6,7 @@
  */
 
 import Whatsapp from "../models/Whatsapp";
-import { getWbot, removeWbot, getWbotIsReconnecting } from "../libs/wbot";
+import { getWbotOrRecover, removeWbot, getWbotIsReconnecting } from "../libs/wbot";
 import { StartWhatsAppSessionUnified as StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSessionUnified";
 import { getIO } from "../libs/socket";
 import logger from "../utils/logger";
@@ -26,6 +26,9 @@ const lastReconnectAttempt = new Map<number, number>();
  */
 function isSocketHealthy(whatsappId: number): { healthy: boolean; reason: string; missing: boolean } {
     try {
+        // NOTA: HealthCheck usa getWbotOrRecover síncrono via require para verificação rápida
+        // Não queremos aguardar reconexão aqui, apenas verificar estado atual
+        const { getWbot } = require("../libs/wbot");
         const session = getWbot(whatsappId);
 
         if (!session) {

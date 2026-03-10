@@ -1,5 +1,5 @@
 import { WASocket } from "@whiskeysockets/baileys";
-import { getWbot } from "../libs/wbot";
+import { getWbotOrRecover } from "../libs/wbot";
 import GetDefaultWhatsApp from "./GetDefaultWhatsApp";
 import Ticket from "../models/Ticket";
 
@@ -14,8 +14,11 @@ const GetTicketWbot = async (ticket: Ticket): Promise<Session> => {
     await ticket.$set("whatsapp", defaultWhatsapp);
   }
 
-  const wbot = getWbot(ticket.whatsappId);
-
+  // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+  const wbot = await getWbotOrRecover(ticket.whatsappId, 30000);
+  if (!wbot) {
+    throw new Error("ERR_WAPP_NOT_INITIALIZED");
+  }
   return wbot;
 };
 

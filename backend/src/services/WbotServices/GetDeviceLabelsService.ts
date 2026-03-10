@@ -2,7 +2,7 @@ import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
 import logger from "../../utils/logger";
 import { getLabels, getAllChatLabels } from "../../libs/labelCache";
 import ShowBaileysService from "../BaileysServices/ShowBaileysService";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 
 interface DeviceLabel {
   id: string;
@@ -25,7 +25,8 @@ const GetDeviceLabelsService = async (companyId: number, whatsappId?: number): P
     if (labels.length === 0) {
       logger.info(`[GetDeviceLabelsService] Cache vazio, tentando forçar resync do App State`);
       try {
-        const wbot = getWbot(defaultWhatsapp.id) as any;
+        // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+        const wbot = await getWbotOrRecover(defaultWhatsapp.id, 30000) as any;
         if (wbot && typeof wbot.resyncAppState === 'function') {
           const { ALL_WA_PATCH_NAMES } = require("@whiskeysockets/baileys");
           // true = solicitar snapshot completo

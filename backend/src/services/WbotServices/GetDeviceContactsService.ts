@@ -1,4 +1,4 @@
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
 import ShowBaileysService from "../BaileysServices/ShowBaileysService";
 import logger from "../../utils/logger";
@@ -75,7 +75,11 @@ const GetDeviceContactsService = async (companyId: number, whatsappId?: number) 
     logger.info(`[GetDeviceContactsService] Buscando contatos para company=${companyId}, whatsappId=${defaultWhatsapp.id}`);
 
     // Método 1: Tentar via store ativo
-    const wbot = getWbot(defaultWhatsapp.id);
+    // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+    const wbot = await getWbotOrRecover(defaultWhatsapp.id, 30000);
+    if (!wbot) {
+      throw new Error("ERR_WAPP_NOT_INITIALIZED");
+    }
     let deviceContacts: any[] = [];
 
     if (wbot && wbot.store) {

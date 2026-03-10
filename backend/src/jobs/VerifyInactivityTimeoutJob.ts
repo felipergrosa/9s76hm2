@@ -10,7 +10,7 @@ import Ticket from "../models/Ticket";
 import AIAgent from "../models/AIAgent";
 import Queue from "../models/Queue";
 import UpdateTicketService from "../services/TicketServices/UpdateTicketService";
-import { getWbot } from "../libs/wbot";
+import { getWbotOrRecover } from "../libs/wbot";
 import { getIO } from "../libs/socket";
 import logger from "../utils/logger";
 
@@ -86,7 +86,12 @@ async function findInactiveTickets(): Promise<InactiveTicket[]> {
  */
 async function sendTimeoutMessage(ticket: Ticket, message: string): Promise<void> {
     try {
-        const wbot = await getWbot(ticket.whatsappId);
+        // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+        const wbot = await getWbotOrRecover(ticket.whatsappId, 30000);
+        if (!wbot) {
+            logger.warn(`[InactivityTimeout] Sessão não disponível para ticket ${ticket.id}`);
+            return;
+        }
         const contact = await ticket.$get("contact");
         
         if (!contact) {

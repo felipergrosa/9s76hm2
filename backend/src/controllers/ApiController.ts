@@ -12,7 +12,7 @@ import CheckIsValidContact from "../services/WbotServices/CheckIsValidContact";
 import CheckContactNumber from "../services/WbotServices/CheckNumber";
 import SendWhatsAppMedia, { getMessageOptions } from "../services/WbotServices/SendWhatsAppMedia";
 import UpdateTicketService from "../services/TicketServices/UpdateTicketService";
-import { getWbot } from "../libs/wbot";
+import { getWbotOrRecover } from "../libs/wbot";
 import SendWhatsAppMessageLink from "../services/WbotServices/SendWhatsAppMessageLink";
 import SendWhatsAppMessageAPI from "../services/WbotServices/SendWhatsAppMessageAPI";
 import SendWhatsAppMediaImage from "../services/WbotServices/SendWhatsappMediaImage";
@@ -296,7 +296,10 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     throw new AppError(err.message);
   }
 
-  const wbot = await getWbot(whatsapp.id);
+  const wbot = await getWbotOrRecover(whatsapp.id, 30000);
+  if (!wbot) {
+    throw new AppError("ERR_WAPP_NOT_INITIALIZED");
+  }
 
   let user
   if (userId?.toString() !== "" && !isNaN(userId)) {
@@ -607,7 +610,10 @@ export const checkNumber = async (req: Request, res: Response): Promise<Response
   const number = newContact.number.replace("-", "").replace(" ", "");
 
   const whatsappDefault = await GetDefaultWhatsApp(whatsapp.id, companyId);
-  const wbot = getWbot(whatsappDefault.id);
+  const wbot = await getWbotOrRecover(whatsappDefault.id, 30000);
+  if (!wbot) {
+    throw new AppError("ERR_WAPP_NOT_INITIALIZED");
+  }
   const jid = createJid(number);
 
   try {

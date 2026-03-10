@@ -40,7 +40,7 @@ import CompaniesSettings from "../../models/CompaniesSettings";
 import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
 import { delay } from "bluebird";
 import typebotListener from "../TypebotServices/typebotListener";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import { proto } from "@whiskeysockets/baileys";
 import { handleOpenAi } from "../IntegrationsServices/OpenAiService";
 import { IOpenAi } from "../../@types/openai";
@@ -246,7 +246,11 @@ export const ActionsWebhookService = async (
       console.log("273");
       if (nodeSelected.type === "typebot") {
         console.log("275");
-        const wbot = getWbot(whatsapp.id);
+        // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+        const wbot = await getWbotOrRecover(whatsapp.id, 30000);
+        if (!wbot) {
+          throw new AppError("ERR_WAPP_NOT_INITIALIZED");
+        }
         await typebotListener({
           wbot: wbot,
           msg,
@@ -286,7 +290,10 @@ export const ActionsWebhookService = async (
           where: { number: numberClient, companyId }
         });
 
-        const wbot = getWbot(whatsapp.id);
+        const wbot = await getWbotOrRecover(whatsapp.id, 30000);
+        if (!wbot) {
+          throw new AppError("ERR_WAPP_NOT_INITIALIZED");
+        }
 
         const ticketTraking = await FindOrCreateATicketTrakingService({
           ticketId: ticket.id,

@@ -1,5 +1,5 @@
 import Contact from "../../models/Contact";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import logger from "../../utils/logger";
 import { jidNormalizedUser } from "@whiskeysockets/baileys";
 
@@ -40,7 +40,10 @@ class ContactEnrichmentService {
             throw new Error("ERR_CONTACT_NOT_FOUND");
         }
 
-        const wbot = getWbot(whatsappId);
+        const wbot = await getWbotOrRecover(whatsappId, 30000);
+        if (!wbot) {
+            throw new Error("ERR_WAPP_NOT_INITIALIZED");
+        }
         const jid = contact.isGroup ? contact.number : `${contact.number}@s.whatsapp.net`;
         const normalizedJid = jidNormalizedUser(jid);
 

@@ -18,7 +18,7 @@ import {
   ConnectionStatus,
   WhatsAppAdapterError
 } from "./IWhatsAppAdapter";
-import { getWbot, removeWbot } from "../wbot";
+import { getWbotOrRecover, removeWbot } from "../wbot";
 import logger from "../../utils/logger";
 import Whatsapp from "../../models/Whatsapp";
 import Message from "../../models/Message";
@@ -54,8 +54,8 @@ export class BaileysAdapter implements IWhatsAppAdapter {
     try {
       logger.info(`[BaileysAdapter] Inicializando para whatsappId=${this.whatsappId}`);
 
-      // Usa o socket já inicializado pelo sistema existente
-      this.socket = getWbot(this.whatsappId);
+      // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+      this.socket = await getWbotOrRecover(this.whatsappId, 30000);
 
       if (!this.socket) {
         throw new WhatsAppAdapterError(
@@ -180,9 +180,10 @@ export class BaileysAdapter implements IWhatsAppAdapter {
 
       // Busca um novo socket do sistema
       try {
-        this.socket = getWbot(this.whatsappId);
+        // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+        this.socket = await getWbotOrRecover(this.whatsappId, 30000);
       } catch (err) {
-        logger.warn(`[BaileysAdapter] getWbot falhou: ${err.message}. Socket não existe.`);
+        logger.warn(`[BaileysAdapter] getWbotOrRecover falhou: ${err.message}. Socket não existe.`);
         // Socket não existe - disparar recovery
         await this.triggerSessionRecovery();
         return false;

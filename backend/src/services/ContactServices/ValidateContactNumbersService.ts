@@ -1,6 +1,6 @@
 import { WASocket } from "@whiskeysockets/baileys";
 import Contact from "../../models/Contact";
-import { getWbot } from "../../libs/wbot";
+import { getWbotOrRecover } from "../../libs/wbot";
 import logger from "../../utils/logger";
 import { Op, literal } from "sequelize";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
@@ -187,7 +187,11 @@ const ValidateContactNumbersService = async ({
     mode,
     offset = 0
 }: ValidateRequest): Promise<ValidateContactNumbersResult> => {
-    const wbot = getWbot(whatsappId);
+    // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
+    const wbot = await getWbotOrRecover(whatsappId, 30000);
+    if (!wbot) {
+        throw new Error("ERR_WAPP_NOT_INITIALIZED");
+    }
 
     // Construir WHERE 
     const whereClause: any = {
