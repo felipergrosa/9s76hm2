@@ -237,7 +237,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
 
       // Disparar reinicialização via StartWhatsAppSessionUnified
       logger.info(`[BaileysAdapter] Disparando StartWhatsAppSessionUnified para recovery...`);
-      const { StartWhatsAppSessionUnified } = require("../services/WbotServices/StartWhatsAppSessionUnified");
+      const { StartWhatsAppSessionUnified } = require("../../services/WbotServices/StartWhatsAppSessionUnified");
       
       // Usar setTimeout para não bloquear e permitir que a chamada atual falhe gracefully
       setTimeout(() => {
