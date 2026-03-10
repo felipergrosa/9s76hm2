@@ -107,7 +107,7 @@ const reconnectingWhatsapps = new Map<number, number>();
 const RECONNECT_FLAG_TIMEOUT_MS = 60_000; // 60 segundos
 
 // Tempo máximo que a flag pode ficar ativa antes de ser considerada "stale" (morta)
-const RECONNECT_STALE_THRESHOLD_MS = 120_000; // 2 minutos
+const RECONNECT_STALE_THRESHOLD_MS = 60_000; // 1 minuto (reduzido de 2min)
 
 // Helper para expor estado de reconexão para outros módulos (ex: HealthCheck)
 export const getWbotIsReconnecting = (whatsappId: number): boolean => {
@@ -146,6 +146,121 @@ const conflictCountMap = new Map<number, number>();
 // Constantes de tempo para reconexão
 const BASE_CONFLICT_DELAY = 30_000; // 30 segundos base
 const MAX_CONFLICT_DELAY = 120_000; // 2 minutos máximo
+
+// ========== CIRCUIT BREAKER (para erros críticos de protocolo) ==========
+// Rastreia falhas de reconexão por whatsappId
+const circuitBreakerMap = new Map<number, {
+  count: number;           // Número de falhas consecutivas
+  firstFailure: number;    // Timestamp da primeira falha
+  lastFailure: number;     // Timestamp da última falha
+  lastError: string;       // Mensagem do último erro
+  openUntil: number;       // Timestamp até quando o circuito está aberto
+}>();
+
+// Configuração do Circuit Breaker
+const CIRCUIT_BREAKER_THRESHOLD = 5;           // Após 5 falhas, abre o circuito
+const CIRCUIT_BREAKER_WINDOW_MS = 300_000;     // Janela de 5 minutos
+const CIRCUIT_BREAKER_COOLDOWN_MS = 300_000;   // 5 minutos de cooldown após abrir
+const CIRCUIT_BREAKER_MAX_DELAY = 60_000;      // Delay máximo de reconexão
+
+// Erros críticos de protocolo que devem disparar o circuit breaker
+const CRITICAL_PROTOCOL_ERRORS = [
+  'xml-not-well-formed',
+  'XML not well-formed',
+  'stream errored',
+  'Stream Errored',
+  'connection reset',
+  'Connection reset',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'ENOTFOUND',
+];
+
+// Helper para verificar se um erro é crítico de protocolo
+const isCriticalProtocolError = (errorMsg: string): boolean => {
+  return CRITICAL_PROTOCOL_ERRORS.some(e => errorMsg.toLowerCase().includes(e.toLowerCase()));
+};
+
+// Helper para registrar falha no circuit breaker
+const recordCircuitBreakerFailure = (whatsappId: number, errorMsg: string): {
+  shouldBlock: boolean;
+  delayMs: number;
+} => {
+  const now = Date.now();
+  let cb = circuitBreakerMap.get(whatsappId);
+  
+  if (!cb) {
+    cb = { count: 0, firstFailure: now, lastFailure: now, lastError: '', openUntil: 0 };
+    circuitBreakerMap.set(whatsappId, cb);
+  }
+  
+  // Resetar se passou da janela
+  if (now - cb.firstFailure > CIRCUIT_BREAKER_WINDOW_MS) {
+    cb.count = 0;
+    cb.firstFailure = now;
+  }
+  
+  cb.count++;
+  cb.lastFailure = now;
+  cb.lastError = errorMsg;
+  
+  // Verificar se atingiu threshold
+  if (cb.count >= CIRCUIT_BREAKER_THRESHOLD) {
+    cb.openUntil = now + CIRCUIT_BREAKER_COOLDOWN_MS;
+    logger.error(
+      `[CircuitBreaker] CIRCUITO ABERTO para whatsappId=${whatsappId}. ` +
+      `${cb.count} falhas em ${Math.round((now - cb.firstFailure) / 1000)}s. ` +
+      `Bloqueando reconexões por ${CIRCUIT_BREAKER_COOLDOWN_MS / 1000}s. ` +
+      `Último erro: ${errorMsg}`
+    );
+    return { shouldBlock: true, delayMs: CIRCUIT_BREAKER_COOLDOWN_MS };
+  }
+  
+  // Backoff exponencial: 5s, 10s, 20s, 40s, 60s
+  const delayMs = Math.min(5000 * Math.pow(2, cb.count - 1), CIRCUIT_BREAKER_MAX_DELAY);
+  logger.warn(
+    `[CircuitBreaker] Falha #${cb.count} para whatsappId=${whatsappId}. ` +
+    `Próxima tentativa em ${delayMs / 1000}s. Erro: ${errorMsg}`
+  );
+  
+  return { shouldBlock: false, delayMs };
+};
+
+// Helper para verificar se o circuito está aberto
+const isCircuitBreakerOpen = (whatsappId: number): { open: boolean; remainingMs: number } => {
+  const cb = circuitBreakerMap.get(whatsappId);
+  if (!cb || cb.openUntil === 0) return { open: false, remainingMs: 0 };
+  
+  const now = Date.now();
+  if (now < cb.openUntil) {
+    return { open: true, remainingMs: cb.openUntil - now };
+  }
+  
+  // Circuito fechado novamente
+  cb.openUntil = 0;
+  return { open: false, remainingMs: 0 };
+};
+
+// Helper para resetar circuit breaker (chamado quando conexão bem-sucedida)
+const resetCircuitBreaker = (whatsappId: number): void => {
+  circuitBreakerMap.delete(whatsappId);
+  logger.info(`[CircuitBreaker] Resetado para whatsappId=${whatsappId}`);
+};
+
+// Exportar para uso em health checks
+export const getCircuitBreakerStatus = (whatsappId: number): any => {
+  const cb = circuitBreakerMap.get(whatsappId);
+  if (!cb) return { status: 'closed', failures: 0 };
+  
+  const { open, remainingMs } = isCircuitBreakerOpen(whatsappId);
+  return {
+    status: open ? 'open' : 'closed',
+    failures: cb.count,
+    lastError: cb.lastError,
+    lastFailure: cb.lastFailure ? new Date(cb.lastFailure).toISOString() : null,
+    remainingCooldown: open ? remainingMs : 0
+  };
+};
 // ===========================================================================
 
 export default function msg() {
@@ -763,7 +878,70 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               }
 
               if (!isLoggedOut) {
-                // Verificar se já está reconectando (limpa flags stale > 2min)
+                // ========== CIRCUIT BREAKER CHECK ==========
+                // Verificar se o circuito está aberto (bloquear reconexões)
+                const { open: circuitOpen, remainingMs } = isCircuitBreakerOpen(id);
+                if (circuitOpen) {
+                  logger.error(
+                    `[wbot][CircuitBreaker] CIRCUITO ABERTO para ${name}. ` +
+                    `Bloqueando reconexão por mais ${Math.round(remainingMs / 1000)}s. ` +
+                    `Erro anterior: ${circuitBreakerMap.get(id)?.lastError}`
+                  );
+                  removeWbot(id, false);
+                  // Notificar frontend que a sessão está com problemas
+                  try {
+                    io?.of(`/workspace-${companyId}`)
+                      .emit("wa-conn-lost", {
+                        whatsappId: id,
+                        whatsappName: name,
+                        statusCode: 'CIRCUIT_BREAKER_OPEN',
+                        reason: `Múltiplas falhas de reconexão. Aguardando ${Math.round(remainingMs / 1000)}s antes de tentar novamente.`,
+                        qrUrl: `${process.env.FRONTEND_URL || ""}/connections/${id}`
+                      });
+                  } catch { }
+                  return;
+                }
+                
+                // ========== REGISTRAR FALHA NO CIRCUIT BREAKER ==========
+                // Se for erro crítico de protocolo, registrar no circuit breaker
+                const isCriticalError = isCriticalProtocolError(errorMsg);
+                let reconnectDelay = 5000; // Default 5s
+                
+                if (isCriticalError) {
+                  const cbResult = recordCircuitBreakerFailure(id, errorMsg);
+                  reconnectDelay = cbResult.delayMs;
+                  
+                  logger.error(
+                    `[wbot][RECONNECT] Erro CRÍTICO de protocolo para ${name}: ${errorMsg}. ` +
+                    `Circuit Breaker: falha #${circuitBreakerMap.get(id)?.count}, ` +
+                    `delay=${reconnectDelay / 1000}s, shouldBlock=${cbResult.shouldBlock}`
+                  );
+                  
+                  // Se circuit breaker abriu, parar reconexões
+                  if (cbResult.shouldBlock) {
+                    removeWbot(id, false);
+                    return;
+                  }
+                  
+                  // ========== CLEANUP SIGNAL PARA ERROS CRÍTICOS ==========
+                  // Para xml-not-well-formed e outros erros de protocolo, limpar chaves Signal
+                  // antes de reconectar para evitar Bad MAC na próxima sessão
+                  try {
+                    const SignalCleanupService = require("../services/WbotServices/SignalCleanupService").default;
+                    logger.info(`[wbot][SignalCleanup] Limpando chaves Signal para ${name} antes de reconectar...`);
+                    const cleanupResult = await SignalCleanupService.cleanupSession(id, companyId);
+                    if (cleanupResult.success) {
+                      logger.info(`[wbot][SignalCleanup] ✅ ${cleanupResult.deleted} arquivos Signal removidos, ${cleanupResult.preserved} preservados`);
+                    } else {
+                      logger.warn(`[wbot][SignalCleanup] ⚠️ Falha na limpeza: ${cleanupResult.error}`);
+                    }
+                  } catch (cleanupErr: any) {
+                    logger.warn(`[wbot][SignalCleanup] Erro ao limpar Signal: ${cleanupErr?.message}`);
+                  }
+                }
+                
+                // ========== CONTROLE DE RECONEXÃO ==========
+                // Verificar se já está reconectando (limpa flags stale > 1min)
                 const alreadyReconnecting = getWbotIsReconnecting(id);
                 const sessionStillExists = sessions.some(s => s.id === id);
                 
@@ -771,7 +949,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 logger.info(`[wbot][RECONNECT] Iniciando tratamento de desconexão para ${name}. ` +
                   `statusCode=${statusCode}, errorMsg="${errorMsg}", ` +
                   `alreadyReconnecting=${alreadyReconnecting}, sessionStillExists=${sessionStillExists}, ` +
-                  `isXmlNotWellFormed=${isXmlNotWellFormed}`);
+                  `isCriticalError=${isCriticalError}, reconnectDelay=${reconnectDelay / 1000}s`);
                 
                 if (alreadyReconnecting && sessionStillExists) {
                   // Flag ativa E sessão existe = reconexão genuinamente em andamento
@@ -789,7 +967,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 reconnectingWhatsapps.set(id, Date.now());
                 removeWbot(id, false);
                 
-                logger.info(`[wbot][RECONNECT] Flag de reconexão SETADA para ${name}. Agendando reconexão em 5s...`);
+                logger.info(`[wbot][RECONNECT] Flag de reconexão SETADA para ${name}. Agendando reconexão em ${reconnectDelay / 1000}s...`);
                 
                 // TIMEOUT DE SEGURANÇA: Limpar flag E disparar reconexão após 60s se sessão não voltou
                 setTimeout(async () => {
@@ -812,9 +990,9 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   }
                 }, RECONNECT_FLAG_TIMEOUT_MS);
                 
-                // Reconexão com delay de 5s
+                // Reconexão com delay dinâmico (5s padrão, ou mais para erros críticos)
                 setTimeout(async () => {
-                  logger.info(`[wbot][RECONNECT] Executando reconexão agendada (5s) para ${name}...`);
+                  logger.info(`[wbot][RECONNECT] Executando reconexão agendada (${reconnectDelay / 1000}s) para ${name}...`);
                   try {
                     // CRÍTICO: Limpar flag ANTES de chamar StartWhatsAppSession
                     // Senão StartWhatsAppSessionUnified vai retornar silenciosamente (getWbotIsReconnecting=true)
@@ -825,9 +1003,10 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   } catch (err: any) {
                     logger.error(`[wbot][RECONNECT] ERRO na StartWhatsAppSession para ${name}: ${err?.message}`);
                     logger.error(`[wbot][RECONNECT] Stack: ${err?.stack}`);
-                    // Flag já foi limpa acima
+                    // Registrar falha no circuit breaker
+                    recordCircuitBreakerFailure(id, err?.message || 'Unknown error');
                   }
-                }, 5000);
+                }, reconnectDelay);
               } else {
                 // Limpar flag de reconexão - logout, não vai reconectar automaticamente
                 reconnectingWhatsapps.delete(id);
@@ -898,13 +1077,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               conflictCountMap.delete(id);
               reconnectingWhatsapps.delete(id);
               
+              // Resetar Circuit Breaker ao conectar com sucesso
+              resetCircuitBreaker(id);
+              
               // Resetar contador de erros Signal ao conectar com sucesso
               try {
                 const { default: SignalErrorHandler } = require("../services/WbotServices/SignalErrorHandler");
                 SignalErrorHandler.resetErrorCount(id);
               } catch { /* ignore */ }
               
-              logger.info(`[wbot] Conexão estabelecida com sucesso para ${name}. Contadores de conflito e Signal resetados.`);
+              logger.info(`[wbot] Conexão estabelecida com sucesso para ${name}. Contadores de conflito, Circuit Breaker e Signal resetados.`);
 
               // BLINDAGEM: Detectar reconexão com mesmo número e migrar histórico
               try {

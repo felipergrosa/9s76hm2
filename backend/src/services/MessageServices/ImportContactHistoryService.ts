@@ -21,25 +21,81 @@ import {
   cancelFetchRequest
 } from "../../libs/messageHistoryHandler";
 import { acquireFetchLock } from "../../libs/fetchHistoryMutex";
+import { discoverChatJid } from "../../helpers/DiscoverChatJid";
+import { getCachedJid, setCachedJid } from "../../cache/ChatJidCache";
+import { downloadMediaFromMessage, hasMedia } from "../../helpers/DownloadMediaMessage";
 
 const writeFileAsync = promisify(fs.writeFile);
 
 const extractFetchedMessages = (payload: any): any[] => {
-    if (!payload) return [];
-    if (Array.isArray(payload)) return payload;
-    if (Array.isArray(payload?.messages)) return payload.messages;
+    if (!payload) {
+        logger.debug(`[extractFetchedMessages] payload é null/undefined`);
+        return [];
+    }
+    
+    if (Array.isArray(payload)) {
+        const valid = payload.filter(m => m && m.key && m.message);
+        logger.debug(`[extractFetchedMessages] Array direto: ${payload.length} total, ${valid.length} válidas`);
+        return valid;
+    }
+    
+    if (Array.isArray(payload?.messages)) {
+        const valid = payload.messages.filter((m: any) => m && m.key && m.message);
+        logger.debug(`[extractFetchedMessages] payload.messages: ${payload.messages.length} total, ${valid.length} válidas`);
+        return valid;
+    }
     
     // Baileys pode retornar objeto com chaves numéricas: { 0: msg, 1: msg, ... }
     if (typeof payload === "object" && !Array.isArray(payload)) {
         const keys = Object.keys(payload);
         const numericKeys = keys.filter(k => !isNaN(Number(k)));
+        
         if (numericKeys.length > 0) {
-            return numericKeys.map(k => payload[k]).filter(m => m);
+            logger.debug(`[extractFetchedMessages] Objeto com chaves numéricas: ${numericKeys.length} keys`);
+            
+            const extracted = numericKeys.map(k => payload[k]);
+            const valid = extracted.filter(m => {
+                if (!m) return false;
+                if (!m.key || !m.key.id) return false;
+                if (!m.message) return false;
+                // Filtrar placeholders (mensagens sem conteúdo real)
+                const msgTypes = Object.keys(m.message);
+                const hasContent = msgTypes.some(t => 
+                    t !== "messageContextInfo" && 
+                    t !== "senderKeyDistributionMessage" &&
+                    t !== "protocolMessage"
+                );
+                return hasContent;
+            });
+            
+            logger.info(`[extractFetchedMessages] Objeto: ${extracted.length} extraídas, ${valid.length} válidas`);
+            
+            // Log amostra das inválidas para debug
+            const invalid = extracted.filter(m => !valid.includes(m));
+            if (invalid.length > 0 && invalid.length <= 3) {
+                invalid.forEach((m, i) => {
+                    const msgTypes = m?.message ? Object.keys(m.message) : [];
+                    logger.debug(`[extractFetchedMessages] Inválida[${i}]: key.id=${m?.key?.id} hasKey=${!!m?.key} hasMessage=${!!m?.message} msgTypes=[${msgTypes.join(',')}]`);
+                });
+            }
+            
+            return valid;
         }
     }
     
-    if (Array.isArray(payload?.syncData?.messages)) return payload.syncData.messages;
-    if (Array.isArray(payload?.historyMessages)) return payload.historyMessages;
+    if (Array.isArray(payload?.syncData?.messages)) {
+        const valid = payload.syncData.messages.filter((m: any) => m && m.key && m.message);
+        logger.debug(`[extractFetchedMessages] payload.syncData.messages: ${valid.length} válidas`);
+        return valid;
+    }
+    
+    if (Array.isArray(payload?.historyMessages)) {
+        const valid = payload.historyMessages.filter((m: any) => m && m.key && m.message);
+        logger.debug(`[extractFetchedMessages] payload.historyMessages: ${valid.length} válidas`);
+        return valid;
+    }
+    
+    logger.warn(`[extractFetchedMessages] Nenhum formato reconhecido. Keys do payload: ${Object.keys(payload).join(',')}`);
     return [];
 };
 
@@ -298,6 +354,7 @@ interface ImportContactHistoryParams {
     ticketId: string | number;
     companyId: number;
     periodMonths: number; // 0 = completo, 1, 3, 6
+    downloadMedia?: boolean; // true = faz download de mídias durante importação
 }
 
 interface ImportResult {
@@ -323,7 +380,8 @@ interface ImportResult {
 const ImportContactHistoryService = async ({
     ticketId,
     companyId,
-    periodMonths
+    periodMonths,
+    downloadMedia = false
 }: ImportContactHistoryParams): Promise<ImportResult> => {
     const io = getIO();
     const eventName = `importHistory-${ticketId}`;
@@ -368,45 +426,75 @@ const ImportContactHistoryService = async ({
 
         const whatsappId = ticket.whatsappId;
 
-        // 2. Verificar wbot ativo
-        let wbot: any;
+        if (typeof whatsappId === "number" && getWbotIsReconnecting(whatsappId)) {
+            logger.warn(`[ImportHistory] Sessão em reconexão para whatsappId=${whatsappId}. Adiando importação do ticket ${ticketId}.`);
+            return { synced: 0, skipped: true, reason: "SESSION_RECONNECTING" };
+        }
+
+        // 2. Obter sessão Baileys
+        let wbot: WASocket;
         try {
             wbot = getWbot(whatsappId);
         } catch (err: any) {
             logger.error(`[ImportHistory] Wbot não disponível: ${err.message}`);
+            if (String(err?.message || "").includes("ERR_WAPP_NOT_INITIALIZED")) {
+                return { synced: 0, skipped: true, reason: "SESSION_NOT_READY" };
+            }
             return { synced: 0, skipped: true, reason: "Conexão WhatsApp não inicializada" };
         }
 
-        // 3. Montar JIDs possíveis do contato (para filtrar dataMessages)
-        const contactNumber = ticket.contact.number;
+        if (!isSocketAlive(wbot, whatsappId)) {
+            logger.warn(`[ImportHistory] Socket instável para whatsappId=${whatsappId}. Adiando importação do ticket ${ticketId}.`);
+            return { synced: 0, skipped: true, reason: "SESSION_UNSTABLE" };
+        }
+
+        // 3. Descobrir JID correto do chat (via store.chats + cache)
+        let targetJid = getCachedJid(Number(ticketId));
+        let discoverySource: string = "cache";
+        
+        if (!targetJid) {
+            // Descobrir dinamicamente via store do Baileys
+            const discovery = await discoverChatJid({
+                wbot: wbot as any,
+                ticket,
+                contact: ticket.contact
+            });
+            
+            targetJid = discovery.jid;
+            discoverySource = discovery.source;
+            
+            // Cachear para próximas vezes
+            setCachedJid(
+                Number(ticketId),
+                ticket.contactId,
+                targetJid,
+                discovery.source,
+                discovery.confidence
+            );
+        }
+        
+        // Construir set de JIDs possíveis (incluindo variações)
         const possibleJids = new Set<string>();
-
-        // JID padrão
-        if (ticket.isGroup) {
-            possibleJids.add(contactNumber.includes("@g.us") ? contactNumber : `${contactNumber}@g.us`);
-        } else {
-            possibleJids.add(contactNumber.includes("@s.whatsapp.net") ? contactNumber : `${contactNumber}@s.whatsapp.net`);
-            // Também incluir versão normalizada
-            try {
-                const normalized = jidNormalizedUser(`${contactNumber}@s.whatsapp.net`);
-                possibleJids.add(normalized);
-            } catch { }
-        }
-
-        // Incluir remoteJid do contato se disponível
-        if (ticket.contact.remoteJid) {
-            possibleJids.add(ticket.contact.remoteJid);
-        }
-
+        possibleJids.add(targetJid);
+        
+        // Incluir versão normalizada
+        try {
+            possibleJids.add(jidNormalizedUser(targetJid));
+        } catch { }
+        
+        // Se é selfchat, incluir JIDs da sessão
         const isSelfChat = isSelfChatTicket(ticket, wbot);
-        const sessionJids = getSessionJidVariants(wbot);
         if (isSelfChat) {
+            const sessionJids = getSessionJidVariants(wbot);
             for (const sessionJid of sessionJids) {
                 possibleJids.add(sessionJid);
             }
         }
-
-        logger.info(`[ImportHistory] JIDs alvo: ${Array.from(possibleJids).join(", ")} | selfChat=${isSelfChat}`);
+        
+        logger.info(
+            `[ImportHistory] JID alvo: ${targetJid} (source: ${discoverySource}) | ` +
+            `possibleJids: ${Array.from(possibleJids).join(", ")} | selfChat=${isSelfChat}`
+        );
 
         // 4. Calcular data de corte
         let cutoffTimestamp: number | null = null;
@@ -535,22 +623,21 @@ const ImportContactHistoryService = async ({
                                 throw err;
                             });
 
-                        const fetchedDirectMessages = extractFetchedMessages(fetchResponse);
-                        if (fetchResponse) {
-                            const responseKeys = Array.isArray(fetchResponse) ? ["array"] : Object.keys(fetchResponse);
-                            logger.info(`[ImportHistory] fetchMessageHistory retornou resposta direta: keys=[${responseKeys.join(",")}] msgs=${fetchedDirectMessages.length}`);
+                        if (fetchResponse !== undefined && fetchResponse !== null) {
+                            const responseInfo = typeof fetchResponse === "string"
+                                ? `requestId=${fetchResponse}`
+                                : Array.isArray(fetchResponse)
+                                    ? `array_len=${fetchResponse.length}`
+                                    : `type=${typeof fetchResponse} keys=[${Object.keys(fetchResponse).join(",")}]`;
+                            logger.info(`[ImportHistory] fetchMessageHistory ack recebido: ${responseInfo}`);
                         }
 
-                        if (fetchedDirectMessages.length > 0) {
-                            allMessages = fetchedDirectMessages;
+                        const storeMessages = await waitForSessionHistory(wbotAny, whatsappId, mainJid, oldestKey, baselineIds, 5000, 1000);
+                        if (storeMessages.length > 0) {
+                            allMessages = storeMessages;
                         } else {
-                            const storeMessages = await waitForSessionHistory(wbotAny, whatsappId, mainJid, oldestKey, baselineIds, 5000, 1000);
-                            if (storeMessages.length > 0) {
-                                allMessages = storeMessages;
-                            } else {
-                                const result = await fetchPromise;
-                                allMessages = result.messages;
-                            }
+                            const result = await fetchPromise;
+                            allMessages = result.messages;
                         }
                         
                         // Repassar dedup
@@ -593,23 +680,22 @@ const ImportContactHistoryService = async ({
                             activeFetchId = registerFetchRequest(mainJid);
                             const retryPromise = startFetchRequest(activeFetchId, mainJid, 30000);
                             const retryResponse = await wbotAny.fetchMessageHistory(200, oldestKey, oldestTimestamp);
-                            const retryDirectMessages = extractFetchedMessages(retryResponse);
 
-                            if (retryResponse) {
-                                const retryKeys = Array.isArray(retryResponse) ? ["array"] : Object.keys(retryResponse);
-                                logger.info(`[ImportHistory] Retry fetchMessageHistory retornou resposta direta: keys=[${retryKeys.join(",")}] msgs=${retryDirectMessages.length}`);
+                            if (retryResponse !== undefined && retryResponse !== null) {
+                                const retryInfo = typeof retryResponse === "string"
+                                    ? `requestId=${retryResponse}`
+                                    : Array.isArray(retryResponse)
+                                        ? `array_len=${retryResponse.length}`
+                                        : `type=${typeof retryResponse} keys=[${Object.keys(retryResponse).join(",")}]`;
+                                logger.info(`[ImportHistory] Retry fetchMessageHistory ack recebido: ${retryInfo}`);
                             }
 
-                            if (retryDirectMessages.length > 0) {
-                                allMessages = retryDirectMessages;
+                            const retryStoreMessages = await waitForSessionHistory(wbotAny, whatsappId, mainJid, oldestKey, retryBaselineIds, 5000, 1000);
+                            if (retryStoreMessages.length > 0) {
+                                allMessages = retryStoreMessages;
                             } else {
-                                const retryStoreMessages = await waitForSessionHistory(wbotAny, whatsappId, mainJid, oldestKey, retryBaselineIds, 5000, 1000);
-                                if (retryStoreMessages.length > 0) {
-                                    allMessages = retryStoreMessages;
-                                } else {
-                                    const retryResult = await retryPromise;
-                                    allMessages = retryResult.messages;
-                                }
+                                const retryResult = await retryPromise;
+                                allMessages = retryResult.messages;
                             }
                             
                             const uniqueFetched = deduplicateAndSort(allMessages);
@@ -718,88 +804,32 @@ const ImportContactHistoryService = async ({
 
                 const originalDate = new Date(timestamp * 1000);
 
-                // Determinar se é mídia
-                const isMediaType = [
-                    "imageMessage", "videoMessage", "audioMessage", "voiceMessage",
-                    "documentMessage", "stickerMessage", "documentWithCaptionMessage",
-                    "ptvMessage"
-                ].includes(messageType);
-
+                // Verificar se mensagem tem mídia
+                const messageHasMedia = hasMedia(msg);
                 let mediaUrl: string | null = null;
                 let finalMediaType = messageType;
 
-                // Tentar baixar mídia
-                if (isMediaType) {
+                // Download de mídia (usando helper + flag downloadMedia)
+                if (messageHasMedia && downloadMedia) {
                     try {
-                        let buffer: Buffer | null = null;
-                        try {
-                            buffer = await downloadMediaMessage(
-                                msg,
-                                "buffer",
-                                {},
-                                {
-                                    logger,
-                                    reuploadRequest: wbot.updateMediaMessage
-                                }
-                            ) as Buffer;
-                        } catch (downloadErr: any) {
-                            // Mídia antiga pode não estar mais disponível — isso é normal
-                            logger.debug(`[ImportHistory] Mídia indisponível msg ${msg.key.id}: ${downloadErr?.message}`);
-                        }
-
-                        if (buffer) {
-                            const mineType =
-                                msg.message?.imageMessage ||
-                                msg.message?.audioMessage ||
-                                msg.message?.videoMessage ||
-                                msg.message?.stickerMessage ||
-                                msg.message?.documentMessage ||
-                                msg.message?.documentWithCaptionMessage?.message?.documentMessage ||
-                                msg.message?.ephemeralMessage?.message?.audioMessage ||
-                                msg.message?.ephemeralMessage?.message?.documentMessage ||
-                                msg.message?.ephemeralMessage?.message?.videoMessage ||
-                                msg.message?.ephemeralMessage?.message?.imageMessage ||
-                                msg.message?.viewOnceMessage?.message?.imageMessage ||
-                                msg.message?.viewOnceMessage?.message?.videoMessage ||
-                                msg.message?.ptvMessage;
-
-                            if (mineType?.mimetype) {
-                                let filename = msg.message?.documentMessage?.fileName || "";
-                                if (!filename) {
-                                    const ext = mineType.mimetype.split("/")[1]?.split(";")[0] || "bin";
-                                    filename = `${Date.now()}_${msg.key.id.slice(-6)}.${ext}`;
-                                } else {
-                                    filename = `${Date.now()}_${filename}`;
-                                }
-
-                                const contactFolder = `contact${ticket.contactId}`;
-                                const folder = path.resolve(
-                                    __dirname, "..", "..", "..", "public",
-                                    `company${companyId}`, contactFolder
-                                );
-
-                                if (!fs.existsSync(folder)) {
-                                    fs.mkdirSync(folder, { recursive: true });
-                                    fs.chmodSync(folder, 0o777);
-                                }
-
-                                await writeFileAsync(
-                                    path.join(folder, filename),
-                                    buffer.toString("base64"),
-                                    "base64"
-                                );
-
-                                mediaUrl = `${contactFolder}/${filename}`;
-                                const mimeBase = mineType.mimetype.split("/")[0];
-                                if (messageType === "stickerMessage" || mineType.mimetype === "image/webp") {
-                                    finalMediaType = "sticker";
-                                } else {
-                                    finalMediaType = mimeBase;
-                                }
+                        const downloadResult = await downloadMediaFromMessage({
+                            message: msg,
+                            companyId,
+                            contactId: ticket.contactId,
+                            ticketId: Number(ticketId)
+                        });
+                        
+                        if (downloadResult.success && downloadResult.mediaUrl) {
+                            mediaUrl = downloadResult.mediaUrl;
+                            if (downloadResult.mediaType) {
+                                finalMediaType = downloadResult.mediaType;
                             }
+                            logger.debug(`[ImportHistory] Mídia baixada: ${mediaUrl} (${downloadResult.mediaType})`);
+                        } else {
+                            logger.debug(`[ImportHistory] Mídia não disponível para msg ${msg.key.id}: ${downloadResult.error}`);
                         }
                     } catch (mediaErr: any) {
-                        logger.debug(`[ImportHistory] Erro mídia: ${mediaErr?.message}`);
+                        logger.debug(`[ImportHistory] Erro ao baixar mídia: ${mediaErr?.message}`);
                     }
                 }
 

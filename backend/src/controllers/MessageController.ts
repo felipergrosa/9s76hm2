@@ -1416,7 +1416,7 @@ export const syncMessages = async (req: Request, res: Response): Promise<Respons
  */
 export const importHistory = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
-  const { periodMonths = 0 } = req.body;
+  const { periodMonths = 0, downloadMedia = false } = req.body;
   const { companyId } = req.user;
 
   // Validar período
@@ -1428,19 +1428,31 @@ export const importHistory = async (req: Request, res: Response): Promise<Respon
     });
   }
 
-  // Executar importação em background (não bloqueia request)
-  ImportContactHistoryService({
-    ticketId,
-    companyId,
-    periodMonths: Number(periodMonths)
-  }).catch(err => {
-    console.error("[importHistory] background error:", err);
-  });
+  try {
+    // Adicionar à queue assíncrona (não bloqueia request)
+    const { queueImportHistory } = require("../services/MessageServices/ImportHistoryQueue");
+    
+    const jobId = await queueImportHistory({
+      ticketId: Number(ticketId),
+      companyId,
+      periodMonths: Number(periodMonths),
+      downloadMedia: Boolean(downloadMedia),
+      requestedBy: "manual_import"
+    });
 
-  return res.status(200).json({
-    started: true,
-    message: `Importação iniciada para ticket ${ticketId}, período: ${periodMonths === 0 ? 'completo' : periodMonths + ' meses'}`
-  });
+    return res.status(200).json({
+      started: true,
+      jobId,
+      message: `Importação iniciada para ticket ${ticketId}, período: ${periodMonths === 0 ? 'completo' : periodMonths + ' meses'}`,
+      downloadMedia
+    });
+  } catch (err: any) {
+    console.error("[importHistory] error:", err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || "Erro ao iniciar importação"
+    });
+  }
 };
 
 /**

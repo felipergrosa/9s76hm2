@@ -63,62 +63,8 @@ export const StartWhatsAppSessionUnified = async (
         wbotMessageListener(wbot, companyId);
         wbotMonitor(wbot, whatsapp, companyId);
 
-        // =================================================================
-        // EVENTO CRÍTICO: lid-mapping.update - Persistir mapeamentos LID→PN
-        // =================================================================
-        // @ts-ignore - evento não tipado no Baileys mas existe em runtime
-        wbot.ev.on("lid-mapping.update" as any, async (update: any) => {
-          try {
-            const LidMapping = require("../../models/LidMapping").default;
-            
-            // update pode ser um array de mapeamentos ou um único objeto
-            const mappings = Array.isArray(update) ? update : [update];
-            
-            for (const mapping of mappings) {
-              if (mapping.lid && mapping.phoneNumber) {
-                await LidMapping.upsert({
-                  lid: mapping.lid,
-                  phoneNumber: mapping.phoneNumber,
-                  companyId,
-                  whatsappId: whatsapp.id,
-                  source: "baileys_lid_mapping_event",
-                  confidence: 1.0, // Baileys fornece com alta confiança
-                  lastVerifiedAt: new Date()
-                });
-                
-                logger.info(`[lid-mapping.update] Mapeamento persistido: ${mapping.lid} → ${mapping.phoneNumber}`);
-                
-                // Atualizar contatos existentes que tenham esse LID
-                try {
-                  const Contact = require("../../models/Contact").default;
-                  const contactsToUpdate = await Contact.findAll({
-                    where: {
-                      remoteJid: mapping.lid,
-                      companyId
-                    }
-                  });
-                  
-                  for (const contact of contactsToUpdate) {
-                    // Atualizar número do contato se ainda não tiver um válido
-                    const currentNumber = contact.number?.replace(/\D/g, "") || "";
-                    if (currentNumber.length < 10 || contact.number?.includes("@lid")) {
-                      await contact.update({
-                        number: mapping.phoneNumber,
-                        remoteJid: `${mapping.phoneNumber}@s.whatsapp.net`
-                      });
-                      logger.info(`[lid-mapping.update] Contato atualizado: ${contact.id} → ${mapping.phoneNumber}`);
-                    }
-                  }
-                } catch (contactErr) {
-                  logger.warn("[lid-mapping.update] Erro ao atualizar contatos", { err: contactErr?.message });
-                }
-              }
-            }
-          } catch (err: any) {
-            logger.error("[lid-mapping.update] Erro ao processar evento", { err: err?.message });
-          }
-        });
-        logger.info(`[StartSession] Evento lid-mapping.update registrado para whatsappId=${whatsapp.id}`);
+        // NOTA: lid-mapping.update é tratado pelo wbotMonitor.ts (handler unificado)
+        // O handler do wbotMonitor faz persistência + merge de contatos duplicados + promoção de PENDING_
 
         // NOTA: Lock simplificado para single-instance - não precisa de heartbeat
         // A flag reconnectingWhatsapps em wbot.ts previne reconexões duplicadas

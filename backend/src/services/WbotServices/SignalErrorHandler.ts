@@ -1,15 +1,17 @@
 /**
- * SIGNAL ERROR HANDLER - Auto-Recovery Robusto v2
+ * SIGNAL ERROR HANDLER - Auto-Recovery Robusto v3
  *
- * Detecta erros de decriptação Signal (Bad MAC, SessionError) e
- * faz auto-recovery PRESERVANDO creds + app-state (sem precisar QR Code).
+ * Detecta erros de decriptação Signal (Bad MAC, SessionError) E erros de protocolo
+ * (xml-not-well-formed, stream errored) e faz auto-recovery PRESERVANDO creds + app-state.
  *
  * Estratégia:
- *   1. O loggerBaileys detecta erros de decriptação e chama `trackDecryptError`
+ *   1. O loggerBaileys detecta erros e chama `trackDecryptError`
  *   2. Quando o threshold é atingido (N erros em X segundos), aciona recovery
  *   3. Recovery: deleta APENAS session-*, sender-key-*, pre-key-* do FS
  *   4. Desconecta e reconecta — Baileys renegocia chaves automaticamente
  *   5. NÃO deleta creds nem app-state → sem necessidade de escanear QR
+ *
+ * v3: Adicionado suporte a erros de protocolo críticos (xml-not-well-formed, stream errored)
  */
 import logger from "../../utils/logger";
 import { releaseWbotLock } from "../../libs/wbotMutex";
@@ -32,7 +34,7 @@ const DECRYPT_ERROR_WINDOW_MS = parseInt(process.env.SIGNAL_ERROR_WINDOW_MS || "
 const MAX_RECOVERIES_PER_HOUR = parseInt(process.env.SIGNAL_MAX_RECOVERIES_HOUR || "2", 10);
 const RECOVERY_DELAY_MS = parseInt(process.env.SIGNAL_RECOVERY_DELAY_MS || "5000", 10);
 
-// Padrões de erro Signal conhecidos
+// Padrões de erro Signal conhecidos (decriptação)
 const SIGNAL_ERROR_PATTERNS = [
   "bad mac",
   "no matching sessions",
@@ -41,6 +43,19 @@ const SIGNAL_ERROR_PATTERNS = [
   "decryptwithsessions",
   "failed to decrypt",
   "invalid prekey id",
+];
+
+// Padrões de erro de PROTOCOLO críticos (WebSocket/XML)
+const PROTOCOL_ERROR_PATTERNS = [
+  "xml-not-well-formed",
+  "XML not well-formed",
+  "stream errored",
+  "Stream Errored",
+  "connection reset",
+  "Connection reset",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "ENOTFOUND",
 ];
 
 class SignalErrorHandler {
@@ -53,6 +68,22 @@ class SignalErrorHandler {
     return SIGNAL_ERROR_PATTERNS.some(p => errorStr.includes(p)) ||
            error.type === "SessionError" ||
            error.type === "PreKeyError";
+  }
+
+  /**
+   * Verifica se uma string contém padrão de erro de PROTOCOLO crítico
+   */
+  static isProtocolError(error: any): boolean {
+    if (!error) return false;
+    const errorStr = ((error.message || "") + " " + (error.stack || "")).toLowerCase();
+    return PROTOCOL_ERROR_PATTERNS.some(p => errorStr.includes(p.toLowerCase()));
+  }
+
+  /**
+   * Verifica se é qualquer tipo de erro crítico (Signal ou Protocolo)
+   */
+  static isCriticalError(error: any): boolean {
+    return this.isSignalError(error) || this.isProtocolError(error);
   }
 
   /**

@@ -564,9 +564,14 @@ const wbotMonitor = async (
 
     // =================================================================
     // POLLING PERIÓDICO: Resolver LIDs pendentes via signalRepository
-    // Executa a cada 5 minutos para LIDs sem phoneNumber
+    // Executa a cada 2 minutos para LIDs sem phoneNumber
+    // Com retry exponencial para LIDs que falharam
     // =================================================================
-    const LID_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutos
+    const LID_POLL_INTERVAL = 2 * 60 * 1000; // 2 minutos (reduzido de 5min)
+    const MAX_LID_RETRIES = 3; // Máximo de tentativas por LID
+    
+    // Map para rastrear tentativas de resolução por LID
+    const lidRetryMap = new Map<string, { count: number; lastAttempt: number }>();
     
     const pollUnresolvedLids = async () => {
       try {
@@ -593,9 +598,24 @@ const wbotMonitor = async (
         logger.info(`[wbotMonitor] Polling de ${unresolvedLids.length} LIDs pendentes...`);
 
         let resolvedCount = 0;
+        let skippedCount = 0;
+        
         for (const contact of unresolvedLids) {
           const lidJid = contact.lidJid || contact.remoteJid;
           if (!lidJid || !lidJid.includes("@lid")) continue;
+
+          // Verificar retry count
+          const retryInfo = lidRetryMap.get(lidJid);
+          if (retryInfo && retryInfo.count >= MAX_LID_RETRIES) {
+            // Backoff: só tentar novamente após 10 minutos
+            const backoffMs = 10 * 60 * 1000;
+            if (Date.now() - retryInfo.lastAttempt < backoffMs) {
+              skippedCount++;
+              continue;
+            }
+            // Resetar contador após backoff
+            lidRetryMap.delete(lidJid);
+          }
 
           const lidId = lidJid.replace("@lid", "");
           
@@ -630,24 +650,34 @@ const wbotMonitor = async (
                   { where: { participant: lidJid, senderName: null } }
                 );
 
+                // Remover do retry map se resolveu
+                lidRetryMap.delete(lidJid);
+                
                 resolvedCount++;
                 logger.info(`[wbotMonitor] LID ${lidJid} resolvido via polling → ${pnDigits}`);
               }
+            } else {
+              // Incrementar retry count
+              const current = lidRetryMap.get(lidJid) || { count: 0, lastAttempt: 0 };
+              lidRetryMap.set(lidJid, { count: current.count + 1, lastAttempt: Date.now() });
+              logger.debug(`[wbotMonitor] LID ${lidJid} não resolvido (tentativa ${current.count + 1}/${MAX_LID_RETRIES})`);
             }
           } catch (e) {
-            // Ignorar erros individuais
+            // Incrementar retry count em caso de erro
+            const current = lidRetryMap.get(lidJid) || { count: 0, lastAttempt: 0 };
+            lidRetryMap.set(lidJid, { count: current.count + 1, lastAttempt: Date.now() });
           }
         }
 
-        if (resolvedCount > 0) {
-          logger.info(`[wbotMonitor] Polling resolveu ${resolvedCount} LIDs`);
+        if (resolvedCount > 0 || skippedCount > 0) {
+          logger.info(`[wbotMonitor] Polling: ${resolvedCount} LIDs resolvidos, ${skippedCount} em backoff`);
         }
       } catch (err: any) {
         logger.error("[wbotMonitor] Erro no polling de LIDs", { err: err?.message });
       }
     };
 
-    // Executar polling a cada 5 minutos
+    // Executar polling a cada 2 minutos
     const pollInterval = setInterval(pollUnresolvedLids, LID_POLL_INTERVAL);
     
     // Executar imediatamente após 30 segundos (dar tempo para sessão estabilizar)
@@ -655,6 +685,128 @@ const wbotMonitor = async (
 
     // Armazenar interval para limpeza se necessário
     (wbot as any)._lidPollInterval = pollInterval;
+
+    // =================================================================
+    // HEALTH CHECK PERIÓDICO: Detectar sockets zumbis
+    // Executa a cada 30s, se 3 pings falharem → forçar reconexão
+    // =================================================================
+    const HEALTH_CHECK_INTERVAL = 30 * 1000; // 30 segundos
+    const MAX_FAILED_PINGS = 3;
+    
+    let failedPings = 0;
+    
+    const healthCheck = async () => {
+      try {
+        // Verificar se o socket ainda existe no pool de sessões
+        const { getWbot, getWbotIsReconnecting } = require("../../libs/wbot");
+        const session = getWbot(whatsapp.id);
+        
+        if (!session) {
+          logger.warn(`[HealthCheck] Sessão ${whatsapp.id} não encontrada no pool`);
+          return;
+        }
+        
+        // Verificar se está reconectando
+        if (getWbotIsReconnecting(whatsapp.id)) {
+          logger.debug(`[HealthCheck] Sessão ${whatsapp.id} está reconectando, pulando health check`);
+          failedPings = 0;
+          return;
+        }
+        
+        // Verificar readyState do WebSocket
+        const ws = (wbot as any).ws;
+        if (ws && typeof ws.readyState === "number") {
+          // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+          if (ws.readyState === 2 || ws.readyState === 3) {
+            failedPings++;
+            logger.warn(
+              `[HealthCheck] Socket ${whatsapp.id} com readyState=${ws.readyState} ` +
+              `(${failedPings}/${MAX_FAILED_PINGS} falhas)`
+            );
+            
+            if (failedPings >= MAX_FAILED_PINGS) {
+              logger.error(`[HealthCheck] Socket ${whatsapp.id} morto (readyState=${ws.readyState}), forçando reconexão`);
+              failedPings = 0;
+              
+              // Disparar reconexão via Circuit Breaker
+              const { removeWbot } = require("../../libs/wbot");
+              removeWbot(whatsapp.id, false);
+              
+              // Registrar falha no circuit breaker
+              const { getCircuitBreakerStatus } = require("../../libs/wbot");
+              const cbStatus = getCircuitBreakerStatus(whatsapp.id);
+              
+              if (cbStatus.status !== 'open') {
+                // Só tentar reconectar se o circuit breaker não estiver aberto
+                const Whatsapp = require("../../models/Whatsapp").default;
+                const wa = await Whatsapp.findByPk(whatsapp.id);
+                if (wa && wa.status !== "PENDING") {
+                  const { StartWhatsAppSession } = require("../../libs/wbot");
+                  setTimeout(() => StartWhatsAppSession(wa, companyId), 5000);
+                }
+              }
+            }
+            return;
+          }
+        }
+        
+        // Tentar ping leve: sendPresenceUpdate
+        try {
+          await Promise.race([
+            wbot.sendPresenceUpdate("available"),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+          ]);
+          
+          // Ping bem-sucedido
+          if (failedPings > 0) {
+            logger.info(`[HealthCheck] Socket ${whatsapp.id} recuperado (${failedPings} falhas anteriores)`);
+          }
+          failedPings = 0;
+          
+        } catch (pingErr: any) {
+          failedPings++;
+          logger.warn(
+            `[HealthCheck] Ping falhou para ${whatsapp.id}: ${pingErr?.message} ` +
+            `(${failedPings}/${MAX_FAILED_PINGS} falhas)`
+          );
+          
+          if (failedPings >= MAX_FAILED_PINGS) {
+            logger.error(`[HealthCheck] Socket ${whatsapp.id} não responde a pings, forçando reconexão`);
+            failedPings = 0;
+            
+            // Disparar reconexão
+            const { removeWbot } = require("../../libs/wbot");
+            removeWbot(whatsapp.id, false);
+            
+            const { getCircuitBreakerStatus } = require("../../libs/wbot");
+            const cbStatus = getCircuitBreakerStatus(whatsapp.id);
+            
+            if (cbStatus.status !== 'open') {
+              const Whatsapp = require("../../models/Whatsapp").default;
+              const wa = await Whatsapp.findByPk(whatsapp.id);
+              if (wa && wa.status !== "PENDING") {
+                const { StartWhatsAppSession } = require("../../libs/wbot");
+                setTimeout(() => StartWhatsAppSession(wa, companyId), 5000);
+              }
+            }
+          }
+        }
+        
+      } catch (err: any) {
+        logger.error(`[HealthCheck] Erro no health check para ${whatsapp.id}: ${err?.message}`);
+      }
+    };
+    
+    // Executar health check a cada 30 segundos
+    const healthCheckInterval = setInterval(healthCheck, HEALTH_CHECK_INTERVAL);
+    
+    // Primeiro health check após 60 segundos (dar tempo para sessão estabilizar)
+    setTimeout(healthCheck, 60000);
+    
+    // Armazenar interval para limpeza
+    (wbot as any)._healthCheckInterval = healthCheckInterval;
+    
+    logger.info(`[wbotMonitor] Health check iniciado para whatsappId=${whatsapp.id} (interval: 30s)`);
 
   } catch (err) {
     logger.error(`Error in wbotMonitor: ${err.message}`);

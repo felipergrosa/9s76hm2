@@ -10,7 +10,7 @@ import Company from "../../models/Company";
 import QueueIntegrations from "../../models/QueueIntegrations";
 import TicketTag from "../../models/TicketTag";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
-import ImportContactHistoryService from "../MessageServices/ImportContactHistoryService";
+import { queueImportHistory } from "../MessageServices/ImportHistoryQueue";
 import logger from "../../utils/logger";
 
 // Throttle de atualização de avatar/nome por contato (24h)
@@ -298,12 +298,15 @@ const ShowTicketService = async (
         if (now - lastSyncAt > 30000) {
           lastTicketHistorySync.set(throttleKey, now);
 
-          ImportContactHistoryService({
-            ticketId: id,
+          // Adicionar à queue assíncrona (não bloqueia)
+          queueImportHistory({
+            ticketId: Number(id),
             companyId,
-            periodMonths: 0
+            periodMonths: 0,
+            downloadMedia: false, // Lazy open não faz download de mídia por padrão
+            requestedBy: "lazy_open"
           }).catch((err: any) => {
-            logger.warn(`[ShowTicket] Erro ao importar histórico: ${err?.message}`);
+            logger.warn(`[ShowTicket] Erro ao adicionar importação à queue: ${err?.message}`);
           });
         }
       }

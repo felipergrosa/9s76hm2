@@ -179,10 +179,12 @@ const reducer = (state, action) => {
     if (action.type === "UPDATE_TICKET_CONTACT") {
         const contact = action.payload;
         let nextState = [...state];
-        const ticketIndex = nextState.findIndex((t) => t.contactId === contact.id);
-        if (ticketIndex !== -1) {
-            nextState[ticketIndex] = { ...nextState[ticketIndex], contact };
-        }
+        nextState = nextState.map((t) => {
+            if (t.contactId === contact.id) {
+                return { ...t, contact: { ...(t.contact || {}), ...contact } };
+            }
+            return t;
+        });
         return nextState;
     }
 

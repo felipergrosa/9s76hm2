@@ -3,7 +3,7 @@ import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
 import { getIO } from "../../libs/socket";
 import logger from "../../utils/logger";
-import ImportContactHistoryService from "./ImportContactHistoryService";
+import { queueImportHistory } from "./ImportHistoryQueue";
 
 interface ResyncTicketMessagesParams {
   ticketId: string | number;
@@ -80,38 +80,23 @@ const ResyncTicketMessagesService = async ({
       periodMonths
     });
 
-    // Executar ImportContactHistoryService em background
-    // Este serviço já verifica duplicatas automaticamente pelo wid
-    ImportContactHistoryService({
-      ticketId,
+    // Adicionar à queue assíncrona (não bloqueia)
+    // A queue já emite progresso via socket através do ImportContactHistoryService
+    queueImportHistory({
+      ticketId: Number(ticketId),
       companyId,
-      periodMonths
-    }).then((result) => {
-      logger.info(`[ResyncTicketMessages] Ressincronização concluída: ${result.synced} novas mensagens`);
-      
-      // Emitir evento de conclusão
-      io.of(`/workspace-${companyId}`).emit(`ticket-${ticketId}-resync`, {
-        action: "resync_completed",
-        ticketId,
-        existing,
-        synced: result.synced,
-        skipped: result.skipped
-      });
-
-      // Atualizar ticket na UI
-      io.of(`/workspace-${companyId}`).emit(`company-${companyId}-ticket`, {
-        action: "update",
-        ticket
-      });
-
+      periodMonths,
+      downloadMedia: false, // Resync não faz download por padrão
+      requestedBy: "manual_resync"
+    }).then((jobId) => {
+      logger.info(`[ResyncTicketMessages] Job ${jobId} adicionado à queue para ticket ${ticketId}`);
     }).catch((err: any) => {
-      logger.error(`[ResyncTicketMessages] Erro na ressincronização: ${err?.message}`);
+      logger.error(`[ResyncTicketMessages] Erro ao adicionar à queue: ${err?.message}`);
       
       // Emitir evento de erro
-      io.of(`/workspace-${companyId}`).emit(`ticket-${ticketId}-resync`, {
-        action: "resync_error",
-        ticketId,
-        error: err?.message
+      io.of(`/workspace-${companyId}`).emit(`resync-${ticketId}`, {
+        action: "update",
+        status: { state: "ERROR", date: err?.message }
       });
     });
 

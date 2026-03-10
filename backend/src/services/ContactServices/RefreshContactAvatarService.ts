@@ -128,6 +128,8 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
     const desiredExists = fs.existsSync(desiredPath);
 
     let newProfileUrl = contact.profilePicUrl;
+    let nameUpdated = false;
+    let avatarUpdated = false;
 
     // Early-exit se atualizado há menos de 24h
     const key = `${companyId}:${contact.id}`;
@@ -174,8 +176,11 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
           } catch (e) {
             // silencioso
           }
-          await contact.update({ name: groupName });
-          await contact.reload();
+          if (groupName !== contact.name) {
+            await contact.update({ name: groupName });
+            await contact.reload();
+            nameUpdated = true;
+          }
         }
         // Atualização de nome de contato comum
         if (!contact.isGroup && allowNameLookup) {
@@ -232,6 +237,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
               } else {
                 await contact.update({ name: nomeNovo });
                 await contact.reload();
+                nameUpdated = true;
               }
             }
           }
@@ -308,18 +314,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
         const relativePathForDb = path.posix.join(relativeAvatarDirDb, filename);
         await contact.update({ profilePicUrl: newProfileUrl, urlPicture: relativePathForDb, pictureUpdated: true });
         await contact.reload();
-
-        // Emite evento Socket.IO para atualização em tempo real
-        const io = getIO();
-        io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-contact`, {
-          action: "update",
-          contact: {
-            id: contact.id,
-            name: contact.name,
-            urlPicture: contact.urlPicture,
-            updatedAt: contact.updatedAt
-          }
-        });
+        avatarUpdated = true;
       } else {
         // silencioso
         // Tentar adotar avatar legado se houver
@@ -346,6 +341,25 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
       }
     }
 
+    // Emitir socket se houve QUALQUER atualização (nome ou avatar)
+    if (nameUpdated || avatarUpdated) {
+      const io = getIO();
+      const payload = {
+        action: "update",
+        contact: {
+          id: contact.id,
+          name: contact.name,
+          urlPicture: contact.urlPicture,
+          profilePicUrl: contact.profilePicUrl,
+          updatedAt: contact.updatedAt
+        }
+      };
+
+      io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-contact`, payload);
+      io.of(`/workspace-${companyId}`).emit(`company-${companyId}-contact`, payload);
+      logger.debug(`[RefreshAvatar] Socket emitido para contactId=${contact.id} (nameUpdated=${nameUpdated}, avatarUpdated=${avatarUpdated})`);
+    }
+    
     // marca o último refresh
     lastAvatarRefreshMap.set(key, now);
     return contact;

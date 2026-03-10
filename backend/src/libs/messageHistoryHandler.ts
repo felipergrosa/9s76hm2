@@ -53,7 +53,7 @@ export const registerFetchRequest = (jid: string): string => {
 export const startFetchRequest = (
   fetchId: string,
   jid: string,
-  timeoutMs: number = 60000
+  timeoutMs: number = parseInt(process.env.FETCH_HISTORY_TIMEOUT_MS || "30000", 10)
 ): Promise<{ messages: any[]; isLatest: boolean; progress: number; syncType?: string }> => {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
