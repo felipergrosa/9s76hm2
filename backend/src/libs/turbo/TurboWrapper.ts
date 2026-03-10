@@ -74,12 +74,40 @@ export class TurboWrapper implements Partial<WASocket> {
     name: ""
   };
 
+  // WS (compatibilidade com Baileys - necessário para wsocket.ws.close())
+  public ws: any = {
+    close: () => {
+      if (this.baileysSocket?.ws) {
+        this.baileysSocket.ws.close();
+      }
+    }
+  };
+
+  // Type (compatibilidade com Baileys - usado em wsocket.type === "md")
+  public type: "md" = "md";
+
+  // ID (compatibilidade - usado em wsocket.id = whatsapp.id)
+  public id: number = 0;
+
   constructor(config: TurboWrapperConfig) {
     this.whatsapp = config.whatsapp;
     this.sessionPath = config.sessionPath;
     
     // Criar orchestrator (ainda não inicializado)
     this.orchestrator = null as any; // Será criado no init()
+  }
+
+  // ============================================================================
+  // MÉTODOS DE COMPATIBILIDADE
+  // ============================================================================
+
+  /**
+   * Faz logout da sessão (compatibilidade com Baileys)
+   */
+  async logout(): Promise<void> {
+    if (this.baileysSocket) {
+      await this.baileysSocket.logout();
+    }
   }
 
   // ============================================================================
