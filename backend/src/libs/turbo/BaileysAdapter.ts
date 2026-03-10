@@ -674,18 +674,12 @@ export class BaileysAdapter implements ITurboEngine {
   // ============================================================================
 
   async ping(): Promise<boolean> {
+    // Verificar se socket existe e está conectado
     if (!this.socket) return false;
-
-    try {
-      // Tentar sendPresenceUpdate como ping leve
-      await Promise.race([
-        this.socket.sendPresenceUpdate("available"),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000)),
-      ]);
-      return true;
-    } catch {
-      return false;
-    }
+    
+    // Se status é "connected", considerar saudável
+    // (não tentar enviar presença para evitar falsos negativos)
+    return this.status === "connected";
   }
 
   // ============================================================================

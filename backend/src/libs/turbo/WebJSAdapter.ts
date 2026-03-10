@@ -606,15 +606,12 @@ export class WebJSAdapter implements ITurboEngine {
   // ============================================================================
 
   async ping(): Promise<boolean> {
+    // Verificar se client existe e está conectado
     if (!this.client) return false;
-
-    try {
-      // Tentar obter estado de conexão
-      const state = await this.client.getState();
-      return state === "CONNECTED";
-    } catch {
-      return false;
-    }
+    
+    // Se status é "connected", considerar saudável
+    // (não tentar getState para evitar chamadas desnecessárias)
+    return this.status === "connected";
   }
 
   // ============================================================================
