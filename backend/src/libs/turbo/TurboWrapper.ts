@@ -68,6 +68,12 @@ export class TurboWrapper implements Partial<WASocket> {
     messages: {},
   };
 
+  // User (compatibilidade com Baileys - necessário para getMeSocket)
+  public user: { id: string; name: string } = {
+    id: "",
+    name: ""
+  };
+
   constructor(config: TurboWrapperConfig) {
     this.whatsapp = config.whatsapp;
     this.sessionPath = config.sessionPath;
@@ -114,6 +120,10 @@ export class TurboWrapper implements Partial<WASocket> {
       if (this.baileysSocket) {
         this.ev = this.baileysSocket.ev;
         this.store = (this.baileysSocket as any).store || this.store;
+        // Copiar user para compatibilidade com getMeSocket()
+        if ((this.baileysSocket as any).user) {
+          this.user = (this.baileysSocket as any).user;
+        }
       }
     }
 
