@@ -110,10 +110,16 @@ export function initModelHooks(sequelize: Sequelize): void {
       }
     });
 
-    // Hook: After Update (para mensagens e inatividade)
+    // Hook: After Update (para mensagens, inatividade e real-time Socket.IO)
     Ticket.afterUpdate(async (instance: any) => {
       try {
         const changed = instance.changed();
+        
+        // Se flag _skipHookEmit está ativa, pular emissão automática (emissão manual foi feita)
+        if (instance._skipHookEmit) {
+          logger.debug(`[ModelHooks] Ticket ${(instance as any).id} - hook skipado (_skipHookEmit=true)`);
+          return;
+        }
         
         if (changed) {
           // Mensagem nova
@@ -152,6 +158,24 @@ export function initModelHooks(sequelize: Sequelize): void {
               );
               logger.debug(`[ModelHooks] InactivityTimeout cancelado para ticket ${(instance as any).id} (status mudou de bot)`);
             }
+          }
+          
+          // userId mudou (atribuição de atendente) - emitir para real-time
+          if (changed.includes('userId')) {
+            await EventTrigger.emitTicketUpdated(instance);
+            logger.debug(`[ModelHooks] Ticket ${(instance as any).id} userId mudou - evento emitido`);
+          }
+          
+          // queueId mudou (transferência de fila) - emitir para real-time
+          if (changed.includes('queueId')) {
+            await EventTrigger.emitTicketUpdated(instance);
+            logger.debug(`[ModelHooks] Ticket ${(instance as any).id} queueId mudou - evento emitido`);
+          }
+          
+          // unreadMessages mudou - emitir para real-time (atualização de badge)
+          if (changed.includes('unreadMessages')) {
+            await EventTrigger.emitTicketUpdated(instance);
+            logger.debug(`[ModelHooks] Ticket ${(instance as any).id} unreadMessages mudou - evento emitido`);
           }
         }
       } catch (err: any) {

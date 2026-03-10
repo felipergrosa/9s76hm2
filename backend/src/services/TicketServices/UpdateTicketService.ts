@@ -614,6 +614,9 @@ const UpdateTicketService = async ({
 
     status = queue && queue.closeTicket && !ticket.isGroup ? "closed" : status;
 
+    // Flag para evitar evento duplicado do ModelHook (emissão manual via ticketEventBus abaixo)
+    (ticket as any)._skipHookEmit = true;
+    
     await ticket.update({
       status,
       queueId,

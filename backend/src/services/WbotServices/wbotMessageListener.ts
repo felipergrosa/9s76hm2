@@ -5457,6 +5457,7 @@ const handleMessage = async (
       }
 
       // BUG-31 fix: Não incrementar unreadMessages aqui — FindOrCreateTicketService já atualizou
+      (ticket as any)._skipHookEmit = true; // Evitar evento duplicado
       await ticket.update({
         status: newStatus
       });

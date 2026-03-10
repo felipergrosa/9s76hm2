@@ -92,6 +92,7 @@ const FindOrCreateTicketService = async (
 
       // Se encontrou ticket antigo, atualizar o UUID para o formato válido
       if (ticket) {
+        (ticket as any)._skipHookEmit = true; // Evitar evento duplicado
         await ticket.update({ uuid: selfChatUuid, unreadMessages });
         ticket = await ShowTicketService(ticket.id, companyId);
         // Emitir evento de atualização para real-time
@@ -103,6 +104,7 @@ const FindOrCreateTicketService = async (
 
     if (ticket) {
       // Atualizar ticket existente
+      (ticket as any)._skipHookEmit = true; // Evitar evento duplicado
       await ticket.update({ unreadMessages });
       ticket = await ShowTicketService(ticket.id, companyId);
       // Emitir evento de atualização para real-time
@@ -160,6 +162,7 @@ const FindOrCreateTicketService = async (
         updates.status = "group";
         logger.info(`[FindOrCreateTicket] Reabrindo ticket de grupo ${ticket.id} (estava ${ticket.status})`);
       }
+      (ticket as any)._skipHookEmit = true; // Evitar evento duplicado
       await ticket.update(updates);
       ticket = await ShowTicketService(ticket.id, companyId);
       // Emitir evento de atualização para real-time
@@ -280,6 +283,7 @@ const FindOrCreateTicketService = async (
         if (hasBotInDefaultQueuePending) {
           // Atualizar ticket para bot se agora tem fila com bot configurado
           const oldStatus = ticket.status;
+          (ticket as any)._skipHookEmit = true; // Evitar evento duplicado
           await ticket.update({
             status: "bot",
             isBot: true,
@@ -353,6 +357,7 @@ const FindOrCreateTicketService = async (
     if (ticket && ticket.status !== "nps") {
       const oldStatus = ticket.status;
       const newStatus = ticket.isGroup ? "group" : "pending";
+      (ticket as any)._skipHookEmit = true; // Evitar evento duplicado
       await ticket.update({
         // Grupos SEMPRE mantêm status "group" ao reabrir
         status: newStatus,
