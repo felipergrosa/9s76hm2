@@ -285,10 +285,12 @@ const ShowTicketService = async (
   try {
     if (ticket.whatsappId && ticket.channel === "whatsapp") {
       const whatsapp = await Whatsapp.findByPk(ticket.whatsappId, {
-        attributes: ["id", "status", "syncOnTicketOpen"]
+        attributes: ["id", "status", "syncOnTicketOpen", "channelType"]
       });
 
-      if (whatsapp?.syncOnTicketOpen && whatsapp.status === "CONNECTED") {
+      if (whatsapp?.channelType === "official") {
+        logger.debug(`[ShowTicket] Pulando syncOnTicketOpen para ticket ${ticket.id}: conexão API Oficial não usa histórico Baileys.`);
+      } else if (whatsapp?.syncOnTicketOpen && whatsapp.status === "CONNECTED") {
         const throttleKey = `${companyId}:${ticket.id}`;
         const now = Date.now();
         const lastSyncAt = lastTicketHistorySync.get(throttleKey) || 0;

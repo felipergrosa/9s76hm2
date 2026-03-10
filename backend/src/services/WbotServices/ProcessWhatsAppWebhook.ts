@@ -14,6 +14,15 @@ import { safeNormalizePhoneNumber } from "../../utils/phone";
 import { UpdateSessionWindow } from "../TicketServices/UpdateSessionWindowService";
 import { sessionWindowRenewalQueue } from "../../queues";
 
+const loadRealtimeTicketPayload = async (ticketId: number) => {
+  return Ticket.findByPk(ticketId, {
+    include: [
+      { model: Contact, as: "contact" },
+      { model: Whatsapp, as: "whatsapp" }
+    ]
+  });
+};
+
 /**
  * Interface para mudança (change) do webhook Meta
  */
@@ -251,13 +260,22 @@ async function processMessageWithExistingContact(
   logger.info(`[WebhookProcessor] Mensagem criada via fallback: ${createdMessage.id}`);
 
   // Emitir evento via Socket.IO
+  const realtimeTicket = await loadRealtimeTicketPayload(ticket.id);
   const io = getIO();
   io.of(`/workspace-${companyId}`)
     .to(ticket.uuid)
     .emit(`company-${companyId}-appMessage`, {
       action: "create",
       message: createdMessage,
-      ticket,
+      ticket: realtimeTicket || ticket,
+      contact,
+    });
+
+  io.of(`/workspace-${companyId}`)
+    .emit(`company-${companyId}-appMessage`, {
+      action: "create",
+      message: createdMessage,
+      ticket: realtimeTicket || ticket,
       contact
     });
 }
@@ -641,6 +659,11 @@ async function processIncomingMessage(
   // Quando o cliente envia uma mensagem, abre-se uma janela de 24h para responder gratuitamente
   await UpdateSessionWindow(ticket.id, whatsapp.id);
 
+  const realtimeTicket = await loadRealtimeTicketPayload(ticket.id);
+  if (realtimeTicket) {
+    ticket = realtimeTicket as any;
+  }
+
   // AGENDAR renovação automática via Bull Queue (zero overhead, sem polling)
   // Agenda para 23 horas depois (1h antes de expirar a janela de 24h)
   try {
@@ -695,6 +718,20 @@ async function processIncomingMessage(
       message: createdMessage,
       ticket,
       contact
+    });
+
+  io.of(`/workspace-${companyId}`)
+    .emit(`company-${companyId}-appMessage`, {
+      action: "create",
+      message: createdMessage,
+      ticket,
+      contact
+    });
+
+  io.of(`/workspace-${companyId}`)
+    .emit(`company-${companyId}-ticket`, {
+      action: "update",
+      ticket
     });
 
   // Processar bot/IA se ticket está marcado como bot

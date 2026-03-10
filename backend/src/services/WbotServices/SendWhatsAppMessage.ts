@@ -11,6 +11,7 @@ import GetTicketWbot from "../../helpers/GetTicketWbot";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import Contact from "../../models/Contact";
+import Whatsapp from "../../models/Whatsapp";
 import { isNil } from "lodash";
 import fs from "fs";
 
@@ -19,6 +20,7 @@ import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatar
 import ResolveSendJid from "../../helpers/ResolveSendJid";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import logger from "../../utils/logger";
+import SendWhatsAppMessageUnified from "./SendWhatsAppMessageUnified";
 
 interface TemplateButton {
   index: number;
@@ -59,6 +61,23 @@ const SendWhatsAppMessage = async ({
   messageTitle,
   imageUrl,
 }: Request): Promise<WAMessage | proto.WebMessageInfo> => {
+  const whatsappConnection = (ticket as any)?.whatsapp || await Whatsapp.findByPk(ticket.whatsappId);
+
+  if (whatsappConnection?.channelType === "official") {
+    logger.info(`[SendMessage] Ticket ${ticket.id} usa API Oficial. Delegando para SendWhatsAppMessageUnified.`);
+    return SendWhatsAppMessageUnified({
+      body,
+      ticket,
+      quotedMsg,
+      msdelay,
+      vCard,
+      isForwarded,
+      templateButtons,
+      messageTitle,
+      imageUrl,
+    }) as Promise<any>;
+  }
+
   let options: any = {};
   const wbot = await GetTicketWbot(ticket);
   const contactNumber = await Contact.findByPk(ticket.contactId);

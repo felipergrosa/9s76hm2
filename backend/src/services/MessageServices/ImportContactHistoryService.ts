@@ -35,6 +35,65 @@ const extractFetchedMessages = (payload: any): any[] => {
 
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
+const getSessionJidVariants = (wbot: any): string[] => {
+    const variants = new Set<string>();
+    const sessionJid = wbot?.user?.id;
+
+    if (!sessionJid || typeof sessionJid !== "string") {
+        return [];
+    }
+
+    variants.add(sessionJid);
+
+    try {
+        variants.add(jidNormalizedUser(sessionJid));
+    } catch { }
+
+    const [userPart] = sessionJid.split("@");
+    const phonePart = userPart?.split(":")[0];
+
+    if (phonePart) {
+        variants.add(`${phonePart}@s.whatsapp.net`);
+        try {
+            variants.add(jidNormalizedUser(`${phonePart}@s.whatsapp.net`));
+        } catch { }
+    }
+
+    return Array.from(variants).filter(Boolean);
+};
+
+const isSelfChatTicket = (ticket: any, wbot: any): boolean => {
+    const contactNumber = String(ticket?.contact?.number || "").replace(/\D/g, "");
+    const sessionJids = getSessionJidVariants(wbot);
+
+    return sessionJids.some(jid => {
+        const [userPart] = jid.split("@");
+        const sessionNumber = String(userPart || "").split(":")[0]?.replace(/\D/g, "");
+        return Boolean(sessionNumber) && sessionNumber === contactNumber;
+    });
+};
+
+const chooseMainHistoryJid = (possibleJids: Set<string>, ticket: any, wbot: any): string => {
+    const allJids = Array.from(possibleJids).filter(Boolean);
+    const sessionJids = getSessionJidVariants(wbot);
+
+    if (isSelfChatTicket(ticket, wbot)) {
+        const preferredSessionJid = sessionJids.find(jid => allJids.includes(jid));
+        if (preferredSessionJid) {
+            return preferredSessionJid;
+        }
+        if (sessionJids[0]) {
+            return sessionJids[0];
+        }
+    }
+
+    if (ticket?.contact?.remoteJid && allJids.includes(ticket.contact.remoteJid)) {
+        return ticket.contact.remoteJid;
+    }
+
+    return allJids[0];
+};
+
 const getSessionCachedMessages = async (
     wbot: any,
     whatsappId: number,
@@ -280,6 +339,11 @@ const ImportContactHistoryService = async ({
             return { synced: 0, skipped: true, reason: "Conexão WhatsApp não encontrada" };
         }
 
+        if ((ticket.whatsapp as any)?.channelType === "official") {
+            logger.info(`[ImportHistory] Pulando ticket ${ticketId}: conexão API Oficial não possui histórico via Baileys/Wbot.`);
+            return { synced: 0, skipped: true, reason: "Histórico não suportado para API Oficial" };
+        }
+
         if (ticket.channel !== "whatsapp") {
             return { synced: 0, skipped: true, reason: "Canal não suportado para importação" };
         }
@@ -316,7 +380,14 @@ const ImportContactHistoryService = async ({
             possibleJids.add(ticket.contact.remoteJid);
         }
 
-        logger.info(`[ImportHistory] JIDs alvo: ${Array.from(possibleJids).join(", ")}`);
+        const sessionJids = getSessionJidVariants(wbot);
+        for (const sessionJid of sessionJids) {
+            possibleJids.add(sessionJid);
+        }
+
+        const isSelfChat = isSelfChatTicket(ticket, wbot);
+
+        logger.info(`[ImportHistory] JIDs alvo: ${Array.from(possibleJids).join(", ")} | selfChat=${isSelfChat}`);
 
         // 4. Calcular data de corte
         let cutoffTimestamp: number | null = null;
@@ -372,8 +443,9 @@ const ImportContactHistoryService = async ({
             if (typeof wbotAny.fetchMessageHistory === "function") {
                 // 1. Definir mensagem âncora (a partir da qual buscaremos para trás)
                 // Se tiver mensagem no banco, usa a mais antiga. Se não, usa "agora".
+                const mainHistoryJid = chooseMainHistoryJid(possibleJids, ticket, wbot);
                 let oldestKey: any = {
-                    remoteJid: ticket.contact.remoteJid || `${ticket.contact.number}@s.whatsapp.net`,
+                    remoteJid: mainHistoryJid,
                     id: "",
                     fromMe: true // tanto faz para âncora inicial se não tiver ID?
                 };
@@ -393,6 +465,9 @@ const ImportContactHistoryService = async ({
                         const parsed = JSON.parse(oldestInDb.dataJson);
                         if (parsed.key) {
                             oldestKey = parsed.key;
+                            if (!possibleJids.has(oldestKey.remoteJid) && mainHistoryJid) {
+                                oldestKey.remoteJid = mainHistoryJid;
+                            }
                             oldestTimestamp = Number(parsed.messageTimestamp) || oldestTimestamp;
                             logger.info(`[ImportHistory] Usando mensagem DB como âncora: ${oldestKey.id} (${oldestTimestamp})`);
                         }
@@ -400,7 +475,8 @@ const ImportContactHistoryService = async ({
                 }
 
                 // 2. Setup de captura (Promessa)
-                const mainJid = oldestKey.remoteJid;
+                const mainJid = chooseMainHistoryJid(possibleJids, ticket, wbot) || oldestKey.remoteJid;
+                oldestKey.remoteJid = mainJid;
 
                 try {
                     emitProgress(0, -1, "FETCHING", "Solicitando histórico ao WhatsApp...");

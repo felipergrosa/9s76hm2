@@ -33,9 +33,15 @@ import UpdateTicketService from "./services/TicketServices/UpdateTicketService";
 import { addSeconds, differenceInSeconds } from "date-fns";
 import { GetWhatsapp } from "./helpers/GetWhatsapp";
 import { safeNormalizePhoneNumber } from "./utils/phone";
+import { sendFacebookMessageMedia } from "./services/FacebookServices/sendFacebookMessageMedia";
+import sendFaceMessage from "./services/FacebookServices/sendFacebookMessage";
+import SendWhatsAppMedia from "./services/WbotServices/SendWhatsAppMedia";
+import SendWhatsAppMessageUnified from "./services/WbotServices/SendWhatsAppMessageUnified";
+import Message from "./models/Message";
+import { verifyMessage, verifyMediaMessage } from "./services/WbotServices/wbotMessageListener";
+
 const CronJob = require('cron').CronJob;
 import CompaniesSettings from "./models/CompaniesSettings";
-import { verifyMediaMessage, verifyMessage } from "./services/WbotServices/wbotMessageListener";
 import FindOrCreateTicketService from "./services/TicketServices/FindOrCreateTicketService";
 import CreateLogTicketService from "./services/TicketServices/CreateLogTicketService";
 import formatBody from "./helpers/Mustache";
@@ -320,7 +326,7 @@ async function handleSendMessage(job) {
 
     if (data.ticketId) {
       const ticket = await ShowTicketService(data.ticketId, messageData.companyId || whatsapp.companyId);
-      await SendWhatsAppMessage({
+      await SendWhatsAppMessageUnified({
         body: (messageData as any).body,
         ticket,
         quotedMsg: (messageData as any).quotedMsg,
