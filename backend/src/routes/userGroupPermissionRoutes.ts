@@ -1,5 +1,6 @@
 import express from "express";
 import isAuth from "../middleware/isAuth";
+import { checkPermission } from "../middleware/checkPermission";
 import * as UserGroupPermissionController from "../controllers/UserGroupPermissionController";
 
 const userGroupPermissionRoutes = express.Router();
@@ -8,6 +9,7 @@ const userGroupPermissionRoutes = express.Router();
 userGroupPermissionRoutes.get(
   "/group-permissions/available",
   isAuth,
+  checkPermission("users.view"),
   UserGroupPermissionController.listAvailableGroups
 );
 
@@ -15,6 +17,7 @@ userGroupPermissionRoutes.get(
 userGroupPermissionRoutes.get(
   "/group-permissions/user/:userId",
   isAuth,
+  checkPermission("users.view"),
   UserGroupPermissionController.listUserPermissions
 );
 
@@ -22,6 +25,7 @@ userGroupPermissionRoutes.get(
 userGroupPermissionRoutes.put(
   "/group-permissions/user/:userId",
   isAuth,
+  checkPermission("users.edit"),
   UserGroupPermissionController.updateUserPermissions
 );
 

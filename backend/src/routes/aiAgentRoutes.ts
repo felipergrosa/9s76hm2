@@ -7,16 +7,16 @@ import * as AIAgentFunnelStageController from "../controllers/AIAgentFunnelStage
 const aiAgentRoutes = Router();
 
 // Listar todos os agentes
-aiAgentRoutes.get("/ai-agents", isAuth, AIAgentController.index);
+aiAgentRoutes.get("/ai-agents", isAuth, checkPermission("ai-agents.view"), AIAgentController.index);
 
 // Buscar um agente específico
-aiAgentRoutes.get("/ai-agents/:id", isAuth, AIAgentController.show);
+aiAgentRoutes.get("/ai-agents/:id", isAuth, checkPermission("ai-agents.view"), AIAgentController.show);
 
 // Listar etapas do funil de um agente
 aiAgentRoutes.get(
   "/ai-agents/:id/funnel-stages",
   isAuth,
-  checkPermission("ai-training.view"),
+  checkPermission("ai-agents.view"),
   AIAgentFunnelStageController.listStages
 );
 
@@ -24,20 +24,21 @@ aiAgentRoutes.get(
 aiAgentRoutes.put(
   "/ai-agents/:agentId/funnel-stages/:stageId/system-prompt",
   isAuth,
-  checkPermission("ai-training.view"),
+  checkPermission("ai-agents.edit"),
   AIAgentFunnelStageController.updateStageSystemPrompt
 );
 
 // Criar novo agente
-aiAgentRoutes.post("/ai-agents", isAuth, AIAgentController.store);
+aiAgentRoutes.post("/ai-agents", isAuth, checkPermission("ai-agents.create"), AIAgentController.store);
 
 // Atualizar agente
-aiAgentRoutes.put("/ai-agents/:id", isAuth, AIAgentController.update);
+aiAgentRoutes.put("/ai-agents/:id", isAuth, checkPermission("ai-agents.edit"), AIAgentController.update);
 
 // Deletar agente
-aiAgentRoutes.delete("/ai-agents/:id", isAuth, AIAgentController.remove);
+aiAgentRoutes.delete("/ai-agents/:id", isAuth, checkPermission("ai-agents.delete"), AIAgentController.remove);
 
 // Migration endpoint (admin only) - deve vir DEPOIS das rotas específicas
-aiAgentRoutes.post("/ai-agents/migrate", isAuth, AIAgentController.migrate);
+// Mantendo sem checkPermission específico além de isAuth por enquanto, ou poderia ser ai-agents.create
+aiAgentRoutes.post("/ai-agents/migrate", isAuth, checkPermission("ai-agents.create"), AIAgentController.migrate);
 
 export default aiAgentRoutes;

@@ -14,21 +14,21 @@ import * as AITrainingMetricsController from "../controllers/AITrainingMetricsCo
 const routes = express.Router();
 
 // Rotas existentes (mantidas para compatibilidade)
-routes.post("/ai/generate-campaign-messages", isAuth, AiController.generateCampaignMessages);
-routes.get("/ai/encryption-status", isAuth, AiController.encryptionStatus);
-routes.post("/ai/transform", isAuth, AiController.transformText);
-routes.get("/ai/models", isAuth, AiController.listModels);
+routes.post("/ai/generate-campaign-messages", isAuth, checkPermission("ai-settings.view"), AiController.generateCampaignMessages);
+routes.get("/ai/encryption-status", isAuth, checkPermission("ai-settings.view"), AiController.encryptionStatus);
+routes.post("/ai/transform", isAuth, checkPermission("ai-settings.view"), AiController.transformText);
+routes.get("/ai/models", isAuth, checkPermission("ai-settings.view"), AiController.listModels);
 
 // Rotas para gerenciamento de presets
-routes.post("/ai/presets", isAuth, AiController.savePreset);
-routes.get("/ai/presets", isAuth, AiController.listPresets);
-routes.delete("/ai/presets/:module", isAuth, AiController.deletePreset);
+routes.post("/ai/presets", isAuth, checkPermission("ai-settings.edit"), AiController.savePreset);
+routes.get("/ai/presets", isAuth, checkPermission("ai-settings.view"), AiController.listPresets);
+routes.delete("/ai/presets/:module", isAuth, checkPermission("ai-settings.edit"), AiController.deletePreset);
 
 // Novas rotas do AIOrchestrator
-routes.post("/ai/orchestrator/process", isAuth, AIOrchestatorController.processAIRequest);
-routes.post("/ai/orchestrator/transform", isAuth, AIOrchestatorController.transformText);
-routes.post("/ai/orchestrator/test-providers", isAuth, AIOrchestatorController.testProviders);
-routes.get("/ai/orchestrator/stats", isAuth, AIOrchestatorController.getStats);
+routes.post("/ai/orchestrator/process", isAuth, checkPermission("ai-settings.view"), AIOrchestatorController.processAIRequest);
+routes.post("/ai/orchestrator/transform", isAuth, checkPermission("ai-settings.view"), AIOrchestatorController.transformText);
+routes.post("/ai/orchestrator/test-providers", isAuth, checkPermission("ai-settings.edit"), AIOrchestatorController.testProviders);
+routes.get("/ai/orchestrator/stats", isAuth, checkPermission("ai-settings.view"), AIOrchestatorController.getStats);
 
 // Training / Sandbox
 routes.post(

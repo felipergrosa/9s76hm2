@@ -1,5 +1,6 @@
 import express from "express";
 import isAuth from "../middleware/isAuth";
+import { checkPermission } from "../middleware/checkPermission";
 
 import * as StatisticsController from "../controllers/StatisticsController";
 // import * as StatisticsPerUsersController from "../controllers/Statistics/StatisticsPerUsersController";
@@ -10,12 +11,14 @@ const statisticsRoutes = express.Router();
 statisticsRoutes.get(
   "/usersMoments",
   isAuth,
+  checkPermission("dashboard.view"),
   StatisticsController.DashTicketsQueues
 );
 
 statisticsRoutes.get(
   "/contacts-report",
   isAuth,
+  checkPermission("reports.view"),
   StatisticsController.ContactsReport
 );
 

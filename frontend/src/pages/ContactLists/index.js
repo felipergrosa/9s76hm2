@@ -26,6 +26,7 @@ import DownloadIcon from "@material-ui/icons/GetApp";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
+import { Can } from "../../components/Can";
 
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
@@ -406,18 +407,20 @@ const ContactLists = () => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} sm="auto">
-                <Button
-                  fullWidth={isMobile}
-                  variant="contained"
-                  color="primary"
-                  onClick={handleOpenContactListModal}
-                  style={{ minHeight: 44 }}
-                  startIcon={<PlusIcon size={16} />}
-                >
-                  {i18n.t("contactLists.buttons.add")}
-                </Button>
-              </Grid>
+              <GrCan role={user.profile} perform="contact-lists.create" yes={() => (
+                <Grid item xs={12} sm="auto">
+                  <Button
+                    fullWidth={isMobile}
+                    variant="contained"
+                    color="primary"
+                    onClick={handleOpenContactListModal}
+                    style={{ minHeight: 44 }}
+                    startIcon={<PlusIcon size={16} />}
+                  >
+                    {i18n.t("contactLists.buttons.add")}
+                  </Button>
+                </Grid>
+              )} />
             </Grid>
           </Grid>
         </Grid>
@@ -490,23 +493,27 @@ const ContactLists = () => {
                 >
                   <PeopleIcon />
                 </IconButton>
-                <IconButton
-                  size="small"
-                  className={classes.actionButton}
-                  onClick={() => handleEditContactList(contactList)}
-                >
-                  <EditIcon />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  className={classes.actionButton}
-                  onClick={() => {
-                    setConfirmModalOpen(true);
-                    setDeletingContactList(contactList);
-                  }}
-                >
-                  <DeleteOutlineIcon />
-                </IconButton>
+                <Can role={user.profile} perform="contact-lists.edit" yes={() => (
+                  <IconButton
+                    size="small"
+                    className={classes.actionButton}
+                    onClick={() => handleEditContactList(contactList)}
+                  >
+                    <EditIcon />
+                  </IconButton>
+                )} />
+                <Can role={user.profile} perform="contact-lists.delete" yes={() => (
+                  <IconButton
+                    size="small"
+                    className={classes.actionButton}
+                    onClick={() => {
+                      setConfirmModalOpen(true);
+                      setDeletingContactList(contactList);
+                    }}
+                  >
+                    <DeleteOutlineIcon />
+                  </IconButton>
+                )} />
                 <IconButton size="small" className={classes.actionButton} component="a" href={planilhaExemplo} download="planilha.xlsx" title="Baixar Planilha Exemplo">
                   <DownloadIcon />
                 </IconButton>
@@ -591,22 +598,26 @@ const ContactLists = () => {
                         <PeopleIcon />
                       </IconButton>
 
-                      <IconButton
-                        size="small"
-                        onClick={() => handleEditContactList(contactList)}
-                      >
-                        <EditIcon />
-                      </IconButton>
+                      <Can role={user.profile} perform="contact-lists.edit" yes={() => (
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditContactList(contactList)}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      )} />
 
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          setConfirmModalOpen(true);
-                          setDeletingContactList(contactList);
-                        }}
-                      >
-                        <DeleteOutlineIcon />
-                      </IconButton>
+                      <Can role={user.profile} perform="contact-lists.delete" yes={() => (
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setConfirmModalOpen(true);
+                            setDeletingContactList(contactList);
+                          }}
+                        >
+                          <DeleteOutlineIcon />
+                        </IconButton>
+                      )} />
                     </TableCell>
                   </TableRow>
                 ))}

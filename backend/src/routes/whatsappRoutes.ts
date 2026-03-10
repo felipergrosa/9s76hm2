@@ -1,5 +1,6 @@
 import express from "express";
 import isAuth from "../middleware/isAuth";
+import { checkPermission } from "../middleware/checkPermission";
 
 import * as WhatsAppController from "../controllers/WhatsAppController";
 import * as MetaController from "../controllers/MetaController";
@@ -14,33 +15,33 @@ const upload = multer(uploadConfig);
 
 const whatsappRoutes = express.Router();
 
-whatsappRoutes.get("/whatsapp/", isAuth, WhatsAppController.index);
-whatsappRoutes.get("/whatsapp/filter", isAuth, WhatsAppController.indexFilter);
-whatsappRoutes.get("/whatsapp/all", isAuth, WhatsAppController.listAll);
+whatsappRoutes.get("/whatsapp/", isAuth, checkPermission("connections.view"), WhatsAppController.index);
+whatsappRoutes.get("/whatsapp/filter", isAuth, checkPermission("connections.view"), WhatsAppController.indexFilter);
+whatsappRoutes.get("/whatsapp/all", isAuth, checkPermission("connections.view"), WhatsAppController.listAll);
 
-whatsappRoutes.post("/whatsapp/", isAuth, WhatsAppController.store);
-whatsappRoutes.post("/facebook/", isAuth, WhatsAppController.storeFacebook);
-whatsappRoutes.get("/whatsapp/:whatsappId", isAuth, WhatsAppController.show);
-whatsappRoutes.put("/whatsapp/:whatsappId", isAuth, WhatsAppController.update);
-whatsappRoutes.delete("/whatsapp/:whatsappId", isAuth, WhatsAppController.remove);
-whatsappRoutes.post("/closedimported/:whatsappId", isAuth, WhatsAppController.closedTickets);
+whatsappRoutes.post("/whatsapp/", isAuth, checkPermission("connections.create"), WhatsAppController.store);
+whatsappRoutes.post("/facebook/", isAuth, checkPermission("connections.create"), WhatsAppController.storeFacebook);
+whatsappRoutes.get("/whatsapp/:whatsappId", isAuth, checkPermission("connections.view"), WhatsAppController.show);
+whatsappRoutes.put("/whatsapp/:whatsappId", isAuth, checkPermission("connections.edit"), WhatsAppController.update);
+whatsappRoutes.delete("/whatsapp/:whatsappId", isAuth, checkPermission("connections.delete"), WhatsAppController.remove);
+whatsappRoutes.post("/closedimported/:whatsappId", isAuth, checkPermission("connections.edit"), WhatsAppController.closedTickets);
 
 //restart
-whatsappRoutes.post("/whatsapp-restart/", isAuth, WhatsAppController.restart);
-whatsappRoutes.post("/whatsapp/:whatsappId/media-upload", isAuth, upload.array("file"), mediaUpload);
+whatsappRoutes.post("/whatsapp-restart/", isAuth, checkPermission("connections.edit"), WhatsAppController.restart);
+whatsappRoutes.post("/whatsapp/:whatsappId/media-upload", isAuth, checkPermission("connections.edit"), upload.array("file"), mediaUpload);
 
-whatsappRoutes.delete("/whatsapp/:whatsappId/media-upload", isAuth, deleteMedia);
+whatsappRoutes.delete("/whatsapp/:whatsappId/media-upload", isAuth, checkPermission("connections.edit"), deleteMedia);
 
 
-whatsappRoutes.delete("/whatsapp-admin/:whatsappId", isAuth, WhatsAppController.remove);
+whatsappRoutes.delete("/whatsapp-admin/:whatsappId", isAuth, checkPermission("connections.delete"), WhatsAppController.remove);
 
-whatsappRoutes.put("/whatsapp-admin/:whatsappId", isAuth, WhatsAppController.updateAdmin);
+whatsappRoutes.put("/whatsapp-admin/:whatsappId", isAuth, checkPermission("connections.edit"), WhatsAppController.updateAdmin);
 
-whatsappRoutes.get("/whatsapp-admin/:whatsappId", isAuth, WhatsAppController.showAdmin);
+whatsappRoutes.get("/whatsapp-admin/:whatsappId", isAuth, checkPermission("connections.view"), WhatsAppController.showAdmin);
 
 // Meta API Official - Templates
-whatsappRoutes.get("/whatsapp/:whatsappId/templates", isAuth, MetaController.getTemplates);
-whatsappRoutes.get("/whatsapp/:whatsappId/session-window", isAuth, MetaController.getSessionWindow);
-whatsappRoutes.post("/whatsapp/:whatsappId/send-template-to-contact", isAuth, MetaController.sendTemplateToContact);
+whatsappRoutes.get("/whatsapp/:whatsappId/templates", isAuth, checkPermission("connections.view"), MetaController.getTemplates);
+whatsappRoutes.get("/whatsapp/:whatsappId/session-window", isAuth, checkPermission("connections.view"), MetaController.getSessionWindow);
+whatsappRoutes.post("/whatsapp/:whatsappId/send-template-to-contact", isAuth, checkPermission("connections.edit"), MetaController.sendTemplateToContact);
 
 export default whatsappRoutes;

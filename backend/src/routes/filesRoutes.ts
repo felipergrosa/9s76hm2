@@ -1,5 +1,6 @@
 import express from "express";
 import isAuth from "../middleware/isAuth";
+import { checkPermission } from "../middleware/checkPermission";
 import { createUpload } from "../config/uploadFactory";
 import validateUploadedFiles from "../middleware/validateUploadedFiles";
 
@@ -14,12 +15,12 @@ const upload = createUpload({
 
 const filesRoutes = express.Router();
 
-filesRoutes.get("/files/list", isAuth, FilesController.list);
-filesRoutes.get("/files", isAuth, FilesController.index);
-filesRoutes.post("/files", isAuth, upload.array("files"), FilesController.store);
-filesRoutes.put("/files/:fileId", isAuth, upload.array("files"), FilesController.update);
-filesRoutes.get("/files/:fileId", isAuth, FilesController.show);
-filesRoutes.delete("/files/:fileId", isAuth, FilesController.remove);
-filesRoutes.delete("/files", isAuth, FilesController.removeAll);
+filesRoutes.get("/files/list", isAuth, checkPermission("files.view"), FilesController.list);
+filesRoutes.get("/files", isAuth, checkPermission("files.view"), FilesController.index);
+filesRoutes.post("/files", isAuth, checkPermission("files.upload"), upload.array("files"), FilesController.store);
+filesRoutes.put("/files/:fileId", isAuth, checkPermission("files.upload"), upload.array("files"), FilesController.update);
+filesRoutes.get("/files/:fileId", isAuth, checkPermission("files.view"), FilesController.show);
+filesRoutes.delete("/files/:fileId", isAuth, checkPermission("files.delete"), FilesController.remove);
+filesRoutes.delete("/files", isAuth, checkPermission("files.delete"), FilesController.removeAll);
 
 export default filesRoutes;

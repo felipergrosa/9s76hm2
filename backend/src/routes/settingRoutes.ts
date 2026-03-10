@@ -1,5 +1,6 @@
 import { Router } from "express";
 import isAuth from "../middleware/isAuth";
+import { checkPermission } from "../middleware/checkPermission";
 import envTokenAuth from "../middleware/envTokenAuth";
 import multer from "multer";
 
@@ -13,25 +14,26 @@ const uploadPrivate = createUpload({ privacy: "private" });
 
 const settingRoutes = Router();
 
-settingRoutes.get("/settings", isAuth, SettingController.index);
+settingRoutes.get("/settings", isAuth, checkPermission("settings.view"), SettingController.index);
 // SavedFilter Cron Config (específico) - definir ANTES de '/settings/:settingKey'
-settingRoutes.get("/settings/saved-filter-cron", isAuth, SettingController.getSavedFilterCronConfig);
-settingRoutes.put("/settings/saved-filter-cron", isAuth, SettingController.updateSavedFilterCronConfig);
+settingRoutes.get("/settings/saved-filter-cron", isAuth, checkPermission("settings.view"), SettingController.getSavedFilterCronConfig);
+settingRoutes.put("/settings/saved-filter-cron", isAuth, checkPermission("settings.edit"), SettingController.updateSavedFilterCronConfig);
 
-settingRoutes.get("/settings/:settingKey", isAuth, SettingController.showOne);
+settingRoutes.get("/settings/:settingKey", isAuth, checkPermission("settings.view"), SettingController.showOne);
 
 // change setting key to key in future
-settingRoutes.put("/settings/:settingKey", isAuth, SettingController.update);
+settingRoutes.put("/settings/:settingKey", isAuth, checkPermission("settings.edit"), SettingController.update);
 
-settingRoutes.get("/setting/:settingKey", isAuth, SettingController.getSetting);
+settingRoutes.get("/setting/:settingKey", isAuth, checkPermission("settings.view"), SettingController.getSetting);
 
-settingRoutes.put("/setting/:settingKey", isAuth, SettingController.updateOne);
+settingRoutes.put("/setting/:settingKey", isAuth, checkPermission("settings.edit"), SettingController.updateOne);
 
 settingRoutes.get("/public-settings/:settingKey", envTokenAuth, SettingController.publicShow);
 
 settingRoutes.post(
   "/settings-whitelabel/logo",
   isAuth,
+  checkPermission("settings.edit"),
   upload.single("file"),
   validateUploadedFiles(),
   SettingController.storeLogo
@@ -40,6 +42,7 @@ settingRoutes.post(
 settingRoutes.post(
   "/settings/privateFile",
   isAuth,
+  checkPermission("settings.edit"),
   uploadPrivate.single("file"),
   validateUploadedFiles(),
   SettingController.storePrivateFile

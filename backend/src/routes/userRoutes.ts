@@ -7,13 +7,13 @@ import { upload } from "../controllers/UserController";
 const userRoutes = express.Router();
 
 // Rotas públicas de listagem
-userRoutes.get("/users", isAuth, UserController.index);
-userRoutes.get("/users/list", isAuth, UserController.list);
+userRoutes.get("/users", isAuth, checkPermission("users.view"), UserController.index);
+userRoutes.get("/users/list", isAuth, checkPermission("users.view"), UserController.list);
 
 // Rotas que precisam de permissão específica
 userRoutes.post("/users", isAuth, checkPermission("users.create"), UserController.store);
 userRoutes.put("/users/:userId", isAuth, UserController.update); // Validação no controller permite editar próprio perfil
-userRoutes.get("/users/:userId", isAuth, UserController.show);
+userRoutes.get("/users/:userId", isAuth, checkPermission("users.view"), UserController.show);
 userRoutes.delete("/users/:userId", isAuth, checkPermission("users.delete"), UserController.remove);
 userRoutes.post(
   "/users/:userId/media-upload",
@@ -24,6 +24,7 @@ userRoutes.post(
 userRoutes.put(
   "/users/toggleChangeWidht/:userId",
   isAuth,
+  checkPermission("users.edit"),
   UserController.toggleChangeWidht
 );
 userRoutes.put(

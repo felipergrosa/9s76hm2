@@ -74,30 +74,32 @@ import { useParams } from "react-router-dom/cjs/react-router-dom.min";
 import ChatAssistantPanel from "../ChatAssistantPanel";
 import useSpellChecker, { autoCorrectText, findMisspelledWords, checkGrammar } from "../../hooks/useSpellChecker";
 import SpellCheckSuggestions from "./SpellCheckSuggestions";
+import FormatToolbar from "./FormatToolbar";
+import useTextSelection from "../../hooks/useTextSelection";
 
 
 const Mp3Recorder = new MicRecorder({ bitRate: 128 });
 
 const useStyles = makeStyles((theme) => ({
   mainWrapper: {
-    background: "transparent",
     display: "flex",
     flexDirection: "column",
     alignItems: "stretch",
-    borderTop: "1px solid rgba(0, 0, 0, 0.08)",
+    borderTop: "none",
+    padding: "8px 12px",
+    backgroundImage: ((theme.palette.mode || theme.palette.type) === 'light') 
+      ? `url(${whatsBackground})` 
+      : `url(${whatsBackgroundDark})`,
+    backgroundRepeat: 'repeat',
+    backgroundSize: '400px auto',
+    backgroundPosition: 'center',
     [theme.breakpoints.down("sm")]: {
       position: "relative",
       width: "100%",
       maxWidth: "100vw",
       borderTop: 'none',
-      padding: '8px',
-      paddingBottom: '8px',
+      padding: '6px 8px',
       zIndex: 10,
-      backgroundColor: theme.mode === 'light' ? 'transparent' : '#0b0b0d',
-      backgroundImage: theme.mode === 'light' ? `url(${whatsBackground})` : `url(${whatsBackgroundDark})`,
-      backgroundRepeat: 'repeat',
-      backgroundSize: '400px auto',
-      backgroundPosition: 'center bottom',
       boxSizing: 'border-box',
       overflowX: 'hidden',
       flexShrink: 0,
@@ -109,18 +111,35 @@ const useStyles = makeStyles((theme) => ({
     height: "50px",
     borderRadius: "25%",
   },
-  dropInfo: {
-    background: "#eee",
+  attachBox: {
+    position: "absolute",
+    top: 0,
+    left: 0,
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    width: "100%",
-    padding: 15,
-    left: 0,
-    right: 0,
+    justifyContent: "center",
+    width: 40,
+    height: "100%",
+    cursor: "pointer",
+    color: "#000000",
+    fontSize: 20,
+    fontWeight: "bold",
   },
-  dropInfoOut: {
-    display: "none",
+  emojiBox: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 40,
+    height: "100%",
+    cursor: "pointer",
+    color: "#000000",
+    fontSize: 28,
+    fontWeight: "bold",
   },
   gridFiles: {
     maxHeight: "100%",
@@ -131,30 +150,30 @@ const useStyles = makeStyles((theme) => ({
     width: "100%",
     maxWidth: "100%",
     display: "flex",
-    padding: "0px 8px",
+    padding: "2px 4px", // Mais 30% menor
     alignItems: "center",
-    borderRadius: 40,
-    border: ((theme.palette.mode || theme.palette.type) === 'light') ? "1px solid rgba(0,0,0,0.08)" : "1px solid rgba(255,255,255,0.10)",
-    boxShadow: ((theme.palette.mode || theme.palette.type) === 'light')
-      ? "0 2px 6px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08)"
-      : "0 2px 6px rgba(0,0,0,0.50)",
-    gap: 4,
-    minHeight: 56,
-    maxHeight: 200,
+    borderRadius: 24, // 20% a mais arredondado
+    border: "none",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+    gap: 2, // Mais 30% menor
+    minHeight: 16, // Mais 30% menor
+    maxHeight: 49, // Mais 30% menor
     boxSizing: 'border-box',
     [theme.breakpoints.down('sm')]: {
-      minHeight: 48,
-      maxHeight: 150,
+      minHeight: 16, // Mais 30% menor
+      maxHeight: 49, // Mais 30% menor
       width: '100%',
       maxWidth: '100vw',
       boxSizing: 'border-box',
-      padding: '0px 4px',
-      gap: 2,
+      padding: '2px 4px', // Mais 30% menor
+      gap: 2, // Mais 30% menor
+      borderRadius: 24,
     }
   },
   messageInputWrapper: {
     marginBottom: 0,
-    backgroundImage: ((theme.palette.mode || theme.palette.type) === 'light') ? `url(${whatsBackground})` : `url(${whatsBackgroundDark})`,
+    backgroundColor: "transparent",
+    backgroundImage: "none",
     display: "flex",
     flexDirection: "column",
     borderRadius: 0,
@@ -164,20 +183,21 @@ const useStyles = makeStyles((theme) => ({
     width: "100%",
     flex: 1,
     '& .MuiInputBase-root': {
-      backgroundColor: ((theme.palette.mode || theme.palette.type) === 'light') ? '#ffffff' : '#202c33',
+      backgroundColor: "transparent",
       borderRadius: 0,
-      border: ((theme.palette.mode || theme.palette.type) === 'light') ? '0px solid #ffffff' : '0px solid rgba(255,255,255,0.18)',
-      minHeight: 40,
-      maxHeight: 120,
+      border: "none",
+      minHeight: 28,
+      maxHeight: 100,
       display: 'flex',
-      alignItems: 'flex-start',
-      paddingTop: 8,
-      paddingBottom: 8,
+      alignItems: 'center',
+      paddingTop: 0,
+      paddingBottom: 0,
       flex: 1,
+      color: ((theme.palette.mode || theme.palette.type) === 'light') ? "#111b21" : "#e9edef",
     },
     '& .MuiInputBase-multiline': {
-      paddingTop: 8,
-      paddingBottom: 8,
+      paddingTop: 2, // Mínimo para não cortar letras
+      paddingBottom: 2,
       height: 'auto',
     },
     '& .MuiInputBase-inputMultiline': {
@@ -186,11 +206,17 @@ const useStyles = makeStyles((theme) => ({
       overflowY: 'auto',
       lineHeight: 1.4,
       fontSize: 14,
+      color: ((theme.palette.mode || theme.palette.type) === 'light') ? "#111b21" : "#e9edef",
     },
     '& .MuiInputBase-input': {
       padding: 0,
       fontSize: 14,
       lineHeight: 1.4,
+      color: ((theme.palette.mode || theme.palette.type) === 'light') ? "#111b21" : "#e9edef",
+      '&::placeholder': {
+        color: ((theme.palette.mode || theme.palette.type) === 'light') ? "#8696a0" : "#667781",
+        opacity: 1,
+      },
     },
     [theme.breakpoints.down('sm')]: {
       width: '100%',
@@ -203,14 +229,11 @@ const useStyles = makeStyles((theme) => ({
       position: 'relative',
       boxShadow: 'none',
       '& .MuiInputBase-root': {
-        maxHeight: 100,
+        maxHeight: 60,
       },
       '& .MuiInputBase-inputMultiline': {
         maxHeight: 80,
-        fontSize: 16,
-      },
-      '& .MuiInputBase-input': {
-        fontSize: 16,
+        fontSize: 14,
       },
     }
   },
@@ -312,8 +335,24 @@ const useStyles = makeStyles((theme) => ({
 
   },
   sendMessageIcons: {
-    color: grey[700],
-    fontSize: 18,
+    color: "#000000",
+    fontSize: 28,
+    fontWeight: "bold",
+  },
+  sendMessageIconsActive: {
+    color: "#ffffff", // Ícone branco
+    fontSize: 28,
+    fontWeight: "bold",
+  },
+  sendButtonActive: {
+    backgroundColor: "#00a884", // Fundo verde circular
+    borderRadius: "50%",
+    width: 42,
+    height: 42,
+    padding: 8,
+    "&:hover": {
+      backgroundColor: "#008c6f", // Verde mais escuro no hover
+    },
   },
   // Botão de alternância de assinatura
   signatureToggle: {
@@ -328,7 +367,9 @@ const useStyles = makeStyles((theme) => ({
     }
   },
   ForwardMessageIcons: {
-    color: grey[700],
+    color: "#000000",
+    fontSize: 28,
+    fontWeight: "bold",
     transform: 'scaleX(-1)'
   },
   uploadInput: {
@@ -341,11 +382,8 @@ const useStyles = makeStyles((theme) => ({
     position: "relative",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: ((theme.palette.mode || theme.palette.type) === 'light') ? "transparent" : "#202c33",
-    backgroundImage: ((theme.palette.mode || theme.palette.type) === 'light') ? `url(${whatsBackground})` : `url(${whatsBackgroundDark})`,
-    backgroundRepeat: "repeat",
-    backgroundSize: "400px auto",
-    backgroundPosition: "center bottom",
+    backgroundColor: "transparent", // Fundo transparente
+    backgroundImage: "none", // Remove imagem de fundo
     borderTop: "none",
   },
   emojiBox: {
@@ -353,6 +391,9 @@ const useStyles = makeStyles((theme) => ({
     bottom: 63,
     width: 40,
     borderTop: "1px solid #e8e8e8",
+    color: grey[700],
+    fontSize: 24,
+    fontWeight: "bold",
   },
   circleLoading: {
     color: green[500],
@@ -681,6 +722,15 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   const [grammarErrors, setGrammarErrors] = useState([]);
   // Menu de contexto (right-click) para sugestões
   const [contextMenu, setContextMenu] = useState(null); // { x, y, word, suggestions, message, type }
+
+  // Hook para gerenciar seleção de texto
+  const { selection, updateSelection, clearSelection } = useTextSelection(inputRef);
+
+  // Estado para a toolbar de formatação
+  const [formatToolbar, setFormatToolbar] = useState({
+    visible: false,
+    position: { x: 0, y: 0 }
+  });
 
   // Debounce para análise ortográfica pesada
   const spellCheckTimeoutRef = useRef(null);
@@ -1150,6 +1200,98 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
     }
   }, [contextMenu]);
 
+  // Funções para a toolbar de formatação
+  const handleTextSelection = () => {
+    if (!inputRef.current) return;
+    
+    const input = inputRef.current;
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const selectedText = input.value.substring(start, end);
+    
+    // Atualizar seleção
+    updateSelection();
+    
+    // Mostrar toolbar apenas se houver texto selecionado
+    if (start !== end && selectedText.trim().length > 0) {
+      // Obter posição do input relativo à viewport
+      const inputRect = input.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      
+      // Posicionar toolbar acima do input, centralizada
+      let toolbarX = inputRect.left + (inputRect.width / 3);
+      let toolbarY = inputRect.top - 50; // 50px acima do input
+      
+      // Garantir que não saia da tela horizontalmente
+      const toolbarWidth = 280; // largura aproximada da toolbar
+      if (toolbarX - toolbarWidth / 2 < 10) {
+        toolbarX = toolbarWidth / 2 + 10;
+      } else if (toolbarX + toolbarWidth / 2 > viewportWidth - 10) {
+        toolbarX = viewportWidth - toolbarWidth / 2 - 10;
+      }
+      
+      // Garantir que não saia da tela verticalmente (mostrar abaixo se necessário)
+      if (toolbarY < 10) {
+        toolbarY = inputRect.bottom + 10; // Mostrar abaixo do input
+      }
+      
+      setFormatToolbar({
+        visible: true,
+        position: { x: toolbarX, y: toolbarY }
+      });
+    } else {
+      setFormatToolbar(prev => ({ ...prev, visible: false }));
+    }
+  };
+
+  const handleCloseFormatToolbar = () => {
+    setFormatToolbar(prev => ({ ...prev, visible: false }));
+  };
+
+  const handleApplyFormat = (newText, newStart, newEnd) => {
+    setInputMessage(newText);
+    
+    // Restaurar o foco e a seleção após aplicar formatação
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(newStart, newEnd);
+      }
+    }, 0);
+  };
+
+  // Detectar atalhos de teclado para formatação
+  const handleKeyDown = (e) => {
+    const input = inputRef.current;
+    if (!input) return;
+    
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const selectedText = input.value.substring(start, end);
+    
+    // Ctrl+B para negrito
+    if (e.ctrlKey && e.key === 'b' && selectedText.trim()) {
+      e.preventDefault();
+      const formattedText = `*${selectedText}*`;
+      const newText = input.value.substring(0, start) + formattedText + input.value.substring(end);
+      handleApplyFormat(newText, start, start + formattedText.length);
+    }
+    
+    // Ctrl+I para itálico
+    if (e.ctrlKey && e.key === 'i' && selectedText.trim()) {
+      e.preventDefault();
+      const formattedText = `_${selectedText}_`;
+      const newText = input.value.substring(0, start) + formattedText + input.value.substring(end);
+      handleApplyFormat(newText, start, start + formattedText.length);
+    }
+    
+    // Esc para fechar toolbar
+    if (e.key === 'Escape' && formatToolbar.visible) {
+      e.preventDefault();
+      handleCloseFormatToolbar();
+    }
+  };
+
   // Atualizar exibição de sugestões quando mudam
   React.useEffect(() => {
     if (spellCheckEnabled && spellCheckLoaded && suggestions.length > 0 && currentWord.length >= 2) {
@@ -1158,6 +1300,13 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
       setShowSpellSuggestions(false);
     }
   }, [suggestions, currentWord, spellCheckEnabled, spellCheckLoaded]);
+
+  // Fechar toolbar de formatação quando o input perde foco ou texto muda
+  React.useEffect(() => {
+    if (!inputMessage) {
+      handleCloseFormatToolbar();
+    }
+  }, [inputMessage]);
 
   const handlePrivateMessage = (e) => {
     setPrivateMessage(!privateMessage);
@@ -1766,7 +1915,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
             setInputMessage("");
           }}
         >
-          <X size={18} className={classes.sendMessageIcons} />
+          <X size={20} className={classes.sendMessageIcons} />
         </IconButton>
       </div>
     );
@@ -1774,10 +1923,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
 
   if (mediasUpload.length > 0) {
     return (
-
-      <Paper
-        elevation={0}
-        square
+      <div
         className={classes.viewMediaInputWrapper}
         onDragEnter={() => setOnDragEnter(true)}
         onDrop={(e) => handleInputDrop(e)}
@@ -1791,8 +1937,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
             onCancelSelection={handleCancelSelection}
           />
         )}
-
-      </Paper>
+      </div>
     )
   }
   else {
@@ -1825,9 +1970,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
             }}
           />
         )}
-        <Paper
-          square
-          elevation={0}
+        <div
           className={classes.messageInputWrapper}
           onDrop={(e) => handleInputDrop(e)}
         >
@@ -1863,7 +2006,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
             <div className={classes.selectionBar}>
               <div className={classes.selectionBarLeft}>
                 <X
-                  size={20}
+                  size={15}
                   className={classes.selectionBarCloseIcon}
                   onClick={handleCancelMessageSelection}
                 />
@@ -1872,7 +2015,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                 </span>
               </div>
               <ReplyIcon
-                size={22}
+                size={15}
                 className={classes.selectionBarForwardIcon}
                 onClick={handleOpenModalForward}
               />
@@ -1887,7 +2030,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                 disabled={disableOption()}
                 onClick={(e) => setShowEmoji((prevState) => !prevState)}
               >
-                <Smile size={18} className={classes.sendMessageIcons} />
+                <Smile size={20} className={classes.sendMessageIcons} />
               </IconButton>
               <Tooltip title="Assistente de Chat">
                 <span>
@@ -1900,7 +2043,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       setAssistantOpen(prev => !prev);
                     }}
                   >
-                    <Sparkles size={18} className={classes.sendMessageIcons} />
+                    <Sparkles size={20} className={classes.sendMessageIcons} />
                   </IconButton>
                 </span>
               </Tooltip>
@@ -1911,7 +2054,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                   onClick={() => setAppointmentModalOpen(true)}
                   disabled={loading}
                 >
-                  <ClockIcon size={18} className={classes.sendMessageIcons} />
+                  <ClockIcon size={20} className={classes.sendMessageIcons} />
                 </IconButton>
               </Tooltip>
               {showEmoji ? (
@@ -1937,7 +2080,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                 onClick={handleOpenMenuClick}
                 tabIndex={-1}
               >
-                <Plus size={18} />
+                <Plus size={20} />
               </Fab>
 
               {/* <IconButton
@@ -1960,9 +2103,9 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                     tabIndex={-1}
                   >
                     {signMessage === true ? (
-                      <PenLine size={18} style={{ color: theme.mode === "light" ? theme.palette.primary.main : "#EEE" }} />
+                      <PenLine size={20} style={{ color: theme.mode === "light" ? theme.palette.primary.main : "#EEE" }} />
                     ) : (
-                      <PenLine size={18} style={{ color: "grey" }} />
+                      <PenLine size={20} style={{ color: "grey" }} />
                     )}
                   </IconButton>
                 </Tooltip>
@@ -1978,7 +2121,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                 style={{ padding: 8 }}
                 tabIndex={-1}
               >
-                <Plus size={18} className={classes.sendMessageIcons} />
+                <Plus size={20} className={classes.sendMessageIcons} />
               </IconButton>
             </Hidden>
             {/* Menu de anexos (disponível em todos os tamanhos) */}
@@ -1999,32 +2142,32 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                   component="span"
                   className={classes.invertedFabMenuMP}
                 >
-                  <ImageIcon size={18} />
+                  <ImageIcon size={20} />
                 </Fab>
                 {i18n.t("messageInput.type.imageVideo")}
               </MenuItem>
               <MenuItem onClick={handleCameraModalOpen}>
                 <Fab className={classes.invertedFabMenuCamera}>
-                  <Camera size={18} />
+                  <Camera size={20} />
                 </Fab>
                 {i18n.t("messageInput.type.cam")}
               </MenuItem>
               <MenuItem onClick={() => uploadDocRef.current.click()}>
                 <Fab aria-label="upload-img"
                   component="span" className={classes.invertedFabMenuDoc}>
-                  <FileText size={18} />
+                  <FileText size={20} />
                 </Fab>
                 Documento
               </MenuItem>
               <MenuItem onClick={handleSendContactModalOpen}>
                 <Fab className={classes.invertedFabMenuCont}>
-                  <UserRound size={18} />
+                  <UserRound size={20} />
                 </Fab>
                 {i18n.t("messageInput.type.contact")}
               </MenuItem>
               <MenuItem onClick={handleSendLinkVideo}>
                 <Fab className={classes.invertedFabMenuMeet}>
-                  <Video size={18} />
+                  <Video size={20} />
                 </Fab>
                 {i18n.t("messageInput.type.meet")}
               </MenuItem>
@@ -2037,20 +2180,20 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
               )}
               <MenuItem onClick={handleButtonModalOpen}>
                 <Fab className={classes.invertedFabMenuCont}>
-                  <MoreHorizontal size={18} />
+                  <MoreHorizontal size={20} />
                 </Fab>
                 Botões
               </MenuItem>
               <Divider />
               <MenuItem onClick={(e) => { handleMenuItemClick(); handleOpenVarsMenu(e); }}>
                 <Fab className={classes.invertedFabMenuCont}>
-                  <Braces size={18} />
+                  <Braces size={20} />
                 </Fab>
                 Variáveis
               </MenuItem>
               <MenuItem onClick={() => { handleMenuItemClick(); handleToggleSpellCheck(); }}>
                 <Fab className={classes.invertedFabMenuCont}>
-                  <SpellCheck2 size={18} style={{ color: spellCheckEnabled ? green[500] : undefined }} />
+                  <SpellCheck2 size={20} style={{ color: spellCheckEnabled ? green[500] : undefined }} />
                 </Fab>
                 {spellCheckEnabled ? "Desativar Corretor" : "Ativar Corretor"}
               </MenuItem>
@@ -2059,13 +2202,13 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                   <Divider />
                   <MenuItem onClick={handleOpenAssistantFromMenu}>
                     <Fab className={classes.invertedFabMenuCont}>
-                      <Sparkles size={18} />
+                      <Sparkles size={20} />
                     </Fab>
                     Assistente de Chat
                   </MenuItem>
                   <MenuItem onClick={handleOpenScheduleFromMenu}>
                     <Fab className={classes.invertedFabMenuCont}>
-                      <ClockIcon size={16} />
+                      <ClockIcon size={20} />
                     </Fab>
                     {i18n.t('tickets.buttons.scredule')}
                   </MenuItem>
@@ -2155,6 +2298,9 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                           handleSendMessage();
                         }
                       }}
+                      onMouseUp={handleTextSelection}
+                      onKeyDown={handleKeyDown}
+                      onSelect={handleTextSelection}
                       onContextMenu={(e) => {
                         // Verificar se o cursor está sobre uma palavra errada
                         if (spellCheckEnabled && misspelledWords.length > 0) {
@@ -2207,7 +2353,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                     onClick={() => setInputMessage('/')}
                     tabIndex={-1}
                   >
-                    <Zap size={18} className={classes.sendMessageIcons} />
+                    <Zap size={20} className={classes.sendMessageIcons} />
                   </IconButton>
                 </Tooltip>
                 <Menu
@@ -2240,13 +2386,14 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       onClick={showSelectMessageCheckbox ? handleOpenModalForward : handleSendMessage}
                       disabled={loading}
                       tabIndex={-1}
+                      className={inputMessage.trim() && !showSelectMessageCheckbox ? classes.sendButtonActive : ""}
                     >
                       {loading ? (
                         <CircularProgress className={classes.circleLoading} size={24} />
                       ) : showSelectMessageCheckbox ? (
-                        <ReplyIcon size={18} className={classes.ForwardMessageIcons} />
+                        <ReplyIcon size={20} className={classes.ForwardMessageIcons} />
                       ) : (
-                        <SendIcon size={18} className={classes.sendMessageIcons} />
+                        <SendIcon size={20} className={inputMessage.trim() ? classes.sendMessageIconsActive : classes.sendMessageIcons} />
                       )}
                     </IconButton>
                   </>
@@ -2260,7 +2407,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       onClick={handleCancelAudio}
                       tabIndex={-1}
                     >
-                      <X size={18} className={classes.cancelAudioIcon} />
+                      <X size={20} className={classes.cancelAudioIcon} />
                     </IconButton>
                     {loading ? (
                       <div>
@@ -2284,7 +2431,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                       disabled={loading}
                       tabIndex={-1}
                     >
-                      <Check size={18} className={classes.sendAudioIcon} />
+                      <Check size={20} className={classes.sendAudioIcon} />
                     </IconButton>
                   </div>
                 ) : (
@@ -2295,7 +2442,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                     onClick={handleStartRecording}
                     tabIndex={-1}
                   >
-                    <MicIcon size={18} className={classes.sendMessageIcons} />
+                    <MicIcon size={20} className={classes.sendMessageIcons} />
                   </IconButton>
                 )}
               </>
@@ -2312,9 +2459,9 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                   {loading ? (
                     <CircularProgress className={classes.circleLoading} size={24} />
                   ) : showSelectMessageCheckbox ? (
-                    <ReplyIcon size={18} className={classes.ForwardMessageIcons} />
+                    <ReplyIcon size={15} className={classes.ForwardMessageIcons} />
                   ) : (
-                    <SendIcon size={18} className={classes.sendMessageIcons} />
+                    <SendIcon size={15} className={classes.sendMessageIcons} />
                   )}
                 </IconButton>
               </>
@@ -2327,7 +2474,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
               />
             )}
           </div>
-        </Paper>
+        </div>
         {/* Popup de sugestões - só aparece se tiver mais de 2 opções */}
         {showSpellSuggestions && spellCheckEnabled && suggestions.length > 2 && (
           <SpellCheckSuggestions
@@ -2384,6 +2531,15 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
             </ul>
           </div>
         )}
+        {/* Toolbar de formatação de texto */}
+        <FormatToolbar
+          visible={formatToolbar.visible}
+          position={formatToolbar.position}
+          onClose={handleCloseFormatToolbar}
+          onFormat={handleApplyFormat}
+          inputRef={inputRef}
+          selection={selection}
+        />
       </div>
     );
   }
