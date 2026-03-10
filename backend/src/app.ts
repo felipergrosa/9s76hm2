@@ -50,7 +50,7 @@ app.set("queues", {
   importContactsQueue
 });
 
-const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:3000")
+const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:3000,https://chats.nobreluminarias.com.br")
   .split(",")
   .map(s => s.trim())
   .filter(Boolean);
