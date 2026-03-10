@@ -635,7 +635,7 @@ const Kanban = () => {
             </FormControl>
           )}
 
-          <Can role={user.profile} perform="tags.create" yes={() => (
+          <Can user={user} perform="tags.create" yes={() => (
             <Tooltip title={i18n.t('kanban.addColumns')}>
               <IconButton className={classes.actionButton} color="primary" onClick={handleAddConnectionClick}>
                 <Add />

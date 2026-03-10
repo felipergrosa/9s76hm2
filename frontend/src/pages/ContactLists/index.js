@@ -407,7 +407,7 @@ const ContactLists = () => {
                   }}
                 />
               </Grid>
-              <GrCan role={user.profile} perform="contact-lists.create" yes={() => (
+              <Can user={user} perform="contact-lists.create" yes={() => (
                 <Grid item xs={12} sm="auto">
                   <Button
                     fullWidth={isMobile}
@@ -493,7 +493,7 @@ const ContactLists = () => {
                 >
                   <PeopleIcon />
                 </IconButton>
-                <Can role={user.profile} perform="contact-lists.edit" yes={() => (
+                <Can user={user} perform="contact-lists.edit" yes={() => (
                   <IconButton
                     size="small"
                     className={classes.actionButton}
@@ -502,7 +502,7 @@ const ContactLists = () => {
                     <EditIcon />
                   </IconButton>
                 )} />
-                <Can role={user.profile} perform="contact-lists.delete" yes={() => (
+                <Can user={user} perform="contact-lists.delete" yes={() => (
                   <IconButton
                     size="small"
                     className={classes.actionButton}
@@ -598,7 +598,7 @@ const ContactLists = () => {
                         <PeopleIcon />
                       </IconButton>
 
-                      <Can role={user.profile} perform="contact-lists.edit" yes={() => (
+                      <Can user={user} perform="contact-lists.edit" yes={() => (
                         <IconButton
                           size="small"
                           onClick={() => handleEditContactList(contactList)}
@@ -607,7 +607,7 @@ const ContactLists = () => {
                         </IconButton>
                       )} />
 
-                      <Can role={user.profile} perform="contact-lists.delete" yes={() => (
+                      <Can user={user} perform="contact-lists.delete" yes={() => (
                         <IconButton
                           size="small"
                           onClick={() => {

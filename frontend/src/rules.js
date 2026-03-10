@@ -1,3 +1,11 @@
+/**
+ * Sistema de permissões granulares
+ * Este arquivo agora funciona como adaptador para user.permissions do backend
+ * 
+ * IMPORTANTE: O componente Can deve usar user.permissions diretamente
+ * Este rules.js mantém apenas compatibilidade com código legado que usa dois pontos (:)
+ */
+
 const rules = {
 	user: {
 		static: [],
@@ -5,6 +13,7 @@ const rules = {
 
 	admin: {
 		static: [
+			// Permissões legadas (formato antigo com :)
 			"dashboard:view",
 			"drawer-admin-items:view",
 			"tickets-manager:showall",
