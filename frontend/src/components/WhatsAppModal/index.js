@@ -125,7 +125,10 @@ const SessionSchema = Yup.object().shape({
     is: "official",
     then: Yup.string().required("Business Account ID é obrigatório para API Oficial"),
     otherwise: Yup.string()
-  })
+  }),
+  color: Yup.string()
+    .matches(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/, "Cor inválida")
+    .nullable()
 });
 
 const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
@@ -140,6 +143,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
 
   const initialState = {
     name: "",
+    color: "#25D366",
     greetingMessage: "",
     complationMessage: "",
     outOfHoursMessage: "",
@@ -744,11 +748,12 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                           arrow
                         >
                           <FormControlLabel
-                            style={{ margin: 0 }}
+                            style={{ marginRight: 7, color: "gray" }}
+                            label={i18n.t("whatsappModal.form.groupAsTicket")}
+                            labelPlacement="end"
                             control={
                               <Switch
-                                color="primary"
-                                name="groupAsTicket"
+                                size="medium"
                                 checked={values.groupAsTicket === "enabled"}
                                 onChange={(e) =>
                                   setFieldValue(
@@ -756,9 +761,10 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                                     e.target.checked ? "enabled" : "disabled"
                                   )
                                 }
+                                name="groupAsTicket"
+                                color="primary"
                               />
                             }
-                            label="Grupos como Ticket"
                           />
                         </Tooltip>
                       </Grid>
@@ -1056,7 +1062,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                       <h3>{i18n.t("whatsappModal.form.queueRedirection")}</h3>
                       <p>{i18n.t("whatsappModal.form.queueRedirectionDesc")}</p>
                       <Grid spacing={2} container>
-                        <Grid xs={6} md={6} item>
+                        <Grid xs={12} md={4} item>
                           <FormControl
                             variant="outlined"
                             margin="dense"
@@ -1085,7 +1091,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                             </Field>
                           </FormControl>
                         </Grid>
-                        <Grid xs={6} md={6} item>
+                        <Grid xs={12} md={4} item>
                           <Field
                             as={TextField}
                             label={i18n.t("whatsappModal.form.timeSendQueue")}
@@ -1100,6 +1106,22 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                             helperText={
                               touched.timeSendQueue && errors.timeSendQueue
                             }
+                          />
+                        </Grid>
+                        <Grid xs={12} md={4} item>
+                          <Field
+                            as={TextField}
+                            label="Cor da conexão"
+                            name="color"
+                            type="color"
+                            fullWidth
+                            variant="outlined"
+                            margin="dense"
+                            value={values.color || "#25D366"}
+                            onChange={(e) => setFieldValue("color", e.target.value)}
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
                           />
                         </Grid>
                       </Grid>

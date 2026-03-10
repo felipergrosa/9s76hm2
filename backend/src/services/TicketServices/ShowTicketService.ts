@@ -116,7 +116,7 @@ const ShowTicketService = async (
       {
         model: Whatsapp,
         as: "whatsapp",
-        attributes: ["id", "name", "groupAsTicket", "greetingMediaAttachment", "facebookUserToken", "facebookUserId", "status", "channelType"]
+        attributes: ["id", "name", "color", "groupAsTicket", "greetingMediaAttachment", "facebookUserToken", "facebookUserId", "status", "channelType"]
 
       },
       {
@@ -252,7 +252,7 @@ const ShowTicketService = async (
             {
               model: Whatsapp,
               as: "whatsapp",
-              attributes: ["id", "name", "groupAsTicket", "greetingMediaAttachment", "facebookUserToken", "facebookUserId", "status", "channelType"]
+              attributes: ["id", "name", "color", "groupAsTicket", "greetingMediaAttachment", "facebookUserToken", "facebookUserId", "status", "channelType"]
             },
             {
               model: Company,

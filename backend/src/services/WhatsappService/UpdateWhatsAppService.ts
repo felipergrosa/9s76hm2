@@ -58,6 +58,7 @@ interface WhatsappData {
   // Mensagem de renovação de janela 24h (API Oficial)
   sessionWindowRenewalMessage?: string;
   sessionWindowRenewalMinutes?: number;
+  color?: string;
 }
 
 interface Request {
@@ -79,7 +80,10 @@ const UpdateWhatsAppService = async ({
   const schema = Yup.object().shape({
     name: Yup.string().min(2),
     status: Yup.string(),
-    isDefault: Yup.boolean()
+    isDefault: Yup.boolean(),
+    color: Yup.string()
+      .nullable()
+      .matches(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/, "Cor da conexão inválida")
   });
 
   const {
@@ -133,11 +137,16 @@ const UpdateWhatsAppService = async ({
     syncOnTicketOpen,
     // Mensagem de renovação de janela 24h (API Oficial)
     sessionWindowRenewalMessage,
-    sessionWindowRenewalMinutes
+    sessionWindowRenewalMinutes,
+    color
   } = whatsappData;
 
+  const normalizedColor = typeof color === "string" && color.trim()
+    ? color.trim()
+    : null;
+
   try {
-    await schema.validate({ name, status, isDefault });
+    await schema.validate({ name, status, isDefault, color: normalizedColor });
   } catch (err: any) {
     throw new AppError(err.message);
   }
@@ -162,6 +171,10 @@ const UpdateWhatsAppService = async ({
   }
   // console.log("GETTING WHATSAPP SHOW WHATSAPP 1", whatsappId, companyId)
   const whatsapp = await ShowWhatsAppService(whatsappId, companyId);
+
+  const finalColor = typeof color === "undefined"
+    ? whatsapp.color
+    : normalizedColor;
 
 
   await whatsapp.update({
@@ -214,7 +227,8 @@ const UpdateWhatsAppService = async ({
     syncOnTicketOpen,
     // Mensagem de renovação de janela 24h (API Oficial)
     sessionWindowRenewalMessage,
-    sessionWindowRenewalMinutes
+    sessionWindowRenewalMinutes,
+    color: finalColor
   });
 
   if (!requestQR) {

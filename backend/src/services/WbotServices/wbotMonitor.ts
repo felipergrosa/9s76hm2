@@ -741,8 +741,8 @@ const wbotMonitor = async (
                 const Whatsapp = require("../../models/Whatsapp").default;
                 const wa = await Whatsapp.findByPk(whatsapp.id);
                 if (wa && wa.status !== "PENDING") {
-                  const { StartWhatsAppSession } = require("../../libs/wbot");
-                  setTimeout(() => StartWhatsAppSession(wa, companyId), 5000);
+                  const { StartWhatsAppSessionUnified } = require("./StartWhatsAppSessionUnified");
+                  setTimeout(() => StartWhatsAppSessionUnified(wa, companyId), 5000);
                 }
               }
             }
@@ -785,8 +785,8 @@ const wbotMonitor = async (
               const Whatsapp = require("../../models/Whatsapp").default;
               const wa = await Whatsapp.findByPk(whatsapp.id);
               if (wa && wa.status !== "PENDING") {
-                const { StartWhatsAppSession } = require("../../libs/wbot");
-                setTimeout(() => StartWhatsAppSession(wa, companyId), 5000);
+                const { StartWhatsAppSessionUnified } = require("./StartWhatsAppSessionUnified");
+                setTimeout(() => StartWhatsAppSessionUnified(wa, companyId), 5000);
               }
             }
           }

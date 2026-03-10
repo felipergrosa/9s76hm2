@@ -18,7 +18,7 @@ const TICKET_CACHE_TTL = 300; // 5 minutos
 // Include padrão para tickets
 const DEFAULT_INCLUDES = [
   { model: Contact, as: "contact", attributes: ["id", "name", "number", "profilePicUrl"] },
-  { model: Whatsapp, as: "whatsapp", attributes: ["id", "name", "status", "channelType"] },
+  { model: Whatsapp, as: "whatsapp", attributes: ["id", "name", "color", "status", "channelType"] },
   { model: User, as: "user", attributes: ["id", "name", "email"] },
   { model: Queue, as: "queue", attributes: ["id", "name", "color"] }
 ];

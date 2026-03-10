@@ -5450,6 +5450,7 @@ const handleMessage = async (
       // Regra de saída de campanha:
       // - Se a fila/conexão tem bot/IA configurado (ticket.isBot === true) => vai para BOT
       // - Caso contrário => vai para AGUARDANDO (pending)
+      const oldStatus = ticket.status;
       let newStatus = "pending";
       if (ticket.isBot) {
         newStatus = "bot";
@@ -5463,6 +5464,9 @@ const handleMessage = async (
       // Recarregar ticket com include completo (inclui queue.chatbots e queue.prompt)
       ticket = await ShowTicketService(ticket.id, companyId);
 
+      // Emitir evento de mudança de status para real-time
+      ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, oldStatus, newStatus);
+      
       logger.info(`[wbotMessageListener] Ticket #${ticket.id} movido para status "${newStatus}", fila: ${ticket.queueId}`);
     }
 

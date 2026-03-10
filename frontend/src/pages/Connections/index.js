@@ -203,6 +203,22 @@ const Connections = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
+  const getConnectionBadgeStyle = (color) => {
+    if (!color) {
+      return {
+        backgroundColor: "transparent",
+        color: theme.palette.text.secondary,
+        border: `1px solid ${theme.palette.divider}`
+      };
+    }
+
+    return {
+      backgroundColor: color,
+      color: theme.palette.getContrastText(color),
+      border: "none"
+    };
+  };
+
   const { whatsApps, loading } = useContext(WhatsAppsContext);
 
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
@@ -601,7 +617,7 @@ const Connections = () => {
     } catch (err) {
       toastError(err);
     }
-  }
+  };
 
   return (
     <MainContainer>
@@ -859,7 +875,15 @@ const Connections = () => {
                     <div className={classes.cardHeader}>
                       <div className={classes.cardTitle}>
                         {IconChannel(whatsApp.channel, whatsApp.channelType)}
-                        <span style={{ color: '#888', fontSize: '0.8rem' }}>#{whatsApp.id}</span>
+                        <Chip
+                          label={`#${whatsApp.id}`}
+                          size="small"
+                          style={{
+                            height: "22px",
+                            fontWeight: 600,
+                            ...getConnectionBadgeStyle(whatsApp.color)
+                          }}
+                        />
                         {whatsApp.name}
                         {whatsApp.channel === 'whatsapp' && whatsApp.channelType === "official" && (
                           <Chip
@@ -971,7 +995,14 @@ const Connections = () => {
                         whatsApps.map((whatsApp) => (
                           <TableRow key={whatsApp.id}>
                             <TableCell align="center">
-                              <Chip label={`#${whatsApp.id}`} size="small" variant="outlined" />
+                              <Chip
+                                label={`#${whatsApp.id}`}
+                                size="small"
+                                style={{
+                                  fontWeight: 600,
+                                  ...getConnectionBadgeStyle(whatsApp.color)
+                                }}
+                              />
                             </TableCell>
                             <TableCell align="center">{IconChannel(whatsApp.channel, whatsApp.channelType)}</TableCell>
                             <TableCell align="center">

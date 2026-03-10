@@ -836,11 +836,14 @@ const setting = await getSetting(
                                         className={classes.connectionTag}
                                         style={{
                                             backgroundColor:
-                                                ticket.channel === "whatsapp"
+                                                ticket.whatsapp?.color ||
+                                                (ticket.channel === "whatsapp"
                                                     ? "#25D366"
                                                     : ticket.channel === "facebook"
                                                         ? "#4267B2"
-                                                        : "#E1306C"
+                                                        : ticket.channel === "instagram"
+                                                            ? "#E1306C"
+                                                            : "#6B46C1")
                                         }}
                                         overlap="rectangular"
                                     >

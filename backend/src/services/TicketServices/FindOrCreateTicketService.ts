@@ -14,6 +14,7 @@ import CompaniesSettings from "../../models/CompaniesSettings";
 import CreateLogTicketService from "./CreateLogTicketService";
 import AppError from "../../errors/AppError";
 import UpdateTicketService from "./UpdateTicketService";
+import { ticketEventBus } from "./TicketEventBus";
 
 // Namespace fixo para gerar UUIDs v5 determinísticos para selfchat
 const SELFCHAT_UUID_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
@@ -93,6 +94,8 @@ const FindOrCreateTicketService = async (
       if (ticket) {
         await ticket.update({ uuid: selfChatUuid, unreadMessages });
         ticket = await ShowTicketService(ticket.id, companyId);
+        // Emitir evento de atualização para real-time
+        ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
         logger.info(`[FindOrCreateTicket] Selfchat ticket migrado: id=${ticket.id}, uuid=${selfChatUuid}`);
         return ticket;
       }
@@ -102,6 +105,8 @@ const FindOrCreateTicketService = async (
       // Atualizar ticket existente
       await ticket.update({ unreadMessages });
       ticket = await ShowTicketService(ticket.id, companyId);
+      // Emitir evento de atualização para real-time
+      ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
       logger.info(`[FindOrCreateTicket] Selfchat ticket reutilizado: id=${ticket.id}, uuid=${ticket.uuid}`);
       return ticket;
     }
@@ -117,6 +122,10 @@ const FindOrCreateTicketService = async (
       unreadMessages: 0,
       lastMessage: ""
     });
+
+    ticket = await ShowTicketService(ticket.id, companyId);
+    // Emitir evento de criação para real-time
+    ticketEventBus.publishTicketCreated(companyId, ticket.id, ticket.uuid, ticket);
 
     logger.info(`[FindOrCreateTicket] Selfchat ticket criado: id=${ticket.id}, uuid=${selfChatUuid}`);
     return ticket;
@@ -141,6 +150,7 @@ const FindOrCreateTicketService = async (
     if (ticket) {
       // Atualizar whatsappId se estava null ou diferente
       const updates: any = { unreadMessages };
+      const oldStatus = ticket.status;
       if (!ticket.whatsappId || ticket.whatsappId !== whatsapp.id) {
         updates.whatsappId = whatsapp.id;
         logger.info(`[FindOrCreateTicket] Grupo ticket ${ticket.id}: atualizando whatsappId ${ticket.whatsappId} -> ${whatsapp.id}`);
@@ -152,6 +162,12 @@ const FindOrCreateTicketService = async (
       }
       await ticket.update(updates);
       ticket = await ShowTicketService(ticket.id, companyId);
+      // Emitir evento de atualização para real-time
+      if (updates.status && updates.status !== oldStatus) {
+        ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, oldStatus, updates.status);
+      } else {
+        ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+      }
       return ticket;
     }
   } else {
@@ -263,6 +279,7 @@ const FindOrCreateTicketService = async (
 
         if (hasBotInDefaultQueuePending) {
           // Atualizar ticket para bot se agora tem fila com bot configurado
+          const oldStatus = ticket.status;
           await ticket.update({
             status: "bot",
             isBot: true,
@@ -271,12 +288,18 @@ const FindOrCreateTicketService = async (
           logger.info(
             `[FindOrCreateTicket] Ticket ${ticket.id} atualizado para bot (fila ${firstQueue.id})`
           );
+          // Emitir evento de mudança de status para real-time
+          ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, oldStatus, "bot");
         }
       }
     }
 
     ticket = await ShowTicketService(ticket.id, companyId);
-    // console.log(ticket.id)
+    // Emitir evento de atualização para real-time (quando ticket foi encontrado e atualizado)
+    // Nota: se houve mudança de status, já foi emitido acima
+    if (ticket.status !== "closed") {
+      ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+    }
 
     if (!isCampaign && !isForward) {
       // @ts-ignore: Unreachable code error
@@ -328,13 +351,21 @@ const FindOrCreateTicketService = async (
     }
 
     if (ticket && ticket.status !== "nps") {
+      const oldStatus = ticket.status;
+      const newStatus = ticket.isGroup ? "group" : "pending";
       await ticket.update({
         // Grupos SEMPRE mantêm status "group" ao reabrir
-        status: ticket.isGroup ? "group" : "pending",
+        status: newStatus,
         unreadMessages,
         companyId,
         // queueId: timeCreateNewTicket === 0 ? null : ticket.queueId
       });
+      // Emitir evento de mudança de status para real-time
+      if (oldStatus !== newStatus) {
+        ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, oldStatus, newStatus);
+      } else {
+        ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+      }
     }
   }
 
@@ -482,6 +513,10 @@ const FindOrCreateTicketService = async (
     ticket = await Ticket.create(
       ticketData
     );
+
+    ticket = await ShowTicketService(ticket.id, companyId);
+    // Emitir evento de criação para real-time
+    ticketEventBus.publishTicketCreated(companyId, ticket.id, ticket.uuid, ticket);
 
     // await FindOrCreateATicketTrakingService({
     //   ticketId: ticket.id,

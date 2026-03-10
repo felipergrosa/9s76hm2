@@ -64,6 +64,7 @@ interface Request {
   metaWebhookVerifyToken?: string;
   instagramAccountId?: string;
   contactTagId?: number;
+  color?: string;
 }
 
 interface Response {
@@ -129,6 +130,7 @@ const CreateWhatsAppService = async ({
   metaWebhookVerifyToken,
   instagramAccountId,
   contactTagId,
+  color,
 }: Request): Promise<Response> => {
   const company = await Company.findOne({
     where: {
@@ -167,11 +169,18 @@ const CreateWhatsAppService = async ({
           return !nameExists;
         }
       ),
-    isDefault: Yup.boolean().required()
+    isDefault: Yup.boolean().required(),
+    color: Yup.string()
+      .nullable()
+      .matches(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/, "Cor da conexão inválida")
   });
 
+  const normalizedColor = typeof color === "string" && color.trim()
+    ? color.trim()
+    : null;
+
   try {
-    await schema.validate({ name, status, isDefault });
+    await schema.validate({ name, status, isDefault, color: normalizedColor });
   } catch (err: any) {
     throw new AppError(err.message);
   }
@@ -277,9 +286,9 @@ const CreateWhatsAppService = async ({
       metaPageAccessToken,
       metaWebhookVerifyToken,
       instagramAccountId,
-      contactTagId
-    },
-    { include: ["queues"] }
+      contactTagId,
+      color: normalizedColor,
+    }
   );
 
   await AssociateWhatsappQueue(whatsapp, queueIds);
