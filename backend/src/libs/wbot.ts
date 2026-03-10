@@ -39,6 +39,7 @@ import { handleMessagingHistorySet } from "./messageHistoryHandler";
 import SignalErrorHandler from "../services/WbotServices/SignalErrorHandler";
 import SignalCleanupService from "../services/WbotServices/SignalCleanupService";
 import { EventTrigger } from "../queue/EventTrigger";
+import { createTurboSocket, isTurboEnabled, withTurboSupport } from "../helpers/TurboIntegration";
 
 const msgRetryCounterCache = new NodeCache({
   stdTTL: 600,
@@ -550,6 +551,12 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           }
         });
 
+        // Turbo Connector: Log informativo (integração segura)
+        if (isTurboEnabled()) {
+          logger.info(`[TURBO] Turbo Connector HABILITADO para sessão ${name} (mode: ${process.env.TURBO_MODE || "hybrid"})`);
+          logger.info(`[TURBO] Engines disponíveis: Baileys (primário), WEBJS (fallback)`);
+        }
+
         wsocket = makeWASocket({
           version,
           logger: loggerBaileys,
@@ -577,6 +584,19 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           getMessage: msgDB.get,
           syncFullHistory: !!whatsapp.importOldMessages,
         });
+
+        // Turbo Connector: Aplicar wrapper se habilitado
+        if (isTurboEnabled()) {
+          try {
+            const sessionPath = path.join(process.env.SESSIONS_DIR || "private/sessions", `whatsapp-${whatsapp.id}`);
+            wsocket = await withTurboSupport(wsocket, whatsapp, sessionPath) as WASocket;
+            logger.info(`[TURBO] TurboWrapper aplicado com sucesso para sessão ${name}`);
+          } catch (error: any) {
+            logger.error(`[TURBO] Erro ao aplicar TurboWrapper: ${error.message}`);
+            logger.warn(`[TURBO] Continuando com Baileys direto (fallback)`);
+            // Continua com wsocket original (Baileys direto)
+          }
+        }
 
         wsocket.ev.on("connection.update", async (update) => {
           const { connection } = update;
