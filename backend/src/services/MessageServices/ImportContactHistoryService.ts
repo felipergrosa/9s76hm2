@@ -28,6 +28,16 @@ const extractFetchedMessages = (payload: any): any[] => {
     if (!payload) return [];
     if (Array.isArray(payload)) return payload;
     if (Array.isArray(payload?.messages)) return payload.messages;
+    
+    // Baileys pode retornar objeto com chaves numéricas: { 0: msg, 1: msg, ... }
+    if (typeof payload === "object" && !Array.isArray(payload)) {
+        const keys = Object.keys(payload);
+        const numericKeys = keys.filter(k => !isNaN(Number(k)));
+        if (numericKeys.length > 0) {
+            return numericKeys.map(k => payload[k]).filter(m => m);
+        }
+    }
+    
     if (Array.isArray(payload?.syncData?.messages)) return payload.syncData.messages;
     if (Array.isArray(payload?.historyMessages)) return payload.historyMessages;
     return [];
