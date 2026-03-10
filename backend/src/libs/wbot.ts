@@ -3,6 +3,8 @@ import makeWASocket, {
   AuthenticationState,
   Browsers,
   DisconnectReason,
+  fetchLatestBaileysVersion,
+  type WAVersion,
   WAMessage,
   WAMessageKey,
   WASocket,
@@ -393,7 +395,22 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
         const { id, name, allowGroup, companyId } = whatsappUpdate;
 
-        const { version, isLatest } = await fetchLatestWaWebVersion({});
+        let version: WAVersion;
+        let isLatest: boolean | undefined;
+
+        try {
+          const latestBaileys = await fetchLatestBaileysVersion();
+          version = latestBaileys.version as WAVersion;
+          isLatest = latestBaileys.isLatest;
+          logger.info(`[wbot] Usando fetchLatestBaileysVersion para ${name}`);
+        } catch (versionError: any) {
+          logger.warn(`[wbot] Falha ao obter versão via fetchLatestBaileysVersion para ${name}: ${versionError?.message}`);
+          const latestWaWeb = await fetchLatestWaWebVersion({});
+          version = latestWaWeb.version as WAVersion;
+          isLatest = latestWaWeb.isLatest;
+          logger.info(`[wbot] Fallback para fetchLatestWaWebVersion em ${name}`);
+        }
+
         try {
           // eslint-disable-next-line @typescript-eslint/no-var-requires
           const baileysPkg = require("@whiskeysockets/baileys/package.json");
