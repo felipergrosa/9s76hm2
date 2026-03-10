@@ -101,6 +101,14 @@ const chooseMainHistoryJid = (possibleJids: Set<string>, ticket: any, wbot: any)
         return ticket.contact.remoteJid;
     }
 
+    const contactNumber = String(ticket?.contact?.number || "").replace(/\D/g, "");
+    if (contactNumber) {
+        const preferredContactJid = allJids.find(jid => String(jid).includes(`${contactNumber}@`));
+        if (preferredContactJid) {
+            return preferredContactJid;
+        }
+    }
+
     return allJids[0];
 };
 
@@ -390,12 +398,13 @@ const ImportContactHistoryService = async ({
             possibleJids.add(ticket.contact.remoteJid);
         }
 
-        const sessionJids = getSessionJidVariants(wbot);
-        for (const sessionJid of sessionJids) {
-            possibleJids.add(sessionJid);
-        }
-
         const isSelfChat = isSelfChatTicket(ticket, wbot);
+        const sessionJids = getSessionJidVariants(wbot);
+        if (isSelfChat) {
+            for (const sessionJid of sessionJids) {
+                possibleJids.add(sessionJid);
+            }
+        }
 
         logger.info(`[ImportHistory] JIDs alvo: ${Array.from(possibleJids).join(", ")} | selfChat=${isSelfChat}`);
 

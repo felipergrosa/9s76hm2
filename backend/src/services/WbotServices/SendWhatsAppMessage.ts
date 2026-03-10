@@ -65,7 +65,7 @@ const SendWhatsAppMessage = async ({
 
   if (whatsappConnection?.channelType === "official") {
     logger.info(`[SendMessage] Ticket ${ticket.id} usa API Oficial. Delegando para SendWhatsAppMessageUnified.`);
-    return SendWhatsAppMessageUnified({
+    const sentMessage = await SendWhatsAppMessageUnified({
       body,
       ticket,
       quotedMsg,
@@ -75,7 +75,31 @@ const SendWhatsAppMessage = async ({
       templateButtons,
       messageTitle,
       imageUrl,
-    }) as Promise<any>;
+    }) as any;
+
+    const contactNumber = await Contact.findByPk(ticket.contactId);
+    const messageId = (sentMessage as any)?.id || (sentMessage as any)?.key?.id || `${Date.now()}`;
+    const persistedBody = body || (vCard ? "" : "");
+    const mediaType = vCard ? "contactMessage" : "extendedTextMessage";
+
+    await CreateMessageService({
+      messageData: {
+        wid: messageId,
+        ticketId: ticket.id,
+        contactId: ticket.contactId,
+        body: persistedBody,
+        fromMe: true,
+        mediaType,
+        read: true,
+        quotedMsgId: quotedMsg?.id || null,
+        ack: 1,
+        remoteJid: contactNumber?.remoteJid,
+        dataJson: JSON.stringify(sentMessage),
+      },
+      companyId: ticket.companyId
+    });
+
+    return sentMessage as any;
   }
 
   let options: any = {};
