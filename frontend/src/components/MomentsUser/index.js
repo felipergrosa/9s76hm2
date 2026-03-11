@@ -260,19 +260,15 @@ const MomentsUser = ({ onPanStart }) => {
     const byUser = {};
 
     tickets.forEach((ticket) => {
-      // Bot Tickets
-      if (ticket.isBot) {
-        bots.push(ticket);
-        return;
-      }
-
       // Campaign Tickets (status campaign)
       if (ticket.status === "campaign") {
         campaigns.push(ticket);
         return;
       }
 
-      // User Tickets (com usuário atribuído)
+      // User Tickets (com usuário atribuído) — tem PRIORIDADE sobre isBot
+      // Quando o atendente aceita um ticket do bot, isBot pode continuar true,
+      // mas o ticket já tem user e deve aparecer na coluna do atendente.
       if (ticket.user) {
         if (!byUser[ticket.user.id]) {
           byUser[ticket.user.id] = {
@@ -281,6 +277,12 @@ const MomentsUser = ({ onPanStart }) => {
           };
         }
         byUser[ticket.user.id].tickets.push(ticket);
+        return;
+      }
+
+      // Bot Tickets (sem user atribuído)
+      if (ticket.isBot) {
+        bots.push(ticket);
         return;
       }
 

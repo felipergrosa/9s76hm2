@@ -53,6 +53,7 @@ import { QueueSelectedContext } from "../../context/QueuesSelected/QueuesSelecte
 
 import api from "../../services/api";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles((theme) => ({
   ticketsWrapper: {
@@ -376,6 +377,10 @@ const TicketsManagerTabs = () => {
   const { profile } = user;
   const { setSelectedQueuesMessage } = useContext(QueueSelectedContext);
   const { tabOpen, setTabOpen } = useContext(TicketsContext);
+  const { hasPermission } = usePermissions();
+
+  const canViewGroups = hasPermission("tickets.view-groups");
+  const canViewAllUsers = hasPermission("tickets.view-all-users");
 
   const [openCount, setOpenCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
@@ -447,7 +452,7 @@ const TicketsManagerTabs = () => {
   }, [selectedQueueIds]);
 
   useEffect(() => {
-    if (user.profile.toUpperCase() === "ADMIN" || user.allUserChat.toUpperCase() === "ENABLED") {
+    if (user.profile.toUpperCase() === "ADMIN" || canViewAllUsers) {
       setShowAllTickets(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -746,8 +751,8 @@ const TicketsManagerTabs = () => {
           <Grid container alignItems="center" justifyContent="space-between" wrap="nowrap">
             <Grid item>
               <Can
-                role={user.allUserChat === 'enabled' && user.profile === 'user' ? 'admin' : user.profile}
-                perform="tickets-manager:showall"
+                user={user}
+                perform="tickets.view-all"
                 yes={() => (
                   <Badge
                     color="primary"
@@ -1154,7 +1159,7 @@ const TicketsManagerTabs = () => {
               />
 
               {/* GRUPOS */}
-              {user.allowGroup && (
+              {canViewGroups && (
                 <Tab
                   label={
                     <Grid container direction="column" alignItems="center" justifyContent="center">
@@ -1279,12 +1284,12 @@ const TicketsManagerTabs = () => {
               status="pending"
               selectedQueueIds={selectedQueueIds}
               sortTickets={sortTickets ? "ASC" : "DESC"}
-              showAll={user.profile === "admin" || user.allUserChat === 'enabled' ? showAllTickets : false}
+              showAll={user.profile === "admin" || canViewAllUsers ? showAllTickets : false}
               updateCount={(val) => setPendingCount(val)}
               style={applyPanelStyle("pending")}
               setTabOpen={setTabOpen}
             />
-            {user.allowGroup && (
+            {canViewGroups && (
               <TicketsList
                 status="group"
                 showAll={showAllTickets}

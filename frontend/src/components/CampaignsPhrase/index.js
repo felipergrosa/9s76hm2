@@ -286,8 +286,8 @@ const CampaignsPhrase = () => {
                       <EditIcon style={{ color: "#ededed" }} />
                     </IconButton>
                     <Can
-                      role={user.profile}
-                      perform="contacts-page:deleteContact"
+                      user={user}
+                      perform="contacts.delete"
                       yes={() => (
                         <IconButton
                           size="small"

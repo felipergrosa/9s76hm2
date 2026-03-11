@@ -28,6 +28,7 @@ import MarkdownWrapper from "../MarkdownWrapper";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import toastError from "../../errors/toastError";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
+import usePermissions from "../../hooks/usePermissions";
 
 import ContactTag from "../ContactTag";
 import ContactAvatar from "../ContactAvatar";
@@ -432,6 +433,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
     const { user } = useContext(AuthContext);
 
     const { get: getSetting } = useCompanySettings();
+    const { hasPermission } = usePermissions();
 
     useEffect(() => {
         logger.log("======== TicketListItemCustom ===========")
@@ -450,13 +452,17 @@ setAcceptTicketWithouSelectQueueOpen(true);
 }, []);
 
 const handleCloseTicket = async (id) => {
-const setting = await getSetting(
-{
-"column": "requiredTag"
-}
-);
+        // Se não tem permissão de settings, assume que não requer tag
+        let requiredTagEnabled = false;
+        
+        if (hasPermission("settings.view")) {
+            const setting = await getSetting({
+                "column": "requiredTag"
+            });
+            requiredTagEnabled = setting?.requiredTag === "enabled";
+        }
 
-        if (setting.requiredTag === "enabled") {
+        if (requiredTagEnabled) {
             //verificar se tem uma tag   
             try {
                 const contactTags = await api.get(`/contactTags/${ticket.contact.id}`);
@@ -963,7 +969,7 @@ const setting = await getSetting(
                     )}
 
                     {/* Ignorar ticket pendente */}
-                    {((ticket.status === "pending" || ticket.status === "lgpd") && (user.userClosePendingTicket === "enabled" || user.profile === "admin")) && (
+                    {((ticket.status === "pending" || ticket.status === "lgpd") && (hasPermission("tickets.close") || user.profile === "admin")) && (
                         <Tooltip title={i18n.t("ticketsList.buttons.ignore")}>
                             <IconButton
                                 size="small"

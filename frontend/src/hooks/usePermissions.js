@@ -51,23 +51,25 @@ const usePermissions = () => {
     }
 
     // FALLBACK: Verifica flags antigas (Sistema Legado)
-    if (permission === "dashboard.view" && user.showDashboard === "enabled") {
-      return true;
-    }
+    // Mapeamento completo: flag legada → permissões granulares equivalentes
+    const legacyMap = {
+      "dashboard.view": user.showDashboard === "enabled",
+      "reports.view": user.showDashboard === "enabled",
+      "realtime.view": user.allowRealTime === "enabled",
+      "connections.view": user.allowConnections === "enabled",
+      "connections.edit": user.allowConnections === "enabled",
+      "connections.create": user.allowConnections === "enabled",
+      "connections.delete": user.allowConnections === "enabled",
+      "tickets.view-all": user.allTicket === "enable",
+      "tickets.update": user.allTicket === "enable",
+      "tickets.transfer": user.allTicket === "enable",
+      "tickets.view-groups": user.allowGroup === true,
+      "tickets.view-all-historic": user.allHistoric === "enabled",
+      "tickets.view-all-users": user.allUserChat === "enabled",
+      "tickets.close": user.userClosePendingTicket === "enabled",
+    };
 
-    if (permission === "reports.view" && user.showDashboard === "enabled") {
-      return true;
-    }
-
-    if (permission === "realtime.view" && user.allowRealTime === "enabled") {
-      return true;
-    }
-
-    if (permission.startsWith("connections.") && user.allowConnections === "enabled") {
-      return true;
-    }
-
-    if (permission.startsWith("tickets.") && user.allTicket === "enable") {
+    if (legacyMap[permission] === true) {
       return true;
     }
 

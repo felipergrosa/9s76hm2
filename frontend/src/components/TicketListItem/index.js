@@ -28,6 +28,7 @@ import MarkdownWrapper from "../MarkdownWrapper";
 import { Tooltip } from "@material-ui/core";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import toastError from "../../errors/toastError";
+import usePermissions from "../../hooks/usePermissions";
 
 import facebookIcon from "../../assets/facebook.png";
 import insatagramIcon from "../../assets/instagram.png";
@@ -242,6 +243,7 @@ const TicketListItem = ({ ticket }) => {
     const { ticketId } = useParams();
     const isMounted = useRef(true);
     const { user } = useContext(AuthContext);
+    const { hasPermission } = usePermissions();
     const { setCurrentTicket, setTabOpen } = useContext(TicketsContext);
 
     useEffect(() => {
@@ -591,7 +593,7 @@ const TicketListItem = ({ ticket }) => {
                     )}
                 </div>
 
-                {(ticket.status === "pending" && (user.showDashboard === "enabled" || user.profile === "admin")) && (
+                {(ticket.status === "pending" && (hasPermission("dashboard.view") || user.profile === "admin")) && (
                     <IconButton
                         className={classes.bottomButton}
                         color="primary"

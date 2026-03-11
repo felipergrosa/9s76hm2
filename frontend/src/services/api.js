@@ -1,47 +1,36 @@
 import axios from "axios";
-import Swal from "sweetalert2";
-
-// Flag para evitar múltiplos modais de permissão simultâneos
-let isPermissionModalOpen = false;
 
 const api = axios.create({
 	baseURL: process.env.REACT_APP_BACKEND_URL,
 	withCredentials: true,
 });
 
+// Interceptor global NÃO-BLOQUEANTE para 403.
+// Apenas loga o erro no console — cada componente trata 403 em seu próprio catch.
+// Não usa SweetAlert/modal para não bloquear a UI.
 api.interceptors.response.use(
-	(response) => {
-		return response;
-	},
+	(response) => response,
 	(error) => {
 		if (error.response && error.response.status === 403) {
-			// Evita abrir múltiplos modais simultaneamente
-			if (!isPermissionModalOpen) {
-				isPermissionModalOpen = true;
-				Swal.fire({
-					icon: "error",
-					title: "Sem Permissão",
-					text: "Você não tem permissão para realizar esta ação ou acessar este recurso.",
-					confirmButtonColor: "#d33",
-					confirmButtonText: "OK",
-					customClass: {
-						container: 'swal-permission-modal'
-					},
-					didOpen: () => {
-						// Garante que o modal fique na frente de outros elementos
-						const modal = document.querySelector('.swal2-container');
-						if (modal) {
-							modal.style.zIndex = '99999';
-						}
-					}
-				}).then(() => {
-					isPermissionModalOpen = false;
-				});
-			}
+			const url = error.config?.url || "unknown";
+			console.warn(`[api] 403 Sem permissão: ${error.config?.method?.toUpperCase()} ${url}`);
 		}
 		return Promise.reject(error);
 	}
 );
+
+// Suprime erros 403 do React dev overlay (unhandled promise rejections)
+// Componentes que lidam com 403 silenciosamente (catch sem re-throw) não disparam isso,
+// mas componentes que não têm catch específico para 403 podem disparar.
+if (typeof window !== "undefined") {
+	window.addEventListener("unhandledrejection", (event) => {
+		const status = event?.reason?.response?.status;
+		if (status === 403) {
+			// Evita que o React dev overlay mostre o erro
+			event.preventDefault();
+		}
+	});
+}
 
 export const openApi = axios.create({
 	baseURL: process.env.REACT_APP_BACKEND_URL

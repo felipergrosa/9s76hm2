@@ -437,8 +437,8 @@ const FlowBuilder = () => {
                     </Stack>
                   </IconButton>
                   <Can
-                    role={user.profile}
-                    perform="contacts-page:deleteContact"
+                    user={user}
+                    perform="contacts.delete"
                     yes={() => (
                       <IconButton
                         size="small"

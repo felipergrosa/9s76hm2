@@ -199,6 +199,23 @@ const Contacts = () => {
     const [hideNum, setHideNum] = useState(false);
     const [enableLGPD, setEnableLGPD] = useState(false);
 
+    // Carregar configurações da empresa apenas se tiver permissão
+    useEffect(() => {
+      const loadSettings = async () => {
+        try {
+          const settings = await getAllSettings(user.companyId);
+          if (settings) {
+            setHideNum(settings.hideNumber === "enabled");
+            setEnableLGPD(settings.enableLGPD === "enabled");
+          }
+        } catch (err) {
+          // Silenciosamente ignora erro para usuários sem permissão
+        }
+      };
+
+      loadSettings();
+    }, [getAllSettings, user.companyId]);
+
     const currencyFormatter = useMemo(() => new Intl.NumberFormat("pt-BR", {
         style: "currency",
         currency: "BRL",
@@ -357,9 +374,11 @@ const Contacts = () => {
     useEffect(() => {
         async function fetchData() {
             const settingList = await getAllSettings(user.companyId);
-            for (const [key, value] of Object.entries(settingList)) {
-                if (key === "enableLGPD") setEnableLGPD(value === "enabled");
-                if (key === "lgpdHideNumber") setHideNum(value === "enabled");
+            if (settingList) {
+                for (const [key, value] of Object.entries(settingList)) {
+                    if (key === "enableLGPD") setEnableLGPD(value === "enabled");
+                    if (key === "lgpdHideNumber") setHideNum(value === "enabled");
+                }
             }
         }
         fetchData();
@@ -1144,8 +1163,8 @@ const Contacts = () => {
                             </PopupState>
 
                             <Can
-                                role={user.profile}
-                                perform="contacts-page:deleteContact"
+                                user={user}
+                                perform="contacts.delete"
                                 yes={() => (
                                     selectedContactIds.length > 0 ? (
                                         <Tooltip {...CustomTooltipProps} title={`Deletar (${selectedContactIds.length})`}>
@@ -1164,8 +1183,8 @@ const Contacts = () => {
                             />
 
                             <Can
-                                role={user.profile}
-                                perform="contacts-page:bulkEdit"
+                                user={user}
+                                perform="contacts.bulk-edit"
                                 yes={() => (
                                     selectedContactIds.length > 0 ? (
                                         <Tooltip {...CustomTooltipProps} title={`Editar em massa (${selectedContactIds.length})`}>
@@ -1285,7 +1304,7 @@ const Contacts = () => {
                                             formatPhoneNumber={formatPhoneNumber}
                                             CustomTooltipProps={CustomTooltipProps}
                                             rowIndex={rowIndex}
-                                            userProfile={user.profile}
+                                            userProfile={user}
                                         />
                                     ))}
                                     {loading && <TableRowSkeleton avatar columns={9} />}
@@ -1395,8 +1414,8 @@ const Contacts = () => {
                                 {selectedContactIds.length > 0 && (
                                     <div className="flex items-center gap-2 mr-2 pr-2 border-r border-blue-200 dark:border-blue-800 animate-in fade-in slide-in-from-right duration-500">
                                         <Can
-                                            role={user.profile}
-                                            perform="contacts-page:deleteContact"
+                                            user={user}
+                                            perform="contacts.delete"
                                             yes={() => (
                                                 <button
                                                     onClick={() => setConfirmDeleteManyOpen(true)}
@@ -1408,8 +1427,8 @@ const Contacts = () => {
                                             )}
                                         />
                                         <Can
-                                            role={user.profile}
-                                            perform="contacts-page:bulkEdit"
+                                            user={user}
+                                            perform="contacts.bulk-edit"
                                             yes={() => (
                                                 <button
                                                     onClick={() => setBulkEditOpen(true)}
@@ -1460,7 +1479,7 @@ const Contacts = () => {
                                 onLongPressEnd={handleCardLongPressEnd}
                                 onTapWhileSelection={handleTapWhileSelection}
                                 isSelected={selectedContactIds.includes(contact.id)}
-                                userProfile={user.profile}
+                                userProfile={user}
                             />
                         ))}
                     </div>

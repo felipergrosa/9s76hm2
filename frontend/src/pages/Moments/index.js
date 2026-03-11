@@ -9,6 +9,7 @@ import { Grid, Paper, Typography } from "@material-ui/core";
 import Title from "../../components/Title";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles((theme) => ({
   container: {
@@ -56,6 +57,7 @@ const useStyles = makeStyles((theme) => ({
 const ChatMoments = () => {
   const classes = useStyles();
   const { user } = useContext(AuthContext)
+  const { hasPermission } = usePermissions();
 
   const momentsScrollRef = useRef(null);
   const panRef = useRef({ active: false, startX: 0, scrollLeft: 0 });
@@ -100,7 +102,7 @@ const ChatMoments = () => {
 
   return (
 
-    user.profile === "user" && user.allowRealTime === "disabled" ?
+    user.profile === "user" && !hasPermission("realtime.view") ?
       <ForbiddenPage />
       :
       <MainHeader>

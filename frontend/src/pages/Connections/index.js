@@ -67,6 +67,7 @@ import usePlans from "../../hooks/usePlans";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import { Can } from "../../components/Can";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
@@ -243,6 +244,7 @@ const Connections = () => {
   const { user, socket } = useContext(AuthContext);
 
   const companyId = user.companyId;
+  const { hasPermission } = usePermissions();
 
   const { getPlanCompany } = usePlans();
 
@@ -446,8 +448,8 @@ const Connections = () => {
       <>
         {whatsApp.status === "qrcode" && isBaileys && (
           <Can
-            role={user.profile === "user" && user.allowConnections === "enabled" ? "admin" : user.profile}
-            perform="connections-page:addConnection"
+            user={user}
+            perform="connections.edit"
             yes={() => (
               <Tooltip title={i18n.t("connections.buttons.qrcode")}>
                 <span>
@@ -465,8 +467,8 @@ const Connections = () => {
         )}
         {whatsApp.status === "DISCONNECTED" && (
           <Can
-            role={user.profile === "user" && user.allowConnections === "enabled" ? "admin" : user.profile}
-            perform="connections-page:addConnection"
+            user={user}
+            perform="connections.edit"
             yes={() => (
               <>
                 <Box display="flex" alignItems="center" style={{ gap: 4, flexWrap: "wrap" }}>
@@ -531,8 +533,8 @@ const Connections = () => {
           whatsApp.status === "PAIRING" ||
           whatsApp.status === "TIMEOUT") && (
             <Can
-              role={user.profile}
-              perform="connections-page:addConnection"
+              user={user}
+              perform="connections.edit"
               yes={() => (
                 <>
                   <Tooltip title={i18n.t("connections.buttons.disconnect")}>
@@ -712,7 +714,7 @@ const Connections = () => {
           Gerenciar Templates de Mensagem
         </MenuItem>
       </Menu>
-      {user.profile === "user" && user.allowConnections === "disabled" ?
+      {user.profile === "user" && !hasPermission("connections.view") ?
         <ForbiddenPage />
         :
         <>
@@ -750,8 +752,8 @@ const Connections = () => {
                       {(popupState) => (
                         <React.Fragment>
                           <Can
-                            role={user.profile}
-                            perform="connections-page:addConnection"
+                            user={user}
+                            perform="connections.create"
                             yes={() => (
                               <>
                                 <Button
@@ -921,8 +923,8 @@ const Connections = () => {
                     <div className={classes.cardActions}>
                       {renderActionButtons(whatsApp)}
                       <Can
-                        role={user.profile}
-                        perform="connections-page:addConnection"
+                        user={user}
+                        perform="connections.create"
                         yes={() => (
                           <>
                             <IconButton
@@ -978,8 +980,8 @@ const Connections = () => {
                     <TableCell align="center">{i18n.t("connections.table.lastUpdate")}</TableCell>
                     <TableCell align="center">{i18n.t("connections.table.default")}</TableCell>
                     <Can
-                      role={user.profile === "user" && user.allowConnections === "enabled" ? "admin" : user.profile}
-                      perform="connections-page:addConnection"
+                      user={user}
+                      perform="connections.create"
                       yes={() => (
                         <TableCell align="center">{i18n.t("connections.table.actions")}</TableCell>
                       )}
@@ -1038,8 +1040,8 @@ const Connections = () => {
                               )}
                             </TableCell>
                             <Can
-                              role={user.profile}
-                              perform="connections-page:addConnection"
+                              user={user}
+                              perform="connections.edit"
                               yes={() => (
                                 <TableCell align="center">
                                   <IconButton

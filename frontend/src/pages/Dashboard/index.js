@@ -42,6 +42,7 @@ import { ChartsDate } from "./ChartsDate";
 import ForbiddenPage from "../../components/ForbiddenPage";
 import { i18n } from "../../translate/i18n";
 import ColorModeContext from "../../layout/themeContext";
+import usePermissions from "../../hooks/usePermissions";
 
 const Dashboard = () => {
   const theme = useTheme();
@@ -59,6 +60,7 @@ const Dashboard = () => {
   const { user } = useContext(AuthContext);
   const { colorMode } = useContext(ColorModeContext);
   const { viewMode } = colorMode || {};
+  const { hasPermission } = usePermissions();
 
   let newDate = new Date();
   let date = newDate.getDate();
@@ -143,7 +145,7 @@ const Dashboard = () => {
     setActiveTab(newValue);
   };
 
-  if (user.profile === "user" && user.showDashboard === "disabled") {
+  if (user.profile === "user" && !hasPermission("dashboard.view")) {
     return <ForbiddenPage />;
   }
 

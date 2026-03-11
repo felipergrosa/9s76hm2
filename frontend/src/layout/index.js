@@ -697,7 +697,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
 
           {user.id && <NotificationsPopOver volume={volume} />}
 
-          <AnnouncementsPopover />
+          {hasPermission("announcements.view") && <AnnouncementsPopover />}
 
           {hasPermission("internal-chat.view") && <ChatPopover />}
 

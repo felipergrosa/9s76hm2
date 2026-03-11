@@ -6,6 +6,7 @@ import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPer
 import { Op } from "sequelize";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import DispatchContactWebhookService from "./DispatchContactWebhookService";
+import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
 
 interface ExtraInfo {
   id?: number;
@@ -174,6 +175,17 @@ const UpdateContactService = async ({
 
   if (!contact) {
     throw new AppError("ERR_NO_CONTACT_FOUND", 404);
+  }
+
+  // Restrição de carteira: se usuário é restrito, só permite editar contato dentro da carteira
+  if (userId) {
+    const walletResult = await GetUserWalletContactIds(userId, companyId);
+    if (walletResult.hasWalletRestriction) {
+      const allowedContactIds = walletResult.contactIds;
+      if (!allowedContactIds.includes(Number(contact.id))) {
+        throw new AppError("FORBIDDEN_CONTACT_ACCESS", 403);
+      }
+    }
   }
 
   const isGroupContact = contact.isGroup;

@@ -1098,6 +1098,8 @@ const MessagesList = ({
 
       const settings = await getAll(companyId);
 
+      if (!settings) return;
+
       let settinglgpdDeleteMessage;
       let settingEnableLGPD;
 

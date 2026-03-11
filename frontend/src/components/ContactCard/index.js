@@ -170,8 +170,8 @@ const ContactCard = memo(({
             </button>
           </Tooltip>
           <Can
-            role={userProfile}
-            perform="contacts-page:deleteContact"
+            user={userProfile}
+            perform="contacts.delete"
             yes={() => (
               <>
                 <Tooltip {...CustomTooltipProps} title="Editar contato">

@@ -286,30 +286,7 @@ const PermissionTransferList = ({ value = [], onChange, disabled = false }) => {
         </Box>
       ))}
 
-      {/* Preview com chips */}
-      {selectedKeys.length > 0 && (
-        <Box style={{ marginTop: 16 }}>
-          <Divider style={{ marginBottom: 12 }} />
-          <Typography variant="subtitle2" gutterBottom>
-            Resumo das Permissões:
-          </Typography>
-          <Box>
-            {catalog.flatMap(c => c.permissions)
-              .filter(p => selectedKeys.includes(p.key))
-              .map(p => (
-                <Chip
-                  key={p.key}
-                  label={p.label}
-                  size="small"
-                  className={classes.chip}
-                  color="primary"
-                  onDelete={() => handleTogglePermission(p.key)}
-                  disabled={disabled}
-                />
-              ))}
-          </Box>
-        </Box>
-      )}
+
     </Box>
   );
 };

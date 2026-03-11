@@ -1012,24 +1012,28 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   //permitir ativar/desativar firma
   useEffect(() => {
     const fetchSettings = async () => {
-      const setting = await getSetting({
-        "column": "sendSignMessage"
-      });
+      try {
+        const setting = await getSetting({
+          "column": "sendSignMessage"
+        });
 
-      if (isMounted.current) {
-        if (setting.sendSignMessage === "enabled") {
-          setSignMessagePar(true);
-          const signMessageStorage = JSON.parse(
-            localStorage.getItem("persistentSignMessage")
-          );
-          if (isNil(signMessageStorage)) {
-            setSignMessage(true)
+        if (isMounted.current && setting && typeof setting === 'object') {
+          if (setting.sendSignMessage === "enabled") {
+            setSignMessagePar(true);
+            const signMessageStorage = JSON.parse(
+              localStorage.getItem("persistentSignMessage")
+            );
+            if (isNil(signMessageStorage)) {
+              setSignMessage(true)
+            } else {
+              setSignMessage(signMessageStorage);
+            }
           } else {
-            setSignMessage(signMessageStorage);
+            setSignMessagePar(false);
           }
-        } else {
-          setSignMessagePar(false);
         }
+      } catch (err) {
+        console.error("Erro ao buscar configurações em MessageInput:", err);
       }
     };
     fetchSettings();

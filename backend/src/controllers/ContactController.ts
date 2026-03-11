@@ -1198,9 +1198,7 @@ export const remove = async (
   const { contactId } = req.params;
   const { companyId } = req.user;
 
-  await ShowContactService(contactId, companyId, Number(req.user.id));
-
-  await DeleteContactService(contactId);
+  await DeleteContactService({ id: contactId, companyId, userId: Number(req.user.id) });
 
   await emitToCompanyNamespace(
     companyId,

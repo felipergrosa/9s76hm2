@@ -398,8 +398,8 @@ const UserModal = ({ open, onClose, userId }) => {
                           fullWidth
                         >
                           <Can
-                            role={loggedInUser.profile}
-                            perform="user-modal:editProfile"
+                            user={loggedInUser}
+                            perform="users.edit"
                             yes={() => (
                               <>
                                 <InputLabel id="profile-selection-input-label">
@@ -426,8 +426,8 @@ const UserModal = ({ open, onClose, userId }) => {
                     <Grid container spacing={1}>
                       <Grid item xs={12} md={12} xl={12}>
                         <Can
-                          role={loggedInUser.profile}
-                          perform="user-modal:editQueues"
+                          user={loggedInUser}
+                          perform="users.edit"
                           yes={() => (
                             <QueueSelect
                               selectedQueueIds={selectedQueueIds}
@@ -441,8 +441,8 @@ const UserModal = ({ open, onClose, userId }) => {
                     <Grid container spacing={1}>
                       <Grid item xs={12} md={12} xl={12}>
                         <Can
-                          role={loggedInUser.profile}
-                          perform="user-modal:editProfile"
+                          user={loggedInUser}
+                          perform="users.edit"
                           yes={() => (
                             <FormControl variant="outlined" margin="dense" className={classes.maxWidth} fullWidth>
                               <InputLabel>
@@ -466,7 +466,7 @@ const UserModal = ({ open, onClose, userId }) => {
                       </Grid>
                     </Grid>
                     <Can
-                      role={loggedInUser.profile}
+                      user={loggedInUser}
                       perform="user-modal:editProfile"
                       yes={() => (
                         <Grid container spacing={1}>
@@ -602,8 +602,8 @@ const UserModal = ({ open, onClose, userId }) => {
                     name={"permissions"}
                   >
                     <Can
-                      role={loggedInUser.profile}
-                      perform="user-modal:editProfile"
+                      user={loggedInUser}
+                      perform="users.edit"
                       yes={() =>
                         <>
                           {/* NOVO: Sistema de Permissões Granulares */}
@@ -616,36 +616,6 @@ const UserModal = ({ open, onClose, userId }) => {
                               />
                             </Grid>
                           </Grid>
-
-                          {/* Configurações Legadas */}
-                          <Divider style={{ marginTop: 24, marginBottom: 16 }} />
-                          <Typography variant="subtitle2" style={{ marginBottom: 16, color: '#666', fontWeight: 500 }}>
-                            Configurações Legadas (Sistema Antigo)
-                          </Typography>
-
-                          <LegacySettingsGroup
-                            title="Visualização de Atendimentos"
-                            icon={<VisibilityIcon />}
-                            settings={[
-                              { key: 'allTicket', label: i18n.t("userModal.form.allTicket"), description: 'Ver chamados sem fila' },
-                              { key: 'allHistoric', label: i18n.t("userModal.form.allHistoric"), description: 'Ver histórico completo' },
-                              { key: 'allUserChat', label: i18n.t("userModal.form.allUserChat"), description: 'Ver conversas de outros usuários' }
-                            ]}
-                            values={values}
-                            onChange={(key, value) => setFieldValue(key, value)}
-                          />
-
-                          <LegacySettingsGroup
-                            title="Permissões de Grupos e Conexões"
-                            icon={<GroupIcon />}
-                            settings={[
-                              { key: 'allowGroup', label: i18n.t("userModal.form.allowGroup"), description: 'Permitir grupos' },
-                              { key: 'allowConnections', label: i18n.t("userModal.form.allowConnections"), description: 'Permitir gerenciar conexões' },
-                              { key: 'allowRealTime', label: i18n.t("userModal.form.allowRealTime"), description: 'Permitir visualização em tempo real' }
-                            ]}
-                            values={values}
-                            onChange={(key, value) => setFieldValue(key, value)}
-                          />
 
                           {/* Seção de Grupos Permitidos - aparece quando allowGroup está habilitado */}
                           {values.allowGroup && userId && (
@@ -665,16 +635,6 @@ const UserModal = ({ open, onClose, userId }) => {
                             </>
                           )}
 
-                          <LegacySettingsGroup
-                            title="Dashboard e Ações"
-                            icon={<DashboardIcon />}
-                            settings={[
-                              { key: 'showDashboard', label: i18n.t("userModal.form.showDashboard"), description: 'Ver dashboard' },
-                              { key: 'userClosePendingTicket', label: i18n.t("userModal.form.userClosePendingTicket"), description: 'Fechar tickets pendentes' }
-                            ]}
-                            values={values}
-                            onChange={(key, value) => setFieldValue(key, value)}
-                          />
 
                           {/* Tags permitidas - exibe apenas tags pessoais (com 1x #, não ##) */}
                           <Divider style={{ marginTop: 16, marginBottom: 16 }} />

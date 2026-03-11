@@ -148,8 +148,8 @@ const TicketOptionsMenu = ({ ticket, menuOpen, handleClose, anchorEl }) => {
 					{i18n.t("ticketOptionsMenu.acceptAudioMessage")}
 				</MenuItem>
 				<Can
-					role={user.profile}
-					perform="ticket-options:deleteTicket"
+					user={user}
+					perform="tickets.delete"
 					yes={() => (
 						<MenuItem onClick={handleOpenConfirmationModal}>
 							{i18n.t("ticketOptionsMenu.delete")}

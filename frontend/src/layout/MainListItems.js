@@ -451,9 +451,8 @@ const MainListItems = ({ collapsed, drawerClose }) => {
 
   return (
     <div onClick={drawerClose}>
-      {/* BLOCO LEGADO - Apenas itens diretos (Dashboard antigo e Tempo Real) */}
-      {((user.profile === "admin" || user.super === true) ||
-        (user.profile === "user" && user.showDashboard === "enabled")) && (
+      {/* DASHBOARD */}
+      {hasPermission("dashboard.view") && (
           <ListItemLink
             to="/"
             primary="Dashboard"
@@ -462,8 +461,8 @@ const MainListItems = ({ collapsed, drawerClose }) => {
             tooltip={collapsed}
           />
         )}
-      {((user.profile === "admin" || user.super === true) ||
-        (user.profile === "user" && user.allowRealTime === "enabled")) && (
+      {/* PAINEL EM TEMPO REAL */}
+      {hasPermission("realtime.view") && (
           <ListItemLink
             to="/moments"
             primary={i18n.t("mainDrawer.listItems.chatsTempoReal")}
@@ -770,9 +769,8 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {/* CONEXÕES (Sistema Legado) */}
-      {((user.profile === "admin" || user.super === true) ||
-        (user.profile === "user" && user.allowConnections === "enabled")) && (
+      {/* CONEXÕES */}
+      {hasPermission("connections.view") && (
           <ListItemLink
             to="/connections"
             primary={i18n.t("mainDrawer.listItems.connections")}
@@ -817,7 +815,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
       )}
 
       {/* INTELIGÊNCIA ARTIFICIAL */}
-      {showOpenAi && (
+      {showOpenAi && hasAnyPermission(["ai-agents.view", "prompts.view", "ai-settings.view", "ai-training.view", "files.view"]) && (
         <>
           <Tooltip title={collapsed ? "Inteligência Artificial" : ""} placement="right">
             <ListItem
@@ -863,12 +861,14 @@ const MainListItems = ({ collapsed, drawerClose }) => {
             }}
           >
             <List dense component="div" disablePadding>
+              {hasPermission("ai-agents.view") && (
               <ListItemLink
                 to="/ai-agents"
                 primary="⭐ Agentes de IA"
                 icon={<SmartToy />}
                 tooltip={collapsed}
               />
+              )}
               {hasPermission("ai-training.view") && (
                 <ListItemLink
                   to="/ai-training"

@@ -11,6 +11,7 @@ import useTickets from "../../hooks/useTickets";
 import { i18n } from "../../translate/i18n";
 import logger from "../../utils/logger";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles((theme) => ({
     ticketsListWrapper: {
@@ -230,7 +231,8 @@ const TicketsListCustom = (props) => {
     const { user, socket } = useContext(AuthContext);
 
     const { profile, queues } = user;
-    const showTicketWithoutQueue = user.allTicket === 'enable';
+    const { hasPermission: checkPerm } = usePermissions();
+    const showTicketWithoutQueue = checkPerm('tickets.view-all');
     const companyId = user.companyId;
 
     // Refs para valores mutáveis - evita stale closures nos handlers de socket

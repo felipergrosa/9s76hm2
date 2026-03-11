@@ -4,42 +4,61 @@
  * api/get/1 configuração específica |
  * api/put/atualização de 1 configuração |
  */
+import { useContext } from "react";
 import api from "../../services/api";
+import { AuthContext } from "../../context/Auth/AuthContext";
 
 const useCompanySettings = () => {
+	const { user } = useContext(AuthContext);
 
-    const getAll = async (companyId) => {
-        const { data } = await api.request({
-            url: `/companySettings/${companyId}`,
-            method: 'GET'
-        });
+	const hasPermission = (permission) => {
+		if (user?.super === true) return true;
+		if (user?.profile === "admin") return true;
+		return Array.isArray(user?.permissions) && user.permissions.includes(permission);
+	};
 
-        return data;
-    }
+	const requirePermission = (permission) => {
+		if (!hasPermission(permission)) {
+			return false;
+		}
+		return true;
+	};
 
-   const get = async (params) => {
-        const { data } = await api.request({
-            url: '/companySettingOne',
-            method: 'GET',
-            params
-        });
-        return data;
-    } 
+	const getAll = async (companyId) => {
+		if (!requirePermission("settings.view")) return null;
+		const { data } = await api.request({
+			url: `/companySettings/${companyId}`,
+			method: "GET",
+		});
 
-    const update = async (data) => {
-        const { data: responseData } = await api.request({
-            url: '/companySettings',
-            method: 'PUT',
-            data
-        });
-        return responseData;
-    }
+		return data;
+	};
 
-    return {
-        getAll,
-        get,
-        update
-    }
-}
+	const get = async (params) => {
+		if (!requirePermission("settings.view")) return null;
+		const { data } = await api.request({
+			url: "/companySettingOne",
+			method: "GET",
+			params,
+		});
+		return data;
+	};
+
+	const update = async (data) => {
+		if (!requirePermission("settings.edit")) return null;
+		const { data: responseData } = await api.request({
+			url: "/companySettings",
+			method: "PUT",
+			data,
+		});
+		return responseData;
+	};
+
+	return {
+		getAll,
+		get,
+		update,
+	};
+};
 
 export default useCompanySettings;

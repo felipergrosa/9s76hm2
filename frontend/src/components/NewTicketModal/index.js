@@ -75,7 +75,14 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
         api
           // .get(`/whatsapp/filter`, { params: { companyId, session: 0, channel: channelFilter } })
           .get(`/whatsapp`, { params: { companyId, session: 0 } })
-          .then(({ data }) => setWhatsapps(data));
+          .then(({ data }) => setWhatsapps(data))
+          .catch((err) => {
+            // 403 = sem permissão connections.view (admin)
+            // Silencia o erro, lista de conexões fica vazia
+            if (err?.response?.status !== 403) {
+              console.error("Erro ao buscar WhatsApps:", err);
+            }
+          });
 
         // .then(({ data }) => {
         //   const mappedWhatsapps = data.map((whatsapp) => ({

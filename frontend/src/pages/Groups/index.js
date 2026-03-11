@@ -18,6 +18,7 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import useDebounce from "../../hooks/useDebounce";
 import ContactAvatar from "../../components/ContactAvatar";
 import { socketConnection } from "../../services/socket";
+import usePermissions from "../../hooks/usePermissions";
 
 // Cores para os headers das lanes (cicla entre elas)
 const LANE_COLORS = [
@@ -242,7 +243,8 @@ const Groups = () => {
         }
     };
 
-    const canViewGroups = user.allowGroup || user.profile === "admin" || user.super;
+    const { hasPermission: checkPerm } = usePermissions();
+    const canViewGroups = checkPerm("tickets.view-groups") || user.profile === "admin" || user.super;
 
     const isConnected = (status) =>
         status === "CONNECTED" || status === "qrcode" || status === "OPENING";

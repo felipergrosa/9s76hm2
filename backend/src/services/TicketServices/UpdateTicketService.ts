@@ -330,6 +330,7 @@ const UpdateTicketService = async ({
     if (isTransfered) {
       if (settings.closeTicketOnTransfer) {
         let newTicketTransfer = ticket;
+        const oldTicketId = ticket.id; // Guardar ID do ticket antigo para migrar mensagens
         if (oldQueueId !== queueId) {
           await ticket.update({
             status: "closed"
@@ -352,6 +353,22 @@ const UpdateTicketService = async ({
 
           await FindOrCreateATicketTrakingService({ ticketId: newTicketTransfer.id, companyId, whatsappId: ticket.whatsapp.id, userId });
 
+          // =================================================================
+          // MIGRAÇÃO DE HISTÓRICO: Transferir mensagens do ticket antigo para o novo
+          // =================================================================
+          // Isso garante que o novo atendente tenha acesso ao histórico da conversa
+          const Message = (await import("../../models/Message")).default;
+          const migratedCount = await Message.update(
+            { ticketId: newTicketTransfer.id },
+            { 
+              where: { 
+                ticketId: oldTicketId,
+                companyId: ticket.companyId 
+              } 
+            }
+          );
+          logger.info(`[UpdateTicketService] Migradas ${migratedCount[0]} mensagens do ticket ${oldTicketId} para ${newTicketTransfer.id}`);
+          // =================================================================
         }
 
         if (!isNil(msgTransfer)) {

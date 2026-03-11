@@ -41,7 +41,7 @@ const useAuth = () => {
       const status = error?.response?.status;
       const isAuthRefreshCall = originalRequest?.url?.includes("/auth/refresh_token");
       
-      if ((status === 401 || status === 403) && !originalRequest._retry && !isAuthRefreshCall) {
+      if (status === 401 && !originalRequest._retry && !isAuthRefreshCall) {
         originalRequest._retry = true;
         try {
           const { data } = await api.post("/auth/refresh_token");
@@ -133,10 +133,12 @@ const useAuth = () => {
           (s) => s.key === "sendSignMessage"
         );
 
-        const signEnable = setting.value === "enable";
+        if (setting) {
+          const signEnable = setting.value === "enable";
 
-        if (setting && setting.value === "enabled") {
-          localStorage.setItem("sendSignMessage", signEnable); //regra pra exibir campanhas
+          if (setting.value === "enabled") {
+            localStorage.setItem("sendSignMessage", signEnable); //regra pra exibir campanhas
+          }
         }
       }
       localStorage.setItem("profileImage", data.user.profileImage); //regra pra exibir imagem contato

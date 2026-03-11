@@ -6,6 +6,7 @@ import { AuthProvider } from "../context/Auth/AuthContext";
 import { TicketsContextProvider } from "../context/Tickets/TicketsContext";
 import { WhatsAppsProvider } from "../context/WhatsApp/WhatsAppsContext";
 import Route from "./Route";
+import PrivateRoute from "./PrivateRoute";
 
 // Componente de loading para lazy loading
 const PageLoader = () => (
@@ -201,7 +202,7 @@ const Routes = () => {
                 <Route exact path="/chats/:id?" component={Chat} isPrivate />
                 <Route exact path="/files" component={LibraryManager} isPrivate />
                 <Route exact path="/moments" component={ChatMoments} isPrivate />
-                <Route exact path="/Kanban" component={Kanban} isPrivate />
+                <PrivateRoute exact path="/Kanban" component={Kanban} permission="kanban.view" />
                 <Route exact path="/TagsKanban" component={TagsKanban} isPrivate />
                 <Route exact path="/allConnections" component={AllConnections} isPrivate />
                 <Route exact path="/ai-settings" component={AISettings} isPrivate />
@@ -209,8 +210,8 @@ const Routes = () => {
                 <Route exact path="/ai-training" component={AITraining} isPrivate />
                 {showCampaigns && (
                   <>
-                    <Route exact path="/contact-lists" component={ContactLists} isPrivate />
-                    <Route exact path="/contact-lists/:contactListId/contacts" component={ContactListItems} isPrivate />
+                    <PrivateRoute exact path="/contact-lists" component={ContactLists} permission="contact-lists.view" />
+                    <PrivateRoute exact path="/contact-lists/:contactListId/contacts" component={ContactListItems} permission="contact-lists.view" />
                     <Route exact path="/campaigns" component={Campaigns} isPrivate />
                     <Route exact path="/campaign/:campaignId/detailed-report" component={CampaignDetailedReport} isPrivate />
                     <Route exact path="/campaigns-config" component={CampaignsConfig} isPrivate />

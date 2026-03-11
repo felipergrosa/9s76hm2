@@ -38,6 +38,7 @@ import toastError from "../../errors/toastError";
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
 import useAuth from "../../hooks/useAuth.js";
+import usePermissions from "../../hooks/usePermissions.js";
 import { DateRangePicker } from 'materialui-daterange-picker';
 import { format, parseISO, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
 
@@ -112,6 +113,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
   const [cronTime, setCronTime] = useState("02:00"); // HH:mm
   const [cronTz, setCronTz] = useState("America/Sao_Paulo");
   const { user, getCurrentUserInfo } = useAuth();
+  const { hasPermission } = usePermissions();
   const timezones = [
     "America/Sao_Paulo",
     "America/Bahia",
@@ -557,6 +559,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
   };
 
   const loadCronConfig = async () => {
+    if (!hasPermission("settings.view")) return;
     try {
       const { data } = await api.get("/settings/saved-filter-cron");
       if (data) {
@@ -589,7 +592,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
     setLoading(true);
     try {
       // Se usuário optar por salvar filtro e atualizar automaticamente, atualiza o cron antes
-      if (saveFilterFlag) {
+      if (saveFilterFlag && hasPermission("settings.edit")) {
         try {
           const [hhStr, mmStr] = (cronTime || "02:00").split(":");
           const hNum = parseInt(hhStr, 10);

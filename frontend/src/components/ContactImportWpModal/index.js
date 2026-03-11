@@ -185,7 +185,7 @@ const ContactImportWpModal = ({ isOpen, handleClose, selectedTags, hideNum, user
       <div>
         <Box style={{ padding: "0px 10px 10px" }} >
           <Can
-            role={user.profile}
+            user={user}
             perform="contacts-page:deleteContact"
             yes={() => (
               <div className={classes.multFieldLine}>

@@ -12,7 +12,11 @@ export const AVAILABLE_PERMISSIONS = {
     "tickets.update",
     "tickets.transfer",
     "tickets.close",
-    "tickets.delete"
+    "tickets.delete",
+    "tickets.view-all",
+    "tickets.view-groups",
+    "tickets.view-all-historic",
+    "tickets.view-all-users"
   ],
   quickMessages: [
     "quick-messages.view",
@@ -93,7 +97,11 @@ export const AVAILABLE_PERMISSIONS = {
     "ai-agents.create",
     "ai-agents.edit",
     "ai-agents.delete",
-    "ai-training.view"
+    "ai-training.view",
+    "announcements.view",
+    "announcements.create",
+    "announcements.edit",
+    "announcements.delete"
   ],
 
   // ADMINISTRAÇÃO
@@ -161,8 +169,34 @@ const getBaseUserPermissions = (): string[] => {
     "quick-messages.view",
     "contacts.view",
     "tags.view",
-    "helps.view"
+    "helps.view",
+    "announcements.view"
   ];
+};
+
+/**
+ * Normaliza permissões adicionando .view automaticamente quando tem .edit, .create ou .delete
+ * Garante hierarquia lógica: não faz sentido ter permissão de editar sem poder visualizar
+ * 
+ * Exemplo: Se tem "contact-lists.edit", adiciona "contact-lists.view" automaticamente
+ */
+const normalizePermissions = (permissions: string[]): string[] => {
+  const normalized = new Set(permissions);
+  
+  permissions.forEach(permission => {
+    // Extrai o prefixo (ex: "contact-lists" de "contact-lists.edit")
+    const parts = permission.split('.');
+    if (parts.length === 2) {
+      const [prefix, action] = parts;
+      
+      // Se tem edit, create ou delete, adiciona view automaticamente
+      if (['edit', 'create', 'delete', 'upload'].includes(action)) {
+        normalized.add(`${prefix}.view`);
+      }
+    }
+  });
+  
+  return Array.from(normalized);
 };
 
 /**
@@ -186,7 +220,7 @@ export const getUserPermissions = (user: User): string[] => {
 
   // Se usuário já tem permissões definidas, usa elas (exceto admin/super)
   if (user.permissions && Array.isArray(user.permissions) && user.permissions.length > 0) {
-    return user.permissions;
+    return normalizePermissions(user.permissions);
   }
 
   // User comum: começa com permissões básicas
@@ -194,7 +228,7 @@ export const getUserPermissions = (user: User): string[] => {
 
   // Adiciona permissões baseadas nas flags existentes
   if (user.allTicket === "enable") {
-    permissions.push("tickets.update", "tickets.transfer");
+    permissions.push("tickets.update", "tickets.transfer", "tickets.view-all");
   }
 
   if (user.allowGroup === true) {
@@ -352,7 +386,7 @@ export const getPermissionsCatalog = () => {
     {
       category: "Módulos",
       permissions: AVAILABLE_PERMISSIONS.modules.filter(key => 
-        !key.startsWith("ai-agents.") && !key.startsWith("prompts.")
+        !key.startsWith("ai-agents.") && !key.startsWith("prompts.") && key !== "ai-training.view"
       ).map(key => ({
         key,
         label: formatPermissionLabel(key),
@@ -401,6 +435,10 @@ const formatPermissionLabel = (key: string): string => {
     "tickets.transfer": "Transferir Atendimentos",
     "tickets.close": "Fechar Atendimentos",
     "tickets.delete": "Deletar Atendimentos",
+    "tickets.view-all": "Ver Chamados Sem Fila",
+    "tickets.view-groups": "Permitir Grupos",
+    "tickets.view-all-historic": "Ver Histórico Completo",
+    "tickets.view-all-users": "Ver Conversas de Outros Usuários",
     "quick-messages.view": "Ver Respostas Rápidas",
     "quick-messages.create": "Criar Respostas Rápidas",
     "quick-messages.edit": "Editar Respostas Rápidas",
@@ -473,6 +511,10 @@ const formatPermissionLabel = (key: string): string => {
     "phrase-campaigns.create": "Criar Campanhas de Frases",
     "phrase-campaigns.edit": "Editar Campanhas de Frases",
     "phrase-campaigns.delete": "Deletar Campanhas de Frases",
+    "announcements.view": "Ver Informativos",
+    "announcements.create": "Criar Informativos",
+    "announcements.edit": "Editar Informativos",
+    "announcements.delete": "Deletar Informativos",
     "helps.view": "Ver Ajuda"
   };
   return labels[key] || key;
@@ -484,6 +526,10 @@ const formatPermissionLabel = (key: string): string => {
 const getPermissionDescription = (key: string): string => {
   const descriptions: Record<string, string> = {
     "tickets.view": "Visualizar atendimentos e tickets",
+    "tickets.view-all": "Visualizar chamados sem fila e de filas não inscritas (antigo: allTicket)",
+    "tickets.view-groups": "Interagir e visualizar grupos do WhatsApp (antigo: allowGroup)",
+    "tickets.view-all-historic": "Ver histórico completo de todas as filas (antigo: allHistoric)",
+    "tickets.view-all-users": "Ver conversas em andamento de outros usuários (antigo: allUserChat)",
     "campaigns.create": "Criar e configurar novas campanhas",
     "users.edit": "Editar informações e permissões de usuários",
     "connections.edit": "Adicionar, editar e remover conexões WhatsApp"

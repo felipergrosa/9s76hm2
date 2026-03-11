@@ -179,7 +179,11 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 				const { data } = await api.get("/users/");
 				setUserOptions(data.users || []);
 			} catch (err) {
-				toastError(err);
+				// 403 = sem permissão para listar usuários (users.view é admin)
+				// Silencia o erro e exibe lista vazia na Carteira
+				if (err?.response?.status !== 403) {
+					toastError(err);
+				}
 			} finally {
 				setLoadingUsers(false);
 			}

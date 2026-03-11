@@ -598,8 +598,8 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                     <MenuItem onClick={handleOpenConfirmationModal}>
                         <DeleteForeverIcon style={{ color: '#d32f2f', marginRight: 10 }} />
                         <Can
-                            role={user.profile}
-                            perform="ticket-options:deleteTicket"
+                            user={user}
+                            perform="tickets.delete"
                             yes={() => (
                                 i18n.t("tickets.buttons.deleteTicket")
                             )}

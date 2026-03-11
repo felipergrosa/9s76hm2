@@ -31,6 +31,7 @@ import defaultLogoFavicon from "../../assets/favicon.ico";
 import ContactAvatar from "../ContactAvatar";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import api from "../../services/api";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles(theme => ({
   tabContainer: {
@@ -79,10 +80,12 @@ const NotificationsPopOver = ({ volume = 1 }) => {
   const soundTimeoutRef = useRef(null);
   const lastSoundTimeRef = useRef(0);
 
+  const { hasPermission: checkPerm } = usePermissions();
+
   const { tickets } = useTickets({
     withUnreadMessages: "true",
     queueIds: JSON.stringify(queueIds),
-    showAll: user.allTicket === "enable" ? "true" : "false"
+    showAll: checkPerm("tickets.view-all") ? "true" : "false"
   });
 
   const [play] = useSound(alertSound, { volume });
@@ -99,18 +102,21 @@ const NotificationsPopOver = ({ volume = 1 }) => {
           }
         );
 
-        if (setting.showNotificationPending === true) {
+        if (setting && setting.showNotificationPending === true) {
           setShowNotificationPending(true);
         }
 
-        if (user.allTicket === "enable") {
+        if (checkPerm("tickets.view-all")) {
           setShowTicketWithoutQueue(true);
         }
-        if (user.allowGroup === true) {
+        if (checkPerm("tickets.view-groups")) {
           setShowGroupNotification(true);
         }
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão settings.view, silencia
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     }
 

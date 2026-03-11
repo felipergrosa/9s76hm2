@@ -2,14 +2,36 @@ import Contact from "../../models/Contact";
 import AppError from "../../errors/AppError";
 import fs from "fs";
 import path from "path";
+import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
 
-const DeleteContactService = async (id: string): Promise<void> => {
+interface Request {
+  id: string;
+  companyId: number;
+  userId?: number;
+}
+
+const DeleteContactService = async ({ id, companyId, userId }: Request): Promise<void> => {
   const contact = await Contact.findOne({
     where: { id }
   });
 
   if (!contact) {
     throw new AppError("ERR_NO_CONTACT_FOUND", 404);
+  }
+
+  if (contact.companyId !== companyId) {
+    throw new AppError("Não é possível excluir registro de outra empresa", 403);
+  }
+
+  // Restrição de carteira: se usuário é restrito, só permite excluir contato dentro da carteira
+  if (userId) {
+    const walletResult = await GetUserWalletContactIds(userId, companyId);
+    if (walletResult.hasWalletRestriction) {
+      const allowedContactIds = walletResult.contactIds;
+      if (!allowedContactIds.includes(Number(contact.id))) {
+        throw new AppError("FORBIDDEN_CONTACT_ACCESS", 403);
+      }
+    }
   }
 
   // Remoção em cascata dos arquivos do contato

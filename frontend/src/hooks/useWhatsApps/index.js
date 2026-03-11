@@ -4,6 +4,7 @@ import toastError from "../../errors/toastError";
 import api from "../../services/api";
 // import { SocketContext } from "../../context/Socket/SocketContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import usePermissions from "../../hooks/usePermissions";
 import { isNill } from "lodash";
 
 const reducer = (state, action) => {
@@ -61,9 +62,17 @@ const useWhatsApps = () => {
 //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
 
+  const { hasPermission } = usePermissions();
+
 
 
   useEffect(() => {
+    // Só carrega conexões se tiver permissão
+    if (!hasPermission("connections.view")) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const fetchSession = async () => {
       try {

@@ -189,8 +189,8 @@ const ModalUsers = ({ open, onClose, userId, companyId }) => {
                     margin="dense"
                   >
                     <Can
-                      role={loggedInUser.profile}
-                      perform="user-modal:editProfile"
+                      user={loggedInUser}
+                      perform="users.edit"
                       yes={() => (
                         <>
                           <InputLabel id="profile-selection-input-label">
@@ -214,8 +214,8 @@ const ModalUsers = ({ open, onClose, userId, companyId }) => {
                   </FormControl>
                 </div>
                 <Can
-                  role={loggedInUser.profile}
-                  perform="user-modal:editQueues"
+                  user={loggedInUser}
+                  perform="users.edit"
                   yes={() => (
                     <QueueSelect
                       selectedQueueIds={selectedQueueIds}
