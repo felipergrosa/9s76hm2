@@ -435,11 +435,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
     const { get: getSetting } = useCompanySettings();
     const { hasPermission } = usePermissions();
 
-    useEffect(() => {
-        logger.log("======== TicketListItemCustom ===========")
-        logger.log(ticket)
-        logger.log("=========================================")
-    }, [ticket]);
+
 
     useEffect(() => {
         return () => {
@@ -1069,4 +1065,13 @@ const handleCloseTicket = async (id) => {
     );
 };
 
-export default TicketListItemCustom;
+export default React.memo(TicketListItemCustom, (prevProps, nextProps) => {
+    return prevProps.ticket.id === nextProps.ticket.id && 
+           prevProps.ticket.updatedAt === nextProps.ticket.updatedAt &&
+           prevProps.ticket.unreadMessages === nextProps.ticket.unreadMessages &&
+           prevProps.ticket.status === nextProps.ticket.status &&
+           prevProps.ticket.presence === nextProps.ticket.presence &&
+           prevProps.ticket.userId === nextProps.ticket.userId &&
+           prevProps.ticket.queueId === nextProps.ticket.queueId &&
+           prevProps.ticket.isGroup === nextProps.ticket.isGroup;
+});

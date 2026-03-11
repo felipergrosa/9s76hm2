@@ -11,7 +11,7 @@ const statisticsRoutes = express.Router();
 statisticsRoutes.get(
   "/usersMoments",
   isAuth,
-  checkPermission("dashboard.view"),
+  checkPermission("realtime.view"),
   StatisticsController.DashTicketsQueues
 );
 

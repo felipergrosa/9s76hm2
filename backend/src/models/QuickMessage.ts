@@ -64,6 +64,15 @@ class QuickMessage extends Model<QuickMessage> {
 
   @Column
   visao: boolean;
+
+  @Column
+  groupName: string;
+
+  @Column
+  color: string;
+
+  @Column
+  useCount: number;
 }
 
 export default QuickMessage;

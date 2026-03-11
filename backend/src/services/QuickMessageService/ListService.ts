@@ -1,11 +1,15 @@
 import { Sequelize, Op, Filterable } from "sequelize";
 import QuickMessage from "../../models/QuickMessage";
+import User from "../../models/User";
 
 interface Request {
   searchParam?: string;
   pageNumber?: string;
   companyId: number | string;
   userId?: number | string;
+  isAdmin?: boolean;
+  sortBy?: string;
+  groupName?: string;
 }
 
 interface Response {
@@ -18,50 +22,81 @@ const ListService = async ({
   searchParam = "",
   pageNumber = "1",
   companyId,
-  userId
+  userId,
+  isAdmin = false,
+  sortBy,
+  groupName
 }: Request): Promise<Response> => {
   const sanitizedSearchParam = searchParam.toLocaleLowerCase().trim();
 
   let whereCondition: Filterable["where"] = {
-    // [Op.or]: [
-    //   {
-    shortcode: Sequelize.where(
-      Sequelize.fn("LOWER", Sequelize.col("shortcode")),
-      "LIKE",
-      `%${sanitizedSearchParam}%`
-    )
-    //   },
-    //   {
-    //     message: Sequelize.where(
-    //       Sequelize.fn("LOWER", Sequelize.col("message")),
-    //       "LIKE",
-    //       `%${sanitizedSearchParam}%`
-    //     )
-    //   }
-    // ]
+    companyId
   };
 
-  whereCondition = {
-    ...whereCondition,
-    companyId,
-    [Op.or]: [
-      {
-        visao: true // Se "visao" é verdadeiro, todas as mensagens são visíveis
-      },
-      {
-        userId // Se "visao" é falso, apenas as mensagens do usuário atual são visíveis
-      }
-    ]
-  };
+  // Filtro de busca por shortcode E message
+  if (sanitizedSearchParam) {
+    whereCondition = {
+      ...whereCondition,
+      [Op.or]: [
+        {
+          shortcode: Sequelize.where(
+            Sequelize.fn("LOWER", Sequelize.col("shortcode")),
+            "LIKE",
+            `%${sanitizedSearchParam}%`
+          )
+        },
+        {
+          message: Sequelize.where(
+            Sequelize.fn("LOWER", Sequelize.col("message")),
+            "LIKE",
+            `%${sanitizedSearchParam}%`
+          )
+        }
+      ]
+    };
+  }
 
-  const limit = 20;
+  // Filtro de visibilidade por perfil
+  // Admin/superadmin veem todas da company
+  // User padrão vê APENAS AS SUAS (strict permission)
+  if (!isAdmin) {
+    whereCondition = {
+      ...whereCondition,
+      userId
+    };
+  }
+
+  // Filtro opcional por groupName
+  if (groupName) {
+    whereCondition = {
+      ...whereCondition,
+      groupName
+    };
+  }
+
+  const limit = 200; // Aumentado para o painel do ticket carregar tudo
   const offset = limit * (+pageNumber - 1);
+
+  // Ordenação
+  let order: any[] = [["shortcode", "ASC"]];
+  if (sortBy === "useCount") {
+    order = [["useCount", "DESC"], ["shortcode", "ASC"]];
+  } else {
+    order = [["groupName", "ASC"], ["shortcode", "ASC"]];
+  }
 
   const { count, rows: records } = await QuickMessage.findAndCountAll({
     where: whereCondition,
+    include: [
+      {
+        model: User,
+        as: "user",
+        attributes: ["id", "name"]
+      }
+    ],
     limit,
     offset,
-    order: [["shortcode", "ASC"]]
+    order
   });
 
   const hasMore = count > offset + records.length;

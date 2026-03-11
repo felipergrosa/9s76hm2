@@ -714,7 +714,7 @@ const Connections = () => {
           Gerenciar Templates de Mensagem
         </MenuItem>
       </Menu>
-      {user.profile === "user" && !hasPermission("connections.view") ?
+      {!hasPermission("connections.view") ?
         <ForbiddenPage />
         :
         <>

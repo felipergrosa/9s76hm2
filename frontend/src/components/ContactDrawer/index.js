@@ -21,9 +21,14 @@ import MarkdownWrapper from "../MarkdownWrapper";
 import { CardHeader, Tooltip, Dialog, DialogContent, CircularProgress, Collapse } from "@material-ui/core";
 import ExpandMoreIcon from "@material-ui/icons/ExpandMore";
 import ExpandLessIcon from "@material-ui/icons/ExpandLess";
+import FlashOnIcon from "@material-ui/icons/FlashOn";
+import FileCopyIcon from "@material-ui/icons/FileCopy";
+import SettingsIcon from "@material-ui/icons/Settings";
+import AssignmentIndIcon from "@material-ui/icons/AssignmentInd";
 import { ContactForm } from "../ContactForm";
 import ContactModal from "../ContactModal";
 import { ContactNotes } from "../ContactNotes";
+import QuickMessagesPanel from "../QuickMessagesPanel";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
@@ -53,9 +58,27 @@ const useStyles = makeStyles(theme => ({
         borderBottom: "1px solid rgba(0, 0, 0, 0.12)",
         backgroundColor: theme.palette.inputBackground,
         alignItems: "center",
+        justifyContent: "space-between",
         padding: theme.spacing(0, 1),
         minHeight: "50px",
-        justifyContent: "flex-start",
+    },
+    toolbarIcons: {
+        display: "flex",
+        alignItems: "center",
+        gap: "4px",
+    },
+    tabIconButton: {
+        padding: "8px",
+        borderRadius: "8px",
+    },
+    tabIconButtonActive: {
+        padding: "8px",
+        borderRadius: "8px",
+        backgroundColor: theme.palette.mode === 'light' ? theme.palette.primary.light : theme.palette.primary.main,
+        color: theme.palette.mode === 'light' ? theme.palette.primary.main : "#fff",
+        "& svg": {
+            color: theme.palette.mode === 'light' ? theme.palette.primary.main : "#fff",
+        }
     },
     content: {
         display: "",
@@ -121,7 +144,7 @@ const useStyles = makeStyles(theme => ({
     },
 }));
 
-const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading }) => {
+const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, activeTabParams = "contact", onSendQuickMessage }) => {
     const classes = useStyles();
 
     const [modalOpen, setModalOpen] = useState(false);
@@ -134,6 +157,11 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading }) =>
     const [avatarModalOpen, setAvatarModalOpen] = useState(false);
     const [avatarLargeUrl, setAvatarLargeUrl] = useState(null);
     const [notesOpen, setNotesOpen] = useState(true);
+    const [activeTab, setActiveTab] = useState(activeTabParams);
+
+    useEffect(() => {
+        setActiveTab(activeTabParams);
+    }, [activeTabParams, open]);
 
     // URL da imagem do avatar para visualização ampliada
     const avatarImageUrl = contact?.contact
@@ -253,16 +281,48 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading }) =>
                 }}
             >
                 <div className={classes.header}>
-                    <IconButton onClick={handleDrawerClose}>
-                        <CloseIcon />
+                    <div className={classes.toolbarIcons}>
+                        <Tooltip title="Dados do Contato">
+                            <IconButton 
+                                className={activeTab === "contact" ? classes.tabIconButtonActive : classes.tabIconButton}
+                                onClick={() => setActiveTab("contact")}
+                                size="small"
+                            >
+                                <AssignmentIndIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Respostas Rápidas">
+                            <IconButton 
+                                className={activeTab === "quickMessages" ? classes.tabIconButtonActive : classes.tabIconButton}
+                                onClick={() => setActiveTab("quickMessages")}
+                                size="small"
+                            >
+                                <FlashOnIcon fontSize="small" color={activeTab === "quickMessages" ? "inherit" : "primary"} />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Clipboard (Em breve)">
+                            <IconButton className={classes.tabIconButton} size="small" disabled>
+                                <FileCopyIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Configurações (Em breve)">
+                            <IconButton className={classes.tabIconButton} size="small" disabled>
+                                <SettingsIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </div>
+                    <IconButton onClick={handleDrawerClose} size="small">
+                        <CloseIcon fontSize="small" />
                     </IconButton>
-                    <Typography style={{ justifySelf: "center" }}>
-                        {i18n.t("contactDrawer.header")}
-                    </Typography>
                 </div>
 
                 {loading ? (
                     <ContactDrawerSkeleton classes={classes} />
+                ) : activeTab === "quickMessages" ? (
+                    <QuickMessagesPanel 
+                        onSendMessage={onSendQuickMessage} 
+                        onEditMessage={() => {}} // será implementado se precisar editar direto daqui
+                    />
                 ) : (
                     <div className={classes.content}>
                         <Paper square variant="outlined" className={classes.contactHeader}>

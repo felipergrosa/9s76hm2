@@ -145,7 +145,7 @@ const Dashboard = () => {
     setActiveTab(newValue);
   };
 
-  if (user.profile === "user" && !hasPermission("dashboard.view")) {
+  if (!hasPermission("dashboard.view")) {
     return <ForbiddenPage />;
   }
 

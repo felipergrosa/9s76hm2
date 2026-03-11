@@ -9,11 +9,13 @@ interface Data {
   geral: boolean;
   mediaPath?: string | null;
   visao: boolean;
-
+  groupName?: string;
+  color?: string;
+  isAdmin?: boolean;
 }
 
 const UpdateService = async (data: Data): Promise<QuickMessage> => {
-  const { id, shortcode, message, userId, geral, mediaPath, visao } = data;
+  const { id, shortcode, message, userId, geral, mediaPath, visao, groupName, color, isAdmin } = data;
 
   const record = await QuickMessage.findByPk(id);
 
@@ -21,17 +23,20 @@ const UpdateService = async (data: Data): Promise<QuickMessage> => {
     throw new AppError("ERR_NO_TICKETNOTE_FOUND", 404);
   }
 
-  if (!record.geral && record.visao && record.userId !== userId) {
+  // Admin/superadmin podem editar qualquer mensagem
+  // User padrão só edita as próprias
+  if (!isAdmin && record.userId !== Number(userId)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
   await record.update({
     shortcode,
     message,
-    // userId,
     geral,
     mediaPath,
-    visao
+    visao,
+    groupName,
+    color
   });
 
   return record;

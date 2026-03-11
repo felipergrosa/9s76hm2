@@ -30,6 +30,7 @@ import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { Can } from "../../components/Can";
 import useContactLists from "../../hooks/useContactLists";
+import usePermissions from "../../hooks/usePermissions";
 import { Chip, Typography, Tooltip, Popover, Button } from "@material-ui/core";
 import IconButton from "@material-ui/core/IconButton";
 import ContactAvatar from "../../components/ContactAvatar";
@@ -227,6 +228,7 @@ const ContactListItems = () => {
 
 
   const { findById: findContactList } = useContactLists();
+  const { hasPermission } = usePermissions();
 
 
   const refreshContactList = () => {
@@ -869,7 +871,7 @@ const ContactListItems = () => {
             )}
           </ConfirmationModal>
           {
-            user.profile === "user" ?
+            !hasPermission("contact-lists.view") ?
               <ForbiddenPage />
               :
               <>

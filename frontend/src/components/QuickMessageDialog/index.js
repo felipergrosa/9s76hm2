@@ -32,6 +32,8 @@ import {
   Select,
 } from "@material-ui/core";
 import ConfirmationModal from "../ConfirmationModal";
+import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete";
+import { Tooltip } from "@material-ui/core";
 
 
 const useStyles = makeStyles((theme) => ({
@@ -73,7 +75,7 @@ const QuickeMessageSchema = Yup.object().shape({
   //   message: Yup.string().required("Obrigatório"),
 });
 
-const QuickMessageDialog = ({ open, onClose, quickemessageId, reload }) => {
+const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialData }) => {
   const classes = useStyles();
   const { user } = useContext(AuthContext);
 
@@ -84,17 +86,36 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload }) => {
     message: "",
     geral: false,
     status: true,
+    groupName: "",
+    color: "#4B5563",
   };
+
+  const colors = [
+    { label: "Cinza", value: "#4B5563" },
+    { label: "Vermelho", value: "#EF4444" },
+    { label: "Amarelo", value: "#F59E0B" },
+    { label: "Verde", value: "#10B981" },
+    { label: "Azul", value: "#3B82F6" },
+    { label: "Roxo", value: "#8B5CF6" },
+  ];
 
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [quickemessage, setQuickemessage] = useState(initialState);
   const [attachment, setAttachment] = useState(null);
+  const [optionsGroups, setOptionsGroups] = useState([]);
   const attachmentFile = useRef(null);
 
   useEffect(() => {
     try {
       (async () => {
-        if (!quickemessageId) return;
+        if (!quickemessageId) {
+          if (initialData) {
+            setQuickemessage((prevState) => {
+              return { ...prevState, ...initialData };
+            });
+          }
+          return;
+        }
 
         const { data } = await api.get(`/quick-messages/${quickemessageId}`);
 
@@ -106,6 +127,19 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload }) => {
       toastError(err);
     }
   }, [quickemessageId, open]);
+
+  useEffect(() => {
+    try {
+      (async () => {
+        if (!open) return;
+        const { data } = await api.get(`/quick-messages/list`);
+        const uniqueGroups = [...new Set(data.map(item => item.groupName).filter(Boolean))];
+        setOptionsGroups(uniqueGroups);
+      })();
+    } catch (err) {
+      toastError(err);
+    }
+  }, [open]);
 
   const handleClose = () => {
     setQuickemessage(initialState);
@@ -248,6 +282,47 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload }) => {
                       margin="dense"
                       fullWidth
                     />
+                    </Grid>
+                  <Grid xs={6} item>
+                    <Autocomplete
+                      freeSolo
+                      options={optionsGroups}
+                      disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
+                      value={values.groupName || ""}
+                      onChange={(e, newValue) => setFieldValue("groupName", newValue)}
+                      onInputChange={(e, newInputValue) => setFieldValue("groupName", newInputValue)}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Categoria / Grupo"
+                          variant="outlined"
+                          margin="dense"
+                          fullWidth
+                        />
+                      )}
+                    />
+                  </Grid>
+                  <Grid xs={6} item>
+                    <FormControl variant="outlined" margin="dense" fullWidth disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}>
+                      <InputLabel id="color-label">Cor</InputLabel>
+                      <Field
+                        as={Select}
+                        label="Cor"
+                        labelId="color-label"
+                        id="color"
+                        name="color"
+                        value={values.color || "#4B5563"}
+                      >
+                        {colors.map((c) => (
+                          <MenuItem key={c.value} value={c.value}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: c.value }}></div>
+                              {c.label}
+                            </div>
+                          </MenuItem>
+                        ))}
+                      </Field>
+                    </FormControl>
                   </Grid>
                   <Grid xs={12} item>
                     <Field

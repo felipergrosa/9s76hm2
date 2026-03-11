@@ -481,9 +481,12 @@ const TicketsListCustom = (props) => {
         }
     };
 
-    if (status && status !== "search") {
-        ticketsList = ticketsList.filter(ticket => ticket.status === status)
-    }
+    const filteredTickets = useMemo(() => {
+        if (status && status !== "search") {
+            return ticketsList.filter(ticket => ticket.status === status);
+        }
+        return ticketsList;
+    }, [ticketsList, status]);
 
     return (
         <Paper className={`${classes.ticketsListWrapper} tickets-list-wrapper`} style={style}>
@@ -495,7 +498,7 @@ const TicketsListCustom = (props) => {
                 onScroll={handleScroll}
             >
                 <List style={{ paddingTop: 0 }} >
-                    {ticketsList.length === 0 && !loading ? (
+                    {filteredTickets.length === 0 && !loading ? (
                         <div className={classes.noTicketsDiv}>
                             <span className={classes.noTicketsTitle}>
                                 {i18n.t("ticketsList.noTicketsTitle")}
@@ -506,15 +509,12 @@ const TicketsListCustom = (props) => {
                         </div>
                     ) : (
                         <>
-                            {ticketsList.map((ticket) => (
-                                // <List key={ticket.id}>
-                                //     {console.log(ticket)}
+                            {filteredTickets.map((ticket) => (
                                 <TicketListItem
                                     ticket={ticket}
                                     key={ticket.id}
                                     setTabOpen={setTabOpen}
                                 />
-                                // </List>
                             ))}
                         </>
                     )}

@@ -23,6 +23,7 @@ import OnlyForSuperUser from "../../components/OnlyForSuperUser";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import useSettings from "../../hooks/useSettings";
 import ForbiddenPage from "../../components/ForbiddenPage/index.js";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -74,6 +75,7 @@ const SettingsCustom = () => {
   const { getAll: getAllSettings } = useCompanySettings();
   const { getAll: getAllSettingsOld } = useSettings();
   const { user, socket } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
 
   useEffect(() => {
     async function findData() {
@@ -132,7 +134,7 @@ const SettingsCustom = () => {
 
   return (
     <MainContainer useWindowScroll={true} className={classes.root}>
-      {user.profile === "user" ?
+      {!hasPermission("settings.view") ?
         <ForbiddenPage />
         :
         <>

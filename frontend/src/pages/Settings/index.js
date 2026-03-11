@@ -12,6 +12,8 @@ import { i18n } from "../../translate/i18n.js";
 import toastError from "../../errors/toastError";
 // import { SocketContext } from "../../context/Socket/SocketContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import ForbiddenPage from "../../components/ForbiddenPage/index.js";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -39,6 +41,7 @@ const Settings = () => {
   const classes = useStyles();
   //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
 
   const [settings, setSettings] = useState([]);
 
@@ -96,7 +99,7 @@ const Settings = () => {
 
   return (
     <div className={classes.root}>
-      {user.profile === "user" ?
+      {!hasPermission("settings.view") ?
         <ForbiddenPage />
         :
         <>

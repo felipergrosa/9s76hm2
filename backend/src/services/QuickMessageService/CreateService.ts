@@ -11,6 +11,8 @@ interface Data {
   isMedia: boolean;
   mediaPath?: string | null;
   visao: boolean;
+  groupName?: string;
+  color?: string;
 }
 
 const CreateService = async (data: Data): Promise<QuickMessage> => {

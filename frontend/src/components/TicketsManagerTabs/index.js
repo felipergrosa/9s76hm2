@@ -1271,53 +1271,56 @@ const TicketsManagerTabs = () => {
           </div>
 
           <Paper className={classes.ticketsWrapper}>
-            <TicketsList
-              status="open"
-              showAll={showAllTickets}
-              sortTickets={sortTickets ? "ASC" : "DESC"}
-              selectedQueueIds={selectedQueueIds}
-              updateCount={(val) => setOpenCount(val)}
-              style={applyPanelStyle("open")}
-              setTabOpen={setTabOpen}
-            />
-            <TicketsList
-              status="pending"
-              selectedQueueIds={selectedQueueIds}
-              sortTickets={sortTickets ? "ASC" : "DESC"}
-              showAll={user.profile === "admin" || canViewAllUsers ? showAllTickets : false}
-              updateCount={(val) => setPendingCount(val)}
-              style={applyPanelStyle("pending")}
-              setTabOpen={setTabOpen}
-            />
-            {canViewGroups && (
+            {tabOpen === "open" && (
+              <TicketsList
+                status="open"
+                showAll={showAllTickets}
+                sortTickets={sortTickets ? "ASC" : "DESC"}
+                selectedQueueIds={selectedQueueIds}
+                updateCount={(val) => setOpenCount(val)}
+                setTabOpen={setTabOpen}
+              />
+            )}
+            {tabOpen === "pending" && (
+              <TicketsList
+                status="pending"
+                selectedQueueIds={selectedQueueIds}
+                sortTickets={sortTickets ? "ASC" : "DESC"}
+                showAll={user.profile === "admin" || canViewAllUsers ? showAllTickets : false}
+                updateCount={(val) => setPendingCount(val)}
+                setTabOpen={setTabOpen}
+              />
+            )}
+            {tabOpen === "group" && canViewGroups && (
               <TicketsList
                 status="group"
                 showAll={showAllTickets}
                 sortTickets={sortTickets ? "ASC" : "DESC"}
                 selectedQueueIds={selectedQueueIds}
                 updateCount={(val) => setGroupingCount(val)}
-                style={applyPanelStyle("group")}
                 setTabOpen={setTabOpen}
               />
             )}
-            <TicketsList
-              status="bot"
-              showAll={showAllTickets}
-              sortTickets={sortTickets ? "ASC" : "DESC"}
-              selectedQueueIds={selectedQueueIds}
-              updateCount={(val) => setBotCount(val)}
-              style={applyPanelStyle("bot")}
-              setTabOpen={setTabOpen}
-            />
-            <TicketsList
-              status="campaign"
-              showAll={showAllTickets}
-              sortTickets={sortTickets ? "ASC" : "DESC"}
-              selectedQueueIds={selectedQueueIds}
-              updateCount={(val) => setCampaignCount(val)}
-              style={applyPanelStyle("campaign")}
-              setTabOpen={setTabOpen}
-            />
+            {tabOpen === "bot" && (
+              <TicketsList
+                status="bot"
+                showAll={showAllTickets}
+                sortTickets={sortTickets ? "ASC" : "DESC"}
+                selectedQueueIds={selectedQueueIds}
+                updateCount={(val) => setBotCount(val)}
+                setTabOpen={setTabOpen}
+              />
+            )}
+            {tabOpen === "campaign" && (
+              <TicketsList
+                status="campaign"
+                showAll={showAllTickets}
+                sortTickets={sortTickets ? "ASC" : "DESC"}
+                selectedQueueIds={selectedQueueIds}
+                updateCount={(val) => setCampaignCount(val)}
+                setTabOpen={setTabOpen}
+              />
+            )}
           </Paper>
         </TabPanel>
         <TabPanel value={tab} name="closed" className={classes.ticketsWrapper}>

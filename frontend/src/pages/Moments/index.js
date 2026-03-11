@@ -102,7 +102,7 @@ const ChatMoments = () => {
 
   return (
 
-    user.profile === "user" && !hasPermission("realtime.view") ?
+    !hasPermission("realtime.view") ?
       <ForbiddenPage />
       :
       <MainHeader>

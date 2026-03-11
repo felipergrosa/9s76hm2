@@ -20,6 +20,8 @@ type IndexQuery = {
   searchParam: string;
   pageNumber: string;
   userId: string | number;
+  sortBy?: string;
+  groupName?: string;
 };
 
 type StoreData = {
@@ -31,6 +33,8 @@ type StoreData = {
   geral: boolean;
   isMedia: boolean;
   visao: boolean;
+  groupName?: string;
+  color?: string;
 };
 
 type FindParams = {
@@ -39,14 +43,18 @@ type FindParams = {
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
-  const { searchParam, pageNumber } = req.query as IndexQuery;
-  const { companyId, id: userId } = req.user;
+  const { searchParam, pageNumber, sortBy, groupName } = req.query as IndexQuery;
+  const { companyId, id: userId, profile } = req.user;
+  const isAdmin = profile === "admin" || (req.user as any).super === true;
 
   const { records, count, hasMore } = await ListService({
     searchParam,
     pageNumber,
     companyId,
-    userId
+    userId,
+    isAdmin,
+    sortBy,
+    groupName
   });
 
   return res.json({ records, count, hasMore });
@@ -112,11 +120,14 @@ export const update = async (
   }
 
   const { id } = req.params;
+  const { profile } = req.user;
+  const isAdmin = profile === "admin" || (req.user as any).super === true;
 
   const record = await UpdateService({
     ...data,
     userId: req.user.id,
     id,
+    isAdmin,
   });
 
   const io = getIO();
@@ -134,7 +145,16 @@ export const remove = async (
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
-  const { companyId } = req.user;
+  const { companyId, profile } = req.user;
+  const isAdmin = profile === "admin" || (req.user as any).super === true;
+
+  // User padrão só pode excluir as próprias
+  if (!isAdmin) {
+    const record = await QuickMessage.findByPk(id);
+    if (record && record.userId !== Number(req.user.id)) {
+      throw new AppError("ERR_NO_PERMISSION", 403);
+    }
+  }
 
   await DeleteService(id);
 
@@ -153,7 +173,9 @@ export const findList = async (
   res: Response
 ): Promise<Response> => {
   const params = req.query as FindParams;
-  const records: QuickMessage[] = await FindService(params);
+  const companyId = req.user.companyId.toString();
+  const userId = req.user.id.toString();
+  const records: QuickMessage[] = await FindService({ ...params, companyId, userId });
 
   return res.status(200).json(records);
 };
@@ -202,5 +224,27 @@ export const deleteMedia = async (
     return res.send({ mensagem: "Arquivo Excluído" });
     } catch (err: any) {
       throw new AppError(err.message);
+  }
+};
+
+export const incrementUse = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+
+  try {
+    const record = await QuickMessage.findByPk(id);
+    if (!record) {
+      throw new AppError("ERR_NO_TICKETNOTE_FOUND", 404);
+    }
+
+    await record.update({
+      useCount: (record.useCount || 0) + 1
+    });
+
+    return res.status(200).json(record);
+  } catch (err: any) {
+    throw new AppError(err.message);
   }
 };

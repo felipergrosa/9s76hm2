@@ -105,6 +105,7 @@ const Ticket = () => {
 
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState("contact");
   const [loading, setLoading] = useState(true);
   const [contact, setContact] = useState({});
   const [ticket, setTicket] = useState({});
@@ -183,7 +184,7 @@ const Ticket = () => {
         }
       };
       fetchTicket();
-    }, 500);
+    }, 50);
 
     return () => clearTimeout(delayDebounceFn);
   }, [ticketId, user, history, socket]);
@@ -203,7 +204,14 @@ const Ticket = () => {
 
   // Abre o drawer quando solicitado
   useEffect(() => {
-    const onOpenContactDrawer = () => setDrawerOpen(true);
+    const onOpenContactDrawer = (e) => {
+      if (e?.detail?.tab) {
+        setDrawerTab(e.detail.tab);
+      } else {
+        setDrawerTab("contact");
+      }
+      setDrawerOpen(true);
+    };
     window.addEventListener('open-contact-drawer', onOpenContactDrawer);
     return () => {
       window.removeEventListener('open-contact-drawer', onOpenContactDrawer);
@@ -372,6 +380,7 @@ const Ticket = () => {
   }, [socket, ticket?.id]);
 
   const handleDrawerOpen = useCallback(() => {
+    setDrawerTab("contact");
     setDrawerOpen(true);
   }, []);
 
@@ -384,8 +393,17 @@ const Ticket = () => {
     if (ticket?.isGroup && ticket?.status === "closed") {
       return;
     }
+    if (!drawerOpen) {
+      setDrawerTab("contact");
+    }
     setDrawerOpen(prev => !prev);
-  }, [ticket?.isGroup, ticket?.status]);
+  }, [ticket?.isGroup, ticket?.status, drawerOpen]);
+
+  const handleSendQuickMessage = useCallback((msg) => {
+    window.dispatchEvent(new CustomEvent('insert-quick-message', {
+      detail: msg
+    }));
+  }, []);
 
   const renderMessagesList = () => {
     return (
@@ -407,6 +425,15 @@ const Ticket = () => {
             contactId={contact.id}
             contactData={contact}
             ticketData={ticket}
+            quickMessagesOpen={drawerOpen && drawerTab === 'quickMessages'}
+            onToggleQuickMessages={() => {
+              if (drawerOpen && drawerTab === 'quickMessages') {
+                setDrawerOpen(false);
+              } else {
+                setDrawerTab('quickMessages');
+                setDrawerOpen(true);
+              }
+            }}
           />
         )}
       </>
@@ -495,6 +522,8 @@ const Ticket = () => {
           contact={contact}
           loading={loading}
           ticket={ticket}
+          activeTabParams={drawerTab}
+          onSendQuickMessage={handleSendQuickMessage}
         />
       )}
 

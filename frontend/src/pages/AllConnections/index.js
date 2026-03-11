@@ -58,6 +58,7 @@ import { i18n } from "../../translate/i18n";
 import { WhatsAppsContext } from "../../context/WhatsApp/WhatsAppsContext";
 import toastError from "../../errors/toastError";
 import ForbiddenPage from "../../components/ForbiddenPage";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles(theme => ({
   mainPaper: {
@@ -132,6 +133,7 @@ const IconChannel = channel => {
 const AllConnections = () => {
   const classes = useStyles();
   const { user, socket } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
   const { list } = useCompanies();
   const [clearAuthById, setClearAuthById] = useState({});
   const [loadingWhatsapp, setLoadingWhatsapp] = useState(true);
@@ -488,7 +490,7 @@ const AllConnections = () => {
         whatsAppId={!qrModalOpen && selectedWhatsApp?.id}
       />
 
-      {user.profile === "user" ?
+      {!hasPermission("all-connections.view") ?
         <ForbiddenPage />
         :
         <>

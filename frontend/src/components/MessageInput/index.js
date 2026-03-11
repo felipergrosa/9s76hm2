@@ -671,7 +671,17 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketChannel, contactData, ticketData }) => {
+const MessageInput = ({ 
+  ticketId, 
+  ticketStatus, 
+  droppedFiles, 
+  contactId, 
+  ticketChannel, 
+  contactData, 
+  ticketData,
+  quickMessagesOpen,
+  onToggleQuickMessages
+}) => {
 
   const classes = useStyles();
   const theme = useTheme();
@@ -1432,6 +1442,24 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
     setMediasUpload(selectedMedias);
     setShowModalMedias(true);
   };
+
+  // Listener para receber a injeção do QuickMessagePanel (novo painel da sidebar)
+  useEffect(() => {
+    const handleInsertQuickMessage = (e) => {
+      if (e?.detail) {
+        if (e.detail.mediaPath) {
+          // Lida com media se necessário (neste caso, fazemos de conta simulando a ação de Mídia Rápida ou só texto)
+          handleQuickAnswersClick(e.detail);
+        } else {
+          insertAtCursor(expandPlaceholders(e.detail.message));
+        }
+      }
+    };
+    window.addEventListener('insert-quick-message', handleInsertQuickMessage);
+    return () => {
+      window.removeEventListener('insert-quick-message', handleInsertQuickMessage);
+    };
+  }, [contactData, ticketData, expandPlaceholders]);
 
   const handleChangeSign = (e) => {
     getStatusSingMessageLocalstogare();
@@ -2354,10 +2382,19 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
                   <IconButton
                     aria-label="flash"
                     component="span"
-                    onClick={() => setInputMessage('/')}
+                    onClick={() => {
+                      if (onToggleQuickMessages) {
+                        onToggleQuickMessages();
+                      } else {
+                        window.dispatchEvent(new CustomEvent('open-contact-drawer', {
+                          detail: { tab: 'quickMessages' }
+                        }));
+                      }
+                    }}
+                    color={quickMessagesOpen ? "primary" : "inherit"}
                     tabIndex={-1}
                   >
-                    <Zap size={20} className={classes.sendMessageIcons} />
+                    <Zap size={20} style={{ color: quickMessagesOpen ? theme.palette.primary.main : "inherit" }} />
                   </IconButton>
                 </Tooltip>
                 <Menu
