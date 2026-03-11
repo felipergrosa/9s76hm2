@@ -76,6 +76,7 @@ import useSpellChecker, { autoCorrectText, findMisspelledWords, checkGrammar } f
 import SpellCheckSuggestions from "./SpellCheckSuggestions";
 import FormatToolbar from "./FormatToolbar";
 import useTextSelection from "../../hooks/useTextSelection";
+import { expandPlaceholders } from "../../utils/expandPlaceholders";
 
 
 const Mp3Recorder = new MicRecorder({ bitRate: 128 });
@@ -751,119 +752,6 @@ const MessageInput = ({
   const isMobile = useMediaQuery('(max-width: 767px)'); // Ajuste o valor conforme necessário
   const [placeholderText, setPlaceHolderText] = useState("");
 
-  // Expansor de placeholders: aceita {chave}, {{chave}} e #chave
-  const expandPlaceholders = (text) => {
-    if (!text || typeof text !== 'string') return text;
-    const c = contactData || {};
-    const safe = (v) => (v === undefined || v === null ? "" : String(v));
-    const fullName = safe(c.name || c.contactName || c.fantasyName);
-    const firstName = fullName.split(/\s+/)[0] || "";
-    const lastName = fullName.split(/\s+/).slice(1).join(' ') || "";
-    const number = safe(c.number);
-    const email = safe(c.email);
-    const city = safe(c.city);
-    const cpfCnpj = safe(c.cpfCnpj);
-    const representativeCode = safe(c.representativeCode);
-    const segment = safe(c.segment);
-    const contactIdStr = safe(c.id);
-
-    // Dados do atendimento/ticket
-    const t = ticketData || {};
-    const ticketIdStr = safe(t.id || ticketId);
-    const ticketUuid = safe(t.uuid);
-    const queueName = safe(t.queue?.name || t.queueName);
-    const conexao = safe(t.whatsapp?.name || t.connectionName || ticketChannel);
-    const protocolo = safe(t.protocol || t.uuid || t.id);
-
-    // Dados do atendente/empresa
-    const attendant = safe((user && user.name) || "");
-    const companyName = safe(user?.companyName || user?.tenant?.name || "");
-
-    // Datas/horas/saudações
-    const now = new Date();
-    const pad2 = (n) => String(n).padStart(2, '0');
-    const data = `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()}`;
-    const hora = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
-    const dataHora = `${data} ${hora}`;
-    const h = now.getHours();
-    const periodoDia = h < 12 ? 'manhã' : (h < 18 ? 'tarde' : 'noite');
-    const saudacao = h < 12 ? 'Bom dia' : (h < 18 ? 'Boa tarde' : 'Boa noite');
-
-    const valueMap = {
-      // nomes (pt e en)
-      'nome': fullName,
-      'name': fullName,
-      'primeiro_nome': firstName,
-      'first_name': firstName,
-      'ultimo_nome': lastName,
-      'last_name': lastName,
-      // telefone/whatsapp
-      'numero': number,
-      'telefone': number,
-      'whatsapp': number,
-      'phone': number,
-      // email
-      'email': email,
-      // cidade
-      'cidade': city,
-      'city': city,
-      // documentos/códigos
-      'cpf_cnpj': cpfCnpj,
-      'cnpj_cpf': cpfCnpj,
-      'representante': representativeCode,
-      'representative_code': representativeCode,
-      'segmento': segment,
-      'segment': segment,
-      // ids
-      'id_contato': contactIdStr,
-      'contact_id': contactIdStr,
-      // atendimento
-      'ticket': ticketIdStr,
-      'ticket_id': ticketIdStr,
-      'protocolo': protocolo,
-      'queue': queueName,
-      'fila': queueName,
-      'conexao': conexao,
-      'connection': conexao,
-      'atendente': attendant,
-      'agent': attendant,
-      // empresa
-      'empresa': companyName,
-      // data/hora / contexto
-      'data': data,
-      'hora': hora,
-      'data_hora': dataHora,
-      'data-hora': dataHora,
-      'periodo_dia': periodoDia,
-      'periodo-dia': periodoDia,
-      'saudacao': saudacao,
-    };
-
-    const normalizeKey = (k) =>
-      String(k || '')
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/\p{Diacritic}+/gu, '')
-        .trim();
-
-    // 1) {chave} e {{chave}} => quando não houver valor, substitui por vazio
-    let out = text
-      .replace(/\{\{\s*([^}]+?)\s*\}\}|\{\s*([^}]+?)\s*\}/g, (m, k1, k2) => {
-        const key = normalizeKey(k1 || k2);
-        const val = valueMap[key];
-        return val !== undefined ? val : "";
-      });
-
-    // 2) #chave (apenas tokens separados por não-letra ou início/fim) => sem valor vira vazio
-    out = out.replace(/(^|[^\w\-])#([\w\-]+)/g, (m, prefix, key) => {
-      const norm = normalizeKey(key);
-      const val = valueMap[norm];
-      return prefix + (val !== undefined ? val : "");
-    });
-
-    return out;
-  };
-
   // Medidor de áudio (waveform simples)
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
@@ -1349,7 +1237,7 @@ const MessageInput = ({
     }
 
     setInputMessage("");
-    setInputMessage(expandPlaceholders(value.value));
+    setInputMessage(expandPlaceholders(value.value, contactData, ticketData, user));
     setTypeBar(false);
   };
 
@@ -1451,7 +1339,7 @@ const MessageInput = ({
           // Lida com media se necessário (neste caso, fazemos de conta simulando a ação de Mídia Rápida ou só texto)
           handleQuickAnswersClick(e.detail);
         } else {
-          insertAtCursor(expandPlaceholders(e.detail.message));
+          insertAtCursor(expandPlaceholders(e.detail.message, contactData, ticketData, user));
         }
       }
     };

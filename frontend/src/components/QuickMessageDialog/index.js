@@ -16,6 +16,10 @@ import CircularProgress from "@material-ui/core/CircularProgress";
 import AttachFileIcon from "@material-ui/icons/AttachFile";
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import IconButton from "@material-ui/core/IconButton";
+import ClickAwayListener from "@material-ui/core/ClickAwayListener";
+import { Smile } from "lucide-react";
+import "emoji-mart/css/emoji-mart.css";
+import { Picker } from "emoji-mart";
 import { i18n } from "../../translate/i18n";
 import { head } from "lodash";
 import api from "../../services/api";
@@ -30,10 +34,13 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  Typography,
 } from "@material-ui/core";
 import ConfirmationModal from "../ConfirmationModal";
 import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete";
-import { Tooltip } from "@material-ui/core";
+import { Tooltip, Popover } from "@material-ui/core";
+import ChatAssistantPanel from "../ChatAssistantPanel";
+import StarsIcon from "@material-ui/icons/Stars";
 
 
 const useStyles = makeStyles((theme) => ({
@@ -104,6 +111,9 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
   const [attachment, setAttachment] = useState(null);
   const [optionsGroups, setOptionsGroups] = useState([]);
   const attachmentFile = useRef(null);
+  const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [emojiAnchorEl, setEmojiAnchorEl] = useState(null);
 
   useEffect(() => {
     try {
@@ -212,18 +222,33 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
     }
   };
 
-  const handleClickMsgVar = async (msgVar, setValueFunc) => {
-    const el = messageInputRef.current;
-    const firstHalfText = el.value.substring(0, el.selectionStart);
-    const secondHalfText = el.value.substring(el.selectionEnd);
-    const newCursorPos = el.selectionStart + msgVar.length;
+  const handleClickMsgVar = (variable, setFieldValue, values) => {
+    const firstPartValue = values.message.substring(0, messageInputRef.current.selectionStart);
+    const secondPartValue = values.message.substring(messageInputRef.current.selectionEnd);
 
-    setValueFunc("message", `${firstHalfText}${msgVar}${secondHalfText}`);
+    const newCursorPos = (firstPartValue + variable).length;
 
-    await new Promise(r => setTimeout(r, 100));
-    messageInputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+    setFieldValue("message", `${firstPartValue}${variable}${secondPartValue}`);
+
+    setTimeout(() => {
+      messageInputRef.current.focus();
+      messageInputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
   };
 
+  const handleEmojiSelect = (emoji, setFieldValue, values) => {
+    const firstPartValue = values.message.substring(0, messageInputRef.current.selectionStart);
+    const secondPartValue = values.message.substring(messageInputRef.current.selectionEnd);
+
+    const newCursorPos = (firstPartValue + emoji.native).length;
+
+    setFieldValue("message", `${firstPartValue}${emoji.native}${secondPartValue}`);
+
+    setTimeout(() => {
+      messageInputRef.current.focus();
+      messageInputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  };
   return (
     <div className={classes.root}>
       <ConfirmationModal
@@ -237,7 +262,7 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
       <Dialog
         open={open}
         onClose={handleClose}
-        maxWidth="xs"
+        maxWidth="md"
         fullWidth
         scroll="paper"
       >
@@ -269,11 +294,11 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
             <Form>
               <DialogContent dividers>
                 <Grid spacing={2} container>
-                  <Grid xs={12} item>
+                  <Grid xs={6} item>
                     <Field
                       as={TextField}
                       autoFocus
-                      label={i18n.t("quickMessages.dialog.shortcode")}
+                      label="Nome"
                       name="shortcode"
                       disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
                       error={touched.shortcode && Boolean(errors.shortcode)}
@@ -282,7 +307,55 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                       margin="dense"
                       fullWidth
                     />
-                    </Grid>
+                  </Grid>
+                  <Grid xs={3} item>
+                    <FormControl variant="outlined" margin="dense" fullWidth>
+                      <InputLabel id="geral-selection-label">
+                        {i18n.t("quickMessages.dialog.visao")}
+                      </InputLabel>
+                      <Field
+                        as={Select}
+                        label={i18n.t("quickMessages.dialog.visao")}
+                        placeholder={i18n.t("quickMessages.dialog.visao")}
+                        labelId="visao-selection-label"
+                        id="visao"
+                        disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
+                        name="visao"
+                        onChange={(e) => {
+                          setFieldValue("visao", e.target.value === "true");
+                        }}
+                        error={touched.visao && Boolean(errors.visao)}
+                        value={values.visao ? "true" : "false"}
+                      >
+                        <MenuItem value={"true"}>{i18n.t("announcements.active")}</MenuItem>
+                        <MenuItem value={"false"}>{i18n.t("announcements.inactive")}</MenuItem>
+                      </Field>
+                    </FormControl>
+                  </Grid>
+                  <Grid xs={3} item>
+                    <FormControl variant="outlined" margin="dense" fullWidth>
+                      <InputLabel id="geral-selection-label">
+                        {i18n.t("quickMessages.dialog.geral")}
+                      </InputLabel>
+                      <Field
+                        as={Select}
+                        label={i18n.t("quickMessages.dialog.geral")}
+                        placeholder={i18n.t("quickMessages.dialog.geral")}
+                        labelId="novo-item-selection-label"
+                        id="geral"
+                        name="geral"
+                        disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
+                        value={values.geral ? "true" : "false"}
+                        error={touched.geral && Boolean(errors.geral)}
+                        onChange={(e) => {
+                          setFieldValue("geral", e.target.value === "true");
+                        }}
+                      >
+                        <MenuItem value={"true"}>{i18n.t("announcements.active")}</MenuItem>
+                        <MenuItem value={"false"}>{i18n.t("announcements.inactive")}</MenuItem>
+                      </Field>
+                    </FormControl>
+                  </Grid>
                   <Grid xs={6} item>
                     <Autocomplete
                       freeSolo
@@ -325,9 +398,121 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                     </FormControl>
                   </Grid>
                   <Grid xs={12} item>
+                    <ChatAssistantPanel
+                      open={aiAssistantOpen}
+                      onClose={() => {
+                        setAiAssistantOpen(false);
+                        setFieldValue("aiAction", null);
+                      }}
+                      inputMessage={values.message}
+                      setInputMessage={(val) => setFieldValue("message", val)}
+                      assistantContext="general"
+                      title="Assistente de Mensagens Rápidas"
+                      dialogMode={true}
+                    />
+                  </Grid>
+                  <Grid xs={12} item>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                      <Typography variant="caption" style={{ width: '100%', marginBottom: 4, opacity: 0.7 }}>
+                        Ajustar Tom (IA):
+                      </Typography>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          setFieldValue("aiAction", "formal");
+                          setAiAssistantOpen(true);
+                        }}
+                        disabled={!values.message || aiAssistantOpen}
+                        style={{ textTransform: 'none', borderRadius: 16 }}
+                      >
+                        👔 Formal
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          setFieldValue("aiAction", "casual");
+                          setAiAssistantOpen(true);
+                        }}
+                        disabled={!values.message || aiAssistantOpen}
+                        style={{ textTransform: 'none', borderRadius: 16 }}
+                      >
+                        🤝 Amigável
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          setFieldValue("aiAction", "persuasive");
+                          setAiAssistantOpen(true);
+                        }}
+                        disabled={!values.message || aiAssistantOpen}
+                        style={{ textTransform: 'none', borderRadius: 16 }}
+                      >
+                        🚀 Persuasivo
+                      </Button>
+                    </div>
+                  </Grid>
+                  <Grid xs={12} item>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: -10 }}>
+                      <Typography variant="body2" color="primary" style={{ fontWeight: 500 }}>
+                        {i18n.t("quickMessages.dialog.message")}
+                      </Typography>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <Tooltip title="Emojis">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              setEmojiAnchorEl(e.currentTarget);
+                              setEmojiOpen(true);
+                            }}
+                            color="primary"
+                            disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
+                          >
+                            <Smile size={20} />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Assistente de IA">
+                          <IconButton
+                            size="small"
+                            onClick={() => setAiAssistantOpen(true)}
+                            color="primary"
+                            disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
+                          >
+                            <StarsIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </div>
+                    </div>
+                    <Popover
+                      open={emojiOpen}
+                      anchorEl={emojiAnchorEl}
+                      onClose={() => setEmojiOpen(false)}
+                      anchorOrigin={{
+                        vertical: 'top',
+                        horizontal: 'right',
+                      }}
+                      transformOrigin={{
+                        vertical: 'bottom',
+                        horizontal: 'right',
+                      }}
+                      PaperProps={{
+                        style: { zIndex: 2000000000 }
+                      }}
+                    >
+                      <Picker
+                        set="apple"
+                        onSelect={(emoji) => {
+                          handleEmojiSelect(emoji, setFieldValue, values);
+                          setEmojiOpen(false);
+                        }}
+                        title="Escolha um emoji"
+                        emoji="point_up"
+                      />
+                    </Popover>
                     <Field
                       as={TextField}
-                      label={i18n.t("quickMessages.dialog.message")}
                       name="message"
                       inputRef={messageInputRef}
                       error={touched.message && Boolean(errors.message)}
@@ -338,75 +523,42 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                       multiline={true}
                       rows={7}
                       fullWidth
-                    // disabled={quickemessage.mediaPath || attachment ? true : false}
                     />
                   </Grid>
                   <Grid item>
                     <MessageVariablesPicker
                       disabled={isSubmitting || (quickemessageId && values.visao && !values.geral && values.userId !== user.id)}
-                      onClick={value => handleClickMsgVar(value, setFieldValue)}
+                      onClick={value => handleClickMsgVar(value, setFieldValue, values)}
                     />
                   </Grid>
                   {/* {(profile === "admin" || profile === "supervisor") && ( */}
-                  <Grid xs={12} item>
-                    <FormControl variant="outlined" margin="dense" fullWidth>
-                      <InputLabel id="geral-selection-label">
-                        {i18n.t("quickMessages.dialog.visao")}
-                      </InputLabel>
-                      <Field
-                        as={Select}
-                        label={i18n.t("quickMessages.dialog.visao")}
-                        placeholder={i18n.t("quickMessages.dialog.visao")}
-                        labelId="visao-selection-label"
-                        id="visao"
-                        disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
-                        name="visao"
-                        onChange={(e) => {
-                          setFieldValue("visao", e.target.value === "true");
-                        }}
-                        error={touched.visao && Boolean(errors.visao)}
-                        value={values.visao ? "true" : "false"} // Converte o valor booleano para string
-                      >
-                        <MenuItem value={"true"}>{i18n.t("announcements.active")}</MenuItem>
-                        <MenuItem value={"false"}>{i18n.t("announcements.inactive")}</MenuItem>
-                      </Field>
-                    </FormControl>
-                    {/* Renderização condicional do novo item */}
-                    {values.visao === true && (
-                      <FormControl variant="outlined" margin="dense" fullWidth>
-                        <InputLabel id="geral-selection-label">
-                          {i18n.t("quickMessages.dialog.geral")}
-                        </InputLabel>
-                        <Field
-                          as={Select}
-                          label={i18n.t("quickMessages.dialog.geral")}
-                          placeholder={i18n.t("quickMessages.dialog.geral")}
-                          labelId="novo-item-selection-label"
-                          id="geral"
-                          name="geral"
-                          disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
-                          value={values.geral ? "true" : "false"} // Converte o valor booleano para string
-                          error={touched.geral && Boolean(errors.geral)}
-                        >
-                          <MenuItem value={"true"}>{i18n.t("announcements.active")}</MenuItem>
-                          <MenuItem value={"false"}>{i18n.t("announcements.inactive")}</MenuItem>
-                        </Field>
-                      </FormControl>
-                    )}
-                  </Grid>
                   {/* )} */}
                   {(quickemessage.mediaPath || attachment) && (
                     <Grid xs={12} item>
-                      <Button startIcon={<AttachFileIcon />}>
-                        {attachment ? attachment.name : quickemessage.mediaName}
-                      </Button>
-                      <IconButton
-                        onClick={() => setConfirmationOpen(true)}
-                        color="secondary"
-                        disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
-                      >
-                        <DeleteOutlineIcon color="secondary" />
-                      </IconButton>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between',
+                        padding: '8px 12px',
+                        backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                        borderRadius: 8,
+                        border: '1px dashed rgba(0, 0, 0, 0.12)'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <AttachFileIcon color="primary" />
+                          <Typography variant="body2" noWrap style={{ maxWidth: 200 }}>
+                            {attachment ? attachment.name : quickemessage.mediaName || quickemessage.mediaPath.split('/').pop()}
+                          </Typography>
+                        </div>
+                        <IconButton
+                          onClick={() => setConfirmationOpen(true)}
+                          size="small"
+                          color="secondary"
+                          disabled={quickemessageId && values.visao && !values.geral && values.userId !== user.id}
+                        >
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </div>
                     </Grid>
                   )}
                 </Grid>
@@ -438,8 +590,8 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                   className={classes.btnWrapper}
                 >
                   {quickemessageId
-                    ? `${i18n.t("quickMessages.buttons.edit")}`
-                    : `${i18n.t("quickMessages.buttons.add")}`}
+                    ? "Salvar"
+                    : i18n.t("quickMessages.buttons.add")}
                   {isSubmitting && (
                     <CircularProgress
                       size={24}

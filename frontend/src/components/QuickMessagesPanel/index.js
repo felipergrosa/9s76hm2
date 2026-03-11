@@ -8,9 +8,13 @@ import {
   Collapse,
   Button,
   Chip,
-  Tooltip
+  Tooltip,
+  Menu,
+  MenuItem,
+  Divider
 } from "@material-ui/core";
 import SearchIcon from "@material-ui/icons/Search";
+import FilterListIcon from "@material-ui/icons/FilterList";
 import ExpandMoreIcon from "@material-ui/icons/ExpandMore";
 import ExpandLessIcon from "@material-ui/icons/ExpandLess";
 import EditIcon from "@material-ui/icons/Edit";
@@ -27,6 +31,7 @@ import { toast } from "react-toastify";
 import { i18n } from "../../translate/i18n";
 import ConfirmationModal from "../ConfirmationModal";
 import QuickMessageDialog from "../QuickMessageDialog";
+import { expandPlaceholders } from "../../utils/expandPlaceholders";
 
 const hexToAlpha = (hex, alpha) => {
   if (!hex || typeof hex !== "string" || !hex.startsWith('#')) return `rgba(0,0,0,${alpha})`;
@@ -54,6 +59,10 @@ const useStyles = makeStyles((theme) => ({
     marginLeft: theme.spacing(1),
     flex: 1,
     fontSize: "14px",
+  },
+  filterIcon: {
+    padding: "8px",
+    color: theme.palette.text.secondary,
   },
   filtersContainer: {
     display: "flex",
@@ -166,9 +175,100 @@ const useStyles = makeStyles((theme) => ({
   }
 }));
 
+const MessageItem = ({ 
+  msg, index, classes, expanded, onToggle, onSend, onCopy, 
+  onEdit, onClone, canEdit, onSendMessage, setDeletingMessage, 
+  setConfirmModalOpen, contact, ticket, user 
+}) => {
+  const itemColor = msg.color || "#6B7280";
+  const bgColor = hexToAlpha(itemColor, 0.08);
+  const borderColor = hexToAlpha(itemColor, 0.2);
+
+  return (
+    <div className={classes.messageItem} style={{ backgroundColor: bgColor, borderColor: borderColor }}>
+      <div className={classes.messageHeader}>
+        <div className={classes.messageTitleArea}>
+          <Typography style={{fontSize: 12, color: '#888', marginRight: 4}}>{index + 1})</Typography>
+          <Typography className={classes.messageShortcode}>
+            {msg.shortcode}
+          </Typography>
+        </div>
+        <div className={classes.actionsArea}>
+          {canEdit && (
+            <>
+              <Tooltip title="Editar">
+                <IconButton className={classes.actionIcon} onClick={onEdit}>
+                  <EditIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Excluir">
+                <IconButton 
+                  className={classes.actionIcon} 
+                  onClick={() => {
+                    setDeletingMessage(msg);
+                    setConfirmModalOpen(true);
+                  }}
+                >
+                  <DeleteOutlineIcon style={{ color: '#d33' }} />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+          <Tooltip title="Clonar">
+            <IconButton className={classes.actionIcon} onClick={onClone}>
+              <ControlPointDuplicateIcon />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Copiar">
+            <IconButton className={classes.actionIcon} onClick={onCopy}>
+              <FileCopyIcon />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Visualizar">
+            <IconButton className={classes.actionIcon} onClick={onToggle}>
+              <VisibilityIcon color={expanded ? "primary" : "inherit"} />
+            </IconButton>
+          </Tooltip>
+          {onSendMessage && (
+            <Tooltip title="Enviar">
+              <IconButton className={classes.actionIcon} onClick={onSend} style={{ backgroundColor: 'rgba(37, 211, 102, 0.1)' }}>
+                <SendIcon style={{ color: '#25D366' }} />
+              </IconButton>
+            </Tooltip>
+          )}
+        </div>
+      </div>
+      
+      <Collapse in={expanded} timeout="auto" unmountOnExit>
+        <div className={classes.previewArea}>
+          <Typography className={classes.previewText}>
+            {expandPlaceholders(msg.message, contact, ticket, user)}
+          </Typography>
+          {msg.mediaPath && (
+            <Typography variant="caption" color="textSecondary" style={{display: 'block', marginBottom: 8}}>
+              📎 {msg.mediaName || "Mídia anexa"}
+            </Typography>
+          )}
+          {onSendMessage && (
+            <Button 
+              className={classes.sendButton}
+              variant="contained"
+              disableElevation
+              endIcon={<SendIcon fontSize="small"/>}
+              onClick={onSend}
+            >
+              Enviar
+            </Button>
+          )}
+        </div>
+      </Collapse>
+    </div>
+  );
+};
+
 const ITEMS_PER_PAGE = 200;
 
-const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false }) => {
+const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, contact, ticket }) => {
   const classes = useStyles({ showHeader });
   const theme = useTheme();
   const [messages, setMessages] = useState([]);
@@ -180,7 +280,21 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false }
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [deletingMessage, setDeletingMessage] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [anchorEl, setAnchorEl] = useState(null);
   const { user } = useContext(AuthContext);
+
+  const handleOpenFilterMenu = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleCloseFilterMenu = () => {
+    setAnchorEl(null);
+  };
+
+  const handleFilterClick = (filter) => {
+    setActiveFilter(filter);
+    handleCloseFilterMenu();
+  };
 
   useEffect(() => {
     fetchMessages();
@@ -346,7 +460,7 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false }
         </div>
       )}
       <Paper component="form" className={classes.searchPaper} elevation={0} variant="outlined">
-        <IconButton type="button" sx={{ p: '10px' }} aria-label="search" size="small">
+        <IconButton type="button" style={{ padding: '10px' }} aria-label="search" size="small">
           <SearchIcon fontSize="small" />
         </IconButton>
         <InputBase
@@ -355,20 +469,34 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false }
           value={searchParam}
           onChange={(e) => setSearchParam(e.target.value)}
         />
+        <Divider orientation="vertical" style={{ margin: '4px 8px', height: '24px' }} />
+        <Tooltip title="Filtrar">
+          <IconButton 
+            className={classes.filterIcon} 
+            onClick={handleOpenFilterMenu}
+            size="small"
+          >
+            <FilterListIcon fontSize="small" color={activeFilter !== "Tudo" ? "primary" : "inherit"} />
+          </IconButton>
+        </Tooltip>
       </Paper>
 
-      <div className={classes.filtersContainer}>
-        {["Tudo", "Tipo", "Sem Categoria", "Categoria", "Mais Usadas"].map(f => (
-          <Chip
-            key={f}
-            label={f}
-            onClick={() => setActiveFilter(f)}
-            color={activeFilter === f ? "primary" : "default"}
-            variant={activeFilter === f ? "default" : "outlined"}
-            className={classes.filterChip}
-          />
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleCloseFilterMenu}
+        keepMounted
+      >
+        {["Tudo", "Tipo", "Sem Categoria", "Categoria", "Mais Usadas"].map((f) => (
+          <MenuItem 
+            key={f} 
+            onClick={() => handleFilterClick(f)}
+            selected={activeFilter === f}
+          >
+            {f}
+          </MenuItem>
         ))}
-      </div>
+      </Menu>
 
       <div className={classes.listContainer}>
         {messages.length === 0 ? (
@@ -392,6 +520,9 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false }
               onSendMessage={onSendMessage}
               setDeletingMessage={setDeletingMessage}
               setConfirmModalOpen={setConfirmModalOpen}
+              contact={contact}
+              ticket={ticket}
+              user={user}
             />
           ))
         ) : (
@@ -469,6 +600,9 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false }
                                   onSendMessage={onSendMessage}
                                   setDeletingMessage={setDeletingMessage}
                                   setConfirmModalOpen={setConfirmModalOpen}
+                                  contact={contact}
+                                  ticket={ticket}
+                                  user={user}
                                 />
                               ))}
                             </div>
@@ -506,91 +640,5 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false }
   );
 };
 
-const MessageItem = ({ msg, index, classes, expanded, onToggle, onSend, onCopy, onEdit, onClone, canEdit, onSendMessage, setDeletingMessage, setConfirmModalOpen }) => {
-  const itemColor = msg.color || "#6B7280";
-  const bgColor = hexToAlpha(itemColor, 0.08);
-  const borderColor = hexToAlpha(itemColor, 0.2);
-
-  return (
-    <div className={classes.messageItem} style={{ backgroundColor: bgColor, borderColor: borderColor }}>
-      <div className={classes.messageHeader}>
-        <div className={classes.messageTitleArea}>
-          <Typography style={{fontSize: 12, color: '#888', marginRight: 4}}>{index + 1})</Typography>
-          <Typography className={classes.messageShortcode}>
-            {msg.shortcode}
-          </Typography>
-        </div>
-        <div className={classes.actionsArea}>
-          {canEdit && (
-            <>
-              <Tooltip title="Editar">
-                <IconButton className={classes.actionIcon} onClick={onEdit}>
-                  <EditIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Excluir">
-                <IconButton 
-                  className={classes.actionIcon} 
-                  onClick={() => {
-                    setDeletingMessage(msg);
-                    setConfirmModalOpen(true);
-                  }}
-                >
-                  <DeleteOutlineIcon style={{ color: '#d33' }} />
-                </IconButton>
-              </Tooltip>
-            </>
-          )}
-          <Tooltip title="Clonar">
-            <IconButton className={classes.actionIcon} onClick={onClone}>
-              <ControlPointDuplicateIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Copiar">
-            <IconButton className={classes.actionIcon} onClick={onCopy}>
-              <FileCopyIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Visualizar">
-            <IconButton className={classes.actionIcon} onClick={onToggle}>
-              <VisibilityIcon color={expanded ? "primary" : "inherit"} />
-            </IconButton>
-          </Tooltip>
-          {onSendMessage && (
-            <Tooltip title="Enviar">
-              <IconButton className={classes.actionIcon} onClick={onSend} style={{ backgroundColor: 'rgba(37, 211, 102, 0.1)' }}>
-                <SendIcon style={{ color: '#25D366' }} />
-              </IconButton>
-            </Tooltip>
-          )}
-        </div>
-      </div>
-      
-      <Collapse in={expanded} timeout="auto" unmountOnExit>
-        <div className={classes.previewArea}>
-          <Typography className={classes.previewText}>
-            {msg.message}
-          </Typography>
-          {msg.mediaPath && (
-            <Typography variant="caption" color="textSecondary" style={{display: 'block', marginBottom: 8}}>
-              📎 {msg.mediaName || "Mídia anexa"}
-            </Typography>
-          )}
-          {onSendMessage && (
-            <Button 
-              className={classes.sendButton}
-              variant="contained"
-              disableElevation
-              endIcon={<SendIcon fontSize="small"/>}
-              onClick={onSend}
-            >
-              Enviar
-            </Button>
-          )}
-        </div>
-      </Collapse>
-    </div>
-  );
-};
 
 export default QuickMessagesPanel;

@@ -322,6 +322,8 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                     <QuickMessagesPanel 
                         onSendMessage={onSendQuickMessage} 
                         onEditMessage={() => {}} // será implementado se precisar editar direto daqui
+                        contact={contact}
+                        ticket={ticket}
                     />
                 ) : (
                     <div className={classes.content}>
