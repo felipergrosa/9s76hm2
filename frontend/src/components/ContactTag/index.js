@@ -1,5 +1,6 @@
 import { makeStyles } from "@material-ui/styles";
 import React from "react";
+import { Tooltip } from "@material-ui/core";
 
 const useStyles = makeStyles(theme => ({
     tag: {
@@ -13,13 +14,15 @@ const useStyles = makeStyles(theme => ({
     }
 }));
 
-const ContactTag = ({ tag }) => {
+const ContactTag = ({ tag, tooltipTitle }) => {
     const classes = useStyles();
 
     return (
-        <div className={classes.tag} style={{ backgroundColor: tag.color, marginTop: '2px' }}>
-           {tag.name.toUpperCase()}
-        </div>
+        <Tooltip title={tooltipTitle || tag.name} arrow>
+            <div className={classes.tag} style={{ backgroundColor: tag.color, marginTop: '2px' }}>
+               {tag.name.toUpperCase()}
+            </div>
+        </Tooltip>
     )
 }
 

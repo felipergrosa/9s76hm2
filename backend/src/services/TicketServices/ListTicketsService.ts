@@ -80,8 +80,15 @@ const ListTicketsService = async ({
   const showTicketAllQueues = user.allHistoric === "enabled";
   const showTicketWithoutQueue = user.allTicket === "enable";
   const showGroups = user.allowGroup === true;
-  const showPendingNotification = await FindCompanySettingOneService({ companyId, column: "showNotificationPending" });
-  const showNotificationPendingValue = showPendingNotification[0].showNotificationPending;
+  let showNotificationPendingValue = "disabled";
+
+  if (withUnreadMessages === "true") {
+    const showPendingNotification = await FindCompanySettingOneService({
+      companyId,
+      column: "showNotificationPending"
+    });
+    showNotificationPendingValue = showPendingNotification[0]?.showNotificationPending || "disabled";
+  }
   let whereCondition: Filterable["where"];
 
   whereCondition = {
@@ -275,7 +282,7 @@ const ListTicketsService = async ({
     } else {
       whereCondition = {
         ...whereCondition,
-        status: showAll === "true" && status === "pending" ? { [Op.or]: [status, "lgpd"] } : status,
+        status: showAll === "true" && status === "pending" && isLGPDEnabled ? { [Op.or]: [status, "lgpd"] } : status,
         // Grupos nunca aparecem nas abas "atendendo" ou "aguardando"
         ...(["open", "pending"].includes(status) ? { isGroup: false } : {})
       };
@@ -620,7 +627,7 @@ const ListTicketsService = async ({
   // 2. Ghost Mode (Hide Private Users) - Aplicado a TODOS (Strict Mode)
   // Oculta tickets de usuários marcados como isPrivate, EXCETO se o usuário for o próprio dono.
   const privateUsers = await User.findAll({
-    where: { isPrivate: true },
+    where: { companyId, isPrivate: true },
     attributes: ["id"]
   });
   const privateUserIds = privateUsers.map(u => u.id);

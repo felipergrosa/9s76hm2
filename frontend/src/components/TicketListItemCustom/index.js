@@ -1,17 +1,13 @@
 import React, { useState, useEffect, useRef, useContext, useCallback } from "react";
-import logger from "../../utils/logger";
 import { parseISO, format, isSameDay, isYesterday } from "date-fns";
 import clsx from "clsx";
 import { useHistory, useParams } from "react-router-dom";
 
 import {
     ListItem,
-    ListItemText,
-    ListItemAvatar,
     Typography,
     Divider,
     Badge,
-    ListItemSecondaryAction,
     Dialog,
     DialogTitle,
     DialogContent,
@@ -50,18 +46,56 @@ import ConnectionIcon from "../ConnectionIcon";
 import AcceptTicketWithouSelectQueue from "../AcceptTicketWithoutQueueModal";
 import TransferTicketModalCustom from "../TransferTicketModalCustom";
 import ShowTicketOpen from "../ShowTicketOpenModal";
-import { isNil } from "lodash";
 import { toast } from "react-toastify";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import { blue } from "@material-ui/core/colors";
 
 const useStyles = makeStyles((theme) => ({
     ticket: {
-        position: "relative"
+        position: "relative",
+        height: "100%",
+        boxSizing: "border-box",
+        overflow: "hidden",
+        alignItems: "stretch",
+        padding: theme.spacing(0, 1, 0, 1),
+        borderBottom: "1px solid rgba(0, 0, 0, 0.08)",
     },
 
     pendingTicket: {
         cursor: "unset",
+    },
+    ticketContent: {
+        display: "grid",
+        gridTemplateColumns: "30px minmax(0, 1fr) 86px",
+        columnGap: theme.spacing(2),
+        alignItems: "stretch",
+        width: "100%",
+        minWidth: 0,
+        minHeight: "100%",
+    },
+    avatarColumn: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: 0,
+    },
+    contentColumn: {
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-start",
+        minWidth: 0,
+        height: "100%",
+        padding: "0px 0 0px 0",
+        gap: 0,
+    },
+    rightRail: {
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        alignItems: "flex-end",
+        minWidth: 96,
+        height: "100%",
+        padding: theme.spacing(0.2, 0),
     },
     queueTag: {
         background: "#FCFCFC",
@@ -82,18 +116,19 @@ const useStyles = makeStyles((theme) => ({
         justifyContent: "center",
     },
     newMessagesCount: {
+        display: "inline-flex",
+        justifyContent: "flex-end",
         justifySelf: "flex-end",
         textAlign: "right",
-        position: "relative",
-        top: 0,
-        color: "green",
+        color: grey[500],
         fontWeight: "bold",
-        marginRight: "10px",
+        marginRight: 0,
         borderRadius: 0,
+        overflow: "visible",
     },
 
     unreadBelowDate: {
-        marginTop: 8,
+        marginTop: 4,
     },
     noTicketsText: {
         textAlign: "center",
@@ -120,12 +155,10 @@ const useStyles = makeStyles((theme) => ({
     contactNameWrapper: {
         display: "flex",
         alignItems: "center",
-        gap: 6,
-        marginLeft: "5px",
+        gap: 0,
         fontWeight: "bold",
         color: theme.mode === 'light' ? "black" : "white",
         minWidth: 0,
-        paddingRight: 60,
     },
     contactNameText: {
         flex: 1,
@@ -133,22 +166,16 @@ const useStyles = makeStyles((theme) => ({
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
+        lineHeight: 1.3,
     },
 
     lastMessageTime: {
         justifySelf: "flex-end",
         textAlign: "right",
-        position: "relative",
-        top: 0,
-        marginRight: "1px",
+        marginRight: 0,
         color: theme.mode === 'light' ? "black" : grey[400],
         fontSize: 11,
-    },
-
-    rightMetaAction: {
-        top: 10,
-        transform: "none",
-        right: 8,
+        lineHeight: 1.3,
     },
 
     rightSideMeta: {
@@ -156,27 +183,33 @@ const useStyles = makeStyles((theme) => ({
         flexDirection: "column",
         alignItems: "flex-end",
         justifyContent: "flex-start",
-        gap: 1,
+        gap: 0,
         position: "relative",
+        width: "100%",
+        minHeight: 32,
     },
 
     unreadPlaceholder: {
         visibility: "hidden",
     },
-
-    rightBadgeDummy: {
-        width: 1,
-        height: 1,
+    unreadBadgeAnchor: {
         display: "inline-block",
+        width: 18,
+        height: 14,
+    },
+    unreadBadgePosition: {
+        transform: "translate(-2px, -3px)",
     },
 
     secondaryContainer: {
         display: "flex",
         flexDirection: "column",
         alignItems: "flex-start",
+        justifyContent: "flex-start",
         width: "100%",
+        flex: 1,
         minWidth: 0,
-        paddingRight: 110,
+        gap: 0,
         overflow: "hidden",
     },
 
@@ -185,27 +218,27 @@ const useStyles = makeStyles((theme) => ({
         flexWrap: "wrap",
         flexDirection: "row",
         alignItems: "center",
-        alignContent: "flex-start",
         gap: 1,
-        marginLeft: "5px",
-        marginTop: 2,
+        marginTop: "1px",
+        width: "100%",
         maxWidth: "100%",
-        minHeight: 18,
+        minHeight: 15,
+        overflow: "visible",
         "& > *": {
             flex: "0 0 auto",
-            maxWidth: "100%"
+            maxWidth: "100%",
+            marginBottom: "1px",
         }
     },
 
     lastMessageTimeUnread: {
         justifySelf: "flex-end",
         textAlign: "right",
-        position: "relative",
-        top: -5,
         color: "green",
         fontWeight: "bold",
-        marginRight: "1px",
-        fontSize: 10,
+        marginRight: 0,
+        fontSize: 11,
+        lineHeight: 1.3,
     },
 
     closedBadge: {
@@ -216,8 +249,6 @@ const useStyles = makeStyles((theme) => ({
     },
 
     contactLastMessage: {
-        paddingRight: "0%",
-        marginLeft: "5px",
         color: theme.mode === 'light' ? "black" : grey[400],
         display: "block",
         minWidth: 0,
@@ -225,10 +256,10 @@ const useStyles = makeStyles((theme) => ({
         overflow: "hidden",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap",
+        lineHeight: 1.1,
     },
 
     contactLastMessageUnread: {
-        paddingRight: 20,
         fontWeight: "bold",
         color: theme.mode === 'light' ? "black" : grey[400],
         display: "block",
@@ -237,6 +268,7 @@ const useStyles = makeStyles((theme) => ({
         overflow: "hidden",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap",
+        lineHeight: 1.1,
     },
 
     badgeStyle: {
@@ -249,14 +281,6 @@ const useStyles = makeStyles((theme) => ({
         right: "1px",
     },
 
-    ticketQueueColor: {
-        flex: "none",
-        height: "100%",
-        position: "absolute",
-        top: "0%",
-        left: "0%",
-    },
-
     avatarContainer: {
         position: 'relative',
         width: 50,
@@ -264,8 +288,8 @@ const useStyles = makeStyles((theme) => ({
     },
     channelBadge: {
         position: 'absolute',
-        right: 0,
-        bottom: 0,
+        right: 4,
+        bottom: -2,
         background: '#fff',
         borderRadius: '50%',
         width: 18,
@@ -300,13 +324,9 @@ const useStyles = makeStyles((theme) => ({
     ticketActionButtons: {
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'flex-end',
         gap: theme.spacing(0.25),
-        position: 'absolute !important',
-        bottom: "8px !important",
-        right: "8px !important",
-        top: "auto !important",
-        left: "auto !important",
-        zIndex: 999,
+        width: "100%",
     },
     actionButton: {
         minWidth: 24,
@@ -434,6 +454,17 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
 
     const { get: getSetting } = useCompanySettings();
     const { hasPermission } = usePermissions();
+
+    const getLastMessagePreview = (message) => {
+        if (!message) return "";
+        if (message.includes('fb.me')) return "Clique de Anuncio";
+        if (message.includes('data:image/png;base64')) return "Localizacao";
+        if (message.includes('BEGIN:VCARD')) return "Contato";
+        return message;
+    };
+
+    const kanbanTags = (ticket.tags || []).filter(tag => Number(tag.kanban) === 1);
+    const otherTags = (ticket.tags || []).filter(tag => Number(tag.kanban) !== 1);
 
 
 
@@ -756,7 +787,6 @@ const handleCloseTicket = async (id) => {
                 button
                 dense
                 onClick={(e) => {
-                    console.log('e', e)
                     const isCheckboxClicked = (e.target.tagName.toLowerCase() === 'input' && e.target.type === 'checkbox')
                         || (e.target.tagName.toLowerCase() === 'svg' && e.target.type === undefined)
                         || (e.target.tagName.toLowerCase() === 'path' && e.target.type === undefined);
@@ -770,32 +800,28 @@ const handleCloseTicket = async (id) => {
                 className={clsx(classes.ticket, "ticket-list-item-core", {
                     [classes.pendingTicket]: ticket.status === "pending",
                 })}
-                style={{
-                    position: "relative",
-                    paddingBottom: theme.spacing(2.5), // espaço para os botões no rodapé
-                }}
             >
-                <ListItemAvatar style={{ marginLeft: "-10px" }}>
-                    <div className={classes.avatarContainer}>
-                        <ContactAvatar
-                            contact={ticket?.contact}
-                            style={{ width: 50, height: 50 }}
-                        />
-                        {ticket.channel && (
-                            <div className={classes.channelBadge}>
-                                <div className={classes.channelIconAdjust}>
-                                    <ConnectionIcon width="14" height="14" connectionType={ticket.channel} />
+                <div className={classes.ticketContent}>
+                    <div className={classes.avatarColumn}>
+                        <div className={classes.avatarContainer}>
+                            <ContactAvatar
+                                contact={ticket?.contact}
+                                style={{ width: 50, height: 50 }}
+                            />
+                            {ticket.channel && (
+                                <div className={classes.channelBadge}>
+                                    <div className={classes.channelIconAdjust}>
+                                        <ConnectionIcon width="14" height="14" connectionType={ticket.channel} />
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
-                </ListItemAvatar>
-                <ListItemText
-                    disableTypography
-                    primary={
+
+                    <div className={classes.contentColumn}>
                         <div className={classes.contactNameWrapper}>
                             {ticket.isGroup && ticket.channel === "whatsapp" && (
-                                <GroupIcon fontSize="small" style={{ color: grey[700], marginBottom: '-1px' }} />
+                                <GroupIcon fontSize="small" style={{ color: grey[700], marginBottom: "-1px" }} />
                             )}
                             <Typography
                                 noWrap
@@ -806,9 +832,8 @@ const handleCloseTicket = async (id) => {
                                 {ticket.contact?.name}
                             </Typography>
                         </div>
-                    }
-                    secondary={
-                        <span className={classes.secondaryContainer}>
+
+                        <div className={classes.secondaryContainer}>
                             <Typography
                                 className={Number(ticket.unreadMessages) > 0 ? classes.contactLastMessageUnread : classes.contactLastMessage}
                                 noWrap
@@ -816,211 +841,84 @@ const handleCloseTicket = async (id) => {
                                 variant="body2"
                             >
                                 {ticket.lastMessage ? (
-                                    <>
-                                        {ticket.lastMessage.includes('fb.me') ? (
-                                            <MarkdownWrapper>Clique de Anúncio</MarkdownWrapper> //Clique de Anúncio adicionado
-                                        ) : ticket.lastMessage.includes('data:image/png;base64') ?
-                                            <MarkdownWrapper>Localização</MarkdownWrapper> :
-                                            <> {ticket.lastMessage.includes('BEGIN:VCARD') ?
-                                                <MarkdownWrapper>Contato</MarkdownWrapper> :
-                                                <MarkdownWrapper>{ticket.lastMessage}</MarkdownWrapper>}
-                                            </>
-                                        }
-                                    </>
+                                    getLastMessagePreview(ticket.lastMessage)
                                 ) : (
                                     <br />
                                 )}
                             </Typography>
 
-                            <span className={classes.pillsRow}>
+                            <div style={{ flexGrow: 1 }} />
+                            <div className={classes.pillsRow}>
                                 {ticket?.whatsapp ? (
-                                    <Badge
-                                        className={classes.connectionTag}
-                                        style={{
-                                            backgroundColor:
-                                                ticket.whatsapp?.color ||
-                                                (ticket.channel === "whatsapp"
-                                                    ? "#25D366"
-                                                    : ticket.channel === "facebook"
-                                                        ? "#4267B2"
-                                                        : ticket.channel === "instagram"
-                                                            ? "#E1306C"
-                                                            : "#6B46C1")
-                                        }}
-                                        overlap="rectangular"
-                                    >
-                                        {ticket.whatsapp?.name.toUpperCase()}
-                                    </Badge>
+                                    <Tooltip title={`Conexao: ${ticket.whatsapp?.name || ticket.channel || "Sem conexao"}`} arrow>
+                                        <span>
+                                            <Badge
+                                                className={classes.connectionTag}
+                                                style={{
+                                                    backgroundColor:
+                                                        ticket.whatsapp?.color ||
+                                                        (ticket.channel === "whatsapp"
+                                                            ? "#25D366"
+                                                            : ticket.channel === "facebook"
+                                                                ? "#4267B2"
+                                                                : ticket.channel === "instagram"
+                                                                    ? "#E1306C"
+                                                                    : "#6B46C1")
+                                                }}
+                                                overlap="rectangular"
+                                            >
+                                                {ticket.whatsapp?.name.toUpperCase()}
+                                            </Badge>
+                                        </span>
+                                    </Tooltip>
                                 ) : null}
 
-                                {/* Badge de fila - não exibe para grupos */}
                                 {!ticket.isGroup && (
-                                    <Badge style={{ backgroundColor: ticket.queue?.color || "#7c7c7c" }} className={classes.connectionTag} overlap="rectangular">
-                                        {ticket.queueId ? ticket.queue?.name.toUpperCase() : ticket.status === "lgpd" ? "LGPD" : "SEM FILA"}
-                                    </Badge>
+                                    <Tooltip title={`Fila: ${ticket.queueId ? ticket.queue?.name || "Sem fila" : ticket.status === "lgpd" ? "LGPD" : "Sem fila"}`} arrow>
+                                        <span>
+                                            <Badge
+                                                style={{ backgroundColor: ticket.queue?.color || "#7c7c7c" }}
+                                                className={classes.connectionTag}
+                                                overlap="rectangular"
+                                            >
+                                                {ticket.queueId ? ticket.queue?.name.toUpperCase() : ticket.status === "lgpd" ? "LGPD" : "SEM FILA"}
+                                            </Badge>
+                                        </span>
+                                    </Tooltip>
                                 )}
 
                                 {ticket?.user && (
-                                    <Badge style={{ backgroundColor: "#000000" }} className={classes.connectionTag} overlap="rectangular">
-                                        {ticket.user?.name.toUpperCase()}
-                                    </Badge>
+                                    <Tooltip title={`Usuario: ${ticket.user?.name || "Nao atribuido"}`} arrow>
+                                        <span>
+                                            <Badge style={{ backgroundColor: "#000000" }} className={classes.connectionTag} overlap="rectangular">
+                                                {ticket.user?.name.toUpperCase()}
+                                            </Badge>
+                                        </span>
+                                    </Tooltip>
                                 )}
 
-                                {ticket.tags?.map((tag) => (
-                                    <ContactTag tag={tag} key={`ticket-contact-tag-${ticket.id}-${tag.id}`} />
+                                {kanbanTags.map((tag) => (
+                                    <ContactTag
+                                        tag={tag}
+                                        tooltipTitle={`Kanban: ${tag.name}`}
+                                        key={`ticket-contact-tag-${ticket.id}-${tag.id}`}
+                                    />
                                 ))}
-                            </span>
-                        </span>
-                    }
-                />
 
-                {/* Botões de ação - devem vir ANTES do ListItemSecondaryAction */}
-                <div
-                    className={classes.ticketActionButtons}
-                    style={{
-                        position: 'absolute',
-                        bottom: 8,
-                        right: 8,
-                        display: 'flex',
-                        gap: 4,
-                        zIndex: 999
-                    }}
-                >
-                    {/* Aceitar ticket sem fila */}
-                    {((ticket.status === "pending" || ticket.status === "bot") && (ticket.queueId === null || ticket.queueId === undefined)) && (
-                        <Tooltip title={i18n.t("ticketsList.buttons.accept")}>
-                            <IconButton
-                                size="small"
-                                className={classes.actionButton}
-                                onClick={e => {
-                                    e.stopPropagation();
-                                    handleOpenAcceptTicketWithouSelectQueue();
-                                }}
-                                disabled={loading}
-                            >
-                                <Done fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
-                            </IconButton>
-                        </Tooltip>
-                    )}
+                                {otherTags.map((tag) => (
+                                    <ContactTag
+                                        tag={tag}
+                                        tooltipTitle={`Tag: ${tag.name}`}
+                                        key={`ticket-contact-tag-${ticket.id}-${tag.id}`}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
 
-                    {/* Aceitar ticket com fila */}
-                    {((ticket.status === "pending" || ticket.status === "bot") && ticket.queueId !== null) && (
-                        <Tooltip title={i18n.t("ticketsList.buttons.accept")}>
-                            <IconButton
-                                size="small"
-                                className={classes.actionButton}
-                                onClick={e => {
-                                    e.stopPropagation();
-                                    handleAcepptTicket(ticket.id);
-                                }}
-                                disabled={loading}
-                            >
-                                <Done fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
-                            </IconButton>
-                        </Tooltip>
-                    )}
-
-                    {/* Transferir ticket - não disponível para grupos */}
-                    {!ticket.isGroup && (ticket.status === "pending" || ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
-                        <Tooltip title={i18n.t("ticketsList.buttons.transfer")}>
-                            <IconButton
-                                size="small"
-                                className={classes.actionButton}
-                                onClick={handleOpenTransferModal}
-                                disabled={loading}
-                            >
-                                <SwapHoriz fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
-                            </IconButton>
-                        </Tooltip>
-                    )}
-
-                    {/* Espiar conversa - não disponível para grupos */}
-                    {!ticket.isGroup && (ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
-                        <Tooltip title="Espiar Conversa">
-                            <IconButton
-                                size="small"
-                                className={classes.actionButton}
-                                onClick={handleOpenMessageDialog}
-                            >
-                                <VisibilityIcon fontSize="small" style={{ color: blue[700] }} />
-                            </IconButton>
-                        </Tooltip>
-                    )}
-
-                    {/* Fechar ticket */}
-                    {(ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
-                        <Tooltip title={i18n.t("ticketsList.buttons.closed")}>
-                            <IconButton
-                                size="small"
-                                className={classes.actionButton}
-                                onClick={e => {
-                                    e.stopPropagation();
-                                    handleCloseTicket(ticket.id);
-                                }}
-                                disabled={loading}
-                            >
-                                <HighlightOff fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
-                            </IconButton>
-                        </Tooltip>
-                    )}
-
-                    {/* Ignorar ticket pendente */}
-                    {((ticket.status === "pending" || ticket.status === "lgpd") && (hasPermission("tickets.close") || user.profile === "admin")) && (
-                        <Tooltip title={i18n.t("ticketsList.buttons.ignore")}>
-                            <IconButton
-                                size="small"
-                                className={classes.actionButton}
-                                onClick={e => {
-                                    e.stopPropagation();
-                                    handleCloseIgnoreTicket(ticket.id);
-                                }}
-                                disabled={loading}
-                            >
-                                <HighlightOff fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
-                            </IconButton>
-                        </Tooltip>
-                    )}
-
-                    {/* Reabrir ticket fechado sem fila */}
-                    {(ticket.status === "closed" && (ticket.queueId === null || ticket.queueId === undefined)) && (
-                        <Tooltip title={i18n.t("ticketsList.buttons.reopen")}>
-                            <IconButton
-                                size="small"
-                                className={classes.actionButton}
-                                onClick={e => {
-                                    e.stopPropagation();
-                                    handleOpenAcceptTicketWithouSelectQueue();
-                                }}
-                                disabled={loading}
-                            >
-                                <Replay fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
-                            </IconButton>
-                        </Tooltip>
-                    )}
-
-                    {/* Reabrir ticket fechado com fila */}
-                    {(ticket.status === "closed" && ticket.queueId !== null) && (
-                        <Tooltip title={i18n.t("ticketsList.buttons.reopen")}>
-                            <IconButton
-                                size="small"
-                                className={classes.actionButton}
-                                onClick={e => {
-                                    e.stopPropagation();
-                                    handleAcepptTicket(ticket.id);
-                                }}
-                                disabled={loading}
-                            >
-                                <Replay fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
-                            </IconButton>
-                        </Tooltip>
-                    )}
-                </div>
-
-                <ListItemSecondaryAction className={classes.rightMetaAction}>
-                    {(ticket.lastMessage || ticket.updatedAt) && (
+                    <div className={classes.rightRail}>
                         <div className={classes.rightSideMeta}>
                             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                {/* Contador de janela 24h para API Oficial - modo compacto ao lado da hora (ESQUERDO) */}
                                 {!ticket.isGroup && ticket.whatsapp?.channelType === "official" && (
                                     <SessionWindowCounter
                                         ticketId={ticket.id}
@@ -1030,7 +928,7 @@ const handleCloseTicket = async (id) => {
                                         compact={true}
                                     />
                                 )}
-                                
+
                                 <Typography
                                     className={Number(ticket.unreadMessages) > 0 ? classes.lastMessageTimeUnread : classes.lastMessageTime}
                                     component="span"
@@ -1050,15 +948,138 @@ const handleCloseTicket = async (id) => {
                                 badgeContent={ticket.unreadMessages}
                                 classes={{
                                     badge: classes.badgeStyle,
+                                    anchorOriginTopRightRectangular: classes.unreadBadgePosition,
                                 }}
                                 overlap="rectangular"
                             >
-                                <span className={classes.rightBadgeDummy} />
+                                <span className={classes.unreadBadgeAnchor} />
                             </Badge>
                         </div>
-                    )}
 
-                </ListItemSecondaryAction>
+                        <div className={classes.ticketActionButtons}>
+                            {((ticket.status === "pending" || ticket.status === "bot") && (ticket.queueId === null || ticket.queueId === undefined)) && (
+                                <Tooltip title={i18n.t("ticketsList.buttons.accept")}>
+                                    <IconButton
+                                        size="small"
+                                        className={classes.actionButton}
+                                        onClick={e => {
+                                            e.stopPropagation();
+                                            handleOpenAcceptTicketWithouSelectQueue();
+                                        }}
+                                        disabled={loading}
+                                    >
+                                        <Done fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+
+                            {((ticket.status === "pending" || ticket.status === "bot") && ticket.queueId !== null) && (
+                                <Tooltip title={i18n.t("ticketsList.buttons.accept")}>
+                                    <IconButton
+                                        size="small"
+                                        className={classes.actionButton}
+                                        onClick={e => {
+                                            e.stopPropagation();
+                                            handleAcepptTicket(ticket.id);
+                                        }}
+                                        disabled={loading}
+                                    >
+                                        <Done fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+
+                            {!ticket.isGroup && (ticket.status === "pending" || ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
+                                <Tooltip title={i18n.t("ticketsList.buttons.transfer")}>
+                                    <IconButton
+                                        size="small"
+                                        className={classes.actionButton}
+                                        onClick={handleOpenTransferModal}
+                                        disabled={loading}
+                                    >
+                                        <SwapHoriz fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+
+                            {!ticket.isGroup && (ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
+                                <Tooltip title="Espiar Conversa">
+                                    <IconButton
+                                        size="small"
+                                        className={classes.actionButton}
+                                        onClick={handleOpenMessageDialog}
+                                    >
+                                        <VisibilityIcon fontSize="small" style={{ color: blue[700] }} />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+
+                            {(ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
+                                <Tooltip title={i18n.t("ticketsList.buttons.closed")}>
+                                    <IconButton
+                                        size="small"
+                                        className={classes.actionButton}
+                                        onClick={e => {
+                                            e.stopPropagation();
+                                            handleCloseTicket(ticket.id);
+                                        }}
+                                        disabled={loading}
+                                    >
+                                        <HighlightOff fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+
+                            {((ticket.status === "pending" || ticket.status === "lgpd") && (hasPermission("tickets.close") || user.profile === "admin")) && (
+                                <Tooltip title={i18n.t("ticketsList.buttons.ignore")}>
+                                    <IconButton
+                                        size="small"
+                                        className={classes.actionButton}
+                                        onClick={e => {
+                                            e.stopPropagation();
+                                            handleCloseIgnoreTicket(ticket.id);
+                                        }}
+                                        disabled={loading}
+                                    >
+                                        <HighlightOff fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+
+                            {(ticket.status === "closed" && (ticket.queueId === null || ticket.queueId === undefined)) && (
+                                <Tooltip title={i18n.t("ticketsList.buttons.reopen")}>
+                                    <IconButton
+                                        size="small"
+                                        className={classes.actionButton}
+                                        onClick={e => {
+                                            e.stopPropagation();
+                                            handleOpenAcceptTicketWithouSelectQueue();
+                                        }}
+                                        disabled={loading}
+                                    >
+                                        <Replay fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+
+                            {(ticket.status === "closed" && ticket.queueId !== null) && (
+                                <Tooltip title={i18n.t("ticketsList.buttons.reopen")}>
+                                    <IconButton
+                                        size="small"
+                                        className={classes.actionButton}
+                                        onClick={e => {
+                                            e.stopPropagation();
+                                            handleAcepptTicket(ticket.id);
+                                        }}
+                                        disabled={loading}
+                                    >
+                                        <Replay fontSize="small" style={{ color: theme.mode === "light" ? "#0872B9" : "#FFF" }} />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+                        </div>
+                    </div>
+                </div>
             </ListItem>
             {/* <Divider variant="inset" component="li" /> */}
         </React.Fragment>

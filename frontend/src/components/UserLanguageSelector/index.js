@@ -1,11 +1,12 @@
 // ARQUIVO COMPLETO: frontend/src/components/UserLanguageSelector/index.js
 
 import React, { useContext, useState } from "react";
-import { Button, Menu, MenuItem, Tooltip } from "@material-ui/core"; // Adicione Tooltip para acessibilidade
-import { Globe as LanguageIcon } from "lucide-react"; // 1. Importe o ícone do globo
+import { IconButton, Menu, MenuItem, Tooltip } from "@material-ui/core"; 
+import { Globe as LanguageIcon } from "lucide-react"; 
 
 import { i18n } from "../../translate/i18n";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import ColorModeContext from "../../layout/themeContext";
 import toastError from "../../errors/toastError";
 import api from "../../services/api";
 
@@ -13,6 +14,8 @@ const UserLanguageSelector = () => {
     const [langueMenuAnchorEl, setLangueMenuAnchorEl] = useState(null);
 
     const { user } = useContext(AuthContext);
+    const { colorMode } = useContext(ColorModeContext);
+    const { viewMode } = colorMode;
 
     const handleOpenLanguageMenu = e => {
         setLangueMenuAnchorEl(e.currentTarget);
@@ -35,16 +38,14 @@ const UserLanguageSelector = () => {
 
     return (
         <>
-            {/* 2. Adicione um Tooltip para indicar a função do ícone */}
-            <Tooltip title={i18n.t("mainHeader.buttons.language")} arrow>
-                <Button
+            <Tooltip title={i18n.t("dashboard.buttons.language")} arrow>
+                <IconButton
                     color="inherit"
                     onClick={handleOpenLanguageMenu}
-
+                    style={{ padding: 8, color: viewMode === "modern" ? "var(--text)" : "white" }}
                 >
-                    {/* 3. Substitua o texto pelo ícone */}
                     <LanguageIcon />
-                </Button>
+                </IconButton>
             </Tooltip>
             <Menu
                 anchorEl={langueMenuAnchorEl}

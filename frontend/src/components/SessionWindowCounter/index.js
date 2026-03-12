@@ -107,8 +107,6 @@ const SessionWindowCounter = ({
 }) => {
   const classes = useStyles();
   const [sessionStatus, setSessionStatus] = useState(null);
-  const [loading, setLoading] = useState(false);
-
   // Determinar se deve mostrar o contador
   // Só aparece para conexões API Oficial (channelType === "whatsapp" e isOfficial === true)
   const shouldShow = channelType === "whatsapp" && isOfficial === true;
@@ -150,15 +148,12 @@ const SessionWindowCounter = ({
     if (!ticketId || !shouldShow) return;
     if (propExpiresAt) return; // Se temos a data via prop, não buscar
 
-    setLoading(true);
     try {
       const { data } = await api.get(`/tickets/${ticketId}/session-window`);
       setSessionStatus(data);
     } catch (err) {
       console.error("[SessionWindowCounter] Erro ao buscar status:", err);
       // Não mostrar toast de erro para não poluir a interface
-    } finally {
-      setLoading(false);
     }
   }, [ticketId, shouldShow, propExpiresAt]);
 
@@ -186,6 +181,8 @@ const SessionWindowCounter = ({
   useEffect(() => {
     if (!sessionStatus?.sessionWindowExpiresAt) return;
 
+    const intervalMs = compact ? 60000 : 1000;
+
     const interval = setInterval(() => {
       const remaining = calculateRemaining(sessionStatus.sessionWindowExpiresAt);
       if (remaining) {
@@ -197,10 +194,10 @@ const SessionWindowCounter = ({
             : `${String(remaining.hours).padStart(2, "0")}:${String(remaining.minutes).padStart(2, "0")}:${String(remaining.seconds).padStart(2, "0")}`,
         }));
       }
-    }, 1000);
+    }, intervalMs);
 
     return () => clearInterval(interval);
-  }, [sessionStatus?.sessionWindowExpiresAt, calculateRemaining]);
+  }, [compact, sessionStatus?.sessionWindowExpiresAt, calculateRemaining]);
 
   // Não renderizar se não for API Oficial
   if (!shouldShow) return null;

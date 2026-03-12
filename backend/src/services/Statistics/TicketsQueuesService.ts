@@ -6,6 +6,7 @@ import User from "../../models/User";
 import Contact from "../../models/Contact";
 import Queue from "../../models/Queue";
 import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
+import FindCompanySettingOneService from "../CompaniesSettings/FindCompanySettingOneService";
 
 interface Request {
   dateStart: string;
@@ -26,6 +27,9 @@ const TicketsQueuesService = async ({
   companyId,
   showAll
 }: Request): Promise<Ticket[]> => {
+  const user = await User.findByPk(userId, { include: ["queues"] });
+  if (!user) throw new Error("ERR_USER_NOT_FOUND");
+
   let whereCondition: Filterable["where"] = {
     // [Op.or]: [{ userId }, { status: "pending" }]
   };
@@ -52,46 +56,58 @@ const TicketsQueuesService = async ({
     }
   ];
   const isExistsQueues = await Queue.count({ where: { companyId } });
-  // eslint-disable-next-line eqeqeq
-  if (isExistsQueues) {
-    const queues = await UsersQueues.findAll({
-      where: {
-        userId
-      }
-    });
-    let queuesIdsUser = queues.map(q => q.queueId);
+  const showTicketWithoutQueue = user.allTicket === "enable";
 
-    if (queuesIds) {
-      const newArray: number[] = [];
-      queuesIds.forEach(i => {
-        const idx = queuesIdsUser.indexOf(+i);
-        if (idx) {
-          newArray.push(+i);
-        }
-      });
-      queuesIdsUser = newArray;
+  if (isExistsQueues) {
+    const userQueues = await UsersQueues.findAll({ where: { userId } });
+    let allowedQueueIds = userQueues.map(q => q.queueId);
+
+    // Se o usuário passou filtros de fila específicos via query
+    if (queuesIds && queuesIds.length > 0) {
+      const filteredIds = queuesIds
+        .map(id => +id)
+        .filter(id => allowedQueueIds.includes(id) || showAll === "true");
+      allowedQueueIds = filteredIds;
     }
 
-    whereCondition = {
-      ...whereCondition,
-      queueId: {
-        [Op.in]: queuesIdsUser
+    if (showAll === "true") {
+      if (allowedQueueIds.length > 0) {
+        // Admin filtrando por filas específicas
+        whereCondition.queueId = {
+          [Op.or]: [
+            { [Op.in]: allowedQueueIds },
+            ...(showTicketWithoutQueue && !queuesIds ? [null] : [])
+          ]
+        };
+      } else if (!showTicketWithoutQueue) {
+        // Admin sem filtro de fila mas sem permissão de 'sem fila'
+        whereCondition.queueId = { [Op.ne]: null };
       }
-    };
+      // Se for admin, showAll e showTicketWithoutQueue, não aplica filtro de queueId (vê tudo)
+    } else {
+      // Usuário comum: sempre restrito às suas filas
+      whereCondition.queueId = {
+        [Op.or]: [
+          { [Op.in]: allowedQueueIds.length > 0 ? allowedQueueIds : [0] },
+          ...(showTicketWithoutQueue ? [null] : [])
+        ]
+      };
+    }
   }
 
-  // eslint-disable-next-line eqeqeq
-  if (showAll == "true") {
-    // Mantém o filtro de filas se ele já foi definido, mas remove filtros de userId/status anteriores
-    const queueFilter = whereCondition.queueId ? { queueId: whereCondition.queueId } : {};
-    whereCondition = { ...queueFilter };
-  }
+  // Buscar configurações de empresa (LGPD)
+  const settings = await FindCompanySettingOneService({ companyId, column: "enableLGPD" });
+  const isLGPDEnabled = settings[0]?.enableLGPD === "enabled";
 
   whereCondition = {
     ...whereCondition,
-    status: { [Op.in]: ["open", "pending", "campaign"] },
+    status: { 
+      [Op.in]: isLGPDEnabled && showAll === "true" 
+        ? ["open", "pending", "campaign", "lgpd"] 
+        : ["open", "pending", "campaign"] 
+    },
     companyId
-  }
+  };
 
   if (dateStart && dateEnd) {
     whereCondition = {

@@ -1,12 +1,14 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useContext } from "react";
 
 import Popover from "@material-ui/core/Popover";
 import IconButton from "@material-ui/core/IconButton";
 import List from "@material-ui/core/List";
 import { makeStyles } from "@material-ui/core/styles";
 import { Volume2, Volume1 } from "lucide-react";
+import ColorModeContext from "../../layout/themeContext";
 
-import { Grid, Slider } from "@material-ui/core";
+import { Grid, Slider, Tooltip } from "@material-ui/core";
+import { i18n } from "../../translate/i18n";
 
 const useStyles = makeStyles((theme) => ({
     tabContainer: {
@@ -35,6 +37,8 @@ const useStyles = makeStyles((theme) => ({
 
 const NotificationsVolume = ({ volume, setVolume }) => {
     const classes = useStyles();
+    const { colorMode } = useContext(ColorModeContext);
+    const { viewMode } = colorMode;
 
     const anchorEl = useRef();
     const [isOpen, setIsOpen] = useState(false);
@@ -54,13 +58,16 @@ const NotificationsVolume = ({ volume, setVolume }) => {
 
     return (
         <>
-            <IconButton
-                onClick={handleClick}
-                ref={anchorEl}
-                aria-label="Open Notifications"
-            >
-                <Volume2 />
-            </IconButton>
+            <Tooltip title={i18n.t("dashboard.buttons.volume")} arrow>
+                <IconButton
+                    onClick={handleClick}
+                    ref={anchorEl}
+                    aria-label="Open Notifications"
+                    style={{ padding: 8, color: viewMode === "modern" ? "var(--text)" : "white" }}
+                >
+                    <Volume2 />
+                </IconButton>
+            </Tooltip>
             <Popover
                 disableScrollLock
                 open={isOpen}

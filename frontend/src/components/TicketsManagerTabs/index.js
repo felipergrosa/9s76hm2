@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef, useState, useCallback } from "react";
+import React, { useContext, useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useTheme } from "@material-ui/core/styles";
 import { useHistory } from "react-router-dom";
 import {
@@ -54,6 +54,7 @@ import { QueueSelectedContext } from "../../context/QueuesSelected/QueuesSelecte
 import api from "../../services/api";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import usePermissions from "../../hooks/usePermissions";
+import useTicketsRealtimeStore from "../../hooks/useTicketsRealtimeStore";
 
 const useStyles = makeStyles((theme) => ({
   ticketsWrapper: {
@@ -381,12 +382,7 @@ const TicketsManagerTabs = () => {
 
   const canViewGroups = hasPermission("tickets.view-groups");
   const canViewAllUsers = hasPermission("tickets.view-all-users");
-
-  const [openCount, setOpenCount] = useState(0);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [groupingCount, setGroupingCount] = useState(0);
-  const [botCount, setBotCount] = useState(0);
-  const [campaignCount, setCampaignCount] = useState(0);
+  const canViewTicketsWithoutQueue = hasPermission("tickets.view-all");
 
   const userQueueIds = user.queues.map((q) => q.id);
   const [selectedQueueIds, setSelectedQueueIds] = useState(userQueueIds || []);
@@ -405,6 +401,59 @@ const TicketsManagerTabs = () => {
   const [isHoveredClosed, setIsHoveredClosed] = useState(false);
   const [isHoveredSort, setIsHoveredSort] = useState(false);
   const [isHoveredBulk, setIsHoveredBulk] = useState(false);
+
+  const sortDirection = sortTickets ? "ASC" : "DESC";
+  const listResetKeyBase = useMemo(() => JSON.stringify({
+    selectedQueueIds,
+    showAllTickets,
+    sortDirection,
+  }), [selectedQueueIds, showAllTickets, sortDirection]);
+
+  const statusConfigs = useMemo(() => ({
+    open: {
+      enabled: true,
+      status: "open",
+      showAll: showAllTickets,
+    },
+    pending: {
+      enabled: true,
+      status: "pending",
+      showAll: user.profile === "admin" || canViewAllUsers ? showAllTickets : false,
+    },
+    group: {
+      enabled: canViewGroups,
+      status: "group",
+      showAll: showAllTickets,
+    },
+    bot: {
+      enabled: true,
+      status: "bot",
+      showAll: showAllTickets,
+    },
+    campaign: {
+      enabled: true,
+      status: "campaign",
+      showAll: showAllTickets,
+    },
+    closed: {
+      enabled: true,
+      status: "closed",
+      showAll: showAllTickets,
+    },
+  }), [canViewAllUsers, canViewGroups, showAllTickets, user.profile]);
+
+  const { ticketsByStatus, metaByStatus, loadMore } = useTicketsRealtimeStore({
+    statusConfigs,
+    selectedQueueIds,
+    sortTickets: sortDirection,
+    showTicketWithoutQueue: canViewTicketsWithoutQueue,
+  });
+
+  const openCount = metaByStatus.open.count;
+  const pendingCount = metaByStatus.pending.count;
+  const groupingCount = metaByStatus.group.count;
+  const botCount = metaByStatus.bot.count;
+  const campaignCount = metaByStatus.campaign.count;
 
   const resetHovers = () => {
     setIsHoveredAll(false);
@@ -1075,7 +1124,13 @@ const TicketsManagerTabs = () => {
             </Grid>
           </Grid>
         </Paper>
-        <TabPanel value={tab} name="open" className={classes.ticketsWrapper}>
+        <div
+          role="tabpanel"
+          id="tickets-panel-open"
+          aria-hidden={tab !== "open"}
+          className={classes.ticketsWrapper}
+          style={{ display: tab === "open" ? "flex" : "none" }}
+        >
           <div style={{ overflow: "visible", position: "relative", zIndex: 10 }}>
             <Tabs
               value={tabOpen}
@@ -1271,66 +1326,89 @@ const TicketsManagerTabs = () => {
           </div>
 
           <Paper className={classes.ticketsWrapper}>
-            {tabOpen === "open" && (
+            <div style={{ display: tabOpen === "open" ? "block" : "none", height: "100%" }}>
               <TicketsList
                 status="open"
                 showAll={showAllTickets}
-                sortTickets={sortTickets ? "ASC" : "DESC"}
-                selectedQueueIds={selectedQueueIds}
-                updateCount={(val) => setOpenCount(val)}
+                externalMode={true}
+                externalTickets={ticketsByStatus.open}
+                externalLoading={metaByStatus.open.loading}
+                externalHasMore={metaByStatus.open.hasMore}
+                onLoadMore={() => loadMore("open")}
+                resetScrollKey={`open:${listResetKeyBase}`}
                 setTabOpen={setTabOpen}
               />
-            )}
-            {tabOpen === "pending" && (
+            </div>
+            <div style={{ display: tabOpen === "pending" ? "block" : "none", height: "100%" }}>
               <TicketsList
                 status="pending"
-                selectedQueueIds={selectedQueueIds}
-                sortTickets={sortTickets ? "ASC" : "DESC"}
-                showAll={user.profile === "admin" || canViewAllUsers ? showAllTickets : false}
-                updateCount={(val) => setPendingCount(val)}
+                externalMode={true}
+                externalTickets={ticketsByStatus.pending}
+                externalLoading={metaByStatus.pending.loading}
+                externalHasMore={metaByStatus.pending.hasMore}
+                onLoadMore={() => loadMore("pending")}
+                resetScrollKey={`pending:${listResetKeyBase}`}
                 setTabOpen={setTabOpen}
               />
-            )}
-            {tabOpen === "group" && canViewGroups && (
+            </div>
+            {canViewGroups && (
+              <div style={{ display: tabOpen === "group" ? "block" : "none", height: "100%" }}>
               <TicketsList
                 status="group"
-                showAll={showAllTickets}
-                sortTickets={sortTickets ? "ASC" : "DESC"}
-                selectedQueueIds={selectedQueueIds}
-                updateCount={(val) => setGroupingCount(val)}
+                externalMode={true}
+                externalTickets={ticketsByStatus.group}
+                externalLoading={metaByStatus.group.loading}
+                externalHasMore={metaByStatus.group.hasMore}
+                onLoadMore={() => loadMore("group")}
+                resetScrollKey={`group:${listResetKeyBase}`}
                 setTabOpen={setTabOpen}
               />
+              </div>
             )}
-            {tabOpen === "bot" && (
+            <div style={{ display: tabOpen === "bot" ? "block" : "none", height: "100%" }}>
               <TicketsList
                 status="bot"
-                showAll={showAllTickets}
-                sortTickets={sortTickets ? "ASC" : "DESC"}
-                selectedQueueIds={selectedQueueIds}
-                updateCount={(val) => setBotCount(val)}
+                externalMode={true}
+                externalTickets={ticketsByStatus.bot}
+                externalLoading={metaByStatus.bot.loading}
+                externalHasMore={metaByStatus.bot.hasMore}
+                onLoadMore={() => loadMore("bot")}
+                resetScrollKey={`bot:${listResetKeyBase}`}
                 setTabOpen={setTabOpen}
               />
-            )}
-            {tabOpen === "campaign" && (
+            </div>
+            <div style={{ display: tabOpen === "campaign" ? "block" : "none", height: "100%" }}>
               <TicketsList
                 status="campaign"
-                showAll={showAllTickets}
-                sortTickets={sortTickets ? "ASC" : "DESC"}
-                selectedQueueIds={selectedQueueIds}
-                updateCount={(val) => setCampaignCount(val)}
+                externalMode={true}
+                externalTickets={ticketsByStatus.campaign}
+                externalLoading={metaByStatus.campaign.loading}
+                externalHasMore={metaByStatus.campaign.hasMore}
+                onLoadMore={() => loadMore("campaign")}
+                resetScrollKey={`campaign:${listResetKeyBase}`}
                 setTabOpen={setTabOpen}
               />
-            )}
+            </div>
           </Paper>
-        </TabPanel>
-        <TabPanel value={tab} name="closed" className={classes.ticketsWrapper}>
+        </div>
+        <div
+          role="tabpanel"
+          id="tickets-panel-closed"
+          aria-hidden={tab !== "closed"}
+          className={classes.ticketsWrapper}
+          style={{ display: tab === "closed" ? "flex" : "none" }}
+        >
           <TicketsList
             status="closed"
-            showAll={showAllTickets}
-            selectedQueueIds={selectedQueueIds}
+            externalMode={true}
+            externalTickets={ticketsByStatus.closed}
+            externalLoading={metaByStatus.closed.loading}
+            externalHasMore={metaByStatus.closed.hasMore}
+            onLoadMore={() => loadMore("closed")}
+            resetScrollKey={`closed:${listResetKeyBase}`}
             setTabOpen={setTabOpen}
           />
-        </TabPanel>
+        </div>
         <TabPanel value={tab} name="search" className={classes.ticketsWrapper}>
           {profile === "admin" && (
             <>

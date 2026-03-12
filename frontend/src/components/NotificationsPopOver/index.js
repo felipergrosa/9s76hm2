@@ -16,7 +16,7 @@ import ListItemSecondaryAction from "@material-ui/core/ListItemSecondaryAction";
 import { makeStyles } from "@material-ui/core/styles";
 import Badge from "@material-ui/core/Badge";
 import { Bell as ChatIcon } from "lucide-react";
-import Button from "@material-ui/core/Button";
+import { Button, Tooltip } from "@material-ui/core";
 
 import TicketListItem from "../TicketListItem";
 import useTickets from "../../hooks/useTickets";
@@ -32,6 +32,7 @@ import ContactAvatar from "../ContactAvatar";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import api from "../../services/api";
 import usePermissions from "../../hooks/usePermissions";
+import ColorModeContext from "../../layout/themeContext";
 
 const useStyles = makeStyles(theme => ({
   tabContainer: {
@@ -59,6 +60,8 @@ const NotificationsPopOver = ({ volume = 1 }) => {
 
   const history = useHistory();
   const { user, socket } = useContext(AuthContext);
+  const { colorMode } = useContext(ColorModeContext);
+  const { viewMode } = colorMode;
   const { profile, queues } = user;
 
   const ticketIdUrl = +history.location.pathname.split("/")[2];
@@ -402,21 +405,23 @@ const NotificationsPopOver = ({ volume = 1 }) => {
     <>
       {browserNotification()}
 
-      <IconButton
-        onClick={handleClick}
-        ref={anchorEl}
-        aria-label="Open Notifications"
-        color="inherit"
-        style={{ color: "white" }}
-      >
-        <Badge
-          overlap="rectangular"
-          badgeContent={notifications.length + (profile === "admin" ? releaseRequests.length : 0)}
-          color="secondary"
+      <Tooltip title={i18n.t("dashboard.buttons.notifications")} arrow>
+        <IconButton
+          onClick={handleClick}
+          ref={anchorEl}
+          aria-label="Open Notifications"
+          color="inherit"
+          style={{ padding: 8, color: viewMode === "modern" ? "var(--text)" : "white" }}
         >
-          <ChatIcon />
-        </Badge>
-      </IconButton>
+          <Badge
+            overlap="rectangular"
+            badgeContent={notifications.length + (profile === "admin" ? releaseRequests.length : 0)}
+            color="secondary"
+          >
+            <ChatIcon />
+          </Badge>
+        </IconButton>
+      </Tooltip>
       <Popover
         disableScrollLock
         open={isOpen}

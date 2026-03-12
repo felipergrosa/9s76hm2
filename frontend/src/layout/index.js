@@ -21,6 +21,7 @@ import Avatar from "@material-ui/core/Avatar";
 import Badge from "@material-ui/core/Badge";
 import withStyles from "@material-ui/core/styles/withStyles";
 import Chip from "@material-ui/core/Chip";
+import Tooltip from "@material-ui/core/Tooltip";
 
 import {
   Menu as MenuIcon,
@@ -610,16 +611,18 @@ const LoggedInLayout = ({ children, themeToggle }) => {
         color="primary"
       >
         <Toolbar variant="dense" className={clsx(classes.toolbar, viewMode === "modern" && classes.modernToolbar)}>
-          <IconButton
-            edge="start"
-            variant="contained"
-            aria-label="open drawer"
-            style={{ color: viewMode === "modern" ? "var(--text)" : "white" }}
-            onClick={() => setDrawerOpen(!drawerOpen)}
-            className={clsx(drawerOpen && classes.menuButtonHidden)}
-          >
-            <MenuIcon />
-          </IconButton>
+          <Tooltip title={drawerOpen ? i18n.t("dashboard.buttons.closeDrawer") : i18n.t("dashboard.buttons.openDrawer")} arrow>
+            <IconButton
+              edge="start"
+              variant="contained"
+              aria-label="open drawer"
+              style={{ padding: 8, color: viewMode === "modern" ? "var(--text)" : "white" }}
+              onClick={() => setDrawerOpen(!drawerOpen)}
+              className={clsx(drawerOpen && classes.menuButtonHidden)}
+            >
+              <MenuIcon />
+            </IconButton>
+          </Tooltip>
 
           <Typography
             component="h2"
@@ -670,28 +673,32 @@ const LoggedInLayout = ({ children, themeToggle }) => {
             setRingVolume={setRingVolume} // Callback function
             timelocale={'UTC-3'} //Set time local for call history
           /> */}
-          <IconButton
-            edge="start"
-            onClick={colorMode.toggleColorMode}
-            style={{ padding: greaterThenSm ? 12 : 8, color: viewMode === "modern" ? "var(--text)" : "white" }}
-          >
-            {theme.mode === "dark" ? (
-              <Brightness7Icon style={{ fontSize: greaterThenSm ? 24 : 20 }} />
-            ) : (
-              <Brightness4Icon style={{ fontSize: greaterThenSm ? 24 : 20 }} />
-            )}
-          </IconButton>
+          <Tooltip title={i18n.t("dashboard.buttons.darkMode")} arrow>
+            <IconButton
+              edge="start"
+              onClick={colorMode.toggleColorMode}
+              style={{ padding: 8, color: viewMode === "modern" ? "var(--text)" : "white" }}
+            >
+              {theme.mode === "dark" ? (
+                <Brightness7Icon style={{ fontSize: greaterThenSm ? 24 : 20 }} />
+              ) : (
+                <Brightness4Icon style={{ fontSize: greaterThenSm ? 24 : 20 }} />
+              )}
+            </IconButton>
+          </Tooltip>
 
           <NotificationsVolume setVolume={setVolume} volume={volume} />
 
-          <IconButton
-            onClick={handleRefreshPage}
-            aria-label={i18n.t("mainDrawer.appBar.refresh")}
-            color="inherit"
-            style={{ padding: greaterThenSm ? 12 : 8, color: viewMode === "modern" ? "var(--text)" : "white" }}
-          >
-            <CachedIcon style={{ fontSize: greaterThenSm ? 24 : 20 }} />
-          </IconButton>
+          <Tooltip title={i18n.t("dashboard.buttons.refresh")} arrow>
+            <IconButton
+              onClick={handleRefreshPage}
+              aria-label={i18n.t("dashboard.buttons.refresh")}
+              color="inherit"
+              style={{ padding: 8, color: viewMode === "modern" ? "var(--text)" : "white" }}
+            >
+              <CachedIcon style={{ fontSize: greaterThenSm ? 24 : 20 }} />
+            </IconButton>
+          </Tooltip>
 
           {/* <DarkMode themeToggle={themeToggle} /> */}
 

@@ -6,6 +6,7 @@ import { Megaphone as AnnouncementIcon } from "lucide-react";
 
 import { i18n } from "../../translate/i18n";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import ColorModeContext from "../../layout/themeContext";
 
 import {
   Avatar,
@@ -23,6 +24,7 @@ import {
   DialogActions,
   Button,
   DialogContentText,
+  Tooltip
 } from "@material-ui/core";
 import api from "../../services/api";
 import { isArray } from "lodash";
@@ -151,7 +153,8 @@ export default function AnnouncementsPopover() {
   const [showAnnouncementDialog, setShowAnnouncementDialog] = useState(false);
   //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
-
+  const { colorMode } = useContext(ColorModeContext);
+  const { viewMode } = colorMode;
 
   useEffect(() => {
     dispatch({ type: "RESET" });
@@ -252,21 +255,23 @@ export default function AnnouncementsPopover() {
         open={showAnnouncementDialog}
         handleClose={() => setShowAnnouncementDialog(false)}
       />
-      <IconButton
-        variant="contained"
-        aria-describedby={id}
-        onClick={handleClick}
-        style={{ color: "white" }}
-      >
-        <Badge
-          color="secondary"
-          variant="dot"
-          invisible={invisible || announcements.length < 1}
-          overlap="rectangular"
+      <Tooltip title={i18n.t("dashboard.buttons.announcements")} arrow>
+        <IconButton
+          variant="contained"
+          aria-describedby={id}
+          onClick={handleClick}
+          style={{ padding: 8, color: viewMode === "modern" ? "var(--text)" : "white" }}
         >
-          <AnnouncementIcon />
-        </Badge>
-      </IconButton>
+          <Badge
+            color="secondary"
+            variant="dot"
+            invisible={invisible || announcements.length < 1}
+            overlap="rectangular"
+          >
+            <AnnouncementIcon />
+          </Badge>
+        </IconButton>
+      </Tooltip>
       <Popover
         id={id}
         open={open}

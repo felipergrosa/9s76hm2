@@ -115,6 +115,19 @@ const messages = {
           promoters: "Promotores",
           neutrals: "Neutros",
           detractors: "Detratores",
+          prosecutors: "Promotores",
+          neutral: "Neutro",
+        },
+        buttons: {
+          language: "Idiomas",
+          darkMode: "Alternar Tema",
+          refresh: "Atualizar Página",
+          volume: "Volume das Notificações",
+          notifications: "Notificações",
+          announcements: "Anúncios",
+          chat: "Chat Interno",
+          openDrawer: "Expandir Menu",
+          closeDrawer: "Recolher Menu"
         },
       },
       researchReports: {

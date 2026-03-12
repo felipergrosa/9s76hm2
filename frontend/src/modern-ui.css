@@ -11,6 +11,16 @@
     --sidebar-bg: rgba(255, 255, 255, 0.8);
 }
 
+/* Typography Global Reset - Força herança em todo o projeto */
+.modern-ui, 
+.modern-ui * {
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
+.modern-ui [class*="MuiTypography-root"] {
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
 /* Global Background */
 .modern-ui #root>div>div {
     background-color: var(--bg) !important;

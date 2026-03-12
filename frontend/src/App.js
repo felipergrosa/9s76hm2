@@ -68,6 +68,12 @@ const App = () => {
     () =>
       createTheme(
         {
+          typography: {
+            fontFamily: [
+              'Plus Jakarta Sans',
+              'sans-serif',
+            ].join(','),
+          },
           scrollbarStyles: {
             "&::-webkit-scrollbar": {
               width: "8px",

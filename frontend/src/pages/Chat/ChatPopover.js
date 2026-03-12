@@ -17,12 +17,14 @@ import {
   ListItemText,
   Paper,
   Typography,
+  Tooltip
 } from "@material-ui/core";
 import api from "../../services/api";
 import { isArray } from "lodash";
 // import { SocketContext } from "../../context/Socket/SocketContext";
 import { useDate } from "../../hooks/useDate";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import ColorModeContext from "../../layout/themeContext";
 
 import notifySound from "../../assets/chat_notify.mp3";
 import useSound from "use-sound";
@@ -100,6 +102,8 @@ export default function ChatPopover() {
 
   //   const socketManager = useContext(SocketContext);
   const { user, socket } = useContext(AuthContext);
+  const { colorMode } = useContext(ColorModeContext);
+  const { viewMode } = colorMode;
 
 
   const [loading, setLoading] = useState(false);
@@ -239,17 +243,19 @@ export default function ChatPopover() {
 
   return (
     <div>
-      <IconButton
-        aria-describedby={id}
-        variant="contained"
-        color={invisible ? "default" : "inherit"}
-        onClick={handleClick}
-        style={{ color: "white" }}
-      >
-        <Badge color="secondary" variant="dot" invisible={invisible} overlap="rectangular">
-          <ForumIcon />
-        </Badge>
-      </IconButton>
+      <Tooltip title={i18n.t("dashboard.buttons.chat")} arrow>
+        <IconButton
+          aria-describedby={id}
+          variant="contained"
+          color={invisible ? "default" : "inherit"}
+          onClick={handleClick}
+          style={{ padding: 8, color: viewMode === "modern" ? "var(--text)" : "white" }}
+        >
+          <Badge color="secondary" variant="dot" invisible={invisible} overlap="rectangular">
+            <ForumIcon />
+          </Badge>
+        </IconButton>
+      </Tooltip>
       <Popover
         id={id}
         open={open}

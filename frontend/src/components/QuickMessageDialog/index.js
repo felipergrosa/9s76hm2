@@ -361,14 +361,15 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
   const [previewItem, setPreviewItem] = useState(null);
 
   useEffect(() => {
+    if (!open) return;
+
     try {
       (async () => {
         if (!quickemessageId) {
-          if (initialData) {
-            setQuickemessage((prevState) => {
-              return { ...prevState, ...initialData };
-            });
-          }
+          // Reset para novo item ou clonagem
+          const baseData = initialData ? { ...initialState, ...initialData } : initialState;
+          setQuickemessage(baseData);
+          setFlowItems(initialData ? hydrateFlowItems(initialData) : []);
           return;
         }
 
@@ -383,7 +384,7 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
     } catch (err) {
       toastError(err);
     }
-  }, [quickemessageId, open]);
+  }, [quickemessageId, open, initialData]);
 
   useEffect(() => {
     try {
@@ -411,6 +412,7 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
 
   const handleClose = () => {
     setQuickemessage(initialState);
+    setFlowItems([]);
     setAttachments([]);
     onClose();
   };

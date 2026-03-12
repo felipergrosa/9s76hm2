@@ -67,12 +67,6 @@ const useWhatsApps = () => {
 
 
   useEffect(() => {
-    // Só carrega conexões se tiver permissão
-    if (!hasPermission("connections.view")) {
-      setLoading(false);
-      return;
-    }
-
     setLoading(true);
     const fetchSession = async () => {
       try {
