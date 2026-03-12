@@ -89,6 +89,11 @@ const ListTicketsService = async ({
     });
     showNotificationPendingValue = showPendingNotification[0]?.showNotificationPending || "disabled";
   }
+
+  // Buscar configurações de empresa (LGPD)
+  const settingsLGPD = await FindCompanySettingOneService({ companyId, column: "enableLGPD" });
+  const isLGPDEnabled = settingsLGPD[0]?.enableLGPD === "enabled";
+
   let whereCondition: Filterable["where"];
 
   whereCondition = {
@@ -322,6 +327,7 @@ const ListTicketsService = async ({
       let whereCondition2: Filterable["where"] = {
         companyId,
         status: "closed",
+        // status: showAll === "true" && status === "pending" && isLGPDEnabled ? { [Op.or]: [status, "lgpd"] } : status,
       }
 
       if (showAll === "false" && (user.profile === "admin" || user.allUserChat === "enabled")) {
@@ -590,6 +596,7 @@ const ListTicketsService = async ({
           [Op.or]: [
             { userId: { [Op.notIn]: walletResult.excludedUserIds } },
             { userId: userId }, // Sempre vê os próprios tickets
+            { userId: userId }, // Meus tickets
             { userId: null } // Tickets sem atribuição
           ]
         }
