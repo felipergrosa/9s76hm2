@@ -1220,25 +1220,85 @@ const MessageInput = ({
     setButtonModalOpen(true); // Define o estado como true para abrir o modal
   };
 
-  const handleQuickAnswersClick = async (value) => {
-    if (value.mediaPath) {
-      try {
-        const { data } = await axios.get(value.mediaPath, {
-          responseType: "blob",
-        });
+  const buildQuickMessageMediaUrl = (mediaValue) => {
+    if (!mediaValue || typeof mediaValue !== "string") {
+      return mediaValue;
+    }
 
-        handleUploadQuickMessageMedia(data, value.value);
-        setInputMessage("");
-        return;
-        //  handleChangeMedias(response)
-      } catch (err) {
-        toastError(err);
+    if (mediaValue.startsWith("http") || mediaValue.startsWith("blob:") || mediaValue.startsWith("data:")) {
+      return mediaValue;
+    }
+
+    return `${process.env.REACT_APP_BACKEND_URL}/public/company${user.companyId}/quickMessage/${mediaValue}`;
+  };
+
+  const handleQuickAnswersClick = async (value) => {
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    let flow = [];
+    if (value.flow) {
+      try {
+        flow = typeof value.flow === 'string' ? JSON.parse(value.flow) : value.flow;
+      } catch (e) {
+        flow = [{ type: 'text', value: value.message || value.value }];
+      }
+    } else {
+      // Compatibilidade com mensagens antigas
+      flow = [{ type: 'text', value: value.message || value.value }];
+      if (value.mediaPath) {
+        let paths = [];
+        try {
+          paths = typeof value.mediaPath === 'string' ? JSON.parse(value.mediaPath) : value.mediaPath;
+          if (!Array.isArray(paths)) paths = [value.mediaPath];
+        } catch (e) {
+          paths = [value.mediaPath];
+        }
+        paths.forEach(p => flow.push({ type: 'media', value: p }));
       }
     }
 
-    setInputMessage("");
-    setInputMessage(expandPlaceholders(value.value, contactData, ticketData, user));
+    const executeFlow = async () => {
+      setLoading(true);
+      for (let i = 0; i < flow.length; i++) {
+        const item = flow[i];
+
+        if (item.type === 'text') {
+          const message = expandPlaceholders(item.value, contactData, ticketData, user);
+          
+          // Lógica de Legenda: se este é o primeiro texto e o próximo item é mídia e sendAsCaption está ativo
+          if (i === 0 && flow[i+1]?.type === 'media' && value.sendAsCaption) {
+            // Não envia agora, enviaremos junto com a mídia abaixo
+            continue;
+          }
+          
+          if (message) {
+            await handleSendMessage(message);
+          }
+        } 
+        else if (item.type === 'delay') {
+          await sleep((item.value || 1) * 1000);
+        } 
+        else if (item.type === 'media') {
+          const mediaUrl = buildQuickMessageMediaUrl(item.serverFilename || item.value);
+          const caption = (i === 1 && flow[0]?.type === 'text' && value.sendAsCaption) 
+            ? expandPlaceholders(flow[0].value, contactData, ticketData, user) 
+            : "";
+
+          try {
+            const { data } = await axios.get(mediaUrl, { responseType: "blob" });
+            await handleUploadQuickMessageMedia(data, caption);
+          } catch (err) {
+            console.error("Erro ao enviar mídia do fluxo:", err);
+            toastError(err);
+          }
+        }
+      }
+      setLoading(false);
+    };
+
+    executeFlow();
     setTypeBar(false);
+    setInputMessage("");
   };
 
   // Inserção no cursor atual do input
@@ -1526,16 +1586,17 @@ const MessageInput = ({
     setPrivateMessageInputVisible(false);
   };
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = async (customMessage) => {
+    const messageBodyText = customMessage || inputMessage;
 
-    if (inputMessage.trim() === "") return;
+    if (messageBodyText.trim() === "") return;
     setLoading(true);
 
     const userName = privateMessage
       ? `${user.name} - Mensagem Privada`
       : user.name;
 
-    const sendMessage = expandPlaceholders(inputMessage.trim());
+    const sendMessage = expandPlaceholders(messageBodyText.trim());
 
     const messageBody = (signMessage || privateMessage) && !editingMessage
       ? `*${userName}:*\n${sendMessage}`
@@ -1566,9 +1627,11 @@ const MessageInput = ({
       console.log("[OptimisticUI] Mensagem adicionada otimisticamente:", tempId);
     }
 
-    // Limpar input imediatamente para UX fluida
+    // Limpar input imediatamente para UX fluida se for a mensagem do input
     const savedInput = inputMessage;
-    setInputMessage("");
+    if (!customMessage) {
+      setInputMessage("");
+    }
     setShowEmoji(false);
     setReplyingMessage(null);
     setPrivateMessage(false);
@@ -1595,7 +1658,9 @@ const MessageInput = ({
       }
       toastError(err);
       // Restaurar input em caso de erro para que usuário possa tentar novamente
-      setInputMessage(savedInput);
+      if (!customMessage) {
+        setInputMessage(savedInput);
+      }
     }
 
     setLoading(false);
@@ -1629,10 +1694,11 @@ const MessageInput = ({
           value: m.message,
           label: `/${m.shortcode} - ${truncatedMessage}`,
           mediaPath: m.mediaPath,
+          flow: m.flow,
+          sendAsCaption: m.sendAsCaption
         };
       });
       if (isMounted.current) {
-
         setQuickAnswer(options);
       }
     }
@@ -1979,7 +2045,7 @@ const MessageInput = ({
               </Tooltip>
               {showEmoji ? (
                 <div className={classes.emojiBox}>
-                  <ClickAwayListener onClickAway={(e) => setShowEmoji(true)}>
+                  <ClickAwayListener onClickAway={(e) => setShowEmoji(false)}>
                     <Picker
                       perLine={16}
                       theme={"dark"}

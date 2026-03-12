@@ -11,7 +11,8 @@ import {
   Tooltip,
   Menu,
   MenuItem,
-  Divider
+  Divider,
+  Box
 } from "@material-ui/core";
 import SearchIcon from "@material-ui/icons/Search";
 import FilterListIcon from "@material-ui/icons/FilterList";
@@ -24,6 +25,9 @@ import VisibilityIcon from "@material-ui/icons/Visibility";
 import FlashOnIcon from "@material-ui/icons/FlashOn";
 import ControlPointDuplicateIcon from "@material-ui/icons/ControlPointDuplicate";
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
+import AttachFileIcon from "@material-ui/icons/AttachFile";
+import TextFieldsIcon from "@material-ui/icons/TextFields";
+import SchemaIcon from "@material-ui/icons/AccountTree"; // Representa fluxo/árvore
 import api from "../../services/api";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import toastError from "../../errors/toastError";
@@ -188,10 +192,30 @@ const MessageItem = ({
     <div className={classes.messageItem} style={{ backgroundColor: bgColor, borderColor: borderColor }}>
       <div className={classes.messageHeader}>
         <div className={classes.messageTitleArea}>
-          <Typography style={{fontSize: 12, color: '#888', marginRight: 4}}>{index + 1})</Typography>
-          <Typography className={classes.messageShortcode}>
-            {msg.shortcode}
-          </Typography>
+          <Tooltip title={msg.shortcode}>
+            <Typography className={classes.messageShortcode}>
+              {msg.shortcode}
+            </Typography>
+          </Tooltip>
+          {msg.flow && (() => {
+            try {
+              const flow = JSON.parse(msg.flow);
+              return flow.length > 1 ? (
+                <Tooltip title="Fluxo de mensagens">
+                   <SchemaIcon style={{ fontSize: 16, color: '#3B82F6' }} />
+                </Tooltip>
+              ) : (
+                <Tooltip title="Mensagem simples">
+                   <TextFieldsIcon style={{ fontSize: 16, color: '#888' }} />
+                </Tooltip>
+              );
+            } catch (e) { return null; }
+          })()}
+          {(msg.mediaPath || (msg.flow && msg.flow.includes('"type":"media"'))) && (
+            <Tooltip title="Possui anexos">
+              <AttachFileIcon style={{ fontSize: 14, color: '#10B981', transform: 'rotate(45deg)' }} />
+            </Tooltip>
+          )}
         </div>
         <div className={classes.actionsArea}>
           {canEdit && (
@@ -244,11 +268,35 @@ const MessageItem = ({
           <Typography className={classes.previewText}>
             {expandPlaceholders(msg.message, contact, ticket, user)}
           </Typography>
-          {msg.mediaPath && (
-            <Typography variant="caption" color="textSecondary" style={{display: 'block', marginBottom: 8}}>
-              📎 {msg.mediaName || "Mídia anexa"}
-            </Typography>
-          )}
+          {(() => {
+            let mediaCount = 0;
+            let hasDelay = false;
+            try {
+              if (msg.flow) {
+                const flow = JSON.parse(msg.flow);
+                mediaCount = flow.filter(i => i.type === 'media').length;
+                hasDelay = flow.some(i => i.type === 'delay');
+              } else if (msg.mediaPath) {
+                const p = JSON.parse(msg.mediaPath);
+                mediaCount = Array.isArray(p) ? p.length : 1;
+              }
+            } catch (e) { }
+            
+            return (
+              <Box mt={1} mb={1}>
+                {mediaCount > 0 && (
+                  <Typography variant="caption" color="textSecondary" style={{display: 'block'}}>
+                    📎 {mediaCount} arquivo(s) anexo(s)
+                  </Typography>
+                )}
+                {hasDelay && (
+                  <Typography variant="caption" color="textSecondary" style={{display: 'block'}}>
+                    ⏳ Contém intervalos (delays)
+                  </Typography>
+                )}
+              </Box>
+            );
+          })()}
           {onSendMessage && (
             <Button 
               className={classes.sendButton}
@@ -504,8 +552,8 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, 
             Nenhuma mensagem encontrada.
           </Typography>
         ) : isFlatList ? (
-          // Renderiza lista plana (sem acordeões de grupos)
-          grouped["GERAL"]?.map((msg, index) => (
+          // Renderiza lista plana ordenada
+          grouped["GERAL"]?.sort((a,b) => a.shortcode.localeCompare(b.shortcode)).map((msg, index) => (
             <MessageItem 
               key={msg.id} 
               msg={msg} 
@@ -584,7 +632,7 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, 
                           <Collapse in={isCategoryExpanded} timeout="auto" unmountOnExit>
                             {/* Nível 3: Mensagens */}
                             <div style={{ marginTop: 4 }}>
-                              {categoryItems.map((msg, index) => (
+                              {[...categoryItems].sort((a,b) => a.shortcode.localeCompare(b.shortcode)).map((msg, index) => (
                                 <MessageItem 
                                   key={msg.id} 
                                   msg={msg} 

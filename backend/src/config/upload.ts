@@ -103,6 +103,19 @@ export default {
           break;
         }
         default: {
+          const isQuickMessageUpload =
+            req.path?.includes("/quick-messages/") &&
+            req.path?.includes("/media-upload");
+
+          if (isQuickMessageUpload) {
+            folder = path.resolve(
+              publicFolder,
+              `company${companyId}`,
+              "quickMessage"
+            );
+            break;
+          }
+
           // ✅ NOVO: Detectar se é upload de mensagem (rota /messages/:ticketId)
           const ticketId = req.params?.ticketId || (req.path?.match(/\/messages\/(\d+)/) || [])[1];
           

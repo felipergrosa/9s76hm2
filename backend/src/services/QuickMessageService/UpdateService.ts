@@ -8,14 +8,18 @@ interface Data {
   id?: number | string;
   geral: boolean;
   mediaPath?: string | null;
+  mediaName?: string | null;
   visao: boolean;
   groupName?: string;
   color?: string;
   isAdmin?: boolean;
+  delay?: number;
+  sendAsCaption?: boolean;
+  flow?: string;
 }
 
 const UpdateService = async (data: Data): Promise<QuickMessage> => {
-  const { id, shortcode, message, userId, geral, mediaPath, visao, groupName, color, isAdmin } = data;
+  const { id, shortcode, message, userId, geral, mediaPath, mediaName, visao, groupName, color, isAdmin, delay, sendAsCaption, flow } = data;
 
   const record = await QuickMessage.findByPk(id);
 
@@ -29,15 +33,39 @@ const UpdateService = async (data: Data): Promise<QuickMessage> => {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
-  await record.update({
+  const updateData: any = {
     shortcode,
     message,
     geral,
-    mediaPath,
     visao,
     groupName,
-    color
-  });
+    color,
+    delay,
+    sendAsCaption,
+    flow
+  };
+
+  if (mediaPath !== undefined) {
+    updateData.mediaPath = mediaPath;
+  }
+
+  if (mediaName !== undefined) {
+    updateData.mediaName = mediaName;
+  }
+
+  await record.update(updateData);
+
+  if (groupName && color) {
+    await QuickMessage.update(
+      { color },
+      {
+        where: {
+          groupName,
+          companyId: record.companyId
+        }
+      }
+    );
+  }
 
   return record;
 };

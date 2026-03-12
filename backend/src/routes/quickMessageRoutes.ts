@@ -26,7 +26,7 @@ routes.post(
     "/quick-messages/:id/media-upload",
     isAuth,
     checkPermission("quick-messages.edit"),
-    upload.array("file"),
+    upload.array("medias"),
     QuickMessageController.mediaUpload
   );
   

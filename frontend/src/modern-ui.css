@@ -26,8 +26,14 @@
     background: var(--card) !important;
     backdrop-filter: blur(12px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
-    border: 1px solid var(--border) !important;
+   /*border: 1px solid var(--border) !important;*/
     box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07) !important;
+}
+
+/* Override de borda para cards de node do construtor de fluxo */
+.modern-ui .qm-node-card {
+    border: none !important;
+    border-left: 8px solid var(--node-color, #002d6e) !important;
 }
 
 /* Cards de Relatório - Cores Específicas (Alta Prioridade) */
@@ -137,9 +143,14 @@
 .modern-ui .MuiPaper-root[style*="background-color: rgb"],
 .modern-ui .MuiPaper-root[style*="background-color: #"] {
     background: unset !important;
-    border: none !important;
+    border: none;
     backdrop-filter: blur(8px) saturate(150%) !important;
     -webkit-backdrop-filter: blur(8px) saturate(150%) !important;
+}
+
+/* Remover border none dos qm-node-cards que caem na regra acima */
+.modern-ui .MuiPaper-root.qm-node-card {
+    border-left: 6px solid var(--node-color) !important;
 }
 
 /* Sidebar Modernization */

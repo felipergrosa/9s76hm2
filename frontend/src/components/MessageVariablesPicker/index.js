@@ -61,10 +61,6 @@ const MessageVariablesPicker = ({ onClick, disabled }) => {
             value: "{{connection}} "
         },
         {
-            name: "Primeiro Nome",
-            value: "{{firstName}}"
-        },
-        {
             name: "Empresa",
             value: "{{company}}"
         },

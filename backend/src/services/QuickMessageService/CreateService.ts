@@ -13,6 +13,9 @@ interface Data {
   visao: boolean;
   groupName?: string;
   color?: string;
+  delay?: number;
+  sendAsCaption?: boolean;
+  flow?: string;
 }
 
 const CreateService = async (data: Data): Promise<QuickMessage> => {
@@ -34,6 +37,18 @@ const CreateService = async (data: Data): Promise<QuickMessage> => {
   }
 
   const record = await QuickMessage.create(data);
+
+  if (data.groupName && data.color) {
+    await QuickMessage.update(
+      { color: data.color },
+      {
+        where: {
+          groupName: data.groupName,
+          companyId: data.companyId
+        }
+      }
+    );
+  }
 
   return record;
 };

@@ -16,6 +16,9 @@ import path from "path";
 
 import AppError from "../errors/AppError";
 
+const getQuickMessageFolder = (companyId: number | string): string =>
+  path.resolve(__dirname, "..", "..", "public", `company${companyId}`, "quickMessage");
+
 type IndexQuery = {
   searchParam: string;
   pageNumber: string;
@@ -186,19 +189,84 @@ export const mediaUpload = async (
 ): Promise<Response> => {
   const { id } = req.params;
   const files = req.files as Express.Multer.File[];
-  const file = head(files);
 
   try {
     const quickmessage = await QuickMessage.findByPk(id);
-    
-    await quickmessage.update ({
-      mediaPath: file.filename,
-      mediaName: file.originalname
+
+    let currentPaths: string[] = [];
+    let currentNames: string[] = [];
+
+    const rawPath = quickmessage.getDataValue("mediaPath");
+    const rawName = quickmessage.getDataValue("mediaName");
+
+    if (rawPath) {
+      try {
+        const parsed = JSON.parse(rawPath);
+        currentPaths = Array.isArray(parsed) ? parsed : [rawPath];
+      } catch (e) {
+        currentPaths = [rawPath];
+      }
+    }
+
+    if (rawName) {
+      try {
+        const parsed = JSON.parse(rawName);
+        currentNames = Array.isArray(parsed) ? parsed : [rawName];
+      } catch (e) {
+        currentNames = [rawName];
+      }
+    }
+
+    const newPaths = await Promise.all(files.map(async (f) => {
+      if (f.mimetype.startsWith("audio/")) {
+        const oggFilename = `${f.filename.split('.')[0]}.ogg`;
+        const oggPath = path.resolve(f.destination, oggFilename);
+        
+        try {
+          await new Promise((resolve, reject) => {
+            const ffmpeg = require("fluent-ffmpeg");
+            const ffmpegPath = require("ffmpeg-static");
+            ffmpeg.setFfmpegPath(ffmpegPath);
+            
+            ffmpeg(f.path)
+              .toFormat("ogg")
+              .audioCodec("libopus")
+              .on("error", (err: any) => {
+                console.error("FFMPEG Error:", err);
+                reject(err);
+              })
+              .on("end", () => {
+                // Remover arquivo original após conversão
+                if (fs.existsSync(f.path)) {
+                  fs.unlinkSync(f.path);
+                }
+                resolve(true);
+              })
+              .save(oggPath);
+          });
+          return oggFilename;
+        } catch (e) {
+          console.error("Erro na conversão de áudio:", e);
+          return f.filename; // Fallback para o original em caso de erro
+        }
+      }
+      return f.filename;
+    }));
+
+    const newNames = files.map(f => f.originalname);
+
+    await quickmessage.update({
+      mediaPath: JSON.stringify([...currentPaths, ...newPaths]),
+      mediaName: JSON.stringify([...currentNames, ...newNames])
     });
 
-    return res.send({ mensagem: "Arquivo Anexado" });
-    } catch (err: any) {
-      throw new AppError(err.message);
+    return res.status(200).json({ 
+      mensagem: "Arquivo Anexado", 
+      files: newNames, 
+      filenames: newPaths 
+    });
+  } catch (err: any) {
+    throw new AppError(err.message);
   }
 };
 
@@ -207,23 +275,66 @@ export const deleteMedia = async (
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
+  const { filename } = req.query; // Para excluir um arquivo específico
   const { companyId } = req.user
 
   try {
     const quickmessage = await QuickMessage.findByPk(id);
-    const filePath = path.resolve("public", `company${companyId}`,"quickMessage",quickmessage.mediaName);
-    const fileExists = fs.existsSync(filePath);
-    if (fileExists) {
-      fs.unlinkSync(filePath);
+    const rawPath = quickmessage.getDataValue("mediaPath");
+    const rawName = quickmessage.getDataValue("mediaName");
+
+    let currentPaths: string[] = [];
+    let currentNames: string[] = [];
+
+    if (rawPath) {
+      try {
+        const parsed = JSON.parse(rawPath);
+        currentPaths = Array.isArray(parsed) ? parsed : [rawPath];
+      } catch (e) {
+        currentPaths = [rawPath];
+      }
     }
-    await quickmessage.update ({
-      mediaPath: null,
-      mediaName: null
+
+    if (rawName) {
+      try {
+        const parsed = JSON.parse(rawName);
+        currentNames = Array.isArray(parsed) ? parsed : [rawName];
+      } catch (e) {
+        currentNames = [rawName];
+      }
+    }
+
+    if (filename) {
+      // Exclui apenas um arquivo específico
+      const fileIndex = currentPaths.indexOf(filename as string);
+      if (fileIndex !== -1) {
+        const filePath = path.resolve(getQuickMessageFolder(companyId), currentPaths[fileIndex]);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+        currentPaths.splice(fileIndex, 1);
+        currentNames.splice(fileIndex, 1);
+      }
+    } else {
+      // Exclui todos
+      currentPaths.forEach(file => {
+        const filePath = path.resolve(getQuickMessageFolder(companyId), file);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      });
+      currentPaths = [];
+      currentNames = [];
+    }
+
+    await quickmessage.update({
+      mediaPath: currentPaths.length > 0 ? JSON.stringify(currentPaths) : null,
+      mediaName: currentNames.length > 0 ? JSON.stringify(currentNames) : null
     });
 
     return res.send({ mensagem: "Arquivo Excluído" });
-    } catch (err: any) {
-      throw new AppError(err.message);
+  } catch (err: any) {
+    throw new AppError(err.message);
   }
 };
 
