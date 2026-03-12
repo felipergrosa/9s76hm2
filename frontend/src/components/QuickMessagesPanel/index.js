@@ -27,7 +27,8 @@ import ControlPointDuplicateIcon from "@material-ui/icons/ControlPointDuplicate"
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import AttachFileIcon from "@material-ui/icons/AttachFile";
 import TextFieldsIcon from "@material-ui/icons/TextFields";
-import SchemaIcon from "@material-ui/icons/AccountTree"; // Representa fluxo/árvore
+import SchemaIcon from "@material-ui/icons/AccountTree"; 
+import AddIcon from "@material-ui/icons/Add";
 import api from "../../services/api";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import toastError from "../../errors/toastError";
@@ -67,6 +68,22 @@ const useStyles = makeStyles((theme) => ({
   filterIcon: {
     padding: "8px",
     color: theme.palette.text.secondary,
+  },
+  addButton: {
+    backgroundColor: theme.palette.primary.main,
+    color: theme.palette.background.paper,
+    padding: '3px',
+    borderRadius: '20px',
+    marginLeft: '4px',
+    transition: 'all 0.2s ease-in-out',
+    "&:hover": {
+      backgroundColor: theme.palette.primary.main,
+      color: "#fff",
+      transform: 'scale(1.1)',
+    },
+    "& svg": {
+      fontSize: '22px',
+    },
   },
   filtersContainer: {
     display: "flex",
@@ -496,17 +513,6 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, 
 
   return (
     <div className={classes.root}>
-      {showHeader && (
-        <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 8px 8px 8px" }}>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleOpenQuickMessageDialog}
-          >
-            Adicionar
-          </Button>
-        </div>
-      )}
       <Paper component="form" className={classes.searchPaper} elevation={0} variant="outlined">
         <IconButton type="button" style={{ padding: '10px' }} aria-label="search" size="small">
           <SearchIcon fontSize="small" />
@@ -518,15 +524,26 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, 
           onChange={(e) => setSearchParam(e.target.value)}
         />
         <Divider orientation="vertical" style={{ margin: '4px 8px', height: '24px' }} />
-        <Tooltip title="Filtrar">
-          <IconButton 
-            className={classes.filterIcon} 
-            onClick={handleOpenFilterMenu}
-            size="small"
-          >
-            <FilterListIcon fontSize="small" color={activeFilter !== "Tudo" ? "primary" : "inherit"} />
-          </IconButton>
-        </Tooltip>
+        <Box display="flex" alignItems="center" gap="4px">
+          <Tooltip title="Filtrar">
+            <IconButton 
+              className={classes.filterIcon} 
+              onClick={handleOpenFilterMenu}
+              size="small"
+            >
+              <FilterListIcon fontSize="small" color={activeFilter !== "Tudo" ? "primary" : "inherit"} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Adicionar Mensagem">
+            <IconButton 
+              className={classes.addButton}
+              onClick={handleOpenQuickMessageDialog}
+              size="small"
+            >
+              <AddIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Paper>
 
       <Menu
