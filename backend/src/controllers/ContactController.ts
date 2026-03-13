@@ -300,7 +300,12 @@ export const processNormalization = async (req: AuthenticatedRequest, res: Respo
 
 export const importXls = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const { number, name, email, validateContact, tags, cpfCnpj, representativeCode, city, instagram, situation, fantasyName, foundationDate, creditLimit, segment, silentMode, clientCode } = req.body; // Adicionar silentMode e clientCode
+  const { number, name, email, validateContact, tags, cpfCnpj, representativeCode, city, instagram, situation, fantasyName, foundationDate, creditLimit,    segment,
+    silentMode,
+    clientCode,
+    dtUltCompra,
+    vlUltCompra
+  } = req.body;
   const simpleNumber = String(number).replace(/[^\d.-]+/g, '');
   let validNumber = simpleNumber;
 
@@ -332,8 +337,9 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
     foundationDate,
     creditLimit: creditLimit ? String(creditLimit) : null,
     segment,
-    clientCode: clientCode ? String(clientCode) : null
-    // whatsappId: defaultWhatsapp.id
+    clientCode: clientCode ? String(clientCode) : null,
+    dtUltCompra,
+    vlUltCompra
   };
 
   const contact = await CreateOrUpdateContactServiceForImport(contactData);
@@ -796,8 +802,8 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
     instagram: Yup.string().nullable(),
     situation: Yup.string().oneOf(['Ativo', 'Baixado', 'Ex-Cliente', 'Excluido', 'Futuro', 'Inativo']).nullable(),
     fantasyName: Yup.string().nullable(),
-    foundationDate: Yup.date().nullable(),
-    dtUltCompra: Yup.date().nullable(),
+    foundationDate: Yup.date().nullable().transform((value, originalValue) => originalValue === "" ? null : value),
+    dtUltCompra: Yup.date().nullable().transform((value, originalValue) => originalValue === "" ? null : value),
     vlUltCompra: Yup.mixed().nullable(),
     email: Yup.string()
       .transform((value, originalValue) => {
@@ -1038,7 +1044,9 @@ export const update = async (
     instagram: Yup.string().nullable(),
     situation: Yup.string().oneOf(['Ativo', 'Baixado', 'Ex-Cliente', 'Excluido', 'Futuro', 'Inativo']).nullable(),
     fantasyName: Yup.string().nullable(),
-    foundationDate: Yup.date().nullable(),
+    foundationDate: Yup.date().nullable().transform((value, originalValue) => originalValue === "" ? null : value),
+    dtUltCompra: Yup.date().nullable().transform((value, originalValue) => originalValue === "" ? null : value),
+    vlUltCompra: Yup.mixed().nullable(),
     segment: Yup.string()
       .transform((value, originalValue) => {
         const v = typeof originalValue === "string" ? originalValue.trim() : originalValue;

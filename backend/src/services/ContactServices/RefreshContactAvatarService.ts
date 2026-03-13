@@ -101,7 +101,9 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
 
     const refreshIntervalHours = numberFromEnv(process.env.AVATAR_REFRESH_INTERVAL_HOURS, 24);
     const refreshIntervalMs = Math.max(1, refreshIntervalHours) * 60 * 60 * 1000;
-    const allowNameLookup = boolFromEnv(process.env.AVATAR_USE_NAME_LOOKUP, false);
+    
+    const isNameNumeric = (contact.name || "").replace(/\D/g, "") === contact.number;
+    const allowNameLookup = boolFromEnv(process.env.AVATAR_USE_NAME_LOOKUP, isNameNumeric);
     const allowGroupMetadata = boolFromEnv(process.env.AVATAR_USE_GROUP_METADATA, false);
 
     const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
@@ -132,10 +134,11 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
     let avatarUpdated = false;
 
     // Early-exit se atualizado há menos de 24h
+    // PROTEÇÃO: Ignorar throttle se o arquivo desejado NÃO existir (força download inicial ou recuperação)
     const key = `${companyId}:${contact.id}`;
     const now = Date.now();
     const last = lastAvatarRefreshMap.get(key) || 0;
-    if (now - last <= refreshIntervalMs) {
+    if (now - last <= refreshIntervalMs && desiredExists) {
       return contact;
     }
 

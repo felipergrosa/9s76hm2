@@ -165,6 +165,8 @@ export async function ImportContactsService(
       let foundationDate = null;
       let creditLimit = "";
       let clientCode = "";
+      let dtUltCompra = null;
+      let vlUltCompra = null;
 
       if (has(row, "clientCode") || has(row, "Código do Cliente") || has(row, "codigo") || has(row, "Código")) {
         clientCode = row["clientCode"] || row["Código do Cliente"] || row["codigo"] || row["Código"];
@@ -200,6 +202,14 @@ export async function ImportContactsService(
 
       if (has(row, "creditLimit") || has(row, "Limite de Crédito")) {
         creditLimit = row["creditLimit"] || row["Limite de Crédito"];
+      }
+
+      if (has(row, "dtUltCompra") || has(row, "Última Compra") || has(row, "Ultima Compra")) {
+        dtUltCompra = row["dtUltCompra"] || row["Última Compra"] || row["Ultima Compra"];
+      }
+
+      if (has(row, "vlUltCompra") || has(row, "Valor Última Compra") || has(row, "Valor Ultima Compra")) {
+        vlUltCompra = row["vlUltCompra"] || row["Valor Última Compra"] || row["Valor Ultima Compra"];
       }
 
       if (has(row, "nome") || has(row, "Nome")) {
@@ -238,6 +248,8 @@ export async function ImportContactsService(
         foundationDate,
         creditLimit,
         clientCode,
+        dtUltCompra,
+        vlUltCompra,
         companyId
       };
     });

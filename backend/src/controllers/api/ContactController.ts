@@ -90,6 +90,8 @@ interface ContactData {
   segment?: string;
   bzEmpresa?: string;
   clientCode?: string;
+  dtUltCompra?: Date | string | null;
+  vlUltCompra?: number | string | null;
 }
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
@@ -132,7 +134,9 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
     instagram: Yup.string().nullable(),
     situation: Yup.string().oneOf(['Ativo', 'Baixado', 'Ex-Cliente', 'Excluido', 'Futuro', 'Inativo']).nullable(),
     fantasyName: Yup.string().nullable(),
-    foundationDate: Yup.date().nullable(),
+    foundationDate: Yup.date().nullable().transform((value, originalValue) => originalValue === "" ? null : value),
+    dtUltCompra: Yup.date().nullable().transform((value, originalValue) => originalValue === "" ? null : value),
+    vlUltCompra: Yup.mixed().nullable(),
     creditLimit: Yup.string()
       .transform((value, originalValue) => {
         const v = typeof originalValue === 'string' ? originalValue.trim() : originalValue;

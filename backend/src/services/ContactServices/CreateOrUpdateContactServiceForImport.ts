@@ -29,7 +29,9 @@ interface Request {
   segment?: string;
   bzEmpresa?: string;
   clientCode?: string;
-  silentMode?: boolean; // Adicionar a nova propriedade
+  silentMode?: boolean;
+  dtUltCompra?: Date | string | null;
+  vlUltCompra?: number | string | null;
 }
 
 const CreateOrUpdateContactServiceForImport = async ({
@@ -53,7 +55,9 @@ const CreateOrUpdateContactServiceForImport = async ({
   segment,
   bzEmpresa,
   clientCode,
-  silentMode // Adicionar a nova propriedade
+  silentMode,
+  dtUltCompra,
+  vlUltCompra
 }: Request): Promise<Contact> => {
   const rawString = (rawNumber || "").toString();
   const { canonical } = !isGroup ? safeNormalizePhoneNumber(rawString) : { canonical: null };
@@ -111,6 +115,25 @@ const CreateOrUpdateContactServiceForImport = async ({
     return undefined;
   };
 
+  const parseMoney = (val: any): number | null => {
+    if (val === undefined || val === null || val === '') return null;
+    if (typeof val === 'number') return val;
+    const cleaned = String(val)
+      .replace(/\s+/g, '')
+      .replace(/R\$?/gi, '')
+      .replace(/\./g, '')
+      .replace(',', '.');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? null : num;
+  };
+
+  const parseDate = (val: any): Date | null => {
+    if (val === undefined || val === null || val === '') return null;
+    if (val instanceof Date) return val;
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
   const contactData = {
     name,
     number,
@@ -131,7 +154,9 @@ const CreateOrUpdateContactServiceForImport = async ({
     foundationDate: finalFoundationDate,
     segment: normalizeSegment(segment),
     bzEmpresa: normalizeBzEmpresa(bzEmpresa),
-    clientCode: clientCode || undefined
+    clientCode: clientCode || undefined,
+    dtUltCompra: parseDate(dtUltCompra),
+    vlUltCompra: parseMoney(vlUltCompra)
   };
 
   const io = getIO();
