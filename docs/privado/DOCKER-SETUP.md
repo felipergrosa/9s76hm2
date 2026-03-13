@@ -1,4 +1,4 @@
-# 🐳 Configuração Docker Whaticket
+# 🐳 Configuração Docker 9s76hm2
 
 ## ⚠️ IMPORTANTE - NÃO MODIFICAR ESTA ESTRUTURA
 
@@ -8,7 +8,7 @@ Esta configuração foi padronizada para manter **desenvolvimento = produção**
 
 ```
 ┌─────────────────────────────────────┐
-│  Docker Compose (whaticket)         │
+│  Docker Compose (9s76hm2)         │
 ├─────────────────────────────────────┤
 │  ✅ Backend    (porta 8080)         │
 │  ✅ Frontend   (porta 80)           │
@@ -57,7 +57,7 @@ docker-compose down -v
 Todas as configurações estão no `docker-compose.yml`:
 - DB_HOST=postgres (nome do serviço)
 - DB_PORT=5432
-- DB_NAME=whaticket
+- DB_NAME=9s76hm2
 - DB_USER=postgres
 - DB_PASS=efe487b6a861100fb704ad9f5c160cb8
 - REDIS_URI=redis://redis:6379/0
@@ -100,10 +100,10 @@ docker ps
 ```
 
 Deve mostrar:
-- whaticket-backend (running)
-- whaticket-frontend (running)
-- whaticket-postgres (running)
-- whaticket-redis (running)
+- 9s76hm2-backend (running)
+- 9s76hm2-frontend (running)
+- 9s76hm2-postgres (running)
+- 9s76hm2-redis (running)
 
 ---
 **Data de padronização**: 2026-03-09  

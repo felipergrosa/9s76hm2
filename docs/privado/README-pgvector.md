@@ -1,6 +1,6 @@
-# Instalação Automática do pgvector para Whaticket
+# Instalação Automática do pgvector para 9s76hm2
 
-Este guia explica como instalar e configurar automaticamente o pgvector (extensão PostgreSQL para IA e RAG) no seu ambiente Whaticket.
+Este guia explica como instalar e configurar automaticamente o pgvector (extensão PostgreSQL para IA e RAG) no seu ambiente 9s76hm2.
 
 ## 📋 O que foi criado
 
@@ -34,15 +34,15 @@ Este guia explica como instalar e configurar automaticamente o pgvector (extens�
 3. **Verifique a instalação:**
    ```bash
    # Conectar ao PostgreSQL
-   psql -U postgres -d whaticket -c "SELECT * FROM pg_extension WHERE extname = 'vector';"
+   psql -U postgres -d 9s76hm2 -c "SELECT * FROM pg_extension WHERE extname = 'vector';"
 
    # Ou se estiver em container Docker:
-   docker exec -it seu-container-postgres psql -U postgres -d whaticket -c "SELECT * FROM pg_extension WHERE extname = 'vector';"
+   docker exec -it seu-container-postgres psql -U postgres -d 9s76hm2 -c "SELECT * FROM pg_extension WHERE extname = 'vector';"
    ```
 
-4. **Execute as migrações do Whaticket:**
+4. **Execute as migrações do 9s76hm2:**
    ```bash
-   # No Portainer, reinicie o stack do Whaticket
+   # No Portainer, reinicie o stack do 9s76hm2
    # Ou via terminal:
    docker-compose restart
    ```
@@ -51,17 +51,17 @@ Este guia explica como instalar e configurar automaticamente o pgvector (extens�
 
 1. **Pare o container PostgreSQL atual:**
    ```bash
-   docker stop whaticket-postgres
-   docker rm whaticket-postgres
+   docker stop 9s76hm2-postgres
+   docker rm 9s76hm2-postgres
    ```
 
 2. **Execute o novo container:**
    ```bash
-   docker run --name whaticket-postgres \
+   docker run --name 9s76hm2-postgres \
      -e POSTGRES_PASSWORD=efe487b6a861100fb704ad9f5c160cb8 \
-     -e POSTGRES_DB=whaticket \
+     -e POSTGRES_DB=9s76hm2 \
      -p 5432:5432 \
-     -d whaticket-postgres-pgvector
+     -d 9s76hm2-postgres-pgvector
    ```
 
 3. **Execute as migrações:**
@@ -81,7 +81,7 @@ sudo apt-get update
 sudo apt-get install postgresql-15-pgvector
 
 # Criar extensão
-psql -U postgres -d whaticket -c "CREATE EXTENSION IF NOT EXISTS vector;"
+psql -U postgres -d 9s76hm2 -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
 # Reiniciar PostgreSQL
 sudo systemctl restart postgresql
@@ -106,7 +106,7 @@ sudo systemctl restart postgresql
 
 ```bash
 # Conectar ao banco
-docker exec -it whaticket-postgres psql -U postgres -d whaticket
+docker exec -it 9s76hm2-postgres psql -U postgres -d 9s76hm2
 
 # Verificar extensão
 SELECT * FROM pg_extension WHERE extname = 'vector';
@@ -120,7 +120,7 @@ SELECT * FROM test_vector;
 ### Verificar migrações:
 ```bash
 # Logs do container backend
-docker logs whaticket-backend | grep -i migration
+docker logs 9s76hm2-backend | grep -i migration
 ```
 
 ## 🎯 Benefícios
@@ -148,16 +148,16 @@ docker logs whaticket-backend | grep -i migration
 
 ### Erro: "Unknown constraint error"
 - **Solução:** Migrações foram corrigidas, deve funcionar agora
-- **Verificação:** Execute `docker logs whaticket-backend`
+- **Verificação:** Execute `docker logs 9s76hm2-backend`
 
 ### Container não inicia:
 ```bash
 # Verificar logs
-docker logs whaticket-postgres
-docker logs whaticket-backend
+docker logs 9s76hm2-postgres
+docker logs 9s76hm2-backend
 
 # Verificar status
-docker ps -a | grep whaticket
+docker ps -a | grep 9s76hm2
 ```
 
 ## 📊 Funcionalidades Habilitadas
@@ -179,4 +179,4 @@ Com pgvector instalado, você terá:
 
 ---
 
-**🎉 Pronto!** Agora você tem pgvector funcionando automaticamente no seu Whaticket!
+**🎉 Pronto!** Agora você tem pgvector funcionando automaticamente no seu 9s76hm2!

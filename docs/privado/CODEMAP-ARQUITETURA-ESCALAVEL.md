@@ -3,7 +3,7 @@
 ## 📁 Estrutura de Diretórios Completa
 
 ```
-whaticket/
+9s76hm2/
 ├── backend/                                    # Backend monolítico (Fase 1 e 2)
 │   ├── src/
 │   │   ├── app.ts                             # [MODIFICAR] Adicionar traceMiddleware, metricsMiddleware

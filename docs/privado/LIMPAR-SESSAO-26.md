@@ -3,10 +3,10 @@
 ## Caminhos para verificar e deletar:
 
 ### Windows
-rmdir /s /q "c:\Users\feliperosa\whaticket\backend\src\wbot\sessions\26"
+rmdir /s /q "c:\Users\feliperosa\9s76hm2\backend\src\wbot\sessions\26"
 
 ### Ou via PowerShell
-Remove-Item -Path "c:\Users\feliperosa\whaticket\backend\src\wbot\sessions\26" -Recurse -Force
+Remove-Item -Path "c:\Users\feliperosa\9s76hm2\backend\src\wbot\sessions\26" -Recurse -Force
 
 ### Linux/Mac
 rm -rf "backend/src/wbot/sessions/26"

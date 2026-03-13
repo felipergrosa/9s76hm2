@@ -154,6 +154,6 @@ backend:
 
 ## 🚀 **STATUS: PRONTO PARA PRODUÇÃO**
 
-**O Smart Guardian está pronto para proteger seu Whaticket 24/7 sem qualquer intervenção manual!**
+**O Smart Guardian está pronto para proteger seu 9s76hm2 24/7 sem qualquer intervenção manual!**
 
 Basta executar `npm run smart-guardian` e deixar o sistema trabalhar sozinho. 🎯✅

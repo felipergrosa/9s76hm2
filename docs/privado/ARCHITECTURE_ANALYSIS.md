@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-Sistemas robustos de multiatendimento (Zendesk, Twilio Flex, Intercom, Slack) usam **arquiteturas radicalmente diferentes** do Whaticket. Eles priorizam:
+Sistemas robustos de multiatendimento (Zendesk, Twilio Flex, Intercom, Slack) usam **arquiteturas radicalmente diferentes** do 9s76hm2. Eles priorizam:
 
 1. **CQRS + Event Sourcing** - Separação completa de leitura/escrita
 2. **Message Brokers** - Kafka/RabbitMQ para garantia de entrega
@@ -117,9 +117,9 @@ Slack processa **bilhões de mensagens diárias** usando:
 
 ## 3. CQRS + Event Sourcing para Mensagens
 
-### Por que Whaticket usa abordagem errada?
+### Por que 9s76hm2 usa abordagem errada?
 
-**Whaticket atual:**
+**9s76hm2 atual:**
 ```
 Mensagem chega → Salva no DB → Emite evento Socket.IO
 ```
@@ -174,10 +174,10 @@ Problema: Se o emit falhar, mensagem está no DB mas frontend não sabe.
 
 ## 4. Multi-Channel Unificado (Padrão Zendesk/Twilio)
 
-### Problema do Whaticket
+### Problema do 9s76hm2
 
 ```javascript
-// Whaticket: Adapters separados
+// 9s76hm2: Adapters separados
 BaileysAdapter.processMessage()  // WhatsApp
 FacebookAdapter.processMessage() // Facebook
 InstagramAdapter.processMessage() // Instagram
@@ -226,7 +226,7 @@ class MessageService {
 ```
 Cenário: Mensagem deve ser enviada para WhatsApp E gravada no DB
 
-Whaticket:
+9s76hm2:
 1. Envia para WhatsApp
 2. Se sucesso, salva no DB
 Problema: Se DB falhar, mensagem foi enviada mas não registrada!
@@ -263,10 +263,10 @@ Problema: Se DB falhar, mensagem foi enviada mas não registrada!
 
 ## 6. WebSocket Gateway: Arquitetura Correta
 
-### Problema do Whaticket
+### Problema do 9s76hm2
 
 ```javascript
-// Whaticket: Socket.IO direto no backend principal
+// 9s76hm2: Socket.IO direto no backend principal
 const io = socketIO(server);
 io.on('connection', (socket) => {
   // Lógica de negócio misturada com WebSocket!
@@ -323,7 +323,7 @@ class WebSocketGateway {
 
 ### Key Differences:
 
-| Aspecto | Whaticket | Sistemas Robustos |
+| Aspecto | 9s76hm2 | Sistemas Robustos |
 |---------|-----------|-------------------|
 | Conexão | Socket.IO no monolito | Gateway separado, stateless |
 | Retry | Manual em código | Automático via fila |
@@ -342,7 +342,7 @@ class WebSocketGateway {
 │              MESSAGE DELIVERY SEMANTICS                      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  At Most Once (Whaticket atual):                           │
+│  At Most Once (9s76hm2 atual):                           │
 │  └── Envia 1x, se falhar = mensagem perdida                │
 │                                                              │
 │  At Least Once (Sistemas robustos):                        │
@@ -380,7 +380,7 @@ await this.processedMessageIds.add(messageId);
 
 ## 8. Banco de Dados: Modelagem para Mensagens
 
-### Whaticket (Relacional tradicional)
+### 9s76hm2 (Relacional tradicional)
 
 ```sql
 -- Problema: JOINs pesados para cada mensagem
@@ -441,7 +441,7 @@ ORDER BY m.createdAt DESC;
 
 ---
 
-## 10. Recomendações para Whaticket
+## 10. Recomendações para 9s76hm2
 
 ### Short-term (1-2 meses)
 

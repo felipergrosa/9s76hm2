@@ -47,7 +47,7 @@ docker-compose down
 ### Passo 2: Limpar build antigo (opcional, mas recomendado)
 
 ```bash
-cd /caminho/para/whaticket/backend
+cd /caminho/para/9s76hm2/backend
 rm -rf dist
 ```
 
@@ -193,7 +193,7 @@ await CreateMessageService({
 pm2 stop backend  # ou docker-compose down
 
 # 2. Ir para pasta backend
-cd /caminho/para/whaticket/backend
+cd /caminho/para/9s76hm2/backend
 
 # 3. Limpar build antigo
 rm -rf dist

@@ -200,7 +200,7 @@ WHERE "companyId" = 1;
 
 ```bash
 # Executar script SQL de limpeza
-psql -U postgres -d whaticket -f CLEANUP-INVALID-GROUP-CONTACTS.sql
+psql -U postgres -d 9s76hm2 -f CLEANUP-INVALID-GROUP-CONTACTS.sql
 ```
 
 **O script faz:**

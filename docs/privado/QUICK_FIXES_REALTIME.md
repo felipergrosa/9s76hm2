@@ -381,9 +381,9 @@ socketEventQueue.process("emit", async (job) => {
 
 ---
 
-## Comparativo: Whaticket Atual vs. Com Fixes
+## Comparativo: 9s76hm2 Atual vs. Com Fixes
 
-| Cenário | Whaticket Atual | Com Soluções 1-3 |
+| Cenário | 9s76hm2 Atual | Com Soluções 1-3 |
 |---------|-----------------|------------------|
 | Desconexão 30s | ❌ Perde mensagens | ✅ Recovery automático |
 | Desconexão 5min | ❌ Perde mensagens | ✅ Last Event ID recupera |

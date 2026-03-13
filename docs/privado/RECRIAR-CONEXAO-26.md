@@ -1,7 +1,7 @@
 # RECRIAR CONEXÃO #26
 
 ## 1. Via Interface (Recomendado)
-- Acesse o Whaticket
+- Acesse o 9s76hm2
 - Vá em "Conexões WhatsApp"
 - Clique em "Adicionar Conexão"
 - Configure com:

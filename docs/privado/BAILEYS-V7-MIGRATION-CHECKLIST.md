@@ -117,18 +117,18 @@ tail -f backend/logs/app.log | grep -i baileys
 
 **Como testar:**
 1. Enviar mensagem de outro WhatsApp
-2. Verificar se aparece no Whaticket
+2. Verificar se aparece no 9s76hm2
 3. Verificar logs: `[handleMessage]`
 
 ---
 
 ### Teste 3: Envio de Mensagens
-- [ ] Enviar mensagem de texto do Whaticket
+- [ ] Enviar mensagem de texto do 9s76hm2
 - [ ] Mensagem é recebida no WhatsApp
 - [ ] Status de entrega atualiza
 
 **Como testar:**
-1. Abrir ticket no Whaticket
+1. Abrir ticket no 9s76hm2
 2. Enviar mensagem
 3. Verificar recebimento no WhatsApp
 
@@ -158,7 +158,7 @@ tail -f backend/logs/app.log | grep -i baileys
 
 **Como testar:**
 1. Enviar mensagem em grupo
-2. Verificar se aparece no Whaticket
+2. Verificar se aparece no 9s76hm2
 3. Verificar se nome do participante está correto
 
 ---

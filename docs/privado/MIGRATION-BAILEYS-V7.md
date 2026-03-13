@@ -117,7 +117,7 @@ await sock.sendMessage(jid, { text: 'Hello' }, {
    cp -r backend/.wwebjs_auth backend/.wwebjs_auth.backup
    
    # Backup do banco (contatos, tickets)
-   pg_dump whaticket > whaticket_backup_$(date +%Y%m%d).sql
+   pg_dump 9s76hm2 > 9s76hm2_backup_$(date +%Y%m%d).sql
    ```
 
 2. **Criar branch**

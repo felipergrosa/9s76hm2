@@ -99,7 +99,7 @@ Este comando vai:
 Após o push das imagens:
 
 1. Acesse seu **Portainer**
-2. Vá em **Stacks → Whaticket**
+2. Vá em **Stacks → 9s76hm2**
 3. Clique em **"Update the stack"** ou **"Pull and redeploy"**
 4. Aguarde o Portainer baixar as novas imagens e reiniciar os containers
 

@@ -16,7 +16,7 @@ Criar um sistema de relatório detalhado que registre o processamento de cada co
 | `Número Normalizado` | Número após normalização | `556292761959` |
 | `Número Canônico` | Número no formato canonical | `556292761959` |
 | `Nome do WhatsApp` | Nome no dispositivo | `João Silva` |
-| [Status](file:///c:/Users/feliperosa/whaticket/backend/src/libs/whatsapp/BaileysAdapter.ts#408-422) | Resultado do processamento | `CRIADO`, `JÁ_EXISTIA`, `ATUALIZADO`, `FALHA`, `IGNORADO` |
+| [Status](file:///c:/Users/feliperosa/9s76hm2/backend/src/libs/whatsapp/BaileysAdapter.ts#408-422) | Resultado do processamento | `CRIADO`, `JÁ_EXISTIA`, `ATUALIZADO`, `FALHA`, `IGNORADO` |
 | `Ação Realizada` | O que foi feito | `Tag aplicada`, `Contato criado`, `Nome atualizado` |
 | `ID Banco` | ID do contato no banco | `12345` |
 | `Nome no Banco` | Nome atual no banco | `João Silva` |
@@ -24,7 +24,7 @@ Criar um sistema de relatório detalhado que registre o processamento de cada co
 | `Critério de Match` | Campo que deu match | `canonicalNumber=556292761959` |
 | `Tags Aplicadas` | Tags adicionadas | `Cliente, VIP` |
 | `Erro (se houver)` | Mensagem de erro | `Validation error: number already exists` |
-| [Timestamp](file:///c:/Users/feliperosa/whaticket/backend/src/services/WbotServices/wbotMessageListener.ts#203-206) | Data/hora do processamento | `2026-01-19 09:28:35` |
+| [Timestamp](file:///c:/Users/feliperosa/9s76hm2/backend/src/services/WbotServices/wbotMessageListener.ts#203-206) | Data/hora do processamento | `2026-01-19 09:28:35` |
 
 ## Implementação
 

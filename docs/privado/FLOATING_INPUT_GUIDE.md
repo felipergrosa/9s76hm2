@@ -1,7 +1,7 @@
 # 🎨 Guia de Design - Campo de Mensagem Flutuante
 
 ## 🎯 Objetivo
-Transformar o campo de mensagem do Whaticket em um componente flutuante com fundo transparente, similar ao design moderno do WhatsApp Web.
+Transformar o campo de mensagem do 9s76hm2 em um componente flutuante com fundo transparente, similar ao design moderno do WhatsApp Web.
 
 ## ✨ Mudanças Implementadas
 

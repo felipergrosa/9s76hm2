@@ -2,11 +2,11 @@
 
 ## Atualização do stack.portainer.yml
 
-Adicione estas variáveis ao serviço `whaticketback` no seu `stack.portainer.yml`:
+Adicione estas variáveis ao serviço `9s76hm2back` no seu `stack.portainer.yml`:
 
 ```yaml
 services:
-  whaticketback:
+  9s76hm2back:
     environment:
       # ... (manter variáveis existentes) ...
       
@@ -61,7 +61,7 @@ services:
 
 1. **Atualizar stack.portainer.yml**
    ```bash
-   # Adicionar estas linhas ao environment do whaticketback
+   # Adicionar estas linhas ao environment do 9s76hm2back
    SOCKET_DEBUG: "false"
    SOCKET_FALLBACK_NS_BROADCAST: "true"
    SOCKET_USE_QUEUE: "true"
@@ -106,7 +106,7 @@ services:
 
 ## Configuração Completa (Bloco para Copiar)
 
-Adicione este bloco no `environment` do serviço `whaticketback`:
+Adicione este bloco no `environment` do serviço `9s76hm2back`:
 
 ```yaml
       # Socket.IO - Soluções de Realtime Sync
@@ -175,13 +175,13 @@ Adicione este bloco no `environment` do serviço `whaticketback`:
 # 1. Atualizar stack.portainer.yml
 # 2. Deploy no Portainer ou via docker stack deploy
 
-docker stack deploy -c stack.portainer.yml whaticket
+docker stack deploy -c stack.portainer.yml 9s76hm2
 
 # 3. Verificar se containers subiram
-docker stack ps whaticket
+docker stack ps 9s76hm2
 
 # 4. Verificar logs do backend
-docker service logs whaticket_whaticketback --tail 100 -f
+docker service logs 9s76hm2_9s76hm2back --tail 100 -f
 ```
 
 ---

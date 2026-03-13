@@ -1,4 +1,4 @@
-# 🚀 Estratégia de Otimização Extrema - Whaticket
+# 🚀 Estratégia de Otimização Extrema - 9s76hm2
 
 ## Objetivo
 Preparar o sistema para suportar **5 conexões WhatsApp** com **20 mensagens/minuto cada** (100 msg/min total) sem travamentos, bugs ou degradação de performance.

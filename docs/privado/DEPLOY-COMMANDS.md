@@ -47,5 +47,5 @@ node scripts/auto-fix-sessions.js all
 tail -f /app/logs/smart-guardian.log
 
 # Logs do backend
-docker logs whaticket-backend --tail=100 | grep -i "prekey\|invalid"
+docker logs 9s76hm2-backend --tail=100 | grep -i "prekey\|invalid"
 ```

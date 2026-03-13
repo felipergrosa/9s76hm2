@@ -8,7 +8,7 @@ Criar um conector "turbinado" que combine o melhor de **múltiplas bibliotecas o
 ## Análise de Mercado - Bibliotecas Disponíveis
 
 ### 1. **Baileys** (WhiskeySockets) ⭐ 21.4k
-**Base atual do Whaticket**
+**Base atual do 9s76hm2**
 
 | Aspecto | Avaliação |
 |---------|-----------|

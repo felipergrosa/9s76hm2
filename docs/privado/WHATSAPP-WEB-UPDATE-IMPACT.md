@@ -131,7 +131,7 @@ const renderMessage = (message) => {
 └─────────────────────────────────────────────────────┘
 ```
 
-**Impacto no Whaticket:**
+**Impacto no 9s76hm2:**
 
 1. **Sidebar atual** (`TicketsListCustom`) precisaria:
    - Adicionar tabs: `Tickets`, `Status`, `Channels`, `Calls`

@@ -1,4 +1,4 @@
-# 🚀 Whaticket - WhatsApp Business API Oficial
+# 🚀 9s76hm2 - WhatsApp Business API Oficial
 
 ## 📋 Resumo
 
@@ -66,7 +66,7 @@ Tipo: Baileys (Grátis - QR Code)
 ```
 1. Criar conta Meta Business
 2. Obter credenciais da API
-3. Whaticket → Nova Conexão → API Oficial
+3. 9s76hm2 → Nova Conexão → API Oficial
 4. Preencher credenciais
 5. Configurar webhook na Meta
 → Conectado automaticamente!
@@ -266,7 +266,7 @@ docker push seu-registry/frontend:latest
 
 - Meta (WhatsApp Business API)
 - Baileys Community
-- Whaticket Community
+- 9s76hm2 Community
 
 ---
 

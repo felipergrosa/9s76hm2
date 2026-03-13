@@ -1,4 +1,4 @@
-# Guia de Uso do Docker - Whaticket
+# Guia de Uso do Docker - 9s76hm2
 
 ## 🔧 Desenvolvimento Local
 
@@ -77,10 +77,10 @@ docker compose build
 docker volume ls
 
 # Backup do banco
-docker exec whaticket-postgres pg_dump -U postgres whaticket > backup.sql
+docker exec 9s76hm2-postgres pg_dump -U postgres 9s76hm2 > backup.sql
 
 # Restaurar backup
-docker exec -i whaticket-postgres psql -U postgres whaticket < backup.sql
+docker exec -i 9s76hm2-postgres psql -U postgres 9s76hm2 < backup.sql
 ```
 
 ---
@@ -90,11 +90,11 @@ docker exec -i whaticket-postgres psql -U postgres whaticket < backup.sql
 ### Backend não conecta no banco
 - Verifique se postgres está rodando: `docker compose ps`
 - Veja os logs: `docker compose logs postgres`
-- Teste conexão: `docker exec whaticket-postgres pg_isready -U postgres`
+- Teste conexão: `docker exec 9s76hm2-postgres pg_isready -U postgres`
 
 ### Redis não conecta
 - Verifique se redis está rodando: `docker compose ps`
-- Teste: `docker exec whaticket-redis redis-cli ping` (deve retornar PONG)
+- Teste: `docker exec 9s76hm2-redis redis-cli ping` (deve retornar PONG)
 
 ### Porta já em uso
 - Backend (8080): `netstat -ano | findstr :8080` e mate o processo

@@ -2,7 +2,7 @@
 
 ## 📊 Visão Geral
 
-Este roadmap detalha a evolução do Whaticket de uma arquitetura monolítica para uma arquitetura distribuída, orientada a eventos e preparada para escalar horizontalmente.
+Este roadmap detalha a evolução do 9s76hm2 de uma arquitetura monolítica para uma arquitetura distribuída, orientada a eventos e preparada para escalar horizontalmente.
 
 **Meta:** Suportar **10.000+ conversas simultâneas** com alta disponibilidade, baixa latência e resiliência.
 
@@ -608,7 +608,7 @@ export interface AIResponseGeneratedEvent extends BaseEvent {
   };
 }
 
-export type WhaticketEvent = 
+export type 9s76hm2Event = 
   | MessageReceivedEvent 
   | HandoffRequestedEvent 
   | AIResponseGeneratedEvent;
