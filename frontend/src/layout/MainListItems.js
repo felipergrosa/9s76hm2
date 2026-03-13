@@ -451,28 +451,18 @@ const MainListItems = ({ collapsed, drawerClose }) => {
 
   return (
     <div onClick={drawerClose}>
-      {/* DASHBOARD */}
+      {/* 1. DASHBOARD */}
       {hasPermission("dashboard.view") && (
-          <ListItemLink
-            to="/"
-            primary="Dashboard"
-            icon={<DashboardOutlinedIcon />}
-            viewMode={viewMode}
-            tooltip={collapsed}
-          />
-        )}
-      {/* PAINEL EM TEMPO REAL */}
-      {hasPermission("realtime.view") && (
-          <ListItemLink
-            to="/moments"
-            primary={i18n.t("mainDrawer.listItems.chatsTempoReal")}
-            icon={<GridOn />}
-            viewMode={viewMode}
-            tooltip={collapsed}
-          />
-        )}
+        <ListItemLink
+          to="/"
+          primary="Dashboard"
+          icon={<DashboardOutlinedIcon />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
 
-      {/* MENU PRINCIPAL */}
+      {/* 2. ATENDIMENTOS */}
       {hasPermission("tickets.view") && (
         <ListItemLink
           to="/tickets"
@@ -483,36 +473,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {hasPermission("quick-messages.view") && (
-        <ListItemLink
-          to="/quick-messages"
-          primary={i18n.t("mainDrawer.listItems.quickMessages")}
-          icon={<FlashOnIcon />}
-          viewMode={viewMode}
-          tooltip={collapsed}
-        />
-      )}
-
-      {showKanban && hasPermission("kanban.view") && (
-        <ListItemLink
-          to="/kanban"
-          primary={i18n.t("mainDrawer.listItems.kanban")}
-          icon={<ViewKanban />}
-          viewMode={viewMode}
-          tooltip={collapsed}
-        />
-      )}
-
-      {hasPermission("contacts.view") && (
-        <ListItemLink
-          to="/contacts"
-          primary={i18n.t("mainDrawer.listItems.contacts")}
-          icon={<ContactPhoneOutlinedIcon />}
-          viewMode={viewMode}
-          tooltip={collapsed}
-        />
-      )}
-
+      {/* 3. GRUPOS */}
       {hasPermission("contacts.view") && (
         <ListItemLink
           to="/groups"
@@ -523,26 +484,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {showSchedules && hasPermission("schedules.view") && (
-        <ListItemLink
-          to="/schedules"
-          primary={i18n.t("mainDrawer.listItems.schedules")}
-          icon={<Schedule />}
-          viewMode={viewMode}
-          tooltip={collapsed}
-        />
-      )}
-
-      {hasPermission("tags.view") && (
-        <ListItemLink
-          to="/tags"
-          primary={i18n.t("mainDrawer.listItems.tags")}
-          icon={<LocalOfferIcon />}
-          viewMode={viewMode}
-          tooltip={collapsed}
-        />
-      )}
-
+      {/* 4. CHAT INTERNO */}
       {showInternalChat && hasPermission("internal-chat.view") && (
         <ListItemLink
           to="/chats"
@@ -557,12 +499,73 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {/* <ListItemLink
-        to="/todolist"
-        primary={i18n.t("ToDoList")}
-        icon={<EventAvailableIcon />}
-      /> */}
+      {/* 5. CONTATOS */}
+      {hasPermission("contacts.view") && (
+        <ListItemLink
+          to="/contacts"
+          primary={i18n.t("mainDrawer.listItems.contacts")}
+          icon={<ContactPhoneOutlinedIcon />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
 
+      {/* 6. PAINEL (MOMENTS) */}
+      {hasPermission("realtime.view") && (
+        <ListItemLink
+          to="/moments"
+          primary={i18n.t("mainDrawer.listItems.chatsTempoReal")}
+          icon={<GridOn />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 7. KANBAN */}
+      {showKanban && hasPermission("kanban.view") && (
+        <ListItemLink
+          to="/kanban"
+          primary={i18n.t("mainDrawer.listItems.kanban")}
+          icon={<ViewKanban />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 8. RESPOSTAS RÁPIDAS */}
+      {hasPermission("quick-messages.view") && (
+        <ListItemLink
+          to="/quick-messages"
+          primary={i18n.t("mainDrawer.listItems.quickMessages")}
+          icon={<FlashOnIcon />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 9. AGENDAMENTOS */}
+      {showSchedules && hasPermission("schedules.view") && (
+        <ListItemLink
+          to="/schedules"
+          primary={i18n.t("mainDrawer.listItems.schedules")}
+          icon={<Schedule />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 10. TAGS */}
+      {hasPermission("tags.view") && (
+        <ListItemLink
+          to="/tags"
+          primary={i18n.t("mainDrawer.listItems.tags")}
+          icon={<LocalOfferIcon />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 11. AJUDA */}
       {hasPermission("helps.view") && (
         <ListItemLink
           to="/helps"
@@ -573,11 +576,44 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {/* SEÇÃO ADMINISTRAÇÃO */}
       <Divider />
       <ListSubheader inset>{i18n.t("mainDrawer.listItems.administration")}</ListSubheader>
 
-      {/* CAMPANHAS */}
+      {/* 1. USUÁRIOS */}
+      {hasPermission("users.view") && (
+        <ListItemLink
+          to="/users"
+          primary={i18n.t("mainDrawer.listItems.users")}
+          icon={<PeopleAltOutlinedIcon />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 2. CONEXÕES */}
+      {hasPermission("connections.view") && (
+        <ListItemLink
+          to="/connections"
+          primary={i18n.t("mainDrawer.listItems.connections")}
+          icon={<SyncAltIcon />}
+          showBadge={connectionWarning}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 3. GERENCIAR CONEXÕES (SUPER) */}
+      {user.super && (
+        <ListItemLink
+          to="/allConnections"
+          primary={i18n.t("mainDrawer.listItems.allConnections")}
+          icon={<PhonelinkSetup />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 4. ENVIO EM MASSA (CAMPANHAS) */}
       {showCampaigns && hasPermission("campaigns.view") && (
         <>
           <Tooltip title={collapsed ? i18n.t("mainDrawer.listItems.campaigns") : ""} placement="right">
@@ -649,7 +685,104 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         </>
       )}
 
-      {/* FLOWBUILDER */}
+      {/* 5. IA (INTELIGÊNCIA ARTIFICIAL) */}
+      {showOpenAi && hasAnyPermission(["ai-agents.view", "prompts.view", "ai-settings.view", "ai-training.view", "files.view"]) && (
+        <>
+          <Tooltip title={collapsed ? "Inteligência Artificial" : ""} placement="right">
+            <ListItem
+              dense
+              button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenIASubmenu((prev) => !prev);
+              }}
+              onMouseEnter={() => setIaHover(true)}
+              onMouseLeave={() => setIaHover(false)}
+              className={clsx(classes.listItem, viewMode === "modern" && classes.modernItem, (isIARouteActive || openIASubmenu) && "active")}
+            >
+              <ListItemIcon className={clsx(viewMode === "modern" && classes.modernIcon)}>
+                {viewMode === "modern" ? (
+                  <SmartToy />
+                ) : (
+                  <Avatar
+                    className={`${classes.iconHoverActive} ${isIARouteActive || iaHover ? "active" : ""
+                      }`}
+                  >
+                    <SmartToy />
+                  </Avatar>
+                )}
+              </ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography className={clsx(classes.listItemText, viewMode === "modern" && classes.modernText)}>
+                    Inteligência Artificial
+                  </Typography>
+                }
+              />
+              {openIASubmenu ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            </ListItem>
+          </Tooltip>
+
+          <Collapse
+            in={openIASubmenu}
+            timeout="auto"
+            unmountOnExit
+            style={{
+              backgroundColor: theme.mode === "light" ? "rgba(120,120,120,0.1)" : "rgba(120,120,120,0.5)",
+            }}
+          >
+            <List dense component="div" disablePadding>
+              {hasPermission("ai-agents.view") && (
+                <ListItemLink
+                  to="/ai-agents"
+                  primary="⭐ Agentes de IA"
+                  icon={<SmartToy />}
+                  viewMode={viewMode}
+                  tooltip={collapsed}
+                />
+              )}
+              {hasPermission("ai-training.view") && (
+                <ListItemLink
+                  to="/ai-training"
+                  primary="🧪 Training / Sandbox"
+                  icon={<SmartToy />}
+                  viewMode={viewMode}
+                  tooltip={collapsed}
+                />
+              )}
+              {hasPermission("prompts.view") && (
+                <ListItemLink
+                  to="/prompts"
+                  primary="Prompts (Legado)"
+                  icon={<AllInclusive />}
+                  viewMode={viewMode}
+                  tooltip={collapsed}
+                />
+              )}
+              {hasPermission("ai-settings.view") && (
+                <ListItemLink
+                  to="/ai-settings"
+                  primary="Configurações IA"
+                  icon={<Memory />}
+                  viewMode={viewMode}
+                  tooltip={collapsed}
+                />
+              )}
+              {hasPermission("files.view") && (
+                <ListItemLink
+                  to="/files"
+                  primary="Base de Conhecimento"
+                  icon={<AttachFile />}
+                  viewMode={viewMode}
+                  tooltip={collapsed}
+                />
+              )}
+            </List>
+          </Collapse>
+        </>
+      )}
+
+      {/* 6. FLOWBUILDER */}
       {hasPermission("flowbuilder.view") && (
         <>
           <Tooltip title={collapsed ? i18n.t("mainDrawer.listItems.flowbuilder") : ""} placement="right">
@@ -716,38 +849,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         </>
       )}
 
-      {/* ANÚNCIOS */}
-      {user.super && (
-        <ListItemLink
-          to="/announcements"
-          primary={i18n.t("mainDrawer.listItems.annoucements")}
-          icon={<AnnouncementIcon />}
-          tooltip={collapsed}
-        />
-      )}
-
-      {/* API EXTERNA */}
-      {showExternalApi && hasPermission("external-api.view") && (
-        <ListItemLink
-          to="/messages-api"
-          primary={i18n.t("mainDrawer.listItems.messagesAPI")}
-          icon={<CodeRoundedIcon />}
-          tooltip={collapsed}
-        />
-      )}
-
-      {/* USUÁRIOS */}
-      {hasPermission("users.view") && (
-        <ListItemLink
-          to="/users"
-          primary={i18n.t("mainDrawer.listItems.users")}
-          icon={<PeopleAltOutlinedIcon />}
-          viewMode={viewMode}
-          tooltip={collapsed}
-        />
-      )}
-
-      {/* FILAS */}
+      {/* 7. FILAS E CHATBOTS */}
       {hasPermission("queues.view") && (
         <ListItemLink
           to="/queues"
@@ -758,7 +860,29 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {/* INTEGRAÇÕES */}
+      {/* 8. INFORMATIVOS */}
+      {user.super && (
+        <ListItemLink
+          to="/announcements"
+          primary={i18n.t("mainDrawer.listItems.annoucements")}
+          icon={<AnnouncementIcon />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 9. API */}
+      {showExternalApi && hasPermission("external-api.view") && (
+        <ListItemLink
+          to="/messages-api"
+          primary={i18n.t("mainDrawer.listItems.messagesAPI")}
+          icon={<CodeRoundedIcon />}
+          viewMode={viewMode}
+          tooltip={collapsed}
+        />
+      )}
+
+      {/* 10. INTEGRAÇÕES */}
       {showIntegrations && hasPermission("integrations.view") && (
         <ListItemLink
           to="/queue-integration"
@@ -769,30 +893,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {/* CONEXÕES */}
-      {hasPermission("connections.view") && (
-          <ListItemLink
-            to="/connections"
-            primary={i18n.t("mainDrawer.listItems.connections")}
-            icon={<SyncAltIcon />}
-            showBadge={connectionWarning}
-            viewMode={viewMode}
-            tooltip={collapsed}
-          />
-        )}
-
-      {/* TODAS AS CONEXÕES (Super) */}
-      {user.super && (
-        <ListItemLink
-          to="/allConnections"
-          primary={i18n.t("mainDrawer.listItems.allConnections")}
-          icon={<PhonelinkSetup />}
-          viewMode={viewMode}
-          tooltip={collapsed}
-        />
-      )}
-
-      {/* FINANCEIRO */}
+      {/* 11. FINANCEIRO */}
       {hasPermission("financeiro.view") && (
         <ListItemLink
           to="/financeiro"
@@ -803,7 +904,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {/* CONFIGURAÇÕES */}
+      {/* 12. CONFIGURAÇÕES */}
       {hasPermission("settings.view") && (
         <ListItemLink
           to="/settings"
@@ -814,115 +915,20 @@ const MainListItems = ({ collapsed, drawerClose }) => {
         />
       )}
 
-      {/* INTELIGÊNCIA ARTIFICIAL */}
-      {showOpenAi && hasAnyPermission(["ai-agents.view", "prompts.view", "ai-settings.view", "ai-training.view", "files.view"]) && (
-        <>
-          <Tooltip title={collapsed ? "Inteligência Artificial" : ""} placement="right">
-            <ListItem
-              dense
-              button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenIASubmenu((prev) => !prev);
-              }}
-              onMouseEnter={() => setIaHover(true)}
-              onMouseLeave={() => setIaHover(false)}
-              className={clsx(classes.listItem, viewMode === "modern" && classes.modernItem, (isIARouteActive || openIASubmenu) && "active")}
-            >
-              <ListItemIcon className={clsx(viewMode === "modern" && classes.modernIcon)}>
-                {viewMode === "modern" ? (
-                  <SmartToy />
-                ) : (
-                  <Avatar
-                    className={`${classes.iconHoverActive} ${isIARouteActive || iaHover ? "active" : ""
-                      }`}
-                  >
-                    <SmartToy />
-                  </Avatar>
-                )}
-              </ListItemIcon>
-              <ListItemText
-                primary={
-                  <Typography className={clsx(classes.listItemText, viewMode === "modern" && classes.modernText)}>
-                    Inteligência Artificial
-                  </Typography>
-                }
-              />
-              {openIASubmenu ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-            </ListItem>
-          </Tooltip>
-
-          <Collapse
-            in={openIASubmenu}
-            timeout="auto"
-            unmountOnExit
-            style={{
-              backgroundColor: theme.mode === "light" ? "rgba(120,120,120,0.1)" : "rgba(120,120,120,0.5)",
-            }}
-          >
-            <List dense component="div" disablePadding>
-              {hasPermission("ai-agents.view") && (
-              <ListItemLink
-                to="/ai-agents"
-                primary="⭐ Agentes de IA"
-                icon={<SmartToy />}
-                tooltip={collapsed}
-              />
-              )}
-              {hasPermission("ai-training.view") && (
-                <ListItemLink
-                  to="/ai-training"
-                  primary="🧪 Training / Sandbox"
-                  icon={<SmartToy />}
-                  tooltip={collapsed}
-                />
-              )}
-              {hasPermission("prompts.view") && (
-                <ListItemLink
-                  to="/prompts"
-                  primary="Prompts (Legado)"
-                  icon={<AllInclusive />}
-                  tooltip={collapsed}
-                />
-              )}
-              {hasPermission("ai-settings.view") && (
-                <ListItemLink
-                  to="/ai-settings"
-                  primary="Configurações IA"
-                  icon={<Memory />}
-                  tooltip={collapsed}
-                />
-              )}
-              {hasPermission("files.view") && (
-                <ListItemLink
-                  to="/files"
-                  primary="Base de Conhecimento"
-                  icon={<AttachFile />}
-                  tooltip={collapsed}
-                />
-              )}
-            </List>
-          </Collapse>
-        </>
-      )}
-
-      {/* EMPRESAS (Super) */}
+      {/* 13. EMPRESAS (SUPER) */}
       {user.super && (
         <ListItemLink
           to="/companies"
           primary={i18n.t("mainDrawer.listItems.companies")}
           icon={<BusinessIcon />}
+          viewMode={viewMode}
           tooltip={collapsed}
         />
       )}
+
       {!collapsed && (
         <React.Fragment>
           <Divider />
-          {/* // IMAGEM NO MENU
-              <Hidden only={['sm', 'xs']}>
-                <img style={{ width: "100%", padding: "10px" }} src={logo} alt="image" />            
-              </Hidden> 
-              */}
           <Tooltip title={`BACKEND BUILD: ${versionInfo.buildDate} | Commit: ${versionInfo.commitShort || versionInfo.commit} | Frontend: ${versionInfo.frontend}`}>
             <Typography
               style={{

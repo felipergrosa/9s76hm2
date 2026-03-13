@@ -628,6 +628,7 @@ const messages = {
           none: "Nenhuma",
           email: "Email",
           password: "Senha",
+          color: "Cor do usuário",
           farewellMessage: "Mensagem de despedida",
           profile: "Perfil",
           startWork: "Inicio de trabalho",

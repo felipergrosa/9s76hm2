@@ -205,6 +205,19 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "center",
     marginTop: 4
   },
+  unreadBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#25d366',
+    color: '#fff',
+    borderRadius: '12px',
+    padding: '0 6px',
+    fontSize: '0.75rem',
+    fontWeight: 'bold',
+    height: 20,
+    minWidth: 20,
+  },
 }));
 
 const MomentsUser = ({ onPanStart }) => {
@@ -488,8 +501,8 @@ const MomentsUser = ({ onPanStart }) => {
                 <div
                   className={`${classes.badge}`}
                   style={{
-                    backgroundColor: "#000",
-                    color: "#fff",
+                    backgroundColor: ticket.user.color || '#000',
+                    color: '#fff',
                     textTransform: "uppercase"
                   }}
                 >
@@ -497,9 +510,16 @@ const MomentsUser = ({ onPanStart }) => {
                 </div>
               </Tooltip>
             )}
-            <Typography className={classes.time} style={{ marginLeft: 'auto' }}>
-              {format(parseISO(ticket.updatedAt), "HH:mm")}
-            </Typography>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+              {Number(ticket.unreadMessages) > 0 && (
+                <div className={classes.unreadBadge} style={{ transform: 'scale(0.8)' }}>
+                  {ticket.unreadMessages}
+                </div>
+              )}
+              <Typography className={classes.time}>
+                {format(parseISO(ticket.updatedAt), "HH:mm")}
+              </Typography>
+            </div>
           </div>
         </CardContent>
       </CardActionArea>
@@ -517,7 +537,7 @@ const MomentsUser = ({ onPanStart }) => {
           {icon}
           {title}
         </div>
-        <Badge badgeContent={items.length} color="primary" max={99} overlap="rectangular">
+        <Badge badgeContent={items.length} color="primary" max={99999} overlap="rectangular">
           <Box width={10} />
         </Badge>
       </div>
@@ -569,7 +589,7 @@ const MomentsUser = ({ onPanStart }) => {
           >
             <div className={classes.columnTitle}>
               <Avatar
-                src={group.user.profileImage ? `${backendUrl}/public/company${user.companyId}/user/${group.user.profileImage}` : null}
+                src={group.user.profileImage ? `${backendUrl}/public/company${user.companyId}/${group.user.profileImage}` : null}
                 style={{ width: 30, height: 30, marginRight: 8 }}
               />
               <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -579,7 +599,7 @@ const MomentsUser = ({ onPanStart }) => {
                 </span>
               </div>
             </div>
-            <Badge badgeContent={group.tickets.length} color="primary" max={99} overlap="rectangular">
+            <Badge badgeContent={group.tickets.length} color="primary" max={99999} overlap="rectangular">
               <Box width={10} />
             </Badge>
           </div>

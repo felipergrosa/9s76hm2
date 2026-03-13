@@ -118,6 +118,7 @@ const BulkEditContactsModal = ({ open, onClose, selectedContactIds = [], onSucce
       wallets: [], // Array de usuários selecionados
       clearWallets: false,
       disableBot: "__KEEP__", // __KEEP__, true, false
+      lgpd: "__KEEP__", // __KEEP__, true, false
     }),
     []
   );
@@ -180,6 +181,11 @@ const BulkEditContactsModal = ({ open, onClose, selectedContactIds = [], onSucce
       // Chatbot: enviar se diferente de __KEEP__
       if (values.disableBot !== "__KEEP__") {
         data.disableBot = values.disableBot === true || values.disableBot === "true";
+      }
+
+      // LGPD: enviar se diferente de __KEEP__ (true = Aceito, false = Recusado)
+      if (values.lgpd !== "__KEEP__") {
+        data.lgpd = values.lgpd === true || values.lgpd === "true";
       }
 
       if (Object.keys(data).length === 0) {
@@ -361,16 +367,13 @@ const BulkEditContactsModal = ({ open, onClose, selectedContactIds = [], onSucce
                   </div>
                 </Grid>
 
-                {/* Chatbot */}
+                {/* Chatbot e LGPD */}
                 <Grid item xs={12} sm={6}>
                   <div className={classes.sectionCard} style={{ height: '100%' }}>
                     <div className={classes.sectionHeader}>
                       <span style={{ fontSize: 20, marginRight: 8 }}>🤖</span>
                       <Typography className={classes.sectionTitle}>Chatbot</Typography>
                     </div>
-                    <Typography className={classes.helperText} style={{ marginBottom: 8 }}>
-                      Habilitar ou desabilitar o bot
-                    </Typography>
                     <Box display="flex" flexWrap="wrap" gap={1}>
                       <Chip
                         size="small"
@@ -392,6 +395,34 @@ const BulkEditContactsModal = ({ open, onClose, selectedContactIds = [], onSucce
                         onClick={() => setFieldValue("disableBot", true)}
                         style={{ backgroundColor: values.disableBot === true ? '#f44336' : undefined, color: values.disableBot === true ? '#fff' : undefined }}
                         variant={values.disableBot === true ? "default" : "outlined"}
+                      />
+                    </Box>
+
+                    <div className={classes.sectionHeader} style={{ marginTop: 16 }}>
+                      <span style={{ fontSize: 20, marginRight: 8 }}>⚖️</span>
+                      <Typography className={classes.sectionTitle}>Aceite LGPD</Typography>
+                    </div>
+                    <Box display="flex" flexWrap="wrap" gap={1}>
+                      <Chip
+                        size="small"
+                        label="🔄 Manter"
+                        onClick={() => setFieldValue("lgpd", "__KEEP__")}
+                        color={values.lgpd === "__KEEP__" ? "primary" : "default"}
+                        variant={values.lgpd === "__KEEP__" ? "default" : "outlined"}
+                      />
+                      <Chip
+                        size="small"
+                        label="✅ Aceito"
+                        onClick={() => setFieldValue("lgpd", true)}
+                        style={{ backgroundColor: values.lgpd === true ? '#4caf50' : undefined, color: values.lgpd === true ? '#fff' : undefined }}
+                        variant={values.lgpd === true ? "default" : "outlined"}
+                      />
+                      <Chip
+                        size="small"
+                        label="🚫 Recusado"
+                        onClick={() => setFieldValue("lgpd", false)}
+                        style={{ backgroundColor: values.lgpd === false ? '#f44336' : undefined, color: values.lgpd === false ? '#fff' : undefined }}
+                        variant={values.lgpd === false ? "default" : "outlined"}
                       />
                     </Box>
                   </div>

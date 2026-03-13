@@ -1150,6 +1150,7 @@ const TicketsManagerTabs = () => {
                         overlap="rectangular"
                         classes={{ badge: classes.customBadge }}
                         badgeContent={openCount}
+                        max={99999}
                         color="primary"
                       >
                         <MessageSharpIcon
@@ -1186,6 +1187,7 @@ const TicketsManagerTabs = () => {
                         overlap="rectangular"
                         classes={{ badge: classes.customBadge }}
                         badgeContent={pendingCount}
+                        max={99999}
                         color="primary"
                       >
                         <ClockIcon
@@ -1223,6 +1225,7 @@ const TicketsManagerTabs = () => {
                           overlap="rectangular"
                           classes={{ badge: classes.customBadge }}
                           badgeContent={groupingCount}
+                          max={99999}
                           color="primary"
                         >
                           <Group
@@ -1260,6 +1263,7 @@ const TicketsManagerTabs = () => {
                         overlap="rectangular"
                         classes={{ badge: classes.customBadge }}
                         badgeContent={botCount}
+                        max={99999}
                         color="primary"
                       >
                         <BotIcon
@@ -1296,6 +1300,7 @@ const TicketsManagerTabs = () => {
                         overlap="rectangular"
                         classes={{ badge: classes.customBadge }}
                         badgeContent={campaignCount}
+                        max={99999}
                         color="primary"
                       >
                         <CampaignIcon

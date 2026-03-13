@@ -52,7 +52,7 @@ const FindMessages = async ({
     where: {
       chatId
     },
-    include: [{ model: User, as: "sender", attributes: ["id", "name"] }],
+    include: [{ model: User, as: "sender", attributes: ["id", "name", "profileImage", "companyId", "color"] }],
     limit,
     offset,
 

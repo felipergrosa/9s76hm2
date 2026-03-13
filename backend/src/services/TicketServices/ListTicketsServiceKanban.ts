@@ -73,7 +73,7 @@ const ListTicketsServiceKanban = async ({
     {
       model: User,
       as: "user",
-      attributes: ["id", "name"]
+      attributes: ["id", "name", "color", "profileImage"]
     },
     {
       model: Tag,

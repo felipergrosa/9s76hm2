@@ -119,7 +119,7 @@ const ListTicketsService = async ({
     {
       model: User,
       as: "user",
-      attributes: ["id", "name"]
+      attributes: ["id", "name", "color", "profileImage"]
     },
     {
       model: Tag,
@@ -296,120 +296,71 @@ const ListTicketsService = async ({
 
 
   if (status === "closed") {
-    let latestTickets;
+    // Ao invés de trazer milhares de IDs para a memória do Node (o que trava o servidor),
+    // aplicamos as regras diretamente no whereCondition principal.
+    let whereCondition2: any = { status: "closed" };
 
     if (!showTicketAllQueues) {
-      let whereCondition2: Filterable["where"] = {
-        companyId,
-        status: "closed",
-      }
-
       if (showAll === "false" && user.profile === "admin") {
         whereCondition2 = {
           ...whereCondition2,
           queueId: queueIds,
           userId
-        }
+        };
       } else {
         whereCondition2 = {
           ...whereCondition2,
           queueId: showAll === "true" || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
-        }
+        };
       }
-
-      latestTickets = await Ticket.findAll({
-        attributes: ['companyId', 'contactId', 'whatsappId', [literal('MAX("id")'), 'id']],
-        where: whereCondition2,
-        group: ['companyId', 'contactId', 'whatsappId'],
-      });
-
     } else {
-      let whereCondition2: Filterable["where"] = {
-        companyId,
-        status: "closed",
-        // status: showAll === "true" && status === "pending" && isLGPDEnabled ? { [Op.or]: [status, "lgpd"] } : status,
-      }
-
       if (showAll === "false" && (user.profile === "admin" || user.allUserChat === "enabled")) {
         whereCondition2 = {
           ...whereCondition2,
           queueId: queueIds,
           userId
-        }
+        };
       } else {
         whereCondition2 = {
           ...whereCondition2,
           queueId: showAll === "true" || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
-        }
+        };
       }
-
-      latestTickets = await Ticket.findAll({
-        attributes: ['companyId', 'contactId', 'whatsappId', [literal('MAX("id")'), 'id']],
-        where: whereCondition2,
-        group: ['companyId', 'contactId', 'whatsappId'],
-      });
-
     }
 
-    const ticketIds = latestTickets.map((t) => t.id);
+    whereCondition = {
+      ...whereCondition,
+      ...whereCondition2
+    } as any;
+  }
+  else if (status === "search") {
+    let whereCondition2: any = {
+      [Op.or]: [{ userId }, { status: ["pending", "closed", "group"] }]
+    };
+
+    if (!showTicketAllQueues && user.profile === "user") {
+      whereCondition2 = {
+        ...whereCondition2,
+        queueId: showAll === "true" || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
+      };
+    } else {
+      if (showAll === "false" && user.profile === "admin") {
+        whereCondition2 = {
+          ...whereCondition2,
+          queueId: queueIds,
+        };
+      } else if (showAll === "true" && user.profile === "admin") {
+        whereCondition2 = {
+          ...whereCondition2,
+          queueId: { [Op.or]: [queueIds, null] },
+        };
+      }
+    }
 
     whereCondition = {
-      id: ticketIds
-
-    };
-  }
-  else
-    if (status === "search") {
-      whereCondition = {
-        companyId
-      }
-      let latestTickets;
-      if (!showTicketAllQueues && user.profile === "user") {
-        latestTickets = await Ticket.findAll({
-          attributes: ['companyId', 'contactId', 'whatsappId', [literal('MAX("id")'), 'id']],
-          where: {
-            [Op.or]: [{ userId }, { status: ["pending", "closed", "group"] }],
-            queueId: showAll === "true" || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
-            companyId
-          },
-          group: ['companyId', 'contactId', 'whatsappId'],
-        });
-      } else {
-        let whereCondition2: Filterable["where"] = {
-          companyId,
-          [Op.or]: [{ userId }, { status: ["pending", "closed", "group"] }]
-        }
-
-        if (showAll === "false" && user.profile === "admin") {
-          whereCondition2 = {
-            ...whereCondition2,
-            queueId: queueIds,
-
-            // [Op.or]: [{ userId }, { status: ["pending", "closed", "group"] }],
-          }
-
-        } else if (showAll === "true" && user.profile === "admin") {
-          whereCondition2 = {
-            companyId,
-            queueId: { [Op.or]: [queueIds, null] },
-            // status: ["pending", "closed", "group"]
-          }
-        }
-
-        latestTickets = await Ticket.findAll({
-          attributes: ['companyId', 'contactId', 'whatsappId', [literal('MAX("id")'), 'id']],
-          where: whereCondition2,
-          group: ['companyId', 'contactId', 'whatsappId'],
-        });
-
-      }
-
-      const ticketIds = latestTickets.map((t) => t.id);
-
-      whereCondition = {
-        ...whereCondition,
-        id: ticketIds
-      };
+      ...whereCondition,
+      ...whereCondition2
+    } as any;
 
       // if (date) {
       //   whereCondition = {

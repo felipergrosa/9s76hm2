@@ -17,6 +17,7 @@ interface BulkUpdateData {
   whatsappId?: number | null;
   walletIds?: number[]; // IDs dos usuários para atribuir carteira
   disableBot?: boolean; // Desabilitar chatbot
+  lgpd?: boolean | "__KEEP__"; // Aceite LGPD
 }
 
 interface BulkUpdateRequest {
@@ -30,7 +31,7 @@ const BulkUpdateContactsService = async ({ companyId, contactIds, data }: BulkUp
     throw new AppError("Nenhum ID de contato fornecido para atualização em massa.", 400);
   }
 
-  const { tagIds, situation, whatsappId, walletIds, disableBot } = data || {};
+  const { tagIds, situation, whatsappId, walletIds, disableBot, lgpd } = data || {};
 
   // Valida situação se fornecida
   if (typeof situation !== "undefined") {
@@ -75,6 +76,13 @@ const BulkUpdateContactsService = async ({ companyId, contactIds, data }: BulkUp
     if (typeof situation !== "undefined") updatePayload.situation = situation;
     if (typeof whatsappId !== "undefined") updatePayload.whatsappId = whatsappId;
     if (typeof disableBot !== "undefined") updatePayload.disableBot = disableBot;
+
+    // LGPD
+    if (lgpd === true) {
+      updatePayload.lgpdAcceptedAt = new Date();
+    } else if (lgpd === false) {
+      updatePayload.lgpdAcceptedAt = null;
+    }
 
     if (Object.keys(updatePayload).length > 0) {
       await c.update(updatePayload);

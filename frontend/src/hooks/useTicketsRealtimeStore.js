@@ -21,6 +21,12 @@ const createInitialState = () => ({
   }, {}),
 });
 
+const getTicketTimestamp = (ticket) => {
+  if (ticket._updatedAtTimestamp) return ticket._updatedAtTimestamp;
+  ticket._updatedAtTimestamp = new Date(ticket.updatedAt).getTime();
+  return ticket._updatedAtTimestamp;
+};
+
 const sortTicketIds = (ids, ticketsById, sortDir) => {
   const direction = sortDir === "ASC" ? 1 : -1;
 
@@ -29,20 +35,22 @@ const sortTicketIds = (ids, ticketsById, sortDir) => {
     const right = ticketsById[rightId];
 
     if (!left || !right) return 0;
-    const leftDate = new Date(left.updatedAt).getTime();
-    const rightDate = new Date(right.updatedAt).getTime();
+    const leftTime = getTicketTimestamp(left);
+    const rightTime = getTicketTimestamp(right);
 
-    if (leftDate === rightDate) {
+    if (leftTime === rightTime) {
       return left.id > right.id ? direction : -direction;
     }
 
-    return leftDate > rightDate ? direction : -direction;
+    return leftTime > rightTime ? direction : -direction;
   });
 };
 
 const mergeTicketsById = (current, tickets) => {
   const next = { ...current };
   tickets.forEach(ticket => {
+    // Pré-calcula timestamp para evitar new Date() no sort
+    ticket._updatedAtTimestamp = new Date(ticket.updatedAt).getTime();
     next[ticket.id] = ticket;
   });
   return next;
@@ -109,39 +117,56 @@ const reducer = (state, action) => {
       };
     }
 
-    case "UPSERT_TICKET_FROM_SOCKET": {
-      const ticketsById = {
-        ...state.ticketsById,
-        [action.ticket.id]: action.ticket,
-      };
-
+    case "BATCH_UPSERT_TICKETS": {
+      const nextTicketsById = { ...state.ticketsById };
       const metaByStatus = { ...state.metaByStatus };
+      const affectedStatusKeys = new Set();
 
-      ALL_STATUS_KEYS.forEach(statusKey => {
-        const slice = metaByStatus[statusKey];
-        const shouldInclude = Boolean(action.statusDecisions[statusKey]);
-        const hadTicket = slice.ids.includes(action.ticket.id);
-        let nextIds = slice.ids.filter(id => id !== action.ticket.id);
-        let nextCount = slice.count;
+      action.payload.forEach(({ ticket, statusDecisions, sortDir, adjustCount }) => {
+        // Pré-calcula timestamp
+        ticket._updatedAtTimestamp = new Date(ticket.updatedAt).getTime();
+        nextTicketsById[ticket.id] = ticket;
 
-        if (shouldInclude) {
-          nextIds.unshift(action.ticket.id);
-          if (!hadTicket && action.adjustCount) {
-            nextCount += 1;
+        ALL_STATUS_KEYS.forEach(statusKey => {
+          const slice = metaByStatus[statusKey];
+          const shouldInclude = Boolean(statusDecisions[statusKey]);
+          const hadTicket = slice.ids.includes(ticket.id);
+
+          if (!shouldInclude && !hadTicket) return;
+
+          affectedStatusKeys.add(statusKey);
+
+          let nextIds = slice.ids.filter(id => id !== ticket.id);
+          let nextCount = slice.count;
+
+          if (shouldInclude) {
+            nextIds.unshift(ticket.id);
+            if (!hadTicket && adjustCount) {
+              nextCount += 1;
+            }
+          } else if (hadTicket && adjustCount) {
+            nextCount = Math.max(0, nextCount - 1);
           }
-        } else if (hadTicket && action.adjustCount) {
-          nextCount = Math.max(0, nextCount - 1);
-        }
 
+          metaByStatus[statusKey] = {
+            ...slice,
+            ids: nextIds, // Vamos ordenar fora do loop interno para performance
+            count: Math.max(nextCount, nextIds.length),
+          };
+        });
+      });
+
+      // Ordena apenas as listas afetadas, uma vez por batch
+      affectedStatusKeys.forEach(statusKey => {
+        const slice = metaByStatus[statusKey];
         metaByStatus[statusKey] = {
           ...slice,
-          ids: sortTicketIds(nextIds, ticketsById, action.sortDir),
-          count: Math.max(nextCount, nextIds.length),
+          ids: sortTicketIds(slice.ids, nextTicketsById, action.sortDir),
         };
       });
 
       return {
-        ticketsById,
+        ticketsById: nextTicketsById,
         metaByStatus,
       };
     }
@@ -187,18 +212,25 @@ const reducer = (state, action) => {
 
     case "UPDATE_CONTACT": {
       const ticketsById = { ...state.ticketsById };
+      let changed = false;
 
-      Object.values(ticketsById).forEach(ticket => {
+      // Otimização: Só itera se o contato realmente estiver em algum ticket
+      // Em uma versão futura, poderíamos ter um índice contactId -> ticketIds
+      Object.keys(ticketsById).forEach(id => {
+        const ticket = ticketsById[id];
         if (ticket?.contactId === action.contact.id) {
-          ticketsById[ticket.id] = {
+          ticketsById[id] = {
             ...ticket,
             contact: {
               ...(ticket.contact || {}),
               ...action.contact,
             },
           };
+          changed = true;
         }
       });
+
+      if (!changed) return state;
 
       return {
         ...state,
@@ -212,6 +244,16 @@ const reducer = (state, action) => {
 };
 
 const canViewTicket = ({ ticket, user, showAll }) => {
+  // 1. Filtro de Conexões (replicando backend: SuperAdmin vê tudo, outros respeitam allowedConnectionIds)
+  if (!user?.super) {
+    const allowedConnectionIds = user?.allowedConnectionIds || [];
+    if (allowedConnectionIds.length > 0 && ticket?.whatsappId) {
+      if (!allowedConnectionIds.includes(ticket.whatsappId)) {
+        return false;
+      }
+    }
+  }
+
   const isBeingAttended = (ticket?.status === "open" || ticket?.status === "group") && ticket?.userId;
 
   if (isBeingAttended) {
@@ -274,6 +316,32 @@ const useTicketsRealtimeStore = ({
   const sortTicketsRef = useRef(sortTickets);
   const userRef = useRef(user);
   const showTicketWithoutQueueRef = useRef(showTicketWithoutQueue);
+  const eventBufferRef = useRef([]);
+  const bufferTimeoutRef = useRef(null);
+
+  const flushBuffer = useCallback(() => {
+    if (eventBufferRef.current.length === 0) return;
+
+    const buffer = eventBufferRef.current;
+    eventBufferRef.current = [];
+    bufferTimeoutRef.current = null;
+
+    dispatch({
+      type: "BATCH_UPSERT_TICKETS",
+      payload: buffer,
+      sortDir: sortTicketsRef.current,
+    });
+  }, []);
+
+  const addToBuffer = useCallback((item) => {
+    // De-duplicar: se o mesmo ticket já está no buffer, remove o antigo
+    eventBufferRef.current = eventBufferRef.current.filter(i => i.ticket.id !== item.ticket.id);
+    eventBufferRef.current.push(item);
+
+    if (!bufferTimeoutRef.current) {
+      bufferTimeoutRef.current = setTimeout(flushBuffer, 100);
+    }
+  }, [flushBuffer]);
 
   useEffect(() => {
     statusConfigsRef.current = statusConfigs;
@@ -421,10 +489,9 @@ const useTicketsRealtimeStore = ({
         return;
       }
 
-      dispatch({
-        type: "UPSERT_TICKET_FROM_SOCKET",
+      // Em vez de dispatch imediato, adiciona ao buffer
+      addToBuffer({
         ticket: data.ticket,
-        sortDir: sortTicketsRef.current,
         statusDecisions: buildStatusDecisions(data.ticket),
         adjustCount: data.action === "create" || data.oldStatus !== data.ticket.status,
       });
@@ -435,10 +502,8 @@ const useTicketsRealtimeStore = ({
         return;
       }
 
-      dispatch({
-        type: "UPSERT_TICKET_FROM_SOCKET",
+      addToBuffer({
         ticket: data.ticket,
-        sortDir: sortTicketsRef.current,
         statusDecisions: buildStatusDecisions(data.ticket),
         adjustCount: false,
       });
@@ -461,6 +526,7 @@ const useTicketsRealtimeStore = ({
 
     return () => {
       leaveConfiguredRooms();
+      if (bufferTimeoutRef.current) clearTimeout(bufferTimeoutRef.current);
       socket.off("connect", joinConfiguredRooms);
       socket.off(`company-${user.companyId}-ticket`, onCompanyTicket);
       socket.off(`company-${user.companyId}-appMessage`, onCompanyAppMessage);
@@ -468,13 +534,44 @@ const useTicketsRealtimeStore = ({
     };
   }, [socket, user?.companyId]);
 
+  const lastTicketsByStatusRef = useRef({});
+  const lastMetaByStatusRef = useRef({});
+  const lastTicketsByIdRef = useRef({});
+
   const ticketsByStatus = useMemo(() => {
-    return ALL_STATUS_KEYS.reduce((acc, statusKey) => {
-      acc[statusKey] = state.metaByStatus[statusKey].ids
-        .map(id => state.ticketsById[id])
-        .filter(Boolean);
-      return acc;
-    }, {});
+    const next = {};
+    let anyChanged = false;
+
+    ALL_STATUS_KEYS.forEach(statusKey => {
+      const slice = state.metaByStatus[statusKey];
+      const prevSlice = lastMetaByStatusRef.current[statusKey];
+      const prevList = lastTicketsByStatusRef.current[statusKey];
+
+      // Se IDs mudaram ou se algum ticket nesta lista mudou no ticketsById
+      // (Podemos simplificar: se ticketsById mudou, verificamos se os IDs deste status apontam para novos objetos)
+      const idsChanged = slice.ids !== prevSlice?.ids;
+      let ticketsChanged = idsChanged;
+
+      if (!ticketsChanged && state.ticketsById !== lastTicketsByIdRef.current) {
+        // Verifica se algum ticket do status atual foi atualizado (referência mudou)
+        ticketsChanged = slice.ids.some(id => state.ticketsById[id] !== lastTicketsByIdRef.current[id]);
+      }
+
+      if (ticketsChanged || !prevList) {
+        next[statusKey] = slice.ids.map(id => state.ticketsById[id]).filter(Boolean);
+        anyChanged = true;
+      } else {
+        next[statusKey] = prevList;
+      }
+    });
+
+    if (anyChanged) {
+      lastTicketsByStatusRef.current = next;
+      lastMetaByStatusRef.current = state.metaByStatus;
+      lastTicketsByIdRef.current = state.ticketsById;
+      return next;
+    }
+    return lastTicketsByStatusRef.current;
   }, [state.metaByStatus, state.ticketsById]);
 
   return {

@@ -36,6 +36,7 @@ interface UserData {
   permissions?: string[];
   allowedConnectionIds?: number[];
   isPrivate?: boolean;
+  color?: string;
 }
 
 interface Request {
@@ -67,7 +68,7 @@ const UpdateUserService = async ({
     password: Yup.string()
   });
 
-  const { name, email, password, profile, queueIds } = userData;
+  const { name, email, password, profile, queueIds, color } = userData;
 
   try {
     await schema.validate({ name, email, password, profile });
@@ -97,6 +98,7 @@ const UpdateUserService = async ({
   if (userData.profileImage) { dataToUpdate.profileImage = userData.profileImage; }
   if (userData.allowConnections) { dataToUpdate.allowConnections = userData.allowConnections; }
   if (userData.language) { dataToUpdate.language = userData.language; }
+  if (color !== undefined) { (dataToUpdate as any).color = color; }
   // Atualiza allowedContactTags apenas se enviado (pode ser [] para limpar)
   if (userData.hasOwnProperty("allowedContactTags")) {
     dataToUpdate.allowedContactTags = Array.isArray(userData.allowedContactTags)
@@ -189,6 +191,7 @@ const UpdateUserService = async ({
     allowRealTime: user.allowRealTime,
     allowConnections: user.allowConnections,
     profileImage: user.profileImage,
+    color: (user as any).color,
     allowedContactTags: user.allowedContactTags,
     managedUserIds: (user as any).managedUserIds || [],
     supervisorViewMode: (user as any).supervisorViewMode || "include",

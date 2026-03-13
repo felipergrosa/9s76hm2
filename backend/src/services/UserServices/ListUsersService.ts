@@ -62,6 +62,7 @@ const ListUsersService = async ({
       "startWork",
       "endWork",
       "profileImage",
+      "color",
       "permissions",
       "allowedContactTags",
       "managedUserIds",

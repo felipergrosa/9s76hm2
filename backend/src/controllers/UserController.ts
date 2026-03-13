@@ -82,7 +82,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     allowedContactTags,
     permissions,
     allowedConnectionIds,
-    isPrivate
+    isPrivate,
+    color
   } = req.body;
   let userCompanyId: number | null = null;
 
@@ -208,6 +209,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       permissions,
       allowedConnectionIds,
       isPrivate,
+      color,
       superUser
     });
 

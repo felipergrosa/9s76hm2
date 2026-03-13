@@ -160,6 +160,7 @@ const UserModal = ({ open, onClose, userId }) => {
     permissions: [],
     allowedConnectionIds: [],
     isPrivate: false,
+    color: "",
   };
 
   const { user: loggedInUser } = useContext(AuthContext);
@@ -322,59 +323,64 @@ const UserModal = ({ open, onClose, userId }) => {
                     value={tab}
                     name={"general"}
                   >
-                    <Grid
-                      container
-                      spacing={1}
-                      alignContent="center"
-                      alignItems="center"
-                      justifyContent="center">
-                      <FormControl className={classes.updateDiv}>
-                        <AvatarUploader
-                          setAvatar={setAvatar}
-                          avatar={user.profileImage}
-                          companyId={user.companyId}
-                        />
-                        {user.profileImage &&
-                          <Button
-                            variant="outlined"
-                            color="secondary"
-                            onClick={() => {
+                    <Grid container spacing={2} alignItems="flex-start">
+                      <Grid item xs={12} md={4} xl={4}>
+                        <FormControl className={classes.updateDiv}>
+                          <AvatarUploader
+                            setAvatar={setAvatar}
+                            avatar={user.profileImage}
+                            companyId={user.companyId}
+                            onRemove={() => {
                               user.profileImage = null;
                               setFieldValue("profileImage", null);
                               setAvatar(null);
                             }}
-                          >
-                            {i18n.t("userModal.title.removeImage")}
-                          </Button>
-                        }
-                      </FormControl>
-                    </Grid>
-                    <Grid container spacing={1}>
-                      <Grid item xs={12} md={6} xl={6}>
-                        <Field
-                          as={TextField}
-                          label={i18n.t("userModal.form.name")}
-                          autoFocus
-                          name="name"
-                          error={touched.name && Boolean(errors.name)}
-                          helperText={touched.name && errors.name}
-                          variant="outlined"
-                          margin="dense"
-                          fullWidth
-                        />
+                          />
+                        </FormControl>
                       </Grid>
-                      <Grid item xs={12} md={6} xl={6}>
-                        <Field
-                          as={TextField}
-                          label={i18n.t("userModal.form.password")}
-                          type="password"
-                          name="password"
-                          error={touched.password && Boolean(errors.password)}
-                          helperText={touched.password && errors.password}
-                          variant="outlined"
-                          margin="dense"
-                          fullWidth
-                        />
+
+                      <Grid item xs={12} md={8} xl={8}>
+                        <Grid container spacing={1}>
+                          <Grid item xs={12}>
+                            <Field
+                              as={TextField}
+                              label={i18n.t("userModal.form.name")}
+                              autoFocus
+                              name="name"
+                              error={touched.name && Boolean(errors.name)}
+                              helperText={touched.name && errors.name}
+                              variant="outlined"
+                              margin="dense"
+                              fullWidth
+                            />
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Field
+                              as={TextField}
+                              label={i18n.t("userModal.form.password")}
+                              type="password"
+                              name="password"
+                              error={touched.password && Boolean(errors.password)}
+                              helperText={touched.password && errors.password}
+                              variant="outlined"
+                              margin="dense"
+                              fullWidth
+                            />
+                          </Grid>
+                          <Grid item xs={12}>
+                            <TextField
+                              label={i18n.t("userModal.form.color") || "Cor do usuário"}
+                              name="color"
+                              type="color"
+                              variant="outlined"
+                              margin="dense"
+                              fullWidth
+                              value={values.color || ""}
+                              onChange={(e) => setFieldValue("color", e.target.value)}
+                              InputLabelProps={{ shrink: true }}
+                            />
+                          </Grid>
+                        </Grid>
                       </Grid>
                     </Grid>
                     <Grid container spacing={1}>

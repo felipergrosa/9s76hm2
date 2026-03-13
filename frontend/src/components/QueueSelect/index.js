@@ -66,7 +66,7 @@ const QueueSelect = ({ selectedQueueIds, onChange }) => {
 									return queue ? (
 										<Chip
 											key={id}
-											style={{ backgroundColor: queue.color }}
+											style={{ backgroundColor: queue.color, color: '#fff', borderColor: queue.color }}
 											variant="outlined"
 											label={queue.name}
 											className={classes.chip}

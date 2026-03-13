@@ -52,19 +52,6 @@ const useStyles = makeStyles(theme => ({
     boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
     zIndex: 2,
   },
- Riverside: {
-    position: "absolute",
-    bottom: -2,
-    left: -2,
-    width: 18,
-    height: 18,
-    borderRadius: 999,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    border: "2px solid #fff",
-    boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
-  },
   ticketName: {
     fontWeight: 600,
     fontSize: "0.95rem",
@@ -403,7 +390,7 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
                 <div
                   className={`${classes.badge}`}
                   style={{
-                    backgroundColor: "#000",
+                    backgroundColor: ticket.user.color || "#000",
                     color: "#fff",
                     textTransform: "uppercase"
                   }}
@@ -416,19 +403,10 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
 
           {/* Contadores: Mensagens, Anexos, Agendamentos */}
           <div className={classes.countersRow}>
-            {comments > 0 ? (
-              <Tooltip title={i18n.t('kanban.counters.comments')}>
-                <div className={classes.unreadBadge}>
-                  {comments}
-                </div>
-              </Tooltip>
-            ) : (
-              <Tooltip title={i18n.t('kanban.counters.comments')}>
-                <div className={classes.counterItem}>
-                  <ChatBubbleOutline style={{ fontSize: 16 }} />
-                  <span>0</span>
-                </div>
-              </Tooltip>
+            {Number(ticket.unreadMessages) > 0 && (
+              <div className={classes.unreadBadge} style={{ transform: 'scale(0.8)', margin: '-2px -4px 0 -4px' }}>
+                {ticket.unreadMessages}
+              </div>
             )}
             <Tooltip title={i18n.t('kanban.counters.attachments')}>
               <div className={classes.counterItem}>

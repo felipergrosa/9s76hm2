@@ -33,6 +33,7 @@ interface SerializedUser {
   managedUserIds?: number[];
   supervisorViewMode?: "include" | "exclude";
   permissions: string[];
+  color?: string;
 }
 
 export const SerializeUser = async (user: User): Promise<SerializedUser> => {
@@ -71,6 +72,7 @@ export const SerializeUser = async (user: User): Promise<SerializedUser> => {
     allowedContactTags: user.allowedContactTags,
     managedUserIds: (user as any).managedUserIds || [],
     supervisorViewMode: (user as any).supervisorViewMode || "include",
-    permissions: getUserPermissions(user)
+    permissions: getUserPermissions(user),
+    color: (user as any).color
   };
 };

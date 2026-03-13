@@ -34,6 +34,7 @@ interface Request {
   allowedConnectionIds?: number[];
   isPrivate?: boolean;
   superUser?: boolean;
+  color?: string;
 }
 
 interface Response {
@@ -70,7 +71,8 @@ const CreateUserService = async ({
   permissions = [],
   allowedConnectionIds = [],
   isPrivate = false,
-  superUser = false
+  superUser = false,
+  color = ""
 }: Request): Promise<Response> => {
   if (companyId !== undefined) {
     const company = await Company.findOne({
@@ -148,7 +150,8 @@ const CreateUserService = async ({
       permissions,
       allowedConnectionIds,
       isPrivate,
-      super: superUser
+      super: superUser,
+      color
     },
     { include: ["queues", "company"] }
   );

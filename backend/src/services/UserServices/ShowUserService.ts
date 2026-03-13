@@ -36,6 +36,7 @@ const ShowUserService = async (id: string | number, companyId: string | number):
         "allHistoric",
         "allowRealTime",
         "allowConnections",
+        "color",
         "language",
         "allowedContactTags",
         "managedUserIds",

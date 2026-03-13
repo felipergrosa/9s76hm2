@@ -725,7 +725,7 @@ const upsertMessage = (state, incomingMessage) => {
   const incomingIdentity = getMessageIdentity(incomingMessage);
 
   if (!incomingIdentity) {
-    return [...state, incomingMessage].sort((a, b) => a.id - b.id);
+    return [...state, incomingMessage].sort((a, b) => (a.id || 0) - (b.id || 0));
   }
 
   const nextState = [...state];
@@ -739,11 +739,12 @@ const upsertMessage = (state, incomingMessage) => {
       ...nextState[messageIndex],
       ...incomingMessage
     };
+    return nextState; // Não precisa re-ordenar se apenas atualizou
   } else {
     nextState.push(incomingMessage);
+    // Ordenação O(N) para uma lista já quase ordenada (inserção no fim)
+    return nextState.sort((a, b) => (a.id || 0) - (b.id || 0));
   }
-
-  return nextState.sort((a, b) => a.id - b.id);
 };
 
 const reducer = (state, action) => {
@@ -1827,14 +1828,17 @@ const MessagesList = ({
     // Safety check
     if (!messagesList) return { filteredMessages: [], messageReactions: {} };
 
+    // Pré-cache do createdAt time para evitar new Date() no loop de ordenação subsequente
     messagesList.forEach((msg) => {
+      if (!msg._createdAtTime) {
+        msg._createdAtTime = new Date(msg.createdAt).getTime();
+      }
+
       if (msg.mediaType === "reactionMessage") {
-        // Se for reação, agrupa pelo quotedMsgId (ID da mensagem que recebeu a reação)
         if (msg.quotedMsgId) {
           if (!reactions[msg.quotedMsgId]) {
             reactions[msg.quotedMsgId] = [];
           }
-          // Evita adicionar duplicatas exatas (mesmo body e participant)
           const isDuplicate = reactions[msg.quotedMsgId].some(
             r => r.body === msg.body && r.participant === msg.participant
           );
@@ -1850,17 +1854,19 @@ const MessagesList = ({
     // Adiciona mensagens otimísticas ao final (ainda não confirmadas pelo servidor)
     const optimisticMsgs = getOptimisticMessages ? getOptimisticMessages(ticketId) : [];
     if (optimisticMsgs && optimisticMsgs.length > 0) {
-      // Filtra mensagens otimísticas que já foram confirmadas (evita duplicatas)
       const existingIds = new Set(filtered.map(m => m.id));
       optimisticMsgs.forEach(optMsg => {
         if (!existingIds.has(optMsg.id)) {
+          if (!optMsg._createdAtTime) {
+            optMsg._createdAtTime = new Date(optMsg.createdAt).getTime();
+          }
           filtered.push(optMsg);
         }
       });
     }
 
-    // Ordena mensagens por createdAt ASC (mais antigas primeiro, cronológico)
-    filtered.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    // Ordena mensagens usando o tempo pré-calculado
+    filtered.sort((a, b) => a._createdAtTime - b._createdAtTime);
 
     return { filteredMessages: filtered, messageReactions: reactions };
   }, [messagesList, ticketId, getOptimisticMessages]);

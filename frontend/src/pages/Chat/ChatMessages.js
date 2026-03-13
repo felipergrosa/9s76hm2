@@ -8,8 +8,10 @@ import {
   makeStyles,
   Paper,
   Typography,
+  Avatar,
 } from "@material-ui/core";
 import SendIcon from "@material-ui/icons/Send";
+import AvatarFallback from "../../components/AvatarFallback";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { useDate } from "../../hooks/useDate";
@@ -43,28 +45,42 @@ const useStyles = makeStyles((theme) => ({
   buttonSend: {
     margin: theme.spacing(1),
   },
-  boxLeft: {
-    padding: "10px 10px 5px",
-    margin: "5px",
+  messageCard: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: "10px 10px 6px",
+    margin: "6px",
     position: "relative",
+    maxWidth: 420,
+    borderRadius: 12,
+    border: "1px solid rgba(0, 0, 0, 0.12)",
     backgroundColor: "#ffffff",
     color: "#303030",
-    maxWidth: 300,
-    borderRadius: 10,
-    borderBottomLeftRadius: 0,
-    border: "1px solid rgba(0, 0, 0, 0.12)",
   },
-  boxRight: {
-    padding: "10px 10px 5px",
-    margin: "5px 10px 10px auto",
-    position: "relative",
+  messageCardOwn: {
+    marginLeft: "auto",
     backgroundColor: "#dcf8c6",
-    color: "#303030",
     textAlign: "right",
-    maxWidth: 300,
-    borderRadius: 10,
-    borderBottomRightRadius: 0,
-    border: "1px solid rgba(0, 0, 0, 0.12)",
+  },
+  messageHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  messageBody: {
+    flex: 1,
+  },
+  senderName: {
+    fontWeight: 600,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  },
+  avatar: {
+    width: 28,
+    height: 28,
   },
 }));
 
@@ -121,31 +137,46 @@ export default function ChatMessages({
       <div onScroll={handleScroll} className={classes.messageList}>
         {Array.isArray(messages) &&
           messages.map((item, key) => {
-            if (item.senderId === user.id) {
-              return (
-                <Box key={key} className={classes.boxRight}>
-                  <Typography variant="subtitle2">
-                    {item.sender.name}
+            const isOwn = item.senderId === user.id;
+            const senderCompanyId = item.sender?.companyId || user.companyId;
+            const avatarSrc = item.sender?.profileImage
+              ? `${process.env.REACT_APP_BACKEND_URL}/public/company${senderCompanyId}/${item.sender.profileImage}`
+              : null;
+
+            return (
+              <Box
+                key={key}
+                className={`${classes.messageCard} ${isOwn ? classes.messageCardOwn : ""}`}
+                style={{ alignSelf: isOwn ? "flex-end" : "flex-start" }}
+              >
+                <AvatarFallback
+                  src={avatarSrc}
+                  name={item.sender?.name}
+                  style={{ width: 32, height: 32 }}
+                />
+
+                <div className={classes.messageBody}>
+                  <div className={classes.messageHeader} style={{ justifyContent: isOwn ? "flex-end" : "flex-start" }}>
+                    {!isOwn && (
+                      <Typography variant="subtitle2" className={classes.senderName}>
+                        {item.sender?.name}
+                      </Typography>
+                    )}
+                    {isOwn && (
+                      <Typography variant="subtitle2" className={classes.senderName} style={{ marginLeft: "auto" }}>
+                        {item.sender?.name}
+                      </Typography>
+                    )}
+                  </div>
+                  <Typography variant="body2" component="div" style={{ whiteSpace: "pre-wrap" }}>
+                    {item.message}
                   </Typography>
-                  {item.message}
-                  <Typography variant="caption" display="block">
+                  <Typography variant="caption" display="block" style={{ marginTop: 4 }}>
                     {datetimeToClient(item.createdAt)}
                   </Typography>
-                </Box>
-              );
-            } else {
-              return (
-                <Box key={key} className={classes.boxLeft}>
-                  <Typography variant="subtitle2">
-                    {item.sender.name}
-                  </Typography>
-                  {item.message}
-                  <Typography variant="caption" display="block">
-                    {datetimeToClient(item.createdAt)}
-                  </Typography>
-                </Box>
-              );
-            }
+                </div>
+              </Box>
+            );
           })}
         <div ref={baseRef}></div>
       </div>

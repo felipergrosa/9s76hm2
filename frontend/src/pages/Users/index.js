@@ -300,8 +300,8 @@ const Users = () => {
 
   const renderProfileImage = (user) => {
     const imageUrl = user.id === loggedInUser.id
-      ? (profileImage ? `${backendUrl}/public/company${user.companyId}/user/${profileImage}` : null)
-      : (user.profileImage ? `${backendUrl}/public/company${user.companyId}/user/${user.profileImage}` : null);
+      ? (profileImage ? `${backendUrl}/public/company${user.companyId}/${profileImage}` : null)
+      : (user.profileImage ? `${backendUrl}/public/company${user.companyId}/${user.profileImage}` : null);
     
     return (
       <AvatarFallback

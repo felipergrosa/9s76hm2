@@ -884,8 +884,16 @@ const handleCloseTicket = async (id) => {
                                 {ticket?.user && (
                                     <Tooltip title={`Usuario: ${ticket.user?.name || "Nao atribuido"}`} arrow>
                                         <span>
-                                            <Badge style={{ backgroundColor: "#000000" }} className={classes.connectionTag} overlap="rectangular">
-                                                {ticket.user?.name.toUpperCase()}
+                                            <Badge
+                                                style={{
+                                                    backgroundColor: ticket.user?.color || "#000000",
+                                                    color: "#fff",
+                                                    borderColor: ticket.user?.color || "#000000"
+                                                }}
+                                                className={classes.connectionTag}
+                                                overlap="rectangular"
+                                            >
+                                                {ticket.user?.name?.toUpperCase()}
                                             </Badge>
                                         </span>
                                     </Tooltip>
@@ -940,6 +948,7 @@ const handleCloseTicket = async (id) => {
                             <Badge
                                 className={`${classes.newMessagesCount} ${classes.unreadBelowDate} ${Number(ticket.unreadMessages) > 0 ? "" : classes.unreadPlaceholder}`}
                                 badgeContent={ticket.unreadMessages}
+                                max={99999}
                                 classes={{
                                     badge: classes.badgeStyle,
                                     anchorOriginTopRightRectangular: classes.unreadBadgePosition,
