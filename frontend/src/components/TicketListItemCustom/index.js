@@ -812,6 +812,7 @@ const handleCloseTicket = async (id) => {
                                 <div className={classes.channelBadge}>
                                     <div className={classes.channelIconAdjust}>
                                         <ConnectionIcon width="14" height="14" connectionType={ticket.channel} />
+
                                     </div>
                                 </div>
                             )}
@@ -855,15 +856,8 @@ const handleCloseTicket = async (id) => {
                                             <Badge
                                                 className={classes.connectionTag}
                                                 style={{
-                                                    backgroundColor:
-                                                        ticket.whatsapp?.color ||
-                                                        (ticket.channel === "whatsapp"
-                                                            ? "#25D366"
-                                                            : ticket.channel === "facebook"
-                                                                ? "#4267B2"
-                                                                : ticket.channel === "instagram"
-                                                                    ? "#E1306C"
-                                                                    : "#6B46C1")
+                                                    backgroundColor: ticket.whatsapp?.color || "#25D366",
+                                                    color: "#fff"
                                                 }}
                                                 overlap="rectangular"
                                             >

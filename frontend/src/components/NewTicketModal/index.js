@@ -133,14 +133,14 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
     return () => clearTimeout(delayDebounceFn);
   }, [searchParam, modalOpen]);
 
-  const IconChannel = (channel) => {
+  const IconChannel = (channel, color) => {
     switch (channel) {
       case "facebook":
-        return <Facebook style={{ color: "#3b5998", verticalAlign: "middle" }} />;
+        return <Facebook style={{ color: color || "#3b5998", verticalAlign: "middle" }} />;
       case "instagram":
-        return <Instagram style={{ color: "#e1306c", verticalAlign: "middle" }} />;
+        return <Instagram style={{ color: color || "#e1306c", verticalAlign: "middle" }} />;
       case "whatsapp":
-        return <WhatsApp style={{ color: "#25d366", verticalAlign: "middle" }} />
+        return <WhatsApp style={{ color: color || "#25d366", verticalAlign: "middle" }} />
       default:
         return "error";
     }
@@ -477,7 +477,7 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
                       <ListItemText
                         primary={
                           <>
-                            {IconChannel(whatsapp.channel)}
+                            {IconChannel(whatsapp.channel, whatsapp.color)}
                             <Typography component="span" style={{ fontSize: 14, marginLeft: "10px", display: "inline-flex", alignItems: "center", lineHeight: "2" }}>
                               {whatsapp.name} &nbsp; <p className={(whatsapp.status) === 'CONNECTED' ? classes.online : classes.offline} >({whatsapp.status})</p>
                             </Typography>

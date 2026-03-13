@@ -52,8 +52,9 @@ const TicketsQueuesService = async ({
     },
     {
       association: "whatsapp",
-      attributes: ["id", "name"]
+      attributes: ["id", "name", "color"]
     }
+
   ];
   const isExistsQueues = await Queue.count({ where: { companyId } });
   const showTicketWithoutQueue = user.allTicket === "enable";

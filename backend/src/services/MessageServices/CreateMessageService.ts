@@ -102,8 +102,9 @@ const CreateMessageService = async ({
           },
           {
             model: Whatsapp,
-            attributes: ["id", "name", "groupAsTicket"]
+            attributes: ["id", "name", "groupAsTicket", "color"]
           },
+
           {
             model: User,
             attributes: ["id", "name"]

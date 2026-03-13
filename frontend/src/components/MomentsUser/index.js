@@ -118,7 +118,7 @@ const useStyles = makeStyles((theme) => ({
     },
   },
   ticketContent: {
-    padding: "12px !important",
+    padding: "8px !important",
   },
   ticketHeader: {
     display: "flex",
@@ -136,14 +136,15 @@ const useStyles = makeStyles((theme) => ({
     maxWidth: 200,
   },
   ticketMessage: {
-    fontSize: "0.85rem",
+    fontSize: "0.8rem",
     color: theme.palette.text.secondary,
     display: "-webkit-box",
     "-webkit-line-clamp": 2,
     "-webkit-box-orient": "vertical",
     overflow: "hidden",
-    marginBottom: theme.spacing(1),
+    marginBottom: theme.spacing(0.5),
     lineHeight: 1.3,
+    wordBreak: "break-word",
   },
   ticketFooter: {
     display: "flex",
@@ -187,11 +188,22 @@ const useStyles = makeStyles((theme) => ({
   statusIndicator: {
     position: "absolute",
     bottom: 0,
-    right: 0,
-    width: 10,
-    height: 10,
+    right: -4,
+    width: 14,
+    height: 14,
     borderRadius: "50%",
     border: "2px solid #fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
+  },
+  tagContainer: {
+    display: "flex",
+    gap: 4,
+    width: "100%",
+    justifyContent: "center",
+    marginTop: 4
   },
 }));
 
@@ -409,19 +421,29 @@ const MomentsUser = ({ onPanStart }) => {
                   contact={ticket.contact}
                   style={{ width: 40, height: 40 }}
                 />
+                <div 
+                  className={classes.statusIndicator} 
+                  style={{ 
+                    backgroundColor: "#25D366",
+                  }}
+                >
+                  <WhatsApp style={{ fontSize: 10, color: "#fff" }} />
+                </div>
               </div>
               <div>
-                <Typography className={classes.ticketName}>
-                  {ticket.contact?.name}
-                </Typography>
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  {ticket.whatsapp && (
-                    <div className={`${classes.badge} ${classes.whatsappTag}`}>
-                      <WhatsApp style={{ fontSize: 12, marginRight: 2 }} />
-                      {ticket.whatsapp.name}
-                    </div>
-                  )}
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Typography className={classes.ticketName}>
+                    {ticket.contact?.name}
+                  </Typography>
+                  <Typography style={{ fontSize: "0.75rem", color: grey[600] }}>
+                    #{ticket.id}
+                  </Typography>
                 </div>
+                
+                {/* Última Mensagem (subida para logo abaixo do ID) */}
+                <Typography className={classes.ticketMessage}>
+                  {ticket.lastMessage || "Sem mensagens"}
+                </Typography>
               </div>
             </div>
             {canAccessTicket(ticket) && (
@@ -431,28 +453,52 @@ const MomentsUser = ({ onPanStart }) => {
             )}
           </div>
 
-          <Typography className={classes.ticketMessage}>
-            {ticket.lastMessage || "Sem mensagens"}
-          </Typography>
+          {/* Tags de Conexão, Fila e Usuário no rodapé */}
+          <div className={classes.tagContainer}>
+            {ticket.whatsapp && (
+              <Tooltip title={`Conexão: ${ticket.whatsapp.name}`}>
+                <div
+                  className={`${classes.badge}`}
+                  style={{
+                    backgroundColor: ticket.whatsapp.color || "#25D366",
+                    color: "#fff",
+                    textTransform: "uppercase"
+                  }}
+                >
+                  {ticket.whatsapp.name}
+                </div>
+              </Tooltip>
+            )}
 
-          <Divider style={{ margin: "8px 0" }} />
-
-          <div className={classes.ticketFooter}>
-            <div style={{ display: "flex", gap: 4 }}>
+            <Tooltip title={`Fila: ${ticket.queue?.name || "Sem Fila"}`}>
               <div
-                className={`${classes.badge} ${classes.queueTag}`}
+                className={`${classes.badge}`}
                 style={{
                   backgroundColor: ticket.queue?.color || "#e0e0e0",
                   color: ticket.queue?.color ? "#fff" : "inherit",
+                  textTransform: "uppercase"
                 }}
               >
                 {ticket.queue?.name || "Sem Fila"}
               </div>
-            </div>
-            <Typography className={classes.time}>
-              {isSameDay(parseISO(ticket.updatedAt), new Date())
-                ? format(parseISO(ticket.updatedAt), "HH:mm")
-                : format(parseISO(ticket.updatedAt), "dd/MM")}
+            </Tooltip>
+
+            {ticket.user?.name && (
+              <Tooltip title={`Atendente: ${ticket.user.name}`}>
+                <div
+                  className={`${classes.badge}`}
+                  style={{
+                    backgroundColor: "#000",
+                    color: "#fff",
+                    textTransform: "uppercase"
+                  }}
+                >
+                  {ticket.user.name}
+                </div>
+              </Tooltip>
+            )}
+            <Typography className={classes.time} style={{ marginLeft: 'auto' }}>
+              {format(parseISO(ticket.updatedAt), "HH:mm")}
             </Typography>
           </div>
         </CardContent>

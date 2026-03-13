@@ -6,6 +6,7 @@ import ContactAvatar from "../../components/ContactAvatar";
 import { i18n } from "../../translate/i18n";
 import { format, isSameDay, parseISO } from "date-fns";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import { grey } from "@material-ui/core/colors";
 
 const useStyles = makeStyles(theme => ({
   ticketCard: {
@@ -25,19 +26,33 @@ const useStyles = makeStyles(theme => ({
     },
   },
   ticketContent: {
-    padding: "12px !important",
+    padding: "8px !important",
   },
   ticketHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: theme.spacing(1),
+    marginBottom: 0,
   },
   avatarContainer: {
     position: "relative",
     marginRight: theme.spacing(1),
   },
   connectionBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: -4,
+    width: 16,
+    height: 16,
+    borderRadius: "50%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "2px solid #fff",
+    boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
+    zIndex: 2,
+  },
+ Riverside: {
     position: "absolute",
     bottom: -2,
     left: -2,
@@ -64,15 +79,16 @@ const useStyles = makeStyles(theme => ({
     color: theme.palette.text.secondary,
   },
   ticketMessage: {
-    fontSize: "0.85rem",
+    fontSize: "0.8rem",
     color: theme.palette.text.secondary,
     display: "-webkit-box",
     "-webkit-line-clamp": 2,
     "-webkit-box-orient": "vertical",
     overflow: "hidden",
-    marginBottom: theme.spacing(1),
+    marginBottom: theme.spacing(0.5),
     lineHeight: 1.3,
-    minHeight: 36,
+    wordBreak: "break-word",
+    minHeight: "auto",
   },
   ticketFooter: {
     display: "flex",
@@ -125,7 +141,7 @@ const useStyles = makeStyles(theme => ({
   },
   priorityDot: {
     position: 'absolute',
-    top: 38,
+    top: 26,
     right: 12,
     width: 10,
     height: 10,
@@ -135,12 +151,12 @@ const useStyles = makeStyles(theme => ({
   },
   // Barra de progresso
   progressWrap: {
-    marginTop: theme.spacing(1),
+    marginTop: 4,
     marginBottom: theme.spacing(1),
   },
   progressTrack: {
     width: '100%',
-    height: 6,
+    height: 8,
     borderRadius: 4,
     background: theme.palette.action.hover,
     overflow: 'hidden',
@@ -153,10 +169,22 @@ const useStyles = makeStyles(theme => ({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
-    marginTop: theme.spacing(1),
-    paddingTop: theme.spacing(1),
-    borderTop: `1px solid ${theme.palette.divider}`,
+    gap: 12,
+    marginTop: theme.spacing(0.5),
+    paddingTop: theme.spacing(0.5),
+  },
+  unreadBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#25d366',
+    color: '#fff',
+    borderRadius: '12px',
+    padding: '0 6px',
+    fontSize: '0.75rem',
+    fontWeight: 'bold',
+    height: 20,
+    minWidth: 20,
   },
   counterItem: {
     display: 'inline-flex',
@@ -169,14 +197,23 @@ const useStyles = makeStyles(theme => ({
   userRow: {
     display: "flex",
     alignItems: "center",
-    gap: 8,
-    marginTop: theme.spacing(1),
+    gap: 4,
+    marginTop: theme.spacing(0.5),
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
   },
   userAvatar: {
-    width: 20,
-    height: 20,
-    fontSize: 10,
+    width: 18,
+    height: 18,
+    fontSize: 9,
   },
+  tagContainer: {
+    display: "flex",
+    gap: 4,
+    width: "100%",
+    justifyContent: "center",
+    marginTop: 4
+  }
 }));
 
 const getPriorityFromUnread = (unread) => {
@@ -216,11 +253,15 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
   }, [override, ticket?.unreadMessages]);
 
   const channelBadge = useMemo(() => {
-    const bg = ticket?.channel === 'facebook'
-      ? '#3b5998'
-      : ticket?.channel === 'instagram'
-        ? '#e1306c'
-        : '#25D366';
+    let bg = ticket?.whatsapp?.color;
+
+    if (!bg) {
+      bg = ticket?.channel === 'facebook'
+        ? '#3b5998'
+        : ticket?.channel === 'instagram'
+          ? '#e1306c'
+          : '#25D366';
+    }
 
     const Icon = ticket?.channel === 'facebook'
       ? Facebook
@@ -229,7 +270,8 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
         : WhatsApp;
 
     return { bg, Icon };
-  }, [ticket?.channel]);
+  }, [ticket?.channel, ticket?.whatsapp?.color]);
+
 
   const ChannelBadgeIcon = channelBadge.Icon;
 
@@ -286,73 +328,108 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
                   style={{ width: 40, height: 40 }}
                 />
                 <Tooltip title={ticket?.whatsapp?.name || i18n.t('kanban.connection')}>
-                  <div className={classes.connectionBadge} style={{ background: channelBadge.bg }}>
+                  <div className={classes.connectionBadge} style={{ background: "#25D366" }}>
                     <ChannelBadgeIcon style={{ fontSize: 12, color: '#fff' }} />
                   </div>
                 </Tooltip>
               </div>
               <div>
-                <Tooltip title={ticket?.contact?.name || "Contato"}>
-                  <Typography className={classes.ticketName}>
-                    {ticket?.contact?.name}
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Tooltip title={ticket?.contact?.name || "Contato"}>
+                    <Typography className={classes.ticketName}>
+                      {ticket?.contact?.name}
+                    </Typography>
+                  </Tooltip>
+                  <Typography className={classes.ticketId}>
+                    #{ticket?.id}
+                  </Typography>
+                </div>
+                
+                {/* Última Mensagem (subida para logo abaixo do ID) */}
+                <Tooltip title={ticket?.lastMessage || "Sem mensagens"}>
+                  <Typography className={classes.ticketMessage}>
+                    {ticket?.lastMessage || "Sem mensagens"}
                   </Typography>
                 </Tooltip>
-                <Typography className={classes.ticketId}>
-                  Ticket #{ticket?.id}
-                </Typography>
               </div>
             </div>
           </div>
 
-          {/* Última Mensagem (limitada a 2 linhas) */}
-          <Tooltip title={ticket?.lastMessage || "Sem mensagens"}>
-            <Typography className={classes.ticketMessage}>
-              {ticket?.lastMessage || "Sem mensagens"}
-            </Typography>
-          </Tooltip>
-
-          {/* Barra de Progresso */}
+          {/* Barra de Progresso + Horário */}
           <div className={classes.progressWrap}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography variant="caption" color="textSecondary">{i18n.t('kanban.progress')}</Typography>
-              <Typography variant="caption" color="textSecondary">
-                {isSameDay(parseISO(ticket?.updatedAt), new Date())
-                  ? format(parseISO(ticket?.updatedAt), "HH:mm")
-                  : format(parseISO(ticket?.updatedAt), "dd/MM/yyyy HH:mm")}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <Typography style={{ fontSize: '0.75rem', color: grey[600] }}>Progresso</Typography>
+              <Typography style={{ fontSize: '0.75rem', color: grey[600] }}>
+                {format(parseISO(ticket.updatedAt), "HH:mm")}
               </Typography>
             </div>
             <div className={classes.progressTrack}>
-              <div className={classes.progressBar} style={{ width: `${progress}%`, background: priority.color }} />
+              <div className={classes.progressBar} style={{ width: `${progress}%`, backgroundColor: priority.color || '#ff9800' }} />
             </div>
           </div>
 
-          {/* Usuário Atribuído + Fila */}
-          <div className={classes.userRow}>
-            <Avatar className={classes.userAvatar}>{userInitials}</Avatar>
-            <Typography variant="caption" color="textSecondary">
-              {ticket?.user?.name || i18n.t('kanban.noAssignee')}
-            </Typography>
-            <div style={{ marginLeft: 'auto' }}>
+          {/* Tags de Conexão, Fila e Usuário no rodapé */}
+          <div className={classes.tagContainer}>
+            {ticket.whatsapp && (
+              <Tooltip title={`Conexão: ${ticket.whatsapp.name}`}>
+                <div
+                  className={`${classes.badge}`}
+                  style={{
+                    backgroundColor: ticket.whatsapp.color || "#25D366",
+                    color: "#fff",
+                    textTransform: "uppercase"
+                  }}
+                >
+                  {ticket.whatsapp.name}
+                </div>
+              </Tooltip>
+            )}
+
+            <Tooltip title={`Fila: ${ticket?.queue?.name || "Sem Fila"}`}>
               <div
-                className={`${classes.badge} ${classes.queueTag}`}
+                className={`${classes.badge}`}
                 style={{
                   backgroundColor: ticket?.queue?.color || "#e0e0e0",
                   color: ticket?.queue?.color ? "#fff" : "inherit",
+                  textTransform: "uppercase"
                 }}
               >
                 {ticket?.queue?.name || "Sem Fila"}
               </div>
-            </div>
+            </Tooltip>
+
+            {ticket?.user?.name && (
+              <Tooltip title={`Atendente: ${ticket.user.name}`}>
+                <div
+                  className={`${classes.badge}`}
+                  style={{
+                    backgroundColor: "#000",
+                    color: "#fff",
+                    textTransform: "uppercase"
+                  }}
+                >
+                  {ticket.user.name}
+                </div>
+              </Tooltip>
+            )}
           </div>
 
           {/* Contadores: Mensagens, Anexos, Agendamentos */}
           <div className={classes.countersRow}>
-            <Tooltip title={i18n.t('kanban.counters.comments')}>
-              <div className={classes.counterItem}>
-                <ChatBubbleOutline style={{ fontSize: 16 }} />
-                <span>{comments}</span>
-              </div>
-            </Tooltip>
+            {comments > 0 ? (
+              <Tooltip title={i18n.t('kanban.counters.comments')}>
+                <div className={classes.unreadBadge}>
+                  {comments}
+                </div>
+              </Tooltip>
+            ) : (
+              <Tooltip title={i18n.t('kanban.counters.comments')}>
+                <div className={classes.counterItem}>
+                  <ChatBubbleOutline style={{ fontSize: 16 }} />
+                  <span>0</span>
+                </div>
+              </Tooltip>
+            )}
             <Tooltip title={i18n.t('kanban.counters.attachments')}>
               <div className={classes.counterItem}>
                 <AttachFile style={{ fontSize: 16 }} />
