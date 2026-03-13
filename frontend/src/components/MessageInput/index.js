@@ -151,24 +151,30 @@ const useStyles = makeStyles((theme) => ({
     width: "100%",
     maxWidth: "100%",
     display: "flex",
-    padding: "2px 4px", // Mais 30% menor
+    padding: "2px 4px",
     alignItems: "center",
-    borderRadius: 24, // 20% a mais arredondado
+    borderRadius: 32, // 20% a mais arredondado
     border: "none",
     boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
-    gap: 2, // Mais 30% menor
-    minHeight: 16, // Mais 30% menor
-    maxHeight: 49, // Mais 30% menor
+    gap: 5, // Mais 30% menor
+    minHeight: 16,
+    maxHeight: 'none',
     boxSizing: 'border-box',
     [theme.breakpoints.down('sm')]: {
-      minHeight: 16, // Mais 30% menor
-      maxHeight: 49, // Mais 30% menor
+      minHeight: 16,
+      maxHeight: 'none',
       width: '100%',
       maxWidth: '100vw',
       boxSizing: 'border-box',
-      padding: '2px 4px', // Mais 30% menor
+      padding: '2px 4px',
       gap: 2, // Mais 30% menor
       borderRadius: 24,
+    }
+    ,
+    '& .MuiIconButton-root': {
+      padding: 5,
+      width: 32,
+      height: 32,
     }
   },
   messageInputWrapper: {
@@ -177,6 +183,7 @@ const useStyles = makeStyles((theme) => ({
     backgroundImage: "none",
     display: "flex",
     flexDirection: "column",
+    alignItems: "stretch",
     borderRadius: 0,
     position: "relative",
     boxShadow: "none !important",
@@ -187,13 +194,14 @@ const useStyles = makeStyles((theme) => ({
       backgroundColor: "transparent",
       borderRadius: 0,
       border: "none",
-      minHeight: 28,
-      maxHeight: 100,
+      minHeight: 14,
+      maxHeight: 'none',
       display: 'flex',
       alignItems: 'center',
       paddingTop: 0,
       paddingBottom: 0,
       flex: 1,
+      width: '100%',
       color: ((theme.palette.mode || theme.palette.type) === 'light') ? "#111b21" : "#e9edef",
     },
     '& .MuiInputBase-multiline': {
@@ -203,9 +211,9 @@ const useStyles = makeStyles((theme) => ({
     },
     '& .MuiInputBase-inputMultiline': {
       padding: 0,
-      maxHeight: 100,
+      maxHeight: 'none',
       overflowY: 'auto',
-      lineHeight: 1.4,
+      lineHeight: 1.3,
       fontSize: 14,
       color: ((theme.palette.mode || theme.palette.type) === 'light') ? "#111b21" : "#e9edef",
     },
@@ -230,10 +238,12 @@ const useStyles = makeStyles((theme) => ({
       position: 'relative',
       boxShadow: 'none',
       '& .MuiInputBase-root': {
-        maxHeight: 60,
+        maxHeight: 'none',
+        alignItems: 'flex-start',
+        width: '100%',
       },
       '& .MuiInputBase-inputMultiline': {
-        maxHeight: 80,
+        maxHeight: 'none',
         fontSize: 14,
       },
     }
@@ -2218,7 +2228,7 @@ const MessageInput = ({
                       }
                       multiline
                       minRows={1}
-                      maxRows={isMobile ? 4 : 6}
+                      maxRows={isMobile ? 8 : 10}
                       value={inputMessage}
                       onChange={handleChangeInput}
                       disabled={disableOption()}
@@ -2270,7 +2280,7 @@ const MessageInput = ({
                       placeholder={placeholderText}
                       multiline
                       minRows={1}
-                      maxRows={isMobile ? 4 : 6}
+                      maxRows={isMobile ? 8 : 10}
                       value={inputMessage}
                       onChange={handleChangeInput}
                       disabled={disableOption()}

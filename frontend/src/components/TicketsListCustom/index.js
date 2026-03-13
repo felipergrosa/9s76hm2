@@ -197,7 +197,7 @@ const TicketsListViewport = ({
                 square
                 name="closed"
                 elevation={0}
-                className={classes.ticketsList}
+                className={`${classes.ticketsList} tickets-list`}
                 ref={listContainerRef}
             >
                 {tickets.length === 0 && !loading ? (

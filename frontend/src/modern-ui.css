@@ -382,30 +382,30 @@
 }
 
 
-.modern-ui [class*="ticketsWrapper"] {
+.modern-ui .tickets-wrapper {
     scrollbar-width: none !important;
     -ms-overflow-style: none !important;
 }
 
-.modern-ui [class*="ticketsWrapper"]::-webkit-scrollbar,
-.modern-ui [class*="ticketsWrapper"] *::-webkit-scrollbar {
+.modern-ui .tickets-wrapper::-webkit-scrollbar,
+.modern-ui .tickets-wrapper *::-webkit-scrollbar {
     width: 0 !important;
     height: 0 !important;
     display: none !important;
 }
 
 /* TicketsList scroll invisível */
-.modern-ui [class*="ticketsList"],
-.modern-ui [class*="TicketsList"] {
+.modern-ui .tickets-list,
+.modern-ui .tickets-list-wrapper {
     scrollbar-width: none !important;
     -ms-overflow-style: none !important;
 }
 
-.modern-ui [class*="ticketsList"]::-webkit-scrollbar,
-.modern-ui [class*="TicketsList"]::-webkit-scrollbar {
-width: 0 !important;
-height: 0 !important;
-display: none !important;
+.modern-ui .tickets-list::-webkit-scrollbar,
+.modern-ui .tickets-list-wrapper::-webkit-scrollbar {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
 }
 
 /* Tickets Page - Remover bordas arredondadas excessivas - MAS MANTER BORDAS DOS WRAPPERS */
@@ -532,8 +532,8 @@ padding: 8px 16px !important;
 }
 
 /* Tickets Page - Ajustar margens para não cortar bordas */
-.modern-ui [class*="serachInputWrapper"],
-.modern-ui [class*="ticketOptionsBox"] {
+.modern-ui .serach-input-wrapper,
+.modern-ui .ticket-options-box {
 margin-right: 3px !important;
 }
 
@@ -556,15 +556,16 @@ border: none !important;
 }
 
 /* Tickets Page - Header/Tabs sem estilo glass */
-.modern-ui [class*="ticketOptionsBox"],
-.modern-ui [class*="serachInputWrapper"],
-.modern-ui [class*="tabsHeader"],
-.modern-ui [class*="ticketsWrapper"] .MuiPaper-elevation0 {
-border-radius: 8px !important;
-border: 1px solid #aaa !important;
-backdrop-filter: none !important;
--webkit-backdrop-filter: none !important;
-box-shadow: none !important;
+.modern-ui .ticket-options-box,
+.modern-ui .serach-input-wrapper,
+.modern-ui .tabs-header,
+.modern-ui .tickets-wrapper .MuiPaper-elevation0 {
+    border-radius: 8px !important;
+    border: 1px solid #aaa !important;
+    background: #ffffff !important; /* Forçar fundo branco pedido no print 3 */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
 }
 
 /* ChatAssistantPanel - Manter estilo original (fundo branco + box-shadow) */
@@ -575,10 +576,6 @@ backdrop-filter: none !important;
 border: none !important;
 border-radius: 12px !important;
 box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18) !important;
-    -webkit-backdrop-filter: none !important;
-    border: none !important;
-    border-radius: 12px !important;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18) !important;
 }
 
 /* Emoji Picker - Fundo branco sem efeito glass */
@@ -764,15 +761,15 @@ box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18) !important;
 
 /* ============================================================
    REGRA FINAL REFORÇADA - Bordas do Header de Tickets
-   Esta regra tem especificidade máxima para garantir que as
-   bordas apareçam corretamente em produção e dev
+   Esta regra garante paridade visual entre Dev e Produção
    ============================================================ */
-.modern-ui .tickets-wrapper .MuiPaper-root[class*="ticketOptionsBox"],
-.modern-ui .tickets-wrapper .MuiPaper-root[class*="serachInputWrapper"],
-.modern-ui .tickets-wrapper .MuiPaper-root[class*="tabsHeader"],
-.modern-ui [class*="ticketsWrapper"] [class*="ticketOptionsBox"],
-.modern-ui [class*="ticketsWrapper"] [class*="serachInputWrapper"],
-.modern-ui [class*="ticketsWrapper"] [class*="tabsHeader"] {
+.modern-ui .tickets-wrapper .ticket-options-box,
+.modern-ui .tickets-wrapper .serach-input-wrapper,
+.modern-ui .tickets-wrapper .tabs-header,
+.modern-ui .ticket-options-box,
+.modern-ui .serach-input-wrapper,
+.modern-ui .tabs-header {
     border: 1px solid #aaa !important;
     border-radius: 8px !important;
+    background-color: #ffffff !important;
 }

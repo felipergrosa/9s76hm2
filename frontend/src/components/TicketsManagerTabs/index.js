@@ -695,10 +695,10 @@ const TicketsManagerTabs = () => {
         initialFilters={{ status: tab }}
       />
       <Paper elevation={0} variant="outlined" className={`${classes.ticketsWrapper} tickets-wrapper`}>
-        <div className={classes.serachInputWrapper}>
+        <div className={`${classes.serachInputWrapper} serach-input-wrapper`}>
           <SearchIcon className={classes.searchIcon} />
           <InputBase
-            className={classes.searchInput}
+            className={`${classes.searchInput} search-input`}
             inputRef={searchInputRef}
             placeholder={i18n.t("tickets.search.placeholder")}
             type="search"
@@ -796,7 +796,7 @@ const TicketsManagerTabs = () => {
           />
         </Tabs>
       </Paper> */}
-        <Paper square elevation={0} className={classes.ticketOptionsBox}>
+        <Paper square elevation={0} className={`${classes.ticketOptionsBox} ticket-options-box`}>
           <Grid container alignItems="center" justifyContent="space-between" wrap="nowrap">
             <Grid item>
               <Can

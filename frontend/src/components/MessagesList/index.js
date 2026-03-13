@@ -32,6 +32,7 @@ import ContactAvatar from "../ContactAvatar";
 import LocationPreview from "../LocationPreview";
 import ModalImageCors from "../ModalImageCors";
 import MediaModal from "../MediaModal";
+import LazyMedia from "../LazyMedia";
 import MessageOptionsMenu from "../MessageOptionsMenu";
 import whatsBackground from "../../assets/wa-background.png";
 import whatsBackgroundDark from "../../assets/wa-background-dark.png";
@@ -775,6 +776,28 @@ const reducer = (state, action) => {
     return upsertMessage(state, messageToUpdate);
   }
 
+  if (action.type === "ADD_MESSAGES") {
+    const newMessages = action.payload;
+    if (!Array.isArray(newMessages) || newMessages.length === 0) return state;
+
+    let nextState = [...state];
+    newMessages.forEach(msg => {
+      const incomingIdentity = getMessageIdentity(msg);
+      if (!incomingIdentity) {
+        nextState.push(msg);
+      } else {
+        const index = nextState.findIndex(m => getMessageIdentity(m) === incomingIdentity);
+        if (index !== -1) {
+          nextState[index] = { ...nextState[index], ...msg };
+        } else {
+          nextState.push(msg);
+        }
+      }
+    });
+
+    return nextState.sort((a, b) => (a.id || 0) - (b.id || 0));
+  }
+
   if (action.type === "RESET") {
     return [];
   }
@@ -1030,21 +1053,38 @@ const MessagesList = ({
 
   // Exibe duração do áudio (mm:ss) usando apenas metadata do arquivo
   const AudioDurationTag = ({ src }) => {
+    const spanRef = useRef(null);
     const audioRef = useRef(null);
     const [duration, setDuration] = useState(0);
+    const [shouldLoad, setShouldLoad] = useState(false);
 
     useEffect(() => {
+      const observer = new IntersectionObserver(([entry]) => {
+        if (entry.isIntersecting) {
+          setShouldLoad(true);
+          observer.disconnect();
+        }
+      }, { rootMargin: '100px' });
+
+      if (spanRef.current) observer.observe(spanRef.current);
+      return () => observer.disconnect();
+    }, []);
+
+    useEffect(() => {
+      if (!shouldLoad || !audioRef.current) return;
       const a = audioRef.current;
-      if (!a) return;
       const onLoaded = () => setDuration(a.duration || 0);
       const onDurationChange = () => setDuration(a.duration || 0);
       a.addEventListener("loadedmetadata", onLoaded);
       a.addEventListener("durationchange", onDurationChange);
+      
+      if (a.readyState >= 1) onLoaded();
+
       return () => {
         a.removeEventListener("loadedmetadata", onLoaded);
         a.removeEventListener("durationchange", onDurationChange);
       };
-    }, []);
+    }, [shouldLoad]);
 
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     const sourceUrl = isIOS ? (src || "").replace(".ogg", ".mp3") : src;
@@ -1057,12 +1097,14 @@ const MessagesList = ({
     };
 
     return (
-      <>
+      <span ref={spanRef} style={{ minWidth: "30px", display: "inline-block" }}>
         {formatTime(duration)}
-        <audio ref={audioRef} preload="metadata" style={{ display: "none" }}>
-          <source src={sourceUrl} type={isIOS ? "audio/mp3" : "audio/ogg"} />
-        </audio>
-      </>
+        {shouldLoad && (
+          <audio ref={audioRef} style={{ display: "none" }} preload="metadata">
+            <source src={sourceUrl} type={isIOS ? "audio/mp3" : "audio/ogg"} />
+          </audio>
+        )}
+      </span>
     );
   };
 
@@ -1359,9 +1401,7 @@ const MessagesList = ({
           }, (result) => {
             if (result?.success && result?.messages?.length > 0) {
               console.log(`[MessagesList] Recuperadas ${result.count} mensagens perdidas`);
-              result.messages.forEach((msg) => {
-                dispatch({ type: "ADD_MESSAGE", payload: msg });
-              });
+              dispatch({ type: "ADD_MESSAGES", payload: result.messages });
               scrollToBottom();
               // Atualizar último ID
               const lastMsg = result.messages[result.messages.length - 1];
@@ -1620,79 +1660,85 @@ const MessagesList = ({
       );
     } else if (message.mediaType === "image") {
       return (
-        <div className={classes.mediaWrapper} style={{ cursor: "pointer" }} onClick={() => !message._pendingMedia && handleOpenMediaModal(message)}>
-          <ModalImageCors imageUrl={message.mediaUrl} />
-          {message._pendingMedia && (
-            <div className={classes.mediaLoadingOverlay}>
-              <CircularProgress size={40} style={{ color: '#fff' }} />
-            </div>
-          )}
-        </div>
+        <LazyMedia threshold={0.01} rootMargin="100px">
+          <div className={classes.mediaWrapper} style={{ cursor: "pointer" }} onClick={() => !message._pendingMedia && handleOpenMediaModal(message)}>
+            <ModalImageCors imageUrl={message.mediaUrl} />
+            {message._pendingMedia && (
+              <div className={classes.mediaLoadingOverlay}>
+                <CircularProgress size={40} style={{ color: '#fff' }} />
+              </div>
+            )}
+          </div>
+        </LazyMedia>
       );
     } else if (message.mediaType === "audio") {
       const persistedText = message?.audioTranscription;
       const transcription = transcriptions[message.id];
       const transcriptionText = transcription?.text || persistedText || "";
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
-          <AudioModal url={message.mediaUrl} contact={getAvatarContactForMessage(message, message?.ticket?.contact)} fromMe={message.fromMe} />
+        <LazyMedia threshold={0.01} rootMargin="50px">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
+            <AudioModal url={message.mediaUrl} contact={getAvatarContactForMessage(message, message?.ticket?.contact)} fromMe={message.fromMe} />
 
-          {/* Botão de transcrição */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
-            <Button
-              size="small"
-              variant="text"
-              color="primary"
-              startIcon={transcription?.loading ? <CircularProgress size={14} /> : <RecordVoiceOver fontSize="small" />}
-              onClick={() => handleTranscribeAudio(message)}
-              disabled={transcription?.loading || !!transcription?.text}
-              style={{ fontSize: 11, padding: '2px 8px', minWidth: 'auto' }}
-            >
-              {transcription?.loading ? "Transcrevendo..." : transcription?.text ? "Transcrito" : "Transcrever"}
-            </Button>
+            {/* Botão de transcrição */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+              <Button
+                size="small"
+                variant="text"
+                color="primary"
+                startIcon={transcription?.loading ? <CircularProgress size={14} /> : <RecordVoiceOver fontSize="small" />}
+                onClick={() => handleTranscribeAudio(message)}
+                disabled={transcription?.loading || !!transcription?.text}
+                style={{ fontSize: 11, padding: '2px 8px', minWidth: 'auto' }}
+              >
+                {transcription?.loading ? "Transcrevendo..." : transcription?.text ? "Transcrito" : "Transcrever"}
+              </Button>
+            </div>
+
+            {/* Exibir transcrição */}
+            {transcriptionText && (
+              <div style={{
+                backgroundColor: 'rgba(0,0,0,0.05)',
+                borderRadius: 4,
+                padding: '6px 8px',
+                fontSize: 14,
+                fontStyle: 'normal',
+                width: '100%',
+                wordBreak: 'break-word'
+              }}>
+                {transcriptionText}
+              </div>
+            )}
+
+            {/* Exibir erro */}
+            {transcription?.error && (
+              <div style={{
+                color: '#d32f2f',
+                fontSize: 11,
+                padding: '4px 8px'
+              }}>
+                ⚠️ {transcription.error}
+              </div>
+            )}
           </div>
-
-          {/* Exibir transcrição */}
-          {transcriptionText && (
-            <div style={{
-              backgroundColor: 'rgba(0,0,0,0.05)',
-              borderRadius: 4,
-              padding: '6px 8px',
-              fontSize: 14,
-              fontStyle: 'normal',
-              width: '100%',
-              wordBreak: 'break-word'
-            }}>
-              {transcriptionText}
-            </div>
-          )}
-
-          {/* Exibir erro */}
-          {transcription?.error && (
-            <div style={{
-              color: '#d32f2f',
-              fontSize: 11,
-              padding: '4px 8px'
-            }}>
-              ⚠️ {transcription.error}
-            </div>
-          )}
-        </div>
+        </LazyMedia>
       );
     } else if (message.mediaType === "video") {
       return (
-        <div className={classes.mediaWrapper} onClick={(e) => { e.preventDefault(); !message._pendingMedia && handleOpenMediaModal(message); }} style={{ display: 'inline-block', cursor: 'pointer' }}>
-          <VideoWithHdBadge
-            className={classes.messageMedia}
-            src={message.mediaUrl}
-            isGif={/\.gif(\?.*)?$/i.test(message.mediaUrl || "")}
-          />
-          {message._pendingMedia && (
-            <div className={classes.mediaLoadingOverlay}>
-              <CircularProgress size={40} style={{ color: '#fff' }} />
-            </div>
-          )}
-        </div>
+        <LazyMedia threshold={0.01} rootMargin="100px">
+          <div className={classes.mediaWrapper} onClick={(e) => { e.preventDefault(); !message._pendingMedia && handleOpenMediaModal(message); }} style={{ display: 'inline-block', cursor: 'pointer' }}>
+            <VideoWithHdBadge
+              className={classes.messageMedia}
+              src={message.mediaUrl}
+              isGif={/\.gif(\?.*)?$/i.test(message.mediaUrl || "")}
+            />
+            {message._pendingMedia && (
+              <div className={classes.mediaLoadingOverlay}>
+                <CircularProgress size={40} style={{ color: '#fff' }} />
+              </div>
+            )}
+          </div>
+        </LazyMedia>
       );
     } else if (message.mediaType === "application" || message.mediaType === "document") {
       const isPdf = /\.pdf($|\?)/i.test(message.mediaUrl || "");
@@ -2216,7 +2262,7 @@ const MessagesList = ({
             {isGroup && !message.fromMe && (
               <ContactAvatar
                 contact={getAvatarContactForMessage(message)}
-                enableRealtimeFetch={true}
+                enableRealtimeFetch={false}
                 className={classes.messageAvatar}
                 style={{ backgroundColor: getParticipantColor(message), color: "#fff" }}
               />

@@ -1,6 +1,7 @@
 import { EventEmitter } from "events";
 import logger from "../../utils/logger";
 import { emitSocketEvent } from "../../queues/socketEventQueue";
+import ShowTicketService from "./ShowTicketService";
 
 // CQRS: Event Bus para Tickets
 // Todos os eventos de ticket passam por aqui antes de serem propagados
@@ -32,14 +33,31 @@ class TicketEventBus extends EventEmitter {
 
   // Configura handlers padrão para emissão Socket.IO
   private setupHandlers(): void {
+    const enrichTicket = async (companyId: number, ticketPayload: any) => {
+      if (!ticketPayload?.ticket?.id) return ticketPayload;
+      const hasUser = !!ticketPayload.ticket?.user;
+      const userColor = ticketPayload.ticket?.user?.color;
+      const userProfileImage = ticketPayload.ticket?.user?.profileImage;
+      const needsEnrich = !hasUser || userColor === undefined || userProfileImage === undefined;
+      if (!needsEnrich) return ticketPayload;
+      try {
+        const fullTicket = await ShowTicketService(ticketPayload.ticket.id, companyId);
+        return { ...ticketPayload, ticket: fullTicket };
+      } catch (err) {
+        logger.warn(`[TicketEventBus] Falha ao enriquecer ticket ${ticketPayload.ticket.id}: ${err?.message}`);
+        return ticketPayload;
+      }
+    };
+
     // Ticket criado
     this.on("TICKET_CREATED", async (event: TicketEvent) => {
       try {
+        const payload = await enrichTicket(event.companyId, event.payload);
         await emitSocketEvent(
           event.companyId,
           null, // Broadcast para toda empresa
           `company-${event.companyId}-ticket`,
-          { action: "create", ...event.payload }
+          { action: "create", ...payload }
         );
       } catch (err) {
         logger.error("[TicketEventBus] Erro ao emitir TICKET_CREATED:", err);
@@ -49,7 +67,8 @@ class TicketEventBus extends EventEmitter {
     // Ticket atualizado
     this.on("TICKET_UPDATED", async (event: TicketEvent) => {
       try {
-        const payload = { action: "update", ...event.payload };
+        const basePayload = { action: "update", ...event.payload };
+        const payload = await enrichTicket(event.companyId, basePayload);
         console.log(`[TicketEventBus DEBUG] TICKET_UPDATED ticketId=${event.ticketId} status=${event.payload?.ticket?.status || event.payload?.status} companyId=${event.companyId}`);
         await emitSocketEvent(
           event.companyId,
@@ -81,11 +100,12 @@ class TicketEventBus extends EventEmitter {
     // Status do ticket mudou
     this.on("TICKET_STATUS_CHANGED", async (event: TicketEvent) => {
       try {
+        const payload = await enrichTicket(event.companyId, event.payload);
         await emitSocketEvent(
           event.companyId,
           null,
           `company-${event.companyId}-ticket`,
-          { action: "update", ...event.payload }
+          { action: "update", ...payload }
         );
       } catch (err) {
         logger.error("[TicketEventBus] Erro ao emitir TICKET_STATUS_CHANGED:", err);
