@@ -2174,7 +2174,7 @@ export const verifyMediaMessage = async (
         ],
         include: [
           { model: Queue, as: "queue" },
-          { model: User, as: "user" },
+          { model: User, as: "user", attributes: ["id", "name", "profileImage", "color"] },
           { model: Contact, as: "contact" },
           { model: Whatsapp, as: "whatsapp" }
         ]
@@ -2321,7 +2321,7 @@ export const verifyMessage = async (
     await ticket.reload({
       include: [
         { model: Queue, as: "queue" },
-        { model: User, as: "user" },
+        { model: User, as: "user", attributes: ["id", "name", "profileImage", "color"] },
         { model: Contact, as: "contact" },
         { model: Whatsapp, as: "whatsapp" }
       ]

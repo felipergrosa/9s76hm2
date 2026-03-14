@@ -68,7 +68,7 @@ export async function createTicket(command: CreateTicketCommand): Promise<Ticket
     include: [
       { model: Contact, as: "contact" },
       { model: Whatsapp, as: "whatsapp" },
-      { model: User, as: "user" },
+      { model: User, as: "user", attributes: ["id", "name", "profileImage", "color"] },
       { model: Queue, as: "queue" }
     ]
   });
@@ -98,7 +98,7 @@ export async function updateTicket(
     include: [
       { model: Contact, as: "contact" },
       { model: Whatsapp, as: "whatsapp" },
-      { model: User, as: "user" },
+      { model: User, as: "user", attributes: ["id", "name", "profileImage", "color"] },
       { model: Queue, as: "queue" }
     ]
   });
@@ -118,7 +118,7 @@ export async function updateTicket(
     include: [
       { model: Contact, as: "contact" },
       { model: Whatsapp, as: "whatsapp" },
-      { model: User, as: "user" },
+      { model: User, as: "user", attributes: ["id", "name", "profileImage", "color"] },
       { model: Queue, as: "queue" }
     ]
   });
@@ -190,7 +190,7 @@ export async function closeTicket(
     include: [
       { model: Contact, as: "contact" },
       { model: Whatsapp, as: "whatsapp" },
-      { model: User, as: "user" },
+      { model: User, as: "user", attributes: ["id", "name", "profileImage", "color"] },
       { model: Queue, as: "queue" }
     ]
   });

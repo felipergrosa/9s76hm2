@@ -8,10 +8,12 @@ import Queue from "../../models/Queue";
 import User from "../../models/User";
 import ShowUserService from "../UserServices/ShowUserService";
 import Tag from "../../models/Tag";
+import TicketTag from "../../models/TicketTag";
+import ContactTag from "../../models/ContactTag";
+import Whatsapp from "../../models/Whatsapp";
+import { BackendPerfMonitor } from "../../utils/performanceDiagnostic";
 
 import { intersection } from "lodash";
-import Whatsapp from "../../models/Whatsapp";
-import ContactTag from "../../models/ContactTag";
 
 import removeAccents from "remove-accents";
 
@@ -75,6 +77,9 @@ const ListTicketsService = async ({
   searchOnMessages = "false",
   walletOnly = false
 }: Request): Promise<Response> => {
+  BackendPerfMonitor.start('ListTicketsService:Total');
+  BackendPerfMonitor.mark('ListTicketsService:Start', { searchParam, status, pageNumber });
+  
   const user = await ShowUserService(userId, companyId);
 
   const showTicketAllQueues = user.allHistoric === "enabled";
@@ -109,7 +114,14 @@ const ListTicketsService = async ({
       model: Contact,
       as: "contact",
       attributes: ["id", "name", "number", "email", "profilePicUrl", "acceptAudioMessage", "active", "urlPicture", "companyId"],
-      include: ["extraInfo", "tags"]
+      include: [
+        {
+          model: Tag,
+          as: "tags",
+          attributes: ["id", "name", "color"],
+          through: { attributes: [] }
+        }
+      ]
     },
     {
       model: Queue,
@@ -124,7 +136,8 @@ const ListTicketsService = async ({
     {
       model: Tag,
       as: "tags",
-      attributes: ["id", "name", "color"]
+      attributes: ["id", "name", "color"],
+      through: { attributes: [] }
     },
     {
       model: Whatsapp,
@@ -637,6 +650,12 @@ const ListTicketsService = async ({
   });
 
   const hasMore = count > offset + tickets.length;
+
+  BackendPerfMonitor.end('ListTicketsService:Total', { 
+    ticketCount: tickets.length, 
+    totalCount: count,
+    hasMore 
+  });
 
   return {
     tickets,

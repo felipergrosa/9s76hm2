@@ -7,6 +7,7 @@ import GetWbotMessage from "../../helpers/GetWbotMessage";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
+import User from "../../models/User";
 import logger from "../../utils/logger";
 
 import formatBody from "../../helpers/Mustache";
@@ -115,7 +116,9 @@ const EditWhatsAppMessage = async ({
       {
         model: Ticket,
         as: "ticket",
-        include: ["contact", "whatsapp"]
+        include: ["contact", "whatsapp",
+          { model: User, as: "user", attributes: ["id", "name", "profileImage", "color"] }
+        ]
       }
     ]
   });
@@ -162,7 +165,9 @@ const EditWhatsAppMessage = async ({
         {
           model: Ticket,
           as: "ticket",
-          include: ["contact", "whatsapp"]
+          include: ["contact", "whatsapp",
+            { model: User, as: "user", attributes: ["id", "name", "profileImage", "color"] }
+          ]
         }
       ]
     });

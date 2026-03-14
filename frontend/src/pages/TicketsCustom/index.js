@@ -15,6 +15,7 @@ import { CircularProgress } from "@material-ui/core";
 import { getBackendUrl } from "../../config";
 import logo from "../../assets/logo.png";
 import logoDark from "../../assets/logo-black.png";
+import { PerformanceMonitor } from "../../utils/performanceDiagnostic";
 
 const defaultTicketsManagerWidth = 550;
 const minTicketsManagerWidth = 404;
@@ -82,9 +83,15 @@ const TicketsCustom = () => {
 	const ticketsManagerWidthRef = useRef(ticketsManagerWidth);
 
 	useEffect(() => {
+		PerformanceMonitor.start('TicketsScreen:Mount');
 		if (user && user.defaultTicketsManagerWidth) {
 			setTicketsManagerWidth(user.defaultTicketsManagerWidth);
 		}
+		PerformanceMonitor.end('TicketsScreen:Mount');
+		
+		return () => {
+			PerformanceMonitor.mark('TicketsScreen:Unmount');
+		};
 	}, [user]);
 
 	// useEffect(() => {

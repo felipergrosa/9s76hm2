@@ -37,6 +37,8 @@ import { i18n } from "../../translate/i18n";
 import ConfirmationModal from "../ConfirmationModal";
 import QuickMessageDialog from "../QuickMessageDialog";
 import { expandPlaceholders } from "../../utils/expandPlaceholders";
+import Avatar from "@material-ui/core/Avatar";
+import { getBackendUrl } from "../../config";
 
 const hexToAlpha = (hex, alpha) => {
   if (!hex || typeof hex !== "string" || !hex.startsWith('#')) return `rgba(0,0,0,${alpha})`;
@@ -468,11 +470,14 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, 
       const usersMap = {};
       messages.forEach(msg => {
         const userName = msg.user?.name || "SISTEMA";
+        const userColor = msg.user?.color || msg.color || "#6B7280";
+        const userProfileImage = msg.user?.profileImage;
         const groupName = msg.groupName || "SEM CATEGORIA";
         
         if (!usersMap[userName]) {
           usersMap[userName] = {
-            color: msg.color || "#6B7280",
+            color: userColor,
+            profileImage: userProfileImage,
             groups: {}
           };
         }
@@ -603,16 +608,44 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, 
                 {/* Nível 1: Usuário */}
                 <div 
                   className={classes.groupHeader} 
-                  style={{ borderLeftColor: theme.palette.primary.main }}
+                  style={{ borderLeftColor: userGroup.color || theme.palette.primary.main }}
                   onClick={() => toggleGroup(userName)}
                 >
                   <div className={classes.groupTitleArea}>
-                    <FlashOnIcon style={{ color: theme.palette.primary.main, fontSize: 16 }} />
-                    <Typography className={classes.groupTitle} style={{ color: theme.palette.primary.main }}>
+                    {userGroup.profileImage ? (
+                      <Avatar 
+                        src={`${getBackendUrl()}/public/company${user?.companyId}/${userGroup.profileImage}`}
+                        alt={userName}
+                        style={{ 
+                          width: 24, 
+                          height: 24, 
+                          border: `2px solid ${userGroup.color || theme.palette.primary.main}`
+                        }}
+                      />
+                    ) : (
+                      <Avatar 
+                        style={{ 
+                          width: 24, 
+                          height: 24, 
+                          backgroundColor: userGroup.color || theme.palette.primary.main,
+                          fontSize: 12
+                        }}
+                      >
+                        {userName.charAt(0).toUpperCase()}
+                      </Avatar>
+                    )}
+                    <Typography 
+                      className={classes.groupTitle} 
+                      style={{ color: userGroup.color || theme.palette.primary.main }}
+                    >
                       {userName}
                     </Typography>
                   </div>
-                  {isUserExpanded ? <ExpandLessIcon fontSize="small" style={{ color: theme.palette.primary.main }} /> : <ExpandMoreIcon fontSize="small" style={{ color: theme.palette.primary.main }} />}
+                  {isUserExpanded ? (
+                    <ExpandLessIcon fontSize="small" style={{ color: userGroup.color || theme.palette.primary.main }} />
+                  ) : (
+                    <ExpandMoreIcon fontSize="small" style={{ color: userGroup.color || theme.palette.primary.main }} />
+                  )}
                 </div>
 
                 <Collapse in={isUserExpanded} timeout="auto" unmountOnExit>
@@ -623,7 +656,7 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, 
                       const isCategoryExpanded = expandedGroups[categoryKey] !== false;
 
                       return (
-                        <div key={categoryName} style={{ marginBottom: 4 }}>
+                        <div key={categoryName} style={{ marginBottom: 0 }}>
                           {/* Nível 2: Categoria */}
                           <div 
                             className={classes.groupHeader} 
@@ -648,7 +681,7 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, 
 
                           <Collapse in={isCategoryExpanded} timeout="auto" unmountOnExit>
                             {/* Nível 3: Mensagens */}
-                            <div style={{ marginTop: 4 }}>
+                            <div style={{ marginTop: 0 }}>
                               {[...categoryItems].sort((a,b) => a.shortcode.localeCompare(b.shortcode)).map((msg, index) => (
                                 <MessageItem 
                                   key={msg.id} 

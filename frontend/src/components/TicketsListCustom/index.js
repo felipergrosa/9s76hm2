@@ -217,7 +217,7 @@ const TicketsListViewport = ({
                         itemCount={tickets.length}
                         itemSize={ROW_HEIGHT}
                         itemData={itemData}
-                        overscanCount={8}
+                        overscanCount={3}
                         onItemsRendered={handleItemsRendered}
                     >
                         {Row}

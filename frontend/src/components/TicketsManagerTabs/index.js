@@ -55,6 +55,8 @@ import api from "../../services/api";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import usePermissions from "../../hooks/usePermissions";
 import useTicketsRealtimeStore from "../../hooks/useTicketsRealtimeStore";
+import useDebounce from "../../hooks/useDebounce";
+import { PerformanceMonitor } from "../../utils/performanceDiagnostic";
 
 const useStyles = makeStyles((theme) => ({
   ticketsWrapper: {
@@ -363,7 +365,8 @@ const TicketsManagerTabs = () => {
   const classes = useStyles();
   const history = useHistory();
 
-  const [searchParam, setSearchParam] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const debouncedSearch = useDebounce(searchInput, 500);
   const [tab, setTab] = useState("open");
   // const [tabOpen, setTabOpen] = useState("open");
   const [newTicketModalOpen, setNewTicketModalOpen] = useState(false);
@@ -372,6 +375,7 @@ const TicketsManagerTabs = () => {
   const [sortTickets, setSortTickets] = useState(false);
 
   const searchInputRef = useRef();
+  const filterTimeoutRef = useRef(null);
   const [searchOnMessages, setSearchOnMessages] = useState(false);
 
   const { user } = useContext(AuthContext);
@@ -442,6 +446,13 @@ const TicketsManagerTabs = () => {
     },
   }), [canViewAllUsers, canViewGroups, showAllTickets, user.profile]);
 
+  useEffect(() => {
+    PerformanceMonitor.start('TicketsManagerTabs:Mount');
+    return () => {
+      PerformanceMonitor.end('TicketsManagerTabs:Mount');
+    };
+  }, []);
+
   const { ticketsByStatus, metaByStatus, loadMore } = useTicketsRealtimeStore({
     statusConfigs,
     selectedQueueIds,
@@ -511,8 +522,17 @@ const TicketsManagerTabs = () => {
     if (tab === "search") {
       searchInputRef.current.focus();
     }
-    setForceSearch(!forceSearch);
   }, [tab]);
+
+  // Aplicar debounced search
+  useEffect(() => {
+    if (debouncedSearch === "") {
+      setTab("open");
+    } else if (tab !== "search") {
+      setTab("search");
+    }
+    setForceSearch(prev => !prev);
+  }, [debouncedSearch]);
 
   const handleFilter = () => {
     if (filter) {
@@ -522,29 +542,10 @@ const TicketsManagerTabs = () => {
     setTab("search");
   };
 
-  // Otimizar busca com useCallback para evitar re-renders
-  const handleSearch = useCallback((e) => {
+  const handleSearch = (e) => {
     const searchedTerm = e.target.value.toLowerCase();
-
-    if (searchedTerm === "") {
-      setSearchParam(searchedTerm);
-      setForceSearch(prev => !prev);
-      setTab("open");
-      return;
-    } else if (tab !== "search") {
-      handleFilter();
-      setTab("search");
-    }
-
-    // Debounce para evitar múltiplas buscas rápidas
-    const timeout = setTimeout(() => {
-      setSearchParam(searchedTerm);
-      setForceSearch(prev => !prev);
-    }, 300);
-
-    // Limpar timeout anterior
-    return () => clearTimeout(timeout);
-  }, [tab, handleFilter]);
+    setSearchInput(searchedTerm);
+  };
 
   const handleBack = () => {
 
@@ -599,66 +600,78 @@ const TicketsManagerTabs = () => {
   const handleSelectedTags = (selecteds) => {
     const tags = selecteds.map((t) => t.id);
 
-    clearTimeout(searchTimeout);
+    if (filterTimeoutRef.current) {
+      clearTimeout(filterTimeoutRef.current);
+    }
 
     if (tags.length === 0) {
-      setForceSearch(!forceSearch);
+      setSelectedTags([]);
+      setForceSearch(prev => !prev);
     } else if (tab !== "search") {
       setTab("search");
     }
 
-    searchTimeout = setTimeout(() => {
+    filterTimeoutRef.current = setTimeout(() => {
       setSelectedTags(tags);
-      setForceSearch(!forceSearch);
+      setForceSearch(prev => !prev);
     }, 500);
   };
 
   const handleSelectedUsers = (selecteds) => {
     const users = selecteds.map((t) => t.id);
 
-    clearTimeout(searchTimeout);
+    if (filterTimeoutRef.current) {
+      clearTimeout(filterTimeoutRef.current);
+    }
 
     if (users.length === 0) {
-      setForceSearch(!forceSearch);
+      setSelectedUsers([]);
+      setForceSearch(prev => !prev);
     } else if (tab !== "search") {
       setTab("search");
     }
-    searchTimeout = setTimeout(() => {
+    filterTimeoutRef.current = setTimeout(() => {
       setSelectedUsers(users);
-      setForceSearch(!forceSearch);
+      setForceSearch(prev => !prev);
     }, 500);
   };
 
   const handleSelectedWhatsapps = (selecteds) => {
     const whatsapp = selecteds.map((t) => t.id);
 
-    clearTimeout(searchTimeout);
+    if (filterTimeoutRef.current) {
+      clearTimeout(filterTimeoutRef.current);
+    }
 
     if (whatsapp.length === 0) {
-      setForceSearch(!forceSearch);
+      setSelectedWhatsapp([]);
+      setForceSearch(prev => !prev);
     } else if (tab !== "search") {
       setTab("search");
     }
-    searchTimeout = setTimeout(() => {
+    filterTimeoutRef.current = setTimeout(() => {
       setSelectedWhatsapp(whatsapp);
-      setForceSearch(!forceSearch);
+      setForceSearch(prev => !prev);
     }, 500);
   };
 
   const handleSelectedStatus = (selecteds) => {
     const statusFilter = selecteds.map((t) => t.status);
 
-    clearTimeout(searchTimeout);
+    if (filterTimeoutRef.current) {
+      clearTimeout(filterTimeoutRef.current);
+    }
 
     if (statusFilter.length === 0) {
-      setForceSearch(!forceSearch);
+      setSelectedStatus([]);
+      setForceSearch(prev => !prev);
     } else if (tab !== "search") {
       setTab("search");
     }
 
-    searchTimeout = setTimeout(() => {
+    filterTimeoutRef.current = setTimeout(() => {
       setSelectedStatus(statusFilter);
-      setForceSearch(!forceSearch);
+      setForceSearch(prev => !prev);
     }, 500);
   };
 
@@ -1419,7 +1432,7 @@ const TicketsManagerTabs = () => {
             <>
               <TicketsList
                 statusFilter={selectedStatus}
-                searchParam={searchParam}
+                searchParam={debouncedSearch}
                 showAll={showAllTickets}
                 tags={selectedTags}
                 users={selectedUsers}
@@ -1435,7 +1448,7 @@ const TicketsManagerTabs = () => {
           {profile === "user" && (
             <TicketsList
               statusFilter={selectedStatus}
-              searchParam={searchParam}
+              searchParam={debouncedSearch}
               showAll={false}
               tags={selectedTags}
               selectedQueueIds={selectedQueueIds}

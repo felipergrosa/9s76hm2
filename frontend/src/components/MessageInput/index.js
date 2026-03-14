@@ -157,11 +157,11 @@ const useStyles = makeStyles((theme) => ({
     border: "none",
     boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
     gap: 5, // Mais 30% menor
-    minHeight: 16,
+    minHeight: 10,
     maxHeight: 'none',
     boxSizing: 'border-box',
     [theme.breakpoints.down('sm')]: {
-      minHeight: 16,
+      minHeight: 10,
       maxHeight: 'none',
       width: '100%',
       maxWidth: '100vw',
@@ -171,10 +171,12 @@ const useStyles = makeStyles((theme) => ({
       borderRadius: 24,
     }
     ,
+    '& .MuiFab-root': {
+      
+    },
     '& .MuiIconButton-root': {
       padding: 5,
-      width: 32,
-      height: 32,
+      
     }
   },
   messageInputWrapper: {
@@ -563,9 +565,12 @@ const useStyles = makeStyles((theme) => ({
     border: "none",
     borderRadius: 50, // Define o raio da borda para 0 para remover qualquer borda
     boxShadow: "none", // Remove a sombra
-    padding: theme.spacing(1),
+    padding: '4px !important',
+    width: '42px !important',
+    height: '42px !important',
+    minHeight: '42px !important',
     backgroundColor: "transparent",
-    color: "grey",
+    color: "black",
     "&:hover": {
       backgroundColor: "transparent",
     },
@@ -577,8 +582,10 @@ const useStyles = makeStyles((theme) => ({
     border: "none",
     borderRadius: 0, // Define o raio da borda para 0 para remover qualquer borda
     boxShadow: "none", // Remove a sombra
-    width: theme.spacing(4), // Ajuste o tamanho de acordo com suas preferências
-    height: theme.spacing(4),
+    width: '32px !important',
+    height: '32px !important',
+    minHeight: '32px !important',
+    padding: '4px !important',
     backgroundColor: "transparent",
     color: blue[800],
     "&:hover": {
@@ -589,9 +596,10 @@ const useStyles = makeStyles((theme) => ({
     border: "none",
     borderRadius: 0, // Define o raio da borda para 0 para remover qualquer borda
     boxShadow: "none", // Remove a sombra
-    minHeight: "auto",
-    width: theme.spacing(4), // Ajuste o tamanho de acordo com suas preferências
-    height: theme.spacing(4),
+    minHeight: '32px !important',
+    width: '32px !important', // Ajuste o tamanho de acordo com suas preferências
+    height: '32px !important',
+    padding: '4px !important',
     backgroundColor: "transparent",
     color: blue[500],
     "&:hover": {
@@ -602,9 +610,10 @@ const useStyles = makeStyles((theme) => ({
     border: "none",
     borderRadius: 0, // Define o raio da borda para 0 para remover qualquer borda
     boxShadow: "none", // Remove a sombra
-    minHeight: "auto",
-    width: theme.spacing(4), // Ajuste o tamanho de acordo com suas preferências
-    height: theme.spacing(4),
+    minHeight: '32px !important',
+    width: '32px !important', // Ajuste o tamanho de acordo com suas preferências
+    height: '32px !important',
+    padding: '4px !important',
     backgroundColor: "transparent",
     color: green[500],
     "&:hover": {
@@ -615,8 +624,10 @@ const useStyles = makeStyles((theme) => ({
     border: "none",
     borderRadius: 0, // Define o raio da borda para 0 para remover qualquer borda
     boxShadow: "none", // Remove a sombra
-    width: theme.spacing(4), // Ajuste o tamanho de acordo com suas preferências
-    height: theme.spacing(4),
+    width: '32px !important', // Ajuste o tamanho de acordo com suas preferências
+    height: '32px !important',
+    minHeight: '32px !important',
+    padding: '4px !important',
     backgroundColor: "transparent",
     color: "#7f66ff",
     "&:hover": {
@@ -627,8 +638,10 @@ const useStyles = makeStyles((theme) => ({
     border: "none",
     borderRadius: 0, // Define o raio da borda para 0 para remover qualquer borda
     boxShadow: "none", // Remove a sombra
-    width: theme.spacing(4), // Ajuste o tamanho de acordo com suas preferências
-    height: theme.spacing(4),
+    width: '32px !important', // Ajuste o tamanho de acordo com suas preferências
+    height: '32px !important',
+    minHeight: '32px !important',
+    padding: '4px !important',
     backgroundColor: "transparent",
     color: pink[500],
     "&:hover": {
@@ -2073,6 +2086,7 @@ const MessageInput = ({
                 aria-label="uploadMedias"
                 component="span"
                 className={classes.invertedFabMenu}
+                size="small"
                 onClick={handleOpenMenuClick}
                 tabIndex={-1}
               >
@@ -2137,32 +2151,33 @@ const MessageInput = ({
                   aria-label="upload-img"
                   component="span"
                   className={classes.invertedFabMenuMP}
+                  size="small"
                 >
                   <ImageIcon size={20} />
                 </Fab>
                 {i18n.t("messageInput.type.imageVideo")}
               </MenuItem>
               <MenuItem onClick={handleCameraModalOpen}>
-                <Fab className={classes.invertedFabMenuCamera}>
+                <Fab className={classes.invertedFabMenuCamera} size="small">
                   <Camera size={20} />
                 </Fab>
                 {i18n.t("messageInput.type.cam")}
               </MenuItem>
               <MenuItem onClick={() => uploadDocRef.current.click()}>
                 <Fab aria-label="upload-img"
-                  component="span" className={classes.invertedFabMenuDoc}>
+                  component="span" className={classes.invertedFabMenuDoc} size="small">
                   <FileText size={20} />
                 </Fab>
                 Documento
               </MenuItem>
               <MenuItem onClick={handleSendContactModalOpen}>
-                <Fab className={classes.invertedFabMenuCont}>
+                <Fab className={classes.invertedFabMenuCont} size="small">
                   <UserRound size={20} />
                 </Fab>
                 {i18n.t("messageInput.type.contact")}
               </MenuItem>
               <MenuItem onClick={handleSendLinkVideo}>
-                <Fab className={classes.invertedFabMenuMeet}>
+                <Fab className={classes.invertedFabMenuMeet} size="small">
                   <Video size={20} />
                 </Fab>
                 {i18n.t("messageInput.type.meet")}
@@ -2175,20 +2190,20 @@ const MessageInput = ({
                 />
               )}
               <MenuItem onClick={handleButtonModalOpen}>
-                <Fab className={classes.invertedFabMenuCont}>
+                <Fab className={classes.invertedFabMenuCont} size="small">
                   <MoreHorizontal size={20} />
                 </Fab>
                 Botões
               </MenuItem>
               <Divider />
               <MenuItem onClick={(e) => { handleMenuItemClick(); handleOpenVarsMenu(e); }}>
-                <Fab className={classes.invertedFabMenuCont}>
+                <Fab className={classes.invertedFabMenuCont} size="small">
                   <Braces size={20} />
                 </Fab>
                 Variáveis
               </MenuItem>
               <MenuItem onClick={() => { handleMenuItemClick(); handleToggleSpellCheck(); }}>
-                <Fab className={classes.invertedFabMenuCont}>
+                <Fab className={classes.invertedFabMenuCont} size="small">
                   <SpellCheck2 size={20} style={{ color: spellCheckEnabled ? green[500] : undefined }} />
                 </Fab>
                 {spellCheckEnabled ? "Desativar Corretor" : "Ativar Corretor"}
@@ -2197,13 +2212,13 @@ const MessageInput = ({
                 <>
                   <Divider />
                   <MenuItem onClick={handleOpenAssistantFromMenu}>
-                    <Fab className={classes.invertedFabMenuCont}>
+                    <Fab className={classes.invertedFabMenuCont} size="small">
                       <Sparkles size={20} />
                     </Fab>
                     Assistente de Chat
                   </MenuItem>
                   <MenuItem onClick={handleOpenScheduleFromMenu}>
-                    <Fab className={classes.invertedFabMenuCont}>
+                    <Fab className={classes.invertedFabMenuCont} size="small">
                       <ClockIcon size={20} />
                     </Fab>
                     {i18n.t('tickets.buttons.scredule')}

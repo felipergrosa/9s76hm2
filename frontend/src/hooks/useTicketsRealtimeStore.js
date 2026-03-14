@@ -339,7 +339,7 @@ const useTicketsRealtimeStore = ({
     eventBufferRef.current.push(item);
 
     if (!bufferTimeoutRef.current) {
-      bufferTimeoutRef.current = setTimeout(flushBuffer, 100);
+      bufferTimeoutRef.current = setTimeout(flushBuffer, 250);
     }
   }, [flushBuffer]);
 
