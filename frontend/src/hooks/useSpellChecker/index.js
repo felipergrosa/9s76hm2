@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import Typo from 'typo-js';
+// OTIMIZAÇÃO: Typo.js carregado dinamicamente para evitar 22s de chunk no carregamento inicial
+// import Typo from 'typo-js';
 
 // ============================================================
 // LANGUAGETOOL API - Verificação Gramatical
@@ -78,6 +79,10 @@ const loadFullDictionary = async () => {
   
   loadingPromise = (async () => {
     try {
+      // OTIMIZAÇÃO: Carregar Typo.js dinamicamente apenas quando necessário
+      const TypoModule = await import('typo-js');
+      const Typo = TypoModule.default;
+      
       const [affResponse, dicResponse] = await Promise.all([
         fetch('/dictionaries/pt-BR.aff'),
         fetch('/dictionaries/pt-BR.dic')

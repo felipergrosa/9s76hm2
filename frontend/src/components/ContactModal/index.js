@@ -30,7 +30,36 @@ import { TagsContainer } from "../TagsContainer";
 import InputMask from "react-input-mask";
 import { isValidCPF, isValidCNPJ } from "../../utils/validators";
 import usePermissions from "../../hooks/usePermissions";
-import { autoCorrectText } from "../../hooks/useSpellChecker";
+// OTIMIZAÇÃO: ACCENT_MAP básico inline para evitar chunk de 22s
+// import { autoCorrectText } from "../../hooks/useSpellChecker";
+const ACCENT_MAP_BASIC = {
+  'nao': 'não', 'sim': 'sim', 'esta': 'está', 'tambem': 'também', 'ja': 'já',
+  'voce': 'você', 'voces': 'vocês', 'nos': 'nós', 'sao': 'são', 'entao': 'então',
+  'ate': 'até', 'apos': 'após', 'so': 'só', 'mae': 'mãe', 'mes': 'mês',
+  'pais': 'país', 'numero': 'número', 'informacao': 'informação', 'solucao': 'solução',
+  'duvida': 'dúvida', 'endereco': 'endereço', 'servico': 'serviço', 'preco': 'preço',
+  'proximo': 'próximo', 'ultimo': 'último', 'necessario': 'necessário', 'possivel': 'possível',
+  'amanha': 'amanhã', 'ola': 'olá', 'vc': 'você', 'vcs': 'vocês', 'pq': 'porque',
+  'tb': 'também', 'tbm': 'também', 'td': 'tudo', 'hj': 'hoje', 'msg': 'mensagem',
+};
+const autoCorrectTextBasic = (text) => {
+  if (!text) return text;
+  const words = text.split(/(\s+)/);
+  return words.map(word => {
+    if (/^\s+$/.test(word)) return word;
+    const lower = word.toLowerCase();
+    const cleanWord = lower.replace(/[.,!?;:]+$/, '');
+    const punctuation = lower.slice(cleanWord.length);
+    if (ACCENT_MAP_BASIC[cleanWord]) {
+      let correction = ACCENT_MAP_BASIC[cleanWord];
+      if (word[0] === word[0].toUpperCase()) {
+        correction = correction.charAt(0).toUpperCase() + correction.slice(1);
+      }
+      return correction + punctuation;
+    }
+    return word;
+  }).join('');
+};
 // import AsyncSelect from "../AsyncSelect";
 
 const useStyles = makeStyles(theme => ({
@@ -126,7 +155,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	// Função auxiliar para correção automática de acentuação
 	const handleAutoCorrect = (setFieldValue, fieldName, value) => {
 		if (!value || typeof value !== 'string') return;
-		const corrected = autoCorrectText(value);
+		const corrected = autoCorrectTextBasic(value);
 		if (corrected !== value) {
 			setFieldValue(fieldName, corrected);
 		}

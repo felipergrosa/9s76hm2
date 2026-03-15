@@ -1,5 +1,34 @@
 import { useState, useCallback } from 'react';
-import { autoCorrectText } from '../hooks/useSpellChecker';
+// OTIMIZAÇÃO: ACCENT_MAP básico inline para evitar chunk de 22s
+// import { autoCorrectText } from '../hooks/useSpellChecker';
+const ACCENT_MAP_BASIC = {
+  'nao': 'não', 'sim': 'sim', 'esta': 'está', 'tambem': 'também', 'ja': 'já',
+  'voce': 'você', 'voces': 'vocês', 'nos': 'nós', 'sao': 'são', 'entao': 'então',
+  'ate': 'até', 'apos': 'após', 'so': 'só', 'mae': 'mãe', 'mes': 'mês',
+  'pais': 'país', 'numero': 'número', 'informacao': 'informação', 'solucao': 'solução',
+  'duvida': 'dúvida', 'endereco': 'endereço', 'servico': 'serviço', 'preco': 'preço',
+  'proximo': 'próximo', 'ultimo': 'último', 'necessario': 'necessário', 'possivel': 'possível',
+  'amanha': 'amanhã', 'ola': 'olá', 'vc': 'você', 'vcs': 'vocês', 'pq': 'porque',
+  'tb': 'também', 'tbm': 'também', 'td': 'tudo', 'hj': 'hoje', 'msg': 'mensagem',
+};
+const autoCorrectTextBasic = (text) => {
+  if (!text) return text;
+  const words = text.split(/(\s+)/);
+  return words.map(word => {
+    if (/^\s+$/.test(word)) return word;
+    const lower = word.toLowerCase();
+    const cleanWord = lower.replace(/[.,!?;:]+$/, '');
+    const punctuation = lower.slice(cleanWord.length);
+    if (ACCENT_MAP_BASIC[cleanWord]) {
+      let correction = ACCENT_MAP_BASIC[cleanWord];
+      if (word[0] === word[0].toUpperCase()) {
+        correction = correction.charAt(0).toUpperCase() + correction.slice(1);
+      }
+      return correction + punctuation;
+    }
+    return word;
+  }).join('');
+};
 
 /**
  * Hook para aplicar correção automática de acentuação em inputs
@@ -20,7 +49,7 @@ export const useAutoCorrect = (initialValue = '', options = {}) => {
   
   const applyCorrection = useCallback((text) => {
     if (!enabled || !text) return text;
-    return autoCorrectText(text);
+    return autoCorrectTextBasic(text);
   }, [enabled]);
   
   const onChange = useCallback((e) => {
@@ -32,7 +61,7 @@ export const useAutoCorrect = (initialValue = '', options = {}) => {
       const triggerChars = [' ', '.', ',', ';', ':', '!', '?', '\n'];
       
       if (newValue.length > 1 && triggerChars.includes(lastChar)) {
-        newValue = autoCorrectText(newValue);
+        newValue = autoCorrectTextBasic(newValue);
       }
     }
     
@@ -78,7 +107,7 @@ export const useAutoCorrectFormik = (fieldValue, fieldOnChange, options = {}) =>
       const triggerChars = [' ', '.', ',', ';', ':', '!', '?', '\n'];
       
       if (newValue.length > 1 && triggerChars.includes(lastChar)) {
-        newValue = autoCorrectText(newValue);
+        newValue = autoCorrectTextBasic(newValue);
       }
     }
     
@@ -93,7 +122,7 @@ export const useAutoCorrectFormik = (fieldValue, fieldOnChange, options = {}) =>
   
   const handleBlur = useCallback((e) => {
     if (enabled) {
-      const corrected = autoCorrectText(fieldValue);
+      const corrected = autoCorrectTextBasic(fieldValue);
       if (corrected !== fieldValue) {
         fieldOnChange({
           target: {
@@ -116,7 +145,7 @@ export const useAutoCorrectFormik = (fieldValue, fieldOnChange, options = {}) =>
  * Função utilitária para corrigir texto diretamente
  */
 export const correctText = (text) => {
-  return autoCorrectText(text);
+  return autoCorrectTextBasic(text);
 };
 
 export default useAutoCorrect;

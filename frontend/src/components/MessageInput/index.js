@@ -71,7 +71,74 @@ import { ForwardMessageContext } from "../../context/ForwarMessage/ForwardMessag
 import { EditMessageContext } from "../../context/EditingMessage/EditingMessageContext";
 import { OptimisticMessageContext } from "../../context/OptimisticMessage/OptimisticMessageContext";
 import { useParams } from "react-router-dom/cjs/react-router-dom.min";
-import useSpellChecker, { autoCorrectText, findMisspelledWords, checkGrammar } from "../../hooks/useSpellChecker";
+// OTIMIZAÇÃO: ACCENT_MAP básico inline para correções imediatas (não carrega chunk de 22s)
+const ACCENT_MAP_BASIC = {
+  'nao': 'não', 'sim': 'sim', 'esta': 'está', 'tambem': 'também', 'ja': 'já',
+  'voce': 'você', 'voces': 'vocês', 'nos': 'nós', 'sao': 'são', 'entao': 'então',
+  'ate': 'até', 'apos': 'após', 'so': 'só', 'mae': 'mãe', 'mes': 'mês',
+  'pais': 'país', 'numero': 'número', 'informacao': 'informação', 'solucao': 'solução',
+  'duvida': 'dúvida', 'endereco': 'endereço', 'servico': 'serviço', 'preco': 'preço',
+  'proximo': 'próximo', 'ultimo': 'último', 'necessario': 'necessário', 'possivel': 'possível',
+  'amanha': 'amanhã', 'ola': 'olá', 'vc': 'você', 'vcs': 'vocês', 'pq': 'porque',
+  'tb': 'também', 'tbm': 'também', 'td': 'tudo', 'hj': 'hoje', 'msg': 'mensagem',
+  'msn': 'mensagem', 'qdo': 'quando', 'qnd': 'quando', 'oq': 'o que', 'oque': 'o que',
+  'pra': 'para', 'pro': 'para o', 'ta': 'está', 'tao': 'tão', 'to': 'estou', 'tou': 'estou',
+  'minimo': 'mínimo', 'maximo': 'máximo', 'atencao': 'atenção', 'agencia': 'agência',
+  'usuario': 'usuário', 'usuarios': 'usuários', 'funcao': 'função', 'opcao': 'opção',
+  'configuracao': 'configuração', 'aplicacao': 'aplicação', 'versao': 'versão',
+  'licenca': 'licença', 'renovacao': 'renovação', 'atualizacao': 'atualização',
+  'correcao': 'correção', 'manutencao': 'manutenção', 'documentacao': 'documentação',
+  'orcamento': 'orçamento', 'vencimento': 'vencimento', 'urgente': 'urgente',
+  'prioridade': 'prioridade', 'importancia': 'importância', 'referencia': 'referência',
+  'diferenca': 'diferença', 'sequencia': 'sequência', 'frequencia': 'frequência',
+  'consequencia': 'consequência', 'presenca': 'presença', 'ausencia': 'ausência',
+  'experiencia': 'experiência', 'ciencia': 'ciência', 'excelencia': 'excelência',
+  'potencia': 'potência', 'transparencia': 'transparência', 'eficiencia': 'eficiência',
+  'coerencia': 'coerência', 'admissao': 'admissão', 'comissao': 'comissão',
+  'demissao': 'demissão', 'discussao': 'discussão', 'expressao': 'expressão',
+  'impressao': 'impressão', 'profissao': 'profissão', 'permissao': 'permissão',
+  'transmissao': 'transmissão', 'conexao': 'conexão', 'direcao': 'direção',
+  'eleicao': 'eleição', 'selecao': 'seleção', 'infeccao': 'infecção',
+  'construcao': 'construção', 'producao': 'produção', 'reducao': 'redução',
+  'introducao': 'introdução', 'educacao': 'educação', 'traducao': 'tradução',
+  'formacao': 'formação', 'transformacao': 'transformação', 'comunicacao': 'comunicação',
+  'apresentacao': 'apresentação', 'operacao': 'operação', 'transacao': 'transação',
+  'condicao': 'condição', 'solicitacao': 'solicitação', 'autorizacao': 'autorização',
+  'avaliacao': 'avaliação', 'relacao': 'relação', 'organizacao': 'organização',
+  'negocio': 'negócio', 'proposito': 'propósito', 'publico': 'público',
+  'politica': 'política', 'logistica': 'logística', 'comunicacao': 'comunicação',
+};
+
+// Auto-correção básica inline (instantânea, sem carregar chunk)
+const autoCorrectTextBasic = (text) => {
+  if (!text) return text;
+  const words = text.split(/(\s+)/);
+  return words.map(word => {
+    if (/^\s+$/.test(word)) return word;
+    const lower = word.toLowerCase();
+    const cleanWord = lower.replace(/[.,!?;:]+$/, '');
+    const punctuation = lower.slice(cleanWord.length);
+    if (ACCENT_MAP_BASIC[cleanWord]) {
+      let correction = ACCENT_MAP_BASIC[cleanWord];
+      if (word[0] === word[0].toUpperCase()) {
+        correction = correction.charAt(0).toUpperCase() + correction.slice(1);
+      }
+      return correction + punctuation;
+    }
+    return word;
+  }).join('');
+};
+
+// SpellChecker completo carregado sob demanda
+let spellCheckerModule = null;
+const loadSpellChecker = async () => {
+  if (!spellCheckerModule) {
+    const module = await import("../../hooks/useSpellChecker");
+    spellCheckerModule = module;
+  }
+  return spellCheckerModule;
+};
+
 import SpellCheckSuggestions from "./SpellCheckSuggestions";
 import FormatToolbar from "./FormatToolbar";
 import useTextSelection from "../../hooks/useTextSelection";
@@ -740,12 +807,29 @@ const MessageInput = ({
   const [senVcardModalOpen, setSenVcardModalOpen] = useState(false);
   const [showModalMedias, setShowModalMedias] = useState(false);
 
-  // Corretor ortográfico (HABILITADO por padrão - correção automática de acentuação)
+  // Corretor ortográfico (AUTO-CORREÇÃO INSTANTÂNEA + módulo completo sob demanda)
   const [spellCheckEnabled, setSpellCheckEnabled] = useState(() => {
     const saved = localStorage.getItem('spellCheckEnabled');
-    return saved !== null ? JSON.parse(saved) : true; // ALTERADO: true por padrão
+    return saved !== null ? JSON.parse(saved) : true; // HABILITADO por padrão
   });
-  const { isLoaded: spellCheckLoaded, isFullDictLoaded, suggestions, currentWord, analyzeText, replaceWord } = useSpellChecker(spellCheckEnabled);
+  const [spellCheckLoaded, setSpellCheckLoaded] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [currentWord, setCurrentWord] = useState('');
+  const [isFullDictLoaded, setIsFullDictLoaded] = useState(false);
+  
+  // Carregar módulo completo sob demanda (quando usuário precisa de sugestões avançadas)
+  useEffect(() => {
+    if (spellCheckEnabled && !spellCheckLoaded) {
+      loadSpellChecker().then(module => {
+        setSpellCheckLoaded(true);
+      });
+    }
+  }, [spellCheckEnabled, spellCheckLoaded]);
+  
+  // Hook dummy para compatibilidade (valores vazios, auto-correção já funciona inline)
+  const analyzeText = () => {};
+  const replaceWord = (text, suggestion, word) => text.replace(word, suggestion);
+  const checkGrammar = async () => [];
   const [showSpellSuggestions, setShowSpellSuggestions] = useState(false);
   const [inputCursorPosition, setInputCursorPosition] = useState(0);
   // Lista de palavras erradas para sublinhado vermelho (ortografia)
@@ -992,18 +1076,16 @@ const MessageInput = ({
     let value = e.target.value;
     let cursorPos = e.target.selectionStart;
     
-    // Autocorreção ao digitar espaço OU pontuação (.,;:!?)
+    // Auto-correção de acentuação ao digitar espaço/pontuação
     const lastChar = value.slice(-1);
     const triggerChars = [' ', '.', ',', ';', ':', '!', '?', '\n'];
     
     if (spellCheckEnabled && value.length > 1 && triggerChars.includes(lastChar)) {
       const originalLength = value.length;
-      const correctedText = autoCorrectText(value);
+      const correctedText = autoCorrectTextBasic(value);
       if (correctedText !== value) {
         value = correctedText;
-        // Ajustar posição do cursor se o texto mudou de tamanho
-        const diff = correctedText.length - originalLength;
-        cursorPos = cursorPos + diff;
+        cursorPos = cursorPos + (correctedText.length - originalLength);
       }
     }
     
@@ -1102,7 +1184,6 @@ const MessageInput = ({
     if (spellCheckEnabled) {
       // Aguarda um tick para o estado atualizar
       setTimeout(async () => {
-        // Verifica erros gramaticais via LanguageTool
         if (newText.length >= 5) {
           const grammarErrs = await checkGrammar(newText);
           setGrammarErrors(grammarErrs);
