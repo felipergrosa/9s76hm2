@@ -16,6 +16,7 @@ import MarkdownWrapper from "../MarkdownWrapper";
 import MoodIcon from "@material-ui/icons/Mood";
 import api from "../../services/api";
 import whatsBackgroundDark from "../../assets/wa-background-dark.png"
+import WhatsAppPopover from "../WhatsAppPopover";
 
 const useStyles = makeStyles((theme) => ({
   messagesList: {
@@ -74,48 +75,11 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: "#00796b", // Cor de fundo desejada
     marginLeft: '3px'
   },
-  emojiBox: {
-    position: "absolute",
-    bottom: 63,
-    width: 40,
-    borderTop: "1px solid #e8e8e8",
-    zIndex: 1
-  },
 }));
-
-// const EmojiOptions = React.forwardRef((props, ref) => {
-//   const { disabled, showEmoji, setShowEmoji, handleAddEmoji } = props;
-//   const classes = useStyles();
-
-//   return (
-//     <>
-//       <IconButton
-//         aria-label="emojiPicker"
-//         component="span"
-//         disabled={disabled}
-//         onClick={(e) => setShowEmoji((prevState) => !prevState)}
-//       >
-//         <MoodIcon className={classes.sendMessageIcons} />
-//       </IconButton>
-
-//       {showEmoji ? (
-//         <div ref={ref} className={classes.emojiBox}>
-//           <EmojiPicker
-//             height={700}
-//             width={400}
-//           />
-//         </div>
-//       ) : null}
-//     </>
-//   );
-// });
 
 const EditMessageModal = ({ open, onClose, onSave, message }) => {
   const classes = useStyles();
   const [editedMessage, setEditedMessage] = useState(null);
-  const [showEmoji, setShowEmoji] = useState(false);
-  const [inputMessage, setInputMessage] = useState("");
-  const emojiOptionsRef = useRef(null);
   const modalRef = useRef(null);
 
   useEffect(() => {
@@ -148,30 +112,9 @@ const EditMessageModal = ({ open, onClose, onSave, message }) => {
     }
   };
 
-
-
-  const setInputValue = (value) => {
-    let emoji = value.native;
-    setEditedMessage(editedMessage ? editedMessage + value.native : emoji);
+  const handleEmojiSelect = (emoji) => {
+    setEditedMessage((prev) => (prev || "") + emoji);
   };
-
-  useEffect(() => {
-    if (open) {
-      // Calculate the position for EmojiOptions inside the modal
-      if (open && modalRef.current && emojiOptionsRef.current) {
-        const modalRect = modalRef.current.getBoundingClientRect();
-        const emojiOptionsRect = emojiOptionsRef.current.getBoundingClientRect();
-        const desiredPosition = {
-          top: emojiOptionsRect.height > modalRect.height
-            ? 0
-            : modalRect.height - emojiOptionsRect.height,
-          left: modalRect.width - emojiOptionsRect.width
-        };
-        emojiOptionsRef.current.style.top = `${desiredPosition.top}px`;
-        emojiOptionsRef.current.style.left = `${desiredPosition.left}px`;
-      }
-    };
-  }, [open]);
 
   return (
     <Dialog
@@ -213,7 +156,6 @@ const EditMessageModal = ({ open, onClose, onSave, message }) => {
             </Box>
           </Box>
           <Paper
-
             component="form"
             style={{
               p: "2px 4px",
@@ -230,17 +172,15 @@ const EditMessageModal = ({ open, onClose, onSave, message }) => {
                 style={{ padding: "15px 0px 15px 15px", flex: 1 }}
                 multiline
                 maxRows={6}
-                placeholder="Search Google Maps"
-                value={editedMessage}
+                placeholder="Editar mensagem..."
+                value={editedMessage || ""}
                 onChange={(e) => setEditedMessage(e.target.value)}
-                inputProps={{ "aria-label": "search google maps" }}
+                inputProps={{ "aria-label": "editar mensagem" }}
               />
-              {/* <EmojiOptions
-              ref={emojiOptionsRef}
-              handleAddEmoji={setInputValue}
-              showEmoji={showEmoji}
-              setShowEmoji={setShowEmoji}
-            /> */}
+              <WhatsAppPopover
+                onSelectEmoji={handleEmojiSelect}
+                disabled={false}
+              />
             </Box>
             <IconButton color="primary" aria-label="directions" onClick={() => handleSave(editedMessage)}>
               <CheckCircleIcon

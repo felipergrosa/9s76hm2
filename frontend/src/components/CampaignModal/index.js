@@ -65,6 +65,7 @@ import FolderGrid from "../../pages/LibraryManager/components/FolderGrid";
 import UploadModal from "../../pages/LibraryManager/components/UploadModal";
 import CampaignHowItWorks from "./CampaignHowItWorks";
 import HelpOutlineIcon from "@material-ui/icons/HelpOutline";
+import WhatsAppPopover from "../WhatsAppPopover";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -968,38 +969,55 @@ const CampaignModal = ({
     }
   };
 
-  const renderMessageField = (identifier) => {
+  const handleEmojiSelect = (fieldName, emoji, setFieldValue, values) => {
+    const currentValue = values[fieldName] || "";
+    setFieldValue(fieldName, currentValue + emoji);
+  };
+
+  const renderMessageField = (identifier, setFieldValue, values) => {
     return (
-      <Field
-        as={TextField}
-        id={identifier}
-        name={identifier}
-        fullWidth
-        rows={5}
-        label={i18n.t(`campaigns.dialog.form.${identifier}`)}
-        placeholder={i18n.t("campaigns.dialog.form.messagePlaceholder")}
-        multiline={true}
-        variant="outlined"
-        helperText="Utilize variáveis como {nome}, {numero}, {email} ou defina variáveis personalizadas."
-        disabled={!campaignEditable && campaign.status !== "CANCELADA"}
-      />
+      <Box display="flex" alignItems="flex-start" gap={1}>
+        <Field
+          as={TextField}
+          id={identifier}
+          name={identifier}
+          fullWidth
+          rows={5}
+          label={i18n.t(`campaigns.dialog.form.${identifier}`)}
+          placeholder={i18n.t("campaigns.dialog.form.messagePlaceholder")}
+          multiline={true}
+          variant="outlined"
+          helperText="Utilize variáveis como {nome}, {numero}, {email} ou defina variáveis personalizadas."
+          disabled={!campaignEditable && campaign.status !== "CANCELADA"}
+        />
+        <WhatsAppPopover
+          onSelectEmoji={(emoji) => handleEmojiSelect(identifier, emoji, setFieldValue, values)}
+          disabled={!campaignEditable && campaign.status !== "CANCELADA"}
+        />
+      </Box>
     );
   };
 
-  const renderConfirmationMessageField = (identifier) => {
+  const renderConfirmationMessageField = (identifier, setFieldValue, values) => {
     return (
-      <Field
-        as={TextField}
-        id={identifier}
-        name={identifier}
-        fullWidth
-        rows={5}
-        label={i18n.t(`campaigns.dialog.form.${identifier}`)}
-        placeholder={i18n.t("campaigns.dialog.form.messagePlaceholder")}
-        multiline={true}
-        variant="outlined"
-        disabled={!campaignEditable && campaign.status !== "CANCELADA"}
-      />
+      <Box display="flex" alignItems="flex-start" gap={1}>
+        <Field
+          as={TextField}
+          id={identifier}
+          name={identifier}
+          fullWidth
+          rows={5}
+          label={i18n.t(`campaigns.dialog.form.${identifier}`)}
+          placeholder={i18n.t("campaigns.dialog.form.messagePlaceholder")}
+          multiline={true}
+          variant="outlined"
+          disabled={!campaignEditable && campaign.status !== "CANCELADA"}
+        />
+        <WhatsAppPopover
+          onSelectEmoji={(emoji) => handleEmojiSelect(identifier, emoji, setFieldValue, values)}
+          disabled={!campaignEditable && campaign.status !== "CANCELADA"}
+        />
+      </Box>
     );
   };
 
@@ -1959,18 +1977,20 @@ const CampaignModal = ({
                                 {values.confirmation ? (
                                   <Grid spacing={2} container>
                                     <Grid xs={12} md={8} item>
-                                      <>{renderMessageField("message1")}</>
+                                      <>{renderMessageField("message1", setFieldValue, values)}</>
                                     </Grid>
                                     <Grid xs={12} md={4} item>
                                       <>
                                         {renderConfirmationMessageField(
-                                          "confirmationMessage1"
+                                          "confirmationMessage1",
+                                          setFieldValue,
+                                          values
                                         )}
                                       </>
                                     </Grid>
                                   </Grid>
                                 ) : (
-                                  <>{renderMessageField("message1")}</>
+                                  <>{renderMessageField("message1", setFieldValue, values)}</>
                                 )}
                                 {renderTabAttachment(0, values, !campaignEditable)}
                               </>
@@ -1981,18 +2001,20 @@ const CampaignModal = ({
                                 {values.confirmation ? (
                                   <Grid spacing={2} container>
                                     <Grid xs={12} md={8} item>
-                                      <>{renderMessageField("message2")}</>
+                                      <>{renderMessageField("message2", setFieldValue, values)}</>
                                     </Grid>
                                     <Grid xs={12} md={4} item>
                                       <>
                                         {renderConfirmationMessageField(
-                                          "confirmationMessage2"
+                                          "confirmationMessage2",
+                                          setFieldValue,
+                                          values
                                         )}
                                       </>
                                     </Grid>
                                   </Grid>
                                 ) : (
-                                  <>{renderMessageField("message2")}</>
+                                  <>{renderMessageField("message2", setFieldValue, values)}</>
                                 )}
                                 {renderTabAttachment(1, values, !campaignEditable)}
                               </>
@@ -2003,18 +2025,20 @@ const CampaignModal = ({
                                 {values.confirmation ? (
                                   <Grid spacing={2} container>
                                     <Grid xs={12} md={8} item>
-                                      <>{renderMessageField("message3")}</>
+                                      <>{renderMessageField("message3", setFieldValue, values)}</>
                                     </Grid>
                                     <Grid xs={12} md={4} item>
                                       <>
                                         {renderConfirmationMessageField(
-                                          "confirmationMessage3"
+                                          "confirmationMessage3",
+                                          setFieldValue,
+                                          values
                                         )}
                                       </>
                                     </Grid>
                                   </Grid>
                                 ) : (
-                                  <>{renderMessageField("message3")}</>
+                                  <>{renderMessageField("message3", setFieldValue, values)}</>
                                 )}
                                 {renderTabAttachment(2, values, !campaignEditable)}
                               </>
@@ -2025,18 +2049,20 @@ const CampaignModal = ({
                                 {values.confirmation ? (
                                   <Grid spacing={2} container>
                                     <Grid xs={12} md={8} item>
-                                      <>{renderMessageField("message4")}</>
+                                      <>{renderMessageField("message4", setFieldValue, values)}</>
                                     </Grid>
                                     <Grid xs={12} md={4} item>
                                       <>
                                         {renderConfirmationMessageField(
-                                          "confirmationMessage4"
+                                          "confirmationMessage4",
+                                          setFieldValue,
+                                          values
                                         )}
                                       </>
                                     </Grid>
                                   </Grid>
                                 ) : (
-                                  <>{renderMessageField("message4")}</>
+                                  <>{renderMessageField("message4", setFieldValue, values)}</>
                                 )}
                                 {renderTabAttachment(3, values, !campaignEditable)}
                               </>
@@ -2047,18 +2073,20 @@ const CampaignModal = ({
                                 {values.confirmation ? (
                                   <Grid spacing={2} container>
                                     <Grid xs={12} md={8} item>
-                                      <>{renderMessageField("message5")}</>
+                                      <>{renderMessageField("message5", setFieldValue, values)}</>
                                     </Grid>
                                     <Grid xs={12} md={4} item>
                                       <>
                                         {renderConfirmationMessageField(
-                                          "confirmationMessage5"
+                                          "confirmationMessage5",
+                                          setFieldValue,
+                                          values
                                         )}
                                       </>
                                     </Grid>
                                   </Grid>
                                 ) : (
-                                  <>{renderMessageField("message5")}</>
+                                  <>{renderMessageField("message5", setFieldValue, values)}</>
                                 )}
                                 {renderTabAttachment(4, values, !campaignEditable)}
                               </>

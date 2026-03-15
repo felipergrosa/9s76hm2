@@ -18,8 +18,7 @@ import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import IconButton from "@material-ui/core/IconButton";
 import ClickAwayListener from "@material-ui/core/ClickAwayListener";
 import { Smile } from "lucide-react";
-import "emoji-mart/css/emoji-mart.css";
-import { Picker } from "emoji-mart";
+import WhatsAppPopover from "../WhatsAppPopover";
 import { i18n } from "../../translate/i18n";
 import { head, cloneDeep } from "lodash";
 import api from "../../services/api";
@@ -564,15 +563,16 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
     const start = input?.selectionStart || currentText.length;
     const end = input?.selectionEnd || currentText.length;
 
-    const newValue = currentText.substring(0, start) + emoji.native + currentText.substring(end);
+    const newValue = currentText.substring(0, start) + emoji + currentText.substring(end);
     items[index].value = newValue;
     setFlowItems(items);
 
     setTimeout(() => {
       input?.focus();
-      const newPos = start + emoji.native.length;
+      const newPos = start + emoji.length;
       input?.setSelectionRange(newPos, newPos);
     }, 0);
+    setEmojiAnchorEl(null);
   };
 
   const handleTagSelect = (variable, index) => {
@@ -964,9 +964,10 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                                     <IconButton size="small" onClick={(e) => { setTagAnchorEl(e.currentTarget); setActiveItemIndex(index); }} style={{ padding: 4 }}>
                                       <LocalOfferIcon style={{ fontSize: 18 }} />
                                     </IconButton>
-                                    <IconButton size="small" onClick={(e) => { setEmojiAnchorEl(e.currentTarget); setActiveItemIndex(index); }} style={{ padding: 4 }}>
-                                      <Smile size={18} />
-                                    </IconButton>
+                                    <WhatsAppPopover
+                                      onSelectEmoji={(emoji) => handleEmojiSelect(emoji, index)}
+                                      disabled={false}
+                                    />
                                   </>
                                 )}
                                 <IconButton size="small" onClick={() => removeFlowItem(index)} color="secondary" style={{ padding: 4 }}>
@@ -1166,7 +1167,7 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                     </Box>
                   </Grid>
 
-                  {/* Popovers */}
+                  {/* Popover de Tags */}
                   <Popover
                     open={Boolean(tagAnchorEl)}
                     anchorEl={tagAnchorEl}
@@ -1177,24 +1178,6 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                     <Box p={1} style={{ maxWidth: 300 }}>
                       <MessageVariablesPicker onClick={(val) => handleTagSelect(val, activeItemIndex)} />
                     </Box>
-                  </Popover>
-
-                  <Popover
-                    open={Boolean(emojiAnchorEl)}
-                    anchorEl={emojiAnchorEl}
-                    onClose={() => setEmojiAnchorEl(null)}
-                    anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-                    transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                  >
-                    <Picker
-                      set="apple"
-                      onSelect={(emoji) => {
-                        handleEmojiSelect(emoji, activeItemIndex);
-                        setEmojiAnchorEl(null);
-                      }}
-                      title="Escolha um emoji"
-                      emoji="point_up"
-                    />
                   </Popover>
                 </Grid>
               </DialogContent>

@@ -410,7 +410,7 @@ const useTicketsRealtimeStore = ({
     }
   }, []);
 
-  const refreshAll = useCallback(() => {
+  const refreshAll = useCallback((priorityStatusKey = null) => {
     requestVersionRef.current += 1;
     const version = requestVersionRef.current;
 
@@ -418,9 +418,22 @@ const useTicketsRealtimeStore = ({
       dispatch({ type: "RESET_STATUS", statusKey });
     });
 
-    enabledStatusKeys.forEach(statusKey => {
-      fetchStatusPage(statusKey, 1, false, version);
-    });
+    // Carregar aba prioritária imediatamente (ou primeira aba se não especificada)
+    const priority = priorityStatusKey || enabledStatusKeys[0];
+    if (priority && enabledStatusKeys.includes(priority)) {
+      fetchStatusPage(priority, 1, false, version);
+    }
+
+    // Carregar outras abas em background após 300ms para não travar renderização
+    setTimeout(() => {
+      if (!mountedRef.current || requestVersionRef.current !== version) return;
+      
+      enabledStatusKeys.forEach(statusKey => {
+        if (statusKey !== priority) {
+          fetchStatusPage(statusKey, 1, false, version);
+        }
+      });
+    }, 300);
   }, [enabledStatusKeys, fetchStatusPage]);
 
   useEffect(() => {

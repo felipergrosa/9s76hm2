@@ -20,6 +20,7 @@ import removeAccents from "remove-accents";
 import FindCompanySettingOneService from "../CompaniesSettings/FindCompanySettingOneService";
 import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
 import ListUserGroupPermissionsService from "../UserGroupPermissionServices/ListUserGroupPermissionsService";
+import { withCache } from "../../utils/serviceCache";
 
 interface Request {
   searchParam?: string;
@@ -80,7 +81,12 @@ const ListTicketsService = async ({
   BackendPerfMonitor.start('ListTicketsService:Total');
   BackendPerfMonitor.mark('ListTicketsService:Start', { searchParam, status, pageNumber });
   
-  const user = await ShowUserService(userId, companyId);
+  // Cache: evita queries repetidas durante carregamento inicial (5 abas simultâneas)
+  const user = await withCache(
+    `user:${userId}:${companyId}`,
+    () => ShowUserService(userId, companyId),
+    60000 // 1 minuto
+  );
 
   const showTicketAllQueues = user.allHistoric === "enabled";
   const showTicketWithoutQueue = user.allTicket === "enable";
@@ -182,9 +188,11 @@ const ListTicketsService = async ({
       }
 
       // Filtro granular por grupos permitidos (tabela UserGroupPermissions)
-      const allowedGroupContactIds = await ListUserGroupPermissionsService(
-        user.id,
-        companyId
+      // Cache: evita query repetida para cada aba
+      const allowedGroupContactIds = await withCache(
+        `groupPermissions:${user.id}:${companyId}`,
+        () => ListUserGroupPermissionsService(user.id, companyId),
+        60000 // 1 minuto
       );
 
       if (allowedGroupContactIds.length > 0) {
@@ -547,7 +555,12 @@ const ListTicketsService = async ({
   };
 
   // Restrição de carteira: vê tickets de sua carteira + carteiras gerenciadas + atribuídos a ele/gerenciados
-  const walletResult = await GetUserWalletContactIds(userId, companyId);
+  // Cache: evita query repetida para cada aba
+  const walletResult = await withCache(
+    `wallet:${userId}:${companyId}`,
+    () => GetUserWalletContactIds(userId, companyId),
+    60000 // 1 minuto
+  );
 
   const forceWallet = walletOnly === true || walletOnly === "true";
 
@@ -597,10 +610,18 @@ const ListTicketsService = async ({
 
   // 2. Ghost Mode (Hide Private Users) - Aplicado a TODOS (Strict Mode)
   // Oculta tickets de usuários marcados como isPrivate, EXCETO se o usuário for o próprio dono.
-  const privateUsers = await User.findAll({
-    where: { companyId, isPrivate: true },
-    attributes: ["id"]
-  });
+  // Cache: evita query repetida para cada aba
+  const privateUsers = await withCache(
+    `privateUsers:${companyId}`,
+    async () => {
+      const users = await User.findAll({
+        where: { companyId, isPrivate: true },
+        attributes: ["id"]
+      });
+      return users;
+    },
+    60000 // 1 minuto
+  );
   const privateUserIds = privateUsers.map(u => u.id);
 
   if (privateUserIds.length > 0) {

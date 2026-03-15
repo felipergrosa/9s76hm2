@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, lazy, Suspense } from "react";
 import { useHistory } from "react-router-dom";
 
 import { makeStyles } from "@material-ui/core/styles";
@@ -14,7 +14,8 @@ import CircularProgress from "@material-ui/core/CircularProgress";
 import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
 import ButtonWithSpinner from "../ButtonWithSpinner";
-import ContactModal from "../ContactModal";
+// OTIMIZAÇÃO: Lazy loading para evitar 21s de parsing do chunk no carregamento inicial
+const ContactModal = lazy(() => import("../ContactModal"));
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { Grid, ListItemText, MenuItem, Select } from "@material-ui/core";
@@ -511,12 +512,14 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
           </ButtonWithSpinner>
         </DialogActions>
         {contactModalOpen && (
-          <ContactModal
-            open={contactModalOpen}
-            initialValues={newContact}
-            onClose={handleCloseContactModal}
-            onSave={handleAddNewContactTicket}
-          ></ContactModal>
+          <Suspense fallback={<CircularProgress />}>
+            <ContactModal
+              open={contactModalOpen}
+              initialValues={newContact}
+              onClose={handleCloseContactModal}
+              onSave={handleAddNewContactTicket}
+            ></ContactModal>
+          </Suspense>
         )}
         {officialTemplateModalOpen && (
           <OfficialTemplateStartModal

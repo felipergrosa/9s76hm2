@@ -14,6 +14,7 @@ import Whatsapp from "../../models/Whatsapp";
 import ContactTag from "../../models/ContactTag";
 import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
 import UserQueue from "../../models/UserQueue";
+import { withCache } from "../../utils/serviceCache";
 
 interface Request {
   searchParam?: string;
@@ -265,7 +266,12 @@ const ListTicketsServiceKanban = async ({
 
   // Restrição de carteira: vê tickets de sua carteira + carteiras gerenciadas + atribuídos a ele/gerenciados
   if (userId) {
-    const walletResult = await GetUserWalletContactIds(Number(userId), companyId);
+    // Cache: evita query repetida no Kanban
+    const walletResult = await withCache(
+      `wallet:${userId}:${companyId}`,
+      () => GetUserWalletContactIds(Number(userId), companyId),
+      60000 // 1 minuto
+    );
 
     // Modo EXCLUDE: admin vê tudo EXCETO tickets dos usuários excluídos
     if (walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) {

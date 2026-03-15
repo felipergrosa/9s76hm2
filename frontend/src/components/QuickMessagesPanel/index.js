@@ -364,38 +364,47 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, 
   };
 
   useEffect(() => {
+    let isMounted = true;
+    
+    const fetchMessages = async () => {
+      try {
+        const params = {
+          searchParam,
+          pageNumber: 1,
+          // ListService usa 200 por padrão agora no limite
+        };
+
+        if (activeFilter === "Mais Usadas") {
+          params.sortBy = "useCount";
+        }
+
+        const { data } = await api.get("/quick-messages", { params });
+        
+        if (!isMounted) return; // Guard contra memory leak
+        
+        let filteredRecords = data.records || [];
+
+        // Filtro local adicional baseado no tipo
+        if (activeFilter === "Sem Categoria") {
+          filteredRecords = filteredRecords.filter(m => !m.groupName);
+        } else if (activeFilter === "Tipo") {
+          // Filtro por tipo de mídia se tivesse "isMedia" implementado como categoria, mas vamos apenas deixar Tudo para fallback aqui já que não temos um dropdowm real ainda
+        }
+
+        setMessages(filteredRecords);
+      } catch (err) {
+        if (!isMounted) return; // Guard contra memory leak
+        toastError(err);
+      }
+    };
+    
     fetchMessages();
+    
+    return () => {
+      isMounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParam, activeFilter]);
-
-  const fetchMessages = async () => {
-    try {
-      const params = {
-        searchParam,
-        pageNumber: 1,
-        // ListService usa 200 por padrão agora no limite
-      };
-
-      if (activeFilter === "Mais Usadas") {
-        params.sortBy = "useCount";
-      }
-
-      const { data } = await api.get("/quick-messages", { params });
-      
-      let filteredRecords = data.records || [];
-
-      // Filtro local adicional baseado no tipo
-      if (activeFilter === "Sem Categoria") {
-        filteredRecords = filteredRecords.filter(m => !m.groupName);
-      } else if (activeFilter === "Tipo") {
-        // Filtro por tipo de mídia se tivesse "isMedia" implementado como categoria, mas vamos apenas deixar Tudo para fallback aqui já que não temos um dropdowm real ainda
-      }
-
-      setMessages(filteredRecords);
-    } catch (err) {
-      toastError(err);
-    }
-  };
 
   const toggleGroup = (groupName) => {
     setExpandedGroups(prev => ({
@@ -454,6 +463,32 @@ const QuickMessagesPanel = ({ onSendMessage, onEditMessage, showHeader = false, 
   };
 
   const [cloneInitialData, setCloneInitialData] = useState(null);
+  
+  // Versão externa de fetchMessages (para reload após delete)
+  const fetchMessages = async () => {
+    try {
+      const params = {
+        searchParam,
+        pageNumber: 1,
+      };
+
+      if (activeFilter === "Mais Usadas") {
+        params.sortBy = "useCount";
+      }
+
+      const { data } = await api.get("/quick-messages", { params });
+      
+      let filteredRecords = data.records || [];
+
+      if (activeFilter === "Sem Categoria") {
+        filteredRecords = filteredRecords.filter(m => !m.groupName);
+      }
+
+      setMessages(filteredRecords);
+    } catch (err) {
+      toastError(err);
+    }
+  };
 
   const canEdit = (message) => {
     const isAdmin = user.profile === "admin" || user.super === true;

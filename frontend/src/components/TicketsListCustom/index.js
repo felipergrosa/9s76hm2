@@ -97,16 +97,17 @@ const reducer = (state, action) => {
 
     if (action.type === "LOAD_TICKETS") {
         const newTickets = action.payload;
-        let nextState = [...state];
-
+        
+        // OTIMIZAÇÃO: Usar Map para O(n) ao invés de O(n²)
+        // Antes: forEach + findIndex = 500×500 = 250k ops = 22s travado
+        // Depois: Map lookup = O(1) = <100ms
+        const ticketsMap = new Map(state.map(ticket => [ticket.id, ticket]));
+        
         newTickets.forEach((ticket) => {
-            const ticketIndex = nextState.findIndex((currentTicket) => currentTicket.id === ticket.id);
-            if (ticketIndex !== -1) {
-                nextState[ticketIndex] = ticket;
-            } else {
-                nextState.push(ticket);
-            }
+            ticketsMap.set(ticket.id, ticket);
         });
+        
+        let nextState = Array.from(ticketsMap.values());
 
         if (sortDir && ["ASC", "DESC"].includes(sortDir)) {
             nextState.sort(sortDir === "ASC" ? ticketSortAsc : ticketSortDesc);

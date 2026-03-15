@@ -173,28 +173,45 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	}, []);
 
 	useEffect(() => {
+		let isMountedLocal = true;
+		
 		const fetchUsers = async () => {
 			try {
+				if (!isMountedLocal) return;
 				setLoadingUsers(true);
-				const { data } = await api.get("/users/");
+				// OTIMIZAÇÃO: Limitar a 20 usuários para evitar parsing JSON pesado
+				const { data } = await api.get("/users/", {
+					params: { pageNumber: 1 }
+				});
+				if (!isMountedLocal) return;
 				setUserOptions(data.users || []);
 			} catch (err) {
+				if (!isMountedLocal) return;
 				// 403 = sem permissão para listar usuários (users.view é admin)
 				// Silencia o erro e exibe lista vazia na Carteira
 				if (err?.response?.status !== 403) {
 					toastError(err);
 				}
 			} finally {
-				setLoadingUsers(false);
+				if (isMountedLocal) {
+					setLoadingUsers(false);
+				}
 			}
 		};
 
 		fetchUsers();
+		
+		return () => {
+			isMountedLocal = false;
+		};
 	}, []);
 
 	useEffect(() => {
+		let isMountedLocal = true;
+		
 		const fetchContact = async () => {
 			if (initialValues) {
+				if (!isMountedLocal) return;
 				setContact(prevState => {
 					return {
 						...prevState,
@@ -210,21 +227,25 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 
 			try {
 				const { data } = await api.get(`/contacts/${contactId}`);
-				if (isMounted.current) {
-					setContact({
-						...data,
-						wallets: Array.isArray(data.wallets)
-							? data.wallets.map(w => (typeof w === "object" ? w.id : w))
-							: []
-					});
-					setDisableBot(data.disableBot)
-				}
+				if (!isMountedLocal || !isMounted.current) return;
+				setContact({
+					...data,
+					wallets: Array.isArray(data.wallets)
+						? data.wallets.map(w => (typeof w === "object" ? w.id : w))
+						: []
+				});
+				setDisableBot(data.disableBot);
 			} catch (err) {
+				if (!isMountedLocal) return;
 				toastError(err);
 			}
 		};
 
 		fetchContact();
+		
+		return () => {
+			isMountedLocal = false;
+		};
 	}, [contactId, open, initialValues]);
 
 	const handleClose = () => {

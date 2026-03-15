@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState, useContext, lazy, Suspense } from "react";
 
 import { makeStyles } from "@material-ui/core/styles";
 import Typography from "@material-ui/core/Typography";
@@ -26,9 +26,10 @@ import FileCopyIcon from "@material-ui/icons/FileCopy";
 import SettingsIcon from "@material-ui/icons/Settings";
 import AssignmentIndIcon from "@material-ui/icons/AssignmentInd";
 import { ContactForm } from "../ContactForm";
-import ContactModal from "../ContactModal";
+// OTIMIZAÇÃO: Lazy loading para evitar 21s de parsing do chunk no carregamento inicial
+const ContactModal = lazy(() => import("../ContactModal"));
+const QuickMessagesPanel = lazy(() => import("../QuickMessagesPanel"));
 import { ContactNotes } from "../ContactNotes";
-import QuickMessagesPanel from "../QuickMessagesPanel";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
@@ -319,12 +320,14 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                 {loading ? (
                     <ContactDrawerSkeleton classes={classes} />
                 ) : activeTab === "quickMessages" ? (
-                    <QuickMessagesPanel 
-                        onSendMessage={onSendQuickMessage} 
-                        onEditMessage={() => {}} // será implementado se precisar editar direto daqui
-                        contact={contact}
-                        ticket={ticket}
-                    />
+                    <Suspense fallback={<CircularProgress />}>
+                        <QuickMessagesPanel 
+                            onSendMessage={onSendQuickMessage} 
+                            onEditMessage={() => {}} // será implementado se precisar editar direto daqui
+                            contact={contact}
+                            ticket={ticket}
+                        />
+                    </Suspense>
                 ) : (
                     <div className={classes.content}>
                         <Paper square variant="outlined" className={classes.contactHeader}>
@@ -528,11 +531,13 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                 )}
             </Drawer>
             {/* Modal de edição do contato: fora do Collapse para permanecer montado */}
-            <ContactModal
-                open={modalOpen}
-                onClose={() => setModalOpen(false)}
-                contactId={contact.id}
-            ></ContactModal>
+            <Suspense fallback={<CircularProgress />}>
+                <ContactModal
+                    open={modalOpen}
+                    onClose={() => setModalOpen(false)}
+                    contactId={contact.id}
+                ></ContactModal>
+            </Suspense>
             {/* Modal para exibir a imagem do avatar ampliada diretamente */}
             <Dialog open={avatarModalOpen} onClose={() => setAvatarModalOpen(false)} maxWidth="md">
                 <DialogContent style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>

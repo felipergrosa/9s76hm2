@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext, useCallback } from "react";
+import React, { useState, useEffect, useRef, useContext, useCallback, useMemo } from "react";
 import { parseISO, format, isSameDay, isYesterday } from "date-fns";
 import clsx from "clsx";
 import { useHistory, useParams } from "react-router-dom";
@@ -463,8 +463,15 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
         return message;
     };
 
-    const kanbanTags = (ticket.tags || []).filter(tag => Number(tag.kanban) === 1);
-    const otherTags = (ticket.tags || []).filter(tag => Number(tag.kanban) !== 1);
+    // Memoizar filtros para evitar recálculos em cada render (otimização INP)
+    const kanbanTags = useMemo(() => 
+        (ticket.tags || []).filter(tag => Number(tag.kanban) === 1),
+        [ticket.tags]
+    );
+    const otherTags = useMemo(() => 
+        (ticket.tags || []).filter(tag => Number(tag.kanban) !== 1),
+        [ticket.tags]
+    );
 
 
 

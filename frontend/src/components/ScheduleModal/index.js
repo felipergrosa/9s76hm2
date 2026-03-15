@@ -19,7 +19,7 @@ import { i18n } from "../../translate/i18n";
 
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
-import { Chip, FormControl, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Select, Switch, Typography, Tooltip, InputAdornment } from "@material-ui/core";
+import { Chip, FormControl, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Select, Switch, Typography, Tooltip, InputAdornment, Box } from "@material-ui/core";
 import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete";
 import moment from "moment"
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -34,6 +34,7 @@ import UserStatusIcon from "../UserModal/statusIcon";
 import { Facebook, Instagram, WhatsApp } from "@material-ui/icons";
 import { Sparkles } from "lucide-react";
 import ChatAssistantPanel from "../ChatAssistantPanel";
+import WhatsAppPopover from "../WhatsAppPopover";
 
 const useStyles = makeStyles(theme => ({
 	root: {
@@ -433,7 +434,7 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 										/>
 									</FormControl>
 								</div>
-								<div className={classes.multFieldLine}>
+								<Box display="flex" alignItems="flex-start" gap={1} width="100%">
 									<Field
 										as={TextField}
 										rows={4}
@@ -454,15 +455,19 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 															size="small"
 															aria-label="assistant"
 															onClick={() => setAssistantOpen(prev => !prev)}
-														>
-															<Sparkles size={18} />
-														</IconButton>
-													</Tooltip>
+															>
+																<Sparkles size={18} />
+															</IconButton>
+														</Tooltip>
 												</InputAdornment>
 											),
 										}}
 									/>
-								</div>
+									<WhatsAppPopover
+										onSelectEmoji={(emoji) => handleEmojiSelect(emoji, setFieldValue)}
+										disabled={isSubmitting}
+									/>
+								</Box>
 								<Grid item xs={12} md={12} xl={12}>
 									<MessageVariablesPicker
 										disabled={isSubmitting}

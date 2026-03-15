@@ -151,6 +151,7 @@ const ShowTicketService = async (
   }
 
   // Atualiza/baixa avatar automaticamente ao abrir o ticket (no máximo 1x a cada 24h por contato)
+  // OTIMIZAÇÃO: Executar de forma ASSÍNCRONA para não bloquear abertura do ticket
   try {
     if (ticket.contactId) {
       const key = `${ticket.companyId}:${ticket.contactId}`;
@@ -159,123 +160,15 @@ const ShowTicketService = async (
       const last = lastAvatarCheck.get(key) || 0;
 
       if (now - last > DAY) {
-        await RefreshContactAvatarService({ contactId: ticket.contactId, companyId, whatsappId: ticket.whatsappId });
-        lastAvatarCheck.set(key, now);
-        await ticket.reload({
-          attributes: [
-            "id",
-            "uuid",
-            "queueId",
-            "lastFlowId",
-            "flowStopped",
-            "dataWebhook",
-            "flowWebhook",
-            "isGroup",
-            "channel",
-            "status",
-            "contactId",
-            "useIntegration",
-            "lastMessage",
-            "updatedAt",
-            "unreadMessages",
-            "companyId",
-            "whatsappId",
-            "imported",
-            "lgpdAcceptedAt",
-            "amountUsedBotQueues",
-            "useIntegration",
-            "integrationId",
-            "userId",
-            "amountUsedBotQueuesNPS",
-            "lgpdSendMessageAt",
-            "isBot",
-            "typebotSessionId",
-            "typebotStatus",
-            "sendInactiveMessage",
-            "queueId",
-            "fromMe",
-            "isOutOfHour",
-            "isActiveDemand",
-            "typebotSessionTime",
-            "sessionWindowExpiresAt"
-          ],
-          include: [
-            {
-              model: Contact,
-              as: "contact",
-              attributes: [
-                "id",
-                "companyId",
-                "name",
-                "number",
-                "email",
-                "profilePicUrl",
-                "acceptAudioMessage",
-                "active",
-                "disableBot",
-                "remoteJid",
-                "urlPicture",
-                "isGroup",
-                "lgpdAcceptedAt",
-                "cpfCnpj",
-                "representativeCode",
-                "city",
-                "instagram",
-                "situation",
-                "segment",
-                "fantasyName",
-                "foundationDate",
-                "creditLimit"
-              ],
-              include: ["extraInfo", "tags",
-                {
-                  association: "wallets",
-                  attributes: ["id", "name"]
-                }]
-            },
-            {
-              model: Queue,
-              as: "queue",
-              attributes: ["id", "name", "color"],
-              include: ["chatbots", "prompt"]
-            },
-            {
-              model: User,
-              as: "user",
-              attributes: ["id", "name", "profileImage", "color"],
-            },
-            {
-              model: Tag,
-              as: "tags",
-              attributes: ["id", "name", "color"]
-            },
-            {
-              model: Whatsapp,
-              as: "whatsapp",
-              attributes: ["id", "name", "color", "groupAsTicket", "greetingMediaAttachment", "facebookUserToken", "facebookUserId", "status", "channelType"]
-            },
-            {
-              model: Company,
-              as: "company",
-              attributes: ["id", "name"],
-              include: [{
-                model: Plan,
-                as: "plan",
-                attributes: ["id", "name", "useKanban"]
-              }]
-            },
-            {
-              model: QueueIntegrations,
-              as: "queueIntegration",
-              attributes: ["id", "name"]
-            },
-            {
-              model: TicketTag,
-              as: "ticketTags",
-              attributes: ["tagId"]
-            }
-          ]
-        });
+        lastAvatarCheck.set(key, now); // Marcar ANTES para evitar múltiplas chamadas
+        
+        // Executar em background sem bloquear resposta
+        RefreshContactAvatarService({ contactId: ticket.contactId, companyId, whatsappId: ticket.whatsappId })
+          .catch((err: any) => {
+            logger.debug(`[ShowTicket] Erro ao atualizar avatar em background: ${err?.message}`);
+          });
+        
+        // NÃO fazer reload aqui - socket emitirá update quando avatar estiver pronto
       }
     }
   } catch (e) {

@@ -1,11 +1,8 @@
-import React, { useState, useEffect, useContext, useRef } from "react";
-import "emoji-mart/css/emoji-mart.css";
-import { Picker } from "emoji-mart";
+import React, { useState, useEffect, useContext, useRef, lazy, Suspense } from "react";
 import { useMediaQuery, useTheme } from '@material-ui/core';
 import { isNil } from "lodash";
 import {
   CircularProgress,
-  ClickAwayListener,
   IconButton,
   InputBase,
   makeStyles,
@@ -60,18 +57,20 @@ import RecordingTimer from "./RecordingTimer";
 
 import useQuickMessages from "../../hooks/useQuickMessages";
 import { isString, isEmpty } from "lodash";
-import ContactSendModal from "../ContactSendModal";
-import CameraModal from "../CameraModal";
+// OTIMIZAÇÃO: Lazy loading de modais pesados para evitar 24s de travamento
+const ContactSendModal = lazy(() => import("../ContactSendModal"));
+const CameraModal = lazy(() => import("../CameraModal"));
+const ButtonModal = lazy(() => import("../ButtonModal"));
+const MessageUploadMedias = lazy(() => import("../MessageUploadMedias"));
+const ScheduleModal = lazy(() => import("../ScheduleModal"));
+const ChatAssistantPanel = lazy(() => import("../ChatAssistantPanel"));
+const WhatsAppPopover = lazy(() => import("../WhatsAppPopover"));
 import axios from "axios";
-import ButtonModal from "../ButtonModal";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import { ForwardMessageContext } from "../../context/ForwarMessage/ForwardMessageContext";
-import MessageUploadMedias from "../MessageUploadMedias";
 import { EditMessageContext } from "../../context/EditingMessage/EditingMessageContext";
 import { OptimisticMessageContext } from "../../context/OptimisticMessage/OptimisticMessageContext";
-import ScheduleModal from "../ScheduleModal";
 import { useParams } from "react-router-dom/cjs/react-router-dom.min";
-import ChatAssistantPanel from "../ChatAssistantPanel";
 import useSpellChecker, { autoCorrectText, findMisspelledWords, checkGrammar } from "../../hooks/useSpellChecker";
 import SpellCheckSuggestions from "./SpellCheckSuggestions";
 import FormatToolbar from "./FormatToolbar";
@@ -713,7 +712,6 @@ const MessageInput = ({
   const isMounted = useRef(true);
   const [buttonModalOpen, setButtonModalOpen] = useState(false);
   const [inputMessage, setInputMessage] = useState("");
-  const [showEmoji, setShowEmoji] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false); // true apenas para upload de arquivos
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -897,7 +895,6 @@ const MessageInput = ({
     inputRef.current.focus();
     return () => {
       setInputMessage("");
-      setShowEmoji(false);
       setMediasUpload([]);
       setReplyingMessage(null);
       //setSignMessage(true);
@@ -1386,35 +1383,11 @@ const MessageInput = ({
         { label: 'Hora', token: '{hora}' },
         { label: 'Data/Hora', token: '{data_hora}' },
         { label: 'Período do dia', token: '{periodo_dia}' },
-        { label: 'Saudação', token: '{saudacao}' },
       ]
     },
   ];
 
-  const handleAddEmoji = (e) => {
-    let emoji = e.native;
-    setInputMessage((prevState) => prevState + emoji);
-  };
-
   const [modalCameraOpen, setModalCameraOpen] = useState(false);
-
-  const handleCapture = (imageData) => {
-    if (imageData) {
-      handleUploadCamera(imageData);
-    }
-  };
-
-  const handleChangeMedias = (e) => {
-    if (!e.target.files) {
-      return;
-    }
-    handleMenuItemClick();
-    const selectedMedias = Array.from(e.target.files);
-    setMediasUpload(selectedMedias);
-    setShowModalMedias(true);
-  };
-
-  // Listener para receber a injeção do QuickMessagePanel (novo painel da sidebar)
   useEffect(() => {
     const handleInsertQuickMessage = (e) => {
       if (e?.detail) {
@@ -1601,7 +1574,6 @@ const MessageInput = ({
     }
 
     setInputMessage("");
-    setShowEmoji(false);
     setLoading(false);
     setReplyingMessage(null);
     setEditingMessage(null);
@@ -1655,7 +1627,6 @@ const MessageInput = ({
     if (!customMessage) {
       setInputMessage("");
     }
-    setShowEmoji(false);
     setReplyingMessage(null);
     setPrivateMessage(false);
     setPrivateMessageInputVisible(false);
@@ -1833,6 +1804,16 @@ const MessageInput = ({
     }
   };
 
+  const handleChangeMedias = (e) => {
+    if (!e.target.files) {
+      return;
+    }
+    handleMenuItemClick();
+    const selectedMedias = Array.from(e.target.files);
+    setMediasUpload(selectedMedias);
+    setShowModalMedias(true);
+  };
+
   const handleCloseModalMedias = () => {
     setShowModalMedias(false);
   };
@@ -1938,13 +1919,15 @@ const MessageInput = ({
         onDrop={(e) => handleInputDrop(e)}
       >
         {showModalMedias && (
-          <MessageUploadMedias
-            isOpen={showModalMedias}
-            files={mediasUpload}
-            onClose={handleCloseModalMedias}
-            onSend={handleUploadMedia}
-            onCancelSelection={handleCancelSelection}
-          />
+          <Suspense fallback={<CircularProgress />}>
+            <MessageUploadMedias
+              isOpen={showModalMedias}
+              files={mediasUpload}
+              onClose={handleCloseModalMedias}
+              onSend={handleUploadMedia}
+              onCancelSelection={handleCancelSelection}
+            />
+          </Suspense>
         )}
       </div>
     )
@@ -1954,30 +1937,36 @@ const MessageInput = ({
       <div className={classes.mainWrapper}>
         {assistantOpen && (
           <div style={{ width: '100%' }}>
-            <ChatAssistantPanel
-              open={assistantOpen}
-              inputMessage={inputMessage}
-              setInputMessage={setInputMessage}
-              queueId={ticketData?.queue?.id || ticketData?.queueId || null}
-              whatsappId={ticketData?.whatsapp?.id || ticketData?.whatsappId || null}
-              onClose={() => setAssistantOpen(false)}
-            />
+            <Suspense fallback={<CircularProgress />}>
+              <ChatAssistantPanel
+                open={assistantOpen}
+                inputMessage={inputMessage}
+                setInputMessage={setInputMessage}
+                queueId={ticketData?.queue?.id || ticketData?.queueId || null}
+                whatsappId={ticketData?.whatsapp?.id || ticketData?.whatsappId || null}
+                onClose={() => setAssistantOpen(false)}
+              />
+            </Suspense>
           </div>
         )}
         {modalCameraOpen && (
-          <CameraModal
-            isOpen={modalCameraOpen}
-            onRequestClose={() => setModalCameraOpen(false)}
-            onCapture={handleCapture}
-          />
+          <Suspense fallback={<CircularProgress />}>
+            <CameraModal
+              isOpen={modalCameraOpen}
+              onRequestClose={() => setModalCameraOpen(false)}
+              onCapture={handleCapture}
+            />
+          </Suspense>
         )}
         {senVcardModalOpen && (
-          <ContactSendModal
-            modalOpen={senVcardModalOpen}
-            onClose={(c) => {
-              handleSendContatcMessage(c);
-            }}
-          />
+          <Suspense fallback={<CircularProgress />}>
+            <ContactSendModal
+              modalOpen={senVcardModalOpen}
+              onClose={(c) => {
+                handleSendContatcMessage(c);
+              }}
+            />
+          </Suspense>
         )}
         <div
           className={classes.messageInputWrapper}
@@ -2033,14 +2022,42 @@ const MessageInput = ({
           {!showSelectMessageCheckbox && (replyingMessage && renderReplyingMessage(replyingMessage)) || (editingMessage && renderReplyingMessage(editingMessage))}
           <div className={classes.newMessageBox} style={{ display: showSelectMessageCheckbox ? 'none' : 'flex' }}>
             <Hidden only={["sm", "xs"]}>
-              <IconButton
-                aria-label="emojiPicker"
-                component="span"
+              <Suspense fallback={<div style={{ width: 40, height: 40 }} />}>
+                <WhatsAppPopover
+                  onSelectEmoji={(emoji) => setInputMessage((prev) => prev + emoji)}
+                  onSelectGif={(gifUrl) => {
+                  // Enviar GIF como imagem
+                  const message = {
+                    read: 1,
+                    fromMe: true,
+                    mediaUrl: gifUrl,
+                    body: "",
+                    quotedMsg: replyingMessage,
+                    isPrivate: privateMessage ? "true" : "false",
+                  };
+                  api.post(`/messages/${ticketId}`, message).catch(toastError);
+                  setReplyingMessage(null);
+                  setPrivateMessage(false);
+                  setPrivateMessageInputVisible(false);
+                }}
+                onSelectSticker={(stickerUrl) => {
+                  // Enviar figurinha como imagem
+                  const message = {
+                    read: 1,
+                    fromMe: true,
+                    mediaUrl: stickerUrl,
+                    body: "",
+                    quotedMsg: replyingMessage,
+                    isPrivate: privateMessage ? "true" : "false",
+                  };
+                  api.post(`/messages/${ticketId}`, message).catch(toastError);
+                  setReplyingMessage(null);
+                  setPrivateMessage(false);
+                  setPrivateMessageInputVisible(false);
+                }}
                 disabled={disableOption()}
-                onClick={(e) => setShowEmoji((prevState) => !prevState)}
-              >
-                <Smile size={20} className={classes.sendMessageIcons} />
-              </IconButton>
+              />
+              </Suspense>
               <Tooltip title="Assistente de Chat">
                 <span>
                   <IconButton
@@ -2066,20 +2083,6 @@ const MessageInput = ({
                   <ClockIcon size={20} className={classes.sendMessageIcons} />
                 </IconButton>
               </Tooltip>
-              {showEmoji ? (
-                <div className={classes.emojiBox}>
-                  <ClickAwayListener onClickAway={(e) => setShowEmoji(false)}>
-                    <Picker
-                      perLine={16}
-                      theme={"dark"}
-                      i18n={i18n}
-                      showPreview={true}
-                      showSkinTones={false}
-                      onSelect={handleAddEmoji}
-                    />
-                  </ClickAwayListener>
-                </div>
-              ) : null}
 
               <Fab
                 disabled={disableOption()}
@@ -2183,11 +2186,13 @@ const MessageInput = ({
                 {i18n.t("messageInput.type.meet")}
               </MenuItem>
               {buttonModalOpen && (
-                <ButtonModal
-                  modalOpen={buttonModalOpen}
-                  onClose={() => setButtonModalOpen(false)}
-                  ticketId={ticketId}
-                />
+                <Suspense fallback={<CircularProgress />}>
+                  <ButtonModal
+                    modalOpen={buttonModalOpen}
+                    onClose={() => setButtonModalOpen(false)}
+                    ticketId={ticketId}
+                  />
+                </Suspense>
               )}
               <MenuItem onClick={handleButtonModalOpen}>
                 <Fab className={classes.invertedFabMenuCont} size="small">
@@ -2487,11 +2492,13 @@ const MessageInput = ({
               </>
             )}
             {appointmentModalOpen && (
-              <ScheduleModal
-                open={appointmentModalOpen}
-                onClose={() => setAppointmentModalOpen(false)}
-                contactId={contactId}
-              />
+              <Suspense fallback={<CircularProgress />}>
+                <ScheduleModal
+                  open={appointmentModalOpen}
+                  onClose={() => setAppointmentModalOpen(false)}
+                  contactId={contactId}
+                />
+              </Suspense>
             )}
           </div>
         </div>

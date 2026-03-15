@@ -1165,13 +1165,16 @@ const MessagesList = ({
 
     currentTicketId.current = ticketId;
     setUiReady(false);
+    initialLoadingRef.current = true; // Reset ao trocar de ticket
   }, [ticketId, selectedQueuesMessage]);
 
   const [uiReady, setUiReady] = useState(false);
   const composerReadyRef = useRef(false);
+  const initialLoadingRef = useRef(true); // Guard para polling durante carregamento inicial
 
   useEffect(() => {
     setLoading(true);
+    
     const fetchMessages = async () => {
       if (!ticketId || ticketId === "undefined") {
         history.push("/tickets");
@@ -1203,16 +1206,16 @@ const MessagesList = ({
           
           if (newRoomId) {
             currentRoomIdRef.current = newRoomId;
-            // Reforço: garante que estamos na sala (o Ticket/index.js é o dono principal)
-            try {
-              if (typeof socket.joinRoom === "function") {
-                socket.joinRoom(newRoomId);
-              }
-            } catch { }
+            // Join removido - Ticket/index.js já faz isso (evita duplicação)
           }
         }
 
         if (pageNumber === 1) {
+          // Marca carregamento inicial como concluído
+          setTimeout(() => {
+            initialLoadingRef.current = false;
+          }, 2000); // 2s após carregar mensagens, habilita polling
+          
           // aguarda composer e layout
           const doReady = () => {
             scrollToBottom();
@@ -1473,6 +1476,12 @@ const MessagesList = ({
 
     const pollNewMessages = async () => {
       try {
+        // GUARD: Não fazer polling durante carregamento inicial (primeiros 2s)
+        if (initialLoadingRef.current) {
+          console.log("[MessagesList] Polling bloqueado durante carregamento inicial");
+          return;
+        }
+        
         // Só faz polling se temos mensagens carregadas (para comparar)
         if (!messagesList || messagesList.length === 0) return;
 

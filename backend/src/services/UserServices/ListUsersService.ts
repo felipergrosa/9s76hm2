@@ -50,55 +50,42 @@ const ListUsersService = async ({
   const limit = 20;
   const offset = limit * (+pageNumber - 1);
 
+  // Sempre retornar atributos completos para a listagem de usuários
+  // A otimização para dropdowns deve ser feita via parâmetro explícito se necessário
+  const attributes = [
+    "name",
+    "id",
+    "email",
+    "companyId",
+    "profile",
+    "online",
+    "startWork",
+    "endWork",
+    "profileImage",
+    "color",
+    "permissions",
+    "allowedContactTags",
+    "managedUserIds",
+    "supervisorViewMode",
+    "super"
+  ];
+
+  const include = [
+    { model: Queue, as: "queues", attributes: ["id", "name", "color"] },
+    {
+      model: Company,
+      as: "company",
+      attributes: ["id", "name", "dueDate", "document"],
+    }
+  ];
+
   const { count, rows: users } = await User.findAndCountAll({
     where: whereCondition,
-    attributes: [
-      "name",
-      "id",
-      "email",
-      "companyId",
-      "profile",
-      "online",
-      "startWork",
-      "endWork",
-      "profileImage",
-      "color",
-      "permissions",
-      "allowedContactTags",
-      "managedUserIds",
-      "supervisorViewMode",
-      "super"
-    ],
+    attributes,
     limit,
     offset,
     order: [["name", "ASC"]],
-    include: [
-      { model: Queue, as: "queues", attributes: ["id", "name", "color"] },
-      {
-        model: Company,
-        as: "company",
-        attributes: ["id", "name", "dueDate", "document"],
-        // include: [
-        //   {
-        //     model: Plan, as: "plan",
-        //     attributes: ["id",
-        //       "name",
-        //       "amount",
-        //       "useWhatsapp",
-        //       "useFacebook",
-        //       "useInstagram",
-        //       "useCampaigns",
-        //       "useSchedules",
-        //       "useInternalChat",
-        //       "useExternalApi",
-        //       "useIntegrations",
-        //       "useOpenAi",
-        //       "useKanban"
-        //     ]
-        //   },
-        // ]
-      }
-    ]
+    include
   });
 
   const hasMore = count > offset + users.length;

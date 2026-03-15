@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef, useCallback } from "react";
+import React, { useState, useEffect, useContext, useRef, useCallback, lazy, Suspense } from "react";
 import { useParams, useHistory } from "react-router-dom";
 
 import clsx from "clsx";
@@ -7,13 +7,14 @@ import { makeStyles, Paper, Hidden } from "@material-ui/core";
 import whatsBackground from "../../assets/wa-background.png";
 import whatsBackgroundDark from "../../assets/wa-background-dark.png";
 
-import ContactDrawer from "../ContactDrawer";
-import GroupInfoDrawer from "../GroupInfoDrawer";
+// OTIMIZAÇÃO: Lazy loading de componentes pesados para resolver INP de 21s
+const ContactDrawer = lazy(() => import("../ContactDrawer"));
+const GroupInfoDrawer = lazy(() => import("../GroupInfoDrawer"));
+const MessageSearchBar = lazy(() => import("../MessageSearchBar"));
+const PinnedMessages = lazy(() => import("../PinnedMessages"));
+const TicketInfo = lazy(() => import("../TicketInfo"));
 import MessageInput from "../MessageInput";
-import MessageSearchBar from "../MessageSearchBar";
-import PinnedMessages from "../PinnedMessages";
 import TicketHeader from "../TicketHeader";
-import TicketInfo from "../TicketInfo";
 import TicketActionButtons from "../TicketActionButtonsCustom";
 import MessagesList from "../MessagesList";
 import api from "../../services/api";
@@ -22,7 +23,7 @@ import { ForwardMessageProvider } from "../../context/ForwarMessage/ForwardMessa
 
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
-import { TagsContainer } from "../TagsContainer";
+const TagsContainer = lazy(() => import("../TagsContainer").then(m => ({ default: m.TagsContainer })));
 import { isNil } from 'lodash';
 import { EditMessageProvider } from "../../context/EditingMessage/EditingMessageContext";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
@@ -112,6 +113,7 @@ const Ticket = () => {
   const [dragDropFiles, setDragDropFiles] = useState([]);
   // Ref estável para o UUID do ticket - evita re-execução do useEffect de socket
   const ticketUuidRef = useRef(null);
+  const joinedRoomRef = useRef(null); // Guard contra joins duplicados
   const [searchOpen, setSearchOpen] = useState(false);
   const [showComposer, setShowComposer] = useState(false);
   const [hasExternalHeader, setHasExternalHeader] = useState(() => {
@@ -148,24 +150,7 @@ const Ticket = () => {
             try {
               window.dispatchEvent(new CustomEvent('ticket-loaded', { detail: { ticket: data, contact: data.contact } }));
             } catch { }
-            // Faz join imediato na sala do ticket pelo UUID
-            try {
-              const candidate = (data?.uuid || ticketId || "").toString().trim();
-              if (candidate && candidate !== "undefined" && socket && typeof socket.joinRoom === "function") {
-                console.log("[Ticket] JOIN imediato:", candidate);
-                socket.joinRoom(candidate, (err) => {
-                  if (err) console.error("[Ticket] joinRoom ERRO:", err);
-                  else console.log("[Ticket] joinRoom OK:", candidate);
-                });
-              } else if (candidate && candidate !== "undefined" && socket && typeof socket.emit === "function") {
-                socket.emit("joinChatBox", candidate, (err) => {
-                  if (err) console.error("[Ticket] joinChatBox ERRO:", err);
-                  else console.log("[Ticket] joinChatBox OK:", candidate);
-                });
-              }
-            } catch (e) {
-              console.error("[Ticket] EXCEÇÃO no join imediato:", e);
-            }
+            // Join removido daqui - será feito pelo useEffect de socket (evita duplicação)
             if (["pending", "open", "group"].includes(data.status)) {
               setTabOpen(data.status);
             }
@@ -258,18 +243,32 @@ const Ticket = () => {
     if (!socket || typeof socket.on !== "function") return;
     if (!user?.companyId) return;
 
-    // Função auxiliar para entrar na sala pelo UUID
+    // Função auxiliar para entrar na sala pelo UUID (com guard contra duplicação)
     const doJoin = (room) => {
       if (!room || room === "undefined") return;
+      // Guard: não fazer join se já estamos nesta sala
+      if (joinedRoomRef.current === room) {
+        console.log("[Ticket] JOIN ignorado (já na sala):", room);
+        return;
+      }
+      
       if (typeof socket.joinRoom === "function") {
         socket.joinRoom(room, (err) => {
-          if (err) console.error("[Ticket] joinRoom ERRO:", room, err);
-          else console.log("[Ticket] joinRoom OK:", room);
+          if (err) {
+            console.error("[Ticket] joinRoom ERRO:", room, err);
+          } else {
+            console.log("[Ticket] joinRoom OK:", room);
+            joinedRoomRef.current = room; // Marca sala como joined
+          }
         });
       } else if (typeof socket.emit === "function") {
         socket.emit("joinChatBox", room, (err) => {
-          if (err) console.error("[Ticket] joinChatBox ERRO:", room, err);
-          else console.log("[Ticket] joinChatBox OK:", room);
+          if (err) {
+            console.error("[Ticket] joinChatBox ERRO:", room, err);
+          } else {
+            console.log("[Ticket] joinChatBox OK:", room);
+            joinedRoomRef.current = room; // Marca sala como joined
+          }
         });
       }
     };
@@ -281,6 +280,10 @@ const Ticket = () => {
         socket.leaveRoom(room);
       } else if (typeof socket.emit === "function") {
         socket.emit("joinChatBoxLeave", room);
+      }
+      // Limpa guard ao sair
+      if (joinedRoomRef.current === room) {
+        joinedRoomRef.current = null;
       }
     };
 
@@ -334,19 +337,24 @@ const Ticket = () => {
     socket.on(`company-${companyId}-ticket`, onCompanyTicket);
     socket.on(`company-${companyId}-contact`, onCompanyContactTicket);
 
-    // Se já estiver conectado, entra na sala imediatamente
+    // Se já estiver conectado, entra na sala imediatamente (mas com debounce)
     if (socket.connected) {
-      onConnectTicket();
+      // Debounce de 50ms para evitar joins simultâneos
+      const connectTimeout = setTimeout(() => {
+        onConnectTicket();
+      }, 50);
+      
+      return () => {
+        clearTimeout(connectTimeout);
+        const candidate = (ticketUuidRef.current || ticketId || "").toString().trim();
+        doLeave(candidate);
+        socket.off("connect", onConnectTicket);
+        socket.off(`company-${companyId}-ticket`, onCompanyTicket);
+        socket.off(`company-${companyId}-contact`, onCompanyContactTicket);
+      };
     }
 
-    return () => {
-      // Sai da sala ao desmontar ou trocar de ticket
-      const candidate = (ticketUuidRef.current || ticketId || "").toString().trim();
-      doLeave(candidate);
-      socket.off("connect", onConnectTicket);
-      socket.off(`company-${companyId}-ticket`, onCompanyTicket);
-      socket.off(`company-${companyId}-contact`, onCompanyContactTicket);
-    };
+    // Cleanup já feito no if acima
     // IMPORTANTE: NÃO incluir `ticket` nas dependências!
     // O ticket é atualizado via setTicket dentro do handler, não precisa re-montar o effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -455,11 +463,13 @@ const Ticket = () => {
           <TicketHeader loading={loading}>
             {ticket.contact !== undefined && (
               <div id="TicketHeader" style={{ flex: 1, minWidth: 0 }}>
-                <TicketInfo
-                  contact={contact}
-                  ticket={ticket}
-                  onClick={handleDrawerToggle}
-                />
+                <Suspense fallback={<div style={{ width: '100%', height: 60 }} />}>
+                  <TicketInfo
+                    contact={contact}
+                    ticket={ticket}
+                    onClick={handleDrawerToggle}
+                  />
+                </Suspense>
               </div>
             )}
             <TicketActionButtons
@@ -468,30 +478,34 @@ const Ticket = () => {
             />
           </TicketHeader>
         )}
-        <MessageSearchBar
-          ticketId={ticket.id}
-          open={searchOpen}
-          onClose={() => setSearchOpen(false)}
-          onNavigateToMessage={(msgId) => {
-            const el = document.getElementById(`message-${msgId}`);
-            if (el) {
-              el.scrollIntoView({ behavior: "smooth", block: "center" });
-              el.style.backgroundColor = "#fef3cd";
-              setTimeout(() => { el.style.backgroundColor = ""; }, 2000);
-            }
-          }}
-        />
-        <PinnedMessages
-          ticketId={ticket.id}
-          onNavigateToMessage={(msgId) => {
-            const el = document.getElementById(`message-${msgId}`);
-            if (el) {
-              el.scrollIntoView({ behavior: "smooth", block: "center" });
-              el.style.backgroundColor = "#d9fdd3";
-              setTimeout(() => { el.style.backgroundColor = ""; }, 2000);
-            }
-          }}
-        />
+        <Suspense fallback={null}>
+          <MessageSearchBar
+            ticketId={ticket.id}
+            open={searchOpen}
+            onClose={() => setSearchOpen(false)}
+            onNavigateToMessage={(msgId) => {
+              const el = document.getElementById(`message-${msgId}`);
+              if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.style.backgroundColor = "#fef3cd";
+                setTimeout(() => { el.style.backgroundColor = ""; }, 2000);
+              }
+            }}
+          />
+        </Suspense>
+        <Suspense fallback={null}>
+          <PinnedMessages
+            ticketId={ticket.id}
+            onNavigateToMessage={(msgId) => {
+              const el = document.getElementById(`message-${msgId}`);
+              if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.style.backgroundColor = "#d9fdd3";
+                setTimeout(() => { el.style.backgroundColor = ""; }, 2000);
+              }
+            }}
+          />
+        </Suspense>
         {importStatus && (
           <ImportProgressBar
             statusImport={importStatus}
@@ -509,22 +523,26 @@ const Ticket = () => {
       </Paper>
 
       {ticket?.isGroup ? (
-        <GroupInfoDrawer
-          open={drawerOpen}
-          handleDrawerClose={handleDrawerClose}
-          contact={contact}
-          ticket={ticket}
-        />
+        <Suspense fallback={null}>
+          <GroupInfoDrawer
+            open={drawerOpen}
+            handleDrawerClose={handleDrawerClose}
+            contact={contact}
+            ticket={ticket}
+          />
+        </Suspense>
       ) : (
-        <ContactDrawer
-          open={drawerOpen}
-          handleDrawerClose={handleDrawerClose}
-          contact={contact}
-          loading={loading}
-          ticket={ticket}
-          activeTabParams={drawerTab}
-          onSendQuickMessage={handleSendQuickMessage}
-        />
+        <Suspense fallback={null}>
+          <ContactDrawer
+            open={drawerOpen}
+            handleDrawerClose={handleDrawerClose}
+            contact={contact}
+            loading={loading}
+            ticket={ticket}
+            activeTabParams={drawerTab}
+            onSendQuickMessage={handleSendQuickMessage}
+          />
+        </Suspense>
       )}
 
     </div>

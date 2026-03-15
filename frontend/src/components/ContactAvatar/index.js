@@ -1,6 +1,7 @@
 import React, { useState, useEffect, memo, useCallback } from "react";
 import { Avatar } from "@material-ui/core";
 import api from "../../services/api";
+import avatarCache from "../../utils/avatarCache";
 
 const getContactAvatarIdentity = (contact) => {
   if (!contact) return "no-contact";
@@ -45,47 +46,41 @@ const getAvatarColor = (seed) => {
 // Componente de avatar com otimização de desempenho (memoizado)
 const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) => {
   const [imageError, setImageError] = useState(false);
-  const [fetchedUrl, setFetchedUrl] = useState(null);
-  const [isFetching, setIsFetching] = useState(false);
+  const [cachedUrl, setCachedUrl] = useState(null);
   const avatarIdentity = getContactAvatarIdentity(contact);
 
-  // Reset error quando contato muda
+  // Verificar cache ao montar ou quando contato muda
   useEffect(() => {
     setImageError(false);
-    setFetchedUrl(null);
-  }, [avatarIdentity]);
-
-  // Buscar avatar em tempo real quando não estiver disponível
-  useEffect(() => {
-    if (!enableRealtimeFetch || !contact || isFetching) return;
-
-    const hasImage = contact?.profilePicUrl || contact?.urlPicture || 
-                     contact?.contact?.profilePicUrl || contact?.contact?.urlPicture;
     
-    // Se já tem imagem, não busca
-    if (hasImage) return;
+    if (!contact) {
+      setCachedUrl(null);
+      return;
+    }
 
-    const contactId = contact?.id || contact?.contact?.id;
-    if (!contactId) return;
+    const contactId = contact.id || contact.contact?.id;
+    const urlPicture = contact.urlPicture || contact.contact?.urlPicture;
+    const profilePicUrl = contact.profilePicUrl || contact.contact?.profilePicUrl;
 
-    // Buscar avatar em tempo real
-    const fetchAvatar = async () => {
-      setIsFetching(true);
-      try {
-        const { data } = await api.post(`/contacts/${contactId}/refresh-avatar`);
-        if (data.success && data.profilePicUrl) {
-          setFetchedUrl(data.profilePicUrl);
-          console.log(`[ContactAvatar] Avatar atualizado para ${contact.name}: ${data.profilePicUrl}`);
-        }
-      } catch (err) {
-        console.debug(`[ContactAvatar] Erro ao buscar avatar: ${err?.message}`);
-      } finally {
-        setIsFetching(false);
-      }
-    };
+    // Buscar no cache primeiro
+    const cached = avatarCache.get(contactId, urlPicture, profilePicUrl);
+    if (cached) {
+      setCachedUrl(cached);
+    } else {
+      setCachedUrl(null);
+    }
+  }, [avatarIdentity, contact]);
 
-    fetchAvatar();
-  }, [contact, enableRealtimeFetch, isFetching]);
+  // DESABILITADO: Busca em tempo real causa lag massivo
+  // O backend já busca avatares automaticamente via ShowTicketService
+  // e emite updates via Socket.IO quando prontos
+  // 
+  // enableRealtimeFetch foi removido porque causava:
+  // - 20+ chamadas simultâneas ao Baileys na lista de tickets
+  // - Timeout de 5s por chamada = travamento total
+  // - Sobrecarga no websocket do WhatsApp
+  //
+  // Solução: Backend atualiza em background + Socket.IO notifica frontend
 
   const handleImageError = useCallback(() => {
     setImageError(true);
@@ -101,7 +96,7 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   }
 
   // Determina a URL da imagem e dados do contato
-  let imageUrl = fetchedUrl; // Prioridade para URL buscada em tempo real
+  let imageUrl = cachedUrl; // Prioridade para URL do cache
   let contactName = contact.name;
   let contactNumber = contact.number;
 
@@ -114,6 +109,14 @@ const ContactAvatar = memo(({ contact, enableRealtimeFetch = false, ...props }) 
   } else {
     // Priorizar urlPicture (local) sobre profilePicUrl (WhatsApp externo que expira)
     imageUrl = imageUrl || contact.urlPicture || contact.profilePicUrl;
+  }
+  
+  // Armazenar no cache se temos uma URL válida
+  if (imageUrl && contact.id) {
+    const contactId = contact.id || contact.contact?.id;
+    const urlPicture = contact.urlPicture || contact.contact?.urlPicture;
+    const profilePicUrl = contact.profilePicUrl || contact.contact?.profilePicUrl;
+    avatarCache.set(contactId, urlPicture, profilePicUrl, imageUrl);
   }
 
   // Se houve erro ou não tem imagem, usa avatar colorido com iniciais
