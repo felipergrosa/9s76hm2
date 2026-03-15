@@ -271,14 +271,17 @@ const PermissionTransferList = ({ value = [], onChange, disabled = false }) => {
                   />
                 }
                 label={
-                  <Box>
-                    <Typography variant="body2">{permission.label}</Typography>
-                    {permission.description && (
-                      <Typography variant="caption" color="textSecondary">
-                        {permission.description}
+                  permission.description ? (
+                    <Tooltip title={permission.description} placement="right" arrow>
+                      <Typography variant="body2" style={{ cursor: 'help' }}>
+                        {permission.label}
                       </Typography>
-                    )}
-                  </Box>
+                    </Tooltip>
+                  ) : (
+                    <Typography variant="body2">
+                      {permission.label}
+                    </Typography>
+                  )
                 }
               />
             ))}

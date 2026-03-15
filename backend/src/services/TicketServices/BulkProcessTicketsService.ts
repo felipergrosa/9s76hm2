@@ -31,6 +31,9 @@ interface BulkProcessOptions {
   closeTicket?: boolean;
   addNote?: string;
   queueId?: number;
+  walletId?: number; // Deprecated: usar walletIds
+  walletIds?: number[]; // Múltiplas carteiras
+  walletMode?: 'replace' | 'append'; // Modo de alteração de carteira
 }
 
 interface TicketProcessResult {
@@ -66,7 +69,8 @@ const BulkProcessTicketsService = async (
     newStatus,
     closeTicket,
     addNote,
-    queueId
+    queueId,
+    walletId
   } = options;
 
   const io = getIO();
@@ -273,6 +277,51 @@ const BulkProcessTicketsService = async (
           } catch (error) {
             logger.error(`[BulkProcess] Erro ao adicionar nota ao ticket ${ticket.id}:`, error);
             ticketResult.actions?.push('Erro ao adicionar nota');
+          }
+        }
+
+        // 6. Atualizar carteira do contato (se configurado)
+        const walletsToProcess = options.walletIds || (options.walletId ? [options.walletId] : null);
+        
+        if (walletsToProcess && walletsToProcess.length > 0 && ticket.contactId) {
+          try {
+            const mode = options.walletMode || 'replace';
+            
+            if (mode === 'append') {
+              // Modo APPEND: buscar carteiras atuais e adicionar novas
+              const Contact = (await import("../../models/Contact")).default;
+              const contact = await Contact.findByPk(ticket.contactId, {
+                include: [{
+                  association: 'wallets',
+                  attributes: ['id']
+                }]
+              });
+              
+              const currentWalletIds = contact?.wallets?.map((w: any) => w.id) || [];
+              // Adicionar novas carteiras evitando duplicados
+              const uniqueNewWallets = walletsToProcess.filter(id => !currentWalletIds.includes(id));
+              const finalWalletIds = [...currentWalletIds, ...uniqueNewWallets];
+              
+              const UpdateContactWalletsService = (await import("../ContactServices/UpdateContactWalletsService")).default;
+              await UpdateContactWalletsService({
+                contactId: String(ticket.contactId),
+                wallets: finalWalletIds,
+                companyId
+              });
+              ticketResult.actions?.push(`${uniqueNewWallets.length} carteira(s) adicionada(s)`);
+            } else {
+              // Modo REPLACE: substituir carteira atual
+              const UpdateContactWalletsService = (await import("../ContactServices/UpdateContactWalletsService")).default;
+              await UpdateContactWalletsService({
+                contactId: String(ticket.contactId),
+                wallets: walletsToProcess,
+                companyId
+              });
+              ticketResult.actions?.push(`Carteira substituída (${walletsToProcess.length} responsável/eis)`);
+            }
+          } catch (error) {
+            logger.error(`[BulkProcess] Erro ao atualizar carteira do contato ${ticket.contactId}:`, error);
+            ticketResult.actions?.push('Erro ao atualizar carteira');
           }
         }
 

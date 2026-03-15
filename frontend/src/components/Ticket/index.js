@@ -7,23 +7,24 @@ import { makeStyles, Paper, Hidden } from "@material-ui/core";
 import whatsBackground from "../../assets/wa-background.png";
 import whatsBackgroundDark from "../../assets/wa-background-dark.png";
 
-// OTIMIZAÇÃO: Lazy loading de componentes pesados para resolver INP de 21s
-const ContactDrawer = lazy(() => import("../ContactDrawer"));
-const GroupInfoDrawer = lazy(() => import("../GroupInfoDrawer"));
-const MessageSearchBar = lazy(() => import("../MessageSearchBar"));
-const PinnedMessages = lazy(() => import("../PinnedMessages"));
-const TicketInfo = lazy(() => import("../TicketInfo"));
+// Componentes carregados estaticamente (usados imediatamente)
 import MessageInput from "../MessageInput";
 import TicketHeader from "../TicketHeader";
 import TicketActionButtons from "../TicketActionButtonsCustom";
 import MessagesList from "../MessagesList";
+import TicketInfo from "../TicketInfo";
+
+// Componentes lazy (usados sob demanda - drawer, modais, etc)
+const ContactDrawer = lazy(() => import("../ContactDrawer"));
+const GroupInfoDrawer = lazy(() => import("../GroupInfoDrawer"));
+const MessageSearchBar = lazy(() => import("../MessageSearchBar"));
+const PinnedMessages = lazy(() => import("../PinnedMessages"));
 import api from "../../services/api";
 import { ReplyMessageProvider } from "../../context/ReplyingMessage/ReplyingMessageContext";
 import { ForwardMessageProvider } from "../../context/ForwarMessage/ForwardMessageContext";
 
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
-const TagsContainer = lazy(() => import("../TagsContainer").then(m => ({ default: m.TagsContainer })));
 import { isNil } from 'lodash';
 import { EditMessageProvider } from "../../context/EditingMessage/EditingMessageContext";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
@@ -463,13 +464,11 @@ const Ticket = () => {
           <TicketHeader loading={loading}>
             {ticket.contact !== undefined && (
               <div id="TicketHeader" style={{ flex: 1, minWidth: 0 }}>
-                <Suspense fallback={<div style={{ width: '100%', height: 60 }} />}>
-                  <TicketInfo
+                <TicketInfo
                     contact={contact}
                     ticket={ticket}
                     onClick={handleDrawerToggle}
                   />
-                </Suspense>
               </div>
             )}
             <TicketActionButtons

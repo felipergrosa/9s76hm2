@@ -51,6 +51,7 @@ import { toast } from 'react-toastify';
 import api from '../../services/api';
 import { AuthContext } from '../../context/Auth/AuthContext';
 import { i18n } from '../../translate/i18n';
+import usePermissions from '../../hooks/usePermissions';
 
 const useStyles = makeStyles((theme) => ({
   dialog: {
@@ -140,6 +141,18 @@ const normalizeTags = (data) => {
 const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
   const classes = useStyles();
   const { user, socket } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
+
+  // Verificar permissões granulares para cada ação
+  const canBulkProcess = hasPermission('tickets.bulk-process');
+  const canEditStatus = hasPermission('tickets.bulk-edit-status');
+  const canEditQueue = hasPermission('tickets.bulk-edit-queue');
+  const canEditUser = hasPermission('tickets.bulk-edit-user');
+  const canEditTags = hasPermission('tickets.bulk-edit-tags');
+  const canEditWallets = hasPermission('tickets.bulk-edit-wallets');
+  const canEditResponse = hasPermission('tickets.bulk-edit-response');
+  const canEditClose = hasPermission('tickets.bulk-edit-close');
+  const canEditNotes = hasPermission('tickets.bulk-edit-notes');
 
   // Estados
   const [loading, setLoading] = useState(false);
@@ -166,6 +179,8 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
   const [queues, setQueues] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [users, setUsers] = useState([]);
+  const [selectedWallets, setSelectedWallets] = useState([]);
+  const [walletMode, setWalletMode] = useState('replace'); // 'replace' ou 'append'
 
   // Progresso
   const [progress, setProgress] = useState(0);
@@ -366,6 +381,8 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
         addNote: addNote.trim() || undefined,
         queueId: selectedQueue || undefined,
         userId: selectedUserId || undefined,
+        walletIds: selectedWallets.length > 0 ? selectedWallets.map(w => w.id) : undefined,
+        walletMode: selectedWallets.length > 0 ? walletMode : undefined, // 'replace' ou 'append'
       };
 
       setProcessLog((prev) => [
@@ -606,43 +623,52 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
               </AccordionSummary>
               <AccordionDetails>
                 <Box width="100%">
-                  <FormControl component="fieldset">
-                    <RadioGroup value={responseType} onChange={(e) => setResponseType(e.target.value)}>
-                      <FormControlLabel value="none" control={<Radio />} label="Não enviar resposta" />
-                      <FormControlLabel value="standard" control={<Radio />} label="Resposta padrão" />
-                      <FormControlLabel value="ai" control={<Radio />} label="Resposta com IA" />
-                    </RadioGroup>
-                  </FormControl>
+                  {canEditResponse ? (
+                    <>
+                      <FormControl variant="outlined" fullWidth margin="dense">
+                        <InputLabel>Tipo de Resposta</InputLabel>
+                        <Select value={responseType} onChange={(e) => setResponseType(e.target.value)} label="Tipo de Resposta">
+                          <MenuItem value="none">Nenhuma</MenuItem>
+                          <MenuItem value="manual">Mensagem Manual</MenuItem>
+                          <MenuItem value="ai">Agente IA</MenuItem>
+                        </Select>
+                      </FormControl>
 
-                  {responseType === 'standard' && (
-                    <TextField
-                      variant="outlined"
-                      label="Mensagem"
-                      placeholder="Digite a mensagem padrão..."
-                      fullWidth
-                      multiline
-                      rows={4}
-                      value={responseMessage}
-                      onChange={(e) => setResponseMessage(e.target.value)}
-                      style={{ marginTop: 16 }}
-                    />
-                  )}
+                      {responseType === 'manual' && (
+                        <TextField
+                          variant="outlined"
+                          label="Mensagem de Resposta"
+                          placeholder="Digite a mensagem que será enviada para todos..."
+                          fullWidth
+                          multiline
+                          rows={3}
+                          value={responseMessage}
+                          onChange={(e) => setResponseMessage(e.target.value)}
+                          style={{ marginTop: 16 }}
+                        />
+                      )}
 
-                  {responseType === 'ai' && (
-                    <FormControl variant="outlined" fullWidth style={{ marginTop: 16 }}>
-                      <InputLabel>Agente IA</InputLabel>
-                      <Select
-                        value={aiAgentId}
-                        onChange={(e) => setAiAgentId(e.target.value)}
-                        label="Agente IA"
-                      >
-                        {aiAgents.map((agent) => (
-                          <MenuItem key={agent.id} value={agent.id}>
-                            {agent.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                      {responseType === 'ai' && (
+                        <FormControl variant="outlined" fullWidth style={{ marginTop: 16 }}>
+                          <InputLabel>Agente IA</InputLabel>
+                          <Select
+                            value={aiAgentId}
+                            onChange={(e) => setAiAgentId(e.target.value)}
+                            label="Agente IA"
+                          >
+                            {aiAgents.map((agent) => (
+                              <MenuItem key={agent.id} value={agent.id}>
+                                {agent.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      )}
+                    </>
+                  ) : (
+                    <Typography variant="body2" color="textSecondary" style={{ padding: 16, textAlign: 'center' }}>
+                      Você não tem permissão para enviar respostas automáticas em massa.
+                    </Typography>
                   )}
                 </Box>
               </AccordionDetails>
@@ -660,91 +686,151 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                 <Box width="100%">
                   <Box className={classes.filterContainer}>
                     {/* Primeira linha: Atribuir Usuário | Fila */}
-                    <FormControl variant="outlined" fullWidth>
-                      <InputLabel>Atribuir a Usuário</InputLabel>
-                      <Select
-                        value={selectedUserId}
-                        onChange={(e) => setSelectedUserId(e.target.value)}
-                        label="Atribuir a Usuário"
-                      >
-                        <MenuItem value="">
-                          <em>Sem alteração</em>
-                        </MenuItem>
-                        {users.map((u) => (
-                          <MenuItem key={u.id} value={u.id}>
-                            {u.name}
+                    {canEditUser && (
+                      <FormControl variant="outlined" fullWidth>
+                        <InputLabel>Atribuir a Usuário</InputLabel>
+                        <Select
+                          value={selectedUserId}
+                          onChange={(e) => setSelectedUserId(e.target.value)}
+                          label="Atribuir a Usuário"
+                        >
+                          <MenuItem value="">
+                            <em>Sem alteração</em>
                           </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                          {users.map((u) => (
+                            <MenuItem key={u.id} value={u.id}>
+                              {u.name}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    )}
 
-                    <FormControl variant="outlined" fullWidth>
-                      <InputLabel>Fila</InputLabel>
-                      <Select
-                        value={selectedQueue}
-                        onChange={(e) => setSelectedQueue(e.target.value)}
-                        label="Fila"
-                      >
-                        <MenuItem value="">
-                          <em>Sem alteração</em>
-                        </MenuItem>
-                        {queues.map((queue) => (
-                          <MenuItem key={queue.id} value={queue.id}>
-                            {queue.name}
+                    {canEditQueue && (
+                      <FormControl variant="outlined" fullWidth>
+                        <InputLabel>Fila</InputLabel>
+                        <Select
+                          value={selectedQueue}
+                          onChange={(e) => setSelectedQueue(e.target.value)}
+                          label="Fila"
+                        >
+                          <MenuItem value="">
+                            <em>Sem alteração</em>
                           </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                          {queues.map((queue) => (
+                            <MenuItem key={queue.id} value={queue.id}>
+                              {queue.name}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    )}
 
                     {/* Segunda linha: Novo Status | Tags */}
-                    <FormControl variant="outlined" fullWidth>
-                      <InputLabel>Novo Status</InputLabel>
-                      <Select
-                        value={newStatus}
-                        onChange={(e) => setNewStatus(e.target.value)}
-                        label="Novo Status"
-                      >
-                        <MenuItem value="">
-                          <em>Sem alteração</em>
-                        </MenuItem>
-                        <MenuItem value="pending">Aguardando</MenuItem>
-                        <MenuItem value="open">Aberto</MenuItem>
-                        <MenuItem value="closed">Fechado</MenuItem>
-                        <MenuItem value="bot">Bot</MenuItem>
-                        <MenuItem value="campaign">Campanha</MenuItem>
-                      </Select>
-                    </FormControl>
+                    {canEditStatus && (
+                      <FormControl variant="outlined" fullWidth>
+                        <InputLabel>Novo Status</InputLabel>
+                        <Select
+                          value={newStatus}
+                          onChange={(e) => setNewStatus(e.target.value)}
+                          label="Novo Status"
+                        >
+                          <MenuItem value="">
+                            <em>Sem alteração</em>
+                          </MenuItem>
+                          <MenuItem value="pending">Aguardando</MenuItem>
+                          <MenuItem value="open">Aberto</MenuItem>
+                          <MenuItem value="closed">Fechado</MenuItem>
+                          <MenuItem value="bot">Bot</MenuItem>
+                          <MenuItem value="campaign">Campanha</MenuItem>
+                        </Select>
+                      </FormControl>
+                    )}
 
-                    <Autocomplete
-                      multiple
-                      options={availableTags}
-                      getOptionLabel={(option) => option.name}
-                      value={selectedTags}
-                      onChange={(_, newValue) => setSelectedTags(newValue)}
-                      renderInput={(params) => (
-                        <TextField {...params} variant="outlined" label="Tags" placeholder="Selecione tags" />
-                      )}
-                    />
+                    {canEditTags && (
+                      <Autocomplete
+                        multiple
+                        options={availableTags}
+                        getOptionLabel={(option) => option.name}
+                        value={selectedTags}
+                        onChange={(_, newValue) => setSelectedTags(newValue)}
+                        renderInput={(params) => (
+                          <TextField {...params} variant="outlined" label="Tags" placeholder="Selecione tags" />
+                        )}
+                      />
+                    )}
+
+                    {/* Carteira - apenas para usuários com permissão */}
+                    {canEditWallets && (
+                      <>
+                        <FormControl variant="outlined" fullWidth>
+                          <InputLabel>Modo de Alteração de Carteira</InputLabel>
+                          <Select
+                            value={walletMode}
+                            onChange={(e) => setWalletMode(e.target.value)}
+                            label="Modo de Alteração de Carteira"
+                          >
+                            <MenuItem value="replace">
+                              Substituir carteira atual
+                            </MenuItem>
+                            <MenuItem value="append">
+                              Adicionar à carteira existente
+                            </MenuItem>
+                          </Select>
+                        </FormControl>
+                        <Autocomplete
+                          multiple
+                          options={users}
+                          getOptionLabel={(option) => option.name}
+                          value={selectedWallets}
+                          onChange={(e, newValue) => setSelectedWallets(newValue)}
+                          filterSelectedOptions
+                          renderTags={(value, getTagProps) =>
+                            value.map((option, index) => (
+                              <Chip
+                                {...getTagProps({ index })}
+                                key={option.id}
+                                label={option.name}
+                                color="primary"
+                              />
+                            ))
+                          }
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              variant="outlined"
+                              label="Carteira (Responsável)"
+                              placeholder="Selecione responsáveis"
+                              fullWidth
+                            />
+                          )}
+                        />
+                      </>
+                    )}
                   </Box>
 
-                  <FormControlLabel
-                    control={
-                      <Checkbox checked={closeTicket} onChange={(e) => setCloseTicket(e.target.checked)} />
-                    }
-                    label="Fechar ticket após processar"
-                  />
+                  {canEditClose && (
+                    <FormControlLabel
+                      control={
+                        <Checkbox checked={closeTicket} onChange={(e) => setCloseTicket(e.target.checked)} />
+                      }
+                      label="Fechar ticket após processar"
+                    />
+                  )}
 
-                  <TextField
-                    variant="outlined"
-                    label="Nota Interna (opcional)"
-                    placeholder="Adicionar nota interna ao ticket..."
-                    fullWidth
-                    multiline
-                    rows={2}
-                    value={addNote}
-                    onChange={(e) => setAddNote(e.target.value)}
-                    style={{ marginTop: 16 }}
-                  />
+                  {canEditNotes && (
+                    <TextField
+                      variant="outlined"
+                      label="Nota Interna (opcional)"
+                      placeholder="Adicionar nota interna ao ticket..."
+                      fullWidth
+                      multiline
+                      rows={2}
+                      value={addNote}
+                      onChange={(e) => setAddNote(e.target.value)}
+                      style={{ marginTop: 16 }}
+                    />
+                  )}
                 </Box>
               </AccordionDetails>
             </Accordion>

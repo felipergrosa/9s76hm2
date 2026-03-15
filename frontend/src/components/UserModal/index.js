@@ -167,7 +167,7 @@ const UserModal = ({ open, onClose, userId }) => {
 
   const [user, setUser] = useState(initialState);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
-  const [whatsappId, setWhatsappId] = useState(false);
+  const [whatsappId, setWhatsappId] = useState('');
   const { loading, whatsApps } = useWhatsApps();
   const [profileUrl, setProfileUrl] = useState(null)
   const [tab, setTab] = useState("general");
@@ -454,18 +454,16 @@ const UserModal = ({ open, onClose, userId }) => {
                               <InputLabel>
                                 {i18n.t("userModal.form.whatsapp")}
                               </InputLabel>
-                              <Field
-                                as={Select}
-                                value={whatsappId}
+                              <Select
+                                value={whatsappId || ''}
                                 onChange={(e) => setWhatsappId(e.target.value)}
                                 label={i18n.t("userModal.form.whatsapp")}
-
                               >
-                                <MenuItem value={''}>&nbsp;</MenuItem>
+                                <MenuItem value="">&nbsp;</MenuItem>
                                 {whatsApps.map((whatsapp) => (
                                   <MenuItem key={whatsapp.id} value={whatsapp.id}>{whatsapp.name}</MenuItem>
                                 ))}
-                              </Field>
+                              </Select>
                             </FormControl>
                           )}
                         />
@@ -644,6 +642,12 @@ const UserModal = ({ open, onClose, userId }) => {
 
                           {/* Tags permitidas - exibe apenas tags pessoais (com 1x #, não ##) */}
                           <Divider style={{ marginTop: 16, marginBottom: 16 }} />
+                          <Typography variant="subtitle2" style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            Tags Pessoais (Carteiras)
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary" style={{ marginBottom: 12, display: 'block' }}>
+                            💡 Tags pessoais definem quais contatos o usuário pode visualizar. Tags devem começar com <strong>#</strong> (ex: #João, #EquipeVendas)
+                          </Typography>
                           <Grid container spacing={1}>
                             <Grid item xs={12}>
                               <Field name="allowedContactTags">
@@ -654,36 +658,52 @@ const UserModal = ({ open, onClose, userId }) => {
                                     t.name && t.name.startsWith('#') && !t.name.startsWith('##')
                                   );
                                   const selectedObjects = personalTags.filter(t => selectedIds.includes(t.id));
+                                  
+                                  // Avisar se há tags sem formato correto
+                                  const invalidTags = tags.filter(t => 
+                                    t.name && !t.name.startsWith('#') && selectedIds.includes(t.id)
+                                  );
+                                  
                                   return (
-                                    <Autocomplete
-                                      multiple
-                                      options={personalTags}
-                                      value={selectedObjects}
-                                      getOptionLabel={(option) => option?.name || ""}
-                                      onChange={(e, value) => form.setFieldValue("allowedContactTags", (value || []).map(v => v.id))}
-                                      loading={tagsLoading}
-                                      filterSelectedOptions
-                                      renderTags={(value, getTagProps) =>
-                                        value.map((option, index) => (
-                                          <Chip
-                                            {...getTagProps({ index })}
-                                            key={option.id}
-                                            label={option.name}
-                                            style={{ backgroundColor: option.color || undefined, color: "#fff" }}
+                                    <>
+                                      <Autocomplete
+                                        multiple
+                                        options={personalTags}
+                                        value={selectedObjects}
+                                        getOptionLabel={(option) => option?.name || ""}
+                                        isOptionEqualToValue={(option, value) => option.id === value.id}
+                                        onChange={(e, value) => form.setFieldValue("allowedContactTags", (value || []).map(v => v.id))}
+                                        loading={tagsLoading}
+                                        filterSelectedOptions
+                                        renderTags={(value, getTagProps) =>
+                                          value.map((option, index) => (
+                                            <Chip
+                                              {...getTagProps({ index })}
+                                              key={option.id}
+                                              label={option.name}
+                                              style={{ backgroundColor: option.color || undefined, color: "#fff" }}
+                                            />
+                                          ))
+                                        }
+                                        renderInput={(params) => (
+                                          <TextField
+                                            {...params}
+                                            variant="outlined"
+                                            margin="dense"
+                                            label="Tags Pessoais (Carteiras)"
+                                            placeholder="Selecione tags que começam com #"
+                                            fullWidth
+                                            InputLabelProps={{ shrink: true }}
+                                            helperText={personalTags.length === 0 ? "⚠️ Nenhuma tag pessoal encontrada. Crie tags com # no início (ex: #João)" : ""}
                                           />
-                                        ))
-                                      }
-                                      renderInput={(params) => (
-                                        <TextField
-                                          {...params}
-                                          variant="outlined"
-                                          margin="dense"
-                                          label={i18n.t("userModal.form.allowedContactTags")}
-                                          fullWidth
-                                          InputLabelProps={{ shrink: true }}
-                                        />
+                                        )}
+                                      />
+                                      {invalidTags.length > 0 && (
+                                        <Typography variant="caption" color="error" style={{ marginTop: 8, display: 'block' }}>
+                                          ⚠️ Atenção: {invalidTags.length} tag(s) selecionada(s) não tem formato correto (devem começar com #)
+                                        </Typography>
                                       )}
-                                    />
+                                    </>
                                   );
                                 }}
                               </Field>

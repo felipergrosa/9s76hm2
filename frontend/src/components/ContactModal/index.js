@@ -642,37 +642,36 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
-										<FormControl
-											variant="outlined"
-											margin="dense"
-											fullWidth
+										<Autocomplete
+											multiple
+											options={userOptions}
+											getOptionLabel={(option) => option.name}
+											value={userOptions.filter(u => (values.wallets || []).includes(u.id))}
+											onChange={(e, newValue) => setFieldValue("wallets", newValue.map(u => u.id))}
 											disabled={!canEditWallets || loadingUsers}
-										>
-											<InputLabel id="wallets-label">Carteira (responsáveis)</InputLabel>
-											<Select
-												labelId="wallets-label"
-												multiple
-												value={values.wallets || []}
-												onChange={(e) => setFieldValue("wallets", e.target.value)}
-												label="Carteira (responsáveis)"
-												renderValue={(selected) => {
-													const ids = Array.isArray(selected) ? selected : [];
-													const names = userOptions
-														.filter(u => ids.includes(u.id))
-														.map(u => u.name);
-													return names.join(", ");
-												}}
-											>
-												{userOptions.map(user => (
-													<MenuItem key={user.id} value={user.id}>
-														<Checkbox
-															checked={Array.isArray(values.wallets) && values.wallets.indexOf(user.id) > -1}
-														/>
-														<ListItemText primary={user.name} />
-													</MenuItem>
-												))}
-											</Select>
-										</FormControl>
+											loading={loadingUsers}
+											filterSelectedOptions
+											renderTags={(value, getTagProps) =>
+												value.map((option, index) => (
+													<Chip
+														{...getTagProps({ index })}
+														key={option.id}
+														label={option.name}
+														color="primary"
+													/>
+												))
+											}
+											renderInput={(params) => (
+												<TextField
+													{...params}
+													variant="outlined"
+													margin="dense"
+													label="Carteira (Responsável)"
+													placeholder="Selecione responsáveis"
+													fullWidth
+												/>
+											)}
+										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
 										{canEditTags ? (
