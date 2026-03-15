@@ -121,6 +121,7 @@ import { campaignQueue, parseToMilliseconds, randomValue } from "../../queues";
 import User from "../../models/User";
 import { sayChatbot } from "./ChatBotListener";
 import MarkDeleteWhatsAppMessage from "./MarkDeleteWhatsAppMessage";
+import UpdateMessageService from "../MessageServices/UpdateMessageService";
 import ListUserQueueServices from "../UserQueueServices/ListUserQueueServices";
 import cacheLayer from "../../libs/cache";
 import { addLogs } from "../../helpers/addLogs";
@@ -6618,6 +6619,24 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
       // (wbot as WASocket)!.readMessages([message.key]);
 
       const msgUp = { ...messageUpdate };
+
+      // Processar edições, deleções e reações via UpdateMessageService
+      try {
+        const result = await UpdateMessageService({
+          messageUpdate: message,
+          companyId
+        });
+        
+        if (result.updated) {
+          logger.info(`[messages.update] Mensagem atualizada via UpdateMessageService: wid=${message.key.id}`);
+          // Se foi processado pelo UpdateMessageService, não precisa processar ACK
+          if (result.message?.isDeleted || result.message?.isEdited || result.message?.reactions) {
+            return; // Já processado
+          }
+        }
+      } catch (err: any) {
+        logger.error(`[messages.update] Erro no UpdateMessageService: ${err.message}`);
+      }
 
       if (
         msgUp["0"]?.update.messageStubType === 1 &&

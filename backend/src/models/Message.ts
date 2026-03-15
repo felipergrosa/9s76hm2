@@ -206,6 +206,15 @@ class Message extends Model<Message> {
 
   @Column(DataType.STRING)
   senderName: string; // Nome do remetente em mensagens de grupo
+
+  @Column(DataType.BIGINT)
+  editedTimestamp: number; // Timestamp da última edição (Baileys v7)
+
+  @Column(DataType.JSONB)
+  reactions: any; // Reações da mensagem { emoji: string, fromMe: boolean, timestamp: number }[]
+
+  @Column(DataType.JSONB)
+  pollData: any; // Dados de enquete (poll)
 }
 
 export default Message;

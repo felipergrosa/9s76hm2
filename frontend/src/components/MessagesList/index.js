@@ -1880,6 +1880,7 @@ const MessagesList = ({
         msg._createdAtTime = new Date(msg.createdAt).getTime();
       }
 
+      // Suporte ANTIGO: reactionMessage como mensagem separada
       if (msg.mediaType === "reactionMessage") {
         if (msg.quotedMsgId) {
           if (!reactions[msg.quotedMsgId]) {
@@ -1893,6 +1894,25 @@ const MessagesList = ({
           }
         }
       } else {
+        // Suporte NOVO: campo reactions (JSONB) do Baileys v7
+        if (msg.reactions && Array.isArray(msg.reactions) && msg.reactions.length > 0) {
+          if (!reactions[msg.id]) {
+            reactions[msg.id] = [];
+          }
+          msg.reactions.forEach(reaction => {
+            const isDuplicate = reactions[msg.id].some(
+              r => r.body === reaction.emoji
+            );
+            if (!isDuplicate) {
+              reactions[msg.id].push({
+                body: reaction.emoji,
+                fromMe: reaction.fromMe,
+                participant: reaction.fromMe ? 'Você' : 'Contato'
+              });
+            }
+          });
+        }
+        
         filtered.push(msg);
       }
     });
