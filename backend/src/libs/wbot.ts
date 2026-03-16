@@ -684,7 +684,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         wsocket.ev.on(
           "connection.update",
           async ({ connection, lastDisconnect, qr }) => {
-            logger.info(
+            // Log apenas em DEBUG para heartbeat (evita spam no terminal)
+            logger.debug(
               `Socket  ${name} Connection Update ${connection || ""} ${lastDisconnect ? lastDisconnect.error.message : ""
               }`
             );

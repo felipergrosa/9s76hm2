@@ -125,7 +125,7 @@ const ContactRow = memo(({
           </Tooltip>
           <Can
             user={userProfile}
-            perform="contacts.delete"
+            perform="contacts.edit"
             yes={() => (
               <>
                 <Tooltip {...CustomTooltipProps} title="Editar contato">
@@ -141,11 +141,18 @@ const ContactRow = memo(({
                     {contact.active ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
                   </button>
                 </Tooltip>
-                <Tooltip {...CustomTooltipProps} title="Deletar contato">
-                  <button onClick={() => onDelete(contact)} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                </Tooltip>
+                <Can
+                  user={userProfile}
+                  perform="contacts.delete"
+                  yes={() => (
+                    <Tooltip {...CustomTooltipProps} title="Deletar contato">
+                      <button onClick={() => onDelete(contact)} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </Tooltip>
+                  )}
+                  no={() => null}
+                />
                 {/* Botão de validação - aparece apenas quando name == number */}
                 {contact.name === contact.number && (
                   <Tooltip {...CustomTooltipProps} title="Validar nome no WhatsApp">

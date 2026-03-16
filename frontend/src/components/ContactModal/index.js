@@ -20,6 +20,7 @@ import CircularProgress from "@material-ui/core/CircularProgress";
 import Switch from "@material-ui/core/Switch";
 import withStyles from "@material-ui/core/styles/withStyles";
 import { Grid, FormControl, InputLabel, MenuItem, Select, Checkbox, ListItemText } from "@material-ui/core";
+import { Autocomplete } from "@material-ui/lab";
 import ContactAvatar from "../ContactAvatar";
 
 import { i18n } from "../../translate/i18n";

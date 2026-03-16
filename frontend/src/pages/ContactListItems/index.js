@@ -1097,7 +1097,7 @@ const ContactListItems = () => {
                                   </Tooltip>
                                   <Can
                                     user={user}
-                                    perform="contacts.delete"
+                                    perform="contact-lists.edit"
                                     yes={() => (
                                       <Tooltip {...CustomTooltipProps} title="Excluir">
                                         <button
@@ -1217,7 +1217,7 @@ const ContactListItems = () => {
                           </Tooltip>
                           <Can
                             user={user}
-                            perform="contacts.delete"
+                            perform="contact-lists.edit"
                             yes={() => (
                               <button
                                 onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
