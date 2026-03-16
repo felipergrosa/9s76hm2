@@ -68,6 +68,7 @@ import useCompanySettings from "../../hooks/useSettings/companySettings";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import BulkEditContactsModal from "../../components/BulkEditContactsModal";
 import DuplicateContactsModal from "../../components/DuplicateContactsModal";
+import usePermissions from "../../hooks/usePermissions";
 
 const CustomTooltipProps = {
     arrow: true,
@@ -133,6 +134,7 @@ const Contacts = () => {
     const location = useLocation();
 
     const { user, socket } = useContext(AuthContext);
+    const { hasPermission } = usePermissions();
 
     // Hook de ordenação para contatos
     const {
@@ -996,31 +998,37 @@ const Contacts = () => {
                                 </button>
                             </Tooltip>
                             <div className="flex items-center gap-2 flex-wrap">
-                                <PopupState variant="popover" popupId="contacts-import-export-menu-mobile">
-                                    {(popupState) => (
-                                        <>
-                                            <Tooltip {...CustomTooltipProps} title="Importar/Exportar">
-                                                <button
-                                                    className="shrink-0 w-10 h-10 flex items-center justify-center text-gray-700 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    aria-label="Importar/Exportar"
-                                                    {...bindTrigger(popupState)}
-                                                >
-                                                    <ImportExport fontSize="small" />
-                                                </button>
-                                            </Tooltip>
-                                            <Menu {...bindMenu(popupState)}>
-                                                <MenuItem onClick={() => { setImportTagsModalOpen(true); popupState.close(); }}>
-                                                    <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
-                                                    Importar com Tags
-                                                </MenuItem>
-                                                <MenuItem onClick={() => { setImportContactModalOpen(true) }}>
-                                                    <Backup fontSize="small" color="primary" style={{ marginRight: 10 }} />
-                                                    {i18n.t("contacts.menu.importToExcel")}
-                                                </MenuItem>
-                                            </Menu>
-                                        </>
-                                    )}
-                                </PopupState>
+                                {(hasPermission("contacts.import") || hasPermission("contacts.export")) && (
+                                    <PopupState variant="popover" popupId="contacts-import-export-menu-mobile">
+                                        {(popupState) => (
+                                            <>
+                                                <Tooltip {...CustomTooltipProps} title="Importar/Exportar">
+                                                    <button
+                                                        className="shrink-0 w-10 h-10 flex items-center justify-center text-gray-700 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        aria-label="Importar/Exportar"
+                                                        {...bindTrigger(popupState)}
+                                                    >
+                                                        <ImportExport fontSize="small" />
+                                                    </button>
+                                                </Tooltip>
+                                                <Menu {...bindMenu(popupState)}>
+                                                    {hasPermission("contacts.import") && (
+                                                        <MenuItem onClick={() => { setImportTagsModalOpen(true); popupState.close(); }}>
+                                                            <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
+                                                            Importar com Tags
+                                                        </MenuItem>
+                                                    )}
+                                                    {hasPermission("contacts.import") && (
+                                                        <MenuItem onClick={() => { setImportContactModalOpen(true) }}>
+                                                            <Backup fontSize="small" color="primary" style={{ marginRight: 10 }} />
+                                                            {i18n.t("contacts.menu.importToExcel")}
+                                                        </MenuItem>
+                                                    )}
+                                                </Menu>
+                                            </>
+                                        )}
+                                    </PopupState>
+                                )}
                                 {String(user?.profile || "").toLowerCase() === "admin" && (
                                     <Tooltip {...CustomTooltipProps} title="Deduplicar contatos">
                                         <span>
@@ -1136,31 +1144,37 @@ const Contacts = () => {
                                     <SlidersHorizontal className={filterIconClass} />
                                 </button>
                             </Tooltip>
-                            <PopupState variant="popover" popupId="contacts-import-export-menu">
-                                {(popupState) => (
-                                    <>
-                                        <Tooltip {...CustomTooltipProps} title="Importar/Exportar">
-                                            <button
-                                                className="w-10 h-10 flex items-center justify-center text-gray-700 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                aria-label="Importar/Exportar"
-                                                {...bindTrigger(popupState)}
-                                            >
-                                                <ImportExport fontSize="small" />
-                                            </button>
-                                        </Tooltip>
-                                        <Menu {...bindMenu(popupState)}>
-                                            <MenuItem onClick={() => { setImportTagsModalOpen(true); popupState.close(); }}>
-                                                <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
-                                                Importar com Tags
-                                            </MenuItem>
-                                            <MenuItem onClick={() => { setImportContactModalOpen(true) }}>
-                                                <Backup fontSize="small" color="primary" style={{ marginRight: 10 }} />
-                                                {i18n.t("contacts.menu.importToExcel")}
-                                            </MenuItem>
-                                        </Menu>
-                                    </>
-                                )}
-                            </PopupState>
+                            {(hasPermission("contacts.import") || hasPermission("contacts.export")) && (
+                                <PopupState variant="popover" popupId="contacts-import-export-menu">
+                                    {(popupState) => (
+                                        <>
+                                            <Tooltip {...CustomTooltipProps} title="Importar/Exportar">
+                                                <button
+                                                    className="w-10 h-10 flex items-center justify-center text-gray-700 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    aria-label="Importar/Exportar"
+                                                    {...bindTrigger(popupState)}
+                                                >
+                                                    <ImportExport fontSize="small" />
+                                                </button>
+                                            </Tooltip>
+                                            <Menu {...bindMenu(popupState)}>
+                                                {hasPermission("contacts.import") && (
+                                                    <MenuItem onClick={() => { setImportTagsModalOpen(true); popupState.close(); }}>
+                                                        <ContactPhone fontSize="small" color="primary" style={{ marginRight: 10 }} />
+                                                        Importar com Tags
+                                                    </MenuItem>
+                                                )}
+                                                {hasPermission("contacts.import") && (
+                                                    <MenuItem onClick={() => { setImportContactModalOpen(true) }}>
+                                                        <Backup fontSize="small" color="primary" style={{ marginRight: 10 }} />
+                                                        {i18n.t("contacts.menu.importToExcel")}
+                                                    </MenuItem>
+                                                )}
+                                            </Menu>
+                                        </>
+                                    )}
+                                </PopupState>
+                            )}
 
                             <Can
                                 user={user}

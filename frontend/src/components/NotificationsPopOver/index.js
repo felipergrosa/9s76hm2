@@ -18,7 +18,6 @@ import Badge from "@material-ui/core/Badge";
 import { Bell as ChatIcon, X as CloseIcon, Trash2 as ClearAllIcon } from "lucide-react";
 import { Button, Tooltip, Typography, Box } from "@material-ui/core";
 
-import TicketListItem from "../TicketListItem";
 import useTickets from "../../hooks/useTickets";
 import alertSound from "../../assets/sound.mp3";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -28,25 +27,26 @@ import useCompanySettings from "../../hooks/useSettings/companySettings";
 import Favicon from "react-favicon";
 import { getBackendUrl } from "../../config";
 import defaultLogoFavicon from "../../assets/favicon.ico";
-import ContactAvatar from "../ContactAvatar";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import api from "../../services/api";
 import usePermissions from "../../hooks/usePermissions";
 import ColorModeContext from "../../layout/themeContext";
+import NotificationTicketCard from "../NotificationTicketCard";
 
 const useStyles = makeStyles(theme => ({
   tabContainer: {
     overflowY: "auto",
-    maxHeight: 350,
+    maxHeight: 380,
+    padding: theme.spacing(1),
     ...theme.scrollbarStyles,
   },
   popoverPaper: {
     width: "100%",
-    maxWidth: 350,
+    maxWidth: 320,
     marginLeft: theme.spacing(2),
     marginRight: theme.spacing(1),
     [theme.breakpoints.down("sm")]: {
-      maxWidth: 270,
+      maxWidth: 280,
     },
   },
   noShadow: {
@@ -59,21 +59,6 @@ const useStyles = makeStyles(theme => ({
     justifyContent: "flex-end",
     alignItems: "center",
     gap: 8,
-  },
-  notificationItem: {
-    position: "relative",
-    paddingRight: 48,
-  },
-  closeButton: {
-    position: "absolute",
-    right: 8,
-    top: "50%",
-    transform: "translateY(-50%)",
-    padding: 4,
-    opacity: 0.7,
-    "&:hover": {
-      opacity: 1,
-    },
   },
 }));
 
@@ -105,6 +90,7 @@ const NotificationsPopOver = ({ volume = 1 }) => {
 
   const soundTimeoutRef = useRef(null);
   const lastSoundTimeRef = useRef(0);
+  const closeTimeoutRef = useRef(null);
 
   const { hasPermission: checkPerm } = usePermissions();
 
@@ -393,55 +379,17 @@ const NotificationsPopOver = ({ volume = 1 }) => {
     setIsOpen(prevState => !prevState);
   };
 
-  const handleClickAway = () => {
-    setIsOpen(false);
-  };
-
-  const NotificationTicket = ({ children, ticket }) => {
-    // Fecha a notificação e marca mensagens como lidas (persiste no banco)
-    const handleCloseNotification = async (e) => {
-      e.stopPropagation();
-      try {
-        // Chama API para marcar como lido (zera unreadMessages)
-        await api.post(`/tickets/${ticket.id}/mark-as-read`);
-        // Remove da lista local
-        setNotifications(prev => prev.filter(t => t.id !== ticket.id));
-      } catch (err) {
-        // 403 = sem permissão, silencia o erro
-        if (err?.response?.status !== 403) {
-          toastError(err);
-        }
-      }
-    };
-
-    return (
-      <div className={classes.notificationItem} onClick={handleClickAway}>
-        {children}
-        <IconButton
-          className={classes.closeButton}
-          size="small"
-          onClick={handleCloseNotification}
-          title="Marcar como lido"
-        >
-          <CloseIcon size={16} />
-        </IconButton>
-      </div>
-    );
-  };
-
-  // Limpa todas as notificações marcando como lidas (persiste no banco)
-  const handleClearAllNotifications = async () => {
-    try {
-      // Chama API para marcar todas como lidas
-      await api.post("/tickets/mark-all-as-read");
-      // Limpa lista local
-      setNotifications([]);
-    } catch (err) {
-      // 403 = sem permissão, silencia o erro
-      if (err?.response?.status !== 403) {
-        toastError(err);
-      }
+  const handleMouseEnter = () => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
     }
+  };
+
+  const handleMouseLeave = () => {
+    closeTimeoutRef.current = setTimeout(() => {
+      setIsOpen(false);
+    }, 800);
   };
 
   const browserNotification = () => {
@@ -501,7 +449,11 @@ const NotificationsPopOver = ({ volume = 1 }) => {
           horizontal: "right",
         }}
         classes={{ paper: classes.popoverPaper }}
-        onClose={handleClickAway}
+        onClose={() => setIsOpen(false)}
+        PaperProps={{
+          onMouseEnter: handleMouseEnter,
+          onMouseLeave: handleMouseLeave,
+        }}
       >
         <Box className={classes.clearAllButton}>
           <Typography variant="body2" color="textSecondary">
@@ -512,7 +464,10 @@ const NotificationsPopOver = ({ volume = 1 }) => {
               size="small"
               color="secondary"
               startIcon={<ClearAllIcon size={16} />}
-              onClick={handleClearAllNotifications}
+              onClick={() => {
+                setNotifications([]);
+                api.post("/tickets/mark-all-as-read");
+              }}
             >
               Limpar todas
             </Button>
@@ -554,9 +509,26 @@ const NotificationsPopOver = ({ volume = 1 }) => {
             </ListItem>
           ) : (
             notifications.map(ticket => (
-              <NotificationTicket key={ticket.id} ticket={ticket}>
-                <TicketListItem ticket={ticket} />
-              </NotificationTicket>
+              <NotificationTicketCard
+                key={ticket.id}
+                ticket={ticket}
+                onClick={(t) => {
+                  setTabOpen(t.status);
+                  setCurrentTicket({ id: t.id, uuid: t.uuid, code: Date.now() });
+                  history.push(`/tickets/${t.uuid}`);
+                  setIsOpen(false);
+                }}
+                onClose={async (t) => {
+                  try {
+                    await api.post(`/tickets/${t.id}/mark-as-read`);
+                    setNotifications(prev => prev.filter(nt => nt.id !== t.id));
+                  } catch (err) {
+                    if (err?.response?.status !== 403) {
+                      toastError(err);
+                    }
+                  }
+                }}
+              />
             ))
           )}
         </List>

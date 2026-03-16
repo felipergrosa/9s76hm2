@@ -74,11 +74,26 @@ const useStyles = makeStyles((theme) => ({
         paddingRight: 60,
     },
 
+    contactNameWrapperNotification: {
+        display: "flex",
+        justifyContent: "space-between",
+        paddingRight: 45,
+        marginBottom: 2,
+    },
+
     lastMessageTime: {
         position: "absolute",
         marginRight: 5,
         right: 20,
         bottom: 30,
+    },
+
+    lastMessageTimeNotification: {
+        position: "absolute",
+        marginRight: 2,
+        right: 8,
+        top: 8,
+        fontSize: "0.7rem",
     },
 
     closedBadge: {
@@ -90,6 +105,25 @@ const useStyles = makeStyles((theme) => ({
 
     contactLastMessage: {
         paddingRight: 20,
+        display: '-webkit-box',
+        '-webkit-line-clamp': 2,
+        '-webkit-box-orient': 'vertical',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        lineHeight: '1.3em',
+        maxHeight: '2.6em',
+    },
+
+    contactLastMessageNotification: {
+        paddingRight: 16,
+        display: '-webkit-box',
+        '-webkit-line-clamp': 2,
+        '-webkit-box-orient': 'vertical',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        lineHeight: '1.2em',
+        maxHeight: '2.4em',
+        fontSize: '0.85rem',
     },
 
     newMessagesCount: {
@@ -100,6 +134,15 @@ const useStyles = makeStyles((theme) => ({
 
     bottomButton: {
         top: "12px",
+    },
+
+    bottomButtonNotification: {
+        top: "auto",
+        bottom: "4px",
+        padding: 2,
+        '& svg': {
+            fontSize: '1rem',
+        },
     },
 
     badgeStyle: {
@@ -134,6 +177,23 @@ const useStyles = makeStyles((theme) => ({
         paddingRight: 5,
         borderRadius: 10,
         fontSize: "0.9em",
+    },
+
+    userTagNotification: {
+        position: "absolute",
+        marginRight: 0,
+        right: 8,
+        bottom: 28,
+        backgroundColor: theme.palette.background.default,
+        color: theme.palette.primary.main,
+        border: "1px solid #CCC",
+        padding: "1px 3px",
+        borderRadius: 6,
+        fontSize: "0.65em",
+        maxWidth: 60,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
     },
     divTags: {
         position: "absolute",
@@ -236,7 +296,7 @@ const getAvatarChannel = (channel) => {
     }
 };
 
-const TicketListItem = ({ ticket }) => {
+const TicketListItem = ({ ticket, isNotification }) => {
     const classes = useStyles();
     const history = useHistory();
     const [loading, setLoading] = useState(false);
@@ -435,7 +495,7 @@ const TicketListItem = ({ ticket }) => {
 
                             {ticket.lastMessage && (
                                 <Typography
-                                    className={classes.lastMessageTime}
+                                    className={isNotification ? classes.lastMessageTimeNotification : classes.lastMessageTime}
                                     component="span"
                                     variant="body2"
                                     color="textSecondary"
@@ -462,7 +522,7 @@ const TicketListItem = ({ ticket }) => {
                             )}
                             {ticket.whatsappId && (
                                 <div
-                                    className={classes.userTag}
+                                    className={isNotification ? classes.userTagNotification : classes.userTag}
                                     title={i18n.t(
                                         "ticketsList.connectionTitle"
                                     )}
@@ -473,15 +533,15 @@ const TicketListItem = ({ ticket }) => {
                         </span>
                     }
                     secondary={
-                        <span className={classes.contactNameWrapper}>
+                        <span className={isNotification ? classes.contactNameWrapperNotification : classes.contactNameWrapper}>
                             {ticket.status === "closed"
                                 ? ticket?.userRating
                                     ? getRatingIcon(ticket?.userRating?.rate)
                                     : null
                                 : null}
                             <Typography
-                                className={classes.contactLastMessage}
-                                noWrap
+                                className={isNotification ? classes.contactLastMessageNotification : classes.contactLastMessage}
+                                noWrap={!isNotification}
                                 component="span"
                                 variant="body2"
                                 color="textSecondary"
@@ -508,7 +568,8 @@ const TicketListItem = ({ ticket }) => {
                 />
                 {(ticket.status === "pending" || ticket.status === "bot") && (
                     <IconButton
-                        className={classes.bottomButton}
+                        className={isNotification ? classes.bottomButtonNotification : classes.bottomButton}
+                        size={isNotification ? "small" : "medium"}
                         color="primary"
                         loading={loading.toString()}
                         onClick={(e) =>
@@ -517,7 +578,7 @@ const TicketListItem = ({ ticket }) => {
                                 : handleAcepptTicket(ticket)
                         }
                     >
-                        <CheckIcon />
+                        <CheckIcon fontSize={isNotification ? "small" : "default"} />
                     </IconButton>
                 )}
                 {/* {ticket.status === "pending" && (
@@ -595,38 +656,42 @@ const TicketListItem = ({ ticket }) => {
 
                 {(ticket.status === "pending" && (hasPermission("dashboard.view") || user.profile === "admin")) && (
                     <IconButton
-                        className={classes.bottomButton}
+                        className={isNotification ? classes.bottomButtonNotification : classes.bottomButton}
+                        size={isNotification ? "small" : "medium"}
                         color="primary"
                         onClick={(e) => handleClosedTicket(ticket)}
                     >
-                        <ClearOutlinedIcon />
+                        <ClearOutlinedIcon fontSize={isNotification ? "small" : "default"} />
                     </IconButton>
                 )}
                 {ticket.status === "open" && (
                     <IconButton
-                        className={classes.bottomButton}
+                        className={isNotification ? classes.bottomButtonNotification : classes.bottomButton}
+                        size={isNotification ? "small" : "medium"}
                         color="primary"
                         onClick={(e) => handleViewTicket(ticket)}
                     >
-                        <ReplayIcon />
+                        <ReplayIcon fontSize={isNotification ? "small" : "default"} />
                     </IconButton>
                 )}
                 {ticket.status === "open" && (
                     <IconButton
-                        className={classes.bottomButton}
+                        className={isNotification ? classes.bottomButtonNotification : classes.bottomButton}
+                        size={isNotification ? "small" : "medium"}
                         color="primary"
                         onClick={(e) => handleClosedTicket(ticket)}
                     >
-                        <ClearOutlinedIcon />
+                        <ClearOutlinedIcon fontSize={isNotification ? "small" : "default"} />
                     </IconButton>
                 )}
                 {ticket.status === "closed" && (
                     <IconButton
-                        className={classes.bottomButton}
+                        className={isNotification ? classes.bottomButtonNotification : classes.bottomButton}
+                        size={isNotification ? "small" : "medium"}
                         color="primary"
                         onClick={(e) => handleReopenTicket(ticket)}
                     >
-                        <ReplayIcon />
+                        <ReplayIcon fontSize={isNotification ? "small" : "default"} />
                     </IconButton>
                 )}
                 {ticket.status === "closed" && (

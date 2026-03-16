@@ -69,16 +69,16 @@ const useAuth = () => {
         const { data } = await api.post("/auth/refresh_token");
         if (data?.token) {
           localStorage.setItem("token", JSON.stringify(data.token));
+          localStorage.setItem("user", JSON.stringify(data.user));
           api.defaults.headers.Authorization = `Bearer ${data.token}`;
           setIsAuth(true);
           setUser(data.user);
         }
       } catch (err) {
-        // falha de refresh inicial: garantir estado limpo
         localStorage.removeItem("token");
+        localStorage.removeItem("user");
         api.defaults.headers.Authorization = undefined;
         setIsAuth(false);
-        // não exibir toast aqui para não poluir ao simplesmente abrir o app sem sessão
       } finally {
         setLoading(false);
       }
@@ -98,6 +98,7 @@ const useAuth = () => {
       io.on(`company-${user.companyId}-user`, (data) => {
         if (data.action === "update" && data.user.id === user.id) {
           setUser(data.user);
+          localStorage.setItem("user", JSON.stringify(data.user));
         }
       });
 
@@ -160,6 +161,7 @@ const useAuth = () => {
 
       if (before === true) {
         localStorage.setItem("token", JSON.stringify(data.token));
+        localStorage.setItem("user", JSON.stringify(data.user));
         // localStorage.setItem("public-token", JSON.stringify(data.user.token));
         // localStorage.setItem("companyId", companyId);
         // localStorage.setItem("userId", id);
@@ -204,6 +206,7 @@ Entre em contato com o Suporte para mais informações! `);
       setIsAuth(false);
       setUser({});
       localStorage.removeItem("token");
+      localStorage.removeItem("user");
       localStorage.removeItem("cshow");
       // localStorage.removeItem("public-token");
       api.defaults.headers.Authorization = undefined;
