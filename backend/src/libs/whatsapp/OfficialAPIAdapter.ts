@@ -201,8 +201,15 @@ export class OfficialAPIAdapter implements IWhatsAppAdapter {
 
       // Mensagem de texto simples
       if (mediaType === "text" || !mediaType) {
+        // CRITICAL: Validar se body é string
+        const bodyText = typeof body === 'string' ? body : String(body || "");
+        
+        if (typeof body !== 'string') {
+          logger.error(`[OfficialAPI] ⚠️ BODY NÃO É STRING! Tipo: ${typeof body}, Valor:`, body);
+        }
+        
         payload.type = "text";
-        payload.text = { body: body || "" };
+        payload.text = { body: bodyText };
       }
       // Mensagem com botões interativos
       else if (buttons && buttons.length > 0) {

@@ -13,14 +13,23 @@ const useUsers = () => {
 
     // Função auxiliar para verificar permissão
     const hasPermission = (permission) => {
+        // Se user ainda não está pronto, não tem permissão
+        if (!user || user.loading) return false;
         if (user?.super === true) return true;
         if (user?.profile === "admin") return true;
         return user?.permissions?.includes(permission);
     };
 
     useEffect(() => {
+        // Se user ainda não está pronto, não carrega
+        if (!user || user.loading) {
+            setLoading(false);
+            return;
+        }
+
         // Só carrega usuários se tiver permissão
         if (!hasPermission("users.view")) {
+            console.log("[useUsers] Usuário sem permissão users.view");
             setLoading(false);
             return;
         }

@@ -544,8 +544,21 @@ const CampaignModal = ({
 
       setLoadingTemplates(true);
       try {
-        const { data } = await api.get(`/whatsapp/${whatsappId}/templates`);
-        setAvailableTemplates(data.templates || []);
+        // Buscar templates da Meta
+        const { data: templatesData } = await api.get(`/whatsapp/${whatsappId}/templates`);
+        const allTemplates = templatesData.templates || [];
+        
+        // Buscar dados da conexão para obter allowedTemplates
+        const { data: whatsappData } = await api.get(`/whatsapp/${whatsappId}`);
+        const allowed = whatsappData.allowedTemplates;
+        
+        // Se allowedTemplates estiver definido e não vazio, filtrar
+        if (allowed && Array.isArray(allowed) && allowed.length > 0) {
+          setAvailableTemplates(allTemplates.filter(t => allowed.includes(t.id)));
+        } else {
+          // Se não houver filtro, mostrar todos
+          setAvailableTemplates(allTemplates);
+        }
       } catch (err) {
         console.error("Erro ao carregar templates", err);
         toastError(err);
