@@ -43,7 +43,7 @@ import ShowMessageService, { GetWhatsAppFromMessage } from "../services/MessageS
 import ImportContactHistoryService from "../services/MessageServices/ImportContactHistoryService";
 import ClearTicketMessagesService from "../services/MessageServices/ClearTicketMessagesService";
 import ResyncTicketMessagesService from "../services/MessageServices/ResyncTicketMessagesService";
-import { messageQueue } from "../queues";
+import { baileysMessageQueue, officialMessageQueue } from "../queues";
 
 type IndexQuery = {
   pageNumber: string;
@@ -897,10 +897,20 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
           throw new AppError("ERR_NO_WHATSAPP_CONNECTION_FOR_TICKET", 400);
         }
 
-        // ENFILEIRAR mensagem via Bull Queue para evitar concorrência no socket
-        console.log(`[MessageController.store] Enfileirando mensagem via Bull Queue para ticket ${ticketId}`);
+        // Buscar tipo de conexão para rotear para fila correta
+        const whatsappConnection = await Whatsapp.findByPk(ticket.whatsappId, {
+          attributes: ["id", "channelType"]
+        });
         
-        await messageQueue.add(
+        const channelType = whatsappConnection?.channelType || "baileys";
+        const isOfficial = channelType === "official";
+        
+        // Selecionar fila apropriada
+        const targetQueue = isOfficial ? officialMessageQueue : baileysMessageQueue;
+        
+        console.log(`[MessageController.store] Enfileirando mensagem via ${isOfficial ? 'Official' : 'Baileys'} Queue para ticket ${ticketId}`);
+        
+        await targetQueue.add(
           "SendMessage",
           {
             ticketId: ticket.id,
@@ -920,7 +930,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
           }
         );
         
-        console.log(`[MessageController.store] Mensagem enfileirada com sucesso`);
+        console.log(`[MessageController.store] Mensagem enfileirada com sucesso na fila ${isOfficial ? 'Official' : 'Baileys'}`);
       } else if (ticket.channel === "whatsapp" && isPrivate === "true") {
         const messageData = {
           wid: `PVT${ticket.updatedAt.toString().replace(" ", "")}`,

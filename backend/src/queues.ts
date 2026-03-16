@@ -303,12 +303,24 @@ export const queueMonitor = new BullQueue("QueueMonitor", connection);
 export const validateWhatsappContactsQueue = new BullQueue("ValidateWhatsappContacts", connection);
 export const sessionWindowRenewalQueue = new BullQueue(`${process.env.DB_NAME}-SessionWindowRenewal`, connection);
 
-export const messageQueue = new BullQueue("MessageQueue", connection, {
+// Fila para mensagens Baileys (concurrency=1 - protege WebSocket único)
+export const baileysMessageQueue = new BullQueue("BaileysMessageQueue", connection, {
   limiter: {
     max: limiterMax as number,
     duration: limiterDuration as number
   }
 });
+
+// Fila para mensagens API Oficial (concurrency=10 - HTTP pode processar em paralelo)
+export const officialMessageQueue = new BullQueue("OfficialMessageQueue", connection, {
+  limiter: {
+    max: (limiterMax as number) * 10, // API Oficial pode processar mais mensagens
+    duration: limiterDuration as number
+  }
+});
+
+// Fila legada (manter por compatibilidade, redireciona para Baileys)
+export const messageQueue = baileysMessageQueue;
 
 let isProcessing = false;
 
@@ -2971,20 +2983,22 @@ handleCloseTicketsAutomatic();
 export async function startQueueProcess() {
   logger.info("Iniciando processamento de filas");
 
-  // CRÍTICO: concurrency=1 para evitar múltiplos jobs usando o MESMO socket Baileys
-  // simultaneamente, o que causa "Connection Closed" e corrupção do WebSocket
-  messageQueue.process("SendMessage", 1, handleSendMessage);
-
-  // CRÍTICO: handleMessage também precisa de concurrency=1 para proteger socket
-  messageQueue.process("handleMessage", 1, async (job) => {
+  // ===== FILA BAILEYS (concurrency=1 - protege WebSocket único) =====
+  logger.info("Iniciando fila Baileys com concurrency=1");
+  baileysMessageQueue.process("SendMessage", 1, handleSendMessage);
+  baileysMessageQueue.process("handleMessage", 1, async (job) => {
     const handleMessageJob = await import("./jobs/handleMessageQueue");
     return handleMessageJob.default.handle(job);
   });
-
-  messageQueue.process("handleMessageAck", 1, async (job) => {
+  baileysMessageQueue.process("handleMessageAck", 1, async (job) => {
     const handleMessageAckJob = await import("./jobs/handleMessageAckQueue");
     return handleMessageAckJob.default.handle(job);
   });
+
+  // ===== FILA API OFICIAL (concurrency=10 - HTTP pode processar em paralelo) =====
+  logger.info("Iniciando fila API Oficial com concurrency=10");
+  officialMessageQueue.process("SendMessage", 10, handleSendMessage);
+  // API Oficial não precisa de handleMessage/handleMessageAck (usa webhook)
 
   scheduleMonitor.process("Verify", 1, handleVerifySchedules);
 

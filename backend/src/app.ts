@@ -15,7 +15,7 @@ import uploadConfig from "./config/upload";
 import AppError from "./errors/AppError";
 import routes from "./routes";
 import logger from "./utils/logger";
-import { messageQueue, sendScheduledMessages } from "./queues";
+import { baileysMessageQueue, officialMessageQueue, sendScheduledMessages } from "./queues";
 import { importContactsQueue } from "./queues/ImportContactsQueue";
 import BullQueue from "./libs/queue"
 import BullBoard from 'bull-board';
@@ -45,7 +45,9 @@ app.set('trust proxy', 1);
 
 // Configuração de filas
 app.set("queues", {
-  messageQueue,
+  baileysMessageQueue,
+  officialMessageQueue,
+  messageQueue: baileysMessageQueue, // Compatibilidade com código legado
   sendScheduledMessages,
   importContactsQueue
 });
