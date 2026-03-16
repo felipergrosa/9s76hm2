@@ -59,6 +59,13 @@ import { useParams, useHistory } from 'react-router-dom';
 import { getBackendUrl } from "../../config";
 import logger from "../../utils/logger";
 
+// Helper seguro para trim de strings - evita erros quando valor não é string
+const safeTrim = (value) => {
+  if (typeof value === 'string') return value.trim();
+  if (value == null) return '';
+  return String(value).trim();
+};
+
 const useStyles = makeStyles((theme) => ({
   messagesListWrapper: {
     overflow: "hidden",
@@ -1275,7 +1282,7 @@ const MessagesList = ({
     }
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    const normalizedTicketId = (ticketId ?? "").toString().trim();
+    const normalizedTicketId = safeTrim((ticketId ?? "").toString());
     const ticketUuidFromUrl = uuidRegex.test(normalizedTicketId) ? normalizedTicketId : null;
     // Se a rota já estiver em UUID, usamos isso como sala atual imediatamente
     if (ticketUuidFromUrl && !currentRoomIdRef.current) {
@@ -1295,7 +1302,7 @@ const MessagesList = ({
     // Reforço de join na sala (o Ticket/index.js é o dono principal)
     const connectEventMessagesList = () => {
       try {
-        const roomToJoin = (currentRoomIdRef.current || ticketUuidFromUrl || "").toString().trim();
+        const roomToJoin = safeTrim((currentRoomIdRef.current || ticketUuidFromUrl || "").toString());
         if (!roomToJoin || roomToJoin === "undefined") return;
         if (typeof socket.joinRoom === "function") {
           socket.joinRoom(roomToJoin);
@@ -1308,7 +1315,7 @@ const MessagesList = ({
         const evtUuid = data?.message?.ticket?.uuid || data?.ticket?.uuid;
         const evtTicketId = data?.message?.ticketId || data?.ticket?.id;
         const hasUuid = Boolean(evtUuid);
-        const currentUuid = (currentRoomIdRef.current || ticketUuidFromUrl || "").toString().trim();
+        const currentUuid = safeTrim((currentRoomIdRef.current || ticketUuidFromUrl || "").toString());
         const urlIsUuid = Boolean(ticketUuidFromUrl);
 
         console.log("[MessagesList] 📨 appMessage recebido", {

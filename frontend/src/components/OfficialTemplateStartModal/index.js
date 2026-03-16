@@ -42,6 +42,7 @@ const OfficialTemplateStartModal = ({
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [sending, setSending] = useState(false);
   const [metaTemplateVariables, setMetaTemplateVariables] = useState(null);  // NOVO
+  const [allowedTemplates, setAllowedTemplates] = useState(null);
 
   useEffect(() => {
     if (!open || !whatsappId) return;
@@ -49,8 +50,23 @@ const OfficialTemplateStartModal = ({
     const load = async () => {
       setLoadingTemplates(true);
       try {
-        const { data } = await api.get(`/whatsapp/${whatsappId}/templates`);
-        setTemplates(data.templates || []);
+        // Buscar templates da Meta
+        const { data: templatesData } = await api.get(`/whatsapp/${whatsappId}/templates`);
+        const allTemplates = templatesData.templates || [];
+        
+        // Buscar dados da conexão para obter allowedTemplates
+        const { data: whatsappData } = await api.get(`/whatsapp/${whatsappId}`);
+        const allowed = whatsappData.allowedTemplates;
+        
+        setAllowedTemplates(allowed);
+        
+        // Se allowedTemplates estiver definido e não vazio, filtrar
+        if (allowed && Array.isArray(allowed) && allowed.length > 0) {
+          setTemplates(allTemplates.filter(t => allowed.includes(t.id)));
+        } else {
+          // Se não houver filtro, mostrar todos
+          setTemplates(allTemplates);
+        }
       } catch (err) {
         toastError(err);
       } finally {

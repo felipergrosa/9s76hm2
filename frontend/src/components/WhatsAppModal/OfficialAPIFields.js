@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Field } from "formik";
 import {
   TextField,
@@ -8,13 +8,17 @@ import {
   Chip,
   IconButton,
   Tooltip,
-  Divider
+  Divider,
+  CircularProgress
 } from "@material-ui/core";
+import { Autocomplete } from "@material-ui/lab";
 import { makeStyles } from "@material-ui/core/styles";
 import { 
   Info, 
   FileCopy
 } from "@material-ui/icons";
+import api from "../../services/api";
+import toastError from "../../errors/toastError";
 
 const useStyles = makeStyles((theme) => ({
   sectionTitle: {
@@ -81,14 +85,39 @@ const useStyles = makeStyles((theme) => ({
   }
 }));
 
-const OfficialAPIFields = ({ values, errors, touched }) => {
+const OfficialAPIFields = ({ values, errors, touched, setFieldValue, whatsAppId }) => {
   const classes = useStyles();
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   // Usar URL do backend (API) em vez do frontend
   const backendUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
   const webhookUrl = `${backendUrl}/webhooks/whatsapp`;
+
+  // Buscar templates aprovados da Meta quando houver whatsAppId
+  useEffect(() => {
+    if (!whatsAppId) {
+      setTemplates([]);
+      return;
+    }
+
+    const fetchTemplates = async () => {
+      setLoadingTemplates(true);
+      try {
+        const { data } = await api.get(`/whatsapp/${whatsAppId}/templates`);
+        setTemplates(data.templates || []);
+      } catch (err) {
+        console.error("Erro ao buscar templates:", err);
+        setTemplates([]);
+      } finally {
+        setLoadingTemplates(false);
+      }
+    };
+
+    fetchTemplates();
+  }, [whatsAppId]);
 
   const handleCopyWebhook = () => {
     navigator.clipboard.writeText(webhookUrl);
@@ -344,6 +373,73 @@ const OfficialAPIFields = ({ values, errors, touched }) => {
       </Grid>
 
       {/* Dica agora exibida no tooltip do ícone (i) ao lado do título */}
+
+      <Divider className={classes.divider} />
+
+      {/* Seleção de Templates Permitidos */}
+      <Typography variant="h6" className={classes.sectionTitle}>
+        Templates Permitidos
+        <Tooltip
+          title="Selecione quais templates aprovados da Meta serão exibidos para os usuários. Isso ajuda a ocultar templates que não estão em uso, mantendo a interface limpa. Se nenhum template for selecionado, todos os templates aprovados serão exibidos."
+        >
+          <IconButton size="small" className={classes.helpButton}>
+            <Info fontSize="small" color="primary" />
+          </IconButton>
+        </Tooltip>
+      </Typography>
+
+      <Grid container spacing={2}>
+        <Grid item xs={12}>
+          <Autocomplete
+            multiple
+            options={templates}
+            value={templates.filter(t => (values.allowedTemplates || []).includes(t.id))}
+            onChange={(e, newValue) => {
+              setFieldValue("allowedTemplates", newValue.map(t => t.id));
+            }}
+            getOptionLabel={(option) => option.name || option.id}
+            loading={loadingTemplates}
+            disabled={!whatsAppId || loadingTemplates}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip
+                  {...getTagProps({ index })}
+                  key={option.id}
+                  label={option.name}
+                  size="small"
+                  color="primary"
+                />
+              ))
+            }
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                variant="outlined"
+                label="Templates Aprovados"
+                placeholder={whatsAppId ? "Selecione os templates" : "Salve a conexão primeiro"}
+                helperText={
+                  !whatsAppId
+                    ? "Salve a conexão primeiro para carregar os templates da Meta"
+                    : loadingTemplates
+                    ? "Carregando templates..."
+                    : templates.length === 0
+                    ? "Nenhum template aprovado encontrado na Meta"
+                    : `${templates.length} template(s) disponível(is). Deixe vazio para exibir todos.`
+                }
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {loadingTemplates ? <CircularProgress color="inherit" size={20} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+          />
+        </Grid>
+      </Grid>
     </>
   );
 };

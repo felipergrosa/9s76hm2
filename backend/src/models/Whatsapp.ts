@@ -322,6 +322,12 @@ class Whatsapp extends Model<Whatsapp> {
   @Default(60)
   @Column
   sessionWindowRenewalMinutes: number;
+
+  // Templates aprovados permitidos para exibição (API Oficial)
+  // Array de IDs dos templates da Meta que o admin escolheu exibir
+  @AllowNull(true)
+  @Column(DataType.JSONB)
+  allowedTemplates: string[];
 }
 
 export default Whatsapp;

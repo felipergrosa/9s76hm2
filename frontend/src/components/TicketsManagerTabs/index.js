@@ -460,11 +460,12 @@ const TicketsManagerTabs = () => {
     showTicketWithoutQueue: canViewTicketsWithoutQueue,
   });
 
-  const openCount = metaByStatus.open.count;
-  const pendingCount = metaByStatus.pending.count;
-  const groupingCount = metaByStatus.group.count;
-  const botCount = metaByStatus.bot.count;
-  const campaignCount = metaByStatus.campaign.count;
+  // Calcular mensagens não lidas somando de cada ticket
+  const openCount = ticketsByStatus.open.reduce((sum, t) => sum + (t.unreadMessages || 0), 0);
+  const pendingCount = ticketsByStatus.pending.reduce((sum, t) => sum + (t.unreadMessages || 0), 0);
+  const groupingCount = ticketsByStatus.group.reduce((sum, t) => sum + (t.unreadMessages || 0), 0);
+  const botCount = ticketsByStatus.bot.reduce((sum, t) => sum + (t.unreadMessages || 0), 0);
+  const campaignCount = ticketsByStatus.campaign.reduce((sum, t) => sum + (t.unreadMessages || 0), 0);
 
   const resetHovers = () => {
     setIsHoveredAll(false);
@@ -1168,6 +1169,7 @@ const TicketsManagerTabs = () => {
                         badgeContent={openCount}
                         max={99999}
                         color="primary"
+                        invisible={openCount === 0}
                       >
                         <MessageSharpIcon
                           style={{
@@ -1205,6 +1207,7 @@ const TicketsManagerTabs = () => {
                         badgeContent={pendingCount}
                         max={99999}
                         color="primary"
+                        invisible={pendingCount === 0}
                       >
                         <ClockIcon
                           style={{
@@ -1243,6 +1246,7 @@ const TicketsManagerTabs = () => {
                           badgeContent={groupingCount}
                           max={99999}
                           color="primary"
+                          invisible={groupingCount === 0}
                         >
                           <Group
                             style={{
@@ -1281,6 +1285,7 @@ const TicketsManagerTabs = () => {
                         badgeContent={botCount}
                         max={99999}
                         color="primary"
+                        invisible={botCount === 0}
                       >
                         <BotIcon
                           style={{
@@ -1318,6 +1323,7 @@ const TicketsManagerTabs = () => {
                         badgeContent={campaignCount}
                         max={99999}
                         color="primary"
+                        invisible={campaignCount === 0}
                       >
                         <CampaignIcon
                           style={{

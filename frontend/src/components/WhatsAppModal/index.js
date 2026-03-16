@@ -530,6 +530,10 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
     setAttachmentName(null)
   }
 
+  const handleEnableImportMessage = (e) => {
+    setEnableImportMessage(e.target.checked);
+  };
+
   return (
     <div className={classes.root}>
       <Dialog
@@ -789,6 +793,8 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                           values={values}
                           errors={errors}
                           touched={touched}
+                          setFieldValue={setFieldValue}
+                          whatsAppId={whatsAppId}
                         />
                       </>
                     )}

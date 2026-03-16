@@ -198,15 +198,35 @@ const reducer = (state, action) => {
         return state;
       }
 
+      const hadUnread = ticket.unreadMessages > 0;
+      const statusKey = ticket.status;
+
+      // Atualiza o ticket
+      const nextTicketsById = {
+        ...state.ticketsById,
+        [action.ticketId]: {
+          ...ticket,
+          unreadMessages: 0,
+        },
+      };
+
+      // Se tinha mensagens não lidas e agora está zerado, decrementa o contador da aba
+      const nextMetaByStatus = { ...state.metaByStatus };
+      if (hadUnread && statusKey && nextMetaByStatus[statusKey]) {
+        const currentCount = nextMetaByStatus[statusKey].count || 0;
+        // Decrementa apenas se o ticket ainda está na lista (tem mensagens não lidas no contador)
+        if (currentCount > 0) {
+          nextMetaByStatus[statusKey] = {
+            ...nextMetaByStatus[statusKey],
+            count: currentCount - 1,
+          };
+        }
+      }
+
       return {
         ...state,
-        ticketsById: {
-          ...state.ticketsById,
-          [action.ticketId]: {
-            ...ticket,
-            unreadMessages: 0,
-          },
-        },
+        ticketsById: nextTicketsById,
+        metaByStatus: nextMetaByStatus,
       };
     }
 
