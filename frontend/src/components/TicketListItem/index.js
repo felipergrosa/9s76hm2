@@ -500,24 +500,17 @@ const TicketListItem = ({ ticket, isNotification }) => {
                                     variant="body2"
                                     color="textSecondary"
                                 >
-                                    {isSameDay(
-                                        parseISO(ticket.updatedAt),
-                                        new Date()
-                                    ) ? (
-                                        <>
-                                            {format(
-                                                parseISO(ticket.updatedAt),
-                                                "HH:mm"
-                                            )}
-                                        </>
-                                    ) : (
-                                        <>
-                                            {format(
-                                                parseISO(ticket.updatedAt),
-                                                "dd/MM/yyyy"
-                                            )}
-                                        </>
-                                    )}
+                                    {(() => {
+                                        try {
+                                            if (!ticket.updatedAt) return "";
+                                            const date = parseISO(ticket.updatedAt);
+                                            return isSameDay(date, new Date())
+                                                ? format(date, "HH:mm")
+                                                : format(date, "dd/MM/yyyy");
+                                        } catch {
+                                            return "";
+                                        }
+                                    })()}
                                 </Typography>
                             )}
                             {ticket.whatsappId && (
@@ -626,30 +619,39 @@ const TicketListItem = ({ ticket, isNotification }) => {
                         )}
                     {ticket.tags?.length > 0 && (
                         <>
-                            <div className={classes.tagsWrapper}>
-                                <div
-                                    key={ticket.tags[0].id}
-                                    className={classes.tags}
-                                    title={ticket.tags[0].name}
-                                    style={{
-                                        backgroundColor: ticket.tags[0].color,
-                                    }}
-                                >
-                                    {ticket.tags[0].name}
-                                </div>
-                            </div>
-                            {ticket.tags.length > 1 && (
-                                <div
-                                    key={ticket.tags[1].id}
-                                    className={classes.tags}
-                                    title={ticket.tags[1].name}
-                                    style={{
-                                        backgroundColor: ticket.tags[1].color,
-                                    }}
-                                >
-                                    +{ticket.tags.length - 1}
-                                </div>
-                            )}
+                            {(() => {
+                                // Filtrar apenas tags Kanban (kanban > 0)
+                                const kanbanTags = ticket.tags.filter(tag => tag.kanban > 0);
+                                if (kanbanTags.length === 0) return null;
+                                return (
+                                    <>
+                                        <div className={classes.tagsWrapper}>
+                                            <div
+                                                key={kanbanTags[0].id}
+                                                className={classes.tags}
+                                                title={kanbanTags[0].name}
+                                                style={{
+                                                    backgroundColor: kanbanTags[0].color,
+                                                }}
+                                            >
+                                                {kanbanTags[0].name}
+                                            </div>
+                                        </div>
+                                        {kanbanTags.length > 1 && (
+                                            <div
+                                                key="more"
+                                                className={classes.tags}
+                                                title={kanbanTags.slice(1).map(t => t.name).join(", ")}
+                                                style={{
+                                                    backgroundColor: kanbanTags[1]?.color || '#999',
+                                                }}
+                                            >
+                                                +{kanbanTags.length - 1}
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </>
                     )}
                 </div>

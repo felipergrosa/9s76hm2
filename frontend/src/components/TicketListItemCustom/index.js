@@ -972,10 +972,15 @@ const handleCloseTicket = async (id) => {
                                     variant="body2"
                                 >
                                     {(() => {
-                                        const d = parseISO(ticket.updatedAt);
-                                        if (isSameDay(d, new Date())) return format(d, "HH:mm");
-                                        if (isYesterday(d)) return "Ontem";
-                                        return format(d, "dd/MM/yy");
+                                        try {
+                                            if (!ticket.updatedAt) return "";
+                                            const d = parseISO(ticket.updatedAt);
+                                            if (isSameDay(d, new Date())) return format(d, "HH:mm");
+                                            if (isYesterday(d)) return "Ontem";
+                                            return format(d, "dd/MM/yy");
+                                        } catch {
+                                            return "";
+                                        }
                                     })()}
                                 </Typography>
                             </div>

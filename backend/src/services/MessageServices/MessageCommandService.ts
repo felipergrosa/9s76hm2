@@ -82,7 +82,7 @@ export async function createMessage(command: CreateMessageCommand): Promise<Mess
           { model: Queue, attributes: ["id", "name", "color"] },
           { model: Whatsapp, attributes: ["id", "name", "groupAsTicket", "greetingMediaAttachment", "facebookUserToken", "facebookUserId"] },
           { model: User, as: "user", attributes: ["id", "name"] },
-          { model: Tag, as: "tags", attributes: ["id", "name", "color"] }
+          { model: Tag, as: "tags", attributes: ["id", "name", "color", "kanban"] }
         ]
       }
     ]
@@ -227,7 +227,7 @@ export async function updateMessageAckByWid(
           { model: Queue, attributes: ["id", "name", "color"] },
           { model: Whatsapp, attributes: ["id", "name", "groupAsTicket"] },
           { model: User, as: "user", attributes: ["id", "name"] },
-          { model: Tag, as: "tags", attributes: ["id", "name", "color"] }
+          { model: Tag, as: "tags", attributes: ["id", "name", "color", "kanban"] }
         ]
       },
       { model: Message, as: "quotedMsg", include: ["contact"] }

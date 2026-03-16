@@ -90,7 +90,7 @@ const ShowTicketUUIDService = async (uuid: string,
       {
         model: Tag,
         as: "tags",
-        attributes: ["id", "name", "color"]
+        attributes: ["id", "name", "color", "kanban"]
       },
       {
         model: Whatsapp,

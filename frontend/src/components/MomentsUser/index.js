@@ -517,7 +517,14 @@ const MomentsUser = ({ onPanStart }) => {
                 </div>
               )}
               <Typography className={classes.time}>
-                {format(parseISO(ticket.updatedAt), "HH:mm")}
+                {(() => {
+                  try {
+                    if (!ticket.updatedAt) return "";
+                    return format(parseISO(ticket.updatedAt), "HH:mm");
+                  } catch {
+                    return "";
+                  }
+                })()}
               </Typography>
             </div>
           </div>

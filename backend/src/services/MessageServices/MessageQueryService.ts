@@ -125,7 +125,7 @@ export async function listMessages({
       {
         model: Tag,
         as: "tags",
-        attributes: ["id", "name", "color"]
+        attributes: ["id", "name", "color", "kanban"]
       }
     ]
   });

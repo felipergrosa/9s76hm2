@@ -87,6 +87,7 @@ const ListService = async ({
         'id',
         'name',
         'color',
+        'kanban',
       ],
       offset,
       order: [["name", "ASC"]],
@@ -142,6 +143,7 @@ const ListService = async ({
         'id',
         'name',
         'color',
+        'kanban',
       ],
     });
 

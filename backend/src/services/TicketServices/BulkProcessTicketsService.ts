@@ -218,7 +218,7 @@ const BulkProcessTicketsService = async (
             // Recarregar ticket com tags atualizadas para emitir evento
             const ticketWithTags = await Ticket.findByPk(ticket.id, {
               include: [
-                { association: "tags", attributes: ["id", "name", "color"] },
+                { association: "tags", attributes: ["id", "name", "color", "kanban"] },
                 { model: Contact, as: "contact", attributes: ["id", "name", "number"] }
               ]
             });
@@ -356,7 +356,7 @@ const BulkProcessTicketsService = async (
                 },
                 {
                   association: "tags",
-                  attributes: ["id", "name", "color"]
+                  attributes: ["id", "name", "color", "kanban"]
                 }
               ]
             });

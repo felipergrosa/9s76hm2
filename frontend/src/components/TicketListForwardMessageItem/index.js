@@ -161,16 +161,22 @@ const TicketListForwardMessageItem = ({ ticket, selectedTicket, sendData }) => {
                             )}
                             {ticket.lastMessage && (
                                 <Typography
-                                    className={clsx(classes.lastMessageTime, { [classes.selectedTicketText]: ticket === selectedTicket })}
+                                    className={classes.lastMessageTime}
                                     component="span"
                                     variant="body2"
                                     color="textSecondary"
                                 >
-                                    {isSameDay(parseISO(ticket.updatedAt), new Date()) ? (
-                                        <>{format(parseISO(ticket.updatedAt), "HH:mm")}</>
-                                    ) : (
-                                        <>{format(parseISO(ticket.updatedAt), "dd/MM/yyyy")}</>
-                                    )}
+                                    {(() => {
+                                        try {
+                                            if (!ticket.updatedAt) return "";
+                                            const date = parseISO(ticket.updatedAt);
+                                            return isSameDay(date, new Date())
+                                                ? format(date, "HH:mm")
+                                                : format(date, "dd/MM/yyyy");
+                                        } catch {
+                                            return "";
+                                        }
+                                    })()}
                                 </Typography>
                             )}
                         </span>

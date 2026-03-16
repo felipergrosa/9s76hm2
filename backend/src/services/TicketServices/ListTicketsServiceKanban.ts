@@ -79,7 +79,7 @@ const ListTicketsServiceKanban = async ({
     {
       model: Tag,
       as: "tags",
-      attributes: ["id", "name", "color"]
+      attributes: ["id", "name", "color", "kanban"]
     },
     {
       model: Whatsapp,

@@ -124,7 +124,7 @@ const ListTicketsService = async ({
         {
           model: Tag,
           as: "tags",
-          attributes: ["id", "name", "color"],
+          attributes: ["id", "name", "color", "kanban"],
           through: { attributes: [] }
         }
       ]
@@ -142,7 +142,7 @@ const ListTicketsService = async ({
     {
       model: Tag,
       as: "tags",
-      attributes: ["id", "name", "color"],
+      attributes: ["id", "name", "color", "kanban"],
       through: { attributes: [] }
     },
     {
