@@ -83,7 +83,7 @@ class TicketEventBus extends EventEmitter {
       try {
         const basePayload = { action: "update", ...event.payload };
         const payload = await enrichTicket(event.companyId, basePayload);
-        console.log(`[TicketEventBus DEBUG] TICKET_UPDATED ticketId=${event.ticketId} status=${event.payload?.ticket?.status || event.payload?.status} companyId=${event.companyId}`);
+        logger.debug(`[TicketEventBus] TICKET_UPDATED ticketId=${event.ticketId} status=${event.payload?.ticket?.status || event.payload?.status} companyId=${event.companyId}`);
         await emitSocketEvent(
           event.companyId,
           null,
@@ -99,7 +99,7 @@ class TicketEventBus extends EventEmitter {
     this.on("TICKET_DELETED", async (event: TicketEvent) => {
       try {
         const payload = { action: "delete", ticketId: event.ticketId, ...event.payload };
-        console.log(`[TicketEventBus DEBUG] TICKET_DELETED ticketId=${event.ticketId} oldStatus=${event.payload?.oldStatus} companyId=${event.companyId}`);
+        logger.debug(`[TicketEventBus] TICKET_DELETED ticketId=${event.ticketId} oldStatus=${event.payload?.oldStatus} companyId=${event.companyId}`);
         await emitSocketEvent(
           event.companyId,
           null,

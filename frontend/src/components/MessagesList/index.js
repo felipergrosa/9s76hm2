@@ -770,10 +770,13 @@ const reducer = (state, action) => {
 
     const merged = [...newMessages, ...state];
     // Ordenar por timestamp/createdAt para manter ordem cronológica correta
+    // Fallback para ID quando timestamps são iguais ou inválidos para garantir ordem determinística
     merged.sort((a, b) => {
       const timeA = a.timestamp || new Date(a.createdAt).getTime() || 0;
       const timeB = b.timestamp || new Date(b.createdAt).getTime() || 0;
-      return timeA - timeB;
+      if (timeA !== timeB) return timeA - timeB;
+      // Fallback para ID quando timestamps são iguais
+      return (a.id || 0) - (b.id || 0);
     });
     return merged;
   }
@@ -808,10 +811,13 @@ const reducer = (state, action) => {
     });
 
     // Ordenar por timestamp/createdAt para manter ordem cronológica correta
+    // Fallback para ID quando timestamps são iguais ou inválidos para garantir ordem determinística
     return nextState.sort((a, b) => {
       const timeA = a.timestamp || new Date(a.createdAt).getTime() || 0;
       const timeB = b.timestamp || new Date(b.createdAt).getTime() || 0;
-      return timeA - timeB;
+      if (timeA !== timeB) return timeA - timeB;
+      // Fallback para ID quando timestamps são iguais
+      return (a.id || 0) - (b.id || 0);
     });
   }
 

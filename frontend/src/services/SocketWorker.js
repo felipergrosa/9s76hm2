@@ -163,6 +163,15 @@ class SocketWorker {
         return cb?.("invalid room");
       }
       
+      // LIMITE: Máximo de 100 salas ativas para evitar memory leak
+      const MAX_ACTIVE_ROOMS = 100;
+      if (this.activeRooms.size >= MAX_ACTIVE_ROOMS) {
+        // Remove a sala mais antiga (primeira do Set)
+        const firstRoom = this.activeRooms.values().next().value;
+        this.activeRooms.delete(firstRoom);
+        this.joinBuffer.delete(firstRoom);
+      }
+      
       // Sempre adiciona às salas ativas para rejoin após reconexão
       this.activeRooms.add(normalized);
       
