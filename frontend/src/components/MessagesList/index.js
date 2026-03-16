@@ -2239,7 +2239,7 @@ const MessagesList = ({
       .replace(/^\[BOTOES\]\s*/i, "")
       .replace(/^\[LIST\]\s*/i, "")
       .replace(/\n\*?\d+\*?\s*-\s*[^\n]+/g, "") // Remove linhas tipo "1 - Opção"
-      .trim();
+      .replace(/\s+$/, "");
     return cleaned;
   };
 
@@ -2358,12 +2358,12 @@ const MessagesList = ({
                     [classes.textContentItemCompact]: (
                       // PDFs: compacta quando body == nome do arquivo
                       (message.mediaType === "application" && /\.pdf($|\?)/i.test(message.mediaUrl || "") &&
-                        (getFileNameFromUrl(message.mediaUrl) || "").trim() === (message.body || "").trim())
+                        safeTrim(getFileNameFromUrl(message.mediaUrl) || "") === safeTrim(message.body || ""))
                       ||
                       // Imagens/Vídeos: compacta quando não há legenda ou quando body == nome do arquivo
                       ((message.mediaType === "image" || message.mediaType === "video") && (
-                        ((message.body || "").trim() === "") ||
-                        ((getFileNameFromUrl(message.mediaUrl) || "").trim() === (message.body || "").trim())
+                        (safeTrim(message.body || "")) === "" ||
+                        (safeTrim(getFileNameFromUrl(message.mediaUrl) || "")) === safeTrim(message.body || "")
                       ))
                     )
                   }
@@ -2371,7 +2371,7 @@ const MessagesList = ({
                   {message.quotedMsg && renderQuotedMessage(message)}
                   {message.mediaType !== "adMetaPreview" && (
                     (() => {
-                      const bodyTrim = (message.body || "").trim();
+                      const bodyTrim = safeTrim(message.body || "");
 
                       // Stickers/GIFs: nunca exibir texto
                       if (message.mediaType === "sticker" || message.mediaType === "gif") return null;
@@ -2402,7 +2402,7 @@ const MessagesList = ({
                         } else {
                           const fileName = getFileNameFromUrl(message.mediaUrl) || "";
                           // Se body é vazio OU é igual ao nome do arquivo, não exibir
-                          if (!bodyTrim || bodyTrim === fileName.trim()) {
+                          if (!bodyTrim || bodyTrim === safeTrim(fileName)) {
                             return null;
                           }
                         }

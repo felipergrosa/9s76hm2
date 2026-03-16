@@ -72,6 +72,14 @@ import { ForwardMessageContext } from "../../context/ForwarMessage/ForwardMessag
 import { EditMessageContext } from "../../context/EditingMessage/EditingMessageContext";
 import { OptimisticMessageContext } from "../../context/OptimisticMessage/OptimisticMessageContext";
 import { useParams } from "react-router-dom/cjs/react-router-dom.min";
+
+// Helper seguro para trim de strings - evita erros quando valor não é string
+const safeTrim = (value) => {
+  if (typeof value === 'string') return value.trim();
+  if (value == null) return '';
+  return String(value).trim();
+};
+
 // OTIMIZAÇÃO: ACCENT_MAP básico inline para correções imediatas (não carrega chunk de 22s)
 const ACCENT_MAP_BASIC = {
   'nao': 'não', 'sim': 'sim', 'esta': 'está', 'tambem': 'também', 'ja': 'já',
@@ -1680,14 +1688,14 @@ const MessageInput = ({
   const handleSendMessage = async (customMessage) => {
     const messageBodyText = customMessage || inputMessage;
 
-    if (messageBodyText.trim() === "") return;
+    if (safeTrim(messageBodyText) === "") return;
     setLoading(true);
 
     const userName = privateMessage
       ? `${user.name} - Mensagem Privada`
       : user.name;
 
-    const sendMessage = expandPlaceholders(messageBodyText.trim());
+    const sendMessage = expandPlaceholders(safeTrim(messageBodyText));
 
     const messageBody = (signMessage || privateMessage) && !editingMessage
       ? `*${userName}:*\n${sendMessage}`
@@ -2524,14 +2532,14 @@ const MessageInput = ({
                       onClick={showSelectMessageCheckbox ? handleOpenModalForward : handleSendMessage}
                       disabled={loading}
                       tabIndex={-1}
-                      className={inputMessage.trim() && !showSelectMessageCheckbox ? classes.sendButtonActive : ""}
+                      className={safeTrim(inputMessage) && !showSelectMessageCheckbox ? classes.sendButtonActive : ""}
                     >
                       {loading ? (
                         <CircularProgress className={classes.circleLoading} size={24} />
                       ) : showSelectMessageCheckbox ? (
                         <ReplyIcon size={20} className={classes.ForwardMessageIcons} />
                       ) : (
-                        <SendIcon size={20} className={inputMessage.trim() ? classes.sendMessageIconsActive : classes.sendMessageIcons} />
+                        <SendIcon size={20} className={safeTrim(inputMessage) ? classes.sendMessageIconsActive : classes.sendMessageIcons} />
                       )}
                     </IconButton>
                   </>

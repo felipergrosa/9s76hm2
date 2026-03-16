@@ -259,6 +259,32 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
     }
   }, [open, initialChannelType, whatsAppId]);
 
+  // Carregar dados da conexão quando abrir em modo de edição
+  useEffect(() => {
+    if (!open || !whatsAppId) return;
+
+    const fetchWhatsAppData = async () => {
+      try {
+        const { data } = await api.get(`/whatsapp/${whatsAppId}`);
+        setWhatsApp(prev => ({ ...prev, ...data }));
+        
+        // Carregar filas associadas
+        if (data.WhatsappQueue) {
+          setSelectedQueueIds(data.WhatsappQueue.map(wq => wq.queueId));
+        }
+        
+        // Carregar schedules se existirem
+        if (data.schedules) {
+          setSchedules(data.schedules);
+        }
+      } catch (err) {
+        toastError(err);
+      }
+    };
+
+    fetchWhatsAppData();
+  }, [open, whatsAppId]);
+
   useEffect(() => {
     async function fetchData() {
       const companyId = user.companyId;
