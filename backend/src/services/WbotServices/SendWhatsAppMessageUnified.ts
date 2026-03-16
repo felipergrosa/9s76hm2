@@ -199,6 +199,26 @@ const SendWhatsAppMessageUnified = async ({
         quotedMsgId
       });
 
+      // CRÍTICO: Para API Oficial, salvar mensagem no banco ANTES que o webhook retorne
+      // Isso evita duplicação quando o webhook processar a mensagem enviada
+      if (channelType === "official" && sentMessage) {
+        const CreateMessageService = (await import("../MessageServices/CreateMessageService")).default;
+        await CreateMessageService({
+          messageData: {
+            wid: sentMessage.id,
+            ticketId: ticket.id,
+            contactId: ticket.contactId,
+            body: formattedBody,
+            fromMe: true,
+            mediaType: "conversation",
+            read: true,
+            ack: 1,
+            quotedMsgId: quotedMsgId ? String(quotedMsgId) : null
+          },
+          companyId: ticket.companyId
+        });
+      }
+
       await ticket.update({
         lastMessage: formattedBody,
         imported: null,

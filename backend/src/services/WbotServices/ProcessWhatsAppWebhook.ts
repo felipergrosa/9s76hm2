@@ -293,6 +293,22 @@ async function processIncomingMessage(
   const messageId = message.id;
   const timestamp = parseInt(message.timestamp) * 1000; // Converter para ms
 
+  // CRÍTICO: Ignorar mensagens que já existem no banco (enviadas por nós mesmos)
+  // Quando enviamos uma mensagem, o OfficialAPIAdapter já salva no banco.
+  // Se o webhook retornar essa mesma mensagem, devemos ignorar para evitar duplicação.
+  const existingMessage = await Message.findOne({
+    where: {
+      wid: messageId,
+      companyId
+    },
+    attributes: ["id", "fromMe"]
+  });
+
+  if (existingMessage) {
+    logger.info(`[WebhookProcessor] Mensagem ${messageId} já existe no banco (fromMe=${existingMessage.fromMe}), ignorando webhook duplicado`);
+    return;
+  }
+
   logger.info(`[WebhookProcessor] Mensagem recebida: ${messageId} de ${from}`);
 
   // Extrair nome do contato se disponível
