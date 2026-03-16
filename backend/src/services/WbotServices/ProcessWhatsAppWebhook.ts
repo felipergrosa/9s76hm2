@@ -1,5 +1,6 @@
 import logger from "../../utils/logger";
 import * as Sentry from "@sentry/node";
+import { Mutex } from "async-mutex";
 import { WhatsAppFactory, IWhatsAppMessage } from "../../libs/whatsapp";
 import Whatsapp from "../../models/Whatsapp";
 import Contact from "../../models/Contact";
@@ -13,6 +14,17 @@ import DownloadOfficialMediaService from "./DownloadOfficialMediaService";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import { UpdateSessionWindow } from "../TicketServices/UpdateSessionWindowService";
 import { sessionWindowRenewalQueue } from "../../queues";
+import { Op } from "sequelize";
+
+// Lock mechanism para evitar race conditions na criação de contatos/tickets
+const contactLocks = new Map<string, Mutex>();
+
+const getContactLock = (key: string): Mutex => {
+  if (!contactLocks.has(key)) {
+    contactLocks.set(key, new Mutex());
+  }
+  return contactLocks.get(key)!;
+};
 
 const loadRealtimeTicketPayload = async (ticketId: number) => {
   return Ticket.findByPk(ticketId, {
@@ -275,13 +287,12 @@ async function processMessageWithExistingContact(
     .emit(`company-${companyId}-appMessage`, {
       action: "create",
       message: createdMessage,
-      ticket: realtimeTicket || ticket,
       contact
     });
 }
 
 /**
- * Processa mensagem recebida
+ * Processa mensagem recebida do webhook (com lock por contato para evitar duplicados)
  */
 async function processIncomingMessage(
   message: any,
@@ -291,11 +302,9 @@ async function processIncomingMessage(
 ): Promise<void> {
   const from = message.from;
   const messageId = message.id;
-  const timestamp = parseInt(message.timestamp) * 1000; // Converter para ms
+  const timestamp = parseInt(message.timestamp) * 1000;
 
   // CRÍTICO: Ignorar mensagens que já existem no banco (enviadas por nós mesmos)
-  // Quando enviamos uma mensagem, o OfficialAPIAdapter já salva no banco.
-  // Se o webhook retornar essa mesma mensagem, devemos ignorar para evitar duplicação.
   const existingMessage = await Message.findOne({
     where: {
       wid: messageId,
@@ -311,30 +320,22 @@ async function processIncomingMessage(
 
   logger.info(`[WebhookProcessor] Mensagem recebida: ${messageId} de ${from}`);
 
-  // Extrair nome do contato se disponível
+  // Extrair nome do contato e número real
   let contactName = from;
   let actualPhoneNumber = from;
 
   if (value.contacts && value.contacts.length > 0) {
-    // Primeiro, tentar encontrar o contato pelo from
     let contactInfo = value.contacts.find((c: any) => c.wa_id === from);
-
-    // Se não encontrou pelo from, pegar o primeiro contato disponível
     if (!contactInfo && value.contacts[0]) {
       contactInfo = value.contacts[0];
     }
 
     if (contactInfo) {
-      // Extrair nome do perfil
       if (contactInfo.profile && contactInfo.profile.name) {
         contactName = contactInfo.profile.name;
       }
-
-      // CRÍTICO: Usar wa_id como número real (é o telefone correto!)
-      // O wa_id sempre contém o número de telefone real, mesmo quando message.from é um ID Meta
       if (contactInfo.wa_id) {
         const { canonical } = safeNormalizePhoneNumber(contactInfo.wa_id);
-        // Validar se wa_id parece um número de telefone válido
         if (canonical) {
           actualPhoneNumber = canonical;
           logger.info(`[WebhookProcessor] Usando wa_id real normalizado: ${actualPhoneNumber} (message.from era: ${from})`);
@@ -343,14 +344,11 @@ async function processIncomingMessage(
     }
   }
 
-  // Verificar se o número ainda é um ID Meta (> 13 dígitos para BR, mas libphonenumber cuida disso)
   const { canonical: finalCanonical } = safeNormalizePhoneNumber(actualPhoneNumber);
   const isMetaId = !finalCanonical && actualPhoneNumber.replace(/\D/g, "").length > 13;
 
   if (isMetaId) {
     logger.warn(`[WebhookProcessor] Número ${actualPhoneNumber} parece ser ID Meta. Tentando fallback...`);
-
-    // Tentar encontrar contato existente pelo nome
     const existingByName = await Contact.findOne({
       where: {
         name: contactName,
@@ -361,432 +359,363 @@ async function processIncomingMessage(
 
     if (existingByName) {
       logger.info(`[WebhookProcessor] Contato encontrado pelo nome "${contactName}" (id=${existingByName.id}), evitando duplicata`);
-      // Usar o contato existente diretamente
       await processMessageWithExistingContact(existingByName, message, whatsapp, companyId, value, messageId, timestamp);
       return;
     } else {
-      // Não conseguimos resolver o número real, ignorar mensagem
-      logger.error(`[WebhookProcessor] REJEITADO: Não foi possível resolver número real para ID Meta ${from}. Mensagem ignorada.`, {
-        from,
-        actualPhoneNumber,
-        contactName,
-        phoneDigitsLength: actualPhoneNumber.replace(/\D/g, "").length
-      });
+      logger.error(`[WebhookProcessor] REJEITADO: Não foi possível resolver número real para ID Meta ${from}. Mensagem ignorada.`);
       return;
     }
   }
 
-  // Criar ou atualizar contato (com número válido)
-  let contact: Contact | null = null;
-  try {
-    contact = await CreateOrUpdateContactService({
-      name: contactName,
-      number: actualPhoneNumber,  // Usar número corrigido!
-      isGroup: false,
-      companyId,
-      whatsappId: whatsapp.id
-    });
+  // Lock por contato para evitar race conditions
+  const lockKey = `contact-${actualPhoneNumber}-${companyId}`;
+  const lock = getContactLock(lockKey);
+
+  await lock.runExclusive(async () => {
+    logger.info(`[WebhookProcessor] Lock adquirido para ${lockKey}`);
+
+    // Criar ou atualizar contato
+    let contact: Contact | null = null;
+    try {
+      contact = await CreateOrUpdateContactService({
+        name: contactName,
+        number: actualPhoneNumber,
+        isGroup: false,
+        companyId,
+        channel: "whatsapp",
+        whatsappId: whatsapp.id,
+        checkProfilePic: true
+      });
+      logger.info(`[WebhookProcessor] Contato resolvido: id=${contact.id}, number=${contact.number}`);
+    } catch (e: any) {
+      logger.error(`[WebhookProcessor] Erro ao criar/atualizar contato: ${e.message}`);
+      return;
+    }
 
     if (!contact) {
-      logger.error(`[WebhookProcessor] CreateOrUpdateContactService retornou null para número ${actualPhoneNumber}`);
+      logger.error(`[WebhookProcessor] Falha crítica: Contato não retornado pelo serviço.`);
       return;
     }
-  } catch (error: any) {
-    logger.error(`[WebhookProcessor] Erro ao criar/atualizar contato ${actualPhoneNumber}: ${error.message}`);
-    Sentry.captureException(error);
-    return;
-  }
 
-  logger.info(`[WebhookProcessor] Contato criado/atualizado: id=${contact.id}, nome=${contact.name}`);
+    // Buscar settings da empresa
+    const CompaniesSettings = (await import("../../models/CompaniesSettings")).default;
+    const settings = await CompaniesSettings.findOne({
+      where: { companyId }
+    });
 
+    // Encontrar ou criar ticket
+    let ticket = await FindOrCreateTicketService(
+      contact,
+      whatsapp,
+      1,
+      companyId,
+      null,
+      null,
+      undefined,
+      "whatsapp",
+      false,
+      false,
+      settings,
+      false,
+      false
+    );
 
-  // Buscar settings da empresa
-  const CompaniesSettings = (await import("../../models/CompaniesSettings")).default;
-  const settings = await CompaniesSettings.findOne({
-    where: { companyId }
-  });
+    logger.info(`[WebhookProcessor] Ticket resolvido: id=${ticket.id}, status=${ticket.status}`);
 
-  // Encontrar ou criar ticket
-  let ticket = await FindOrCreateTicketService(
-    contact,
-    whatsapp,
-    1, // unreadMessages - incrementa 1 para cada mensagem recebida
-    companyId,
-    null, // queueId
-    null, // userId
-    undefined, // groupContact
-    "whatsapp", // channel
-    false, // isImported
-    false, // isForward
-    settings, // settings da empresa
-    false, // isTransfered
-    false // isCampaign
-  );
-
-  // Se o ticket está em status "campaign" e o contato respondeu, mover para fluxo normal
-  if (ticket.status === "campaign") {
-    logger.info(`[WebhookProcessor] Contato respondeu em ticket de campanha #${ticket.id}, movendo para fluxo normal. Fila: ${ticket.queueId}`);
-
-    // Regra de saída de campanha:
-    // - Se a fila tem bot/agente (Chatbot ou RAG) => vai para BOT
-    // - Caso contrário => vai direto para ATENDENDO (open)
-    let shouldGoBot = Boolean(ticket.isBot);
-    try {
-      if (ticket.queueId) {
-        const Queue = (await import("../../models/Queue")).default;
-        const queue = await Queue.findByPk(ticket.queueId, {
-          include: [
-            {
-              association: "chatbots",
-              required: false
-            }
-          ]
-        });
-        const hasChatbot = Boolean(queue?.chatbots && (queue as any).chatbots.length > 0);
-        const hasRAG = Boolean(queue?.ragCollection && String(queue.ragCollection).trim());
-        shouldGoBot = hasChatbot || hasRAG;
+    // Se ticket estava em campanha, mudar para pending/bot
+    if (ticket.status === "campaign") {
+      logger.info(`[WebhookProcessor] Contato respondeu em ticket de campanha #${ticket.id}, movendo para fluxo normal. Fila: ${ticket.queueId}`);
+      let newStatus = "pending";
+      if (ticket.isBot) {
+        newStatus = "bot";
       }
-    } catch (e: any) {
-      logger.warn(`[WebhookProcessor] Erro ao avaliar bot/RAG da fila (queueId=${ticket.queueId}): ${e?.message || e}`);
+
+      await ticket.update({ status: newStatus });
+
+      const ShowTicketService = (await import("../TicketServices/ShowTicketService")).default;
+      ticket = await ShowTicketService(ticket.id, companyId);
+
+      const { ticketEventBus } = await import("../TicketServices/TicketEventBus");
+      ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, "campaign", newStatus);
     }
 
-    // REGRA UNIFICADA: Se não tem bot, vai para PENDING (Aguardando), não para OPEN
-    const newStatus = shouldGoBot ? "bot" : "pending";
+    // Processar corpo da mensagem
+    let body = "";
+    let mediaType: string | undefined;
+    let mediaUrl: string | undefined;
 
-    await ticket.update({
-      status: newStatus,
-      isBot: shouldGoBot,
-      unreadMessages: (ticket.unreadMessages || 0) + 1
-    });
+    switch (message.type) {
+      case "text":
+        body = message.text?.body || "";
+        mediaType = "conversation";
+        break;
 
-    // Recarregar ticket
-    const Ticket = (await import("../../models/Ticket")).default;
-    const Queue = (await import("../../models/Queue")).default;
-    const User = (await import("../../models/User")).default;
-    ticket = await Ticket.findByPk(ticket.id, {
-      include: [
-        { model: Contact, as: "contact" },
-        { model: Queue, as: "queue" },
-        { model: User, as: "user" },
-        { model: Whatsapp, as: "whatsapp" }
-      ]
-    });
-
-    logger.info(`[WebhookProcessor] Ticket #${ticket.id} movido para status "${newStatus}", fila: ${ticket.queueId}`);
-  } else {
-    // Incrementar contador de mensagens não lidas
-    await ticket.update({
-      unreadMessages: (ticket.unreadMessages || 0) + 1
-    });
-  }
-
-  logger.info(`[WebhookProcessor] Ticket ${ticket.id} criado/encontrado: status=${ticket.status}, queueId=${ticket.queueId}, isBot=${ticket.isBot}, unreadMessages=${ticket.unreadMessages}`);
-
-  // Extrair corpo da mensagem
-  let body = "";
-  let mediaType: string | undefined;
-  let mediaUrl: string | undefined;
-
-  switch (message.type) {
-    case "text":
-      body = message.text?.body || "";
-      mediaType = "conversation";
-      break;
-
-    case "image":
-      body = message.image?.caption || "";
-      mediaType = "image";
-
-      // Baixar mídia da Meta API
-      if (message.image?.id) {
-        try {
-          mediaUrl = await DownloadOfficialMediaService({
-            mediaId: message.image.id,
-            whatsapp,
-            companyId,
-            contactId: contact.id,
-            mediaType: "image"
-          });
-          logger.info(`[WebhookProcessor] Imagem baixada: ${mediaUrl}`);
-        } catch (error: any) {
-          logger.error(`[WebhookProcessor] Erro ao baixar imagem: ${error.message}`);
-          mediaUrl = undefined; // Falha silenciosa, mensagem será texto
+      case "image":
+        body = message.image?.caption || "";
+        if (message.image?.id) {
+          try {
+            mediaUrl = await DownloadOfficialMediaService({
+              mediaId: message.image.id,
+              whatsapp,
+              companyId,
+              contactId: contact.id,
+              mediaType: "image"
+            });
+            mediaType = "image";
+          } catch (err: any) {
+            logger.error(`[WebhookProcessor] Erro ao baixar imagem: ${err.message}`);
+            body += " (Erro ao baixar mídia)";
+          }
         }
-      }
-      break;
+        break;
 
-    case "video":
-      body = message.video?.caption || "";
-      mediaType = "video";
-
-      if (message.video?.id) {
-        try {
-          mediaUrl = await DownloadOfficialMediaService({
-            mediaId: message.video.id,
-            whatsapp,
-            companyId,
-            contactId: contact.id,
-            mediaType: "video"
-          });
-          logger.info(`[WebhookProcessor] Vídeo baixado: ${mediaUrl}`);
-        } catch (error: any) {
-          logger.error(`[WebhookProcessor] Erro ao baixar vídeo: ${error.message}`);
-          mediaUrl = undefined;
+      case "video":
+        body = message.video?.caption || "";
+        if (message.video?.id) {
+          try {
+            mediaUrl = await DownloadOfficialMediaService({
+              mediaId: message.video.id,
+              whatsapp,
+              companyId,
+              contactId: contact.id,
+              mediaType: "video"
+            });
+            mediaType = "video";
+          } catch (err: any) {
+            logger.error(`[WebhookProcessor] Erro ao baixar vídeo: ${err.message}`);
+            body += " (Erro ao baixar mídia)";
+          }
         }
-      }
-      break;
+        break;
 
-    case "audio":
-      body = "";
-      mediaType = "audio";
-
-      if (message.audio?.id) {
-        try {
-          mediaUrl = await DownloadOfficialMediaService({
-            mediaId: message.audio.id,
-            whatsapp,
-            companyId,
-            contactId: contact.id,
-            mediaType: "audio"
-          });
-          logger.info(`[WebhookProcessor] Áudio baixado: ${mediaUrl}`);
-        } catch (error: any) {
-          logger.error(`[WebhookProcessor] Erro ao baixar áudio: ${error.message}`);
-          mediaUrl = undefined;
+      case "audio":
+      case "voice":
+        if (message.audio?.id || message.voice?.id) {
+          try {
+            const audioId = message.audio?.id || message.voice?.id;
+            mediaUrl = await DownloadOfficialMediaService({
+              mediaId: audioId,
+              whatsapp,
+              companyId,
+              contactId: contact.id,
+              mediaType: "audio"
+            });
+            mediaType = "audio";
+          } catch (err: any) {
+            logger.error(`[WebhookProcessor] Erro ao baixar áudio: ${err.message}`);
+            body = "(Erro ao baixar mídia)";
+          }
         }
-      }
-      break;
+        break;
 
-    case "document":
-      body = message.document?.caption || message.document?.filename || "";
-      mediaType = "document";
-
-      if (message.document?.id) {
-        try {
-          mediaUrl = await DownloadOfficialMediaService({
-            mediaId: message.document.id,
-            whatsapp,
-            companyId,
-            contactId: contact.id,
-            mediaType: "document"
-          });
-          logger.info(`[WebhookProcessor] Documento baixado: ${mediaUrl}`);
-        } catch (error: any) {
-          logger.error(`[WebhookProcessor] Erro ao baixar documento: ${error.message}`);
-          mediaUrl = undefined;
+      case "document":
+        body = message.document?.caption || message.document?.filename || "";
+        if (message.document?.id) {
+          try {
+            mediaUrl = await DownloadOfficialMediaService({
+              mediaId: message.document.id,
+              whatsapp,
+              companyId,
+              contactId: contact.id,
+              mediaType: "document"
+            });
+            mediaType = "document";
+          } catch (err: any) {
+            logger.error(`[WebhookProcessor] Erro ao baixar documento: ${err.message}`);
+            body += " (Erro ao baixar mídia)";
+          }
         }
-      }
-      break;
+        break;
 
-    case "button":
-      body = message.button?.text || "";
-      break;
-
-    case "interactive":
-      if (message.interactive?.button_reply) {
-        body = message.interactive.button_reply.title;
-      } else if (message.interactive?.list_reply) {
-        body = message.interactive.list_reply.title;
-      }
-      break;
-
-    case "sticker":
-      body = "sticker";
-      mediaType = "sticker";
-
-      if (message.sticker?.id) {
-        try {
-          mediaUrl = await DownloadOfficialMediaService({
-            mediaId: message.sticker.id,
-            whatsapp,
-            companyId,
-            contactId: contact.id,
-            mediaType: "sticker"
-          });
-          logger.info(`[WebhookProcessor] Sticker baixado: ${mediaUrl}`);
-        } catch (error: any) {
-          logger.error(`[WebhookProcessor] Erro ao baixar sticker: ${error.message}`);
-          mediaUrl = undefined;
+      case "sticker":
+        if (message.sticker?.id) {
+          try {
+            mediaUrl = await DownloadOfficialMediaService({
+              mediaId: message.sticker.id,
+              whatsapp,
+              companyId,
+              contactId: contact.id,
+              mediaType: "sticker"
+            });
+            mediaType = "sticker";
+          } catch (err: any) {
+            logger.error(`[WebhookProcessor] Erro ao baixar sticker: ${err.message}`);
+            body = "(Sticker)";
+          }
         }
-      }
-      break;
+        break;
 
-    case "location":
-      // Formato compatível com LocationPreview do frontend
-      const lat = message.location?.latitude || 0;
-      const lng = message.location?.longitude || 0;
-      const locationName = message.location?.name || "";
-      const locationAddress = message.location?.address || "";
-      const description = locationName ? `${locationName}\\n${locationAddress}` : `${lat}, ${lng}`;
+      case "location":
+        const lat = message.location?.latitude;
+        const lng = message.location?.longitude;
+        const locName = message.location?.name || "";
+        const description = message.location?.address || "";
+        const mapsLink = `https://maps.google.com/?q=${lat},${lng}`;
+        body = `data:image/png;base64, | ${mapsLink} | ${description}`;
+        mediaType = "locationMessage";
+        logger.info(`[WebhookProcessor] Localização recebida: ${lat}, ${lng}`);
+        break;
 
-      // Formato: base64_image | maps_link | description
-      const mapsLink = `https://maps.google.com/maps?q=${lat}%2C${lng}&z=17&hl=pt-BR`;
-      body = `data:image/png;base64, | ${mapsLink} | ${description}`;
-      mediaType = "locationMessage";
-      logger.info(`[WebhookProcessor] Localização recebida: ${lat}, ${lng}`);
-      break;
-
-    case "contacts":
-      // Formato vCard compatível com VcardPreview do frontend
-      if (message.contacts && message.contacts.length > 0) {
-        const vCards: string[] = [];
-        for (const c of message.contacts) {
-          const name = c.name?.formatted_name || "Contato";
-          const phones = c.phones?.map(p => p.phone).join(", ") || "";
-          // Formato vCard simplificado
-          vCards.push(`BEGIN:VCARD\nVERSION:3.0\nFN:${name}\nTEL:${phones}\nEND:VCARD`);
+      case "contacts":
+        if (message.contacts && message.contacts.length > 0) {
+          const vCards: string[] = [];
+          for (const c of message.contacts) {
+            const name = c.name?.formatted_name || "Contato";
+            const phones = c.phones?.map((p: any) => p.phone).join(", ") || "";
+            vCards.push(`BEGIN:VCARD\nVERSION:3.0\nFN:${name}\nTEL:${phones}\nEND:VCARD`);
+          }
+          body = vCards.join("\n");
+          mediaType = "contactMessage";
+          logger.info(`[WebhookProcessor] Contato(s) recebido(s): ${message.contacts.length}`);
         }
-        body = vCards.join("\n");
-        mediaType = "contactMessage";
-        logger.info(`[WebhookProcessor] Contato(s) recebido(s): ${message.contacts.length}`);
-      }
-      break;
+        break;
 
-    case "reaction":
-      body = message.reaction?.emoji || "👍";
-      mediaType = "reactionMessage";
-      logger.info(`[WebhookProcessor] Reação recebida: ${body}`);
-      break;
+      case "reaction":
+        body = message.reaction?.emoji || "👍";
+        mediaType = "reactionMessage";
+        logger.info(`[WebhookProcessor] Reação recebida: ${body}`);
+        break;
 
-    default:
-      logger.warn(`[WebhookProcessor] Tipo de mensagem não suportado: ${message.type}`);
-      body = `[${message.type}]`;
-  }
-
-  // Criar mensagem no banco
-  const createdMessage = await CreateMessageService({
-    messageData: {
-      wid: messageId,
-      ticketId: ticket.id,
-      contactId: contact.id,
-      body,
-      fromMe: false,
-      mediaType,
-      mediaUrl,
-      read: false,
-      ack: 0
-    },
-    companyId
-  });
-
-  logger.info(`[WebhookProcessor] Mensagem criada: ${createdMessage.id}`);
-
-  // Atualizar janela de sessão de 24h (API Oficial)
-  // Quando o cliente envia uma mensagem, abre-se uma janela de 24h para responder gratuitamente
-  await UpdateSessionWindow(ticket.id, whatsapp.id);
-
-  const realtimeTicket = await loadRealtimeTicketPayload(ticket.id);
-  if (realtimeTicket) {
-    ticket = realtimeTicket as any;
-  }
-
-  // AGENDAR renovação automática via Bull Queue (zero overhead, sem polling)
-  // Agenda para 23 horas depois (1h antes de expirar a janela de 24h)
-  try {
-    const renewalMinutes = whatsapp.sessionWindowRenewalMinutes || 60;
-    const delayMs = (24 * 60 - renewalMinutes) * 60 * 1000; // 24h - renewalMinutes
-    
-    // Job ID único por ticket (evita duplicatas)
-    const jobId = `window-renewal-${ticket.id}`;
-    
-    // Remover job anterior se existir (caso janela tenha sido renovada)
-    const existingJob = await sessionWindowRenewalQueue.getJob(jobId);
-    
-    if (existingJob) {
-      await existingJob.remove();
-      logger.info(`[WebhookProcessor] Job anterior removido: ${jobId}`);
+      default:
+        logger.warn(`[WebhookProcessor] Tipo de mensagem não suportado: ${message.type}`);
+        body = `[${message.type}]`;
     }
-    
-    // Agendar novo job
-    await sessionWindowRenewalQueue.add(
-      {
+
+    // Criar mensagem no banco
+    const createdMessage = await CreateMessageService({
+      messageData: {
+        wid: messageId,
         ticketId: ticket.id,
-        companyId: companyId
+        contactId: contact.id,
+        body,
+        fromMe: false,
+        mediaType,
+        mediaUrl,
+        read: false,
+        ack: 0
       },
-      {
-        jobId: jobId,
-        delay: delayMs, // Ex: 23h depois se renewalMinutes=60
-        attempts: 3,
-        backoff: {
-          type: 'fixed',
-          delay: 60000 // 1 min entre retries
-        }
-      }
-    );
-    
-    logger.info(
-      `[WebhookProcessor] Agendado renovação de janela para ticket ${ticket.id} ` +
-      `(envio em ${Math.floor(delayMs / 3600000)}h se não houver resposta)`
-    );
-  } catch (scheduleError: any) {
-    logger.error(
-      `[WebhookProcessor] Erro ao agendar renovação de janela para ticket ${ticket.id}: ${scheduleError.message}`
-    );
-    // Não lançar erro - mensagem já foi processada com sucesso
-  }
-
-  // Emitir evento via Socket.IO apenas para a sala do ticket específico
-  const io = getIO();
-  io.of(`/workspace-${companyId}`)
-    .to(ticket.uuid)  // CRÍTICO: Emitir apenas para a sala do ticket, não broadcast
-    .emit(`company-${companyId}-appMessage`, {
-      action: "create",
-      message: createdMessage,
-      ticket,
-      contact
+      companyId
     });
 
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-appMessage`, {
-      action: "create",
-      message: createdMessage,
-      ticket,
-      contact
+    logger.info(`[WebhookProcessor] Mensagem criada: ${createdMessage.id}`);
+
+    // Atualizar ticket com contador de mensagens não lidas
+    await ticket.update({
+      lastMessage: body,
+      updatedAt: new Date(),
+      unreadMessages: (ticket.unreadMessages || 0) + 1
     });
 
-  io.of(`/workspace-${companyId}`)
-    .emit(`company-${companyId}-ticket`, {
-      action: "update",
-      ticket
-    });
+    // Atualizar janela de sessão de 24h (API Oficial)
+    await UpdateSessionWindow(ticket.id, whatsapp.id);
 
-  // Processar bot/IA se ticket está marcado como bot
-  if (ticket.status === "bot" && ticket.queueId && !message.from.includes(whatsapp.wabaPhoneNumberId || "")) {
-    logger.info(`[WebhookProcessor] Ticket ${ticket.id} é bot (status: ${ticket.status}, queue: ${ticket.queueId}), processando IA/Prompt...`);
+    const realtimeTicket = await loadRealtimeTicketPayload(ticket.id);
+    if (realtimeTicket) {
+      ticket = realtimeTicket as any;
+    }
 
+    // AGENDAR renovação automática via Bull Queue
     try {
-      // Verificar debounce para evitar mensagens duplicadas
-      const { canProcessBotMessage } = await import("../../helpers/BotDebounce");
-
-      if (!canProcessBotMessage(ticket.id, messageId)) {
-        logger.info(`[WebhookProcessor] Mensagem ${messageId} ignorada por debounce (ticket ${ticket.id})`);
-        return;
+      const renewalMinutes = whatsapp.sessionWindowRenewalMinutes || 60;
+      const delayMs = (24 * 60 - renewalMinutes) * 60 * 1000;
+      
+      const jobId = `window-renewal-${ticket.id}`;
+      const existingJob = await sessionWindowRenewalQueue.getJob(jobId);
+      
+      if (existingJob) {
+        await existingJob.remove();
+        logger.info(`[WebhookProcessor] Job anterior removido: ${jobId}`);
       }
+      
+      await sessionWindowRenewalQueue.add(
+        {
+          ticketId: ticket.id,
+          companyId: companyId
+        },
+        {
+          jobId: jobId,
+          delay: delayMs,
+          attempts: 3,
+          backoff: {
+            type: 'fixed',
+            delay: 60000
+          }
+        }
+      );
+    
+      logger.info(
+        `[WebhookProcessor] Agendado renovação de janela para ticket ${ticket.id} ` +
+        `(envio em ${Math.floor(delayMs / 3600000)}h se não houver resposta)`
+      );
+    } catch (scheduleError: any) {
+      logger.error(
+        `[WebhookProcessor] Erro ao agendar renovação de janela para ticket ${ticket.id}: ${scheduleError.message}`
+      );
+    }
 
-      // Importar dinamicamente para evitar circular dependencies
-      const { processOfficialBot } = await import("./ProcessOfficialBot");
-      await processOfficialBot({
+    // Emitir evento via Socket.IO
+    const io = getIO();
+    io.of(`/workspace-${companyId}`)
+      .to(ticket.uuid)
+      .emit(`company-${companyId}-appMessage`, {
+        action: "create",
         message: createdMessage,
         ticket,
-        contact,
-        whatsapp,
-        companyId
+        contact
       });
-    } catch (error: any) {
-      logger.error(`[WebhookProcessor] Erro ao processar bot: ${error.message}`);
-      Sentry.captureException(error);
-    }
-  }
 
-  // Marcar mensagem como lida automaticamente (se configurado)
-  const adapter = WhatsAppFactory.getAdapter(whatsapp.id);
-  if (adapter && adapter.markAsRead) {
-    try {
-      await adapter.markAsRead(messageId);
-    } catch (error: any) {
-      logger.warn(`[WebhookProcessor] Falha ao marcar como lida: ${error.message}`);
+    io.of(`/workspace-${companyId}`)
+      .emit(`company-${companyId}-appMessage`, {
+        action: "create",
+        message: createdMessage,
+        ticket,
+        contact
+      });
+
+    io.of(`/workspace-${companyId}`)
+      .emit(`company-${companyId}-ticket`, {
+        action: "update",
+        ticket
+      });
+
+    // Processar bot/IA se ticket está marcado como bot
+    if (ticket.status === "bot" && ticket.queueId && !message.from.includes(whatsapp.wabaPhoneNumberId || "")) {
+      logger.info(`[WebhookProcessor] Ticket ${ticket.id} é bot (status: ${ticket.status}, queue: ${ticket.queueId}), processando IA/Prompt...`);
+
+      try {
+        const { canProcessBotMessage } = await import("../../helpers/BotDebounce");
+
+        if (!canProcessBotMessage(ticket.id, messageId)) {
+          logger.info(`[WebhookProcessor] Mensagem ${messageId} ignorada por debounce (ticket ${ticket.id})`);
+          return;
+        }
+
+        const { processOfficialBot } = await import("./ProcessOfficialBot");
+        await processOfficialBot({
+          message: createdMessage,
+          ticket,
+          contact,
+          whatsapp,
+          companyId
+        });
+      } catch (error: any) {
+        logger.error(`[WebhookProcessor] Erro ao processar bot: ${error.message}`);
+        Sentry.captureException(error);
+      }
     }
-  }
+
+    // Marcar mensagem como lida automaticamente
+    const adapter = WhatsAppFactory.getAdapter(whatsapp.id);
+    if (adapter && adapter.markAsRead) {
+      try {
+        await adapter.markAsRead(messageId);
+      } catch (error: any) {
+        logger.warn(`[WebhookProcessor] Falha ao marcar como lida: ${error.message}`);
+      }
+    }
+
+    logger.info(`[WebhookProcessor] Lock liberado para ${lockKey}`);
+  });
 }
 
 /**

@@ -5428,31 +5428,29 @@ const handleMessage = async (
     });
 
     // Usa lock por JID para evitar race conditions na criação de contatos
-    // (o mutex por companyId foi removido pois serializava todas as mensagens,
-    // criando gargalo quando há muitas mensagens - 73+ na fila)
-    const contactJid = contact.number ? `${contact.number}@s.whatsapp.net` : msg.key.remoteJid;
-    
-    let ticket = await withJidLock(contactJid, async () => {
-      console.log(`[wbotMessageListener] Dentro do lock JID - criando/buscando ticket para contactId=${contact.id}`);
-      const result = await FindOrCreateTicketService(
-        contact,
-        whatsapp,
-        unreadMessages,
-        companyId,
-        queueId,
-        userId,
-        groupContact,
-        "whatsapp",
-        isImported,
-        false,
-        settings,
-        false,
-        false,
-        Boolean(msg?.key?.fromMe),
-        isSelfChat
-      );
-      console.log(`[wbotMessageListener] Ticket obtido: id=${result.id}, uuid=${result.uuid}, status=${result.status}`);
-      return result;
+    let ticket = await withJidLock(`ticket-${contact.id}-${companyId}`, async () => {
+      console.log(`[wbotMessageListener] Dentro do lock JID - criando/buscando ticket para contactId=${contact.id}, whatsappId=${whatsapp.id}, companyId=${companyId}`);
+      
+      try {
+        const result = await FindOrCreateTicketService(
+          contact,
+          whatsapp,
+          unreadMessages,
+          companyId,
+          queueId,
+          userId,
+          groupContact,
+          "whatsapp",
+          false,
+          false,
+          settings
+        );
+        console.log(`[wbotMessageListener] FindOrCreateTicketService retornou ticketId=${result.id}, status=${result.status}`);
+        return result;
+      } catch (err) {
+        console.error(`[wbotMessageListener] Erro em FindOrCreateTicketService:`, err);
+        throw err;
+      }
     });
 
     // Se o ticket está em status "campaign" e o contato respondeu, mover para fluxo normal

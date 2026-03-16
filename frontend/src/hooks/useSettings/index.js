@@ -32,7 +32,6 @@ const useSettings = () => {
   const getAll = async (params) => {
     // Verifica permissão ANTES de fazer a chamada
     if (!checkPermission("settings.view")) {
-      console.log("[useSettings] Usuário sem permissão settings.view, retornando null");
       return null;
     }
     
@@ -55,7 +54,6 @@ const useSettings = () => {
   const update = async (data) => {
     // Verifica permissão ANTES de fazer a chamada
     if (!checkPermission("settings.edit")) {
-      console.log("[useSettings] Usuário sem permissão settings.edit, retornando null");
       return null;
     }
     
@@ -65,7 +63,6 @@ const useSettings = () => {
         method: "PUT",
         data,
       });
-      console.log(responseData);
       return responseData;
     } catch (err) {
       // Silencia erro 403
@@ -79,7 +76,6 @@ const useSettings = () => {
   const get = async (param) => {
     // Verifica permissão ANTES de fazer a chamada
     if (!checkPermission("settings.view")) {
-      console.log("[useSettings] Usuário sem permissão settings.view, retornando null");
       return null;
     }
     

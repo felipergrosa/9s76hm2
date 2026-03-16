@@ -333,10 +333,17 @@ class Contact extends Model<Contact> {
       if (file === 'nopicture.png') {
         return `${process.env.FRONTEND_URL}/nopicture.png`;
       }
-      // Se já for uma URL absoluta (http:// ou https://), retorna diretamente
-      if (file.startsWith('http://') || file.startsWith('https://')) {
+      
+      // CRÍTICO: Detectar URLs absolutas (mesmo mal formatadas) para evitar concatenação dupla
+      // Ex: trata 'https://...', 'http://...' e erros comuns como 'https//...'
+      if (file.startsWith('http://') || file.startsWith('https://') || file.startsWith('https//')) {
+        // Corrigir typo comum 'https//' -> 'https://'
+        if (file.startsWith('https//')) {
+            return file.replace('https//', 'https://');
+        }
         return file;
       }
+
       // Se já vier com subpastas, considerar relativo à raiz da company
       const relative = file.includes('/') ? file : `contacts/${file}`;
       // Monta origem preferindo sempre o backend (que serve /public)

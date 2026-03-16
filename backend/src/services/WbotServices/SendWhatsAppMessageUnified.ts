@@ -64,13 +64,9 @@ const SendWhatsAppMessageUnified = async ({
 }: Request): Promise<IWhatsAppMessage | proto.WebMessageInfo> => {
   
   try {
-    logger.info(`[SendUnified] Enviando mensagem para ticket ${ticket.id} (whatsappId=${ticket.whatsappId})`);
-    
     // Obter adapter apropriado (Baileys ou Official API)
     const adapter = await GetTicketAdapter(ticket);
     const channelType = adapter.channelType;
-    
-    logger.debug(`[SendUnified] Usando adapter: ${channelType}`);
     
     // Obter contato
     const contactNumber = await Contact.findByPk(ticket.contactId);
@@ -78,18 +74,12 @@ const SendWhatsAppMessageUnified = async ({
       throw new AppError("ERR_CONTACT_NOT_FOUND", 404);
     }
 
-    // Debug: Logar informações do contato
-    logger.info(`[SendMessageUnified] Contato obtido: id=${contactNumber.id}, number=${contactNumber.number}, remoteJid=${contactNumber.remoteJid}, lidJid=${contactNumber.lidJid}`);
-
     // Resolver JID correto para envio (trata LIDs → número real)
     const number = await ResolveSendJid(contactNumber, ticket.isGroup, ticket.whatsappId);
-    
-    // Debug: Logar resultado da resolução
-    logger.info(`[SendMessageUnified] ResolveSendJid resultado: ${number}`);
 
     // VALIDAÇÃO: Se não conseguiu resolver o JID, não enviar
     if (!number) {
-      logger.error(`[SendMessageUnified] ❌ Não foi possível resolver JID para envio. Contact: ${contactNumber.id}, Ticket: ${ticket.id}`);
+      logger.error(`[SendMessageUnified] Não foi possível resolver JID para envio. Contact: ${contactNumber.id}, Ticket: ${ticket.id}`);
       throw new AppError("Não foi possível resolver o número de destino. Contato pode ter número inválido ou não estar sincronizado.", 400);
     }
 
@@ -185,7 +175,10 @@ const SendWhatsAppMessageUnified = async ({
 
     // ===== ENVIO DE TEXTO SIMPLES =====
     if (body) {
-      const formattedBody = formatBody(body, ticket);
+      // Garantir que body seja string
+      const bodyString = typeof body === 'object' ? JSON.stringify(body) : String(body);
+      
+      const formattedBody = formatBody(bodyString, ticket);
 
       // Se tem mensagem citada
       let quotedMsgId: string | undefined;
@@ -232,7 +225,7 @@ const SendWhatsAppMessageUnified = async ({
 
   } catch (error: any) {
     Sentry.captureException(error);
-    logger.error(`[SendUnified] Erro ao enviar mensagem: ${error.message}`);
+    logger.error(`Erro ao enviar mensagem: ${error.message}`);
     
     if (error instanceof AppError) {
       throw error;

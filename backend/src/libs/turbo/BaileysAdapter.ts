@@ -190,8 +190,8 @@ export class BaileysAdapter implements ITurboEngine {
         logger: {
           level: 'silent' as const,
           info: () => {},
-          error: (obj: any) => logger.error(`[Baileys] ${obj}`),
-          warn: (obj: any) => logger.warn(`[Baileys] ${obj}`),
+          error: (obj: any) => logger.error(`[Baileys] ${typeof obj === 'object' ? obj?.message || JSON.stringify(obj) : obj}`),
+          warn: (obj: any) => logger.warn(`[Baileys] ${typeof obj === 'object' ? obj?.message || JSON.stringify(obj) : obj}`),
           debug: () => {},
           trace: () => {},
           child: function() {

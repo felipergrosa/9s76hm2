@@ -253,25 +253,18 @@ const Ticket = () => {
       if (!room || room === "undefined") return;
       // Guard: não fazer join se já estamos nesta sala
       if (joinedRoomRef.current === room) {
-        console.log("[Ticket] JOIN ignorado (já na sala):", room);
         return;
       }
       
       if (typeof socket.joinRoom === "function") {
         socket.joinRoom(room, (err) => {
-          if (err) {
-            console.error("[Ticket] joinRoom ERRO:", room, err);
-          } else {
-            console.log("[Ticket] joinRoom OK:", room);
+          if (!err) {
             joinedRoomRef.current = room; // Marca sala como joined
           }
         });
       } else if (typeof socket.emit === "function") {
         socket.emit("joinChatBox", room, (err) => {
-          if (err) {
-            console.error("[Ticket] joinChatBox ERRO:", room, err);
-          } else {
-            console.log("[Ticket] joinChatBox OK:", room);
+          if (!err) {
             joinedRoomRef.current = room; // Marca sala como joined
           }
         });
@@ -295,7 +288,6 @@ const Ticket = () => {
     const onConnectTicket = () => {
       // Usa o UUID do ref (mais estável) ou o ticketId da URL
       const candidate = (ticketUuidRef.current || ticketId || "").toString().trim();
-      console.log("[Ticket] onConnect - joinRoom:", candidate);
       doJoin(candidate);
     };
 

@@ -35,11 +35,25 @@ class TicketEventBus extends EventEmitter {
   private setupHandlers(): void {
     const enrichTicket = async (companyId: number, ticketPayload: any) => {
       if (!ticketPayload?.ticket?.id) return ticketPayload;
-      const hasUser = !!ticketPayload.ticket?.user;
-      const userColor = ticketPayload.ticket?.user?.color;
-      const userProfileImage = ticketPayload.ticket?.user?.profileImage;
-      const needsEnrich = !hasUser || userColor === undefined || userProfileImage === undefined;
+      
+      const ticket = ticketPayload.ticket;
+      const hasUser = !!ticket?.user;
+      const hasUserId = !!ticket?.userId;
+      const userColor = ticket?.user?.color;
+      const userProfileImage = ticket?.user?.profileImage;
+      
+      // CORREÇÃO: Sempre enriquecer se:
+      // 1. Não tem objeto user mas tem userId (usuário atribuído mas dados não carregados)
+      // 2. Cor do usuário é undefined ou null
+      // 3. Imagem de perfil é undefined ou null
+      const needsEnrich = (!hasUser && hasUserId) || 
+                          userColor === undefined || 
+                          userColor === null ||
+                          userProfileImage === undefined || 
+                          userProfileImage === null;
+      
       if (!needsEnrich) return ticketPayload;
+      
       try {
         const fullTicket = await ShowTicketService(ticketPayload.ticket.id, companyId);
         return { ...ticketPayload, ticket: fullTicket };

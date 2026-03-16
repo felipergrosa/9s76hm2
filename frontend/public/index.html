@@ -81,6 +81,10 @@
 			if (args[0]?.includes?.('aria-hidden') || args[0]?.includes?.('Blocked aria-hidden')) {
 				return; // Ignora avisos aria-hidden
 			}
+			// Suprimir erros de conexão WebSocket do Socket.IO
+			if (args[0]?.includes?.('WebSocket connection') || args[0]?.includes?.('websocket')) {
+				return; // Ignora erros de conexão WebSocket
+			}
 			originalConsoleError.apply(console, args);
 		};
 	</script>

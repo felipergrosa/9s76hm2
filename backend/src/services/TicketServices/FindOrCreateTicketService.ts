@@ -175,7 +175,7 @@ const FindOrCreateTicketService = async (
     }
   } else {
     // Para contatos individuais: buscar apenas tickets com status ativo
-    ticket = await Ticket.findOne({
+    const queryOptions = {
       where: {
         status: {
           [Op.or]: ["open", "pending", "group", "nps", "lgpd", "bot", "campaign"]
@@ -185,7 +185,26 @@ const FindOrCreateTicketService = async (
         whatsappId: whatsapp.id
       },
       order: [["id", "DESC"]]
-    });
+    };
+    
+    // DEBUG: Logar parâmetros da busca
+    logger.info(`[FindOrCreateTicket] Buscando ticket existente: contactId=${contact?.id}, whatsappId=${whatsapp.id}, companyId=${companyId}`);
+    
+    ticket = await Ticket.findOne(queryOptions as any);
+    
+    if (ticket) {
+        logger.info(`[FindOrCreateTicket] Ticket encontrado: ${ticket.id} (status=${ticket.status})`);
+    } else {
+        logger.warn(`[FindOrCreateTicket] Nenhum ticket encontrado para contactId=${contact?.id}, whatsappId=${whatsapp.id}. Será criado um novo.`);
+        // Verificar se existe algum ticket fechado ou com outro whatsappId para debug
+        const anyTicket = await Ticket.findOne({
+            where: { contactId: contact?.id, companyId },
+            order: [["id", "DESC"]]
+        });
+        if (anyTicket) {
+            logger.warn(`[FindOrCreateTicket] Ticket ${anyTicket.id} existe mas não bateu nos filtros: status=${anyTicket.status}, whatsappId=${anyTicket.whatsappId}`);
+        }
+    }
   }
 
   if (ticket) {

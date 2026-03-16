@@ -139,7 +139,7 @@ const NotificationsPopOver = ({ volume = 1 }) => {
     soundAlertRef.current = play;
 
     if (!("Notification" in window)) {
-      console.log("This browser doesn't support notifications");
+      // Browser não suporta notificações
     } else {
       Notification.requestPermission();
     }
@@ -209,17 +209,6 @@ const NotificationsPopOver = ({ volume = 1 }) => {
         ticket?.status === "open" ||
         ticket?.status === "pending" && showNotificationPending === true ||
         ticket?.status === "group" && ticket?.whatsapp?.groupAsTicket === "enabled" && showGroupNotification === true;
-
-      // Debug para investigar notificações de contatos privados
-      if (!isStatusAllowed && ticket?.status) {
-        console.log('[Notifications] DEBUG - Status não permitido:', {
-          status: ticket?.status,
-          showNotificationPending,
-          showGroupNotification,
-          isGroup: ticket?.isGroup,
-          groupAsTicket: ticket?.whatsapp?.groupAsTicket
-        });
-      }
 
       if (
         data?.action === "create" &&
@@ -335,13 +324,6 @@ const NotificationsPopOver = ({ volume = 1 }) => {
     const { message, ticket } = data;
     const contact = data?.contact || data?.ticket?.contact || {};
 
-    // Debug: verificar se notificação está sendo chamada
-    console.log('[Notifications] handleNotifications chamado', {
-      ticketId: ticket.id,
-      volume: volume,
-      hasSound: !!soundAlertRef.current
-    });
-
     try {
       if ("Notification" in window && Notification.permission === "granted") {
         const options = {
@@ -381,20 +363,15 @@ const NotificationsPopOver = ({ volume = 1 }) => {
     const timeSinceLastSound = now - lastSoundTimeRef.current;
     const MIN_SOUND_INTERVAL = 1000; // Mínimo 1 segundo entre sons
 
-    // Debug: verificar condições do som
-    console.log('[Notifications] Som - volume:', volume, 'timeSinceLastSound:', timeSinceLastSound);
-
     if (timeSinceLastSound < MIN_SOUND_INTERVAL) {
       if (soundTimeoutRef.current) {
         clearTimeout(soundTimeoutRef.current);
       }
       soundTimeoutRef.current = setTimeout(() => {
-        console.log('[Notifications] Tocando som (delayed)');
         soundAlertRef.current?.();
         lastSoundTimeRef.current = Date.now();
       }, MIN_SOUND_INTERVAL - timeSinceLastSound);
     } else {
-      console.log('[Notifications] Tocando som imediatamente');
       soundAlertRef.current?.();
       lastSoundTimeRef.current = now;
     }

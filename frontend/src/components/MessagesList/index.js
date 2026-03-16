@@ -769,7 +769,12 @@ const reducer = (state, action) => {
     });
 
     const merged = [...newMessages, ...state];
-    merged.sort((a, b) => a.id - b.id);
+    // Ordenar por timestamp/createdAt para manter ordem cronológica correta
+    merged.sort((a, b) => {
+      const timeA = a.timestamp || new Date(a.createdAt).getTime() || 0;
+      const timeB = b.timestamp || new Date(b.createdAt).getTime() || 0;
+      return timeA - timeB;
+    });
     return merged;
   }
 
@@ -802,7 +807,12 @@ const reducer = (state, action) => {
       }
     });
 
-    return nextState.sort((a, b) => (a.id || 0) - (b.id || 0));
+    // Ordenar por timestamp/createdAt para manter ordem cronológica correta
+    return nextState.sort((a, b) => {
+      const timeA = a.timestamp || new Date(a.createdAt).getTime() || 0;
+      const timeB = b.timestamp || new Date(b.createdAt).getTime() || 0;
+      return timeA - timeB;
+    });
   }
 
   if (action.type === "RESET") {
@@ -1249,7 +1259,6 @@ const MessagesList = ({
   // Listener para evento de refresh de mensagens (importação de histórico)
   useEffect(() => {
     const handleRefreshMessages = () => {
-      console.log("[MessagesList] Evento refreshMessages recebido - recarregando mensagens");
       // Incrementa counter para disparar o useEffect de busca
       setRefreshCounter(prev => prev + 1);
       setPageNumber(1);
@@ -1318,18 +1327,6 @@ const MessagesList = ({
         const currentUuid = safeTrim((currentRoomIdRef.current || ticketUuidFromUrl || "").toString());
         const urlIsUuid = Boolean(ticketUuidFromUrl);
 
-        console.log("[MessagesList] 📨 appMessage recebido", {
-          action: data?.action,
-          evtUuid,
-          evtTicketId,
-          hasUuid,
-          currentRoom: currentRoomIdRef.current,
-          currentTicketId: ticketId,
-          currentUuid,
-          msgId: data?.message?.id,
-          body: data?.message?.body?.substring(0, 50),
-        });
-
         // CRÍTICO: Verificar se a mensagem pertence ao ticket atual
         // Suporta múltiplas conexões com tickets separados para o mesmo contato
         let shouldHandle = false;
@@ -1351,21 +1348,10 @@ const MessagesList = ({
         }
 
         if (!shouldHandle) {
-          console.warn("[MessagesList] ❌ Rejeitando mensagem de outro ticket", {
-            evtUuid,
-            evtTicketId,
-            currentRoom: currentRoomIdRef.current,
-            currentUuid,
-            currentNumericId: currentTicketNumericId.current,
-            ticketId
-          });
           return;
         }
 
-        console.log("[MessagesList] ✅ Processando mensagem do ticket atual");
-
         if (data.action === "create") {
-          console.log("[MessagesList] ➕ Adicionando nova mensagem:", data.message?.id);
           dispatch({ type: "ADD_MESSAGE", payload: data.message });
           scrollToBottom();
 
@@ -1395,7 +1381,7 @@ const MessagesList = ({
           dispatch({ type: "MARK_ALL_READ", payload: { ticketId: data.ticketId } });
         }
       } catch (e) {
-        console.debug("[MessagesList] error handling appMessage", e, data);
+        // Silenciar erros de processamento de mensagens
       }
     };
 
@@ -1404,13 +1390,11 @@ const MessagesList = ({
       try {
         const lastMessageId = localStorage.getItem(`lastMessageId-${ticketId}`);
         if (lastMessageId && socket?.connected) {
-          console.log("[MessagesList] Tentando recuperar mensagens perdidas desde ID:", lastMessageId);
           socket.emit("recoverMissedMessages", {
             ticketId: ticketId,
             lastMessageId: parseInt(lastMessageId, 10)
           }, (result) => {
             if (result?.success && result?.messages?.length > 0) {
-              console.log(`[MessagesList] Recuperadas ${result.count} mensagens perdidas`);
               dispatch({ type: "ADD_MESSAGES", payload: result.messages });
               scrollToBottom();
               // Atualizar último ID
@@ -1418,13 +1402,11 @@ const MessagesList = ({
               if (lastMsg?.id) {
                 localStorage.setItem(`lastMessageId-${ticketId}`, String(lastMsg.id));
               }
-            } else if (result?.error) {
-              console.warn("[MessagesList] Erro ao recuperar mensagens:", result.error);
             }
           });
         }
       } catch (e) {
-        console.debug("[MessagesList] Erro ao tentar recuperar mensagens:", e);
+        // Silenciar erros de recuperação
       }
     };
 
@@ -1447,16 +1429,16 @@ const MessagesList = ({
 
     // Logs auxiliares de conexão (somente em debug)
     socket.on("disconnect", (reason) => {
-      // console.debug("[MessagesList] disconnect", reason);
+      // silenciado
     });
     socket.on("reconnect", (attempt) => {
-      // console.debug("[MessagesList] reconnect", attempt);
+      // silenciado
     });
     socket.on("reconnect_attempt", (attempt) => {
-      // console.debug("[MessagesList] reconnect_attempt", attempt);
+      // silenciado
     });
     socket.on("connect_error", (err) => {
-      // console.debug("[MessagesList] connect_error", err?.message || err);
+      // silenciado
     });
 
     return () => {
@@ -1485,7 +1467,6 @@ const MessagesList = ({
       try {
         // GUARD: Não fazer polling durante carregamento inicial (primeiros 2s)
         if (initialLoadingRef.current) {
-          console.log("[MessagesList] Polling bloqueado durante carregamento inicial");
           return;
         }
         
@@ -1505,7 +1486,6 @@ const MessagesList = ({
           );
 
           if (newMessages.length > 0) {
-            console.log(`[MessagesList] Polling encontrou ${newMessages.length} mensagem(s) nova(s)`);
             newMessages.forEach((msg) => {
               dispatch({ type: "ADD_MESSAGE", payload: msg });
             });
@@ -1527,7 +1507,6 @@ const MessagesList = ({
         consecutiveFailsRef.current = 0; // Reset falhas após sucesso
       } catch (err) {
         consecutiveFailsRef.current++;
-        console.debug("[MessagesList] Erro no polling:", err);
       }
     };
 
@@ -1542,13 +1521,11 @@ const MessagesList = ({
       let intervalMs = 120000; // Default: 2min (reduzido de 30s)
 
       if (!socket?.connected) {
-        intervalMs = 30000; // 30s quando socket desconectado (reduzido de 5s)
-        logger.log("[MessagesList] Polling adaptativo: 30s (socket desconectado)");
+        intervalMs = 30000; // 30s quando socket desconectado
       } else if (consecutiveFailsRef.current > 5) {
-        intervalMs = 300000; // 5min após muitas falhas (aumentado de 60s)
-        logger.log("[MessagesList] Polling adaptativo: 5min (backoff após falhas)");
+        intervalMs = 300000; // 5min após muitas falhas
       } else {
-        logger.log("[MessagesList] Polling adaptativo: 2min (socket conectado - reduzido)");
+        intervalMs = 120000; // 2min padrão
       }
 
       pollIntervalRef.current = setInterval(pollNewMessages, intervalMs);
@@ -1559,12 +1536,10 @@ const MessagesList = ({
 
     // Reconfigura quando estado do socket muda
     const onConnect = () => {
-      console.log("[MessagesList] Socket reconectado - ajustando polling");
       setupAdaptivePolling();
     };
 
     const onDisconnect = () => {
-      console.log("[MessagesList] Socket desconectado - aumentando frequência de polling");
       setupAdaptivePolling();
     };
 

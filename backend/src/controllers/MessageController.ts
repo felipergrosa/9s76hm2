@@ -43,7 +43,7 @@ import ShowMessageService, { GetWhatsAppFromMessage } from "../services/MessageS
 import ImportContactHistoryService from "../services/MessageServices/ImportContactHistoryService";
 import ClearTicketMessagesService from "../services/MessageServices/ClearTicketMessagesService";
 import ResyncTicketMessagesService from "../services/MessageServices/ResyncTicketMessagesService";
-import { baileysMessageQueue, officialMessageQueue } from "../queues";
+import { baileysMessageQueue, officialMessageQueue, baileysChatQueue, officialChatQueue } from "../queues";
 
 type IndexQuery = {
   pageNumber: string;
@@ -782,10 +782,10 @@ function obterNomeEExtensaoDoArquivo(url: string): string {
   return `${nomeDoArquivo}.${extensao}`;
 }
 
-// Armazenar mensagem
 export const store = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
   const { body, quotedMsg, vCard, isPrivate = "false" }: MessageData = req.body;
+  
   const medias = req.files as Express.Multer.File[];
   const { companyId } = req.user;
 
@@ -812,7 +812,6 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     if (fallbackTicket?.whatsappId) {
       await ticket.update({ whatsappId: fallbackTicket.whatsappId });
       ticket.whatsappId = fallbackTicket.whatsappId;
-      console.log(`[MessageController.store] whatsappId recuperado para ticket ${ticketId}: ${ticket.whatsappId} (origem ticket ${fallbackTicket.id})`);
     }
   }
 
@@ -830,29 +829,11 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   }
 
   try {
-    console.log(`[MessageController.store] Iniciando fluxo de envio de mensagem para ticket ${ticketId}`);
-    console.log(`[MessageController.store] Ticket channel: ${ticket.channel}, whatsappId: ${ticket.whatsappId}`);
-
     if (medias) {
-      console.log(`[MessageController.store] Enviando ${medias.length} mídia(s) para ticket ${ticketId}`);
-      
-      // Log detalhado de cada arquivo
-      medias.forEach((media: Express.Multer.File, index) => {
-        console.log(`[MessageController.store] Mídia ${index + 1}:`, {
-          originalname: media.originalname,
-          filename: media.filename,
-          mimetype: media.mimetype,
-          size: media.size,
-          path: media.path
-        });
-      });
       
       await Promise.all(
         medias.map(async (media: Express.Multer.File, index) => {
-          console.log(`[MessageController.store] Processando mídia ${index + 1}/${medias.length}: ${media.originalname}`);
-          
           if (ticket.channel === "whatsapp") {
-            console.log(`[MessageController.store] Chamando SendWhatsAppMediaUnified...`);
             await SendWhatsAppMediaUnified({
               media,
               ticket,
@@ -860,7 +841,6 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
               isPrivate: isPrivate === "true",
               isForwarded: false
             });
-            console.log(`[MessageController.store] SendWhatsAppMediaUnified concluído com sucesso`);
           }
 
           if (["facebook", "instagram"].includes(ticket.channel)) {
@@ -906,9 +886,18 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
         const isOfficial = channelType === "official";
         
         // Selecionar fila apropriada
-        const targetQueue = isOfficial ? officialMessageQueue : baileysMessageQueue;
+        // Usar fila de chat (sem rate limiter) para mensagens manuais de tickets
+        // Usar fila normal (com rate limiter) para campanhas/agendamentos
+        const isChatMessage = !!ticket.id;
+        let targetQueue;
         
-        console.log(`[MessageController.store] Enfileirando mensagem via ${isOfficial ? 'Official' : 'Baileys'} Queue para ticket ${ticketId}`);
+        if (isChatMessage) {
+          // Mensagens de chat ao vivo usam filas rápidas (sem rate limiter)
+          targetQueue = isOfficial ? officialChatQueue : baileysChatQueue;
+        } else {
+          // Campanhas e mensagens em massa usam filas com rate limiter
+          targetQueue = isOfficial ? officialMessageQueue : baileysMessageQueue;
+        }
         
         await targetQueue.add(
           "SendMessage",
@@ -917,7 +906,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
             whatsappId: ticket.whatsappId,
             data: {
               number: ticket.contact.number,
-              body: body || "",
+              body: typeof body === 'object' ? JSON.stringify(body) : (body || ""),
               quotedMsg: quotedMsg || undefined,
               vCard: vCard || undefined,
               companyId: ticket.companyId
@@ -929,8 +918,6 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
             removeOnFail: false
           }
         );
-        
-        console.log(`[MessageController.store] Mensagem enfileirada com sucesso na fila ${isOfficial ? 'Official' : 'Baileys'}`);
       } else if (ticket.channel === "whatsapp" && isPrivate === "true") {
         const messageData = {
           wid: `PVT${ticket.updatedAt.toString().replace(" ", "")}`,

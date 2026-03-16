@@ -73,11 +73,11 @@ import { EditMessageContext } from "../../context/EditingMessage/EditingMessageC
 import { OptimisticMessageContext } from "../../context/OptimisticMessage/OptimisticMessageContext";
 import { useParams } from "react-router-dom/cjs/react-router-dom.min";
 
-// Helper seguro para trim de strings - evita erros quando valor não é string
+// Helper para trim de strings
 const safeTrim = (value) => {
   if (typeof value === 'string') return value.trim();
   if (value == null) return '';
-  return String(value).trim();
+  return '';
 };
 
 // OTIMIZAÇÃO: ACCENT_MAP básico inline para correções imediatas (não carrega chunk de 22s)
@@ -1560,7 +1560,6 @@ const MessageInput = ({
 
     // Certifique-se de que a variável medias esteja preenchida antes de continuar
     if (!mediasUpload.length) {
-      console.log("Nenhuma mídia selecionada.");
       return;
     }
 
@@ -1618,7 +1617,6 @@ const MessageInput = ({
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
           setUploadProgress(percentCompleted);
-          console.log(`[Upload] Progresso: ${percentCompleted}%`);
         }
       });
       
@@ -1686,7 +1684,9 @@ const MessageInput = ({
   };
 
   const handleSendMessage = async (customMessage) => {
-    const messageBodyText = customMessage || inputMessage;
+    // Ignorar se customMessage for um evento React ( SyntheticBaseEvent )
+    const isCustomMessage = typeof customMessage === 'string' && customMessage;
+    const messageBodyText = isCustomMessage ? customMessage : inputMessage;
 
     if (safeTrim(messageBodyText) === "") return;
     setLoading(true);
@@ -1695,7 +1695,9 @@ const MessageInput = ({
       ? `${user.name} - Mensagem Privada`
       : user.name;
 
-    const sendMessage = expandPlaceholders(safeTrim(messageBodyText));
+    const trimmedText = safeTrim(messageBodyText);
+
+    const sendMessage = expandPlaceholders(trimmedText, contactData, ticketData, user);
 
     const messageBody = (signMessage || privateMessage) && !editingMessage
       ? `*${userName}:*\n${sendMessage}`
@@ -1723,18 +1725,7 @@ const MessageInput = ({
         contact: { name: user.name },
         ticketId: ticketId,
       });
-      console.log("[OptimisticUI] Mensagem adicionada otimisticamente:", tempId);
     }
-
-    // Limpar input imediatamente para UX fluida se for a mensagem do input
-    const savedInput = inputMessage;
-    if (!customMessage) {
-      setInputMessage("");
-    }
-    setReplyingMessage(null);
-    setPrivateMessage(false);
-    setPrivateMessageInputVisible(false);
-    handleMenuItemClick();
 
     try {
       if (editingMessage !== null) {
@@ -1742,23 +1733,27 @@ const MessageInput = ({
         setEditingMessage(null);
       } else {
         const { data } = await api.post(`/messages/${ticketId}`, message);
-        // Confirmar mensagem otimística com a mensagem real do servidor
-        if (tempId && confirmOptimisticMessage && data?.message) {
+        
+        // Limpar input imediatamente após envio bem-sucedido
+        if (!customMessage) {
+          setInputMessage("");
+        }
+        setReplyingMessage(null);
+        setPrivateMessage(false);
+        setPrivateMessageInputVisible(false);
+        handleMenuItemClick();
+        
+        // Confirmar mensagem otimística se servidor retornar objeto
+        if (tempId && confirmOptimisticMessage && data?.message && typeof data.message === 'object') {
           confirmOptimisticMessage(ticketId, tempId, data.message);
-          console.log("[OptimisticUI] Mensagem confirmada pelo servidor:", data.message?.id);
         }
       }
     } catch (err) {
       // Marcar mensagem otimística como falha
       if (tempId && failOptimisticMessage) {
         failOptimisticMessage(ticketId, tempId, err?.message || "Erro ao enviar");
-        console.error("[OptimisticUI] Falha ao enviar mensagem:", err);
       }
       toastError(err);
-      // Restaurar input em caso de erro para que usuário possa tentar novamente
-      if (!customMessage) {
-        setInputMessage(savedInput);
-      }
     }
 
     setLoading(false);
@@ -2183,7 +2178,6 @@ const MessageInput = ({
                       component="span"
                       disabled={disableOption()}
                       onClick={() => {
-                        console.log('Clicou no assistente, alterando estado para:', !assistantOpen);
                         setAssistantOpen(prev => !prev);
                       }}
                     >
@@ -2193,14 +2187,16 @@ const MessageInput = ({
                 </Tooltip>
               )}
               <Tooltip title={i18n.t("tickets.buttons.scredule")}>
-                <IconButton
-                  aria-label="scheduleMessage"
-                  component="span"
-                  onClick={() => setAppointmentModalOpen(true)}
-                  disabled={loading}
-                >
-                  <ClockIcon size={20} className={classes.sendMessageIcons} />
-                </IconButton>
+                <span>
+                  <IconButton
+                    aria-label="scheduleMessage"
+                    component="span"
+                    onClick={() => setAppointmentModalOpen(true)}
+                    disabled={loading}
+                  >
+                    <ClockIcon size={20} className={classes.sendMessageIcons} />
+                  </IconButton>
+                </span>
               </Tooltip>
 
               <Fab

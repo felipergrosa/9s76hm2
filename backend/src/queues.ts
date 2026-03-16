@@ -319,7 +319,11 @@ export const officialMessageQueue = new BullQueue("OfficialMessageQueue", connec
   }
 });
 
-// Fila legada (manter por compatibilidade, redireciona para Baileys)
+// FILAS PARA CHAT AO VIVO - Mensagens manuais do usuário (SEM rate limiter)
+// Estas filas processam mensagens imediatamente, sem delay
+export const baileysChatQueue = new BullQueue("BaileysChatQueue", connection);
+export const officialChatQueue = new BullQueue("OfficialChatQueue", connection);
+
 export const messageQueue = baileysMessageQueue;
 
 let isProcessing = false;
@@ -335,6 +339,11 @@ async function handleSendMessage(job) {
     }
 
     const messageData: MessageData = data.data;
+
+    // Garantir que body seja string
+    if (messageData && typeof messageData.body === 'object') {
+      messageData.body = JSON.stringify(messageData.body);
+    }
 
     if (data.ticketId) {
       const ticket = await ShowTicketService(data.ticketId, messageData.companyId || whatsapp.companyId);
@@ -2999,6 +3008,11 @@ export async function startQueueProcess() {
   logger.info("Iniciando fila API Oficial com concurrency=10");
   officialMessageQueue.process("SendMessage", 10, handleSendMessage);
   // API Oficial não precisa de handleMessage/handleMessageAck (usa webhook)
+
+  // ===== FILAS DE CHAT AO VIVO (sem rate limiter - mensagens instantâneas) =====
+  logger.info("Iniciando filas de chat ao vivo (sem rate limiter)");
+  baileysChatQueue.process("SendMessage", 1, handleSendMessage);
+  officialChatQueue.process("SendMessage", 10, handleSendMessage);
 
   scheduleMonitor.process("Verify", 1, handleVerifySchedules);
 
