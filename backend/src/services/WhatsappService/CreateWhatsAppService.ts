@@ -65,6 +65,8 @@ interface Request {
   instagramAccountId?: string;
   contactTagId?: number;
   color?: string;
+  // Templates permitidos para API Oficial
+  allowedTemplates?: string[];
 }
 
 interface Response {
@@ -131,6 +133,8 @@ const CreateWhatsAppService = async ({
   instagramAccountId,
   contactTagId,
   color,
+  // Templates permitidos para API Oficial
+  allowedTemplates,
 }: Request): Promise<Response> => {
   const company = await Company.findOne({
     where: {
@@ -288,6 +292,8 @@ const CreateWhatsAppService = async ({
       instagramAccountId,
       contactTagId,
       color: normalizedColor,
+      // Templates permitidos para API Oficial
+      allowedTemplates,
     }
   );
 

@@ -41,6 +41,8 @@ interface WhatsappData {
   promptId?: number;
   requestQR?: boolean;
   contactTagId?: number;
+  // Templates permitidos para API Oficial
+  allowedTemplates?: string[];
 }
 
 interface Request {
@@ -98,7 +100,9 @@ const UpdateWhatsAppServiceAdmin = async ({
     schedules,
     promptId,
     requestQR = false,
-    contactTagId
+    contactTagId,
+    // Templates permitidos para API Oficial
+    allowedTemplates
   } = whatsappData;
 
   try {
@@ -159,7 +163,9 @@ const UpdateWhatsAppServiceAdmin = async ({
     integrationId,
     schedules,
     promptId,
-    contactTagId
+    contactTagId,
+    // Templates permitidos para API Oficial
+    allowedTemplates
   });
 
   if (!requestQR) {

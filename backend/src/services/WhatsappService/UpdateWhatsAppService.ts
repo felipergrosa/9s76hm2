@@ -58,6 +58,8 @@ interface WhatsappData {
   // Mensagem de renovação de janela 24h (API Oficial)
   sessionWindowRenewalMessage?: string;
   sessionWindowRenewalMinutes?: number;
+  // Templates permitidos para API Oficial
+  allowedTemplates?: string[];
   color?: string;
 }
 
@@ -138,6 +140,8 @@ const UpdateWhatsAppService = async ({
     // Mensagem de renovação de janela 24h (API Oficial)
     sessionWindowRenewalMessage,
     sessionWindowRenewalMinutes,
+    // Templates permitidos para API Oficial
+    allowedTemplates,
     color
   } = whatsappData;
 
@@ -228,6 +232,8 @@ const UpdateWhatsAppService = async ({
     // Mensagem de renovação de janela 24h (API Oficial)
     sessionWindowRenewalMessage,
     sessionWindowRenewalMinutes,
+    // Templates permitidos para API Oficial
+    allowedTemplates,
     color: finalColor
   });
 
