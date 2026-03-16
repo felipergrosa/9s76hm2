@@ -23,7 +23,11 @@ const useMessages = ({ fromMe, dateStart, dateEnd }) => {
                     setLoading(false);
                 } catch (err) {
                     setLoading(false);
-                    toastError(err);
+                    // 403 = sem permissão messages.view (admin)
+                    // Silencia o erro
+                    if (err?.response?.status !== 403) {
+                        toastError(err);
+                    }
                 }
             };
 

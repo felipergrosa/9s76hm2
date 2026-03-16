@@ -11,7 +11,7 @@ import Tag from "../../models/Tag";
 import TicketTag from "../../models/TicketTag";
 import ContactTag from "../../models/ContactTag";
 import Whatsapp from "../../models/Whatsapp";
-import { BackendPerfMonitor } from "../../utils/performanceDiagnostic";
+// import { BackendPerfMonitor } from "../../utils/performanceDiagnostic";
 
 import { intersection } from "lodash";
 
@@ -78,8 +78,8 @@ const ListTicketsService = async ({
   searchOnMessages = "false",
   walletOnly = false
 }: Request): Promise<Response> => {
-  BackendPerfMonitor.start('ListTicketsService:Total');
-  BackendPerfMonitor.mark('ListTicketsService:Start', { searchParam, status, pageNumber });
+  // BackendPerfMonitor.start('ListTicketsService:Total');
+  // BackendPerfMonitor.mark('ListTicketsService:Start', { searchParam, status, pageNumber });
   
   // Cache: evita queries repetidas durante carregamento inicial (5 abas simultâneas)
   const user = await withCache(
@@ -672,11 +672,11 @@ const ListTicketsService = async ({
 
   const hasMore = count > offset + tickets.length;
 
-  BackendPerfMonitor.end('ListTicketsService:Total', { 
-    ticketCount: tickets.length, 
-    totalCount: count,
-    hasMore 
-  });
+  // BackendPerfMonitor.end('ListTicketsService:Total', { 
+  //   ticketCount: tickets.length, 
+  //   totalCount: count,
+  //   hasMore 
+  // });
 
   return {
     tickets,

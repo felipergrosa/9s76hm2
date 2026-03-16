@@ -182,7 +182,12 @@ const Schedules = () => {
       setHasMore(data.hasMore);
       setLoading(false);
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão schedules.view (admin)
+      // Silencia o erro, lista de agendamentos fica vazia
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
+      setLoading(false);
     }
   }, [searchParam, pageNumber]);
 
@@ -261,7 +266,11 @@ const Schedules = () => {
       await api.delete(`/schedules/${scheduleId}`);
       toast.success(i18n.t("schedules.toasts.deleted"));
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão schedules.delete (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
     setDeletingSchedule(null);
     setSearchParam("");

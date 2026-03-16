@@ -307,7 +307,7 @@ const useStyles = makeStyles((theme) => ({
   },
   triggerButton: {
     padding: 6,
-    color: '#54656f',
+    color: '#000000',
     '&:hover': {
       backgroundColor: 'rgba(0,0,0,0.05)',
     },
@@ -646,7 +646,7 @@ const WhatsAppPopover = ({ onSelectEmoji, onSelectGif, onSelectSticker, disabled
 
   return (
     <>
-      <Tooltip title="Emojis, GIFs, figurinhas">
+      <Tooltip title="Emojis, GIFs, Figurinhas">
         <IconButton
           className={classes.triggerButton}
           onClick={handleOpen}

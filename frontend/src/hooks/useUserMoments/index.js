@@ -23,10 +23,14 @@ const useUserMoments = () => {
           setUpdate(false);
         }
       } catch (err) {
-        if (err.response?.status !== 500) {
-          toastError(err);
-        } else {
-          toast.error(`${i18n.t("frontEndErrors.getUsers")}`);
+        // 403 = sem permissão users.view ou dashboard.view (admin)
+        // Silencia o erro
+        if (err?.response?.status !== 403) {
+          if (err.response?.status !== 500) {
+            toastError(err);
+          } else {
+            toast.error(`${i18n.t("frontEndErrors.getUsers")}`);
+          }
         }
       }
     })();

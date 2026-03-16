@@ -108,6 +108,7 @@ export const AVAILABLE_PERMISSIONS = {
     "ai-agents.edit",
     "ai-agents.delete",
     "ai-training.view",
+    "ai-chat-assistant.use",
     "announcements.view",
     "announcements.create",
     "announcements.edit",
@@ -119,6 +120,7 @@ export const AVAILABLE_PERMISSIONS = {
     "users.view",
     "users.create",
     "users.edit",
+    "users.edit-own",
     "users.delete",
     "queues.view",
     "queues.create",
@@ -172,10 +174,13 @@ const getAdminPermissions = (): string[] => {
 
 /**
  * Retorna permissões básicas de usuário comum
+ * Usuário comum pode: ver tickets, enviar mensagens, aceitar/fechar tickets próprios
  */
 const getBaseUserPermissions = (): string[] => {
   return [
     "tickets.view",
+    "tickets.update",      // Permite enviar mensagens e atualizar status
+    "tickets.create",      // Permite criar novos tickets
     "quick-messages.view",
     "contacts.view",
     "tags.view",
@@ -276,7 +281,7 @@ export const getUserPermissions = (user: User): string[] => {
  * Verifica se usuário tem uma permissão específica
  * Suporta wildcard: "campaigns.*" concede todas permissões de campanhas
  */
-export const hasPermission = (user: User | null | undefined, permission: string): boolean => {
+export const hasPermission = (user: any | null | undefined, permission: string): boolean => {
   if (!user) return false;
 
   // Super admin sempre tem todas permissões
@@ -284,7 +289,7 @@ export const hasPermission = (user: User | null | undefined, permission: string)
     return true;
   }
 
-  const userPermissions = getUserPermissions(user);
+  const userPermissions = getUserPermissions(user as User);
 
   // Verifica permissão exata
   if (userPermissions.includes(permission)) {
@@ -483,6 +488,7 @@ const formatPermissionLabel = (key: string): string => {
     "users.view": "Ver Usuários",
     "users.create": "Criar Usuários",
     "users.edit": "Editar Usuários",
+    "users.edit-own": "Editar Próprio Perfil",
     "users.delete": "Deletar Usuários",
     "connections.view": "Ver Conexões",
     "connections.edit": "Gerenciar Conexões",
@@ -505,6 +511,7 @@ const formatPermissionLabel = (key: string): string => {
     "ai-agents.edit": "Editar Agentes de IA",
     "ai-agents.delete": "Deletar Agentes de IA",
     "ai-training.view": "Acessar Training / Sandbox (IA)",
+    "ai-chat-assistant.use": "Usar Assistente de Chat IA",
     "queues.view": "Ver Filas",
     "queues.create": "Criar Filas",
     "queues.edit": "Editar Filas",
@@ -559,8 +566,53 @@ const getPermissionDescription = (key: string): string => {
     "tickets.bulk-edit-close": "Fechar múltiplos tickets de uma vez",
     "tickets.bulk-edit-notes": "Adicionar nota interna em múltiplos tickets",
     "campaigns.create": "Criar e configurar novas campanhas",
-    "users.edit": "Editar informações e permissões de usuários",
-    "connections.edit": "Adicionar, editar e remover conexões WhatsApp"
+    "users.edit": "Editar informações e permissões de outros usuários",
+    "users.edit-own": "Permitir que o usuário edite seu próprio perfil (nome, avatar, cor, etc)",
+    "connections.edit": "Adicionar, editar e remover conexões WhatsApp",
+    "tags.view": "Visualizar etiquetas/tags de contatos e tickets",
+    "tags.create": "Criar novas etiquetas/tags",
+    "tags.edit": "Editar etiquetas/tags existentes",
+    "tags.delete": "Deletar etiquetas/tags",
+    "contacts.view": "Visualizar informações de contatos",
+    "contacts.create": "Criar novos contatos",
+    "contacts.edit": "Editar informações de contatos",
+    "contacts.delete": "Deletar contatos",
+    "quick-messages.view": "Visualizar respostas rápidas",
+    "quick-messages.create": "Criar novas respostas rápidas",
+    "quick-messages.edit": "Editar respostas rápidas",
+    "quick-messages.delete": "Deletar respostas rápidas",
+    "helps.view": "Acessar central de ajuda e tutoriais",
+    "schedules.view": "Visualizar agendamentos de mensagens",
+    "schedules.create": "Criar novos agendamentos",
+    "schedules.edit": "Editar agendamentos existentes",
+    "schedules.delete": "Deletar agendamentos",
+    "internal-chat.view": "Usar chat interno entre usuários",
+    "prompts.view": "Visualizar prompts de IA",
+    "prompts.create": "Criar novos prompts",
+    "prompts.edit": "Editar prompts",
+    "prompts.delete": "Deletar prompts",
+    "ai-agents.view": "Visualizar agentes de IA configurados",
+    "ai-agents.create": "Criar novos agentes de IA",
+    "ai-agents.edit": "Editar configurações de agentes de IA",
+    "ai-agents.delete": "Deletar agentes de IA",
+    "ai-training.view": "Acessar área de treinamento e sandbox de IA",
+    "ai-chat-assistant.use": "Usar o assistente de chat IA para melhorar mensagens (ícone de estrela/sparkle)",
+    "ai-settings.view": "Visualizar configurações de IA",
+    "ai-settings.edit": "Editar configurações de IA",
+    "queues.view": "Visualizar filas de atendimento",
+    "queues.create": "Criar novas filas",
+    "queues.edit": "Editar filas",
+    "queues.delete": "Deletar filas",
+    "dashboard.view": "Acessar dashboard e relatórios",
+    "reports.view": "Visualizar relatórios",
+    "announcements.view": "Visualizar informativos",
+    "announcements.create": "Criar informativos",
+    "announcements.edit": "Editar informativos",
+    "announcements.delete": "Deletar informativos",
+    "settings.view": "Visualizar configurações do sistema",
+    "settings.edit": "Editar configurações do sistema",
+    "integrations.view": "Visualizar integrações (n8n, Typebot, DialogFlow, etc)",
+    "files.view": "Acessar base de conhecimento / arquivos RAG"
   };
   return descriptions[key] || "";
 };

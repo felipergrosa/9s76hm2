@@ -30,6 +30,17 @@ const useStyles = makeStyles((theme) => ({
   maxWidth: {
     width: "100%",
   },
+  compactDialog: {
+    '& .MuiDialogContent-root': {
+      padding: theme.spacing(2),
+    },
+    '& .MuiGrid-container': {
+      marginBottom: theme.spacing(1),
+    },
+  },
+  textFieldCompact: {
+    marginTop: theme.spacing(1),
+  }
 }));
 
 const filterOptions = createFilterOptions({
@@ -46,7 +57,7 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedQueue, setSelectedQueue] = useState("");
   const classes = useStyles();
-  const { findAll: findAllQueues } = useQueues();
+  const { findAllForSelection } = useQueues();
   const isMounted = useRef(true);
   const [msgTransfer, setMsgTransfer] = useState('');
 
@@ -59,9 +70,10 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
   useEffect(() => {
     if (isMounted.current) {
       const loadQueues = async () => {
+        // Usa findAllForSelection - SEM permissão queues.view
         const list = mode === "bot"
-          ? await findAllQueues({ onlyWithBot: true })
-          : await findAllQueues();
+          ? await findAllForSelection({ onlyWithBot: true })
+          : await findAllForSelection();
 
         setAllQueues(list);
         setQueues(list);
@@ -82,12 +94,14 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
       const fetchUsers = async () => {
         setLoading(true);
         try {
-          const { data } = await api.get("/users/list");
+          // Usa /users/available - SEM permissão users.view
+          const { data } = await api.get("/users/available");
           setOptions(data);
           setLoading(false);
         } catch (err) {
           setLoading(false);
-          toastError(err);
+          console.error("Erro ao buscar usuários disponíveis:", err);
+          setOptions([]);
         }
       };
 
@@ -138,15 +152,23 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
 
 
   return (
-    <Dialog open={modalOpen} onClose={handleClose} maxWidth="md" fullWidth scroll="paper">
+    <Dialog 
+      open={modalOpen} 
+      onClose={handleClose} 
+      maxWidth={false}
+      PaperProps={{
+        style: { maxWidth: 300, width: '100%' }
+      }}
+      className={classes.compactDialog}
+    >
       {/* <form onSubmit={handleSaveTicket}> */}
       <DialogTitle id="form-dialog-title">
         {i18n.t("transferTicketModal.title")}
       </DialogTitle>
-      <DialogContent dividers>
-        <Grid container spacing={2}>
+      <DialogContent dividers style={{ paddingBottom: 8 }}>
+        <Grid container spacing={1}>
           {mode !== "bot" && (
-            <Grid item xs={12} sm={6} xl={6}>
+            <Grid item xs={12}>
               <FormControl variant="outlined" fullWidth>
                 <InputLabel id="user-selection-label">
                   {i18n.t("transferTicketModal.fieldLabel")}
@@ -184,7 +206,7 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
               </FormControl>
             </Grid>
           )}
-          <Grid xs={12} sm={mode === "bot" ? 12 : 6} xl={mode === "bot" ? 12 : 6} item >
+          <Grid item xs={12}>
             <FormControl variant="outlined" fullWidth>
               <InputLabel>
                 {i18n.t("transferTicketModal.fieldQueueLabel")}
@@ -193,6 +215,7 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
                 value={selectedQueue}
                 onChange={(e) => setSelectedQueue(e.target.value)}
                 label={i18n.t("transferTicketModal.fieldQueuePlaceholder")}
+                fullWidth
               >
                 {queues.map((queue) => (
                   <MenuItem key={queue.id} value={queue.id}>
@@ -203,7 +226,7 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
             </FormControl>
           </Grid>
         </Grid>
-        <Grid container spacing={2}>
+        <Grid container spacing={1} style={{ marginTop: 2 }}>
           {mode !== "bot" && (
             <Grid item xs={12} sm={12} xl={12} >
               <TextField
@@ -212,8 +235,8 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
                 onChange={handleMsgTransferChange}
                 variant="outlined"
                 multiline
-                maxRows={5}
-                minRows={5}
+                maxRows={2}
+                minRows={2}
                 fullWidth
               />
             </Grid>

@@ -208,7 +208,11 @@ const Users = () => {
         dispatch({ type: "SET_USERS", payload: data.users });
         setTotalUsers(typeof data.count === "number" ? data.count : (data.total || data.users.length));
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão users.view (admin)
+        // Silencia o erro, lista de usuários fica vazia
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       } finally {
         setLoading(false);
       }
@@ -258,7 +262,11 @@ const Users = () => {
       await api.delete(`/users/${userId}`);
       toast.success(i18n.t("users.toasts.deleted"));
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão users.delete (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
     setDeletingUser(null);
     setSearchParam("");

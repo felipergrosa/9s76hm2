@@ -12,7 +12,7 @@ class PerformanceDiagnostic {
     this.metrics = {};
     this.timers = {};
     this.renderCounts = {};
-    this.enabled = true;
+    this.enabled = false;
   }
 
   start(label) {
@@ -157,11 +157,11 @@ export const measureAsync = async (label, asyncFn) => {
   }
 };
 
-// Auto-report após 30 segundos
-if (typeof window !== 'undefined') {
-  setTimeout(() => {
-    PerformanceMonitor.reportSummary();
-  }, 30000);
-}
+// Auto-report após 30 segundos (DESATIVADO)
+// if (typeof window !== 'undefined') {
+//   setTimeout(() => {
+//     PerformanceMonitor.reportSummary();
+//   }, 30000);
+// }
 
 export default PerformanceMonitor;

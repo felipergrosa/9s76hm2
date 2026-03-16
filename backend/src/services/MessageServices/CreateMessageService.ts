@@ -114,7 +114,9 @@ const CreateMessageService = async ({
             as: "tags",
             attributes: ["id", "name", "color"]
           }
-        ]
+        ],
+        // CRÍTICO: Incluir unreadMessages para notificações funcionarem
+        attributes: ["id", "uuid", "status", "unreadMessages", "userId", "queueId", "isGroup", "lastMessage", "companyId", "whatsappId"]
       },
       {
         model: Message,
@@ -153,6 +155,13 @@ const CreateMessageService = async ({
       updatedAt: new Date()
     });
   }
+
+  // Recarregar ticket para garantir unreadMessages atualizado
+  // CRÍTICO: FindOrCreateTicketService atualizou unreadMessages, mas o ticket
+  // no payload do evento precisa ter o valor correto para notificações funcionarem
+  await message.ticket.reload({
+    attributes: ["id", "uuid", "status", "unreadMessages", "userId", "queueId", "isGroup", "lastMessage", "companyId", "whatsappId"]
+  });
 
   const io = getIO();
 

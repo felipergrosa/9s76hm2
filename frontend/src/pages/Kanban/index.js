@@ -179,7 +179,11 @@ const Kanban = () => {
           }
           setSelectableUsers(allowedUsers);
         } catch (err) {
-          console.error("Erro ao buscar usuários para kanban", err);
+          // 403 = sem permissão users.view (admin)
+          // Silencia o erro, lista de usuários fica vazia
+          if (err?.response?.status !== 403) {
+            console.error("Erro ao buscar usuários para kanban", err);
+          }
         }
       };
       fetchUsers();
@@ -216,7 +220,11 @@ const Kanban = () => {
       const fetchedTags = response.data.lista || [];
       setTags(fetchedTags);
     } catch (error) {
-      console.log(error);
+      // 403 = sem permissão tags.view (admin)
+      // Silencia o erro, lista de tags fica vazia
+      if (error?.response?.status !== 403) {
+        console.log(error);
+      }
     }
   }, [viewingUserId]);
 

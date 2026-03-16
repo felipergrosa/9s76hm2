@@ -327,7 +327,11 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
       const usersList = Array.isArray(data?.users) ? data.users : (Array.isArray(data) ? data : []);
       setUsers(usersList);
     } catch (error) {
-      console.error('Erro ao carregar usuários:', error);
+      // 403 = sem permissão users.view (admin)
+      // Silencia o erro, lista de usuários fica vazia
+      if (error?.response?.status !== 403) {
+        console.error('Erro ao carregar usuários:', error);
+      }
     }
   };
 

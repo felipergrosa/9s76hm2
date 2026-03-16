@@ -223,7 +223,12 @@ const QueueIntegration = () => {
           setHasMore(data.hasMore);
           setLoading(false);
         } catch (err) {
-          toastError(err);
+          // 403 = sem permissão integrations.view (admin)
+          // Silencia o erro, lista de integrações fica vazia
+          if (err?.response?.status !== 403) {
+            toastError(err);
+          }
+          setLoading(false);
         }
       };
       fetchIntegrations();
@@ -279,7 +284,11 @@ const QueueIntegration = () => {
       await api.delete(`/queueIntegration/${integrationId}`);
       toast.success(i18n.t("queueIntegration.toasts.deleted"));
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão integrations.delete (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
     setDeletingUser(null);
     setSearchParam("");

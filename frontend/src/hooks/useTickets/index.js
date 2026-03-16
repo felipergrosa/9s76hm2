@@ -131,7 +131,11 @@ const useTickets = ({
         return;
       }
       if (isMountedRef.current) {
-        toastError(err);
+        // 403 = sem permissão tickets.view ou dashboard.view (admin)
+        // Silencia o erro
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     } finally {
       if (isMountedRef.current) {

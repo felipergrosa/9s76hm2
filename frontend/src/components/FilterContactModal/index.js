@@ -612,7 +612,11 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
       setUsers(activeUsers);
       setCache("users", activeUsers);
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão users.view (admin)
+      // Silencia o erro, lista de usuários fica vazia
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
     setLoadingUsers(false);
   };
@@ -628,7 +632,11 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
       setWhatsapps(list);
       setCache("whatsapps", list);
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão connections.view (admin)
+      // Silencia o erro, lista de conexões fica vazia
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
     setLoadingWhatsapps(false);
   };

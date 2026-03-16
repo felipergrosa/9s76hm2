@@ -180,7 +180,11 @@ const Queues = () => {
 
         setLoading(false);
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão queues.view (admin)
+        // Silencia o erro, lista de filas fica vazia
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
         setLoading(false);
       }
     })();
@@ -229,7 +233,11 @@ const Queues = () => {
       await api.delete(`/queue/${queueId}`);
       toast.success(i18n.t("Queue deleted successfully!"));
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão queues.delete (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
     setSelectedQueue(null);
   };
@@ -309,23 +317,27 @@ const Queues = () => {
                     </div>
                   </div>
                   <div className={classes.cardActions}>
-                    <IconButton
-                      size="small"
-                      className={classes.actionButton}
-                      onClick={() => handleEditQueue(queue)}
-                    >
-                      <Edit />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      className={classes.actionButton}
-                      onClick={() => {
-                        setSelectedQueue(queue);
-                        setConfirmModalOpen(true);
-                      }}
-                    >
-                      <DeleteOutline />
-                    </IconButton>
+                    {hasPermission("queues.edit") && (
+                      <IconButton
+                        size="small"
+                        className={classes.actionButton}
+                        onClick={() => handleEditQueue(queue)}
+                      >
+                        <Edit />
+                      </IconButton>
+                    )}
+                    {hasPermission("queues.delete") && (
+                      <IconButton
+                        size="small"
+                        className={classes.actionButton}
+                        onClick={() => {
+                          setSelectedQueue(queue);
+                          setConfirmModalOpen(true);
+                        }}
+                      >
+                        <DeleteOutline />
+                      </IconButton>
+                    )}
                   </div>
                 </div>
               ))}
@@ -398,22 +410,26 @@ const Queues = () => {
                           </div>
                         </TableCell>
                         <TableCell align="center">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleEditQueue(queue)}
-                          >
-                            <Edit />
-                          </IconButton>
+                          {hasPermission("queues.edit") && (
+                            <IconButton
+                              size="small"
+                              onClick={() => handleEditQueue(queue)}
+                            >
+                              <Edit />
+                            </IconButton>
+                          )}
 
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setSelectedQueue(queue);
-                              setConfirmModalOpen(true);
-                            }}
-                          >
-                            <DeleteOutline />
-                          </IconButton>
+                          {hasPermission("queues.delete") && (
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                setSelectedQueue(queue);
+                                setConfirmModalOpen(true);
+                              }}
+                            >
+                              <DeleteOutline />
+                            </IconButton>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}

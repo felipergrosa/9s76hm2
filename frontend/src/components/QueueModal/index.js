@@ -63,6 +63,7 @@ import HelpOutlineOutlinedIcon from "@material-ui/icons/HelpOutlineOutlined";
 import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete";
 import useQueues from "../../hooks/useQueues";
 import UserStatusIcon from "../UserModal/statusIcon";
+import usePermissions from "../../hooks/usePermissions";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -212,6 +213,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
   const { getPlanCompany } = usePlans();
   const { collections: ragCollections, loading: ragLoading } = useRAGCollections();
   const { findAll: findAllQueues } = useQueues();
+  const { hasPermission } = usePermissions();
 
   // Schedules
   const initialStateSchedule = [
@@ -232,7 +234,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
   useEffect(() => {
     async function fetchData() {
       const planConfigs = await getPlanCompany(undefined, companyId);
-      setShowIntegrations(planConfigs.plan.useIntegrations);
+      setShowIntegrations(planConfigs?.plan?.useIntegrations || false);
     }
     fetchData();
   }, []);
@@ -240,34 +242,56 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
   useEffect(() => {
     const fetchData = async () => {
       const setting = await getSetting({ column: "scheduleType" });
-      if (setting.scheduleType === "queue") setSchedulesEnabled(true);
+      if (setting?.scheduleType === "queue") setSchedulesEnabled(true);
     };
     fetchData();
   }, []);
 
   useEffect(() => {
     (async () => {
+      // Verifica permissão ANTES de fazer a chamada
+      if (!hasPermission("files.view")) {
+        setFolders([]);
+        return;
+      }
+
       try {
         const { data } = await api.get("/library/folders", { params: { companyId } });
         console.log("📊 Pastas carregadas:", data);
         setFolders(data.folders || data);
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão files.view (admin)
+        // Silencia o erro, lista de pastas fica vazia
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (showIntegrations) {
       (async () => {
+        // Verifica permissão ANTES de fazer a chamada
+        if (!hasPermission("integrations.view")) {
+          setIntegrations([]);
+          return;
+        }
+
         try {
           const { data } = await api.get("/queueIntegration/", { params: { companyId } });
           setIntegrations(data.integrations || data.queueIntegrations || []);
         } catch (err) {
-          toastError(err);
+          // 403 = sem permissão integrations.view (admin)
+          // Silencia o erro, lista de integrações fica vazia
+          if (err?.response?.status !== 403) {
+            toastError(err);
+          }
         }
       })();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showIntegrations]);
 
   useEffect(() => {
@@ -291,7 +315,11 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
           setSchedules(data.schedules);
         }
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão queues.view (admin)
+        // Silencia o erro, dados da fila não são carregados
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     })();
 
@@ -321,7 +349,11 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
           setLoading(false);
         } catch (err) {
           setLoading(false);
-          toastError(err);
+          // 403 = sem permissão users.view (admin)
+          // Silencia o erro, lista de usuários fica vazia
+          if (err?.response?.status !== 403) {
+            toastError(err);
+          }
         }
       };
       fetchUsers();

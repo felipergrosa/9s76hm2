@@ -842,7 +842,7 @@ const messages = {
         fieldQueuePlaceholder: "Selecione uma fila",
         fieldWhatsapp: "Selecione um whatsapp",
         noOptions: "Nenhum usuário encontrado com esse nome",
-        msgTransfer: "Observações - mensagem interna, não vai para o cliente",
+        msgTransfer: "Mensagem interna, não vai para o cliente",
         buttons: {
           ok: "Transferir",
           cancel: "Cancelar",

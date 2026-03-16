@@ -221,7 +221,11 @@ const FlowDefault = () => {
       });
       toast.success("Fluxo excluído com sucesso");
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão flowbuilder.delete (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
   };
 
@@ -249,7 +253,11 @@ const FlowDefault = () => {
         });
         toast.success("Fluxos padrões atualizados");
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão flowbuilder.update (admin)
+        // Silencia o erro
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     } else {
       try {
@@ -259,7 +267,11 @@ const FlowDefault = () => {
         });
         toast.success("Fluxos padrões atualizados");
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão flowbuilder.create (admin)
+        // Silencia o erro
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     }
 

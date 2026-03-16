@@ -516,7 +516,11 @@ const handleCloseTicket = async (id) => {
                 }
             } catch (err) {
                 setLoading(false);
-                toastError(err);
+                // 403 = sem permissão tags.view (admin)
+                // Silencia o erro
+                if (err?.response?.status !== 403) {
+                    toastError(err);
+                }
             }
         } else {
             setLoading(true);
@@ -528,7 +532,11 @@ const handleCloseTicket = async (id) => {
 
             } catch (err) {
                 setLoading(false);
-                toastError(err);
+                // 403 = sem permissão tickets.update (admin)
+                // Silencia o erro
+                if (err?.response?.status !== 403) {
+                    toastError(err);
+                }
             }
             if (isMounted.current) {
                 setLoading(false);
@@ -550,7 +558,11 @@ const handleCloseTicket = async (id) => {
 
         } catch (err) {
             setLoading(false);
-            toastError(err);
+            // 403 = sem permissão tickets.update (admin)
+            // Silencia o erro
+            if (err?.response?.status !== 403) {
+                toastError(err);
+            }
         }
         if (isMounted.current) {
             setLoading(false);
@@ -604,7 +616,11 @@ const handleCloseTicket = async (id) => {
                         "column": "sendGreetingAccepted"
                     });
                 } catch (err) {
-                    toastError(err);
+                    // 403 = sem permissão settings.view (admin)
+                    // Silencia o erro
+                    if (err?.response?.status !== 403) {
+                        toastError(err);
+                    }
                 }
 
                 if (setting.sendGreetingAccepted === "enabled" && (!ticket.isGroup || ticket.whatsapp?.groupAsTicket === "enabled")) {
@@ -620,7 +636,11 @@ const handleCloseTicket = async (id) => {
             }
         } catch (err) {
             setLoading(false);
-            toastError(err);
+            // 403 = sem permissão tickets.update (admin)
+            // Silencia o erro
+            if (err?.response?.status !== 403) {
+                toastError(err);
+            }
         }
     };
 
@@ -632,7 +652,11 @@ const handleCloseTicket = async (id) => {
                 "column": "greetingAcceptedMessage"
             })
         } catch (err) {
-            toastError(err);
+            // 403 = sem permissão settings.view (admin)
+            // Silencia o erro
+            if (err?.response?.status !== 403) {
+                toastError(err);
+            }
         }
 
         const msg = `${setting.greetingAcceptedMessage}`;
@@ -645,7 +669,11 @@ const handleCloseTicket = async (id) => {
         try {
             await api.post(`/messages/${id}`, message);
         } catch (err) {
-            toastError(err);
+            // 403 = sem permissão tickets.update (admin)
+            // Silencia o erro
+            if (err?.response?.status !== 403) {
+                toastError(err);
+            }
         }
     };
 

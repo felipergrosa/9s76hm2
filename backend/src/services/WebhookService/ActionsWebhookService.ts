@@ -44,6 +44,7 @@ import { getWbotOrRecover } from "../../libs/wbot";
 import { proto } from "@whiskeysockets/baileys";
 import { handleOpenAi } from "../IntegrationsServices/OpenAiService";
 import { IOpenAi } from "../../@types/openai";
+import { emitTicketStatusChange, emitTicketUpdateSimple } from "../../helpers/emitTicketUpdate";
 
 interface IAddContact {
   companyId: number;
@@ -193,6 +194,8 @@ export const ActionsWebhookService = async (
             await ticket.update({
               status: "closed"
             });
+            // Emitir evento de deleção (remover da aba antiga)
+            await emitTicketStatusChange(ticket, companyId, ticket.status);
           }
           break;
         }
@@ -365,6 +368,8 @@ export const ActionsWebhookService = async (
             hashFlowId: hashWebhookId,
             flowStopped: idFlowDb.toString()
           });
+          // Emitir update do ticket
+          await emitTicketUpdateSimple(ticket, companyId);
         }
         break;
       }
@@ -383,6 +388,7 @@ export const ActionsWebhookService = async (
           hashFlowId: hashWebhookId,
           flowStopped: idFlowDb.toString()
         });
+        // Nota: UpdateTicketService abaixo já emite eventos
 
         await FindOrCreateATicketTrakingService({
           ticketId: ticket.id,
@@ -731,6 +737,8 @@ ${optionsMenu}`;
               hashFlowId: hashWebhookId,
               flowStopped: idFlowDb.toString()
             });
+            // Emitir update do ticket
+            await emitTicketUpdateSimple(ticket, companyId);
           }
 
           break;
@@ -813,6 +821,8 @@ ${optionsMenu}`;
         hashFlowId: hashWebhookId,
         flowStopped: idFlowDb.toString()
       });
+      // Emitir update do ticket
+      await emitTicketUpdateSimple(ticket, companyId);
 
       noAlterNext = false;
       execCount++;

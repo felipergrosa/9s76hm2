@@ -20,7 +20,7 @@ class BackendPerformanceDiagnostic {
   private metrics: Map<string, PerformanceMetric> = new Map();
   private timers: Map<string, number> = new Map();
   private queryMetrics: QueryMetric[] = [];
-  private enabled: boolean = true;
+  private enabled: boolean = false;
 
   start(label: string): void {
     if (!this.enabled) return;
@@ -179,9 +179,9 @@ export const measureAsync = async <T>(label: string, fn: () => Promise<T>): Prom
   }
 };
 
-// Auto-report após 60 segundos
-setTimeout(() => {
-  BackendPerfMonitor.reportSummary();
-}, 60000);
+// Auto-report após 60 segundos (DESATIVADO)
+// setTimeout(() => {
+//   BackendPerfMonitor.reportSummary();
+// }, 60000);
 
 export default BackendPerfMonitor;

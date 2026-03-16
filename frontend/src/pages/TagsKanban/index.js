@@ -123,7 +123,12 @@ const Tags = () => {
           setHasMore(data.hasMore);
           setLoading(false);
         } catch (err) {
-          toastError(err);
+          // 403 = sem permissão tags.view (admin)
+          // Silencia o erro, lista de tags fica vazia
+          if (err?.response?.status !== 403) {
+            toastError(err);
+          }
+          setLoading(false);
         }
       };
       fetchTags();
@@ -179,7 +184,11 @@ const Tags = () => {
       await api.delete(`/tags/${tagId}`);
       toast.success(i18n.t("tags.toasts.deleted"));
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão tags.delete (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
     setDeletingTag(null);
     setSearchParam("");

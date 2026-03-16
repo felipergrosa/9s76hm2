@@ -133,7 +133,11 @@ const Prompts = () => {
 
         setLoading(false);
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão prompts.view (admin)
+        // Silencia o erro, lista de prompts fica vazia
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
         setLoading(false);
       }
     })();
@@ -185,7 +189,11 @@ const Prompts = () => {
       const { data } = await api.delete(`/prompt/${promptId}`);
       toast.info(i18n.t(data.message));
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão prompts.delete (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
     setSelectedPrompt(null);
   };

@@ -139,7 +139,11 @@ const BulkEditContactsModal = ({ open, onClose, selectedContactIds = [], onSucce
           : [];
         setUsers(usersList);
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão connections.view/users.view (admin)
+        // Silencia o erro, listas ficam vazias
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     })();
   }, [open]);

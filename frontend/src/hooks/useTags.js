@@ -16,9 +16,13 @@ const useTags = () => {
         });
         setTags(data.tags);
         setLoading(false);
-      } catch (error) {
-        toastError(error);
+      } catch (err) {
         setLoading(false);
+        // 403 = sem permissão tags.view (admin)
+        // Silencia o erro
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     };
 

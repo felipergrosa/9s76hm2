@@ -29,6 +29,34 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   return res.status(200).json(queues);
 };
 
+/**
+ * Listagem simplificada de filas para seleção em contextos operacionais
+ * SEM permissão queues.view - permite que usuários selecionem filas em:
+ * - Campanhas (campaigns.create)
+ * - Transferências (tickets.transfer)
+ * - Agendamentos (schedules.create)
+ * Retorna apenas dados básicos: id, name, color, orderQueue
+ */
+export const listAvailable = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const { onlyWithBot } = req.query as unknown as QueueFilter;
+
+  const queues = await ListQueuesService({
+    companyId,
+    onlyWithBot: String(onlyWithBot || "").toLowerCase() === "true"
+  });
+
+  // Retorna apenas dados básicos para seleção
+  const basicQueues = queues.map(q => ({
+    id: q.id,
+    name: q.name,
+    color: q.color,
+    orderQueue: q.orderQueue
+  }));
+
+  return res.status(200).json(basicQueues);
+};
+
 export const store = async (req: Request, res: Response): Promise<Response> => {
   const {
     name,

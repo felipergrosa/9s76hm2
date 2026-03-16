@@ -166,7 +166,11 @@ const Ticket = () => {
         } catch (err) {
           history.push("/tickets");   // correção para evitar tela branca uuid não encontrado Feito por Altemir 16/08/2023
           setLoading(false);
-          toastError(err);
+          // 403 = sem permissão tickets.view (admin)
+          // Silencia o erro
+          if (err?.response?.status !== 403) {
+            toastError(err);
+          }
         }
       };
       fetchTicket();

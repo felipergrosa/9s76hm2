@@ -170,26 +170,34 @@ const CampaignsConfig = () => {
   }, []);
 
   useEffect(() => {
-    api.get("/campaign-settings").then(({ data }) => {
-      const settingsList = [];
-      console.log(data)
-      if (Array.isArray(data) && data.length > 0) {
-        data.forEach((item) => {
-          settingsList.push([item.key, item.value]);
-          if (item.key === "sabado") setSabado(item?.value === "true");
-          if (item.key === "domingo") setDomingo(item?.value === "true");
-          if (item.key === "startHour") setStartHour(item?.value);
-          if (item.key === "endHour") setEndHour(item?.value);
-          if (item.key === "suppressionTagNames") {
-            try {
-              const arr = JSON.parse(item.value);
-              if (Array.isArray(arr)) setSuppressionTagNamesStr(arr.join(", "));
-            } catch (e) {}
-          }
-        });
-        setSettings(Object.fromEntries(settingsList));
-      }
-    });
+    api.get("/campaign-settings")
+      .then(({ data }) => {
+        const settingsList = [];
+        console.log(data)
+        if (Array.isArray(data) && data.length > 0) {
+          data.forEach((item) => {
+            settingsList.push([item.key, item.value]);
+            if (item.key === "sabado") setSabado(item?.value === "true");
+            if (item.key === "domingo") setDomingo(item?.value === "true");
+            if (item.key === "startHour") setStartHour(item?.value);
+            if (item.key === "endHour") setEndHour(item?.value);
+            if (item.key === "suppressionTagNames") {
+              try {
+                const arr = JSON.parse(item.value);
+                if (Array.isArray(arr)) setSuppressionTagNamesStr(arr.join(", "));
+              } catch (e) {}
+            }
+          });
+          setSettings(Object.fromEntries(settingsList));
+        }
+      })
+      .catch((err) => {
+        // 403 = sem permissão campaign-settings.view (admin)
+        // Silencia o erro, configurações ficam com valores padrão
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
+      });
   }, []);
 
   // Removido: status de criptografia. A configuração de IA passou para o modal de campanha.

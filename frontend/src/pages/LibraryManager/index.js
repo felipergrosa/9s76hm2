@@ -67,7 +67,11 @@ const LibraryManager = () => {
 
             setSelectedItems([]);
         } catch (err) {
-            toastError(err);
+            // 403 = sem permissão library.view (admin)
+            // Silencia o erro, listas ficam vazias
+            if (err?.response?.status !== 403) {
+                toastError(err);
+            }
         } finally {
             setLoading(false);
         }
@@ -78,7 +82,11 @@ const LibraryManager = () => {
             const allFoldersData = await libraryApi.fetchAllFolders();
             setAllFolders(allFoldersData);
         } catch (err) {
-            toastError(err);
+            // 403 = sem permissão library.view (admin)
+            // Silencia o erro, lista de pastas fica vazia
+            if (err?.response?.status !== 403) {
+                toastError(err);
+            }
         }
     }, []);
 

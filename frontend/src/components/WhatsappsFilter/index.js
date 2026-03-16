@@ -34,7 +34,11 @@ export function WhatsappsFilter({ onFiltered, initialWhatsapps }) {
       const whatsappList = data.map((w) => ({ id: w.id, name: w.name, channel: w.channel }));
       setWhatsapps(whatsappList);
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão connections.view (admin)
+      // Silencia o erro, lista de conexões fica vazia
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
   };
 

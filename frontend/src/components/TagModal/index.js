@@ -107,7 +107,11 @@ const TagModal = ({ open, onClose, tagId, kanban }) => {
 					const { data } = await api.get("/users/", { params: { pageNumber: 1, pageSize: 9999 } });
 					setUsers(data.users);
 				} catch (err) {
-					toastError(err);
+					// 403 = sem permissão users.view (admin)
+					// Silencia o erro, lista de usuários fica vazia
+					if (err?.response?.status !== 403) {
+						toastError(err);
+					}
 				}
 			};
 			fetchUsers();

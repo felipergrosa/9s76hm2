@@ -171,7 +171,11 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
         const { data } = await api.get("/prompt");
         setPrompts(data.prompts);
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão prompts.view (admin)
+        // Silencia o erro, lista de prompts fica vazia
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     })();
   }, [whatsAppId]);
@@ -187,11 +191,6 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
     }
     fetchData();
   }, []);
-
-  const handleEnableImportMessage = async (e) => {
-    setEnableImportMessage(e.target.checked);
-
-  };
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -226,7 +225,11 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
         const { data } = await api.get("/queue");
         setQueues(data);
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão queues.view (admin)
+        // Silencia o erro, lista de filas fica vazia
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     })();
   }, []);
@@ -238,7 +241,11 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
 
         setIntegrations(data.queueIntegrations);
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão integrations.view (admin)
+        // Silencia o erro, lista de integrações fica vazia
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     })();
   }, []);

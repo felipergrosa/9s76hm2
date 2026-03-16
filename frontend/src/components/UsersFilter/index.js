@@ -34,7 +34,11 @@ export function UsersFilter({ onFiltered, initialUsers }) {
       const userList = data.map((u) => ({ id: u.id, name: u.name }));
       setUsers(userList);
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão users.view (admin)
+      // Silencia o erro, lista de usuários fica vazia
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
   };
 

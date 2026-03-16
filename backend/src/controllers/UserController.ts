@@ -27,6 +27,7 @@ import Setting from "../models/Setting";
 import fs from "fs";
 import path from "path";
 import multer from "multer";
+import { hasPermission } from "../helpers/PermissionAdapter";
 import {
   buildCompanyBase,
   buildUserBase,
@@ -226,7 +227,15 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { userId } = req.params;
-  const { companyId } = req.user;
+  const { companyId, id: requestUserId } = req.user;
+
+  // Permite buscar próprios dados mesmo sem users.view
+  const isOwnProfile = +userId === +requestUserId;
+  const canView = isOwnProfile || hasPermission(req.user, "users.view");
+
+  if (!canView) {
+    throw new AppError("ERR_NO_PERMISSION: users.view", 403);
+  }
 
   const user = await ShowUserService(userId, companyId);
 
@@ -249,13 +258,19 @@ export const update = async (
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
-  const { id: requestUserId, companyId, profile } = req.user;
+  const { id: requestUserId, companyId, profile } = req.user as any;
   const { userId } = req.params;
   const userData = req.body;
 
-  // LÓGICA DE PERMISSÃO CORRIGIDA
-  // Se o usuário não for admin, ele só pode alterar o próprio perfil.
-  if (profile !== "admin" && userId !== requestUserId) {
+  // LÓGICA DE PERMISSÃO ATUALIZADA
+  // Admin pode editar qualquer usuário
+  // Usuário comum pode editar próprio perfil se tiver permissão users.edit-own
+  const isEditingOwnProfile = userId === requestUserId;
+  const isAdmin = profile === "admin";
+  const canEditOwnProfile = hasPermission(req.user as any, "users.edit-own");
+  const canEditUsers = hasPermission(req.user as any, "users.edit");
+
+  if (!isAdmin && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
@@ -331,14 +346,42 @@ export const list = async (req: Request, res: Response): Promise<Response> => {
   return res.status(200).json(users);
 };
 
+export const listAvailable = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId: userCompanyId } = req.user;
+
+  const users = await SimpleListService({
+    companyId: userCompanyId
+  });
+
+  // Retorna apenas dados básicos para seleção
+  const basicUsers = users.map(u => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    profile: u.profile
+  }));
+
+  return res.json(basicUsers);
+};
+
 export const mediaUpload = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
   const { userId } = req.params;
-  const { companyId } = req.user;
+  const { id: requestUserId, companyId, profile } = req.user as any;
   const files = req.files as Express.Multer.File[];
   const file = head(files);
+
+  // Verificação de permissão para upload de avatar via media-upload
+  const isEditingOwnProfile = userId === requestUserId;
+  const isUserAdmin = profile === "admin";
+  const canEditOwnProfile = hasPermission(req.user as any, "users.edit-own");
+  const canEditUsers = hasPermission(req.user as any, "users.edit");
+
+  if (!isUserAdmin && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
 
   try {
     let user = await User.findByPk(userId);
@@ -481,6 +524,17 @@ export const upload = multer({ storage });
 export const uploadAvatar = async (req: Request, res: Response): Promise<Response> => {
   const userId = req.params.userId;
   const file = req.file;
+  const { id: requestUserId, companyId, profile } = req.user;
+
+  // Verificação de permissão para upload de avatar
+  const isEditingOwnProfile = userId === requestUserId;
+  const isAdmin = profile === "admin";
+  const canEditOwnProfile = hasPermission(req.user, "users.edit-own");
+  const canEditUsers = hasPermission(req.user, "users.edit");
+
+  if (!isAdmin && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
 
   if (!file) {
     return res.status(400).json({ error: "Arquivo não enviado." });
@@ -493,7 +547,6 @@ export const uploadAvatar = async (req: Request, res: Response): Promise<Respons
       return res.status(404).json({ error: "Usuário não encontrado." });
     }
 
-    const { companyId } = req.user;
     const username = sanitizeFileName(String(user.name || `user-${user.id}`)).toLowerCase();
     const ext = path.extname(file.originalname) || path.extname(file.filename) || ".jpg";
     const targetFileName = `avatar${ext}`;

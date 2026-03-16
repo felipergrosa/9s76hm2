@@ -281,7 +281,11 @@ const Connections = () => {
     try {
       await api.post(`/whatsappsession/${whatsAppId}`);
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão connections.update (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
   };
 
@@ -295,7 +299,11 @@ const Connections = () => {
       await api.put(`/whatsappsession/${whatsAppId}`, { clearAuth });
       setClearAuthById(prev => ({ ...prev, [whatsAppId]: false }));
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão connections.update (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
   };
 
@@ -370,7 +378,11 @@ const Connections = () => {
       try {
         await api.delete(`/whatsappsession/${confirmModalInfo.whatsAppId}`);
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão connections.delete (admin)
+        // Silencia o erro
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     }
 
@@ -379,7 +391,11 @@ const Connections = () => {
         await api.delete(`/whatsapp/${confirmModalInfo.whatsAppId}`);
         toast.success(i18n.t("connections.toasts.deleted"));
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão connections.delete (admin)
+        // Silencia o erro
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     }
     if (confirmModalInfo.action === "closedImported") {
@@ -387,7 +403,11 @@ const Connections = () => {
         await api.post(`/closedimported/${confirmModalInfo.whatsAppId}`);
         toast.success(i18n.t("connections.toasts.closedimported"));
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão connections.update (admin)
+        // Silencia o erro
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     }
 
@@ -617,7 +637,11 @@ const Connections = () => {
       await api.post(`/whatsapp-restart/`);
       toast.success(i18n.t("connections.waitConnection"));
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão connections.update (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
   };
 

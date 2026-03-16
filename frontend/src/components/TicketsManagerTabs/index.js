@@ -900,32 +900,35 @@ const TicketsManagerTabs = () => {
                   <AddIcon className={classes.icon} />
                 </IconButton>
               </Badge>
-              <Badge
-                color="primary"
-                invisible={
-                  !isHoveredBulk ||
-                  isHoveredAll ||
-                  isHoveredNew ||
-                  isHoveredResolve ||
-                  isHoveredOpen ||
-                  isHoveredClosed ||
-                  isHoveredSort
-                }
-                badgeContent={i18n.t("tickets.inbox.bulkProcess")}
-                classes={{ badge: classes.tabsBadge }}
-                overlap="rectangular"
-              >
-                <IconButton
-                  onMouseEnter={() => handleHover("bulk")}
-                  onMouseLeave={resetHovers}
-                  className={classes.button}
-                  onClick={() => {
-                    setBulkProcessModalOpen(true);
-                  }}
+              {/* Processar Tickets em Massa - só exibe se tiver permissão */}
+              {hasPermission("tickets.bulk-process") && (
+                <Badge
+                  color="primary"
+                  invisible={
+                    !isHoveredBulk ||
+                    isHoveredAll ||
+                    isHoveredNew ||
+                    isHoveredResolve ||
+                    isHoveredOpen ||
+                    isHoveredClosed ||
+                    isHoveredSort
+                  }
+                  badgeContent={i18n.t("tickets.inbox.bulkProcess")}
+                  classes={{ badge: classes.tabsBadge }}
+                  overlap="rectangular"
                 >
-                  <PlaylistAddCheckOutlined className={classes.icon} />
-                </IconButton>
-              </Badge>
+                  <IconButton
+                    onMouseEnter={() => handleHover("bulk")}
+                    onMouseLeave={resetHovers}
+                    className={classes.button}
+                    onClick={() => {
+                      setBulkProcessModalOpen(true);
+                    }}
+                  >
+                    <PlaylistAddCheckOutlined className={classes.icon} />
+                  </IconButton>
+                </Badge>
+              )}
               {user.profile === "admin" && (
                 <Badge
                   color="primary"

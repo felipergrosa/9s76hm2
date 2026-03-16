@@ -137,10 +137,18 @@ const CampaignsPhrase = () => {
 
   const getCampaigns =  async() => {
     setLoading(true);
-    await api.get("/flowcampaign").then(res => {
+    try {
+      const res = await api.get("/flowcampaign");
       setCampaignFlows(res.data.flow);
+    } catch (err) {
+      // 403 = sem permissão campaigns.view (admin)
+      // Silencia o erro, lista de campanhas fica vazia
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   const onSaveModal = () => {

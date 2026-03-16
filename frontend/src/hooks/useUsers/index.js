@@ -38,7 +38,11 @@ const useUsers = () => {
                     setLoading(false);
                 } catch (err) {
                     setLoading(false);
-                    toastError(err);
+                    // 403 = sem permissão users.view (admin)
+                    // Silencia o erro, lista de usuários fica vazia
+                    if (err?.response?.status !== 403) {
+                        toastError(err);
+                    }
                 }
             };
 

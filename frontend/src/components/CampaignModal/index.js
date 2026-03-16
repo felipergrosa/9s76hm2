@@ -302,7 +302,7 @@ const CampaignModal = ({
   const [loading, setLoading] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState([]);  // Agora é array para múltiplos usuários
   const [selectedQueue, setSelectedQueue] = useState("");
-  const { findAll: findAllQueues } = useQueues();
+  const { findAllForSelection } = useQueues();
 
   // Seletor de arquivos (File Manager)
   const [fileLibraryOpen, setFileLibraryOpen] = useState(false);
@@ -517,7 +517,8 @@ const CampaignModal = ({
   useEffect(() => {
     if (isMounted.current) {
       const loadQueues = async () => {
-        const list = await findAllQueues();
+        // Usa findAllForSelection - SEM permissão queues.view
+        const list = await findAllForSelection();
         setAllQueues(list);
         setQueues(list);
 
@@ -575,10 +576,15 @@ const CampaignModal = ({
     if (options && options.length > 0) return;
     try {
       setLoading(true);
-      const { data } = await api.get("/users/");
-      setOptions(data.users || []);
+      // Usa /users/available - SEM permissão users.view
+      const { data } = await api.get("/users/available");
+      setOptions(data || []);
     } catch (err) {
-      toastError(err);
+      // Silencia erro
+      // Silencia o erro, lista de usuários fica vazia
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     } finally {
       setLoading(false);
     }
@@ -684,7 +690,11 @@ const CampaignModal = ({
         }
       } catch (err) {
         console.error('[CampaignModal] Erro ao carregar dados:', err);
-        toastError(err);
+        // 403 = sem permissão campaigns.view/contacts.view/tags.view (admin)
+        // Silencia o erro, listas ficam vazias
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
         setCampaignLoading(false);
       }
     };

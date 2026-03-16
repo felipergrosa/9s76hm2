@@ -93,7 +93,7 @@ export default function VerticalLinearStepper(props) {
   const [selectedQueue, setSelectedQueue] = useState("");
   const [selectedQueueOption, setSelectedQueueOption] = useState("");
 
-  const { findAll: findAllQueues } = useQueues();
+  const { findAllForSelection } = useQueues();
   const [allQueues, setAllQueues] = useState([]);
   const [userOptions, setUserOptions] = useState([]);
   const isMounted = useRef(true);
@@ -125,7 +125,8 @@ export default function VerticalLinearStepper(props) {
   useEffect(() => {
     if (isMounted.current) {
       const loadQueues = async () => {
-        const list = await findAllQueues();
+        // Usa findAllForSelection - SEM permissão queues.view
+        const list = await findAllForSelection();
         setAllQueues(list);
         setQueues(list);
 
@@ -144,7 +145,11 @@ export default function VerticalLinearStepper(props) {
 
         setFile(data.files);
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão files.view (admin)
+        // Silencia o erro, lista de arquivos fica vazia
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     })();
   }, []);
@@ -159,12 +164,14 @@ export default function VerticalLinearStepper(props) {
       //setLoading(true);
       const fetchUsers = async () => {
         try {
-          const { data } = await api.get("/users/");
-          setUserOptions(data.users);
+          // Usa /users/available - SEM permissão users.view
+          const { data } = await api.get("/users/available");
+          setUserOptions(data || []);
           setLoading(false);
         } catch (err) {
           setLoading(false);
-          toastError(err);
+          console.error("Erro ao buscar usuários disponíveis:", err);
+          setUserOptions([]);
         }
       };
 
@@ -182,7 +189,11 @@ export default function VerticalLinearStepper(props) {
 
         setIntegrations(data.queueIntegrations);
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão integrations.view (admin)
+        // Silencia o erro, lista de integrações fica vazia
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     })();
   }, []);

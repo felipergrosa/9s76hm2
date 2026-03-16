@@ -51,7 +51,11 @@ export function TagsKanbanContainer({ ticket }) {
                 setTags(data);
             }
         } catch (err) {
-            toastError(err);
+            // 403 = sem permissão tags.view (admin)
+            // Silencia o erro, lista de tags fica vazia
+            if (err?.response?.status !== 403) {
+                toastError(err);
+            }
         }
     }
 

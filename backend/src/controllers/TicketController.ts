@@ -622,3 +622,64 @@ export const getSessionWindow = async (
 
   return res.status(200).json(sessionStatus);
 };
+
+/**
+ * Marca notificação como lida (zera unreadMessages do ticket)
+ * Usado pelo popover de notificações para dispensar notificação
+ * sem fechar o ticket, apenas marcando mensagens como lidas
+ */
+export const markNotificationAsRead = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+
+  const ticket = await Ticket.findOne({
+    where: { id: ticketId, companyId }
+  });
+
+  if (!ticket) {
+    throw new AppError("Ticket não encontrado", 404);
+  }
+
+  // Marcar mensagens como lidas (zera unreadMessages)
+  if (ticket.channel === "whatsapp" && ticket.whatsappId && ticket.unreadMessages > 0) {
+    await SetTicketMessagesAsRead(ticket);
+  }
+
+  return res.status(200).json({ success: true });
+};
+
+/**
+ * Marca todas as notificações como lidas (zera unreadMessages de todos os tickets com unread > 0)
+ * Usado pelo botão "Limpar todas" no popover de notificações
+ */
+export const markAllNotificationsAsRead = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId } = req.user;
+
+  // Buscar todos os tickets com mensagens não lidas
+  const tickets = await Ticket.findAll({
+    where: {
+      companyId,
+      unreadMessages: { [Op.gt]: 0 }
+    }
+  });
+
+  // Marcar cada ticket como lido
+  for (const ticket of tickets) {
+    if (ticket.channel === "whatsapp" && ticket.whatsappId && ticket.unreadMessages > 0) {
+      try {
+        await SetTicketMessagesAsRead(ticket);
+      } catch (err) {
+        // Continua mesmo se falhar para um ticket específico
+        console.error(`Erro ao marcar ticket ${ticket.id} como lido:`, err);
+      }
+    }
+  }
+
+  return res.status(200).json({ success: true, count: tickets.length });
+};

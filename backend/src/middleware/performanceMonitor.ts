@@ -26,13 +26,13 @@ class PerformanceMonitor {
         const duration = Date.now() - start;
         const statusCode = res.statusCode;
 
-        // Log de requisições lentas
-        if (duration > this.slowThreshold) {
-          const level = duration > this.criticalThreshold ? "CRITICAL" : "WARN";
-          console.warn(
-            `[PERFORMANCE ${level}] ${endpoint} - ${duration}ms - Status: ${statusCode}`
-          );
-        }
+        // Log de requisições lentas (DESATIVADO)
+        // if (duration > this.slowThreshold) {
+        //   const level = duration > this.criticalThreshold ? "CRITICAL" : "WARN";
+        //   console.warn(
+        //     `[PERFORMANCE ${level}] ${endpoint} - ${duration}ms - Status: ${statusCode}`
+        //   );
+        // }
 
         // Salva métricas no cache para análise
         await this.saveMetrics({

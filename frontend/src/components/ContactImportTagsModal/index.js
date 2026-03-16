@@ -582,7 +582,11 @@ const ContactImportTagsModal = ({ isOpen, handleClose, onImport }) => {
       const whatsappsData = Array.isArray(data) ? data : [];
       setWhatsapps(whatsappsData);
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão connections.view (admin)
+      // Silencia o erro, lista de conexões fica vazia
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
   }, [selectedWhatsappId]);
 

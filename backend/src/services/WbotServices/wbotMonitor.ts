@@ -28,6 +28,7 @@ import createOrUpdateBaileysService from "../BaileysServices/CreateOrUpdateBaile
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import CompaniesSettings from "../../models/CompaniesSettings";
 import { verifyMessage } from "./wbotMessageListener";
+import { emitTicketStatusChange, emitTicketUpdateSimple } from "../../helpers/emitTicketUpdate";
 
 let i = 0;
 
@@ -50,80 +51,98 @@ const wbotMonitor = async (
 ): Promise<void> => {
   logger.info(`[wbotMonitor] Iniciando monitor para whatsappId=${whatsapp.id}, companyId=${companyId}`);
   try {
-    wbot.ws.on("CB:call", async (node: BinaryNode) => {
-      const content = node.content[0] as any;
+    // =================================================================
+    // EVENTO CB:call - Chamadas de voz/vídeo (COM VERIFICAÇÃO DEFENSIVA)
+    // =================================================================
+    const ws = (wbot as any).ws;
+    if (ws && typeof ws.on === "function") {
+      try {
+        ws.on("CB:call", async (node: BinaryNode) => {
+          const content = node.content[0] as any;
 
-      await new Promise((r) => setTimeout(r, i * 650));
-      i++;
+          await new Promise((r) => setTimeout(r, i * 650));
+          i++;
 
-      if (content.tag === "terminate" && !node.attrs.from.includes("@call")) {
-        const settings = await CompaniesSettings.findOne({
-          where: { companyId },
-        });
-
-        if (settings?.acceptCallWhatsapp === "enabled") {
-          const sentMessage = await wbot.sendMessage(node.attrs.from, {
-            text: `\u200e ${settings.AcceptCallWhatsappMessage}`,
-          });
-          const number = node.attrs.from.split(":")[0].replace(/\D/g, "");
-
-          const contact = await Contact.findOne({
-            where: { companyId, number },
-          });
-
-          if (!contact) return;
-
-          const [ticket] = await Ticket.findOrCreate({
-            where: {
-              contactId: contact.id,
-              whatsappId: wbot.id,
-              status: ["open", "pending", "nps", "lgpd"],
-              companyId,
-            },
-            defaults: {
-              companyId,
-              contactId: contact.id,
-              whatsappId: wbot.id,
-              isGroup: contact.isGroup,
-              status: "pending",
-            },
-          });
-
-          if (!ticket) return;
-
-          await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
-
-          const date = new Date();
-          const hours = date.getHours();
-          const minutes = date.getMinutes();
-
-          const body = `Chamada de voz/vídeo perdida às ${hours}:${minutes}`;
-          const messageData = {
-            wid: content.attrs["call-id"],
-            ticketId: ticket.id,
-            contactId: contact.id,
-            body,
-            fromMe: false,
-            mediaType: "call_log",
-            read: true,
-            quotedMsgId: null,
-            ack: 1,
-          };
-
-          await ticket.update({
-            lastMessage: body,
-          });
-
-          if (ticket.status === "closed") {
-            await ticket.update({
-              status: "pending",
+          if (content.tag === "terminate" && !node.attrs.from.includes("@call")) {
+            const settings = await CompaniesSettings.findOne({
+              where: { companyId },
             });
-          }
 
-          return CreateMessageService({ messageData, companyId });
-        }
+            if (settings?.acceptCallWhatsapp === "enabled") {
+              const sentMessage = await wbot.sendMessage(node.attrs.from, {
+                text: `\u200e ${settings.AcceptCallWhatsappMessage}`,
+              });
+              const number = node.attrs.from.split(":")[0].replace(/\D/g, "");
+
+              const contact = await Contact.findOne({
+                where: { companyId, number },
+              });
+
+              if (!contact) return;
+
+              const [ticket] = await Ticket.findOrCreate({
+                where: {
+                  contactId: contact.id,
+                  whatsappId: wbot.id,
+                  status: ["open", "pending", "nps", "lgpd"],
+                  companyId,
+                },
+                defaults: {
+                  companyId,
+                  contactId: contact.id,
+                  whatsappId: wbot.id,
+                  isGroup: contact.isGroup,
+                  status: "pending",
+                },
+              });
+
+              if (!ticket) return;
+
+              await verifyMessage(sentMessage, ticket, contact, undefined, undefined, false, false, wbot);
+
+              const date = new Date();
+              const hours = date.getHours();
+              const minutes = date.getMinutes();
+
+              const body = `Chamada de voz/vídeo perdida às ${hours}:${minutes}`;
+              const messageData = {
+                wid: content.attrs["call-id"],
+                ticketId: ticket.id,
+                contactId: contact.id,
+                body,
+                fromMe: false,
+                mediaType: "call_log",
+                read: true,
+                quotedMsgId: null,
+                ack: 1,
+              };
+
+              await ticket.update({
+                lastMessage: body,
+              });
+
+              if (ticket.status === "closed") {
+                const oldStatus = ticket.status;
+                await ticket.update({
+                  status: "pending",
+                });
+                // Emitir evento de mudança de status (reabriu ticket)
+                await emitTicketStatusChange(ticket, companyId, oldStatus);
+              } else {
+                // Emitir update simples (apenas lastMessage mudou)
+                await emitTicketUpdateSimple(ticket, companyId);
+              }
+
+              return CreateMessageService({ messageData, companyId });
+            }
+          }
+        });
+      } catch (err: any) {
+        logger.warn(`[wbotMonitor] Falha ao registrar handler CB:call: ${err?.message}`);
       }
-    });
+    } else {
+      logger.warn(`[wbotMonitor] wbot.ws.on não disponível - CB:call handler ignorado`);
+    }
 
     function cleanStringForJSON(str: string | undefined): string {
       if (!str) return "";

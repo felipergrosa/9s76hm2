@@ -27,7 +27,11 @@ const QueueSelectSingle = ({ selectedQueueId, onChange, label }) => {
                 setQueues(data);
                 // Debug removido - funcionando corretamente
             } catch (err) {
-                toastError(`QUEUESELETSINGLE >>> ${err}`);
+                // 403 = sem permissão queues.view (admin)
+                // Silencia o erro, lista de filas fica vazia
+                if (err?.response?.status !== 403) {
+                    toastError(`QUEUESELETSINGLE >>> ${err}`);
+                }
             }
         })();
     }, []);

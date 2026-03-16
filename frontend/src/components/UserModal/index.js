@@ -27,6 +27,7 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import useWhatsApps from "../../hooks/useWhatsApps";
 import useTags from "../../hooks/useTags";
 import useUsers from "../../hooks/useUsers";
+import usePermissions from "../../hooks/usePermissions";
 
 import { Can } from "../Can";
 import { Avatar, Grid, Input, Paper, Tab, Tabs, Chip, Typography, Divider } from "@material-ui/core";
@@ -164,6 +165,16 @@ const UserModal = ({ open, onClose, userId }) => {
   };
 
   const { user: loggedInUser } = useContext(AuthContext);
+  const { hasPermission, isAdmin } = usePermissions();
+
+  // Verifica se está editando próprio perfil e se tem permissão
+  const isEditingOwnProfile = userId === loggedInUser?.id;
+  const canEditOwnProfile = hasPermission("users.edit-own");
+  const canEditUsers = hasPermission("users.edit");
+  const isUserAdmin = isAdmin();
+
+  // Determina se pode salvar baseado nas permissões
+  const canSave = !isEditingOwnProfile || canEditOwnProfile || canEditUsers || isUserAdmin;
 
   const [user, setUser] = useState(initialState);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
@@ -199,7 +210,11 @@ const UserModal = ({ open, onClose, userId }) => {
         setSelectedQueueIds(userQueueIds);
         setWhatsappId(data.whatsappId ? data.whatsappId : '');
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão users.view (admin)
+        // Silencia o erro
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     };
 
@@ -226,7 +241,11 @@ const UserModal = ({ open, onClose, userId }) => {
         const { data } = await api.post(`/users/${file.id}/media-upload`, formData);
         localStorage.setItem("profileImage", data.user.profileImage);
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão users.edit-own (admin)
+        // Silencia o erro
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     };
 
@@ -915,9 +934,10 @@ const UserModal = ({ open, onClose, userId }) => {
                 <Button
                   type="submit"
                   color="primary"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !canSave}
                   variant="contained"
                   className={classes.btnWrapper}
+                  title={!canSave ? "Você não tem permissão para editar este perfil" : ""}
                 >
                   {userId
                     ? `${i18n.t("userModal.buttons.okEdit")}`

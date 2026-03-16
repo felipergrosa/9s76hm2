@@ -172,7 +172,11 @@ const AllConnections = () => {
         setLoadingWhatsapp(false);
       } catch (err) {
         setLoadingWhatsapp(false);
-        toastError(err);
+        // 403 = sem permissão connections.view (admin)
+        // Silencia o erro, lista de conexões fica vazia
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     };
     fetchSession();

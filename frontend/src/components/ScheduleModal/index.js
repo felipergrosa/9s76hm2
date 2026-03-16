@@ -116,46 +116,43 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 	const messageInputRef = useRef();
 	const [channelFilter, setChannelFilter] = useState("whatsapp");
 	const [whatsapps, setWhatsapps] = useState([]);
-	const [selectedWhatsapps, setSelectedWhatsapps] = useState([]);
-	const [loading, setLoading] = useState(false);
-	const [queues, setQueues] = useState([]);
 	const [allQueues, setAllQueues] = useState([]);
-	const [selectedUser, setSelectedUser] = useState(null);
-	const [selectedQueue, setSelectedQueue] = useState(null);
-	const { findAll: findAllQueues } = useQueues();
+	const [queues, setQueues] = useState([]);
 	const [options, setOptions] = useState([]);
-	const [searchParam, setSearchParam] = useState("");
+	const [loading, setLoading] = useState(false);
+	const [selectedWhatsapps, setSelectedWhatsapps] = useState("");
+	const [selectedUser, setSelectedUser] = useState(null);
+	const [selectedQueue, setSelectedQueue] = useState("");
 	const [assistantOpen, setAssistantOpen] = useState(false);
 
-	useEffect(() => {
-		return () => {
-			isMounted.current = false;
-		};
-	}, []);
+	const { findAllForSelection } = useQueues();
 
-	useEffect(() => {
-		if (isMounted.current) {
-			const loadQueues = async () => {
-				const list = await findAllQueues();
-				setAllQueues(list);
-				setQueues(list);
-			};
-			loadQueues();
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+  useEffect(() => {
+    if (isMounted.current) {
+      const loadQueues = async () => {
+        // Usa findAllForSelection - SEM permissão queues.view
+        const list = await findAllForSelection();
+        setAllQueues(list);
+        setQueues(list);
+      };
+      loadQueues();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
 	useEffect(() => {
 		if (open) {
 			const fetchUsers = async () => {
 				setLoading(true);
 				try {
-					const { data } = await api.get("/users/list");
+					// Usa /users/available - SEM permissão users.view
+					const { data } = await api.get("/users/available");
 					setOptions(data);
 					setLoading(false);
 				} catch (err) {
 					setLoading(false);
-					toastError(err);
+					console.error("Erro ao buscar usuários disponíveis:", err);
+					setOptions([]);
 				}
 			};
 

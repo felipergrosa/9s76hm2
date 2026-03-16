@@ -45,6 +45,7 @@ import SchedulesForm from "../SchedulesForm";
 import usePlans from "../../hooks/usePlans";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import useTags from "../../hooks/useTags";
+import usePermissions from "../../hooks/usePermissions";
 import OfficialAPIFields from "./OfficialAPIFields";
 import OfficialAPIGuide from "./OfficialAPIGuide";
 import MetaAPIFields from "./MetaAPIFields";
@@ -237,6 +238,8 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
   const [selectedIntegration, setSelectedIntegration] = useState(null);
   const [integrations, setIntegrations] = useState([]);
 
+  const { hasPermission } = usePermissions();
+
   useEffect(() => {
     if (!whatsAppId && !whatsApp.token) {
       setAutoToken(generateRandomCode(30));
@@ -270,114 +273,88 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
 
   useEffect(() => {
     (async () => {
+      // Verifica permissão ANTES de fazer a chamada
+      if (!hasPermission("prompts.view")) {
+        setPrompts([]);
+        return;
+      }
+
       try {
         const { data } = await api.get("/prompt");
         setPrompts(data.prompts);
       } catch (err) {
-        toastError(err);
+        if (err?.response?.status === 403) {
+          setPrompts([]);
+        } else {
+          toastError(err);
+        }
       }
     })();
-  }, [whatsAppId]);
-
-  useEffect(() => {
-
-    const fetchData = async () => {
-
-      const settingSchedules = await getSetting({
-        "column": "scheduleType"
-      });
-      setSchedulesEnabled(settingSchedules.scheduleType === "connection");
-      const settingNPS = await getSetting({
-        "column": "userRating"
-      });
-      setNPSEnabled(settingNPS.userRating === "enabled");
-    }
-    fetchData();
-  }, []);
-
-  const handleEnableImportMessage = async (e) => {
-    setEnableImportMessage(e.target.checked);
-
-  };
-
-  useEffect(() => {
-    const fetchSession = async () => {
-      if (!whatsAppId) return;
-
-      try {
-        const { data } = await api.get(`whatsapp/${whatsAppId}?session=0`);
-        if (data && data?.flowIdNotPhrase) {
-          const { data: flowDefault } = await api.get(`flowbuilder/${data.flowIdNotPhrase}`)
-          console.log(flowDefault?.flow.id)
-          const selectedFlowIdNotPhrase = flowDefault?.flow.id
-          setFlowIdNotPhrase(selectedFlowIdNotPhrase)
-        }
-        if (data && data?.flowIdWelcome) {
-          const { data: flowDefault } = await api.get(`flowbuilder/${data.flowIdWelcome}`)
-          console.log(flowDefault?.flow.id)
-          const selectedFlowIdWelcome = flowDefault?.flow.id
-          setFlowIdWelcome(selectedFlowIdWelcome)
-        }
-        setWhatsApp(data);
-        setAttachmentName(data.greetingMediaAttachment);
-        setAutoToken(data.token);
-        setSelectedIntegration(data?.integrationId)
-        data.promptId ? setSelectedPrompt(data.promptId) : setSelectedPrompt(null);
-        const whatsQueueIds = data.queues?.map((queue) => queue.id);
-        setSelectedQueueIds(whatsQueueIds);
-        setSchedules(data.schedules)
-        if (!isNil(data?.importOldMessages)) {
-          setEnableImportMessage(true);
-          setImportOldMessages(data?.importOldMessages);
-          setImportRecentMessages(data?.importRecentMessages);
-          setClosedTicketsPostImported(data?.closedTicketsPostImported);
-          setImportOldMessagesGroups(data?.importOldMessagesGroups);
-        }
-        // Sincronização individual
-        if (!isNil(data?.syncOnTicketOpen)) {
-          setSyncOnTicketOpen(data?.syncOnTicketOpen);
-        }
-      } catch (err) {
-        toastError(err);
-      }
-    };
-    fetchSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [whatsAppId]);
 
   useEffect(() => {
     (async () => {
+      // Verifica permissão ANTES de fazer a chamada
+      if (!hasPermission("queues.view")) {
+        setQueues([]);
+        return;
+      }
+
       try {
         const { data } = await api.get("/queue");
         setQueues(data);
       } catch (err) {
-        toastError(err);
+        if (err?.response?.status === 403) {
+          setQueues([]);
+        } else {
+          toastError(err);
+        }
       }
     })();
   }, []);
 
   useEffect(() => {
     (async () => {
+      // Verifica permissão ANTES de fazer a chamada
+      if (!hasPermission("integrations.view")) {
+        setIntegrations([]);
+        return;
+      }
+
       try {
         const { data } = await api.get("/queueIntegration");
-
         setIntegrations(data.queueIntegrations);
       } catch (err) {
-        toastError(err);
+        if (err?.response?.status === 403) {
+          setIntegrations([]);
+        } else {
+          toastError(err);
+        }
       }
     })();
   }, []);
 
-
   useEffect(() => {
     (async () => {
+      // Verifica permissão ANTES de fazer a chamada
+      if (!hasPermission("flowbuilder.view")) {
+        setWebhooks([]);
+        return;
+      }
+
       try {
-        const { data } = await api.get("/flowbuilder")
-        setWebhooks(data.flows)
+        const { data } = await api.get("/flowbuilder");
+        setWebhooks(data.flows);
       } catch (err) {
-        toastError(err)
+        if (err?.response?.status === 403) {
+          setWebhooks([]);
+        } else {
+          toastError(err);
+        }
       }
     })();
-  }, [])
+  }, []);
 
   const handleChangeQueue = (e) => {
     setSelectedQueueIds(e);

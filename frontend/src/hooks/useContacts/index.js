@@ -30,7 +30,11 @@ const useContacts = ({ searchParam, pageNumber, date, dateStart, dateEnd }) => {
                     setLoading(false);
                 } catch (err) {
                     setLoading(false);
-                    toastError(err);
+                    // 403 = sem permissão contacts.view (admin)
+                    // Silencia o erro
+                    if (err?.response?.status !== 403) {
+                        toastError(err);
+                    }
                 }
             };
 

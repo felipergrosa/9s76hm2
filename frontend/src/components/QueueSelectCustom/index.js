@@ -29,7 +29,11 @@ const QueueSelectCustom = ({ selectedQueueIds, onChange }) => {
 				const { data } = await api.get("/queue");
 				setQueues(data);
 			} catch (err) {
-				toastError(err);
+				// 403 = sem permissão queues.view (admin)
+				// Silencia o erro, lista de filas fica vazia
+				if (err?.response?.status !== 403) {
+					toastError(err);
+				}
 			}
 		})();
 	}, []);

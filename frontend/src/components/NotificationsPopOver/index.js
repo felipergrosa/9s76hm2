@@ -15,8 +15,8 @@ import ListItemText from "@material-ui/core/ListItemText";
 import ListItemSecondaryAction from "@material-ui/core/ListItemSecondaryAction";
 import { makeStyles } from "@material-ui/core/styles";
 import Badge from "@material-ui/core/Badge";
-import { Bell as ChatIcon } from "lucide-react";
-import { Button, Tooltip } from "@material-ui/core";
+import { Bell as ChatIcon, X as CloseIcon, Trash2 as ClearAllIcon } from "lucide-react";
+import { Button, Tooltip, Typography, Box } from "@material-ui/core";
 
 import TicketListItem from "../TicketListItem";
 import useTickets from "../../hooks/useTickets";
@@ -51,6 +51,29 @@ const useStyles = makeStyles(theme => ({
   },
   noShadow: {
     boxShadow: "none !important",
+  },
+  clearAllButton: {
+    padding: "8px 16px",
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    display: "flex",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: 8,
+  },
+  notificationItem: {
+    position: "relative",
+    paddingRight: 48,
+  },
+  closeButton: {
+    position: "absolute",
+    right: 8,
+    top: "50%",
+    transform: "translateY(-50%)",
+    padding: 4,
+    opacity: 0.7,
+    "&:hover": {
+      opacity: 1,
+    },
   },
 }));
 
@@ -374,8 +397,51 @@ const NotificationsPopOver = ({ volume = 1 }) => {
     setIsOpen(false);
   };
 
-  const NotificationTicket = ({ children }) => {
-    return <div onClick={handleClickAway}>{children}</div>;
+  const NotificationTicket = ({ children, ticket }) => {
+    // Fecha a notificação e marca mensagens como lidas (persiste no banco)
+    const handleCloseNotification = async (e) => {
+      e.stopPropagation();
+      try {
+        // Chama API para marcar como lido (zera unreadMessages)
+        await api.post(`/tickets/${ticket.id}/mark-as-read`);
+        // Remove da lista local
+        setNotifications(prev => prev.filter(t => t.id !== ticket.id));
+      } catch (err) {
+        // 403 = sem permissão, silencia o erro
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
+      }
+    };
+
+    return (
+      <div className={classes.notificationItem} onClick={handleClickAway}>
+        {children}
+        <IconButton
+          className={classes.closeButton}
+          size="small"
+          onClick={handleCloseNotification}
+          title="Marcar como lido"
+        >
+          <CloseIcon size={16} />
+        </IconButton>
+      </div>
+    );
+  };
+
+  // Limpa todas as notificações marcando como lidas (persiste no banco)
+  const handleClearAllNotifications = async () => {
+    try {
+      // Chama API para marcar todas como lidas
+      await api.post("/tickets/mark-all-as-read");
+      // Limpa lista local
+      setNotifications([]);
+    } catch (err) {
+      // 403 = sem permissão, silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
+    }
   };
 
   const browserNotification = () => {
@@ -437,6 +503,21 @@ const NotificationsPopOver = ({ volume = 1 }) => {
         classes={{ paper: classes.popoverPaper }}
         onClose={handleClickAway}
       >
+        <Box className={classes.clearAllButton}>
+          <Typography variant="body2" color="textSecondary">
+            {notifications.length} notificação(ões)
+          </Typography>
+          {notifications.length > 0 && (
+            <Button
+              size="small"
+              color="secondary"
+              startIcon={<ClearAllIcon size={16} />}
+              onClick={handleClearAllNotifications}
+            >
+              Limpar todas
+            </Button>
+          )}
+        </Box>
         <List dense className={classes.tabContainer}>
           {profile === "admin" && releaseRequests.length > 0 && (
             <>
@@ -473,7 +554,7 @@ const NotificationsPopOver = ({ volume = 1 }) => {
             </ListItem>
           ) : (
             notifications.map(ticket => (
-              <NotificationTicket key={ticket.id}>
+              <NotificationTicket key={ticket.id} ticket={ticket}>
                 <TicketListItem ticket={ticket} />
               </NotificationTicket>
             ))

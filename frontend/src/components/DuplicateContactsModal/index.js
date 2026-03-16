@@ -343,7 +343,13 @@ const DuplicateContactsModal = ({ open, onClose, onActionCompleted }) => {
           setWhatsapps(connected);
           if (connected.length > 0) setSelectedWhatsappId(connected[0].id);
         })
-        .catch(() => { });
+        .catch((err) => {
+          // 403 = sem permissão connections.view (admin)
+          // Silencia o erro, lista de conexões fica vazia
+          if (err?.response?.status !== 403) {
+            console.warn("Erro ao buscar conexões:", err);
+          }
+        });
     }
   }, [open, fetchTags]);
 

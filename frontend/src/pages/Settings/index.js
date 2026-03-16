@@ -51,7 +51,11 @@ const Settings = () => {
         const { data } = await api.get("/settings");
         setSettings(data);
       } catch (err) {
-        toastError(err);
+        // 403 = sem permissão settings.view (admin)
+        // Silencia o erro, lista de settings fica vazia
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     };
     fetchSession();
@@ -88,7 +92,11 @@ const Settings = () => {
       });
       toast.success(i18n.t("settings.success"));
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão settings.update (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
   };
 

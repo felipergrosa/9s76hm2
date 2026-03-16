@@ -13,7 +13,7 @@ api.interceptors.response.use(
 	(error) => {
 		if (error.response && error.response.status === 403) {
 			const url = error.config?.url || "unknown";
-			console.warn(`[api] 403 Sem permissão: ${error.config?.method?.toUpperCase()} ${url}`);
+			// Log desativado - console.warn(`[api] 403 Sem permissão: ${error.config?.method?.toUpperCase()} ${url}`);
 		}
 		return Promise.reject(error);
 	}

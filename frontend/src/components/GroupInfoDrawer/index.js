@@ -307,7 +307,11 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
       setNewMemberNumber("");
       fetchGroupInfo(); // Recarregar lista
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão groups.update (admin)
+      // Silencia o erro para operações de grupo
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     } finally {
       setAddingMember(false);
     }
@@ -323,7 +327,11 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
       toast.success(`${participant.name} removido do grupo`);
       fetchGroupInfo();
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão groups.update (admin)
+      // Silencia o erro para operações de grupo
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
     setMenuAnchor(null);
   };
@@ -336,7 +344,11 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
       toast.success(`${participant.name} promovido a admin`);
       fetchGroupInfo();
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão groups.update (admin)
+      // Silencia o erro para operações de grupo
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
     setMenuAnchor(null);
   };
@@ -349,7 +361,11 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
       toast.success(`${participant.name} rebaixado de admin`);
       fetchGroupInfo();
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão groups.update (admin)
+      // Silencia o erro para operações de grupo
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
     setMenuAnchor(null);
   };
@@ -362,7 +378,9 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
       toast.success("Você saiu do grupo");
       handleDrawerClose();
     } catch (err) {
-      toastError(err);
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
   };
 
@@ -372,7 +390,9 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
       await navigator.clipboard.writeText(data.link);
       toast.success("Link de convite copiado!");
     } catch (err) {
-      toastError(err);
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
   };
 
@@ -394,7 +414,11 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
       setEditingName(false);
       fetchGroupInfo();
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão groups.update (admin)
+      // Silencia o erro para operações de grupo
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     } finally {
       setSavingName(false);
     }
@@ -414,7 +438,11 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
       setEditingDesc(false);
       fetchGroupInfo();
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão groups.update (admin)
+      // Silencia o erro para operações de grupo
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     } finally {
       setSavingDesc(false);
     }
@@ -436,7 +464,11 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
       toast.success("Foto do grupo alterada!");
       fetchGroupInfo();
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão groups.update (admin)
+      // Silencia o erro para operações de grupo
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     } finally {
       setSavingPicture(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -454,7 +486,11 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
       toast.success(currentlyAnnouncement ? "Todos podem enviar mensagens" : "Apenas admins podem enviar mensagens");
       fetchGroupInfo();
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão groups.update (admin)
+      // Silencia o erro para operações de grupo
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     } finally {
       setSavingSettings(false);
     }
@@ -470,7 +506,11 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
       toast.success(currentlyLocked ? "Todos podem editar dados do grupo" : "Apenas admins podem editar dados do grupo");
       fetchGroupInfo();
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão groups.update (admin)
+      // Silencia o erro para operações de grupo
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     } finally {
       setSavingSettings(false);
     }

@@ -112,7 +112,11 @@ export function ContactForm ({ initialContact, onSave, onCancel }) {
 				const { data } = await api.get("/users/");
 				setUserOptions(data.users || []);
 			} catch (err) {
-				toastError(err);
+				// 403 = sem permissão users.view (admin)
+				// Silencia o erro, lista de usuários fica vazia
+				if (err?.response?.status !== 403) {
+					toastError(err);
+				}
 			} finally {
 				setLoadingUsers(false);
 			}

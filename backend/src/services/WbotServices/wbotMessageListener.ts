@@ -44,6 +44,7 @@ import { debounce } from "../../helpers/Debounce";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
 import { ticketEventBus } from "../TicketServices/TicketEventBus";
 import { messageEventBus } from "../MessageServices/MessageEventBus";
+import { emitTicketUpdateSimple } from "../../helpers/emitTicketUpdate";
 import formatBody from "../../helpers/Mustache";
 import TicketTraking from "../../models/TicketTraking";
 import UserRating from "../../models/UserRating";
@@ -2454,6 +2455,8 @@ const sendDialogflowAwswer = async (
       contactId: ticket.contact.id,
       useIntegration: false
     });
+    // Emitir update do ticket (useIntegration mudou)
+    await emitTicketUpdateSimple(ticket, companyId);
   }
 
   const image = dialogFlowReply.parameters.image?.stringValue ?? undefined;
@@ -2629,6 +2632,8 @@ const verifyQueue = async (
           integrationId: integrations.id
         });
       }
+      // Emitir update do ticket (integration mudou)
+      await emitTicketUpdateSimple(ticket, companyId);
 
       // return;
     }
@@ -2964,6 +2969,8 @@ const verifyQueue = async (
           isOutOfHour: true,
           amountUsedBotQueues: ticket.amountUsedBotQueues + 1
         });
+        // Emitir update do ticket (queueId/isOutOfHour mudou)
+        await emitTicketUpdateSimple(ticket, companyId);
         return;
       }
 
@@ -3414,6 +3421,8 @@ const verifyQueue = async (
           isOutOfHour: true,
           amountUsedBotQueues: ticket.amountUsedBotQueues + 1
         });
+        // Emitir update do ticket (queueId/isOutOfHour mudou)
+        await emitTicketUpdateSimple(ticket, companyId);
         return;
       }
 
@@ -3890,6 +3899,8 @@ const verifyQueue = async (
           isOutOfHour: true,
           amountUsedBotQueues: ticket.amountUsedBotQueues + 1
         });
+        // Emitir update do ticket (queueId/isOutOfHour mudou)
+        await emitTicketUpdateSimple(ticket, companyId);
         return;
       }
 

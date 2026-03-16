@@ -91,19 +91,22 @@ const TagModal = ({ open, onClose, tagId, reload }) => {
 	const [tag, setTag] = useState(initialState);
 
 	useEffect(() => {
-		try {
-			(async () => {
-				if (!tagId) return;
-
+		(async () => {
+			if (!tagId) return;
+			try {
 				const { data } = await api.get(`/tags/${tagId}`);
                 //console.log(data);
 				setTag(prevState => {
 					return { ...prevState, ...data };
 				});
-			})()
-		} catch (err) {
-			toastError(err);
-		}
+			} catch (err) {
+				// 403 = sem permissão tags.view (admin)
+				// Silencia o erro, tag não é carregada
+				if (err?.response?.status !== 403) {
+					toastError(err);
+				}
+			}
+		})()
 	}, [tagId, open]);
 
 	const handleClose = () => {

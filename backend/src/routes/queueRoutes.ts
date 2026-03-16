@@ -6,6 +6,10 @@ import * as QueueController from "../controllers/QueueController";
 
 const queueRoutes = Router();
 
+// Endpoint público para seleção de filas em contextos operacionais (SEM permissão)
+queueRoutes.get("/queue/available", isAuth, QueueController.listAvailable);
+
+// Endpoints administrativos (COM permissão)
 queueRoutes.get("/queue", isAuth, checkPermission("queues.view"), QueueController.index);
 
 queueRoutes.post("/queue", isAuth, checkPermission("queues.create"), QueueController.store);

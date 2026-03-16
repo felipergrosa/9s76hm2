@@ -64,7 +64,11 @@ const Groups = () => {
                 setGroups(data.groups || []);
                 setTotalGroups(data.count || 0);
             } catch (err) {
-                toastError(err);
+                // 403 = sem permissão groups.view (admin)
+                // Silencia o erro, lista de grupos fica vazia
+                if (err?.response?.status !== 403) {
+                    toastError(err);
+                }
             } finally {
                 if (currentId === requestIdRef.current) setLoading(false);
             }
@@ -184,7 +188,11 @@ const Groups = () => {
                 setGroups(data.groups || []);
                 setTotalGroups(data.count || 0);
             } catch (err) {
-                toastError(err);
+                // 403 = sem permissão groups.view (admin)
+                // Silencia o erro, lista de grupos fica vazia
+                if (err?.response?.status !== 403) {
+                    toastError(err);
+                }
             } finally {
                 if (currentId === requestIdRef.current) setLoading(false);
             }
@@ -201,7 +209,11 @@ const Groups = () => {
             });
             history.push(`/tickets/${ticket.uuid}`);
         } catch (err) {
-            toastError(err);
+            // 403 = sem permissão tickets.create (admin)
+            // Silencia o erro
+            if (err?.response?.status !== 403) {
+                toastError(err);
+            }
         }
     };
 
@@ -237,7 +249,13 @@ const Groups = () => {
             // Recarregar lista
             handleRefresh();
         } catch (err) {
-            toastError(err);
+            // 403 = sem permissão connections.view (admin)
+            // Silencia o erro, mostra mensagem amigável
+            if (err?.response?.status === 403) {
+                toast.warn("Você não tem permissão para acessar as conexões.");
+            } else {
+                toastError(err);
+            }
         } finally {
             setSyncing(false);
         }

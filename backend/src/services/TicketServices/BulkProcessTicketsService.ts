@@ -214,6 +214,21 @@ const BulkProcessTicketsService = async (
             // Adicionar novas tags
             await ticket.$add('tags', tagIds);
             ticketResult.actions?.push(`${tagIds.length} tag(s) adicionada(s)`);
+            
+            // Recarregar ticket com tags atualizadas para emitir evento
+            const ticketWithTags = await Ticket.findByPk(ticket.id, {
+              include: [
+                { association: "tags", attributes: ["id", "name", "color"] },
+                { model: Contact, as: "contact", attributes: ["id", "name", "number"] }
+              ]
+            });
+            if (ticketWithTags) {
+              io.of(`/workspace-${companyId}`).emit(`company-${companyId}-ticket`, {
+                action: "update",
+                ticket: ticketWithTags
+              });
+              logger.debug(`[BulkProcess] Evento socket emitido para ticket ${ticket.id} (tags atualizadas)`);
+            }
           } catch (error) {
             logger.error(`[BulkProcess] Erro ao adicionar tags ao ticket ${ticket.id}:`, error);
             ticketResult.actions?.push('Erro ao adicionar tags');
@@ -281,6 +296,7 @@ const BulkProcessTicketsService = async (
         }
 
         // 6. Atualizar carteira do contato (se configurado)
+        let contactUpdated = false;
         const walletsToProcess = options.walletIds || (options.walletId ? [options.walletId] : null);
         
         if (walletsToProcess && walletsToProcess.length > 0 && ticket.contactId) {
@@ -309,6 +325,7 @@ const BulkProcessTicketsService = async (
                 companyId
               });
               ticketResult.actions?.push(`${uniqueNewWallets.length} carteira(s) adicionada(s)`);
+              contactUpdated = true;
             } else {
               // Modo REPLACE: substituir carteira atual
               const UpdateContactWalletsService = (await import("../ContactServices/UpdateContactWalletsService")).default;
@@ -318,10 +335,41 @@ const BulkProcessTicketsService = async (
                 companyId
               });
               ticketResult.actions?.push(`Carteira substituída (${walletsToProcess.length} responsável/eis)`);
+              contactUpdated = true;
             }
           } catch (error) {
             logger.error(`[BulkProcess] Erro ao atualizar carteira do contato ${ticket.contactId}:`, error);
             ticketResult.actions?.push('Erro ao atualizar carteira');
+          }
+        }
+
+        // 7. Emitir eventos Socket.IO para contatos atualizados (carteiras)
+        // Nota: eventos de ticket já são emitidos pelo UpdateTicketService via ticketEventBus
+        if (contactUpdated && ticket.contactId) {
+          try {
+            const updatedContact = await Contact.findByPk(ticket.contactId, {
+              attributes: ["id", "name", "number", "profilePicUrl", "email"],
+              include: [
+                {
+                  association: "wallets",
+                  attributes: ["id", "name"]
+                },
+                {
+                  association: "tags",
+                  attributes: ["id", "name", "color"]
+                }
+              ]
+            });
+
+            if (updatedContact) {
+              io.of(`/workspace-${companyId}`).emit(`company-${companyId}-contact`, {
+                action: "update",
+                contact: updatedContact
+              });
+              logger.debug(`[BulkProcess] Evento socket emitido para contato ${ticket.contactId}`);
+            }
+          } catch (socketError) {
+            logger.error(`[BulkProcess] Erro ao emitir evento socket para contato ${ticket.contactId}:`, socketError);
           }
         }
 
@@ -340,7 +388,7 @@ const BulkProcessTicketsService = async (
 
       // Emitir progresso via Socket.IO
       const progress = Math.round((result.processed / result.total) * 100);
-      io.of(String(companyId)).emit(`company-${companyId}-bulk-process-progress`, {
+      io.of(`/workspace-${companyId}`).emit(`company-${companyId}-bulk-process-progress`, {
         userId,
         progress,
         processed: result.processed,
@@ -367,7 +415,7 @@ const BulkProcessTicketsService = async (
   logger.info(`[BulkProcess] Processamento concluído: ${result.success} sucesso, ${result.errors} erros em ${result.duration}ms`);
 
   // Emitir evento de conclusão
-  io.of(String(companyId)).emit(`company-${companyId}-bulk-process-complete`, {
+  io.of(`/workspace-${companyId}`).emit(`company-${companyId}-bulk-process-complete`, {
     userId,
     result
   });

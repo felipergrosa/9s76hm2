@@ -130,7 +130,11 @@ const Reports = () => {
           setLoading(false);
         } catch (err) {
           setLoading(false);
-          toastError(err);
+          // 403 = sem permissão contacts.view (admin)
+          // Silencia o erro, lista de contatos fica vazia
+          if (err?.response?.status !== 403) {
+            toastError(err);
+          }
         }
       };
       fetchContacts();

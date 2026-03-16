@@ -44,4 +44,8 @@ ticketRoutes.post("/tickets/merge-duplicates", isAuth, checkPermission("tickets.
 // Rota para status da janela de sessão 24h (API Oficial)
 ticketRoutes.get("/tickets/:ticketId/session-window", isAuth, checkPermission("tickets.view"), TicketController.getSessionWindow);
 
+// Rotas para marcar notificações como lidas
+ticketRoutes.post("/tickets/:ticketId/mark-as-read", isAuth, TicketController.markNotificationAsRead);
+ticketRoutes.post("/tickets/mark-all-as-read", isAuth, TicketController.markAllNotificationsAsRead);
+
 export default ticketRoutes;

@@ -56,6 +56,7 @@ import api from "../../services/api";
 import RecordingTimer from "./RecordingTimer";
 
 import useQuickMessages from "../../hooks/useQuickMessages";
+import usePermissions from "../../hooks/usePermissions";
 import { isString, isEmpty } from "lodash";
 // OTIMIZAÇÃO: Lazy loading de modais pesados para evitar 24s de travamento
 const ContactSendModal = lazy(() => import("../ContactSendModal"));
@@ -794,6 +795,8 @@ const MessageInput = ({
   const { setEditingMessage, editingMessage } = useContext(EditMessageContext);
   const { addOptimisticMessage, confirmOptimisticMessage, failOptimisticMessage } = useContext(OptimisticMessageContext);
   const { user } = useContext(AuthContext);
+  const { hasPermission } = usePermissions();
+  const canUseAIAssistant = hasPermission("ai-chat-assistant.use");
   const [appointmentModalOpen, setAppointmentModalOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   // Menu de variáveis/Tags
@@ -1035,7 +1038,11 @@ const MessageInput = ({
           }
         }
       } catch (err) {
-        console.error("Erro ao buscar configurações em MessageInput:", err);
+        // 403 = sem permissão settings.view (admin)
+        // Silencia o erro, configuração fica com valor padrão
+        if (err?.response?.status !== 403) {
+          console.error("Erro ao buscar configurações em MessageInput:", err);
+        }
       }
     };
     fetchSettings();
@@ -1616,7 +1623,11 @@ const MessageInput = ({
       });
       
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão messages.send (admin)
+      // Silencia o erro, mensagem não é enviada
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
       // Marcar mensagens como falha
       optimisticTempIds.forEach(tempId => {
         failOptimisticMessage(ticketId, tempId, err.message);
@@ -1651,7 +1662,11 @@ const MessageInput = ({
     try {
       await api.post(`/messages/${ticketId}`, message);
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão messages.send (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
 
     setInputMessage("");
@@ -1751,6 +1766,7 @@ const MessageInput = ({
       setRecording(true);
       setLoading(false);
     } catch (err) {
+      // 403 não se aplica aqui - erro de gravação local
       toastError(err);
       setLoading(false);
     }
@@ -1824,7 +1840,11 @@ const MessageInput = ({
 
       await api.post(`/messages/${ticketId}`, formData);
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão messages.send (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
       setLoading(false);
     }
     setLoading(false);
@@ -1845,7 +1865,11 @@ const MessageInput = ({
         await api.post(`/messages/${ticketId}`, formData);
       }
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão messages.send (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     } finally {
       if (isMounted.current) {
         setLoading(false);
@@ -1876,7 +1900,11 @@ const MessageInput = ({
         await api.post(`/messages/${ticketId}`, formData);
       }
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão messages.send (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     } finally {
       if (isMounted.current) {
         setLoading(false);
@@ -2139,21 +2167,23 @@ const MessageInput = ({
                 disabled={disableOption()}
               />
               </Suspense>
-              <Tooltip title="Assistente de Chat">
-                <span>
-                  <IconButton
-                    aria-label="assistant"
-                    component="span"
-                    disabled={disableOption()}
-                    onClick={() => {
-                      console.log('Clicou no assistente, alterando estado para:', !assistantOpen);
-                      setAssistantOpen(prev => !prev);
-                    }}
-                  >
-                    <Sparkles size={20} className={classes.sendMessageIcons} />
-                  </IconButton>
-                </span>
-              </Tooltip>
+              {canUseAIAssistant && (
+                <Tooltip title="Assistente de Chat">
+                  <span>
+                    <IconButton
+                      aria-label="assistant"
+                      component="span"
+                      disabled={disableOption()}
+                      onClick={() => {
+                        console.log('Clicou no assistente, alterando estado para:', !assistantOpen);
+                        setAssistantOpen(prev => !prev);
+                      }}
+                    >
+                      <Sparkles size={20} className={classes.sendMessageIcons} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              )}
               <Tooltip title={i18n.t("tickets.buttons.scredule")}>
                 <IconButton
                   aria-label="scheduleMessage"
@@ -2297,12 +2327,14 @@ const MessageInput = ({
               {isMobile && (
                 <>
                   <Divider />
-                  <MenuItem onClick={handleOpenAssistantFromMenu}>
-                    <Fab className={classes.invertedFabMenuCont} size="small">
-                      <Sparkles size={20} />
-                    </Fab>
-                    Assistente de Chat
-                  </MenuItem>
+                  {canUseAIAssistant && (
+                    <MenuItem onClick={handleOpenAssistantFromMenu}>
+                      <Fab className={classes.invertedFabMenuCont} size="small">
+                        <Sparkles size={20} />
+                      </Fab>
+                      Assistente de Chat
+                    </MenuItem>
+                  )}
                   <MenuItem onClick={handleOpenScheduleFromMenu}>
                     <Fab className={classes.invertedFabMenuCont} size="small">
                       <ClockIcon size={20} />

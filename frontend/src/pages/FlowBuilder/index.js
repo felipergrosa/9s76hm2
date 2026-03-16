@@ -155,7 +155,12 @@ const FlowBuilder = () => {
           setHasMore(data.hasMore);
           setLoading(false);
         } catch (err) {
-          toastError(err);
+          // 403 = sem permissão flowbuilder.view (admin)
+          // Silencia o erro, lista de flows fica vazia
+          if (err?.response?.status !== 403) {
+            toastError(err);
+          }
+          setLoading(false);
         }
       };
       fetchContacts();
@@ -218,7 +223,11 @@ const FlowBuilder = () => {
       });
       toast.success("Fluxo excluído com sucesso");
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão flowbuilder.delete (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
   };
 
@@ -230,7 +239,11 @@ const FlowBuilder = () => {
       });
       toast.success("Fluxo duplicado com sucesso");
     } catch (err) {
-      toastError(err);
+      // 403 = sem permissão flowbuilder.create (admin)
+      // Silencia o erro
+      if (err?.response?.status !== 403) {
+        toastError(err);
+      }
     }
   };
 
