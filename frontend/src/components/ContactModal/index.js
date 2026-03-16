@@ -19,7 +19,7 @@ import { Close as CloseIcon } from "@material-ui/icons";
 import CircularProgress from "@material-ui/core/CircularProgress";
 import Switch from "@material-ui/core/Switch";
 import withStyles from "@material-ui/core/styles/withStyles";
-import { Grid, FormControl, InputLabel, MenuItem, Select, Checkbox, ListItemText } from "@material-ui/core";
+import { Grid, FormControl, InputLabel, MenuItem, Select, Checkbox, ListItemText, Chip } from "@material-ui/core";
 import { Autocomplete } from "@material-ui/lab";
 import ContactAvatar from "../ContactAvatar";
 

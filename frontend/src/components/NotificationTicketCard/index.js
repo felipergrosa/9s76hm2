@@ -107,7 +107,7 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: theme.spacing(1),
-    marginLeft: 56,
+    marginLeft: 46, // reduzido de 56 para mover chips mais à esquerda
   },
   tagContainer: {
     display: "flex",

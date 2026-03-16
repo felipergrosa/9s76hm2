@@ -147,7 +147,12 @@ const NotificationsPopOver = ({ volume = 1 }) => {
 
   useEffect(() => {
     const processNotifications = () => {
-      setNotifications(tickets);
+      if (tickets && tickets.length > 0) {
+        const groupedNotifications = groupNotificationsByContact(tickets);
+        setNotifications(groupedNotifications);
+      } else {
+        setNotifications([]);
+      }
     }
 
     processNotifications();
@@ -201,9 +206,20 @@ const NotificationsPopOver = ({ volume = 1 }) => {
         user?.queues?.some(queue => queue.id === ticket?.queueId) ||
         (!ticket?.queueId && showTicketWithoutQueue === true);
       const isStatusAllowed =
-        !["pending", "lgpd", "nps", "group"].includes(ticket?.status) ||
-        (ticket?.status === "pending" && showNotificationPending === true) ||
-        (ticket?.status === "group" && ticket?.whatsapp?.groupAsTicket === "enabled" && showGroupNotification === true);
+        ticket?.status === "open" ||
+        ticket?.status === "pending" && showNotificationPending === true ||
+        ticket?.status === "group" && ticket?.whatsapp?.groupAsTicket === "enabled" && showGroupNotification === true;
+
+      // Debug para investigar notificações de contatos privados
+      if (!isStatusAllowed && ticket?.status) {
+        console.log('[Notifications] DEBUG - Status não permitido:', {
+          status: ticket?.status,
+          showNotificationPending,
+          showGroupNotification,
+          isGroup: ticket?.isGroup,
+          groupAsTicket: ticket?.whatsapp?.groupAsTicket
+        });
+      }
 
       if (
         data?.action === "create" &&
@@ -218,8 +234,17 @@ const NotificationsPopOver = ({ volume = 1 }) => {
         setNotifications(prevState => {
           const ticketIndex = prevState.findIndex(t => t.id === ticket.id);
           if (ticketIndex !== -1) {
-            prevState[ticketIndex] = ticket;
-            return [...prevState];
+            const updatedTicket = { ...prevState[ticketIndex] };
+            // Soma mensagens não lidas
+            updatedTicket.unreadMessages = (updatedTicket.unreadMessages || 0) + (ticket.unreadMessages || 1);
+            // Atualiza para mensagem mais recente
+            updatedTicket.lastMessage = ticket.lastMessage || updatedTicket.lastMessage;
+            updatedTicket.updatedAt = ticket.updatedAt;
+            
+            const newState = [...prevState];
+            newState[ticketIndex] = updatedTicket;
+            // Reordena por data
+            return newState.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
           }
           return [ticket, ...prevState];
         });
@@ -373,6 +398,49 @@ const NotificationsPopOver = ({ volume = 1 }) => {
       soundAlertRef.current?.();
       lastSoundTimeRef.current = now;
     }
+  };
+
+  // Função para agrupar notificações por contato/grupo
+  const groupNotificationsByContact = (ticketsList) => {
+    if (!Array.isArray(ticketsList)) return [];
+    
+    const grouped = {};
+    
+    ticketsList.forEach(ticket => {
+      // Usa contactId ou ticket.contact.id como chave
+      const contactId = ticket.contact?.id || ticket.contactId || ticket.id;
+      const isGroup = ticket.isGroup === true;
+      const key = `${contactId}-${isGroup ? 'group' : 'private'}`;
+      
+      if (!grouped[key]) {
+        grouped[key] = {
+          ...ticket,
+          unreadMessages: Number(ticket.unreadMessages) || 0,
+          _originalTickets: [ticket]
+        };
+      } else {
+        // Soma mensagens não lidas
+        grouped[key].unreadMessages += Number(ticket.unreadMessages) || 0;
+        grouped[key]._originalTickets.push(ticket);
+        
+        // Mantém a mensagem mais recente (última atualização)
+        const currentDate = new Date(ticket.updatedAt || Date.now());
+        const existingDate = new Date(grouped[key].updatedAt || 0);
+        
+        if (currentDate > existingDate) {
+          grouped[key].lastMessage = ticket.lastMessage;
+          grouped[key].updatedAt = ticket.updatedAt;
+          grouped[key].id = ticket.id;
+          grouped[key].uuid = ticket.uuid;
+          grouped[key].status = ticket.status;
+        }
+      }
+    });
+    
+    // Converte de volta para array e ordena por data (mais recente primeiro)
+    return Object.values(grouped).sort((a, b) => {
+      return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
+    });
   };
 
   const handleClick = () => {
