@@ -25,7 +25,7 @@ const LazyMedia = ({ children, placeholder, threshold = 0.1, rootMargin = "200px
   }, [threshold, rootMargin]);
 
   return (
-    <div ref={containerRef} style={{ minHeight: "100px", width: "100%" }}>
+    <div ref={containerRef} style={{ width: "100%" }}>
       {isVisible ? children : (placeholder || <div style={{ height: "100px", backgroundColor: "#f0f0f0", borderRadius: "8px" }} />)}
     </div>
   );
