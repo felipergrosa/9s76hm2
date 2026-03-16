@@ -274,6 +274,9 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
       const queueIds = (user?.queues || []).map(q => q?.UserQueue?.queueId || q?.id).filter(Boolean);
       const statusFilters = filters.status ? [filters.status] : undefined;
 
+      // Superadmin e admin devem ver todos os tickets, não apenas os da carteira
+      const isSuperUser = user?.super || user?.profile === 'admin';
+
       const { data } = await api.get('/tickets', {
         params: {
           status: filters.status,
@@ -282,7 +285,8 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
           showAll: true,
           queueIds,
           statusFilters,
-          walletOnly: true
+          // Apenas filtrar por carteira se NÃO for superadmin/admin
+          walletOnly: isSuperUser ? false : true
         },
       });
       setTickets(data.tickets || []);
