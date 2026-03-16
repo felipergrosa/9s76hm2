@@ -1735,7 +1735,8 @@ const MessageInput = ({
         const { data } = await api.post(`/messages/${ticketId}`, message);
         
         // Limpar input imediatamente após envio bem-sucedido
-        if (!customMessage) {
+        // Usar isCustomMessage para garantir que só limpa quando não é mensagem customizada
+        if (!isCustomMessage) {
           setInputMessage("");
         }
         setReplyingMessage(null);
