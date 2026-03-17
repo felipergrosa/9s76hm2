@@ -245,7 +245,7 @@ const ListTicketsService = async ({
                   userId:
                     { [Op.or]: [user.id, null] },
                   status: "pending",
-                  queueId: { [Op.in]: queueIds }
+                  queueId: { [Op.in]: effectiveQueueIds }
                 },
               });
             } else {
