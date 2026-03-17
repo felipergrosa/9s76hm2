@@ -27,7 +27,6 @@ import { i18n } from "../../translate/i18n";
 
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
-import { TagsContainer } from "../TagsContainer";
 import InputMask from "react-input-mask";
 import { isValidCPF, isValidCNPJ } from "../../utils/validators";
 import usePermissions from "../../hooks/usePermissions";
@@ -125,6 +124,7 @@ const ContactSchema = Yup.object().shape({
 	vlUltCompra: Yup.mixed().nullable(),
 	bzEmpresa: Yup.string().nullable(),
 	region: Yup.string().nullable(),
+	tags: Yup.array().nullable(),
 	wallets: Yup.array().nullable(),
 });
 
@@ -149,9 +149,35 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	const classes = useStyles();
 	const isMounted = useRef(true);
 	const [avatarOpen, setAvatarOpen] = useState(false);
-	const [pendingTags, setPendingTags] = useState([]);
+	const [tagOptions, setTagOptions] = useState([]);
+	const [loadingTags, setLoadingTags] = useState(false);
 	const [userOptions, setUserOptions] = useState([]);
 	const [loadingUsers, setLoadingUsers] = useState(false);
+	// Opções para campos autocomplete com freeSolo e lazy loading
+	const [cityOptions, setCityOptions] = useState([]);
+	const [cityHasMore, setCityHasMore] = useState(true);
+	const [cityOffset, setCityOffset] = useState(0);
+	const [cityLoading, setCityLoading] = useState(false);
+	
+	const [regionOptions, setRegionOptions] = useState([]);
+	const [regionHasMore, setRegionHasMore] = useState(true);
+	const [regionOffset, setRegionOffset] = useState(0);
+	const [regionLoading, setRegionLoading] = useState(false);
+	
+	const [segmentOptions, setSegmentOptions] = useState([]);
+	const [segmentHasMore, setSegmentHasMore] = useState(true);
+	const [segmentOffset, setSegmentOffset] = useState(0);
+	const [segmentLoading, setSegmentLoading] = useState(false);
+	
+	const [repOptions, setRepOptions] = useState([]);
+	const [repHasMore, setRepHasMore] = useState(true);
+	const [repOffset, setRepOffset] = useState(0);
+	const [repLoading, setRepLoading] = useState(false);
+	
+	const [companyOptions, setCompanyOptions] = useState([]);
+	const [companyHasMore, setCompanyHasMore] = useState(true);
+	const [companyOffset, setCompanyOffset] = useState(0);
+	const [companyLoading, setCompanyLoading] = useState(false);
 
 	// Função auxiliar para correção automática de acentuação
 	const handleAutoCorrect = (setFieldValue, fieldName, value) => {
@@ -168,6 +194,78 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	const canEditTags = hasPermission("contacts.edit-tags");
 	const canEditWallets = hasPermission("contacts.edit-wallets");
 	const canEditRepresentative = hasPermission("contacts.edit-representative");
+
+	useEffect(() => {
+		let isMountedLocal = true;
+		
+		const fetchTags = async () => {
+			try {
+				if (!isMountedLocal) return;
+				setLoadingTags(true);
+				const { data } = await api.get("/tags/");
+				if (!isMountedLocal) return;
+				// Garante que sempre seja um array (API pode retornar { tags: [...] } ou [...])
+				const tagsArray = Array.isArray(data) ? data : (data?.tags || []);
+				setTagOptions(tagsArray);
+			} catch (err) {
+				if (!isMountedLocal) return;
+				// Silencia erro 403
+				if (err?.response?.status !== 403) {
+					toastError(err);
+				}
+			} finally {
+				if (isMountedLocal) {
+					setLoadingTags(false);
+				}
+			}
+		};
+
+		fetchTags();
+		
+		// Buscar valores únicos dos contatos para autocomplete (lazy loading inicial)
+		const fetchUniqueValues = async () => {
+			try {
+				const limit = 50;
+				const [citiesRes, regionsRes, segmentsRes, repsRes, companiesRes] = await Promise.all([
+					api.get(`/contacts/unique-values?field=city&limit=${limit}&offset=0`),
+					api.get(`/contacts/unique-values?field=region&limit=${limit}&offset=0`),
+					api.get(`/contacts/unique-values?field=segment&limit=${limit}&offset=0`),
+					api.get(`/contacts/unique-values?field=representativeCode&limit=${limit}&offset=0`),
+					api.get(`/contacts/unique-values?field=bzEmpresa&limit=${limit}&offset=0`)
+				]);
+				
+				if (!isMountedLocal) return;
+				
+				setCityOptions(citiesRes.data.values || []);
+				setCityHasMore(citiesRes.data.hasMore);
+				setCityOffset(limit);
+				
+				setRegionOptions(regionsRes.data.values || []);
+				setRegionHasMore(regionsRes.data.hasMore);
+				setRegionOffset(limit);
+				
+				setSegmentOptions(segmentsRes.data.values || []);
+				setSegmentHasMore(segmentsRes.data.hasMore);
+				setSegmentOffset(limit);
+				
+				setRepOptions(repsRes.data.values || []);
+				setRepHasMore(repsRes.data.hasMore);
+				setRepOffset(limit);
+				
+				setCompanyOptions(companiesRes.data.values || []);
+				setCompanyHasMore(companiesRes.data.hasMore);
+				setCompanyOffset(limit);
+			} catch (err) {
+				// Silencioso - campos continuam funcionando como texto livre
+				console.log("[ContactModal] Erro ao buscar valores únicos:", err);
+			}
+		};
+		fetchUniqueValues();
+		
+		return () => {
+			isMountedLocal = false;
+		};
+	}, []);
 
 	const initialState = {
 		clientCode: "",
@@ -191,6 +289,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		vlUltCompra: "",
 		bzEmpresa: "",
 		region: "",
+		tags: [],
 		wallets: [],
 	};
 
@@ -248,7 +347,10 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 						...initialValues,
 						wallets: Array.isArray(initialValues.wallets)
 							? initialValues.wallets.map(w => (typeof w === "object" ? w.id : w))
-							: (initialValues.wallets || [])
+							: (initialValues.wallets || []),
+						tags: Array.isArray(initialValues.tags)
+							? initialValues.tags.map(t => (typeof t === "object" ? t.id : t))
+							: (initialValues.tags || [])
 					};
 				});
 			}
@@ -262,6 +364,9 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 					...data,
 					wallets: Array.isArray(data.wallets)
 						? data.wallets.map(w => (typeof w === "object" ? w.id : w))
+						: [],
+					tags: Array.isArray(data.tags)
+						? data.tags.map(t => (typeof t === "object" ? t.id : t))
 						: []
 				});
 				setDisableBot(data.disableBot);
@@ -277,6 +382,87 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			isMountedLocal = false;
 		};
 	}, [contactId, open, initialValues]);
+
+	// Funções de lazy loading para campos autocomplete
+	const loadMoreCities = async () => {
+		if (cityLoading || !cityHasMore) return;
+		try {
+			setCityLoading(true);
+			const limit = 50;
+			const { data } = await api.get(`/contacts/unique-values?field=city&limit=${limit}&offset=${cityOffset}`);
+			setCityOptions(prev => [...prev, ...(data.values || [])]);
+			setCityHasMore(data.hasMore);
+			setCityOffset(prev => prev + limit);
+		} catch (err) {
+			console.log("[ContactModal] Erro ao carregar mais cidades:", err);
+		} finally {
+			setCityLoading(false);
+		}
+	};
+
+	const loadMoreRegions = async () => {
+		if (regionLoading || !regionHasMore) return;
+		try {
+			setRegionLoading(true);
+			const limit = 50;
+			const { data } = await api.get(`/contacts/unique-values?field=region&limit=${limit}&offset=${regionOffset}`);
+			setRegionOptions(prev => [...prev, ...(data.values || [])]);
+			setRegionHasMore(data.hasMore);
+			setRegionOffset(prev => prev + limit);
+		} catch (err) {
+			console.log("[ContactModal] Erro ao carregar mais regiões:", err);
+		} finally {
+			setRegionLoading(false);
+		}
+	};
+
+	const loadMoreSegments = async () => {
+		if (segmentLoading || !segmentHasMore) return;
+		try {
+			setSegmentLoading(true);
+			const limit = 50;
+			const { data } = await api.get(`/contacts/unique-values?field=segment&limit=${limit}&offset=${segmentOffset}`);
+			setSegmentOptions(prev => [...prev, ...(data.values || [])]);
+			setSegmentHasMore(data.hasMore);
+			setSegmentOffset(prev => prev + limit);
+		} catch (err) {
+			console.log("[ContactModal] Erro ao carregar mais segmentos:", err);
+		} finally {
+			setSegmentLoading(false);
+		}
+	};
+
+	const loadMoreReps = async () => {
+		if (repLoading || !repHasMore) return;
+		try {
+			setRepLoading(true);
+			const limit = 50;
+			const { data } = await api.get(`/contacts/unique-values?field=representativeCode&limit=${limit}&offset=${repOffset}`);
+			setRepOptions(prev => [...prev, ...(data.values || [])]);
+			setRepHasMore(data.hasMore);
+			setRepOffset(prev => prev + limit);
+		} catch (err) {
+			console.log("[ContactModal] Erro ao carregar mais representantes:", err);
+		} finally {
+			setRepLoading(false);
+		}
+	};
+
+	const loadMoreCompanies = async () => {
+		if (companyLoading || !companyHasMore) return;
+		try {
+			setCompanyLoading(true);
+			const limit = 50;
+			const { data } = await api.get(`/contacts/unique-values?field=bzEmpresa&limit=${limit}&offset=${companyOffset}`);
+			setCompanyOptions(prev => [...prev, ...(data.values || [])]);
+			setCompanyHasMore(data.hasMore);
+			setCompanyOffset(prev => prev + limit);
+		} catch (err) {
+			console.log("[ContactModal] Erro ao carregar mais empresas:", err);
+		} finally {
+			setCompanyLoading(false);
+		}
+	};
 
 	const handleClose = () => {
 		onClose();
@@ -306,14 +492,6 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 				handleClose();
 			} else {
 				const { data } = await api.post("/contacts", payload);
-				// Sincroniza tags pendentes após criação, se houver
-				if (Array.isArray(pendingTags) && pendingTags.length > 0) {
-					try {
-						await api.post('/tags/sync', { contactId: data.id, tags: pendingTags });
-					} catch (syncErr) {
-						// silencioso para não bloquear o fluxo
-					}
-				}
 				if (onSave) {
 					onSave(data);
 				}
@@ -404,17 +582,32 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
-										<Field
-											as={TextField}
-											label="Empresa"
-											name="bzEmpresa"
-											variant="outlined"
-											margin="dense"
-											fullWidth
-											InputLabelProps={{
-												shrink: true,
+										<Autocomplete
+											freeSolo
+											options={companyOptions}
+											value={values.bzEmpresa || ''}
+											onChange={(e, newValue) => setFieldValue('bzEmpresa', newValue || '')}
+											onInputChange={(e, newInputValue) => setFieldValue('bzEmpresa', newInputValue)}
+											disabled={!canEditFields}
+											loading={companyLoading}
+											ListboxProps={{
+												onScroll: (event) => {
+													const listboxNode = event.currentTarget;
+													if (listboxNode.scrollTop + listboxNode.clientHeight >= listboxNode.scrollHeight - 20) {
+														loadMoreCompanies();
+													}
+												}
 											}}
-											onBlur={() => handleAutoCorrect(setFieldValue, 'bzEmpresa', values.bzEmpresa)}
+											renderInput={(params) => (
+												<TextField
+													{...params}
+													label="Empresa"
+													variant="outlined"
+													margin="dense"
+													fullWidth
+													InputLabelProps={{ shrink: true }}
+												/>
+											)}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -509,17 +702,46 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										</Field>
 									</Grid>
 									<Grid item xs={12} md={6}>
+										<Autocomplete
+											freeSolo
+											options={repOptions}
+											value={values.representativeCode || ''}
+											onChange={(e, newValue) => setFieldValue('representativeCode', newValue || '')}
+											onInputChange={(e, newInputValue) => setFieldValue('representativeCode', newInputValue)}
+											disabled={!canEditRepresentative}
+											loading={repLoading}
+											ListboxProps={{
+												onScroll: (event) => {
+													const listboxNode = event.currentTarget;
+													if (listboxNode.scrollTop + listboxNode.clientHeight >= listboxNode.scrollHeight - 20) {
+														loadMoreReps();
+													}
+												}
+											}}
+											renderInput={(params) => (
+												<TextField
+													{...params}
+													label="Código do Representante"
+													variant="outlined"
+													margin="dense"
+													fullWidth
+													InputLabelProps={{ shrink: true }}
+												/>
+											)}
+										/>
+									</Grid>
+									<Grid item xs={12} md={6}>
 										<Field
 											as={TextField}
-											label="Código do Representante"
-											name="representativeCode"
+											label="E-mail"
+											name="email"
+											type="email"
 											variant="outlined"
 											margin="dense"
 											InputLabelProps={{
 												shrink: true,
 											}}
 											fullWidth
-											disabled={!canEditRepresentative}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -540,8 +762,8 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 									<Grid item xs={12} md={6}>
 										<Field
 											as={TextField}
-											label="Cidade"
-											name="city"
+											label="Valor Última Compra"
+											name="vlUltCompra"
 											variant="outlined"
 											margin="dense"
 											InputLabelProps={{
@@ -549,22 +771,65 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											}}
 											fullWidth
 											disabled={!canEditFields}
-											onBlur={() => handleAutoCorrect(setFieldValue, 'city', values.city)}
+											placeholder="R$ 0,00"
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
-										<Field
-											as={TextField}
-											label="Região"
-											name="region"
-											variant="outlined"
-											margin="dense"
-											InputLabelProps={{
-												shrink: true,
-											}}
-											fullWidth
+										<Autocomplete
+											freeSolo
+											options={cityOptions}
+											value={values.city || ''}
+											onChange={(e, newValue) => setFieldValue('city', newValue || '')}
+											onInputChange={(e, newInputValue) => setFieldValue('city', newInputValue)}
 											disabled={!canEditFields}
-											onBlur={() => handleAutoCorrect(setFieldValue, 'region', values.region)}
+											loading={cityLoading}
+											ListboxProps={{
+												onScroll: (event) => {
+													const listboxNode = event.currentTarget;
+													if (listboxNode.scrollTop + listboxNode.clientHeight >= listboxNode.scrollHeight - 20) {
+														loadMoreCities();
+													}
+												}
+											}}
+											renderInput={(params) => (
+												<TextField
+													{...params}
+													label="Cidade"
+													variant="outlined"
+													margin="dense"
+													fullWidth
+													InputLabelProps={{ shrink: true }}
+												/>
+											)}
+										/>
+									</Grid>
+									<Grid item xs={12} md={6}>
+										<Autocomplete
+											freeSolo
+											options={regionOptions}
+											value={values.region || ''}
+											onChange={(e, newValue) => setFieldValue('region', newValue || '')}
+											onInputChange={(e, newInputValue) => setFieldValue('region', newInputValue)}
+											disabled={!canEditFields}
+											loading={regionLoading}
+											ListboxProps={{
+												onScroll: (event) => {
+													const listboxNode = event.currentTarget;
+													if (listboxNode.scrollTop + listboxNode.clientHeight >= listboxNode.scrollHeight - 20) {
+														loadMoreRegions();
+													}
+												}
+											}}
+											renderInput={(params) => (
+												<TextField
+													{...params}
+													label="Região"
+													variant="outlined"
+													margin="dense"
+													fullWidth
+													InputLabelProps={{ shrink: true }}
+												/>
+											)}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -598,18 +863,32 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
-										<Field
-											as={TextField}
-											label="Segmento de Mercado"
-											name="segment"
-											InputLabelProps={{
-												shrink: true,
-											}}
-											variant="outlined"
-											margin="dense"
+										<Autocomplete
+											freeSolo
+											options={segmentOptions}
+											value={values.segment || ''}
+											onChange={(e, newValue) => setFieldValue('segment', newValue || '')}
+											onInputChange={(e, newInputValue) => setFieldValue('segment', newInputValue)}
 											disabled={!canEditFields}
-											fullWidth
-											onBlur={() => handleAutoCorrect(setFieldValue, 'segment', values.segment)}
+											loading={segmentLoading}
+											ListboxProps={{
+												onScroll: (event) => {
+													const listboxNode = event.currentTarget;
+													if (listboxNode.scrollTop + listboxNode.clientHeight >= listboxNode.scrollHeight - 20) {
+														loadMoreSegments();
+													}
+												}
+											}}
+											renderInput={(params) => (
+												<TextField
+													{...params}
+													label="Segmento de Mercado"
+													variant="outlined"
+													margin="dense"
+													fullWidth
+													InputLabelProps={{ shrink: true }}
+												/>
+											)}
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
@@ -643,10 +922,31 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
+										<Field name="situation">
+											{({ field, form }) => (
+												<FormControl variant="outlined" margin="dense" fullWidth disabled={!canEditFields}>
+													<InputLabel shrink>Situação</InputLabel>
+													<Select
+														{...field}
+														value={field.value || "Ativo"}
+														onChange={(e) => form.setFieldValue("situation", e.target.value)}
+														label="Situação"
+													>
+														<MenuItem value="Ativo">Ativo</MenuItem>
+														<MenuItem value="Inativo">Inativo</MenuItem>
+														<MenuItem value="Suspenso">Suspenso</MenuItem>
+														<MenuItem value="Bloqueado">Bloqueado</MenuItem>
+														<MenuItem value="Excluido">Excluído</MenuItem>
+													</Select>
+												</FormControl>
+											)}
+										</Field>
+									</Grid>
+									<Grid item xs={12} md={6}>
 										<Autocomplete
 											multiple
 											options={userOptions}
-											getOptionLabel={(option) => option.name}
+											getOptionLabel={(option) => option.name?.toUpperCase() || ''}
 											value={userOptions.filter(u => (values.wallets || []).includes(u.id))}
 											onChange={(e, newValue) => setFieldValue("wallets", newValue.map(u => u.id))}
 											disabled={!canEditWallets || loadingUsers}
@@ -657,8 +957,10 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 													<Chip
 														{...getTagProps({ index })}
 														key={option.id}
-														label={option.name}
+														label={option.name?.toUpperCase()}
 														color="primary"
+														size="small"
+														style={{ height: '24px', fontSize: '11px' }}
 													/>
 												))
 											}
@@ -675,20 +977,42 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
-										{canEditTags ? (
-											contact?.id ? (
-												<TagsContainer contact={contact} />
-											) : (
-												<TagsContainer contact={{}} pendingTags={pendingTags} onPendingChange={setPendingTags} />
-											)
-										) : (
-											<div style={{ padding: '8px 0', color: '#666', fontSize: '14px' }}>
-												<strong>Tags:</strong> {contact?.tags?.map(t => t.name).join(', ') || 'Nenhuma tag'}
-												<Typography variant="caption" display="block" style={{ color: '#999', marginTop: 4 }}>
-													Você não tem permissão para editar tags
-												</Typography>
-											</div>
-										)}
+										<Autocomplete
+											multiple
+											options={Array.isArray(tagOptions) ? tagOptions : []}
+											getOptionLabel={(option) => option.name?.toUpperCase() || ''}
+											value={(Array.isArray(tagOptions) ? tagOptions : []).filter(t => (values.tags || []).includes(t.id))}
+											onChange={(e, newValue) => setFieldValue("tags", newValue.map(t => t.id))}
+											disabled={!canEditTags || loadingTags}
+											loading={loadingTags}
+											filterSelectedOptions
+											renderTags={(value, getTagProps) =>
+												value.map((option, index) => (
+													<Chip
+														{...getTagProps({ index })}
+														key={option.id}
+														label={option.name?.toUpperCase()}
+														style={{
+															backgroundColor: option.color || undefined,
+															height: '24px',
+															fontSize: '11px',
+															color: '#fff'
+														}}
+														size="small"
+													/>
+												))
+											}
+											renderInput={(params) => (
+												<TextField
+													{...params}
+													variant="outlined"
+													margin="dense"
+													label="Tags"
+													placeholder="Selecione tags"
+													fullWidth
+												/>
+											)}
+										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
 										<div style={{ display: 'flex', gap: 24, alignItems: 'center', paddingTop: 8 }}>

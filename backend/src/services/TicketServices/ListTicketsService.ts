@@ -644,6 +644,27 @@ const ListTicketsService = async ({
     subQuery: false
   });
 
+  // Debug: verificar se ticket específico está sendo filtrado
+  if (userId === 3 && status === "open") {
+    console.log(`[DEBUG ListTickets] User ${userId}, status ${status}, count: ${count}`);
+    console.log(`[DEBUG ListTickets] Tickets retornados: ${tickets.map(t => t.id).join(', ')}`);
+    console.log(`[DEBUG ListTickets] whereCondition:`, JSON.stringify(whereCondition, null, 2));
+    
+    // Verificar se ticket 5349 existe
+    const ticket5349 = await Ticket.findByPk(5349);
+    if (ticket5349) {
+      console.log(`[DEBUG ListTickets] Ticket 5349 no banco:`, {
+        id: ticket5349.id,
+        status: ticket5349.status,
+        userId: ticket5349.userId,
+        queueId: ticket5349.queueId,
+        contactId: ticket5349.contactId,
+        whatsappId: ticket5349.whatsappId,
+        isGroup: ticket5349.isGroup
+      });
+    }
+  }
+
   const hasMore = count > offset + tickets.length;
 
   // BackendPerfMonitor.end('ListTicketsService:Total', { 

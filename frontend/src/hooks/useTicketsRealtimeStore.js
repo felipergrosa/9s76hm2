@@ -82,6 +82,14 @@ const reducer = (state, action) => {
     }
 
     case "FETCH_SUCCESS": {
+      // Debug: verificar se ticket 5349 está na resposta para a Bruna (userId=3)
+      if (action.tickets.some(t => t.id === 5349)) {
+        console.log(`[DEBUG Frontend] Ticket 5349 encontrado na resposta de ${action.statusKey}`, action.tickets.find(t => t.id === 5349));
+      }
+      if (action.tickets.length > 0 && action.tickets[0]?.userId === 3) {
+        console.log(`[DEBUG Frontend] User 3 - status ${action.statusKey} - tickets retornados:`, action.tickets.map(t => ({ id: t.id, status: t.status, userId: t.userId, queueId: t.queueId, contactId: t.contactId })));
+      }
+      
       const ticketsById = mergeTicketsById(state.ticketsById, action.tickets);
       const currentIds = action.append ? state.metaByStatus[action.statusKey].ids : [];
       const mergedIds = [...currentIds, ...action.tickets.map(ticket => ticket.id)];

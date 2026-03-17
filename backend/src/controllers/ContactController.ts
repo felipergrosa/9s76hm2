@@ -2508,3 +2508,119 @@ export const validateContactName = async (req: AuthenticatedRequest, res: Respon
     return res.status(500).json({ error: error.message || "Erro ao validar nome do contato" });
   }
 };
+
+/**
+ * Retorna valores únicos para campos de autocomplete
+ * GET /contacts/unique-values
+ */
+export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const { field, search, limit = "50", offset = "0" } = req.query as {
+    field?: string;
+    search?: string;
+    limit?: string;
+    offset?: string;
+  };
+
+  const parsedLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const parsedOffset = Math.max(Number(offset) || 0, 0);
+
+  try {
+    // Se field especificado, retorna apenas aquele campo (lazy loading)
+    if (field && ['city', 'region', 'segment', 'representativeCode', 'bzEmpresa'].includes(field)) {
+      const columnName = field === 'bzEmpresa' ? 'bzEmpresa' : field;
+      
+      const whereClause: any = {
+        companyId,
+        [columnName]: { [Op.not]: null, [Op.ne]: "" }
+      };
+
+      // Filtro de busca opcional
+      if (search) {
+        whereClause[columnName] = { 
+          [Op.and]: [
+            { [Op.not]: null },
+            { [Op.ne]: "" },
+            { [Op.iLike]: `%${search}%` }
+          ]
+        };
+      }
+
+      const results = await Contact.findAll({
+        where: whereClause,
+        attributes: [columnName],
+        group: [columnName],
+        order: [[columnName, 'ASC']],
+        raw: true,
+        limit: parsedLimit,
+        offset: parsedOffset
+      });
+
+      const values = [...new Set(results.map((r: any) => r[columnName]).filter(Boolean))];
+
+      return res.json({ field, values, hasMore: values.length === parsedLimit });
+    }
+
+    // Buscar todos os valores únicos para cada campo
+    const citiesPromise = Contact.findAll({
+      where: { companyId, city: { [Op.not]: null, [Op.ne]: "" } },
+      attributes: ["city"],
+      group: ["city"],
+      order: [["city", "ASC"]],
+      raw: true,
+      limit: 200
+    }).then((results: any[]) => [...new Set(results.map(r => r.city).filter(Boolean))]);
+
+    const regionsPromise = Contact.findAll({
+      where: { companyId, region: { [Op.not]: null, [Op.ne]: "" } },
+      attributes: ["region"],
+      group: ["region"],
+      order: [["region", "ASC"]],
+      raw: true,
+      limit: 200
+    }).then((results: any[]) => [...new Set(results.map(r => r.region).filter(Boolean))]);
+
+    const segmentsPromise = Contact.findAll({
+      where: { companyId, segment: { [Op.not]: null, [Op.ne]: "" } },
+      attributes: ["segment"],
+      group: ["segment"],
+      order: [["segment", "ASC"]],
+      raw: true,
+      limit: 200
+    }).then((results: any[]) => [...new Set(results.map(r => r.segment).filter(Boolean))]);
+
+    const representativesPromise = Contact.findAll({
+      where: { companyId, representativeCode: { [Op.not]: null, [Op.ne]: "" } },
+      attributes: ["representativeCode"],
+      group: ["representativeCode"],
+      order: [["representativeCode", "ASC"]],
+      raw: true,
+      limit: 200
+    }).then((results: any[]) => [...new Set(results.map(r => r.representativeCode).filter(Boolean))]);
+
+    const companiesPromise = Contact.findAll({
+      where: { companyId, bzEmpresa: { [Op.not]: null, [Op.ne]: "" } },
+      attributes: ["bzEmpresa"],
+      group: ["bzEmpresa"],
+      order: [["bzEmpresa", "ASC"]],
+      raw: true,
+      limit: 200
+    }).then((results: any[]) => [...new Set(results.map(r => r.bzEmpresa).filter(Boolean))]);
+
+    const [cities, regions, segments, representatives, companies] = await Promise.all([
+      citiesPromise, regionsPromise, segmentsPromise, representativesPromise, companiesPromise
+    ]);
+
+    return res.json({
+      cities,
+      regions,
+      segments,
+      representatives,
+      companies
+    });
+
+  } catch (error: any) {
+    console.error("[uniqueValues] Erro:", error);
+    return res.status(500).json({ error: error.message || "Erro ao buscar valores únicos" });
+  }
+};

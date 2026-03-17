@@ -27,7 +27,7 @@ contactRoutes.get("/contacts", isAuth, checkPermission("contacts.view"), Contact
 contactRoutes.get("/contacts/duplicates", isAuth, checkPermission("contacts.view"), ContactController.listDuplicates);
 contactRoutes.get("/contacts/pending-normalization", isAuth, checkPermission("contacts.view"), ContactController.listPendingNormalization);
 contactRoutes.get("/contacts/list", isAuth, checkPermission("contacts.view"), ContactController.list);
-contactRoutes.get("/contacts/segments", isAuth, checkPermission("contacts.view"), ContactController.segments);
+contactRoutes.get("/contacts/unique-values", isAuth, checkPermission("contacts.view"), ContactController.uniqueValues);
 contactRoutes.get("/contacts/empresas", isAuth, checkPermission("contacts.view"), ContactController.empresas);
 contactRoutes.get("/contacts/profile/:number", isAuth, checkPermission("contacts.view"), ContactController.getContactProfileURL);
 contactRoutes.get("/contacts/:contactId(\\d+)", isAuth, checkPermission("contacts.view"), ContactController.show);
