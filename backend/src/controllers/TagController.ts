@@ -15,6 +15,7 @@ import KanbanListService from "../services/TagServices/KanbanListService";
 import ContactTag from "../models/ContactTag";
 import ListAllTagsService from "../services/TagServices/ListAllTagsService";
 import SyncContactWalletsAndPersonalTagsService from "../services/ContactServices/SyncContactWalletsAndPersonalTagsService";
+import InMemoryCache from "../helpers/InMemoryCache";
 
 type IndexQuery = {
   searchParam?: string;
@@ -81,6 +82,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     userId
   });
 
+  // Invalida cache de tags da empresa
+  InMemoryCache.delPattern(`tags:*:${companyId}:*`);
+
   const io = getIO();
   io.of(`/workspace-${companyId}`)
     .emit(`company${companyId}-tag`, {
@@ -127,6 +131,9 @@ export const update = async (
 
   const tag = await UpdateService({ tagData, id: tagId });
 
+  // Invalida cache de tags da empresa
+  InMemoryCache.delPattern(`tags:*:${companyId}:*`);
+
   const io = getIO();
   io.of(`/workspace-${companyId}`)
     .emit(`company${companyId}-tag`, {
@@ -155,6 +162,9 @@ export const remove = async (
 
   await DeleteService(tagId);
 
+  // Invalida cache de tags da empresa
+  InMemoryCache.delPattern(`tags:*:${companyId}:*`);
+
   const io = getIO();
   io.of(`/workspace-${companyId}`)
     .emit(`company${companyId}-tag`, {
@@ -172,8 +182,25 @@ export const list = async (req: Request, res: Response): Promise<Response> => {
   console.log("[TagController.list] Request:", { searchParam, kanban, companyId, profile, userId: id });
 
   try {
+    // Cache apenas para listagens simples sem filtro de busca
+    const cacheKey = `tags:list:${companyId}:${profile}:${id}:${kanban || 'all'}`;
+    
+    if (!searchParam) {
+      const cached = InMemoryCache.get<any[]>(cacheKey);
+      if (cached) {
+        console.log("[TagController.list] ✅ Cache hit - retornando do cache");
+        return res.json(cached);
+      }
+    }
+
     const tags = await SimpleListService({ searchParam, kanban, companyId, profile, userId: id });
     console.log("[TagController.list] Tags retornadas:", tags?.length);
+    
+    // Salva no cache apenas se não houver filtro de busca
+    if (!searchParam) {
+      InMemoryCache.set(cacheKey, tags, 300000); // 5 minutos
+    }
+    
     return res.json(tags);
   } catch (err) {
     console.error("[TagController.list] Erro ao buscar tags:", err);
