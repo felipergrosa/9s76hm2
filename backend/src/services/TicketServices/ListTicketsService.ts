@@ -158,12 +158,25 @@ const ListTicketsService = async ({
   const effectiveQueueIds = queueIds.length > 0 ? queueIds : userQueueIds;
 
   if (status === "open") {
+    // DEBUG: Log antes de sobrescrever whereCondition
+    if (userId === 3) {
+      console.log(`[DEBUG ListTickets] Status=open: ANTES de sobrescrever whereCondition`);
+      console.log(`[DEBUG ListTickets] whereCondition atual:`, JSON.stringify(whereCondition, null, 2));
+      console.log(`[DEBUG ListTickets] effectiveQueueIds:`, effectiveQueueIds);
+    }
+    
     whereCondition = {
       ...whereCondition,
       userId,
       queueId: { [Op.in]: effectiveQueueIds },
       isGroup: false // Grupos nunca aparecem na aba "atendendo"
     };
+    
+    // DEBUG: Log após sobrescrever
+    if (userId === 3) {
+      console.log(`[DEBUG ListTickets] Status=open: APÓS sobrescrever whereCondition`);
+      console.log(`[DEBUG ListTickets] whereCondition novo:`, JSON.stringify(whereCondition, null, 2));
+    }
   } else
     if (status === "group" && user.allowGroup) {
       // Montar lista de conexões visíveis: primária + permitidas
@@ -619,6 +632,14 @@ const ListTicketsService = async ({
   // 3. REGRA PRINCIPAL: Ticket em atendimento (open com userId) só pode ser visto pelo atendente
   // Grupos (status=group) são excluídos - visibilidade de grupos controlada por allowGroup
   // Independente de ser admin, supervisor ou estar na carteira
+  
+  // DEBUG: Log antes da regra principal
+  if (userId === 3) {
+    console.log(`[DEBUG ListTickets] ANTES da regra principal:`);
+    console.log(`[DEBUG ListTickets] whereCondition:`, JSON.stringify(whereCondition, null, 2));
+    console.log(`[DEBUG ListTickets] userId do request: ${userId}`);
+  }
+  
   whereCondition = {
     [Op.and]: [
       whereCondition,
@@ -631,6 +652,12 @@ const ListTicketsService = async ({
       }
     ]
   } as any;
+  
+  // DEBUG: Log após a regra principal
+  if (userId === 3) {
+    console.log(`[DEBUG ListTickets] APÓS regra principal:`);
+    console.log(`[DEBUG ListTickets] whereCondition final:`, JSON.stringify(whereCondition, null, 2));
+  }
 
   // Limite/paginação: para showAll === "true", retornamos até 500 registros (otimizado para performance)
   const limit = showAll === "true" ? 500 : 40;

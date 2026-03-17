@@ -827,6 +827,81 @@ const wbotMonitor = async (
     
     logger.info(`[wbotMonitor] Health check iniciado para whatsappId=${whatsapp.id} (interval: 30s)`);
 
+    // =================================================================
+    // ANDROID SYNC: Forçar sync periódico para conexões Android
+    // Android tem Doze Mode que suspende WhatsApp em background
+    // Isso causa "stalled connection" - WS parece conectado mas não recebe eventos
+    // =================================================================
+    const ANDROID_SYNC_INTERVAL = 120 * 1000; // 2 minutos
+    let lastActivityTimestamp = Date.now();
+    let lastSyncAttempt = 0;
+    
+    // Atualizar timestamp de atividade quando receber mensagens
+    // (o wbotMessageListener já emite eventos que podemos usar)
+    const activityCheckInterval = setInterval(() => {
+      // Verificar se há atividade recente consultando o wbot
+      const ws = (wbot as any).ws;
+      if (ws && ws.readyState === 1) {
+        // WebSocket está OPEN, considerar como atividade
+        lastActivityTimestamp = Date.now();
+      }
+    }, 30000); // Checar a cada 30s
+    
+    const androidSync = async () => {
+      try {
+        const timeSinceLastActivity = Date.now() - lastActivityTimestamp;
+        const timeSinceLastSync = Date.now() - lastSyncAttempt;
+        
+        // Se passou mais de 3 minutos sem atividade e 5 minutos desde último sync
+        if (timeSinceLastActivity > 3 * 60 * 1000 && timeSinceLastSync > 5 * 60 * 1000) {
+          logger.info(`[AndroidSync] whatsappId=${whatsapp.id} sem atividade há ${Math.round(timeSinceLastActivity/1000)}s, forçando sync`);
+          
+          try {
+            // Tentar resync do estado do app (similar ao LabelSyncService)
+            if (typeof (wbot as any)?.resyncAppState === "function") {
+              await (wbot as any).resyncAppState(["critical_unblock_low"], true);
+              logger.info(`[AndroidSync] resyncAppState executado para whatsappId=${whatsapp.id}`);
+            }
+            
+            // Tentar atualizar presença para "despertar" conexão
+            await wbot.sendPresenceUpdate("available");
+            
+            lastSyncAttempt = Date.now();
+            lastActivityTimestamp = Date.now(); // Resetar após sync bem-sucedido
+            logger.info(`[AndroidSync] Sync forçado concluído para whatsappId=${whatsapp.id}`);
+          } catch (syncErr: any) {
+            logger.warn(`[AndroidSync] Erro no sync forçado: ${syncErr?.message}`);
+            
+            // Se falhar e passou mais de 10 minutos, pode ser stalled connection
+            if (timeSinceLastActivity > 10 * 60 * 1000) {
+              logger.error(`[AndroidSync] Possível stalled connection detectada para whatsappId=${whatsapp.id}`);
+              // Forçar reconexão via circuit breaker
+              const { removeWbot, getCircuitBreakerStatus } = require("../../libs/wbot");
+              removeWbot(whatsapp.id, false);
+              
+              const cbStatus = getCircuitBreakerStatus(whatsapp.id);
+              if (cbStatus.status !== 'open') {
+                const Whatsapp = require("../../models/Whatsapp").default;
+                const wa = await Whatsapp.findByPk(whatsapp.id);
+                if (wa && wa.status !== "PENDING") {
+                  const { StartWhatsAppSessionUnified } = require("./StartWhatsAppSessionUnified");
+                  setTimeout(() => StartWhatsAppSessionUnified(wa, companyId), 10000);
+                }
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        logger.error(`[AndroidSync] Erro no androidSync: ${err?.message}`);
+      }
+    };
+    
+    const androidSyncInterval = setInterval(androidSync, ANDROID_SYNC_INTERVAL);
+    (wbot as any)._activityCheckInterval = activityCheckInterval;
+    (wbot as any)._androidSyncInterval = androidSyncInterval;
+    
+    logger.info(`[wbotMonitor] Android sync iniciado para whatsappId=${whatsapp.id} (interval: 2min)`);
+
   } catch (err) {
     logger.error(`Error in wbotMonitor: ${err.message}`);
     Sentry.captureException(err);

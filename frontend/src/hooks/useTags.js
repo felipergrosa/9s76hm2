@@ -10,13 +10,21 @@ const useTags = () => {
 
   useEffect(() => {
     const fetchTags = async () => {
+      console.log("[useTags] Iniciando fetch de tags...");
+      console.log("[useTags] User:", user);
+      
       try {
         const { data } = await api.get(`/tags`, {
           params: { companyId: user.companyId },
         });
+        console.log("[useTags] Resposta da API:", data);
+        console.log("[useTags] Tags recebidas:", data.tags);
         setTags(data.tags);
         setLoading(false);
       } catch (err) {
+        console.error("[useTags] Erro ao buscar tags:", err);
+        console.error("[useTags] Status:", err?.response?.status);
+        console.error("[useTags] Mensagem:", err?.message);
         setLoading(false);
         // 403 = sem permissão tags.view (admin)
         // Silencia o erro
@@ -26,7 +34,12 @@ const useTags = () => {
       }
     };
 
-    fetchTags();
+    if (user?.companyId) {
+      fetchTags();
+    } else {
+      console.log("[useTags] Sem companyId, pulando fetch");
+      setLoading(false);
+    }
   }, [user]);
 
   return { tags, loading };

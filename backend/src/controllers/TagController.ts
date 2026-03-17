@@ -28,17 +28,27 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   const { pageNumber, searchParam, kanban, tagId } = req.query as IndexQuery;
   const { companyId, profile, id } = req.user;
 
-  const { tags, count, hasMore } = await ListService({
-    searchParam,
-    pageNumber,
-    companyId,
-    kanban,
-    tagId,
-    profile,
-    userId: id
-  });
+  console.log("[TagController.index] Request:", { pageNumber, searchParam, kanban, tagId, companyId, profile, userId: id });
 
-  return res.json({ tags, count, hasMore });
+  try {
+    const { tags, count, hasMore } = await ListService({
+      searchParam,
+      pageNumber,
+      companyId,
+      kanban,
+      tagId,
+      profile,
+      userId: id
+    });
+
+    console.log("[TagController.index] Tags retornadas:", tags?.length);
+    console.log("[TagController.index] Tags (nomes):", tags?.map(t => t.name));
+    
+    return res.json({ tags, count, hasMore });
+  } catch (err) {
+    console.error("[TagController.index] Erro ao buscar tags:", err);
+    throw err;
+  }
 };
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
@@ -159,12 +169,17 @@ export const list = async (req: Request, res: Response): Promise<Response> => {
   const { searchParam, kanban } = req.query as IndexQuery;
   const { companyId, profile, id } = req.user;
 
-  const tags = await SimpleListService({ searchParam, kanban, companyId, profile, userId: id });
+  console.log("[TagController.list] Request:", { searchParam, kanban, companyId, profile, userId: id });
 
-  return res.json(tags);
+  try {
+    const tags = await SimpleListService({ searchParam, kanban, companyId, profile, userId: id });
+    console.log("[TagController.list] Tags retornadas:", tags?.length);
+    return res.json(tags);
+  } catch (err) {
+    console.error("[TagController.list] Erro ao buscar tags:", err);
+    throw err;
+  }
 };
-
-
 
 export const kanban = async (req: Request, res: Response): Promise<Response> => {
   const { companyId, profile, id } = req.user;

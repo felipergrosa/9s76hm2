@@ -31,6 +31,8 @@ const ListService = async ({
   profile = "user",
   userId
 }: Request): Promise<Response> => {
+  console.log("[ListService] Iniciando busca de tags:", { companyId, searchParam, pageNumber, kanban, tagId, profile, userId });
+  
   let whereCondition: any = {};
 
   const limit = 20;
@@ -57,7 +59,11 @@ const ListService = async ({
 
     // Usuários não-admin veem apenas tags transacionais (sem #)
     // E apenas tags globais ou suas próprias tags
-    if (profile !== "admin") {
+    // EXCEÇÃO: Se tem permissão users.edit, vê todas (para poder atribuir a outros usuários)
+    console.log("[ListService] Verificando filtro: profile =", profile, ", userId =", userId);
+    
+    if (profile !== "admin" && !userId) {
+      console.log("[ListService] Aplicando filtro de tags transacionais (sem #) para não-admin");
       whereCondition = {
         ...whereCondition,
         name: { [Op.notLike]: "#%" },
@@ -66,7 +72,11 @@ const ListService = async ({
           { userId: userId }
         ]
       };
+    } else {
+      console.log("[ListService] Admin ou userId presente - mostrando todas as tags");
     }
+
+    console.log("[ListService] whereCondition final:", JSON.stringify({ ...whereCondition, companyId, kanban }, null, 2));
 
     const { count, rows: tags } = await Tag.findAndCountAll({
       where: { ...whereCondition, companyId, kanban },
@@ -93,6 +103,9 @@ const ListService = async ({
       order: [["name", "ASC"]],
     });
 
+    console.log("[ListService] Tags encontradas:", tags?.length);
+    console.log("[ListService] Total count:", count);
+    console.log("[ListService] Tags (nomes):", tags?.map(t => t.name));
 
     const hasMore = count > offset + tags.length;
 

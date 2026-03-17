@@ -189,6 +189,24 @@ const UserModal = ({ open, onClose, userId }) => {
   const { tags, loading: tagsLoading } = useTags(); // Usar o hook
   const { users: allUsers, loading: usersLoading } = useUsers(); // Lista de usuários para selecionar gerenciados
 
+  // DEBUG: Log das tags carregadas
+  useEffect(() => {
+    console.log("[UserModal DEBUG] Tags carregadas:", tags);
+    console.log("[UserModal DEBUG] Tags loading:", tagsLoading);
+    console.log("[UserModal DEBUG] Total tags:", tags?.length);
+    
+    // Categorizar tags
+    const personal = tags?.filter(t => t.name?.startsWith('#') && !t.name?.startsWith('##')) || [];
+    const group = tags?.filter(t => t.name?.startsWith('##')) || [];
+    const region = tags?.filter(t => t.name?.startsWith('###')) || [];
+    const others = tags?.filter(t => !t.name?.startsWith('#')) || [];
+    
+    console.log("[UserModal DEBUG] Tags pessoais (#):", personal);
+    console.log("[UserModal DEBUG] Tags grupo (##):", group);
+    console.log("[UserModal DEBUG] Tags região (###):", region);
+    console.log("[UserModal DEBUG] Tags outras:", others);
+  }, [tags, tagsLoading]);
+
   useEffect(() => {
     const fetchUser = async () => {
 
