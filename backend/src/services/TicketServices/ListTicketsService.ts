@@ -154,11 +154,14 @@ const ListTicketsService = async ({
 
   const userQueueIds = user.queues.map(queue => queue.id);
 
+  // Fallback: se queueIds não informado, usar filas do usuário
+  const effectiveQueueIds = queueIds.length > 0 ? queueIds : userQueueIds;
+
   if (status === "open") {
     whereCondition = {
       ...whereCondition,
       userId,
-      queueId: { [Op.in]: queueIds },
+      queueId: { [Op.in]: effectiveQueueIds },
       isGroup: false // Grupos nunca aparecem na aba "atendendo"
     };
   } else
@@ -647,6 +650,8 @@ const ListTicketsService = async ({
   // Debug: verificar se ticket específico está sendo filtrado
   if (userId === 3 && status === "open") {
     console.log(`[DEBUG ListTickets] User ${userId}, status ${status}, count: ${count}`);
+    console.log(`[DEBUG ListTickets] queueIds recebidos:`, queueIds);
+    console.log(`[DEBUG ListTickets] user.queues:`, user.queues.map(q => ({ id: q.id, name: q.name })));
     console.log(`[DEBUG ListTickets] Tickets retornados: ${tickets.map(t => t.id).join(', ')}`);
     console.log(`[DEBUG ListTickets] whereCondition:`, JSON.stringify(whereCondition, null, 2));
     
@@ -662,6 +667,7 @@ const ListTicketsService = async ({
         whatsappId: ticket5349.whatsappId,
         isGroup: ticket5349.isGroup
       });
+      console.log(`[DEBUG ListTickets] Ticket 5349 queueId IN queueIds?`, queueIds.includes(ticket5349.queueId));
     }
   }
 
