@@ -336,12 +336,24 @@ class Contact extends Model<Contact> {
       
       // CRÍTICO: Detectar URLs absolutas (mesmo mal formatadas) para evitar concatenação dupla
       // Ex: trata 'https://...', 'http://...' e erros comuns como 'https//...'
-      if (file.startsWith('http://') || file.startsWith('https://') || file.startsWith('https//')) {
+      // Também detecta quando já contém o domínio do backend/frontend
+      const backendUrl = (process.env.BACKEND_URL || '').replace(/:\d+$/, '');
+      const frontendUrl = (process.env.FRONTEND_URL || '').replace(/:\d+$/, '');
+      
+      const isAbsoluteUrl = file.startsWith('http://') || 
+                            file.startsWith('https://') || 
+                            file.startsWith('https//') ||
+                            file.includes('chatsapi.') ||
+                            file.includes(backendUrl) ||
+                            file.includes(frontendUrl);
+      
+      if (isAbsoluteUrl) {
         // Corrigir typo comum 'https//' -> 'https://'
-        if (file.startsWith('https//')) {
-            return file.replace('https//', 'https://');
+        let correctedUrl = file;
+        if (correctedUrl.startsWith('https//')) {
+          correctedUrl = correctedUrl.replace('https//', 'https://');
         }
-        return file;
+        return correctedUrl;
       }
 
       // Se já vier com subpastas, considerar relativo à raiz da company

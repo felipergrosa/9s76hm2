@@ -351,12 +351,14 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
     // Emitir socket se houve QUALQUER atualização (nome ou avatar)
     if (nameUpdated || avatarUpdated) {
       const io = getIO();
+      // Importante: usar getDataValue("urlPicture") para enviar caminho relativo, não URL completa do getter
+      const urlPictureRaw = contact.getDataValue("urlPicture");
       const payload = {
         action: "update",
         contact: {
           id: contact.id,
           name: contact.name,
-          urlPicture: contact.urlPicture,
+          urlPicture: urlPictureRaw, // Caminho relativo (ex: contacts/uuid/avatar.jpg)
           profilePicUrl: contact.profilePicUrl,
           updatedAt: contact.updatedAt
         }
