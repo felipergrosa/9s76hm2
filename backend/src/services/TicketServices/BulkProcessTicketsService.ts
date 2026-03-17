@@ -18,7 +18,7 @@ interface BulkProcessOptions {
   userId: number;
   
   // Opções de Resposta
-  responseType: 'none' | 'standard' | 'ai';
+  responseType: 'none' | 'standard' | 'ai' | 'manual';
   responseMessage?: string;
   aiAgentId?: number;
   
@@ -31,6 +31,7 @@ interface BulkProcessOptions {
   closeTicket?: boolean;
   addNote?: string;
   queueId?: number;
+  assignedUserId?: number; // ID do usuário para atribuir os tickets
   walletId?: number; // Deprecated: usar walletIds
   walletIds?: number[]; // Múltiplas carteiras
   walletMode?: 'replace' | 'append'; // Modo de alteração de carteira
@@ -70,6 +71,7 @@ const BulkProcessTicketsService = async (
     closeTicket,
     addNote,
     queueId,
+    assignedUserId,
     walletId
   } = options;
 
@@ -171,6 +173,9 @@ const BulkProcessTicketsService = async (
       };
 
       try {
+        // Declarar variável de controle para emissão de eventos de contato
+        let contactUpdated = false;
+
         // 1. Enviar resposta (se configurado)
         if (responseType === 'standard' && responseMessage) {
           try {
@@ -206,14 +211,24 @@ const BulkProcessTicketsService = async (
           }
         }
 
-        // 3. Adicionar tags
+        // 3. Adicionar tags ao TICKET e ao CONTATO
         if (tagIds && tagIds.length > 0) {
           try {
-            // Remover tags antigas
+            // Adicionar tags ao TICKET
             await ticket.$set('tags', []);
-            // Adicionar novas tags
             await ticket.$add('tags', tagIds);
-            ticketResult.actions?.push(`${tagIds.length} tag(s) adicionada(s)`);
+            ticketResult.actions?.push(`${tagIds.length} tag(s) adicionada(s) ao ticket`);
+            
+            // Adicionar tags ao CONTATO também
+            if (ticket.contactId) {
+              const contact = await Contact.findByPk(ticket.contactId);
+              if (contact) {
+                await contact.$set('tags', []);
+                await contact.$add('tags', tagIds);
+                ticketResult.actions?.push(`${tagIds.length} tag(s) adicionada(s) ao contato`);
+                contactUpdated = true;
+              }
+            }
             
             // Recarregar ticket com tags atualizadas para emitir evento
             const ticketWithTags = await Ticket.findByPk(ticket.id, {
@@ -235,7 +250,7 @@ const BulkProcessTicketsService = async (
           }
         }
 
-        // 4. Atualizar status/fila
+        // 4. Atualizar status/fila/usuário
         const updateData: any = {};
         
         // IMPORTANTE: Se resposta IA, SEMPRE configurar modo bot
@@ -252,6 +267,12 @@ const BulkProcessTicketsService = async (
 
         if (queueId) {
           updateData.queueId = queueId;
+        }
+
+        // Atribuir usuário aos tickets
+        if (assignedUserId) {
+          updateData.userId = assignedUserId;
+          ticketResult.actions?.push(`Atribuído ao usuário ${assignedUserId}`);
         }
 
         if (closeTicket) {
@@ -296,7 +317,6 @@ const BulkProcessTicketsService = async (
         }
 
         // 6. Atualizar carteira do contato (se configurado)
-        let contactUpdated = false;
         const walletsToProcess = options.walletIds || (options.walletId ? [options.walletId] : null);
         
         if (walletsToProcess && walletsToProcess.length > 0 && ticket.contactId) {

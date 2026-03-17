@@ -354,7 +354,106 @@ const ListTicketsService = async ({
       ...whereCondition2
     } as any;
   }
-  else if (status === "search") {
+
+  // Aplicar searchParam em TODOS os status (não apenas "search")
+  // Isso permite busca no modal de processamento em massa
+  if (searchParam) {
+    const sanitizedSearchParam = removeAccents(searchParam.toLocaleLowerCase().trim());
+    if (searchOnMessages === "true") {
+      includeCondition = [
+        ...includeCondition,
+        {
+          model: Message,
+          as: "messages",
+          attributes: ["id", "body"],
+          where: {
+            body: where(
+              fn("LOWER", fn('unaccent', col("body"))),
+              "LIKE",
+              `%${sanitizedSearchParam}%`
+            ),
+          },
+          required: false,
+          duplicating: false
+        }
+      ];
+      whereCondition = {
+        ...whereCondition,
+        [Op.or]: [
+          {
+            "$contact.name$": where(
+              fn("LOWER", fn("unaccent", col("contact.name"))),
+              "LIKE",
+              `%${sanitizedSearchParam}%`
+            )
+          },
+          { "$contact.number$": { [Op.like]: `%${sanitizedSearchParam}%` } },
+          {
+            "$message.body$": where(
+              fn("LOWER", fn("unaccent", col("body"))),
+              "LIKE",
+              `%${sanitizedSearchParam}%`
+            )
+          }
+        ]
+      };
+    } else {
+      whereCondition = {
+        ...whereCondition,
+        [Op.or]: [
+          {
+            "$contact.name$": where(
+              fn("LOWER", fn("unaccent", col("contact.name"))),
+              "LIKE",
+              `%${sanitizedSearchParam}%`
+            )
+          },
+          { "$contact.number$": { [Op.like]: `%${sanitizedSearchParam}%` } }
+        ]
+      };
+    }
+  }
+
+  if (Array.isArray(tags) && tags.length > 0) {
+    const contactTagFilter: any[] | null = [];
+    const contactTags = await ContactTag.findAll({
+      where: { tagId: tags }
+    });
+    if (contactTags) {
+      contactTagFilter.push(contactTags.map(t => t.contactId));
+    }
+
+    const contactsIntersection: number[] = intersection(...contactTagFilter);
+
+    whereCondition = {
+      ...whereCondition,
+      contactId: contactsIntersection
+    };
+  }
+
+  if (Array.isArray(users) && users.length > 0) {
+    whereCondition = {
+      ...whereCondition,
+      userId: users
+    };
+  }
+
+  if (Array.isArray(whatsappIds) && whatsappIds.length > 0) {
+    whereCondition = {
+      ...whereCondition,
+      whatsappId: whatsappIds
+    };
+  }
+
+  if (Array.isArray(statusFilters) && statusFilters.length > 0) {
+    whereCondition = {
+      ...whereCondition,
+      status: { [Op.in]: statusFilters }
+    };
+  }
+
+  // Manter lógica do status "search" para compatibilidade com busca global
+  if (status === "search") {
     let whereCondition2: any = {
       [Op.or]: [{ userId }, { status: ["pending", "closed", "group"] }]
     };
@@ -382,143 +481,7 @@ const ListTicketsService = async ({
       ...whereCondition,
       ...whereCondition2
     } as any;
-
-      // if (date) {
-      //   whereCondition = {
-      //     createdAt: {
-      //       [Op.between]: [+startOfDay(parseISO(date)), +endOfDay(parseISO(date))]
-      //     }
-      //   };
-      // }
-
-      // if (dateStart && dateEnd) {
-      //   whereCondition = {
-      //     updatedAt: {
-      //       [Op.between]: [+startOfDay(parseISO(dateStart)), +endOfDay(parseISO(dateEnd))]
-      //     }
-      //   };
-      // }
-
-      // if (updatedAt) {
-      //   whereCondition = {
-      //     updatedAt: {
-      //       [Op.between]: [
-      //         +startOfDay(parseISO(updatedAt)),
-      //         +endOfDay(parseISO(updatedAt))
-      //       ]
-      //     }
-      //   };
-      // }
-
-
-      if (searchParam) {
-        const sanitizedSearchParam = removeAccents(searchParam.toLocaleLowerCase().trim());
-        if (searchOnMessages === "true") {
-          includeCondition = [
-            ...includeCondition,
-            {
-              model: Message,
-              as: "messages",
-              attributes: ["id", "body"],
-              where: {
-                body: where(
-                  fn("LOWER", fn('unaccent', col("body"))),
-                  "LIKE",
-                  `%${sanitizedSearchParam}%`
-                ),
-                // ticketId: 
-              },
-              required: false,
-              duplicating: false
-            }
-          ];
-          whereCondition = {
-            ...whereCondition,
-            [Op.or]: [
-              {
-                "$contact.name$": where(
-                  fn("LOWER", fn("unaccent", col("contact.name"))),
-                  "LIKE",
-                  `%${sanitizedSearchParam}%`
-                )
-              },
-              { "$contact.number$": { [Op.like]: `%${sanitizedSearchParam}%` } },
-              {
-                "$message.body$": where(
-                  fn("LOWER", fn("unaccent", col("body"))),
-                  "LIKE",
-                  `%${sanitizedSearchParam}%`
-                )
-              }
-            ]
-          };
-        } else {
-          whereCondition = {
-            ...whereCondition,
-            [Op.or]: [
-              {
-                "$contact.name$": where(
-                  fn("LOWER", fn("unaccent", col("contact.name"))),
-                  "LIKE",
-                  `%${sanitizedSearchParam}%`
-                )
-              },
-              { "$contact.number$": { [Op.like]: `%${sanitizedSearchParam}%` } },
-              // {
-              //   "$message.body$": where(
-              //     fn("LOWER", fn("unaccent", col("body"))),
-              //     "LIKE",
-              //     `%${sanitizedSearchParam}%`
-              //   )
-              // }
-            ]
-          };
-        }
-
-      }
-
-      if (Array.isArray(tags) && tags.length > 0) {
-        const contactTagFilter: any[] | null = [];
-        // for (let tag of tags) {
-        const contactTags = await ContactTag.findAll({
-          where: { tagId: tags }
-        });
-        if (contactTags) {
-          contactTagFilter.push(contactTags.map(t => t.contactId));
-        }
-        // }
-
-        const contactsIntersection: number[] = intersection(...contactTagFilter);
-
-        whereCondition = {
-          ...whereCondition,
-          contactId: contactsIntersection
-        };
-      }
-
-      if (Array.isArray(users) && users.length > 0) {
-        whereCondition = {
-          ...whereCondition,
-          userId: users
-        };
-      }
-
-
-      if (Array.isArray(whatsappIds) && whatsappIds.length > 0) {
-        whereCondition = {
-          ...whereCondition,
-          whatsappId: whatsappIds
-        };
-      }
-
-      if (Array.isArray(statusFilters) && statusFilters.length > 0) {
-        whereCondition = {
-          ...whereCondition,
-          status: { [Op.in]: statusFilters }
-        };
-      }
-
-    } else
+  } else
       if (withUnreadMessages === "true") {
         // console.log(showNotificationPendingValue)
         whereCondition = {

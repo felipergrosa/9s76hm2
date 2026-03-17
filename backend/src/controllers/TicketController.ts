@@ -525,7 +525,7 @@ export const remove = async (
 };
 
 export const bulkProcess = async (req: Request, res: Response): Promise<Response> => {
-  const { companyId, id: userId } = req.user;
+  const { companyId, id: currentUserId } = req.user;
   const {
     ticketIds,
     responseType,
@@ -536,7 +536,10 @@ export const bulkProcess = async (req: Request, res: Response): Promise<Response
     newStatus,
     closeTicket,
     addNote,
-    queueId
+    queueId,
+    userId,        // ID do usuário para atribuir os tickets
+    walletIds,     // IDs dos usuários para carteira do contato
+    walletMode     // 'replace' ou 'append'
   } = req.body;
 
   try {
@@ -545,7 +548,7 @@ export const bulkProcess = async (req: Request, res: Response): Promise<Response
       return res.status(400).json({ error: "ticketIds é obrigatório e deve ser um array" });
     }
 
-    if (!responseType || !['none', 'standard', 'ai'].includes(responseType)) {
+    if (!responseType || !['none', 'standard', 'ai', 'manual'].includes(responseType)) {
       return res.status(400).json({ error: "responseType inválido" });
     }
 
@@ -563,7 +566,7 @@ export const bulkProcess = async (req: Request, res: Response): Promise<Response
     const result = await BulkProcessTicketsService({
       ticketIds,
       companyId,
-      userId: Number(userId),
+      userId: Number(currentUserId),
       responseType,
       responseMessage,
       aiAgentId,
@@ -572,7 +575,10 @@ export const bulkProcess = async (req: Request, res: Response): Promise<Response
       newStatus,
       closeTicket,
       addNote,
-      queueId
+      queueId,
+      assignedUserId: userId ? Number(userId) : undefined, // Usuário para atribuir tickets
+      walletIds,
+      walletMode
     });
 
     return res.status(200).json(result);
