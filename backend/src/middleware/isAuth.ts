@@ -39,8 +39,9 @@ const isAuth = async (req: ExtendedRequest, res: Response, next: NextFunction): 
     const decoded = verify(token, authConfig.secret) as TokenPayload;
     const { id, profile, companyId, super: superUser } = decoded;
 
-    // Atualização do usuário
-    await updateUser(id, companyId);
+    // REMOVIDO: updateUser causava deadlock em requisições simultâneas
+    // await updateUser(id, companyId);
+    // O status online será atualizado apenas no login e em eventos específicos
 
     // Adição segura do usuário ao request
     req.user = {
