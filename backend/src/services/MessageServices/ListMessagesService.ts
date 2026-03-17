@@ -77,30 +77,30 @@ const ListMessagesService = async ({
     ticketsFilter.push(ids.length > 0 ? ids : [ticket.id]);
     logger.info(`[ListMessages] GRUPO: contactId=${ticket.contactId} ticketIds=${JSON.stringify(ids)}`);
   } else {
+    // Histórico unificado: buscar mensagens de TODOS os tickets do mesmo contato
+    // Filtro de fila conforme permissões do usuário (comportamento original)
     const isAllHistoricEnabled = await isQueueIdHistoryBlocked({ userRequest: user.id });
-
+    
     let ticketIds = [];
-    if (!isAllHistoricEnabled) {
+    if (!isAllHistoricEnabled && queues && queues.length > 0) {
+      // Com filtro de fila (usuário restrito)
       ticketIds = await Ticket.findAll({
-        where:
-        {
+        where: {
           id: { [Op.lte]: ticket.id },
           companyId: ticket.companyId,
           contactId: ticket.contactId,
           whatsappId: ticket.whatsappId,
           isGroup: ticket.isGroup,
-          queueId: user.profile === "admin" || user.allTicket === "enable" ?
-            {
-              [Op.or]: [queues, null]
-            } :
-            { [Op.in]: queues },
+          queueId: user.profile === "admin" || user.allTicket === "enable" || (ticket.isGroup && user.allowGroup) ?
+            { [Op.or]: [queues, null] } :
+            { [Op.in]: queues }
         },
         attributes: ["id"]
       });
     } else {
+      // Sem filtro de fila (admin, allTicket, ou histórico liberado)
       ticketIds = await Ticket.findAll({
-        where:
-        {
+        where: {
           id: { [Op.lte]: ticket.id },
           companyId: ticket.companyId,
           contactId: ticket.contactId,
@@ -111,8 +111,11 @@ const ListMessagesService = async ({
       });
     }
 
-    if (ticketIds) {
+    if (ticketIds && ticketIds.length > 0) {
       ticketsFilter.push(ticketIds.map(t => t.id));
+    } else {
+      // Fallback: usar apenas o ticket atual se não encontrou outros
+      ticketsFilter.push([ticket.id]);
     }
   }
 

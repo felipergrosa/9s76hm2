@@ -174,34 +174,37 @@ const FindOrCreateTicketService = async (
       return ticket;
     }
   } else {
-    // Para contatos individuais: buscar ticket mais recente (incluindo closed)
-    // Isso evita criar tickets duplicados para o mesmo contato
+    // Para contatos individuais: buscar ticket ABERTO mais recente
+    // Tickets fechados permanecem fechados - novo ciclo = novo ticket
     ticket = await Ticket.findOne({
       where: {
         contactId: contact?.id,
         companyId,
-        whatsappId: whatsapp.id
+        whatsappId: whatsapp.id,
+        status: { [Op.notIn]: ["closed"] } // Ignorar tickets fechados
       },
       order: [["id", "DESC"]]
     });
     
-    if (ticket) {
-      logger.info(`[FindOrCreateTicket] Ticket encontrado: ${ticket.id} (status=${ticket.status}, userId=${ticket.userId}, queueId=${ticket.queueId})`);
+    if (!ticket) {
+      // Verificar se existe ticket fechado para rastreabilidade
+      const closedTicket = await Ticket.findOne({
+        where: {
+          contactId: contact?.id,
+          companyId,
+          whatsappId: whatsapp.id,
+          status: "closed"
+        },
+        order: [["id", "DESC"]]
+      });
       
-      // Se ticket está CLOSED, reabrir como pending
-      if (ticket.status === "closed") {
-        const oldStatus = ticket.status;
-        (ticket as any)._skipHookEmit = true;
-        await ticket.update({ status: "pending", unreadMessages });
-        ticket = await ShowTicketService(ticket.id, companyId);
-        // Emitir evento de mudança de status para real-time
-        ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, "closed");
-        ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
-        logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} reaberto de CLOSED para PENDING`);
-        return ticket;
+      if (closedTicket) {
+        logger.info(`[FindOrCreateTicket] Ticket fechado #${closedTicket.id} encontrado. Criando novo ticket para novo ciclo.`);
+      } else {
+        logger.info(`[FindOrCreateTicket] Nenhum ticket encontrado para contactId=${contact?.id}. Será criado novo.`);
       }
     } else {
-      logger.info(`[FindOrCreateTicket] Nenhum ticket encontrado para contactId=${contact?.id}, whatsappId=${whatsapp.id}. Será criado novo.`);
+      logger.info(`[FindOrCreateTicket] Ticket aberto encontrado: ${ticket.id} (status=${ticket.status}, userId=${ticket.userId}, queueId=${ticket.queueId})`);
     }
   }
 
