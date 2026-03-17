@@ -483,26 +483,37 @@ const ListTicketsService = async ({
     } as any;
   } else
       if (withUnreadMessages === "true") {
-        // console.log(showNotificationPendingValue)
-        whereCondition = {
-          [Op.or]: [
-            {
-              userId,
-              status: showNotificationPendingValue ? { [Op.notIn]: ["closed", "lgpd", "nps"] } : { [Op.notIn]: ["pending", "closed", "lgpd", "nps", "group"] },
-              queueId: { [Op.in]: userQueueIds },
-              unreadMessages: { [Op.gt]: 0 },
-              companyId,
-              isGroup: showGroups ? { [Op.or]: [true, false] } : false
-            },
-            {
-              status: showNotificationPendingValue ? { [Op.in]: ["pending", "group"] } : { [Op.in]: ["group"] },
-              queueId: showTicketWithoutQueue ? { [Op.or]: [userQueueIds, null] } : { [Op.or]: [userQueueIds] },
-              unreadMessages: { [Op.gt]: 0 },
-              companyId,
-              isGroup: showGroups ? { [Op.or]: [true, false] } : false
-            }
-          ]
-        };
+        // Se houver um status específico, filtra apenas tickets daquele status com mensagens não lidas
+        if (status && status !== "all") {
+          whereCondition = {
+            status,
+            unreadMessages: { [Op.gt]: 0 },
+            companyId,
+            isGroup: showGroups ? { [Op.or]: [true, false] } : false,
+            queueId: showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : { [Op.or]: [queueIds] },
+          };
+        } else {
+          // Comportamento original quando não há status específico
+          whereCondition = {
+            [Op.or]: [
+              {
+                userId,
+                status: showNotificationPendingValue ? { [Op.notIn]: ["closed", "lgpd", "nps"] } : { [Op.notIn]: ["pending", "closed", "lgpd", "nps", "group"] },
+                queueId: { [Op.in]: userQueueIds },
+                unreadMessages: { [Op.gt]: 0 },
+                companyId,
+                isGroup: showGroups ? { [Op.or]: [true, false] } : false
+              },
+              {
+                status: showNotificationPendingValue ? { [Op.in]: ["pending", "group"] } : { [Op.in]: ["group"] },
+                queueId: showTicketWithoutQueue ? { [Op.or]: [userQueueIds, null] } : { [Op.or]: [userQueueIds] },
+                unreadMessages: { [Op.gt]: 0 },
+                companyId,
+                isGroup: showGroups ? { [Op.or]: [true, false] } : false
+              }
+            ]
+          };
+        }
 
         if (status === "group" && (user.allowGroup || showAll === "true")) {
           whereCondition = {

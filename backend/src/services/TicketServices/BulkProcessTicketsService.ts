@@ -211,15 +211,10 @@ const BulkProcessTicketsService = async (
           }
         }
 
-        // 3. Adicionar tags ao TICKET e ao CONTATO
+        // 3. Adicionar tags ao CONTATO APENAS (não ao ticket)
         if (tagIds && tagIds.length > 0) {
           try {
-            // Adicionar tags ao TICKET
-            await ticket.$set('tags', []);
-            await ticket.$add('tags', tagIds);
-            ticketResult.actions?.push(`${tagIds.length} tag(s) adicionada(s) ao ticket`);
-            
-            // Adicionar tags ao CONTATO também
+            // Tags vão APENAS para o contato, NÃO para o ticket
             if (ticket.contactId) {
               const contact = await Contact.findByPk(ticket.contactId);
               if (contact) {
@@ -227,26 +222,17 @@ const BulkProcessTicketsService = async (
                 await contact.$add('tags', tagIds);
                 ticketResult.actions?.push(`${tagIds.length} tag(s) adicionada(s) ao contato`);
                 contactUpdated = true;
+                
+                // Emitir evento de atualização do contato
+                io.of(`/workspace-${companyId}`).emit(`company-${companyId}-contact`, {
+                  action: "update",
+                  contact: contact
+                });
               }
             }
-            
-            // Recarregar ticket com tags atualizadas para emitir evento
-            const ticketWithTags = await Ticket.findByPk(ticket.id, {
-              include: [
-                { association: "tags", attributes: ["id", "name", "color", "kanban"] },
-                { model: Contact, as: "contact", attributes: ["id", "name", "number"] }
-              ]
-            });
-            if (ticketWithTags) {
-              io.of(`/workspace-${companyId}`).emit(`company-${companyId}-ticket`, {
-                action: "update",
-                ticket: ticketWithTags
-              });
-              logger.debug(`[BulkProcess] Evento socket emitido para ticket ${ticket.id} (tags atualizadas)`);
-            }
           } catch (error) {
-            logger.error(`[BulkProcess] Erro ao adicionar tags ao ticket ${ticket.id}:`, error);
-            ticketResult.actions?.push('Erro ao adicionar tags');
+            logger.error(`[BulkProcess] Erro ao adicionar tags ao contato do ticket ${ticket.id}:`, error);
+            ticketResult.actions?.push('Erro ao adicionar tags ao contato');
           }
         }
 
@@ -282,11 +268,31 @@ const BulkProcessTicketsService = async (
 
         if (Object.keys(updateData).length > 0) {
           try {
-            await UpdateTicketService({
+            const { ticket: updatedTicket, oldStatus } = await UpdateTicketService({
               ticketData: updateData,
               ticketId: ticket.id,
               companyId
             });
+            
+            // Emitir evento Socket.IO DIRETO para garantir atualização em tempo real
+            // O UpdateTicketService já emite via ticketEventBus, mas emitimos diretamente aqui como garantia
+            const fullTicket = await ShowTicketService(ticket.id, companyId);
+            
+            // Se mudou de status, emitir delete para a aba antiga
+            if (oldStatus && oldStatus !== fullTicket.status) {
+              io.of(`/workspace-${companyId}`).emit(`company-${companyId}-ticket`, {
+                action: "delete",
+                ticketId: ticket.id,
+                oldStatus
+              });
+            }
+            
+            // Emitir update com ticket completo
+            io.of(`/workspace-${companyId}`).emit(`company-${companyId}-ticket`, {
+              action: "update",
+              ticket: fullTicket
+            });
+            
             ticketResult.actions?.push('Status/fila atualizado');
           } catch (error) {
             logger.error(`[BulkProcess] Erro ao atualizar ticket ${ticket.id}:`, error);

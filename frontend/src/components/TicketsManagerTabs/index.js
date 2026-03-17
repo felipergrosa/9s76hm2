@@ -32,6 +32,8 @@ import {
   Filter as FilterAlt,
   List as PlaylistAddCheckOutlined,
   XCircle as HighlightOff,
+  Mail as UnreadIcon,
+  MailCheck as ReadIcon,
 } from "lucide-react";
 import ToggleButton from "@material-ui/lab/ToggleButton";
 
@@ -373,6 +375,7 @@ const TicketsManagerTabs = () => {
   const [bulkProcessModalOpen, setBulkProcessModalOpen] = useState(false);
   const [showAllTickets, setShowAllTickets] = useState(false);
   const [sortTickets, setSortTickets] = useState(false);
+  const [withUnreadMessages, setWithUnreadMessages] = useState(false);
 
   const searchInputRef = useRef();
   const filterTimeoutRef = useRef(null);
@@ -405,6 +408,7 @@ const TicketsManagerTabs = () => {
   const [isHoveredClosed, setIsHoveredClosed] = useState(false);
   const [isHoveredSort, setIsHoveredSort] = useState(false);
   const [isHoveredBulk, setIsHoveredBulk] = useState(false);
+  const [isHoveredUnread, setIsHoveredUnread] = useState(false);
 
   const sortDirection = sortTickets ? "ASC" : "DESC";
   const listResetKeyBase = useMemo(() => JSON.stringify({
@@ -418,33 +422,39 @@ const TicketsManagerTabs = () => {
       enabled: true,
       status: "open",
       showAll: showAllTickets,
+      withUnreadMessages: tabOpen === "open" ? withUnreadMessages : false,
     },
     pending: {
       enabled: true,
       status: "pending",
       showAll: user.profile === "admin" || canViewAllUsers ? showAllTickets : false,
+      withUnreadMessages: tabOpen === "pending" ? withUnreadMessages : false,
     },
     group: {
       enabled: canViewGroups,
       status: "group",
       showAll: showAllTickets,
+      withUnreadMessages: tabOpen === "group" ? withUnreadMessages : false,
     },
     bot: {
       enabled: true,
       status: "bot",
       showAll: showAllTickets,
+      withUnreadMessages: tabOpen === "bot" ? withUnreadMessages : false,
     },
     campaign: {
       enabled: true,
       status: "campaign",
       showAll: showAllTickets,
+      withUnreadMessages: tabOpen === "campaign" ? withUnreadMessages : false,
     },
     closed: {
       enabled: true,
       status: "closed",
       showAll: showAllTickets,
+      withUnreadMessages: false, // Aba closed não usa filtro de não lidas
     },
-  }), [canViewAllUsers, canViewGroups, showAllTickets, user.profile]);
+  }), [canViewAllUsers, canViewGroups, showAllTickets, user.profile, tabOpen, withUnreadMessages]);
 
   useEffect(() => {
     PerformanceMonitor.start('TicketsManagerTabs:Mount');
@@ -475,6 +485,7 @@ const TicketsManagerTabs = () => {
     setIsHoveredClosed(false);
     setIsHoveredSort(false);
     setIsHoveredBulk(false);
+    setIsHoveredUnread(false);
   };
 
   const handleHover = (name) => {
@@ -500,6 +511,9 @@ const TicketsManagerTabs = () => {
         break;
       case "bulk":
         setIsHoveredBulk(true);
+        break;
+      case "unread":
+        setIsHoveredUnread(true);
         break;
       default:
         break;
@@ -1122,6 +1136,54 @@ const TicketsManagerTabs = () => {
                     ) : (
                       <TextRotationDown style={{
                         color: sortTickets
+                          ? theme.mode === "light"
+                            ? theme.palette.primary.main
+                            : "#FFF"
+                          : "#aaa",
+                      }} />
+                    )}
+                  </ToggleButton>
+                </Badge>
+              )}
+              {/* Botão de filtro não lidas */}
+              {tab !== "closed" && tab !== "search" && (
+                <Badge
+                  color="primary"
+                  invisible={
+                    !isHoveredUnread ||
+                    isHoveredAll ||
+                    isHoveredNew ||
+                    isHoveredResolve ||
+                    isHoveredOpen ||
+                    isHoveredClosed ||
+                    isHoveredBulk ||
+                    isHoveredSort
+                  }
+                  badgeContent={withUnreadMessages ? "Todos" : "Não lidas"}
+                  classes={{ badge: classes.tabsBadge }}
+                  overlap="rectangular"
+                >
+                  <ToggleButton
+                    onMouseEnter={() => handleHover("unread")}
+                    onMouseLeave={resetHovers}
+                    className={classes.button}
+                    value="uncheck"
+                    selected={withUnreadMessages}
+                    onChange={() =>
+                      setWithUnreadMessages((prevState) => !prevState)
+                    }
+                  >
+                    {withUnreadMessages ? (
+                      <UnreadIcon style={{
+                        color: withUnreadMessages
+                          ? theme.mode === "light"
+                            ? theme.palette.primary.main
+                            : "#FFF"
+                          : "#aaa",
+                      }} />
+                    ) : (
+                      <ReadIcon style={{
+                        color: withUnreadMessages
                           ? theme.mode === "light"
                             ? theme.palette.primary.main
                             : "#FFF"

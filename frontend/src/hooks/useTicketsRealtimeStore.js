@@ -312,12 +312,13 @@ const shouldIncludeTicketInStatus = ({
   return (!ticket?.queueId && showTicketWithoutQueue) || selectedQueueIds.includes(ticket?.queueId);
 };
 
-const buildRequestParams = ({ status, selectedQueueIds, showAll, sortTickets }) => ({
+const buildRequestParams = ({ status, selectedQueueIds, showAll, sortTickets, withUnreadMessages }) => ({
   pageNumber: 1,
   status,
   showAll: showAll ? "true" : "false",
   queueIds: JSON.stringify(selectedQueueIds),
   sortTickets,
+  withUnreadMessages: withUnreadMessages ? "true" : "false",
 });
 
 const useTicketsRealtimeStore = ({
@@ -402,6 +403,7 @@ const useTicketsRealtimeStore = ({
             selectedQueueIds: selectedQueueIdsRef.current,
             showAll: config.showAll,
             sortTickets: sortTicketsRef.current,
+            withUnreadMessages: config.withUnreadMessages || false,
           }),
           pageNumber,
         },
@@ -459,6 +461,30 @@ const useTicketsRealtimeStore = ({
   useEffect(() => {
     refreshAll();
   }, [refreshAll]);
+
+  // Recarregar tickets quando a ordenação mudar
+  useEffect(() => {
+    requestVersionRef.current += 1;
+    const version = requestVersionRef.current;
+
+    // Resetar todas as abas e recarregar
+    enabledStatusKeys.forEach(statusKey => {
+      dispatch({ type: "RESET_STATUS", statusKey });
+    });
+
+    // Recarregar primeira aba imediatamente
+    if (enabledStatusKeys[0]) {
+      fetchStatusPage(enabledStatusKeys[0], 1, false, version);
+    }
+
+    // Recarregar outras abas em background
+    setTimeout(() => {
+      if (!mountedRef.current || requestVersionRef.current !== version) return;
+      enabledStatusKeys.slice(1).forEach(statusKey => {
+        fetchStatusPage(statusKey, 1, false, version);
+      });
+    }, 300);
+  }, [sortTickets]);
 
   const loadMore = useCallback((statusKey) => {
     const slice = state.metaByStatus[statusKey];

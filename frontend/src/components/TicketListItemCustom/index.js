@@ -463,13 +463,10 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
         return message;
     };
 
-    // Memoizar filtros para evitar recálculos em cada render (otimização INP)
-    const kanbanTags = useMemo(() => 
-        (ticket.tags || []).filter(tag => Number(tag.kanban) === 1),
-        [ticket.tags]
-    );
-    const otherTags = useMemo(() => 
-        (ticket.tags || []).filter(tag => Number(tag.kanban) !== 1),
+    // Memoizar Kanban lane para evitar recálculos em cada render (otimização INP)
+    // Kanban lane = tag com kanban === 1 (representa a coluna do Kanban onde o ticket está)
+    const kanbanLane = useMemo(() => 
+        (ticket.tags || []).find(tag => Number(tag.kanban) === 1),
         [ticket.tags]
     );
 
@@ -933,23 +930,17 @@ const handleCloseTicket = async (id) => {
                                         </span>
                                     </Tooltip>
                                 )}
-
-                                {kanbanTags.map((tag) => (
-                                    <ContactTag
-                                        tag={tag}
-                                        tooltipTitle={`Kanban: ${tag.name}`}
-                                        key={`ticket-contact-tag-${ticket.id}-${tag.id}`}
-                                    />
-                                ))}
-
-                                {otherTags.map((tag) => (
-                                    <ContactTag
-                                        tag={tag}
-                                        tooltipTitle={`Tag: ${tag.name}`}
-                                        key={`ticket-contact-tag-${ticket.id}-${tag.id}`}
-                                    />
-                                ))}
                             </div>
+                            
+                            {/* Segunda linha: Kanban lane (se houver) */}
+                            {kanbanLane && (
+                                <div className={classes.pillsRow} style={{ marginTop: 2 }}>
+                                    <ContactTag
+                                        tag={kanbanLane}
+                                        tooltipTitle={`Kanban: ${kanbanLane.name}`}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
 

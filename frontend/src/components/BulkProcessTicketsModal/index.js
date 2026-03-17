@@ -699,11 +699,11 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                     {/* Primeira linha: Atribuir Usuário | Fila */}
                     {canEditUser && (
                       <FormControl variant="outlined" fullWidth>
-                        <InputLabel>Atribuir a Usuário</InputLabel>
+                        <InputLabel>Atribuir a Usuário (ticket)</InputLabel>
                         <Select
                           value={selectedUserId}
                           onChange={(e) => setSelectedUserId(e.target.value)}
-                          label="Atribuir a Usuário"
+                          label="Atribuir a Usuário (ticket)"
                         >
                           <MenuItem value="">
                             <em>Sem alteração</em>
@@ -719,11 +719,11 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
 
                     {canEditQueue && (
                       <FormControl variant="outlined" fullWidth>
-                        <InputLabel>Fila</InputLabel>
+                        <InputLabel>Fila (ticket)</InputLabel>
                         <Select
                           value={selectedQueue}
                           onChange={(e) => setSelectedQueue(e.target.value)}
-                          label="Fila"
+                          label="Fila (ticket)"
                         >
                           <MenuItem value="">
                             <em>Sem alteração</em>
@@ -740,11 +740,11 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                     {/* Segunda linha: Novo Status | Tags */}
                     {canEditStatus && (
                       <FormControl variant="outlined" fullWidth>
-                        <InputLabel>Novo Status</InputLabel>
+                        <InputLabel>Novo Status (ticket)</InputLabel>
                         <Select
                           value={newStatus}
                           onChange={(e) => setNewStatus(e.target.value)}
-                          label="Novo Status"
+                          label="Novo Status (ticket)"
                         >
                           <MenuItem value="">
                             <em>Sem alteração</em>
@@ -769,7 +769,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                         value={selectedTags}
                         onChange={(_, newValue) => setSelectedTags(newValue)}
                         renderInput={(params) => (
-                          <TextField {...params} variant="outlined" label="Tags" placeholder="Selecione tags" />
+                          <TextField {...params} variant="outlined" label="Tags (contato)" placeholder="Selecione tags" />
                         )}
                       />
                     )}
@@ -778,11 +778,11 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                     {canEditWallets && (
                       <>
                         <FormControl variant="outlined" fullWidth>
-                          <InputLabel>Modo de Alteração de Carteira</InputLabel>
+                          <InputLabel>Modo de Alteração de Carteira (contato)</InputLabel>
                           <Select
                             value={walletMode}
                             onChange={(e) => setWalletMode(e.target.value)}
-                            label="Modo de Alteração de Carteira"
+                            label="Modo de Alteração de Carteira (contato)"
                           >
                             <MenuItem value="replace">
                               Substituir carteira atual
@@ -813,7 +813,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                             <TextField
                               {...params}
                               variant="outlined"
-                              label="Carteira (Responsável)"
+                              label="Carteira (Responsável) (contato)"
                               placeholder="Selecione responsáveis"
                               fullWidth
                             />
@@ -828,14 +828,14 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                       control={
                         <Checkbox checked={closeTicket} onChange={(e) => setCloseTicket(e.target.checked)} />
                       }
-                      label="Fechar ticket após processar"
+                      label="Fechar ticket após processar (ticket)"
                     />
                   )}
 
                   {canEditNotes && (
                     <TextField
                       variant="outlined"
-                      label="Nota Interna (opcional)"
+                      label="Nota Interna (opcional) (ticket)"
                       placeholder="Adicionar nota interna ao ticket..."
                       fullWidth
                       multiline
