@@ -173,16 +173,21 @@ const reducer = (state, action) => {
 
     case "DELETE_TICKET_FROM_SOCKET": {
       const metaByStatus = { ...state.metaByStatus };
+      const targetStatusKeys = action.oldStatus ? [action.oldStatus] : ALL_STATUS_KEYS;
 
-      ALL_STATUS_KEYS.forEach(statusKey => {
+      targetStatusKeys.forEach(statusKey => {
         const slice = metaByStatus[statusKey];
+        if (!slice) return;
+
         const hadTicket = slice.ids.includes(action.ticketId);
+        if (!hadTicket) return;
+
         const nextIds = slice.ids.filter(id => id !== action.ticketId);
 
         metaByStatus[statusKey] = {
           ...slice,
           ids: nextIds,
-          count: hadTicket ? Math.max(0, slice.count - 1) : slice.count,
+          count: Math.max(0, slice.count - 1),
         };
       });
 
@@ -192,13 +197,15 @@ const reducer = (state, action) => {
       };
     }
 
-    case "RESET_UNREAD": {
+    case "UPDATE_UNREAD": {
       const ticket = state.ticketsById[action.ticketId];
       if (!ticket) {
         return state;
       }
 
-      const hadUnread = ticket.unreadMessages > 0;
+      const nextUnreadCount = Number.isFinite(Number(action.unreadCount))
+        ? Math.max(0, Number(action.unreadCount))
+        : ticket.unreadMessages || 0;
       const statusKey = ticket.status;
 
       // Atualiza o ticket
@@ -206,21 +213,17 @@ const reducer = (state, action) => {
         ...state.ticketsById,
         [action.ticketId]: {
           ...ticket,
-          unreadMessages: 0,
+          unreadMessages: nextUnreadCount,
         },
       };
 
-      // Se tinha mensagens não lidas e agora está zerado, decrementa o contador da aba
+      // Mantém o count da slice coerente com tickets carregados localmente
       const nextMetaByStatus = { ...state.metaByStatus };
-      if (hadUnread && statusKey && nextMetaByStatus[statusKey]) {
-        const currentCount = nextMetaByStatus[statusKey].count || 0;
-        // Decrementa apenas se o ticket ainda está na lista (tem mensagens não lidas no contador)
-        if (currentCount > 0) {
-          nextMetaByStatus[statusKey] = {
-            ...nextMetaByStatus[statusKey],
-            count: currentCount - 1,
-          };
-        }
+      if (statusKey && nextMetaByStatus[statusKey]) {
+        nextMetaByStatus[statusKey] = {
+          ...nextMetaByStatus[statusKey],
+          count: Math.max(nextMetaByStatus[statusKey].count || 0, nextMetaByStatus[statusKey].ids.length),
+        };
       }
 
       return {
@@ -260,11 +263,18 @@ const reducer = (state, action) => {
 
     default:
       return state;
-  }
+  };
+};
+
+const getPersonalContactTagIds = (ticket) => {
+  const contactTags = ticket?.contact?.tags || [];
+  return contactTags
+    .filter(tag => typeof tag?.name === "string" && tag.name.startsWith("#") && !tag.name.startsWith("##"))
+    .map(tag => tag.id)
+    .filter(id => typeof id === "number");
 };
 
 const canViewTicket = ({ ticket, user, showAll }) => {
-  // 1. Filtro de Conexões (replicando backend: SuperAdmin vê tudo, outros respeitam allowedConnectionIds)
   if (!user?.super) {
     const allowedConnectionIds = user?.allowedConnectionIds || [];
     if (allowedConnectionIds.length > 0 && ticket?.whatsappId) {
@@ -281,18 +291,19 @@ const canViewTicket = ({ ticket, user, showAll }) => {
     return ticket?.userId === user?.id;
   }
 
-  if (user?.profile === "admin" && (!user?.allowedContactTags || user?.allowedContactTags?.length === 0)) {
-    return true;
-  }
-
   if (showAll) return true;
-  if (!user?.allowedContactTags || user?.allowedContactTags?.length === 0) return true;
 
-  const contactTags = ticket?.contact?.tags || [];
-  if (contactTags.length === 0) return true;
+  const hasManagedUsers = Array.isArray(user?.managedUserIds) && user.managedUserIds.length > 0;
+  if (hasManagedUsers) return true;
 
-  const userTagIds = user?.allowedContactTags || [];
-  return contactTags.some(tag => userTagIds.includes(tag.id));
+  const userTagIds = Array.isArray(user?.allowedContactTags) ? user.allowedContactTags : [];
+  if (user?.profile === "admin" && userTagIds.length === 0) return true;
+  if (userTagIds.length === 0) return true;
+
+  const personalContactTagIds = getPersonalContactTagIds(ticket);
+  if (personalContactTagIds.length === 0) return true;
+
+  return personalContactTagIds.some(tagId => userTagIds.includes(tagId));
 };
 
 const shouldIncludeTicketInStatus = ({
@@ -535,12 +546,12 @@ const useTicketsRealtimeStore = ({
 
     const onCompanyTicket = (data) => {
       if (data.action === "updateUnread") {
-        dispatch({ type: "RESET_UNREAD", ticketId: data.ticketId });
+        dispatch({ type: "UPDATE_UNREAD", ticketId: data.ticketId, unreadCount: data.unreadCount });
         return;
       }
 
       if (data.action === "delete") {
-        dispatch({ type: "DELETE_TICKET_FROM_SOCKET", ticketId: data.ticketId });
+        dispatch({ type: "DELETE_TICKET_FROM_SOCKET", ticketId: data.ticketId, oldStatus: data.oldStatus });
         return;
       }
 

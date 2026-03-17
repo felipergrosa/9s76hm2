@@ -237,7 +237,9 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
       try {
         const data = err?.response?.data || {};
         const isStringData = typeof data === "string";
-        const errorField = isStringData ? undefined : data?.error;
+        
+        // Backend retorna erro em 'message' (AppError) ou 'error' (formato antigo)
+        const errorField = isStringData ? undefined : (data?.message || data?.error);
         const code = isStringData
           ? data
           : typeof errorField === "string"
@@ -250,17 +252,18 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
           return;
         }
 
-        // Compatibilidade: backend antigo enviava JSON string no campo error
+        // Parse do JSON do ticket existente (retornado pelo CheckContactOpenTickets)
         if (typeof errorField === "string" && errorField.trim().startsWith("{")) {
           const ticket = JSON.parse(errorField);
+          
           // Verificar se posso acessar: meu ticket ou de usuário que gerencio
           const managedIds = (user?.managedUserIds || []).map(id => Number(id));
-          const canAccess = ticket.userId === user?.id ||
-            user?.profile === "admin" ||
-            user?.super ||
-            managedIds.includes(Number(ticket.userId));
+          const isMyTicket = ticket.userId === user?.id;
+          const isAdmin = user?.profile === "admin" || user?.super;
+          const isManagedUser = managedIds.includes(Number(ticket.userId));
+          const canAccess = isMyTicket || isAdmin || isManagedUser;
 
-          if (ticket.userId === user?.id) {
+          if (isMyTicket) {
             // Já é meu ticket, apenas abrir
             setOpenAlert(false);
             setUserTicketOpen("");
@@ -274,11 +277,24 @@ const NewTicketModal = ({ modalOpen, onClose, initialContact }) => {
             setQueueTicketOpen(ticket?.queue?.name);
             setOpenTicketData(ticket);
           } else {
-            // Sem permissão: apenas informar
-            setOpenAlert(true);
-            setUserTicketOpen(ticket?.user?.name);
-            setQueueTicketOpen(ticket?.queue?.name);
-            setOpenTicketData(null);
+            // Sem permissão: mostrar motivo e quais permissões faltam
+            const missingPermissions = [];
+            if (!isAdmin) missingPermissions.push("Ser admin ou super");
+            if (!isManagedUser) missingPermissions.push("Gerenciar o usuário " + (ticket?.user?.name || "do ticket"));
+            
+            toast.warn(
+              <div style={{ textAlign: "left" }}>
+                <strong>Ticket em atendimento</strong><br />
+                Atendente: <strong>{ticket?.user?.name || "Não atribuído"}</strong><br />
+                Fila: <strong>{ticket?.queue?.name || "Sem fila"}</strong><br />
+                <hr style={{ margin: "8px 0", borderColor: "#ffc107" }} />
+                <strong>Para assumir você precisa:</strong>
+                <ul style={{ margin: "4px 0", paddingLeft: "20px" }}>
+                  {missingPermissions.map((p, i) => <li key={i}>{p}</li>)}
+                </ul>
+              </div>,
+              { autoClose: 8000 }
+            );
           }
           return;
         }
