@@ -17,9 +17,14 @@ const useTags = () => {
         const { data } = await api.get(`/tags`, {
           params: { companyId: user.companyId },
         });
-        console.log("[useTags] Resposta da API:", data);
-        console.log("[useTags] Tags recebidas:", data.tags);
-        setTags(data.tags);
+        console.log("[useTags] Resposta completa:", data);
+        console.log("[useTags] data.tags:", data.tags);
+        console.log("[useTags] data.tags existe?", Array.isArray(data.tags));
+        
+        // A API retorna { tags: [...], count: number, hasMore: boolean }
+        const tagsArray = Array.isArray(data.tags) ? data.tags : (Array.isArray(data) ? data : []);
+        console.log("[useTags] Tags processadas:", tagsArray?.length);
+        setTags(tagsArray);
         setLoading(false);
       } catch (err) {
         console.error("[useTags] Erro ao buscar tags:", err);

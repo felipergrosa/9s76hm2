@@ -700,6 +700,12 @@ const UserModal = ({ open, onClose, userId }) => {
                                   );
                                   const selectedObjects = personalTags.filter(t => selectedIds.includes(t.id));
                                   
+                                  // DEBUG: Log das tags no dropdown
+                                  console.log("[UserModal] Tags disponíveis:", tags?.length);
+                                  console.log("[UserModal] Tags pessoais filtradas:", personalTags?.length, personalTags?.map(t => t.name));
+                                  console.log("[UserModal] selectedIds:", selectedIds);
+                                  console.log("[UserModal] tagsLoading:", tagsLoading);
+                                  
                                   // Avisar se há tags sem formato correto
                                   const invalidTags = tags.filter(t => 
                                     t.name && !t.name.startsWith('#') && selectedIds.includes(t.id)
