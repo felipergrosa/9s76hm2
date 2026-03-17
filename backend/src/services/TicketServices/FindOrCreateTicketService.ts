@@ -174,36 +174,34 @@ const FindOrCreateTicketService = async (
       return ticket;
     }
   } else {
-    // Para contatos individuais: buscar apenas tickets com status ativo
-    const queryOptions = {
+    // Para contatos individuais: buscar ticket mais recente (incluindo closed)
+    // Isso evita criar tickets duplicados para o mesmo contato
+    ticket = await Ticket.findOne({
       where: {
-        status: {
-          [Op.or]: ["open", "pending", "group", "nps", "lgpd", "bot", "campaign"]
-        },
         contactId: contact?.id,
         companyId,
         whatsappId: whatsapp.id
       },
       order: [["id", "DESC"]]
-    };
-    
-    // DEBUG: Logar parâmetros da busca
-    logger.info(`[FindOrCreateTicket] Buscando ticket existente: contactId=${contact?.id}, whatsappId=${whatsapp.id}, companyId=${companyId}`);
-    
-    ticket = await Ticket.findOne(queryOptions as any);
+    });
     
     if (ticket) {
-        logger.info(`[FindOrCreateTicket] Ticket encontrado: ${ticket.id} (status=${ticket.status})`);
+      logger.info(`[FindOrCreateTicket] Ticket encontrado: ${ticket.id} (status=${ticket.status}, userId=${ticket.userId}, queueId=${ticket.queueId})`);
+      
+      // Se ticket está CLOSED, reabrir como pending
+      if (ticket.status === "closed") {
+        const oldStatus = ticket.status;
+        (ticket as any)._skipHookEmit = true;
+        await ticket.update({ status: "pending", unreadMessages });
+        ticket = await ShowTicketService(ticket.id, companyId);
+        // Emitir evento de mudança de status para real-time
+        ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, "closed");
+        ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+        logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} reaberto de CLOSED para PENDING`);
+        return ticket;
+      }
     } else {
-        logger.warn(`[FindOrCreateTicket] Nenhum ticket encontrado para contactId=${contact?.id}, whatsappId=${whatsapp.id}. Será criado um novo.`);
-        // Verificar se existe algum ticket fechado ou com outro whatsappId para debug
-        const anyTicket = await Ticket.findOne({
-            where: { contactId: contact?.id, companyId },
-            order: [["id", "DESC"]]
-        });
-        if (anyTicket) {
-            logger.warn(`[FindOrCreateTicket] Ticket ${anyTicket.id} existe mas não bateu nos filtros: status=${anyTicket.status}, whatsappId=${anyTicket.whatsappId}`);
-        }
+      logger.info(`[FindOrCreateTicket] Nenhum ticket encontrado para contactId=${contact?.id}, whatsappId=${whatsapp.id}. Será criado novo.`);
     }
   }
 

@@ -2138,15 +2138,19 @@ export const verifyMediaMessage = async (
       isCampaign  // Passa para CreateMessageService para evitar emit na conversa
     };
 
-    await ticket.update({
-      lastMessage: body || media.filename
-    });
+    // Atualizar lastMessage e incrementar unreadMessages se não for fromMe
+    const updateData: any = { lastMessage: body || media.filename };
+    if (!msg.key.fromMe) {
+      updateData.unreadMessages = (ticket.unreadMessages || 0) + 1;
+    }
+    await ticket.update(updateData);
 
     const newMessage = await CreateMessageService({
       messageData,
       companyId: companyId
     });
 
+    // Se ticket estava fechado, reabrir como pending
     if (!msg.key.fromMe && ticket.status === "closed") {
       await ticket.update({ status: "pending" });
       await ticket.reload({
@@ -2185,6 +2189,20 @@ export const verifyMediaMessage = async (
       // CQRS: Emitir eventos via TicketEventBus (oldStatus=closed pois ticket reabriu)
       ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, "closed");
       ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+    } else if (!msg.key.fromMe && ticket.status !== "closed") {
+      // Ticket estava aberto: emitir evento de atualização para real-time
+      // Isso faz o ticket subir na lista e mostrar notificação
+      await ticket.reload({
+        include: [
+          { model: Queue, as: "queue" },
+          { model: User, as: "user", attributes: ["id", "name", "profileImage", "color"] },
+          { model: Contact, as: "contact" },
+          { model: Whatsapp, as: "whatsapp" }
+        ]
+      });
+      if (!ticket.imported) {
+        ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+      }
     }
 
     return newMessage;
@@ -2311,14 +2329,17 @@ export const verifyMessage = async (
     isCampaign  // Passa para CreateMessageService para evitar emit na conversa
   };
 
-  await ticket.update({
-    lastMessage: body
-  });
+  // Atualizar lastMessage e incrementar unreadMessages se não for fromMe
+  const updateData: any = { lastMessage: body };
+  if (!msg.key.fromMe) {
+    updateData.unreadMessages = (ticket.unreadMessages || 0) + 1;
+  }
+  await ticket.update(updateData);
 
   await CreateMessageService({ messageData, companyId: companyId });
 
+  // Se ticket estava fechado, reabrir como pending
   if (!msg.key.fromMe && ticket.status === "closed") {
-
     await ticket.update({ status: "pending" });
     await ticket.reload({
       include: [
@@ -2332,6 +2353,20 @@ export const verifyMessage = async (
     if (!ticket.imported) {
       // CQRS: Emitir via TicketEventBus para broadcast (oldStatus=closed pois ticket reabriu)
       ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, "closed");
+      ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+    }
+  } else if (!msg.key.fromMe && ticket.status !== "closed") {
+    // Ticket estava aberto: emitir evento de atualização para real-time
+    // Isso faz o ticket subir na lista e mostrar notificação
+    await ticket.reload({
+      include: [
+        { model: Queue, as: "queue" },
+        { model: User, as: "user", attributes: ["id", "name", "profileImage", "color"] },
+        { model: Contact, as: "contact" },
+        { model: Whatsapp, as: "whatsapp" }
+      ]
+    });
+    if (!ticket.imported) {
       ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
     }
   }
