@@ -85,7 +85,11 @@ const PinnedMessages = ({ ticketId, onNavigateToMessage }) => {
     if (!ticketId) return;
     try {
       const { data } = await api.get(`/messages/${ticketId}/pinned`);
-      setPinnedMessages(data.messages || []);
+      // Filtrar stickers e GIFs - não exibir no topo do ticket
+      const filteredMessages = (data.messages || []).filter(
+        msg => msg.mediaType !== "sticker" && msg.mediaType !== "gif"
+      );
+      setPinnedMessages(filteredMessages);
     } catch (err) {
       console.error("[PinnedMessages] Erro:", err);
     }

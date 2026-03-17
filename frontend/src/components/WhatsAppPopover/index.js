@@ -353,6 +353,7 @@ const WhatsAppPopover = ({ onSelectEmoji, onSelectGif, onSelectSticker, disabled
   const [recentEmojis, setRecentEmojis] = useState([]);
   const [gifs, setGifs] = useState([]);
   const [stickers, setStickers] = useState([]);
+  const [favoriteStickers, setFavoriteStickers] = useState([]);
   const [loadingGifs, setLoadingGifs] = useState(false);
   const [loadingStickers, setLoadingStickers] = useState(false);
   const [gifCategory, setGifCategory] = useState('trending');
@@ -368,6 +369,59 @@ const WhatsAppPopover = ({ onSelectEmoji, onSelectGif, onSelectSticker, disabled
         console.error('Erro ao carregar emojis recentes:', e);
       }
     }
+  }, []);
+
+  // Carregar stickers favoritos
+  useEffect(() => {
+    const saved = localStorage.getItem('favoriteStickers');
+    if (saved) {
+      try {
+        setFavoriteStickers(JSON.parse(saved));
+      } catch (e) {
+        console.error('Erro ao carregar stickers favoritos:', e);
+      }
+    }
+  }, []);
+
+  // Sincronizar favoritos em realtime entre abas/janelas
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'favoriteStickers') {
+        console.log('[WhatsAppPopover] Favoritos atualizados via storage event');
+        const saved = localStorage.getItem('favoriteStickers');
+        if (saved) {
+          try {
+            setFavoriteStickers(JSON.parse(saved));
+          } catch (err) {
+            console.error('Erro ao sincronizar stickers favoritos:', err);
+          }
+        } else {
+          setFavoriteStickers([]);
+        }
+      }
+    };
+
+    // Listener para mudanças no localStorage de outras abas/janelas
+    window.addEventListener('storage', handleStorageChange);
+
+    // Listener para evento customizado (mesma janela)
+    const handleCustomEvent = () => {
+      console.log('[WhatsAppPopover] Favoritos atualizados via evento customizado');
+      const saved = localStorage.getItem('favoriteStickers');
+      if (saved) {
+        try {
+          setFavoriteStickers(JSON.parse(saved));
+        } catch (err) {
+          console.error('Erro ao sincronizar stickers favoritos:', err);
+        }
+      }
+    };
+    window.addEventListener('favoriteStickersUpdated', handleCustomEvent);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('favoriteStickersUpdated', handleCustomEvent);
+    };
   }, []);
 
   // Buscar GIFs trending ao abrir aba
@@ -616,6 +670,38 @@ const WhatsAppPopover = ({ onSelectEmoji, onSelectGif, onSelectSticker, disabled
 
     return (
       <div className={classes.content}>
+        {/* Seção de Favoritos */}
+        {favoriteStickers.length > 0 && (
+          <>
+            <div className={classes.sectionTitle}>
+              ⭐ Favoritos ({favoriteStickers.length})
+            </div>
+            <div className={classes.stickerGrid}>
+              {favoriteStickers.map((sticker) => (
+                <div
+                  key={sticker.id}
+                  className={classes.stickerItem}
+                  onClick={() => {
+                    if (onSelectSticker) {
+                      onSelectSticker(sticker.url);
+                    }
+                    handleClose();
+                  }}
+                >
+                  <img
+                    src={sticker.url}
+                    alt="Favorito"
+                    loading="lazy"
+                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div style={{ borderTop: '1px solid #eee', margin: '8px 0' }} />
+          </>
+        )}
+
+        {/* Stickers da API */}
         <div className={classes.stickerGrid}>
           {stickers.length > 0 ? (
             stickers.map((sticker) => (

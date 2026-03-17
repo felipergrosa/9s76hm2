@@ -2,7 +2,7 @@ import React, { useState, useContext } from "react";
 import PropTypes from "prop-types";
 
 import AddCircleOutlineIcon from '@material-ui/icons/Add';
-import { GetApp } from "@material-ui/icons";
+import { GetApp, Favorite, FavoriteBorder } from "@material-ui/icons";
 
 import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
@@ -145,6 +145,47 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 		handleClose();
 	};
 
+	// Função para favoritar sticker
+	const handleFavoriteSticker = () => {
+		try {
+			if (!message?.mediaUrl) {
+				toast.error("Não foi possível favoritar este sticker");
+				return;
+			}
+
+			// Recuperar stickers favoritos do localStorage
+			const savedStickers = JSON.parse(localStorage.getItem('favoriteStickers') || '[]');
+			
+			// Verificar se já existe
+			const exists = savedStickers.some(s => s.url === message.mediaUrl);
+			if (exists) {
+				toast.info("Este sticker já está nos favoritos!");
+				handleClose();
+				return;
+			}
+
+			// Adicionar novo sticker
+			const newSticker = {
+				id: message.id,
+				url: message.mediaUrl,
+				createdAt: new Date().toISOString()
+			};
+
+			savedStickers.push(newSticker);
+			localStorage.setItem('favoriteStickers', JSON.stringify(savedStickers));
+			
+			// Disparar evento customizado para sincronizar em realtime
+			window.dispatchEvent(new CustomEvent('favoriteStickersUpdated'));
+			console.log('[MessageOptionsMenu] Evento favoriteStickersUpdated disparado');
+			
+			toast.success("Sticker favoritado! 🎉");
+		} catch (err) {
+			console.error("Erro ao favoritar sticker:", err);
+			toastError(err);
+		}
+		handleClose();
+	};
+
 	const handleOpenConfirmationModal = e => {
 		setConfirmationOpen(true);
 		handleClose();
@@ -244,6 +285,13 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
 							Download
 						</MenuItem>
 					)}
+				{/* Botão de favoritar sticker */}
+				{(message?.mediaType === "sticker" || message?.mediaType === "gif") && message?.mediaUrl && (
+					<MenuItem onClick={handleFavoriteSticker}>
+						<FavoriteBorder fontSize="small" style={{ marginRight: 8 }} />
+						Favoritar Sticker
+					</MenuItem>
+				)}
 				{message.fromMe && (
 					<MenuItem onClick={handleOpenEditMessageModal}>
 						{i18n.t("messageOptionsMenu.edit")}

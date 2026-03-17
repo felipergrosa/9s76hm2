@@ -231,6 +231,9 @@ const UserModal = ({ open, onClose, userId }) => {
   };
 
   const handleSaveUser = async (values) => {
+    console.log("[UserModal] handleSaveUser chamado", values);
+    console.log("[UserModal] userId:", userId);
+    
     const uploadAvatar = async (file) => {
       try {
         const formData = new FormData();
@@ -312,6 +315,7 @@ const UserModal = ({ open, onClose, userId }) => {
           enableReinitialize={true}
           validationSchema={UserSchema}
           onSubmit={(values, actions) => {
+            console.log("[UserModal] onSubmit chamado", values);
             setTimeout(() => {
               handleSaveUser(values);
               actions.setSubmitting(false);
@@ -938,6 +942,13 @@ const UserModal = ({ open, onClose, userId }) => {
                   variant="contained"
                   className={classes.btnWrapper}
                   title={!canSave ? "Você não tem permissão para editar este perfil" : ""}
+                  onClick={() => {
+                    console.log("[UserModal] Botão Salvar clicado");
+                    console.log("[UserModal] canSave:", canSave);
+                    console.log("[UserModal] isSubmitting:", isSubmitting);
+                    console.log("[UserModal] errors:", errors);
+                    console.log("[UserModal] touched:", touched);
+                  }}
                 >
                   {userId
                     ? `${i18n.t("userModal.buttons.okEdit")}`
