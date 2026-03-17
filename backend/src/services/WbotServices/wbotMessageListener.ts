@@ -6546,10 +6546,19 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
         where: { wid: message.key.id!, companyId }
       });
 
+      // DEBUG: Log se mensagem já existe
+      if (messageExists) {
+        logger.info(`[messages.upsert] Mensagem JÁ EXISTE no banco: wid=${message.key.id}, remoteJid=${message.key.remoteJid}`);
+      }
+
       if (!messageExists) {
         let isCampaign = false;
         let body = await getBodyMessage(message);
         const fromMe = message?.key?.fromMe;
+        
+        // DEBUG: Log para rastrear mensagens que chegam aqui
+        logger.info(`[messages.upsert] Processando mensagem: wid=${message.key.id}, fromMe=${fromMe}, remoteJid=${message.key.remoteJid}`);
+        
         if (fromMe) {
           isCampaign = /\u200c/.test(body);
         } else {
@@ -6557,6 +6566,11 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
           logger.debug(
             "Validação de mensagem de campanha enviada por terceiros: " + body
           );
+        }
+        
+        // DEBUG: Log se for campanha
+        if (isCampaign) {
+          logger.info(`[messages.upsert] Mensagem IGNORADA (campanha): wid=${message.key.id}, remoteJid=${message.key.remoteJid}`);
         }
 
         if (!isCampaign) {
