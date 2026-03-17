@@ -96,6 +96,12 @@ app.use(express.json());
 app.use(Sentry.Handlers.requestHandler());
 app.use("/public", express.static(uploadConfig.directory));
 
+// Desabilitar HTTP/2 para evitar erros de protocolo
+app.use((req, res, next) => {
+  res.setHeader('Connection', 'keep-alive');
+  next();
+});
+
 // Rotas
 app.use(routes);
 
