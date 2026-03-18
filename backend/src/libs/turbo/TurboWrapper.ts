@@ -408,7 +408,17 @@ export class TurboWrapper implements Partial<WASocket> {
       try {
         return await this.baileysSocket.sendPresenceUpdate(type as any, jid);
       } catch (error: any) {
-        logger.warn(`[TurboWrapper] Baileys falhou no sendPresenceUpdate: ${error.message}`);
+        // Silenciar erros de conexão fechada - comportamento normal quando desconectado
+        const errorMsg = error?.message || "";
+        const isConnectionClosed = 
+          errorMsg.includes("Connection Closed") ||
+          errorMsg.includes("connection closed") ||
+          errorMsg.includes("not connected") ||
+          errorMsg.includes("disconnected");
+        
+        if (!isConnectionClosed) {
+          logger.warn(`[TurboWrapper] Baileys falhou no sendPresenceUpdate: ${error.message}`);
+        }
       }
     }
   }

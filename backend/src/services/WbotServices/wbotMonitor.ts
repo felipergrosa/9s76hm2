@@ -707,10 +707,10 @@ const wbotMonitor = async (
 
     // =================================================================
     // HEALTH CHECK PERIÓDICO: Detectar sockets zumbis
-    // Executa a cada 30s, se 3 pings falharem → forçar reconexão
+    // Executa a cada 30s, se 2 pings falharem → forçar reconexão (MAIS AGRESSIVO)
     // =================================================================
     const HEALTH_CHECK_INTERVAL = 30 * 1000; // 30 segundos
-    const MAX_FAILED_PINGS = 3;
+    const MAX_FAILED_PINGS = 2; // Reduzido de 3 para 2 (detecta mais rápido)
     
     let failedPings = 0;
     
@@ -761,7 +761,7 @@ const wbotMonitor = async (
                 const wa = await Whatsapp.findByPk(whatsapp.id);
                 if (wa && wa.status !== "PENDING") {
                   const { StartWhatsAppSessionUnified } = require("./StartWhatsAppSessionUnified");
-                  setTimeout(() => StartWhatsAppSessionUnified(wa, companyId), 5000);
+                  setTimeout(() => StartWhatsAppSessionUnified(wa, companyId), 2000); // Reduzido de 5s para 2s
                 }
               }
             }
@@ -769,11 +769,11 @@ const wbotMonitor = async (
           }
         }
         
-        // Tentar ping leve: sendPresenceUpdate
+        // Tentar ping leve: sendPresenceUpdate com timeout mais curto
         try {
           await Promise.race([
             wbot.sendPresenceUpdate("available"),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000)) // Reduzido de 5s para 3s
           ]);
           
           // Ping bem-sucedido
@@ -828,13 +828,59 @@ const wbotMonitor = async (
     logger.info(`[wbotMonitor] Health check iniciado para whatsappId=${whatsapp.id} (interval: 30s)`);
 
     // =================================================================
-    // ANDROID SYNC: Forçar sync periódico para conexões Android
-    // Android tem Doze Mode que suspende WhatsApp em background
-    // Isso causa "stalled connection" - WS parece conectado mas não recebe eventos
+    // ANDROID SYNC: Forçar sync periódico AGRESSIVO para conexões Android
+    // Android tem Doze Mode que suspende WhatsApp em background rapidamente
+    // Estratégia: Keepalive frequente + detecção precoce + reconexão rápida
     // =================================================================
-    const ANDROID_SYNC_INTERVAL = 120 * 1000; // 2 minutos
+    const ANDROID_SYNC_INTERVAL = 60 * 1000; // 1 minuto (era 2min - MAIS AGRESSIVO)
+    const ANDROID_KEEPALIVE_INTERVAL = 45 * 1000; // 45s entre keepalives
+    const ANDROID_STALLED_THRESHOLD = 2 * 60 * 1000; // 2min sem atividade = stalled (era 3min)
+    const ANDROID_FORCE_RECONNECT_THRESHOLD = 5 * 60 * 1000; // 5min = forçar reconexão (era 10min)
+    
     let lastActivityTimestamp = Date.now();
     let lastSyncAttempt = 0;
+    let lastKeepaliveTimestamp = Date.now();
+    let consecutiveStalledDetections = 0;
+    
+    // Keepalive AGRESSIVO para Android: enviar presence a cada 45s para manter vivo
+    const androidKeepalive = async () => {
+      try {
+        const timeSinceLastKeepalive = Date.now() - lastKeepaliveTimestamp;
+        
+        // Só enviar se passou 45s desde o último
+        if (timeSinceLastKeepalive >= ANDROID_KEEPALIVE_INTERVAL) {
+          // Verificar se socket está realmente aberto antes de tentar
+          const ws = (wbot as any).ws;
+          if (ws && ws.readyState === 1) {
+            try {
+              // Enviar presence update para "despertar" conexão
+              await Promise.race([
+                wbot.sendPresenceUpdate("available"),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
+              ]);
+              
+              lastKeepaliveTimestamp = Date.now();
+              lastActivityTimestamp = Date.now(); // Contar como atividade
+              
+              // Resetar contador de stalled se keepalive funcionou
+              if (consecutiveStalledDetections > 0) {
+                logger.info(`[AndroidKeepalive] whatsappId=${whatsapp.id} - conexão recuperada após ${consecutiveStalledDetections} detecções`);
+                consecutiveStalledDetections = 0;
+              }
+            } catch (keepaliveErr: any) {
+              // Falha no keepalive = possível stalled
+              consecutiveStalledDetections++;
+              logger.warn(`[AndroidKeepalive] Falha no keepalive para whatsappId=${whatsapp.id}: ${keepaliveErr?.message} (stalled #${consecutiveStalledDetections})`);
+            }
+          }
+        }
+      } catch (err: any) {
+        // Silenciar erros não críticos
+      }
+    };
+    
+    // Iniciar keepalive a cada 45 segundos
+    const androidKeepaliveInterval = setInterval(androidKeepalive, ANDROID_KEEPALIVE_INTERVAL);
     
     // Atualizar timestamp de atividade quando receber mensagens
     // (o wbotMessageListener já emite eventos que podemos usar)
@@ -845,37 +891,46 @@ const wbotMonitor = async (
         // WebSocket está OPEN, considerar como atividade
         lastActivityTimestamp = Date.now();
       }
-    }, 30000); // Checar a cada 30s
+    }, 20000); // Checar a cada 20s (era 30s - mais frequente)
     
     const androidSync = async () => {
       try {
         const timeSinceLastActivity = Date.now() - lastActivityTimestamp;
         const timeSinceLastSync = Date.now() - lastSyncAttempt;
         
-        // Se passou mais de 3 minutos sem atividade e 5 minutos desde último sync
-        if (timeSinceLastActivity > 3 * 60 * 1000 && timeSinceLastSync > 5 * 60 * 1000) {
-          logger.info(`[AndroidSync] whatsappId=${whatsapp.id} sem atividade há ${Math.round(timeSinceLastActivity/1000)}s, forçando sync`);
+        // ESTRATÉGIA AGRESSIVA PARA ANDROID:
+        // Se passou mais de 2 minutos sem atividade e 3 minutos desde último sync
+        if (timeSinceLastActivity > ANDROID_STALLED_THRESHOLD && timeSinceLastSync > 3 * 60 * 1000) {
+          logger.info(`[AndroidSync] whatsappId=${whatsapp.id} sem atividade há ${Math.round(timeSinceLastActivity/1000)}s, forçando sync AGRESSIVO`);
           
           try {
-            // Tentar resync do estado do app (similar ao LabelSyncService)
+            // 1. Tentar resync do estado do app (similar ao LabelSyncService)
             if (typeof (wbot as any)?.resyncAppState === "function") {
               await (wbot as any).resyncAppState(["critical_unblock_low"], true);
               logger.info(`[AndroidSync] resyncAppState executado para whatsappId=${whatsapp.id}`);
             }
             
-            // Tentar atualizar presença para "despertar" conexão
-            await wbot.sendPresenceUpdate("available");
+            // 2. Tentar atualizar presença para "despertar" conexão
+            await Promise.race([
+              wbot.sendPresenceUpdate("available"),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
+            ]);
             
+            // 3. Se chegou aqui, sync funcionou
             lastSyncAttempt = Date.now();
-            lastActivityTimestamp = Date.now(); // Resetar após sync bem-sucedido
-            logger.info(`[AndroidSync] Sync forçado concluído para whatsappId=${whatsapp.id}`);
-          } catch (syncErr: any) {
-            logger.warn(`[AndroidSync] Erro no sync forçado: ${syncErr?.message}`);
+            lastActivityTimestamp = Date.now();
+            consecutiveStalledDetections = 0;
+            logger.info(`[AndroidSync] Sync AGRESSIVO concluído com sucesso para whatsappId=${whatsapp.id}`);
             
-            // Se falhar e passou mais de 10 minutos, pode ser stalled connection
-            if (timeSinceLastActivity > 10 * 60 * 1000) {
-              logger.error(`[AndroidSync] Possível stalled connection detectada para whatsappId=${whatsapp.id}`);
-              // Forçar reconexão via circuit breaker
+          } catch (syncErr: any) {
+            consecutiveStalledDetections++;
+            logger.warn(`[AndroidSync] Erro no sync AGRESSIVO: ${syncErr?.message} (stalled #${consecutiveStalledDetections})`);
+            
+            // Se falhar E passou mais de 5 minutos OU 3 detecções consecutivas = reconectar
+            if (timeSinceLastActivity > ANDROID_FORCE_RECONNECT_THRESHOLD || consecutiveStalledDetections >= 3) {
+              logger.error(`[AndroidSync] STALLED CONNECTION CRÍTICA detectada para whatsappId=${whatsapp.id}. Forçando RECONEXÃO IMEDIATA.`);
+              
+              // Forçar reconexão via circuit breaker (delay curto para Android)
               const { removeWbot, getCircuitBreakerStatus } = require("../../libs/wbot");
               removeWbot(whatsapp.id, false);
               
@@ -885,9 +940,13 @@ const wbotMonitor = async (
                 const wa = await Whatsapp.findByPk(whatsapp.id);
                 if (wa && wa.status !== "PENDING") {
                   const { StartWhatsAppSessionUnified } = require("./StartWhatsAppSessionUnified");
-                  setTimeout(() => StartWhatsAppSessionUnified(wa, companyId), 10000);
+                  // Delay menor para Android: 3s ao invés de 10s
+                  setTimeout(() => StartWhatsAppSessionUnified(wa, companyId), 3000);
                 }
               }
+              
+              // Resetar contador após tentativa de reconexão
+              consecutiveStalledDetections = 0;
             }
           }
         }
@@ -899,8 +958,9 @@ const wbotMonitor = async (
     const androidSyncInterval = setInterval(androidSync, ANDROID_SYNC_INTERVAL);
     (wbot as any)._activityCheckInterval = activityCheckInterval;
     (wbot as any)._androidSyncInterval = androidSyncInterval;
+    (wbot as any)._androidKeepaliveInterval = androidKeepaliveInterval;
     
-    logger.info(`[wbotMonitor] Android sync iniciado para whatsappId=${whatsapp.id} (interval: 2min)`);
+    logger.info(`[wbotMonitor] Android sync AGRESSIVO iniciado para whatsappId=${whatsapp.id} (sync: 1min, keepalive: 45s, stalled: 2min)`);
 
   } catch (err) {
     logger.error(`Error in wbotMonitor: ${err.message}`);

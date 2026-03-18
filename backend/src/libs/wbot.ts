@@ -217,8 +217,8 @@ const recordCircuitBreakerFailure = (whatsappId: number, errorMsg: string): {
     return { shouldBlock: true, delayMs: CIRCUIT_BREAKER_COOLDOWN_MS };
   }
   
-  // Backoff exponencial: 5s, 10s, 20s, 40s, 60s
-  const delayMs = Math.min(5000 * Math.pow(2, cb.count - 1), CIRCUIT_BREAKER_MAX_DELAY);
+  // Backoff exponencial: 3s, 6s, 12s, 24s, 60s (mais agressivo nos primeiros erros)
+  const delayMs = Math.min(3000 * Math.pow(2, cb.count - 1), CIRCUIT_BREAKER_MAX_DELAY);
   logger.warn(
     `[CircuitBreaker] Falha #${cb.count} para whatsappId=${whatsappId}. ` +
     `Próxima tentativa em ${delayMs / 1000}s. Erro: ${errorMsg}`
@@ -926,7 +926,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 // ========== REGISTRAR FALHA NO CIRCUIT BREAKER ==========
                 // Se for erro crítico de protocolo, registrar no circuit breaker
                 const isCriticalError = isCriticalProtocolError(errorMsg);
-                let reconnectDelay = 5000; // Default 5s
+                let reconnectDelay = 2000; // Default 2s (acelerado para reconexão rápida)
                 
                 if (isCriticalError) {
                   const cbResult = recordCircuitBreakerFailure(id, errorMsg);
