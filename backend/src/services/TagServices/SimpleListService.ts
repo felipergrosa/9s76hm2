@@ -67,6 +67,7 @@ const ListService = async ({
         "Tag.id",
         "contacts.ContactTag.tagId",
         "contacts.ContactTag.contactId",
+        "contacts.ContactTag.companyId",
         "contacts.ContactTag.createdAt",
         "contacts.ContactTag.updatedAt",
         "contacts.id"

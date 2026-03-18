@@ -51,7 +51,7 @@ const CreateTicketService = async ({
     defaultWhatsapp = await GetDefaultWhatsApp(whatsapp?.id, companyId, userIdNumber || undefined);
 
   // console.log("defaultWhatsapp", defaultWhatsapp.id, defaultWhatsapp.channel)
-  await CheckContactOpenTickets(contactId, defaultWhatsapp.id, companyId);
+  await CheckContactOpenTickets(contactId, defaultWhatsapp.id, companyId, userIdNumber);
 
   const { isGroup } = await ShowContactService(contactId, companyId);
 

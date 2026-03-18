@@ -294,6 +294,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	};
 
 	const [contact, setContact] = useState(initialState);
+	const [walletUsers, setWalletUsers] = useState([]);
 	const [disableBot, setDisableBot] = useState(false);
 	useEffect(() => {
 		return () => {
@@ -369,6 +370,13 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 						? data.tags.map(t => (typeof t === "object" ? t.id : t))
 						: []
 				});
+				// Guardar dados dos usuários da carteira para exibição readonly
+				if (data.wallets && Array.isArray(data.wallets)) {
+					const walletData = data.wallets.map(w => typeof w === "object" ? w : { id: w, name: "Usuário " + w });
+					setWalletUsers(walletData);
+				} else {
+					setWalletUsers([]);
+				}
 				setDisableBot(data.disableBot);
 			} catch (err) {
 				if (!isMountedLocal) return;
@@ -943,76 +951,126 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										</Field>
 									</Grid>
 									<Grid item xs={12} md={6}>
-										<Autocomplete
-											multiple
-											options={userOptions}
-											getOptionLabel={(option) => option.name?.toUpperCase() || ''}
-											value={userOptions.filter(u => (values.wallets || []).includes(u.id))}
-											onChange={(e, newValue) => setFieldValue("wallets", newValue.map(u => u.id))}
-											disabled={!canEditWallets || loadingUsers}
-											loading={loadingUsers}
-											filterSelectedOptions
-											renderTags={(value, getTagProps) =>
-												value.map((option, index) => (
-													<Chip
-														{...getTagProps({ index })}
-														key={option.id}
-														label={option.name?.toUpperCase()}
-														color="primary"
-														size="small"
-														style={{ height: '24px', fontSize: '11px' }}
+										{canEditWallets ? (
+											<Autocomplete
+												multiple
+												options={userOptions}
+												getOptionLabel={(option) => option.name?.toUpperCase() || ''}
+												value={userOptions.filter(u => (values.wallets || []).includes(u.id))}
+												onChange={(e, newValue) => setFieldValue("wallets", newValue.map(u => u.id))}
+												disabled={loadingUsers}
+												loading={loadingUsers}
+												filterSelectedOptions
+												renderTags={(value, getTagProps) =>
+													value.map((option, index) => (
+														<Chip
+															{...getTagProps({ index })}
+															key={option.id}
+															label={option.name?.toUpperCase()}
+															color="primary"
+															size="small"
+															style={{ height: '24px', fontSize: '11px' }}
+														/>
+													))
+												}
+												renderInput={(params) => (
+													<TextField
+														{...params}
+														variant="outlined"
+														margin="dense"
+														label="Carteira (Responsável)"
+														placeholder="Selecione responsáveis"
+														fullWidth
 													/>
-												))
-											}
-											renderInput={(params) => (
-												<TextField
-													{...params}
-													variant="outlined"
-													margin="dense"
-													label="Carteira (Responsável)"
-													placeholder="Selecione responsáveis"
-													fullWidth
-												/>
-											)}
-										/>
+												)}
+											/>
+										) : (
+											<div>
+												<Typography variant="caption" color="textSecondary" style={{ fontSize: '12px', marginBottom: '4px', display: 'block' }}>
+													Carteira (Responsável)
+												</Typography>
+												<div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+													{walletUsers.length === 0 ? (
+														<Typography style={{ fontSize: '14px', color: '#999' }}>—</Typography>
+													) : (
+														walletUsers.map((option) => (
+															<Chip
+																key={option.id}
+																label={option.name?.toUpperCase() || `USUÁRIO ${option.id}`}
+																color="primary"
+																size="small"
+																style={{ height: '24px', fontSize: '11px' }}
+															/>
+														))
+													)}
+												</div>
+											</div>
+										)}
 									</Grid>
 									<Grid item xs={12} md={6}>
-										<Autocomplete
-											multiple
-											options={Array.isArray(tagOptions) ? tagOptions : []}
-											getOptionLabel={(option) => option.name?.toUpperCase() || ''}
-											value={(Array.isArray(tagOptions) ? tagOptions : []).filter(t => (values.tags || []).includes(t.id))}
-											onChange={(e, newValue) => setFieldValue("tags", newValue.map(t => t.id))}
-											disabled={!canEditTags || loadingTags}
-											loading={loadingTags}
-											filterSelectedOptions
-											renderTags={(value, getTagProps) =>
-												value.map((option, index) => (
-													<Chip
-														{...getTagProps({ index })}
-														key={option.id}
-														label={option.name?.toUpperCase()}
-														style={{
-															backgroundColor: option.color || undefined,
-															height: '24px',
-															fontSize: '11px',
-															color: '#fff'
-														}}
-														size="small"
+										{canEditTags ? (
+											<Autocomplete
+												multiple
+												options={Array.isArray(tagOptions) ? tagOptions : []}
+												getOptionLabel={(option) => option.name?.toUpperCase() || ''}
+												value={(Array.isArray(tagOptions) ? tagOptions : []).filter(t => (values.tags || []).includes(t.id))}
+												onChange={(e, newValue) => setFieldValue("tags", newValue.map(t => t.id))}
+												disabled={loadingTags}
+												loading={loadingTags}
+												filterSelectedOptions
+												renderTags={(value, getTagProps) =>
+													value.map((option, index) => (
+														<Chip
+															{...getTagProps({ index })}
+															key={option.id}
+															label={option.name?.toUpperCase()}
+															style={{
+																backgroundColor: option.color || undefined,
+																height: '24px',
+																fontSize: '11px',
+																color: '#fff'
+															}}
+															size="small"
+														/>
+													))
+												}
+												renderInput={(params) => (
+													<TextField
+														{...params}
+														variant="outlined"
+														margin="dense"
+														label="Tags"
+														placeholder="Selecione tags"
+														fullWidth
 													/>
-												))
-											}
-											renderInput={(params) => (
-												<TextField
-													{...params}
-													variant="outlined"
-													margin="dense"
-													label="Tags"
-													placeholder="Selecione tags"
-													fullWidth
-												/>
-											)}
-										/>
+												)}
+											/>
+										) : (
+											<div>
+												<Typography variant="caption" color="textSecondary" style={{ fontSize: '12px', marginBottom: '4px', display: 'block' }}>
+													Tags
+												</Typography>
+												<div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+													{(Array.isArray(tagOptions) ? tagOptions : []).filter(t => (values.tags || []).includes(t.id)).length === 0 ? (
+														<Typography style={{ fontSize: '14px', color: '#999' }}>—</Typography>
+													) : (
+														(Array.isArray(tagOptions) ? tagOptions : []).filter(t => (values.tags || []).includes(t.id)).map((option) => (
+															<Chip
+																key={option.id}
+																label={option.name?.toUpperCase()}
+																style={{
+																	backgroundColor: option.color || undefined,
+																	height: '24px',
+																	fontSize: '11px',
+																	color: '#fff'
+																}}
+																size="small"
+															/>
+														))
+													)}
+												</div>
+											</div>
+										)}
 									</Grid>
 									<Grid item xs={12} md={6}>
 										<div style={{ display: 'flex', gap: 24, alignItems: 'center', paddingTop: 8 }}>

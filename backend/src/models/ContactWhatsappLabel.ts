@@ -11,6 +11,7 @@ import {
 } from "sequelize-typescript";
 import Contact from "./Contact";
 import WhatsappLabel from "./WhatsappLabel";
+import Company from "./Company";
 
 @Table
 class ContactWhatsappLabel extends Model<ContactWhatsappLabel> {
@@ -32,6 +33,13 @@ class ContactWhatsappLabel extends Model<ContactWhatsappLabel> {
 
   @BelongsTo(() => WhatsappLabel)
   whatsappLabel: WhatsappLabel;
+
+  @ForeignKey(() => Company)
+  @Column
+  companyId: number;
+
+  @BelongsTo(() => Company)
+  company: Company;
 
   @CreatedAt
   createdAt: Date;

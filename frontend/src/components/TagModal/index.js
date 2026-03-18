@@ -104,11 +104,11 @@ const TagModal = ({ open, onClose, tagId, kanban }) => {
 		if (user.profile === "admin") {
 			const fetchUsers = async () => {
 				try {
-					const { data } = await api.get("/users/", { params: { pageNumber: 1, pageSize: 9999 } });
-					setUsers(data.users);
+					// Usa /users/list que não requer permissão users.view
+					const { data } = await api.get("/users/list");
+					setUsers(data);
 				} catch (err) {
-					// 403 = sem permissão users.view (admin)
-					// Silencia o erro, lista de usuários fica vazia
+					console.error("[TagModal] Erro ao buscar usuários:", err);
 					if (err?.response?.status !== 403) {
 						toastError(err);
 					}

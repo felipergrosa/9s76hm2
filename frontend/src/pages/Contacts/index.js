@@ -106,7 +106,8 @@ const reducer = (state, action) => {
         const contactIndex = state.findIndex((c) => c.id === contact.id);
 
         if (contactIndex !== -1) {
-            state[contactIndex] = contact;
+            // Fazer merge dos dados: manter campos existentes e atualizar apenas os que vieram
+            state[contactIndex] = { ...state[contactIndex], ...contact };
             return [...state];
         } else {
             // Não insere contatos que não estão na página/lista atual para evitar "subir para o topo"

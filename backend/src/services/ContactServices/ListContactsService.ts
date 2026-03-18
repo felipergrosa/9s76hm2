@@ -151,8 +151,8 @@ const ListContactsService = async ({
   }
 
   // Filtro de segurança: tags permitidas do usuário (allowedContactTags)
-  // REGRA CORRETA: O contato deve ter TODAS as tags que o usuário possui.
-  // Exemplo: Usuário com [#FERNANDA, #REPRESENTANTES] só vê contatos que tenham AMBAS.
+  // REGRA CORRETA: O contato deve ter PELO MENOS UMA das tags que o usuário possui.
+  // Exemplo: Usuário com [#FERNANDA, #REPRESENTANTES] vê contatos que tenham qualquer uma dessas tags.
   // EXCEÇÃO: Admin não tem restrição de tags (vê todos os contatos)
   if (profile !== "admin" && Array.isArray(allowedContactTags) && allowedContactTags.length > 0) {
     const allowedTags = await Tag.findAll({
@@ -161,15 +161,13 @@ const ListContactsService = async ({
     });
     const allowedTagIds = allowedTags.map(t => t.id);
     if (allowedTagIds.length > 0) {
-      // Busca contatos que têm TODAS as tags (COUNT(DISTINCT "tagId") = totalTags)
-      const contactsWithAllTags = await ContactTag.findAll({
+      // Busca contatos que têm PELO MENOS UMA das tags
+      const contactsWithAnyTag = await ContactTag.findAll({
         where: { tagId: { [Op.in]: allowedTagIds } },
-        attributes: ["contactId"],
-        group: ["contactId"],
-        having: literal(`COUNT(DISTINCT "tagId") = ${allowedTagIds.length}`),
+        attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
         raw: true
       });
-      const allowedContactIds = contactsWithAllTags.map((ct: any) => Number(ct.contactId)).filter(Number.isInteger);
+      const allowedContactIds = contactsWithAnyTag.map((ct: any) => Number(ct.contactId)).filter(Number.isInteger);
 
       const currentIdFilter: any = (whereCondition as any).id;
       const currentIn: number[] | undefined = currentIdFilter?.[Op.in];

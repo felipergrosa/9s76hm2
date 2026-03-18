@@ -2,6 +2,7 @@ import AppError from "../../errors/AppError";
 import Contact from "../../models/Contact";
 import ContactCustomField from "../../models/ContactCustomField";
 import ContactWallet from "../../models/ContactWallet";
+import ContactTag from "../../models/ContactTag";
 import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 import { Op } from "sequelize";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
@@ -31,6 +32,7 @@ interface ContactData {
   disableBot?: boolean;
   remoteJid?: string;
   wallets?: null | number[] | string[];
+  tags?: null | number[] | string[];
 
   // Novos campos
   cpfCnpj?: string;
@@ -74,6 +76,7 @@ const UpdateContactService = async ({
     disableBot,
     remoteJid,
     wallets,
+    tags,
     // Novos campos
     cpfCnpj,
     representativeCode,
@@ -273,6 +276,26 @@ const UpdateContactService = async ({
     }
   }
 
+  // Processa tags do contato (similar ao processamento de wallets)
+  if (tags !== undefined) {
+    await ContactTag.destroy({
+      where: {
+        companyId,
+        contactId
+      }
+    });
+
+    if (tags && tags.length > 0) {
+      const contactTags = tags.map((tagId: any) => ({
+        tagId: typeof tagId === 'number' || typeof tagId === 'string' ? Number(tagId) : tagId.id,
+        contactId,
+        companyId
+      }));
+
+      await ContactTag.bulkCreate(contactTags);
+    }
+  }
+
   // Função auxiliar para converter strings vazias/whitespace em null
   const emptyToNull = (value: any) => {
     if (value === undefined || value === null) return null;
@@ -345,6 +368,9 @@ const UpdateContactService = async ({
   }
 
   await contact.update(updateData);
+
+  // Reload para garantir dados atualizados após o update
+  await contact.reload();
 
   // === PERFORMANCE: Operações secundárias vão para background ===
   // Retorno imediato para o usuário, sync acontece depois

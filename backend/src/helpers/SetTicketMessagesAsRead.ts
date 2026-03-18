@@ -60,7 +60,8 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
           io.of(`/workspace-${ticket.companyId}`)
             .emit(`company-${ticket.companyId}-ticket`, {
               action: "updateUnread",
-              ticketId: ticket.id
+              ticketId: ticket.id,
+              unreadCount: 0
             });
 
           return;
@@ -131,7 +132,8 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
         io.of(`/workspace-${ticket.companyId}`)
           .emit(`company-${ticket.companyId}-ticket`, {
             action: "updateUnread",
-            ticketId: ticket.id
+            ticketId: ticket.id,
+            unreadCount: 0
           });
 
         // Evento updateRead já é emitido pelo MessageCommandService via EventBus
