@@ -10,7 +10,6 @@ import Contact from "../../models/Contact";
 import { Op } from "sequelize";
 import Tag from "../../models/Tag";
 import ContactTag from "../../models/ContactTag";
-import SyncContactWalletsAndPersonalTagsService from "../../services/ContactServices/SyncContactWalletsAndPersonalTagsService";
 
 type IndexQuery = {
   companyId: number;
@@ -273,13 +272,7 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
       }
     }
 
-    if (hasTagAssociation) {
-      await SyncContactWalletsAndPersonalTagsService({
-        companyId,
-        contactId: contact.id,
-        source: "tags"
-      });
-    }
+    // Após migração para tags pessoais, não é necessário sincronizar carteiras
 
     const io = getIO();
     io.of(`/workspace-${companyId}`).emit(`company-${companyId}-contact`, {

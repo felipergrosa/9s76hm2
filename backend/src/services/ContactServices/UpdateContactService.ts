@@ -1,13 +1,11 @@
 import AppError from "../../errors/AppError";
 import Contact from "../../models/Contact";
 import ContactCustomField from "../../models/ContactCustomField";
-import ContactWallet from "../../models/ContactWallet";
 import ContactTag from "../../models/ContactTag";
-import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 import { Op } from "sequelize";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import DispatchContactWebhookService from "./DispatchContactWebhookService";
-import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
+import GetUserPersonalTagContactIds from "../../helpers/GetUserPersonalTagContactIds";
 
 interface ExtraInfo {
   id?: number;
@@ -165,11 +163,7 @@ const UpdateContactService = async ({
       "cpfCnpj", "representativeCode", "city", "region", "instagram",
       "situation", "fantasyName", "foundationDate", "creditLimit", "segment", "dtUltCompra", "vlUltCompra", "clientCode"
     ],
-    include: ["extraInfo", "tags",
-      {
-        association: "wallets",
-        attributes: ["id", "name"]
-      }]
+    include: ["extraInfo", "tags"]
   });
 
   if (contact?.companyId !== companyId) {
@@ -180,9 +174,9 @@ const UpdateContactService = async ({
     throw new AppError("ERR_NO_CONTACT_FOUND", 404);
   }
 
-  // Restrição de carteira: se usuário é restrito, só permite editar contato dentro da carteira
+  // Restrição por tags pessoais: se usuário é restrito, só permite editar contato dentro da sua carteira
   if (userId) {
-    const walletResult = await GetUserWalletContactIds(userId, companyId);
+    const walletResult = await GetUserPersonalTagContactIds(userId, companyId);
     if (walletResult.hasWalletRestriction) {
       const allowedContactIds = walletResult.contactIds;
       if (!allowedContactIds.includes(Number(contact.id))) {
@@ -245,38 +239,7 @@ const UpdateContactService = async ({
     );
   }
 
-  if (wallets) {
-    await ContactWallet.destroy({
-      where: {
-        companyId,
-        contactId
-      }
-    });
-
-    const contactWallets: Wallet[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    wallets.forEach((wallet: any) => {
-      contactWallets.push({
-        walletId: !wallet.id ? wallet : wallet.id,
-        contactId,
-        companyId
-      });
-    });
-
-    await ContactWallet.bulkCreate(contactWallets);
-
-    try {
-      await SyncContactWalletsAndPersonalTagsService({
-        companyId,
-        contactId,
-        source: "wallet"
-      });
-    } catch (err) {
-      console.warn("[UpdateContactService] Falha ao sincronizar carteiras e tags pessoais", err);
-    }
-  }
-
-  // Processa tags do contato (similar ao processamento de wallets)
+  // Processa tags do contato (wallets agora são representados por tags pessoais #)
   if (tags !== undefined) {
     await ContactTag.destroy({
       where: {
@@ -369,12 +332,19 @@ const UpdateContactService = async ({
 
   await contact.update(updateData);
 
-  // Reload para garantir dados atualizados após o update
-  await contact.reload();
+  // Reload com includes para garantir dados completos no retorno (tags, extraInfo)
+  // Isso é necessário para o frontend não perder dados ao receber o evento socket
+  const updatedContact = await Contact.findByPk(contact.id, {
+    include: ["extraInfo", "tags"]
+  });
+
+  if (!updatedContact) {
+    throw new AppError("ERR_CONTACT_NOT_FOUND_AFTER_UPDATE", 500);
+  }
 
   // === PERFORMANCE: Operações secundárias vão para background ===
   // Retorno imediato para o usuário, sync acontece depois
-  const savedContactId = contact.id;
+  const savedContactId = updatedContact.id;
 
   setImmediate(async () => {
     // 1. Atualizar avatar/nome
@@ -410,8 +380,8 @@ const UpdateContactService = async ({
     }
   });
 
-  // Retorno IMEDIATO - sem reload, sem aguardar operações secundárias
-  return contact;
+  // Retorno IMEDIATO com dados completos (tags, extraInfo) para o frontend
+  return updatedContact;
 };
 
 export default UpdateContactService;

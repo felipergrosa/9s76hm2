@@ -35,18 +35,26 @@ const UpdateUserOnlineStatusService = async ({
     }
 
     // Atualiza status online
-    await user.update({ online, updatedAt: new Date() });
+    await user.update({ online, updatedAt: new Date(), lastActivityAt: online ? new Date() : user.lastActivityAt });
 
-    // Emite evento Socket.IO
+    // Emite evento Socket.IO com dados completos do usuário
     const io = getIO();
+    
+    // Busca dados atualizados do usuário para emitir
+    const updatedUser = await User.findByPk(userId, {
+      attributes: ["id", "name", "email", "profile", "online", "companyId", "profileImage", "startWork", "endWork", "lastActivityAt"]
+    });
+    
     io.of(`/workspace-${companyId}`)
       .emit(`company-${companyId}-user`, {
         action: "update",
         user: {
-          id: user.id,
-          online
+          ...updatedUser.toJSON(),
+          online: online  // Garante que o campo online está presente
         }
       });
+
+    console.log(`[UpdateUserOnlineStatus] Evento emitido: company-${companyId}-user, user=${userId}, online=${online}`);
 
     console.log(`[UpdateUserOnlineStatus] Usuário ${userId} → online=${online}`);
   } catch (error) {

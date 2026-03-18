@@ -31,6 +31,7 @@ import BullQueue from './libs/queue';
 import { initSavedFilterCron } from "./jobs/SavedFilterCronManager";
 import startInactivityTimeoutJob from "./jobs/VerifyInactivityTimeoutJob";
 import startWhatsAppHealthCheckJob from "./jobs/WhatsAppHealthCheckJob";
+import startUserStatusJob from "./jobs/UserStatusJob";
 
 import { startQueueProcess } from "./queues";
 import tagRulesCron from "./cron/tagRulesCron";
@@ -286,6 +287,9 @@ tagRulesCron(); // Executa diariamente às 2h (processamento completo)
 // Inicializa job de verificação de contatos e grupos (diário às 03:00)
 import { startVerifyContactsJob } from "./jobs/VerifyContactsJob";
 startVerifyContactsJob();
+
+// Inicializa job de verificação de status de usuário (online/ausente/offline)
+startUserStatusJob();
 
 // Job de reconciliação de contatos PENDING_ (LIDs não resolvidos)
 // DESATIVADO: Substituído por Bull Queue Event-Driven (ReconcileLidJob)

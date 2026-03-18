@@ -10,10 +10,6 @@ const ShowContactService = async (
   const contact = await Contact.findByPk(id, {
     include: ["extraInfo", "tags",
       {
-        association: "wallets",
-        attributes: ["id", "name"]
-      },
-      {
         model: Whatsapp,
         as: "whatsapp",
         attributes: ["id", "name", "expiresTicket", "groupAsTicket"]

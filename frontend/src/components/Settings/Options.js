@@ -132,9 +132,6 @@ export default function Options(props) {
   const [closeTicketOnTransfer, setCloseTicketOnTransfer] = useState(false)
   const [loadingCloseTicketOnTransfer, setLoadingCloseTicketOnTransfer] = useState(false)
 
-  // Usar carteira de clientes
-  const [directTicketsToWallets, setDirectTicketsToWallets] = useState(false)
-  const [loadingDirectTicketsToWallets, setLoadingDirectTicketsToWallets] = useState(false)
 
   //MENSAGENS CUSTOMIZADAS
   const [transferMessage, setTransferMessage] = useState("Seu Atendimento foi Transferido para o setor ${queue.name},Aguarde atendimento por favor...");
@@ -198,7 +195,6 @@ export default function Options(props) {
       if (key === "lgpdMessage") setLGPDMessage(value);
       if (key === "sendMsgTransfTicket") setSettingsTransfTicket(value);
       if (key === "lgpdLink") setLGPDLink(value);
-      if (key === "DirectTicketsToWallets") setDirectTicketsToWallets(value);
       if (key === "closeTicketOnTransfer") setCloseTicketOnTransfer(value);
       if (key === "transferMessage") setTransferMessage(value);
       if (key === "greetingAcceptedMessage") setGreetingAcceptedMessage(value);
@@ -472,16 +468,6 @@ export default function Options(props) {
       data: value,
     });
     setLoadingCloseTicketOnTransfer(false);
-  }
-
-  async function handleDirectTicketsToWallets(value) {
-    setDirectTicketsToWallets(value);
-    setLoadingDirectTicketsToWallets(true);
-    await update({
-      column: "DirectTicketsToWallets",
-      data: value,
-    });
-    setLoadingDirectTicketsToWallets(false);
   }
 
   return (
@@ -890,24 +876,6 @@ export default function Options(props) {
             </Select>
             <FormHelperText>
               {loadingShowNotificationPending && i18n.t("settings.settings.options.updating")}
-            </FormHelperText>
-          </FormControl>
-        </Grid>
-        <Grid xs={12} sm={6} md={4} item>
-          <FormControl className={classes.selectContainer}>
-            <InputLabel id="DirectTicketsToWallets-label"> {i18n.t("settings.settings.options.DirectTicketsToWallets")}</InputLabel>
-            <Select
-              labelId="DirectTicketsToWallets-label"
-              value={directTicketsToWallets}
-              onChange={async (e) => {
-                handleDirectTicketsToWallets(e.target.value);
-              }}
-            >
-              <MenuItem value={false}>{i18n.t("settings.settings.options.disabled")}</MenuItem>
-              <MenuItem value={true}>{i18n.t("settings.settings.options.enabled")}</MenuItem>
-            </Select>
-            <FormHelperText>
-              {loadingDirectTicketsToWallets && i18n.t("settings.settings.options.updating")}
             </FormHelperText>
           </FormControl>
         </Grid>

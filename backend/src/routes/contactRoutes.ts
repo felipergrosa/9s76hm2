@@ -43,12 +43,7 @@ contactRoutes.post(
   ContactController.processDuplicatesByName
 );
 contactRoutes.post("/contacts/normalization/process", isAuth, checkPermission("contacts.edit"), ContactController.processNormalization);
-contactRoutes.post(
-  "/contacts/backfill-wallets-tags",
-  isAuth,
-  checkPermission("settings.view"),
-  ContactController.backfillWalletsAndPersonalTags
-);
+
 contactRoutes.post("/contacts/:contactId/validate-name", isAuth, checkPermission("contacts.edit"), ContactController.validateContactName);
 
 // Mova a rota de deleção em massa ANTES da rota de deleção de ID único.
@@ -68,7 +63,6 @@ contactRoutes.put("/contacts/block/:contactId", isAuth, checkPermission("contact
 contactRoutes.post("/contacts/upload", isAuth, checkPermission("contacts.import"), upload.array("file"), ContactController.upload);
 contactRoutes.get("/contactTags/:contactId", isAuth, checkPermission("contacts.view"), ContactController.getContactTags);
 contactRoutes.put("/contacts/toggleDisableBot/:contactId", isAuth, checkPermission("contacts.edit"), ContactController.toggleDisableBot);
-contactRoutes.put("/contact-wallet/:contactId", isAuth, checkPermission("contacts.edit-wallets"), ContactController.updateContactWallet);
 contactRoutes.post("/contacts/bulk-refresh-avatars", isAuth, checkPermission("contacts.edit"), ContactController.bulkRefreshAvatars);
 
 // ========== ROTA PARA ATUALIZAÇÃO DE AVATAR EM TEMPO REAL ==========

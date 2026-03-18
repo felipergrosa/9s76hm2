@@ -9,6 +9,7 @@ import Whatsapp from "../../models/Whatsapp";
 import Company from "../../models/Company";
 import QueueIntegrations from "../../models/QueueIntegrations";
 import TicketTag from "../../models/TicketTag";
+import ContactCustomField from "../../models/ContactCustomField";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
 import { queueImportHistory } from "../MessageServices/ImportHistoryQueue";
 import logger from "../../utils/logger";
@@ -91,11 +92,17 @@ const ShowTicketService = async (
           "foundationDate",
           "creditLimit"
         ],
-        include: ["extraInfo", "tags",
+        include: [
           {
-            association: "wallets",
-            attributes: ["id", "name"]
-          }]
+            model: ContactCustomField,
+            as: "extraInfo"
+          },
+          {
+            model: Tag,
+            as: "tags",
+            attributes: ["id", "name", "color"]
+          }
+        ]
       },
       {
         model: Queue,

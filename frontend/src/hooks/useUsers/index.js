@@ -29,7 +29,6 @@ const useUsers = () => {
 
         // Só carrega usuários se tiver permissão
         if (!hasPermission("users.view")) {
-            console.log("[useUsers] Usuário sem permissão users.view");
             setLoading(false);
             return;
         }

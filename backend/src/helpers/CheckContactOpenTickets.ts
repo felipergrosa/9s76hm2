@@ -82,24 +82,23 @@ const CheckContactOpenTickets = async (
     throw new AppError(ticketInfo);
   }
 
-  // Verificar se o contato tem as tags/carteiras do usuário
+  // Verificar se o contato tem as tags do usuário (wallets removido - agora usa tags pessoais #)
   const contact = await Contact.findByPk(contactId, {
-    include: ["tags", "wallets"]
+    include: ["tags"]
   });
 
   if (contact) {
     const userAllowedTags = requestUser.allowedContactTags || [];
     const contactTagIds = (contact as any).tags?.map((t: any) => t.id) || [];
-    const contactWalletIds = (contact as any).wallets?.map((w: any) => w.id) || [];
 
     // Se usuário tem tags permitidas, verificar se contato tem PELO MENOS UMA delas
     if (userAllowedTags.length > 0) {
       const hasAnyTag = userAllowedTags.some(tagId => 
-        contactTagIds.includes(tagId) || contactWalletIds.includes(tagId)
+        contactTagIds.includes(tagId)
       );
 
       if (hasAnyTag) {
-        // Contato tem pelo menos uma tag/carteira do usuário, pode assumir
+        // Contato tem pelo menos uma tag do usuário, pode assumir
         const ticketInfo = JSON.stringify({
           id: ticket.id,
           status: ticket.status,

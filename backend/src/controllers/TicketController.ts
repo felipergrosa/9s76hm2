@@ -24,7 +24,7 @@ import Queue from "../models/Queue";
 import Chatbot from "../models/Chatbot";
 import Prompt from "../models/Prompt";
 import AIAgent from "../models/AIAgent";
-import GetUserWalletContactIds from "../helpers/GetUserWalletContactIds";
+import GetUserPersonalTagContactIds from "../helpers/GetUserPersonalTagContactIds";
 
 type IndexQuery = {
   searchParam: string;
@@ -176,7 +176,7 @@ export const report = async (req: Request, res: Response): Promise<Response> => 
   const userId = String(req.user.id);
   const { companyId } = req.user;
 
-  const walletResult = await GetUserWalletContactIds(Number(userId), Number(companyId));
+  const walletResult = await GetUserPersonalTagContactIds(Number(userId), Number(companyId));
   const walletContactIds = walletResult.hasWalletRestriction ? walletResult.contactIds : null;
   const walletUserIds = walletResult.hasWalletRestriction
     ? [Number(userId), ...walletResult.managedUserIds]
@@ -393,7 +393,7 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
   const ticket = await ShowTicketService(ticketId, companyId);
 
   // Verificação de acesso por carteira (inclui supervisor via managedUserIds)
-  const walletResult = await GetUserWalletContactIds(Number(userId), Number(companyId));
+  const walletResult = await GetUserPersonalTagContactIds(Number(userId), Number(companyId));
 
   // Modo EXCLUDE: bloqueia acesso a tickets dos usuários excluídos
   if (walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) {
@@ -454,7 +454,7 @@ export const showFromUUID = async (
   });
 
   // Verificação de acesso por carteira (inclui supervisor via managedUserIds)
-  const walletResult = await GetUserWalletContactIds(Number(userId), Number(companyId));
+  const walletResult = await GetUserPersonalTagContactIds(Number(userId), Number(companyId));
 
   // Modo EXCLUDE: bloqueia acesso a tickets dos usuários excluídos
   if (walletResult.excludedUserIds && walletResult.excludedUserIds.length > 0) {

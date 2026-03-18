@@ -2,14 +2,12 @@ import { Sequelize, fn, col, where, Op, Filterable, literal } from "sequelize";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import ContactTag from "../../models/ContactTag";
-
 import { intersection } from "lodash";
 import Tag from "../../models/Tag";
 import removeAccents from "remove-accents";
 import Whatsapp from "../../models/Whatsapp";
 import User from "../../models/User";
 import ShowUserService from "../UserServices/ShowUserService";
-import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
 
 interface Request {
   searchParam?: string;
@@ -19,7 +17,7 @@ interface Request {
   isGroup?: string;
   userId?: number;
   profile?: string;
-  allowedContactTags?: number[]; // Adicionar a nova propriedade
+  allowedContactTags?: number[];
   limit?: string;
   orderBy?: string;
   order?: string;
@@ -38,8 +36,7 @@ interface Request {
   florder?: boolean;
   bzEmpresa?: string[];
   isWhatsappValid?: boolean;
-  walletIds?: number[]; // Novo: IDs de usuários para filtro de carteira
-  whatsappIds?: number[]; // Novo: IDs de conexões WhatsApp
+  whatsappIds?: number[];
 }
 
 interface Response {
@@ -75,77 +72,31 @@ const ListContactsService = async ({
   florder,
   bzEmpresa,
   isWhatsappValid,
-  walletIds, // Novo: IDs de usuários para filtro de carteira
-  whatsappIds // Novo: IDs de conexões WhatsApp
+  whatsappIds
 }: Request): Promise<Response> => {
   let whereCondition: Filterable["where"] = {};
   const additionalWhere: any[] = [];
 
-  // Restrição de carteira: vê contatos de sua carteira + carteiras gerenciadas
-  if (userId) {
-    const walletResult = await GetUserWalletContactIds(userId, companyId);
-    if (walletResult.hasWalletRestriction) {
-      const allowedContactIds = walletResult.contactIds;
-      whereCondition.id = allowedContactIds.length > 0 ? { [Op.in]: allowedContactIds } : { [Op.in]: [] };
-    }
-
-    // Modo EXCLUDE: excluir contatos que pertencem à carteira (tags pessoais) dos usuários bloqueados
-    if (Array.isArray(walletResult.excludedUserIds) && walletResult.excludedUserIds.length > 0) {
-      try {
-        const blockedUsers = await User.findAll({
-          where: { id: { [Op.in]: walletResult.excludedUserIds } },
-          attributes: ["id", "allowedContactTags"]
+  // Restrição por tag pessoal: usuário só vê contatos que têm sua tag pessoal
+  if (userId && profile !== "admin") {
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "allowedContactTags"]
+    });
+    
+    if (user) {
+      const userTagId = (user as any).getPersonalTagId?.() || 
+                        (Array.isArray((user as any).allowedContactTags) && (user as any).allowedContactTags.length > 0 
+                          ? (user as any).allowedContactTags[0] 
+                          : null);
+      
+      if (userTagId) {
+        const taggedContacts = await ContactTag.findAll({
+          where: { tagId: userTagId },
+          attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
+          raw: true
         });
-
-        const blockedTagIdsRaw: number[] = [];
-        for (const bu of blockedUsers) {
-          const tagIds = Array.isArray((bu as any).allowedContactTags)
-            ? ((bu as any).allowedContactTags as number[])
-            : [];
-          blockedTagIdsRaw.push(...tagIds);
-        }
-
-        if (blockedTagIdsRaw.length > 0) {
-          const blockedPersonalTags = await Tag.findAll({
-            where: {
-              id: { [Op.in]: blockedTagIdsRaw },
-              companyId,
-              name: {
-                [Op.and]: [{ [Op.like]: "#%" }, { [Op.notLike]: "##%" }]
-              }
-            },
-            attributes: ["id"]
-          });
-          const blockedPersonalTagIds = blockedPersonalTags.map(t => t.id);
-
-          if (blockedPersonalTagIds.length > 0) {
-            const blockedContacts = await ContactTag.findAll({
-              where: { tagId: { [Op.in]: blockedPersonalTagIds } },
-              attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
-              raw: true
-            });
-            const blockedContactIds = blockedContacts.map((ct: any) => Number(ct.contactId)).filter(Number.isInteger);
-
-            if (blockedContactIds.length > 0) {
-              const currentIdFilter: any = (whereCondition as any).id;
-              const currentIn: number[] | undefined = currentIdFilter?.[Op.in];
-              if (Array.isArray(currentIn)) {
-                // Intersect do filtro atual com NOT IN (mais seguro do que empilhar operadores)
-                const filtered = currentIn.filter(id => !blockedContactIds.includes(id));
-                (whereCondition as any).id = { [Op.in]: filtered };
-              } else if (currentIdFilter) {
-                // Caso raro: já existe alguma condição id diferente de IN
-                additionalWhere.push({ id: { [Op.notIn]: blockedContactIds } });
-              } else {
-                (whereCondition as any).id = { [Op.notIn]: blockedContactIds };
-              }
-            }
-          }
-        }
-      } catch (e: any) {
-        // Se falhar, não bloqueia listagem inteira; apenas loga
-        // (evita quebrar a UX do usuário)
-        // logger está disponível no arquivo
+        const allowedIds = taggedContacts.map((ct: any) => Number(ct.contactId)).filter(Number.isInteger);
+        whereCondition.id = allowedIds.length > 0 ? { [Op.in]: allowedIds } : { [Op.in]: [] };
       }
     }
   }
@@ -438,44 +389,6 @@ const ListContactsService = async ({
     whereCondition = {
       ...whereCondition,
       isGroup: false
-    }
-  }
-
-  // Filtro por carteira (usuários responsáveis)
-  if (Array.isArray(walletIds) && walletIds.length > 0) {
-    try {
-      // Para cada usuário selecionado, obter IDs dos contatos na carteira
-      const allWalletContactIds = new Set<number>();
-
-      for (const userId of walletIds) {
-        const walletResult = await GetUserWalletContactIds(userId, companyId);
-        if (walletResult.hasWalletRestriction && walletResult.contactIds.length > 0) {
-          // Adiciona todos os IDs ao Set (união)
-          walletResult.contactIds.forEach(id => allWalletContactIds.add(id));
-        }
-      }
-
-      // Se não encontrou nenhum contato nas carteiras selecionadas, retorna lista vazia
-      if (allWalletContactIds.size === 0) {
-        whereCondition.id = { [Op.in]: [] };
-      } else {
-        // Converter Set para array
-        const walletContactIdsArray = Array.from(allWalletContactIds);
-
-        // Combinar com filtro existente de carteira (se houver)
-        const currentIdFilter: any = (whereCondition as any).id;
-        if (currentIdFilter && currentIdFilter[Op.in]) {
-          // Interseção com filtro existente de carteira do usuário logado
-          const existingIds = currentIdFilter[Op.in];
-          const finalIntersection = walletContactIdsArray.filter(id => existingIds.includes(id));
-          (whereCondition as any).id = { [Op.in]: finalIntersection };
-        } else {
-          (whereCondition as any).id = { [Op.in]: walletContactIdsArray };
-        }
-      }
-    } catch (error: any) {
-      // Se falhar, não bloqueia listagem; apenas loga
-      console.warn("[ListContactsService] Erro ao filtrar por carteira:", error.message);
     }
   }
 

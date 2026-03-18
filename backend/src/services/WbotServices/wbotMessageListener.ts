@@ -565,6 +565,7 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
         msg.message?.listResponseMessage?.contextInfo?.externalAdReply?.title,
       pollCreationMessageV3: msg?.message?.pollCreationMessageV3 ? `*Enquete*\n${msg.message.pollCreationMessageV3.name}\n\n${msg.message.pollCreationMessageV3.options.map(option => option.optionName).join('\n')}` : null,
       eventMessage: msg?.message?.eventMessage?.name ? `*Nome do Evento: ${msg.message.eventMessage.name}*\n` : 'sem nome do evento\n',
+      templateMessage: msg?.message?.templateMessage?.hydratedTemplate?.hydratedContentText || '[Mensagem Template]',
     };
 
     const objKey = Object.keys(types).find(key => key === type);
@@ -2423,7 +2424,8 @@ const isValidMsg = (msg: proto.IWebMessageInfo): boolean => {
       msgType === "advertisingMessage" ||
       msgType === "highlyStructuredMessage" ||
       msgType === "eventMessage" ||
-      msgType === "adMetaPreview"; // Adicionado para tratar mensagens de anúncios
+      msgType === "adMetaPreview" || // Adicionado para tratar mensagens de anúncios
+      msgType === "templateMessage"; // Mensagens de template comercial com botões
 
     if (!ifType) {
       logger.warn(`#### Nao achou o type em isValidMsg: ${msgType}

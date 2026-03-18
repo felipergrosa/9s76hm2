@@ -3,7 +3,6 @@ import AppError from "../../errors/AppError";
 import Contact from "../../models/Contact";
 import sequelize from "../../database";
 import { getIO } from "../../libs/socket";
-import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 
 interface ProcessDuplicateByNameParams {
   companyId: number;
@@ -28,7 +27,6 @@ const referencingTables: Array<{ table: string; column: string }> = [
   { table: "Messages", column: "contactId" },
   { table: "ContactTags", column: "contactId" },
   { table: "ContactCustomFields", column: "contactId" },
-  { table: "ContactWallets", column: "contactId" },
   { table: "ContactWhatsappLabels", column: "contactId" },
   { table: "Schedules", column: "contactId" },
   { table: "TicketNotes", column: "contactId" }
@@ -153,26 +151,6 @@ const updateReferences = async (
               FROM "ContactTags" ct
               WHERE ct."contactId" = :masterId
                 AND ct."tagId" = "ContactTags"."tagId"
-            );
-        `,
-        {
-          replacements: { masterId, duplicateId },
-          transaction,
-          type: QueryTypes.DELETE
-        }
-      );
-    }
-
-    if (ref.table === "ContactWallets") {
-      await sequelize.query(
-        `
-          DELETE FROM "ContactWallets"
-          WHERE "contactId" = :duplicateId
-            AND EXISTS (
-              SELECT 1
-              FROM "ContactWallets" cw
-              WHERE cw."contactId" = :masterId
-                AND cw."walletId" = "ContactWallets"."walletId"
             );
         `,
         {
@@ -351,18 +329,6 @@ const ProcessDuplicateContactsByNameService = async ({
     });
   } catch (err: any) {
     throw new AppError(`ERR_PROCESS_DUPLICATES_FAILED: ${err?.message || err}`, 500);
-  }
-
-  if (updatedMaster) {
-    try {
-      await SyncContactWalletsAndPersonalTagsService({
-        companyId,
-        contactId: updatedMaster.id,
-        source: "tags"
-      });
-    } catch (err) {
-      console.warn("[ProcessDuplicateContactsByNameService] Falha ao sincronizar carteiras e tags pessoais", err);
-    }
   }
 
   let io: any;

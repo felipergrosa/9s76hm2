@@ -18,7 +18,7 @@ import { i18n } from "../../translate/i18n";
 import ContactAvatar from "../ContactAvatar";
 import ContactDrawerSkeleton from "../ContactDrawerSkeleton";
 import MarkdownWrapper from "../MarkdownWrapper";
-import { CardHeader, Tooltip, Dialog, DialogContent, CircularProgress, Collapse } from "@material-ui/core";
+import { CardHeader, Tooltip, Dialog, DialogContent, CircularProgress, Collapse, Chip } from "@material-ui/core";
 import ExpandMoreIcon from "@material-ui/icons/ExpandMore";
 import ExpandLessIcon from "@material-ui/icons/ExpandLess";
 import FlashOnIcon from "@material-ui/icons/FlashOn";
@@ -440,11 +440,43 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                                         <Typography style={{ color: "primary", fontSize: 12 }}>
                                             {`Chatbot: ${contact.disableBot ? 'Desabilitado' : 'Habilitado'}`}
                                         </Typography>
-                                        {contact.wallets && contact.wallets.length > 0 && (
-                                            <Typography style={{ color: "primary", fontSize: 12 }}>
-                                                {`Carteira: ${contact.wallets.map(w => w.name || w.user?.name).filter(Boolean).join(', ')}`}
-                                            </Typography>
-                                        )}
+                                        {/* Carteira: exibe tags pessoais (#) como chips */}
+                                        {(() => {
+                                            const allTags = contact?.tags || [];
+                                            const personalTags = allTags.filter(t => 
+                                                t.name && t.name.startsWith('#') && !t.name.startsWith('##')
+                                            );
+                                            
+                                            // Sempre mostrar a seção, mesmo sem tags
+                                            return (
+                                                <div style={{ marginTop: 8 }}>
+                                                    <Typography style={{ color: "textSecondary", fontSize: 11, marginBottom: 4 }}>
+                                                        Carteira (Responsável)
+                                                    </Typography>
+                                                    {personalTags.length > 0 ? (
+                                                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                                                            {personalTags.map(tag => (
+                                                                <Chip
+                                                                    key={tag.id}
+                                                                    label={tag.name}
+                                                                    size="small"
+                                                                    style={{
+                                                                        backgroundColor: tag.color || "#4caf50",
+                                                                        color: "#fff",
+                                                                        fontSize: 10,
+                                                                        height: 20
+                                                                    }}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <Typography style={{ color: "#999", fontSize: 11, fontStyle: "italic" }}>
+                                                            —
+                                                        </Typography>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                         {contact.whatsapp && (
                                             <Typography style={{ color: "primary", fontSize: 12 }}>
                                                 {`Conexão: ${contact.whatsapp.name || contact.whatsapp.id}`}

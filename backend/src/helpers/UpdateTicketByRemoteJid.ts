@@ -33,11 +33,7 @@ export const updateTicketByRemoteJid = async (remoteJid: string, queue: number, 
           model: Contact,
           as: "contact",
           attributes: ["id", "name", "number", "profilePicUrl", "companyId", "urlPicture"],
-          include: ["extraInfo", "tags",
-            {
-              association: "wallets",
-              attributes: ["id", "name"]
-            }]
+          include: ["extraInfo", "tags"]
         },
         {
           model: User,

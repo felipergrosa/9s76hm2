@@ -5,7 +5,6 @@ import Ticket from "../../models/Ticket";
 import ContactTag from "../../models/ContactTag";
 import User from "../../models/User";
 import Tag from "../../models/Tag";
-import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
 
 export interface SearchContactParams {
   companyId: string | number;
@@ -29,27 +28,38 @@ const SimpleListService = async ({ name, companyId, userId, profile }: SearchCon
     }
   }
 
-  // Restrição de carteira: se usuário não for admin, limita por carteira (inclui gerenciados)
-  if (userId) {
-    const walletResult = await GetUserWalletContactIds(userId, Number(companyId));
-    if (walletResult.hasWalletRestriction) {
-      const allowedContactIds = walletResult.contactIds;
-      options.where = {
-        ...options.where,
-        companyId,
-        id: { [Op.in]: allowedContactIds.length > 0 ? allowedContactIds : [0] }
-      };
+  // Restrição por tag pessoal: usuário só vê contatos com sua tag pessoal
+  if (userId && profile !== "admin") {
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "allowedContactTags"]
+    });
+    
+    if (user) {
+      const userTagId = (user as any).getPersonalTagId?.() || 
+                        (Array.isArray((user as any).allowedContactTags) && (user as any).allowedContactTags.length > 0 
+                          ? (user as any).allowedContactTags[0] 
+                          : null);
+      
+      if (userTagId) {
+        const taggedContacts = await ContactTag.findAll({
+          where: { tagId: userTagId },
+          attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
+          raw: true
+        });
+        const allowedIds = taggedContacts.map((ct: any) => Number(ct.contactId)).filter(Number.isInteger);
+        options.where = {
+          ...options.where,
+          companyId,
+          id: { [Op.in]: allowedIds.length > 0 ? allowedIds : [0] }
+        };
+      } else {
+        options.where = { ...options.where, companyId };
+      }
     } else {
-      options.where = {
-        ...options.where,
-        companyId
-      };
+      options.where = { ...options.where, companyId };
     }
   } else {
-    options.where = {
-      ...options.where,
-      companyId
-    };
+    options.where = { ...options.where, companyId };
   }
 
   const contacts = await Contact.findAll(options);

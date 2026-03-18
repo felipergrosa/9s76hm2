@@ -328,7 +328,9 @@ const NotificationsPopOver = ({ volume = 1 }) => {
       if ("Notification" in window && Notification.permission === "granted") {
         const options = {
           body: `${message.body} - ${format(new Date(), "HH:mm")}`,
-          icon: contact.urlPicture ? `${getBackendUrl()}${contact.urlPicture}` : null,
+          icon: contact.urlPicture 
+            ? (contact.urlPicture.startsWith('http') ? contact.urlPicture : `${getBackendUrl()}${contact.urlPicture}`)
+            : null,
           tag: ticket.id,
           renotify: true,
         };

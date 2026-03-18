@@ -59,10 +59,15 @@ const reducer = (state, action) => {
 
   if (action.type === "UPDATE_USERS") {
     const user = action.payload;
+    console.log("[Users] UPDATE_USERS recebido:", user);
+    console.log("[Users] user.online =", user.online, "tipo:", typeof user.online);
     const userIndex = state.findIndex((u) => u.id === user.id);
 
     if (userIndex !== -1) {
-      state[userIndex] = user;
+      // Faz merge dos dados preservando campos existentes
+      const merged = { ...state[userIndex], ...user };
+      console.log("[Users] Usuário após merge, online =", merged.online);
+      state[userIndex] = merged;
       return [...state];
     } else {
       return [user, ...state];
@@ -401,6 +406,10 @@ const Users = () => {
                     <div className={classes.metaValue}>ID #{user.id}</div>
                   </div>
                   <div className={classes.cardMeta}>
+                    <div>
+                      <div className={classes.metaLabel}>{i18n.t("users.table.status")}</div>
+                      <div className={classes.metaValue}><UserStatusIcon user={user} /></div>
+                    </div>
                     <div>
                       <div className={classes.metaLabel}>{i18n.t("users.table.email")}</div>
                       <div className={classes.metaValue}>{user.email || "—"}</div>

@@ -105,15 +105,11 @@ const ListService = async ({
   // Primeiro, identificar quais itens precisam de busca
   const itemsNeedingContact = rowsAny.filter(item => !item.contact);
   
-  console.log(`[ListService] Total de itens: ${rowsAny.length}, Sem contact: ${itemsNeedingContact.length}`);
-  
   if (itemsNeedingContact.length > 0) {
     // Usar canonicalNumber para busca (mais preciso)
     const canonicalNumbers = itemsNeedingContact
       .map(item => item.canonicalNumber || (item.number || "").replace(/\D/g, ""))
       .filter(n => n);
-
-    console.log(`[ListService] Buscando ${canonicalNumbers.length} números canônicos no banco...`);
     
     if (canonicalNumbers.length > 0) {
       // Buscar contatos usando canonicalNumber
@@ -147,8 +143,6 @@ const ListService = async ({
         ]
       });
 
-      console.log(`[ListService] Encontrados ${foundContacts.length} contatos no banco`);
-
       // Criar mapa canonicalNumber -> contato
       const contactMap = new Map<string, any>();
       foundContacts.forEach(contact => {
@@ -170,8 +164,6 @@ const ListService = async ({
           matched++;
         }
       });
-      
-      console.log(`[ListService] ${matched} de ${itemsNeedingContact.length} itens associados com sucesso`);
     }
   }
 

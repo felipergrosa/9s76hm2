@@ -17,8 +17,6 @@ const ListService = async ({
   profile = "user",
   userId
 }: Request): Promise<Tag[]> => {
-  console.log("[SimpleListService] Params:", { companyId, searchParam, kanban, profile, userId });
-  
   let whereCondition: any = {};
 
   if (searchParam) {
@@ -40,12 +38,7 @@ const ListService = async ({
         { userId: userId }
       ]
     };
-    console.log("[SimpleListService] Filtro aplicado (não-admin):", whereCondition);
-  } else {
-    console.log("[SimpleListService] Admin detectado, sem filtro de userId");
   }
-
-  console.log("[SimpleListService] whereCondition final:", { ...whereCondition, companyId, kanban });
 
   try {
     const tags = await Tag.findAll({
@@ -74,9 +67,6 @@ const ListService = async ({
       ]
     });
 
-    console.log("[SimpleListService] Tags encontradas:", tags?.length);
-    console.log("[SimpleListService] Tags (nomes):", tags?.map(t => t.name));
-    
     return tags;
   } catch (err) {
     console.error("[SimpleListService] Erro ao buscar tags:", err);

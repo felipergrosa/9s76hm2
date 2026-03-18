@@ -55,6 +55,71 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   return res.json({ users, count, hasMore });
 };
 
+export const list = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.query;
+  const { companyId: userCompanyId } = req.user;
+
+  const users = await SimpleListService({
+    companyId: companyId ? +companyId : userCompanyId,
+    requestUserId: +req.user.id
+  });
+
+  return res.status(200).json(users);
+};
+
+export const listAvailable = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId: userCompanyId } = req.user;
+
+  const users = await SimpleListService({
+    companyId: userCompanyId
+  });
+
+  // Retorna apenas dados básicos para seleção
+  const basicUsers = users.map(u => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    profile: u.profile
+  }));
+
+  return res.json(basicUsers);
+};
+
+export const remove = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { userId } = req.params;
+  const { companyId, id, profile } = req.user;
+
+  if (profile !== "admin") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
+  if (process.env.DEMO === "ON") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
+  const user = await User.findOne({
+    where: { id: userId }
+  });
+
+  if (companyId !== user.companyId) {
+    return res.status(400).json({ error: "Você não possui permissão para acessar este recurso!" });
+  } else {
+    await DeleteUserService(userId, companyId);
+
+    const io = getIO();
+    io.of(`/workspace-${companyId}`)
+      .emit(`company-${companyId}-user`, {
+        action: "delete",
+        userId
+      });
+
+    return res.status(200).json({ message: "User deleted" });
+  }
+};
+
 export const store = async (req: Request, res: Response): Promise<Response> => {
   const {
     email,
@@ -262,13 +327,19 @@ export const update = async (
   const { userId } = req.params;
   const userData = req.body;
 
+  // Buscar usuário completo do banco para ter acesso às permissões
+  const currentUser = await User.findByPk(requestUserId);
+  if (!currentUser) {
+    throw new AppError("ERR_USER_NOT_FOUND", 404);
+  }
+
   // LÓGICA DE PERMISSÃO ATUALIZADA
   // Admin pode editar qualquer usuário
   // Usuário comum pode editar próprio perfil se tiver permissão users.edit-own
-  const isEditingOwnProfile = userId === requestUserId;
+  const isEditingOwnProfile = parseInt(userId) === parseInt(requestUserId);
   const isAdmin = profile === "admin";
-  const canEditOwnProfile = hasPermission(req.user as any, "users.edit-own");
-  const canEditUsers = hasPermission(req.user as any, "users.edit");
+  const canEditOwnProfile = hasPermission(currentUser, "users.edit-own");
+  const canEditUsers = hasPermission(currentUser, "users.edit");
 
   if (!isAdmin && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
@@ -287,7 +358,6 @@ export const update = async (
     requestUserId: +requestUserId
   });
 
-
   const io = getIO();
   io.of(`/workspace-${companyId}`)
     .emit(`company-${companyId}-user`, {
@@ -296,72 +366,6 @@ export const update = async (
     });
 
   return res.status(200).json(user);
-};
-
-export const remove = async (
-  req: Request,
-  res: Response
-): Promise<Response> => {
-  const { userId } = req.params;
-  const { companyId, id, profile } = req.user;
-
-  if (profile !== "admin") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
-
-  if (process.env.DEMO === "ON") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
-
-  const user = await User.findOne({
-    where: { id: userId }
-  });
-
-  if (companyId !== user.companyId) {
-    return res.status(400).json({ error: "Você não possui permissão para acessar este recurso!" });
-  } else {
-    await DeleteUserService(userId, companyId);
-
-    const io = getIO();
-    io.of(`/workspace-${companyId}`)
-      .emit(`company-${companyId}-user`, {
-        action: "delete",
-        userId
-      });
-
-    return res.status(200).json({ message: "User deleted" });
-  }
-
-};
-
-export const list = async (req: Request, res: Response): Promise<Response> => {
-  const { companyId } = req.query;
-  const { companyId: userCompanyId } = req.user;
-
-  const users = await SimpleListService({
-    companyId: companyId ? +companyId : userCompanyId,
-    requestUserId: +req.user.id
-  });
-
-  return res.status(200).json(users);
-};
-
-export const listAvailable = async (req: Request, res: Response): Promise<Response> => {
-  const { companyId: userCompanyId } = req.user;
-
-  const users = await SimpleListService({
-    companyId: userCompanyId
-  });
-
-  // Retorna apenas dados básicos para seleção
-  const basicUsers = users.map(u => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    profile: u.profile
-  }));
-
-  return res.json(basicUsers);
 };
 
 export const mediaUpload = async (
@@ -373,11 +377,17 @@ export const mediaUpload = async (
   const files = req.files as Express.Multer.File[];
   const file = head(files);
 
+  // Buscar usuário completo do banco para ter acesso às permissões
+  const currentUser = await User.findByPk(requestUserId);
+  if (!currentUser) {
+    throw new AppError("ERR_USER_NOT_FOUND", 404);
+  }
+
   // Verificação de permissão para upload de avatar via media-upload
-  const isEditingOwnProfile = userId === requestUserId;
+  const isEditingOwnProfile = parseInt(userId) === parseInt(requestUserId);
   const isUserAdmin = profile === "admin";
-  const canEditOwnProfile = hasPermission(req.user as any, "users.edit-own");
-  const canEditUsers = hasPermission(req.user as any, "users.edit");
+  const canEditOwnProfile = hasPermission(currentUser, "users.edit-own");
+  const canEditUsers = hasPermission(currentUser, "users.edit");
 
   if (!isUserAdmin && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
@@ -430,6 +440,72 @@ export const mediaUpload = async (
     return res.status(200).json({ user, message: "Imagem atualizada" });
   } catch (err: any) {
     throw new AppError(err.message);
+  }
+};
+
+export const uploadAvatar = async (req: Request, res: Response): Promise<Response> => {
+  const userId = req.params.userId;
+  const file = req.file;
+  const { id: requestUserId, companyId, profile } = req.user;
+
+  // Buscar usuário completo do banco para ter acesso às permissões
+  const currentUser = await User.findByPk(requestUserId);
+  if (!currentUser) {
+    throw new AppError("ERR_USER_NOT_FOUND", 404);
+  }
+
+  // Verificação de permissão para upload de avatar
+  const isEditingOwnProfile = parseInt(userId) === parseInt(requestUserId);
+  const isAdmin = profile === "admin";
+  const canEditOwnProfile = hasPermission(currentUser, "users.edit-own");
+  const canEditUsers = hasPermission(currentUser, "users.edit");
+
+  if (!isAdmin && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
+  if (!file) {
+    return res.status(400).json({ error: "Arquivo não enviado." });
+  }
+
+  try {
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado." });
+    }
+
+    const username = sanitizeFileName(String(user.name || `user-${user.id}`)).toLowerCase();
+    const ext = path.extname(file.originalname) || path.extname(file.filename) || ".jpg";
+    const targetFileName = `avatar${ext}`;
+
+    const relativeDir = buildUserBase(companyId, username);
+    const relativePath = buildUserAvatarRelativePath(companyId, username, targetFileName);
+
+    const publicRoot = path.resolve(__dirname, "..", "..", "public");
+    const absDir = path.resolve(publicRoot, relativeDir);
+    const absPath = path.resolve(publicRoot, relativePath);
+
+    if (!fs.existsSync(absDir)) {
+      fs.mkdirSync(absDir, { recursive: true });
+    }
+
+    // Remove avatar anterior se existir
+    if (user.profileImage) {
+      try {
+        const oldAbs = path.resolve(publicRoot, buildCompanyBase(companyId), user.profileImage.startsWith("company") ? user.profileImage : path.posix.join("", user.profileImage));
+        if (fs.existsSync(oldAbs)) fs.unlinkSync(oldAbs);
+      } catch { }
+    }
+
+    fs.renameSync(file.path, absPath);
+
+    user.profileImage = path.posix.join("users", username, targetFileName);
+    await user.save();
+
+    return res.status(200).json({ success: true, profileImage: user.profileImage });
+  } catch (err) {
+    return res.status(500).json({ error: "Erro ao salvar imagem." });
   }
 };
 
@@ -520,63 +596,3 @@ const storage = multer.diskStorage({
 });
 
 export const upload = multer({ storage });
-
-export const uploadAvatar = async (req: Request, res: Response): Promise<Response> => {
-  const userId = req.params.userId;
-  const file = req.file;
-  const { id: requestUserId, companyId, profile } = req.user;
-
-  // Verificação de permissão para upload de avatar
-  const isEditingOwnProfile = userId === requestUserId;
-  const isAdmin = profile === "admin";
-  const canEditOwnProfile = hasPermission(req.user, "users.edit-own");
-  const canEditUsers = hasPermission(req.user, "users.edit");
-
-  if (!isAdmin && !canEditUsers && !(isEditingOwnProfile && canEditOwnProfile)) {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
-
-  if (!file) {
-    return res.status(400).json({ error: "Arquivo não enviado." });
-  }
-
-  try {
-    const user = await User.findByPk(userId);
-
-    if (!user) {
-      return res.status(404).json({ error: "Usuário não encontrado." });
-    }
-
-    const username = sanitizeFileName(String(user.name || `user-${user.id}`)).toLowerCase();
-    const ext = path.extname(file.originalname) || path.extname(file.filename) || ".jpg";
-    const targetFileName = `avatar${ext}`;
-
-    const relativeDir = buildUserBase(companyId, username);
-    const relativePath = buildUserAvatarRelativePath(companyId, username, targetFileName);
-
-    const publicRoot = path.resolve(__dirname, "..", "..", "public");
-    const absDir = path.resolve(publicRoot, relativeDir);
-    const absPath = path.resolve(publicRoot, relativePath);
-
-    if (!fs.existsSync(absDir)) {
-      fs.mkdirSync(absDir, { recursive: true });
-    }
-
-    // Remove avatar anterior se existir
-    if (user.profileImage) {
-      try {
-        const oldAbs = path.resolve(publicRoot, buildCompanyBase(companyId), user.profileImage.startsWith("company") ? user.profileImage : path.posix.join("", user.profileImage));
-        if (fs.existsSync(oldAbs)) fs.unlinkSync(oldAbs);
-      } catch { }
-    }
-
-    fs.renameSync(file.path, absPath);
-
-    user.profileImage = path.posix.join("users", username, targetFileName);
-    await user.save();
-
-    return res.status(200).json({ success: true, profileImage: user.profileImage });
-  } catch (err) {
-    return res.status(500).json({ error: "Erro ao salvar imagem." });
-  }
-};

@@ -45,7 +45,7 @@ const useCompanySettings = () => {
 	const getAll = async (companyId) => {
 		// Verifica permissão ANTES de fazer a chamada
 		if (!checkPermission("settings.view")) {
-			console.log("[useCompanySettings] Usuário sem permissão settings.view, retornando null");
+			// Silencioso - sem permissão
 			return null;
 		}
 		
@@ -58,7 +58,7 @@ const useCompanySettings = () => {
 		} catch (err) {
 			// Silencia erro 403 (sem permissão)
 			if (err?.response?.status !== 403) {
-				console.error("[useCompanySettings] Erro ao buscar configurações:", err);
+				// console.error("[useCompanySettings] Erro ao buscar configurações:", err);
 			}
 			return null;
 		}
@@ -67,7 +67,7 @@ const useCompanySettings = () => {
 	const get = async (params) => {
 		// Verifica permissão ANTES de fazer a chamada
 		if (!checkPermission("settings.view")) {
-			console.log("[useCompanySettings] Usuário sem permissão settings.view, retornando null");
+			// Silencioso - sem permissão
 			return null;
 		}
 		
@@ -81,7 +81,7 @@ const useCompanySettings = () => {
 		} catch (err) {
 			// Silencia erro 403 (sem permissão)
 			if (err?.response?.status !== 403) {
-				console.error("[useCompanySettings] Erro ao buscar configuração:", err);
+				// Log silenciado
 			}
 			return null;
 		}
@@ -90,7 +90,6 @@ const useCompanySettings = () => {
 	const update = async (data) => {
 		// Verifica permissão ANTES de fazer a chamada
 		if (!checkPermission("settings.edit")) {
-			console.log("[useCompanySettings] Usuário sem permissão settings.edit, retornando null");
 			return null;
 		}
 		
@@ -104,7 +103,7 @@ const useCompanySettings = () => {
 		} catch (err) {
 			// Silencia erro 403 (sem permissão)
 			if (err?.response?.status !== 403) {
-				console.error("[useCompanySettings] Erro ao atualizar configuração:", err);
+				// Log silenciado
 			}
 			return null;
 		}

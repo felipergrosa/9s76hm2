@@ -1,7 +1,7 @@
 import Contact from "../../models/Contact";
 import AppError from "../../errors/AppError";
 import { FindOptions, Op } from "sequelize";
-import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
+import GetUserPersonalTagContactIds from "../../helpers/GetUserPersonalTagContactIds";
 
 export interface SearchContactParams {
   companyId: string | number;
@@ -32,7 +32,7 @@ const NumberSimpleListService = async ({ number, companyId, userId }: SearchCont
 
   // Restrição de carteira: limita por carteira (inclui gerenciados)
   if (userId) {
-    const walletResult = await GetUserWalletContactIds(userId, Number(companyId));
+    const walletResult = await GetUserPersonalTagContactIds(userId, Number(companyId));
     if (walletResult.hasWalletRestriction) {
       const allowedContactIds = walletResult.contactIds;
       options.where = {

@@ -335,10 +335,7 @@ const App = () => {
   }, [mode]);
 
   useEffect(() => {
-    console.log("|=========== handleSaveSetting ==========|")
-    console.log("APP START")
-    console.log("|========================================|")
-
+    // Removido logs de debug
 
     getPublicSetting("primaryColorLight")
       .then((color) => {

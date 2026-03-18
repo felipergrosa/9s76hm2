@@ -10,6 +10,7 @@ import { SendRefreshToken } from "../helpers/SendRefreshToken";
 import { RefreshTokenService } from "../services/AuthServices/RefreshTokenService";
 import FindUserFromToken from "../services/AuthServices/FindUserFromToken";
 import User from "../models/User";
+import UpdateUserOnlineStatusService from "../services/UserServices/UpdateUserOnlineStatusService";
 
 export const forgotPassword = async (req: Request, res: Response): Promise<Response> => {
   const { email } = req.body;
@@ -71,6 +72,13 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   });
 
   SendRefreshToken(res, refreshToken);
+
+  // Atualiza status do usuário para online
+  await UpdateUserOnlineStatusService({
+    userId: serializedUser.id,
+    companyId: serializedUser.companyId,
+    online: true
+  });
 
   const io = getIO();
 

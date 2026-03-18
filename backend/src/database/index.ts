@@ -42,7 +42,6 @@ import CompaniesSettings from "../models/CompaniesSettings";
 import LogTicket from "../models/LogTicket";
 import Prompt from "../models/Prompt";
 import Partner from "../models/Partner";
-import ContactWallet from "../models/ContactWallet";
 import ScheduledMessages from "../models/ScheduledMessages";
 import ScheduledMessagesEnvio from "../models/ScheduledMessagesEnvio";
 import Versions from "../models/Versions";
@@ -194,7 +193,6 @@ const models = [
   LogTicket,
   Prompt,
   Partner,
-  ContactWallet,
   ScheduledMessages,
   ScheduledMessagesEnvio,
   Versions,

@@ -125,7 +125,7 @@ const ContactSchema = Yup.object().shape({
 	bzEmpresa: Yup.string().nullable(),
 	region: Yup.string().nullable(),
 	tags: Yup.array().nullable(),
-	wallets: Yup.array().nullable(),
+	wallets: Yup.array().nullable(), // Agora representa usuários com tag pessoal no contato
 });
 
 // Switch personalizado: verde quando ativo (checked), vermelho quando inativo
@@ -151,7 +151,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	const [avatarOpen, setAvatarOpen] = useState(false);
 	const [tagOptions, setTagOptions] = useState([]);
 	const [loadingTags, setLoadingTags] = useState(false);
-	const [userOptions, setUserOptions] = useState([]);
+	const [userOptions, setUserOptions] = useState([]); // Usuários para campo wallets (tags pessoais)
 	const [loadingUsers, setLoadingUsers] = useState(false);
 	// Opções para campos autocomplete com freeSolo e lazy loading
 	const [cityOptions, setCityOptions] = useState([]);
@@ -192,7 +192,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	const { hasPermission } = usePermissions();
 	const canEditFields = hasPermission("contacts.edit-fields");
 	const canEditTags = hasPermission("contacts.edit-tags");
-	const canEditWallets = hasPermission("contacts.edit-wallets");
+	const canEditWallets = hasPermission("contacts.edit-tags"); // Permissão de tags controla wallets também (são tags #)
 	const canEditRepresentative = hasPermission("contacts.edit-representative");
 
 	useEffect(() => {
@@ -291,17 +291,15 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		region: "",
 		tags: [],
 		wallets: [],
+		profilePicUrl: "",
+		urlPicture: "",
 	};
 
 	const [contact, setContact] = useState(initialState);
-	const [walletUsers, setWalletUsers] = useState([]);
 	const [disableBot, setDisableBot] = useState(false);
-	useEffect(() => {
-		return () => {
-			isMounted.current = false;
-		};
-	}, []);
+	const [walletUsers, setWalletUsers] = useState([]); // Usuários calculados das tags pessoais
 
+	// Buscar usuários para o campo wallets (baseado nas tags pessoais)
 	useEffect(() => {
 		let isMountedLocal = true;
 		
@@ -309,19 +307,17 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			try {
 				if (!isMountedLocal) return;
 				setLoadingUsers(true);
-				// OTIMIZAÇÃO: Limitar a 20 usuários para evitar parsing JSON pesado
-				const { data } = await api.get("/users/", {
-					params: { pageNumber: 1 }
-				});
+				const { data } = await api.get("/users/", { params: { pageNumber: 1 } });
 				if (!isMountedLocal) return;
 				setUserOptions(data.users || []);
 			} catch (err) {
 				if (!isMountedLocal) return;
-				// 403 = sem permissão para listar usuários (users.view é admin)
-				// Silencia o erro e exibe lista vazia na Carteira
+				// Silenciar erro 403 - usuário sem permissão, não logar erro
 				if (err?.response?.status !== 403) {
-					toastError(err);
+					console.log("[ContactModal] Erro ao buscar usuários:", err);
 				}
+				// Usuário sem permissão - deixa array vazio, será tratado no useEffect abaixo
+				setUserOptions([]);
 			} finally {
 				if (isMountedLocal) {
 					setLoadingUsers(false);
@@ -336,6 +332,39 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		};
 	}, []);
 
+	// Buscar dados dos wallets quando userOptions está vazio (usuário sem permissão)
+	useEffect(() => {
+		const fetchWalletUsers = async () => {
+			// Só executa se não temos userOptions mas temos contact.wallets
+			if (userOptions.length > 0 || !contact.wallets || contact.wallets.length === 0) {
+				return;
+			}
+			
+			try {
+				// Buscar dados dos usuários específicos (endpoint pode ser acessado sem permissão de admin)
+				const walletData = [];
+				for (const userId of contact.wallets) {
+					try {
+						const { data } = await api.get(`/users/${userId}`);
+						if (data) {
+							walletData.push(data);
+						}
+					} catch (err) {
+						// Silencioso - usuário pode não ter permissão para ver detalhes
+					}
+				}
+				
+				if (walletData.length > 0) {
+					setWalletUsers(walletData);
+				}
+			} catch (err) {
+				// Silencioso
+			}
+		};
+		
+		fetchWalletUsers();
+	}, [userOptions.length, contact.wallets]);
+
 	useEffect(() => {
 		let isMountedLocal = true;
 		
@@ -346,9 +375,6 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 					return {
 						...prevState,
 						...initialValues,
-						wallets: Array.isArray(initialValues.wallets)
-							? initialValues.wallets.map(w => (typeof w === "object" ? w.id : w))
-							: (initialValues.wallets || []),
 						tags: Array.isArray(initialValues.tags)
 							? initialValues.tags.map(t => (typeof t === "object" ? t.id : t))
 							: (initialValues.tags || [])
@@ -363,20 +389,10 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 				if (!isMountedLocal || !isMounted.current) return;
 				setContact({
 					...data,
-					wallets: Array.isArray(data.wallets)
-						? data.wallets.map(w => (typeof w === "object" ? w.id : w))
-						: [],
 					tags: Array.isArray(data.tags)
 						? data.tags.map(t => (typeof t === "object" ? t.id : t))
 						: []
 				});
-				// Guardar dados dos usuários da carteira para exibição readonly
-				if (data.wallets && Array.isArray(data.wallets)) {
-					const walletData = data.wallets.map(w => typeof w === "object" ? w : { id: w, name: "Usuário " + w });
-					setWalletUsers(walletData);
-				} else {
-					setWalletUsers([]);
-				}
 				setDisableBot(data.disableBot);
 			} catch (err) {
 				if (!isMountedLocal) return;
@@ -391,6 +407,48 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		};
 	}, [contactId, open, initialValues]);
 
+	// Calcular wallets (donos) baseado nas tags pessoais (#) do contato
+	useEffect(() => {
+		const calculateWalletUsers = () => {
+			if (!contact.tags || contact.tags.length === 0 || userOptions.length === 0 || !tagOptions.length) {
+				setWalletUsers([]);
+				return;
+			}
+
+			// Extrair IDs das tags (podem ser objetos ou IDs diretos)
+			const contactTagIds = Array.isArray(contact.tags) 
+				? contact.tags.map(t => typeof t === 'object' ? t.id : t)
+				: [];
+			
+			// Identificar quais tags do contato são pessoais (começam com #)
+			const personalTagIds = contactTagIds.filter(tagId => {
+				const tag = tagOptions.find(t => t.id === tagId);
+				return tag && tag.name && tag.name.startsWith('#') && !tag.name.startsWith('##');
+			});
+
+			if (personalTagIds.length === 0) {
+				setWalletUsers([]);
+				return;
+			}
+
+			// Encontrar usuários que têm essas tags como allowedContactTags
+			const walletUserList = userOptions.filter(user => {
+				const userTags = user.allowedContactTags || [];
+				return personalTagIds.some(ptid => userTags.includes(ptid));
+			});
+
+			setWalletUsers(walletUserList);
+			
+			// Atualizar valores do form com IDs dos wallets
+			const walletIds = walletUserList.map(u => u.id);
+			if (JSON.stringify(walletIds) !== JSON.stringify(contact.wallets || [])) {
+				setContact(prev => ({ ...prev, wallets: walletIds }));
+			}
+		};
+
+		calculateWalletUsers();
+	}, [contact.tags, userOptions, tagOptions]);
+
 	// Funções de lazy loading para campos autocomplete
 	const loadMoreCities = async () => {
 		if (cityLoading || !cityHasMore) return;
@@ -402,7 +460,6 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			setCityHasMore(data.hasMore);
 			setCityOffset(prev => prev + limit);
 		} catch (err) {
-			console.log("[ContactModal] Erro ao carregar mais cidades:", err);
 		} finally {
 			setCityLoading(false);
 		}
@@ -418,7 +475,6 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			setRegionHasMore(data.hasMore);
 			setRegionOffset(prev => prev + limit);
 		} catch (err) {
-			console.log("[ContactModal] Erro ao carregar mais regiões:", err);
 		} finally {
 			setRegionLoading(false);
 		}
@@ -434,7 +490,6 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			setSegmentHasMore(data.hasMore);
 			setSegmentOffset(prev => prev + limit);
 		} catch (err) {
-			console.log("[ContactModal] Erro ao carregar mais segmentos:", err);
 		} finally {
 			setSegmentLoading(false);
 		}
@@ -450,7 +505,6 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			setRepHasMore(data.hasMore);
 			setRepOffset(prev => prev + limit);
 		} catch (err) {
-			console.log("[ContactModal] Erro ao carregar mais representantes:", err);
 		} finally {
 			setRepLoading(false);
 		}
@@ -466,7 +520,6 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			setCompanyHasMore(data.hasMore);
 			setCompanyOffset(prev => prev + limit);
 		} catch (err) {
-			console.log("[ContactModal] Erro ao carregar mais empresas:", err);
 		} finally {
 			setCompanyLoading(false);
 		}
@@ -957,7 +1010,37 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 												options={userOptions}
 												getOptionLabel={(option) => option.name?.toUpperCase() || ''}
 												value={userOptions.filter(u => (values.wallets || []).includes(u.id))}
-												onChange={(e, newValue) => setFieldValue("wallets", newValue.map(u => u.id))}
+												onChange={(e, newValue) => {
+													// Atualizar wallets
+													setFieldValue("wallets", newValue.map(u => u.id));
+													
+													// Sincronizar tags: adicionar/remover tags pessoais dos usuários selecionados
+													const currentTags = values.tags || [];
+													const selectedUserIds = newValue.map(u => u.id);
+													
+													// Pegar todas as tags pessoais dos usuários selecionados
+													const personalTagsToAdd = [];
+													newValue.forEach(user => {
+														const userTagId = user.allowedContactTags?.[0]; // Primeira tag pessoal do usuário
+														if (userTagId && !currentTags.includes(userTagId)) {
+															personalTagsToAdd.push(userTagId);
+														}
+													});
+													
+													// Remover tags pessoais de usuários que foram deselecionados
+													const removedUsers = walletUsers.filter(u => !selectedUserIds.includes(u.id));
+													const tagsToRemove = [];
+													removedUsers.forEach(user => {
+														const userTagId = user.allowedContactTags?.[0];
+														if (userTagId && currentTags.includes(userTagId)) {
+															tagsToRemove.push(userTagId);
+														}
+													});
+													
+													// Atualizar tags
+													const newTags = [...currentTags, ...personalTagsToAdd].filter(t => !tagsToRemove.includes(t));
+													setFieldValue("tags", [...new Set(newTags)]);
+												}}
 												disabled={loadingUsers}
 												loading={loadingUsers}
 												filterSelectedOptions
@@ -985,15 +1068,15 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 												)}
 											/>
 										) : (
-											<div>
-												<Typography variant="caption" color="textSecondary" style={{ fontSize: '12px', marginBottom: '4px', display: 'block' }}>
-													Carteira (Responsável)
-												</Typography>
-												<div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-													{walletUsers.length === 0 ? (
-														<Typography style={{ fontSize: '14px', color: '#999' }}>—</Typography>
-													) : (
-														walletUsers.map((option) => (
+										<div>
+											<Typography variant="caption" color="textSecondary" style={{ fontSize: '12px', marginBottom: '4px', display: 'block' }}>
+												Carteira (Responsável)
+											</Typography>
+											<div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+												{(() => {
+													// Se temos walletUsers, mostra os nomes
+													if (walletUsers.length > 0) {
+														return walletUsers.map((option) => (
 															<Chip
 																key={option.id}
 																label={option.name?.toUpperCase() || `USUÁRIO ${option.id}`}
@@ -1001,11 +1084,39 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 																size="small"
 																style={{ height: '24px', fontSize: '11px' }}
 															/>
-														))
-													)}
-												</div>
+														));
+													}
+													
+													// Fallback: mostrar tags pessoais (tags com #) quando não temos dados dos usuários
+													const allTags = (Array.isArray(tagOptions) ? tagOptions : []);
+													const contactTagIds = (values.tags || []);
+													const personalTags = allTags.filter(t => 
+															contactTagIds.includes(t.id) && 
+															t.name && t.name.startsWith('#') && !t.name.startsWith('##')
+													);
+													
+													if (personalTags.length > 0) {
+														return personalTags.map((tag) => (
+															<Chip
+																key={tag.id}
+																label={tag.name?.toUpperCase()}
+																style={{
+																	backgroundColor: tag.color || '#4caf50',
+																	height: '24px',
+																	fontSize: '11px',
+																	color: '#fff'
+																}}
+																size="small"
+															/>
+														));
+													}
+													
+													// Se não tem nada, mostra —
+													return <Typography style={{ fontSize: '14px', color: '#999' }}>—</Typography>;
+												})()}
 											</div>
-										)}
+										</div>
+									)}
 									</Grid>
 									<Grid item xs={12} md={6}>
 										{canEditTags ? (
@@ -1054,7 +1165,8 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 													{(Array.isArray(tagOptions) ? tagOptions : []).filter(t => (values.tags || []).includes(t.id)).length === 0 ? (
 														<Typography style={{ fontSize: '14px', color: '#999' }}>—</Typography>
 													) : (
-														(Array.isArray(tagOptions) ? tagOptions : []).filter(t => (values.tags || []).includes(t.id)).map((option) => (
+														// Tags: mostrar apenas as NÃO pessoais (não começam com #)
+														(Array.isArray(tagOptions) ? tagOptions : []).filter(t => (values.tags || []).includes(t.id) && !(t.name && t.name.startsWith('#') && !t.name.startsWith('##'))).map((option) => (
 															<Chip
 																key={option.id}
 																label={option.name?.toUpperCase()}

@@ -503,43 +503,36 @@ const FindOrCreateTicketService = async (
       whatsappId: whatsapp.id,
       companyId,
       isBot: initialIsBot,
-      queueId: initialQueueId, // Atribui fila padrão se tem bot
+      queueId: initialQueueId,
       channel,
       imported: isImported ? new Date() : null,
       isActiveDemand: false,
     };
 
     if (DirectTicketsToWallets && contact?.id && !groupContact) {
-      const wallet: any = contact;
-      const wallets = await wallet.getWallets();
-      if (wallets && wallets[0]?.id) {
+      // NOVO: Smart Routing por Tags Pessoais (migração Wallet→Tag)
+      const walletOwners = await contact.getWalletOwners();
 
-        // Smart Routing: Check if owner is Online
-        const User = (await import("../../models/User")).default;
-        const walletOwner = await User.findByPk(wallets[0].id);
+      if (walletOwners && walletOwners.length > 0) {
+        // Buscar primeiro usuário online
+        const onlineOwner = walletOwners.find(u => u.online);
 
-        // Regra de Ouro: Só atribui se estiver ONLINE
-        if (walletOwner && walletOwner.online) {
+        if (onlineOwner) {
           ticketData.status = (!isImported && !isNil(settings?.enableLGPD)
             && openAsLGPD) ?
             "lgpd" : "open";
-
-          ticketData.userId = wallets[0].id;
-          logger.info(`[SmartRouting] Ticket assigned to ONLINE wallet owner: ${walletOwner.name} (${walletOwner.id})`);
+          ticketData.userId = onlineOwner.id;
+          logger.info(`[SmartRouting-Tags] Ticket atribuído a usuário ONLINE: ${onlineOwner.name} (${onlineOwner.id})`);
         } else {
-          // Se dono estiver Offline/Férias -> Mantém Pending para Supervisor/Admin ver
           ticketData.status = "pending";
           ticketData.userId = null;
-          logger.info(`[SmartRouting] Wallet owner ${walletOwner?.name} is OFFLINE. Ticket kept PENDING for supervision.`);
+          const ownerNames = walletOwners.map(u => u.name).join(", ");
+          logger.info(`[SmartRouting-Tags] Donos [${ownerNames}] estão OFFLINE. Ticket mantido PENDING.`);
         }
       }
     }
 
-    ticket = await Ticket.create(
-      ticketData
-    );
-
-    ticket = await ShowTicketService(ticket.id, companyId);
+    ticket = await Ticket.create(ticketData);
     // Emitir evento de criação para real-time
     ticketEventBus.publishTicketCreated(companyId, ticket.id, ticket.uuid, ticket);
 

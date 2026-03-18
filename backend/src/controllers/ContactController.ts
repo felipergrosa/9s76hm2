@@ -41,7 +41,6 @@ import BlockUnblockContactService from "../services/ContactServices/BlockUnblock
 import { ImportContactsService, getImportProgress } from "../services/ContactServices/ImportContactsService";
 import NumberSimpleListService from "../services/ContactServices/NumberSimpleListService";
 import CreateOrUpdateContactServiceForImport from "../services/ContactServices/CreateOrUpdateContactServiceForImport";
-import UpdateContactWalletsService from "../services/ContactServices/UpdateContactWalletsService";
 import BulkUpdateContactsService from "../services/ContactServices/BulkUpdateContactsService";
 import NormalizeContactNumbersService from "../services/ContactServices/NormalizeContactNumbersService";
 import ListDuplicateContactsService from "../services/ContactServices/ListDuplicateContactsService";
@@ -50,8 +49,6 @@ import ProcessDuplicateContactsByNameService from "../services/ContactServices/P
 import ListContactsPendingNormalizationService from "../services/ContactServices/ListContactsPendingNormalizationService";
 import ValidateContactNameService from "../services/ContactServices/ValidateContactNameService";
 import ProcessContactsNormalizationService from "../services/ContactServices/ProcessContactsNormalizationService";
-import BackfillWalletsAndPersonalTagsService from "../services/ContactServices/BackfillWalletsAndPersonalTagsService";
-import SyncContactWalletsAndPersonalTagsService from "../services/ContactServices/SyncContactWalletsAndPersonalTagsService";
 
 import FindContactTags from "../services/ContactServices/FindContactTags";
 import { log } from "console";
@@ -114,7 +111,6 @@ type IndexQuery = {
   florder?: string;
   bzEmpresa?: string | string[];
   isWhatsappValid?: string;
-  walletIds?: string | string[];
   whatsappIds?: string | string[];
 };
 
@@ -366,14 +362,6 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
         hasTagAssociation = true;
       }
     }
-
-    if (hasTagAssociation) {
-      await SyncContactWalletsAndPersonalTagsService({
-        companyId,
-        contactId: contact.id,
-        source: "tags"
-      });
-    }
   } catch (error) {
     logger.info("Erro ao associar Tags (importXls)", error);
   }
@@ -389,42 +377,6 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
   }
 
   return res.status(200).json(contact);
-};
-
-export const backfillWalletsAndPersonalTags = async (
-  req: Request,
-  res: Response
-): Promise<Response> => {
-  const { companyId } = req.user;
-  const { contactIds, mode, limit, offset } = req.body as {
-    contactIds?: Array<number | string>;
-    mode?: "auto" | "wallet" | "tags";
-    limit?: number;
-    offset?: number;
-  };
-
-  try {
-    const parsedIds = Array.isArray(contactIds)
-      ? contactIds
-        .map(id => Number(id))
-        .filter(id => Number.isInteger(id) && id > 0)
-      : undefined;
-
-    const result = await BackfillWalletsAndPersonalTagsService({
-      companyId,
-      contactIds: parsedIds && parsedIds.length > 0 ? parsedIds : undefined,
-      mode,
-      limit,
-      offset
-    });
-
-    return res.status(200).json(result);
-  } catch (error: any) {
-    logger.error("[Contacts.backfillWalletsAndPersonalTags] Erro ao executar backfill:", error);
-    return res.status(500).json({
-      error: error?.message || "Erro ao executar backfill de carteiras e tags pessoais"
-    });
-  }
 };
 
 export const index = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
@@ -584,7 +536,7 @@ export const index = async (req: AuthenticatedRequest, res: Response): Promise<R
   const florder = parseBooleanParam("florder");
   const isWhatsappValid = parseBooleanParam("isWhatsappValid");
 
-  // Parse walletIds e whatsappIds como arrays de números
+  // Parse whatsappIds como array de números
   const parseIdArrayParam = (key: string): number[] | undefined => {
     const arr = parseStringArrayParam(key);
     if (!arr) return undefined;
@@ -594,7 +546,6 @@ export const index = async (req: AuthenticatedRequest, res: Response): Promise<R
     return nums.length ? Array.from(new Set(nums)) : undefined;
   };
 
-  const walletIds = parseIdArrayParam("walletIds");
   const whatsappIds = parseIdArrayParam("whatsappIds");
 
   const result = await ListContactsService({
@@ -624,7 +575,6 @@ export const index = async (req: AuthenticatedRequest, res: Response): Promise<R
     florder,
     bzEmpresa: bzEmpresas,
     isWhatsappValid,
-    walletIds,
     whatsappIds
   });
 
@@ -955,14 +905,6 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
         hasTagAssociation = true;
       }
     }
-
-    if (hasTagAssociation) {
-      await SyncContactWalletsAndPersonalTagsService({
-        companyId,
-        contactId: contact.id,
-        source: "tags"
-      });
-    }
   } catch (error) {
     logger.info("Erro ao associar Tags (store)", error);
   }
@@ -1142,12 +1084,6 @@ export const update = async (
       delete (contactData as any).tags;
       delete (contactData as any).tagIds;
       logger.info(`[Contacts.update] Usuário ${req.user.id} tentou alterar tags sem permissão. Tags removidas do payload.`);
-    }
-
-    // Se usuário não tem permissão para editar wallets, remove do body
-    if (!hasPermission(user, "contacts.edit-wallets")) {
-      delete (contactData as any).wallets;
-      logger.info(`[Contacts.update] Usuário ${req.user.id} tentou alterar wallets sem permissão. Wallets removidas do payload.`);
     }
 
     // Se usuário não tem permissão para editar representative, remove do body
@@ -1550,23 +1486,6 @@ export const toggleDisableBot = async (req: Request, res: Response): Promise<Res
       action: "update",
       contact
     });
-
-  return res.status(200).json(contact);
-};
-
-export const updateContactWallet = async (
-  req: Request,
-  res: Response
-): Promise<Response> => {
-  const { wallets } = req.body;
-  const { contactId } = req.params;
-  const { companyId } = req.user;
-
-  const contact = await UpdateContactWalletsService({
-    wallets,
-    contactId,
-    companyId
-  });
 
   return res.status(200).json(contact);
 };

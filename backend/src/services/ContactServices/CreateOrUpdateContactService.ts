@@ -2,7 +2,6 @@ import { getIO } from "../../libs/socket";
 import CompaniesSettings from "../../models/CompaniesSettings";
 import Contact from "../../models/Contact";
 import ContactCustomField from "../../models/ContactCustomField";
-import ContactWallet from "../../models/ContactWallet";
 import fs from "fs";
 import path, { join } from "path";
 import logger from "../../utils/logger";
@@ -13,7 +12,6 @@ import { safeNormalizePhoneNumber, isRealPhoneNumber, MAX_PHONE_DIGITS } from ".
 import DispatchContactWebhookService from "./DispatchContactWebhookService";
 import ContactTag from "../../models/ContactTag";
 import Tag from "../../models/Tag";
-import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 import { Op, UniqueConstraintError } from "sequelize";
 
 const axios = require("axios");
@@ -44,15 +42,6 @@ const applyAutoTagFromWhatsapp = async (
     defaults: { contactId: contact.id, tagId: tag.id }
   });
 
-  try {
-    await SyncContactWalletsAndPersonalTagsService({
-      companyId,
-      contactId: contact.id,
-      source: "tags"
-    });
-  } catch (err) {
-    logger.warn("[CreateOrUpdateContactService] Falha ao sincronizar carteiras/tags após auto tag", err);
-  }
 };
 
 interface ExtraInfo extends ContactCustomField {

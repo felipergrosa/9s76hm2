@@ -19,7 +19,6 @@ import Contact from "../models/Contact";
 import Ticket from "../models/Ticket";
 import Message from "../models/Message";
 import ContactTag from "../models/ContactTag";
-import ContactWallet from "../models/ContactWallet";
 import Whatsapp from "../models/Whatsapp";
 import Tag from "../models/Tag";
 import { Op, Sequelize } from "sequelize";
@@ -216,28 +215,8 @@ const mergeContacts = async (
     }
   }
 
-  // 4. Mover wallets do duplicado para o principal (evitando duplicatas)
-  const duplicateWallets = await ContactWallet.findAll({
-    where: { contactId: duplicateContact.id }
-  });
-  
-  for (const wallet of duplicateWallets) {
-    const existsInPrimary = await ContactWallet.findOne({
-      where: { contactId: primaryContact.id, walletId: wallet.walletId }
-    });
-    
-    if (!existsInPrimary) {
-      stats.wallets++;
-      if (!dryRun) {
-        await ContactWallet.update(
-          { contactId: primaryContact.id },
-          { where: { id: wallet.id } }
-        );
-      }
-    } else if (!dryRun) {
-      await wallet.destroy();
-    }
-  }
+  // 4. Carteiras agora são representadas por tags pessoais (#) - não há mais tabela ContactWallet
+  // As tags já são movidas no passo 3 acima
 
   // 5. Deletar o contato duplicado
   if (!dryRun) {

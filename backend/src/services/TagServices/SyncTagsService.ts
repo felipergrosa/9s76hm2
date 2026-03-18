@@ -1,7 +1,6 @@
 import Tag from "../../models/Tag";
 import Contact from "../../models/Contact";
 import ContactTag from "../../models/ContactTag";
-import SyncContactWalletsAndPersonalTagsService from "../ContactServices/SyncContactWalletsAndPersonalTagsService";
 
 interface Request {
   tags: Tag[];
@@ -20,16 +19,6 @@ const SyncTags = async ({
   await ContactTag.bulkCreate(tagList);
 
   if (contact) {
-    try {
-      await SyncContactWalletsAndPersonalTagsService({
-        companyId: contact.companyId,
-        contactId: contact.id,
-        source: "tags"
-      });
-    } catch (err) {
-      console.warn("[SyncTagsService] Falha ao sincronizar carteiras e tags pessoais", err);
-    }
-
     await contact.reload();
   }
 

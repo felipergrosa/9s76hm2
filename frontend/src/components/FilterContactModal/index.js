@@ -102,8 +102,8 @@ const createEmptyValues = () => ({
   dtUltCompraEnd: null,
   bzEmpresa: [],
   whatsappInvalid: false,
-  walletIds: [], // Novo: IDs de usuários para filtro de carteira
-  whatsappIds: [], // Novo: IDs de conexões WhatsApp
+  walletIds: [], // Filtro por usuário (convertido para tags pessoais no backend)
+  whatsappIds: [], // IDs de conexões WhatsApp
 });
 
 const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} }) => {
@@ -125,10 +125,10 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
   const [loadingSituations, setLoadingSituations] = useState(false);
   const [loadingRepresentatives, setLoadingRepresentatives] = useState(false);
   const [loadingEmpresas, setLoadingEmpresas] = useState(false);
-  const [users, setUsers] = useState([]); // Novo: usuários para filtro de carteira
-  const [whatsapps, setWhatsapps] = useState([]); // Novo: conexões WhatsApp
-  const [loadingUsers, setLoadingUsers] = useState(false); // Novo: loading para usuários
-  const [loadingWhatsapps, setLoadingWhatsapps] = useState(false); // Novo: loading para whatsapps
+  const [users, setUsers] = useState([]); // Usuários para filtro (convertido para tags pessoais)
+  const [whatsapps, setWhatsapps] = useState([]); // Conexões WhatsApp
+  const [loadingUsers, setLoadingUsers] = useState(false); // Loading para usuários
+  const [loadingWhatsapps, setLoadingWhatsapps] = useState(false); // Loading para whatsapps
   const { user, getCurrentUserInfo } = useAuth();
   const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeAnchor, setRangeAnchor] = useState(null);

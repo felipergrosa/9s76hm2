@@ -123,7 +123,9 @@ const CreateMessageService = async ({
         as: "quotedMsg",
         include: ["contact"]
       }
-    ]
+    ],
+    // CRÍTICO: Incluir quotedMsgId para reações poderem ser associadas à mensagem correta
+    attributes: { include: ["quotedMsgId"] }
   });
 
   if (message.ticket.queueId !== null && message.queueId === null) {

@@ -18,7 +18,7 @@ import { intersection } from "lodash";
 import removeAccents from "remove-accents";
 
 import FindCompanySettingOneService from "../CompaniesSettings/FindCompanySettingOneService";
-import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
+import GetUserPersonalTagContactIds from "../../helpers/GetUserPersonalTagContactIds";
 import ListUserGroupPermissionsService from "../UserGroupPermissionServices/ListUserGroupPermissionsService";
 import { withCache } from "../../utils/serviceCache";
 
@@ -158,25 +158,12 @@ const ListTicketsService = async ({
   const effectiveQueueIds = queueIds.length > 0 ? queueIds : userQueueIds;
 
   if (status === "open") {
-    // DEBUG: Log antes de sobrescrever whereCondition
-    if (userId === 3) {
-      console.log(`[DEBUG ListTickets] Status=open: ANTES de sobrescrever whereCondition`);
-      console.log(`[DEBUG ListTickets] whereCondition atual:`, JSON.stringify(whereCondition, null, 2));
-      console.log(`[DEBUG ListTickets] effectiveQueueIds:`, effectiveQueueIds);
-    }
-    
     whereCondition = {
       ...whereCondition,
       userId,
       queueId: { [Op.in]: effectiveQueueIds },
       isGroup: false // Grupos nunca aparecem na aba "atendendo"
     };
-    
-    // DEBUG: Log após sobrescrever
-    if (userId === 3) {
-      console.log(`[DEBUG ListTickets] Status=open: APÓS sobrescrever whereCondition`);
-      console.log(`[DEBUG ListTickets] whereCondition novo:`, JSON.stringify(whereCondition, null, 2));
-    }
   } else
     if (status === "group" && user.allowGroup) {
       // Montar lista de conexões visíveis: primária + permitidas
@@ -246,49 +233,25 @@ const ListTicketsService = async ({
         }
         else
           if (user.profile === "user" && status === "pending" && showTicketWithoutQueue) {
-
-            const TicketsUserFilter: any[] | null = [];
-
-            let ticketsIds = [];
-
+            // OTIMIZAÇÃO: Ao invés de buscar IDs e depois filtrar, aplicar condições diretamente
+            // Isso evita uma query extra que pode ser lenta com muitos tickets
             if (!showTicketAllQueues) {
-              ticketsIds = await Ticket.findAll({
-                where: {
-                  companyId,
-                  userId:
-                    { [Op.or]: [user.id, null] },
-                  status: "pending",
-                  queueId: { [Op.in]: effectiveQueueIds }
-                },
-              });
+              whereCondition = {
+                ...whereCondition,
+                userId: { [Op.or]: [user.id, null] },
+                status: "pending",
+                queueId: { [Op.in]: effectiveQueueIds }
+              };
             } else {
-              ticketsIds = await Ticket.findAll({
-                where: {
-                  companyId,
-                  [Op.or]:
-                    [{
-                      userId:
-                        { [Op.or]: [user.id, null] }
-                    },
-                    {
-                      status: "pending"
-                    }
-                    ],
-                  // queueId: { [Op.in] : queueIds},
-                  status: "pending"
-                },
-              });
+              whereCondition = {
+                ...whereCondition,
+                [Op.or]: [
+                  { userId: { [Op.or]: [user.id, null] } },
+                  { status: "pending" }
+                ],
+                status: "pending"
+              };
             }
-            if (ticketsIds) {
-              TicketsUserFilter.push(ticketsIds.map(t => t.id));
-            }
-
-            const ticketsIntersection: number[] = intersection(...TicketsUserFilter);
-
-            whereCondition = {
-              ...whereCondition,
-              id: ticketsIntersection
-            };
           }
 
   if (
@@ -548,7 +511,7 @@ const ListTicketsService = async ({
   // Cache: evita query repetida para cada aba
   const walletResult = await withCache(
     `wallet:${userId}:${companyId}`,
-    () => GetUserWalletContactIds(userId, companyId),
+    () => GetUserPersonalTagContactIds(userId, companyId),
     60000 // 1 minuto
   );
 
@@ -633,13 +596,6 @@ const ListTicketsService = async ({
   // Grupos (status=group) são excluídos - visibilidade de grupos controlada por allowGroup
   // Independente de ser admin, supervisor ou estar na carteira
   
-  // DEBUG: Log antes da regra principal
-  if (userId === 3) {
-    console.log(`[DEBUG ListTickets] ANTES da regra principal:`);
-    console.log(`[DEBUG ListTickets] whereCondition:`, JSON.stringify(whereCondition, null, 2));
-    console.log(`[DEBUG ListTickets] userId do request: ${userId}`);
-  }
-  
   whereCondition = {
     [Op.and]: [
       whereCondition,
@@ -652,12 +608,6 @@ const ListTicketsService = async ({
       }
     ]
   } as any;
-  
-  // DEBUG: Log após a regra principal
-  if (userId === 3) {
-    console.log(`[DEBUG ListTickets] APÓS regra principal:`);
-    console.log(`[DEBUG ListTickets] whereCondition final:`, JSON.stringify(whereCondition, null, 2));
-  }
 
   // Limite/paginação: para showAll === "true", retornamos até 500 registros (otimizado para performance)
   const limit = showAll === "true" ? 500 : 40;
@@ -673,30 +623,6 @@ const ListTicketsService = async ({
     order: [["updatedAt", sortTickets]],
     subQuery: false
   });
-
-  // Debug: verificar se ticket específico está sendo filtrado
-  if (userId === 3 && status === "open") {
-    console.log(`[DEBUG ListTickets] User ${userId}, status ${status}, count: ${count}`);
-    console.log(`[DEBUG ListTickets] queueIds recebidos:`, queueIds);
-    console.log(`[DEBUG ListTickets] user.queues:`, user.queues.map(q => ({ id: q.id, name: q.name })));
-    console.log(`[DEBUG ListTickets] Tickets retornados: ${tickets.map(t => t.id).join(', ')}`);
-    console.log(`[DEBUG ListTickets] whereCondition:`, JSON.stringify(whereCondition, null, 2));
-    
-    // Verificar se ticket 5349 existe
-    const ticket5349 = await Ticket.findByPk(5349);
-    if (ticket5349) {
-      console.log(`[DEBUG ListTickets] Ticket 5349 no banco:`, {
-        id: ticket5349.id,
-        status: ticket5349.status,
-        userId: ticket5349.userId,
-        queueId: ticket5349.queueId,
-        contactId: ticket5349.contactId,
-        whatsappId: ticket5349.whatsappId,
-        isGroup: ticket5349.isGroup
-      });
-      console.log(`[DEBUG ListTickets] Ticket 5349 queueId IN queueIds?`, queueIds.includes(ticket5349.queueId));
-    }
-  }
 
   const hasMore = count > offset + tickets.length;
 

@@ -9,7 +9,6 @@ import { transferQueue } from "../WbotServices/wbotMessageListener";
 import { search as ragSearch } from "../RAG/RAGSearchService";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
 import CreateLogTicketService from "../TicketServices/CreateLogTicketService";
-import SyncContactWalletsAndPersonalTagsService from "../ContactServices/SyncContactWalletsAndPersonalTagsService";
 import FilesOptions from "../../models/FilesOptions";
 import LibraryFile from "../../models/LibraryFile";
 import LibraryFolder from "../../models/LibraryFolder";
@@ -1008,27 +1007,14 @@ export class ActionExecutor {
         const motivo = ctx.arguments.motivo || "solicitação do cliente";
 
         try {
-            // 1. Buscar atendente da carteira do contato
-            const ContactWallet = (await import("../../models/ContactWallet")).default;
-            const User = (await import("../../models/User")).default;
-            
-            const wallet = await ContactWallet.findOne({
-                where: {
-                    contactId: ctx.contact.id,
-                    companyId: ctx.ticket.companyId
-                },
-                include: [{
-                    model: User,
-                    as: "wallet",
-                    attributes: ["id", "name", "email"]
-                }]
-            });
+            // Buscar atendente baseado nas tags pessoais do contato (migração Wallet→Tags)
+            const walletOwners = await ctx.contact.getWalletOwners();
 
-            if (wallet && wallet.wallet) {
-                // Encontrou atendente da carteira - transferir direto para ele
-                const atendente = wallet.wallet;
+            if (walletOwners && walletOwners.length > 0) {
+                // Encontrou atendente via tag pessoal - transferir direto para ele
+                const atendente = walletOwners[0];
                 
-                logger.info(`[ActionExecutor] Transferindo para atendente da carteira: ${atendente.name}`, {
+                logger.info(`[ActionExecutor] Transferindo para atendente (tag pessoal): ${atendente.name}`, {
                     ticketId: ctx.ticket.id,
                     userId: atendente.id,
                     motivo
@@ -1049,8 +1035,8 @@ export class ActionExecutor {
                 return `✅ Transferindo para ${atendente.name} (seu atendente)`;
             }
 
-            // 2. Não encontrou carteira - colocar na fila para qualquer atendente
-            logger.info(`[ActionExecutor] Sem carteira definida, transferindo para fila (pending)`, {
+            // Não encontrou atendente via tag pessoal - colocar na fila para qualquer atendente
+            logger.info(`[ActionExecutor] Sem tag pessoal definida, transferindo para fila (pending)`, {
                 ticketId: ctx.ticket.id,
                 contactId: ctx.contact.id,
                 motivo
@@ -1168,15 +1154,6 @@ export class ActionExecutor {
                     });
                     logger.info(`[ActionExecutor] Tag "${agentConfig.qualifiedLeadTag}" adicionada ao contato ${ctx.contact.id}`);
 
-                    try {
-                        await SyncContactWalletsAndPersonalTagsService({
-                            companyId: ctx.ticket.companyId,
-                            contactId: ctx.contact.id,
-                            source: "tags"
-                        });
-                    } catch (err) {
-                        logger.warn("[ActionExecutor] Falha ao sincronizar carteiras e tags pessoais após qualifiedLeadTag", err);
-                    }
                 }
             }
 
@@ -1362,15 +1339,6 @@ export class ActionExecutor {
                         companyId: ctx.ticket.companyId
                     });
 
-                    try {
-                        await SyncContactWalletsAndPersonalTagsService({
-                            companyId: ctx.ticket.companyId,
-                            contactId: ctx.contact.id,
-                            source: "tags"
-                        });
-                    } catch (err) {
-                        logger.warn("[ActionExecutor] Falha ao sincronizar carteiras e tags pessoais após sdrHotLeadTag", err);
-                    }
                 }
             }
 
@@ -1505,24 +1473,11 @@ ${schedulingMessage}
                 }
             }
 
-            // Usar a lógica existente de transferência
-            const ContactWallet = (await import("../../models/ContactWallet")).default;
-            const User = (await import("../../models/User")).default;
-            
-            const wallet = await ContactWallet.findOne({
-                where: {
-                    contactId: ctx.contact.id,
-                    companyId: ctx.ticket.companyId
-                },
-                include: [{
-                    model: User,
-                    as: "wallet",
-                    attributes: ["id", "name", "email"]
-                }]
-            });
+            // Usar tags pessoais para encontrar atendente (migração Wallet→Tags)
+            const walletOwners = await ctx.contact.getWalletOwners();
 
-            if (wallet && wallet.wallet) {
-                const atendente = wallet.wallet;
+            if (walletOwners && walletOwners.length > 0) {
+                const atendente = walletOwners[0];
                 
                 const UpdateTicketService = (await import("../TicketServices/UpdateTicketService")).default;
                 await UpdateTicketService({

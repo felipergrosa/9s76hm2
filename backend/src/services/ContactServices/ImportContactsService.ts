@@ -37,7 +37,6 @@ export function resetImportProgress(progressId: string) {
 }
 
 import CreateOrUpdateContactServiceForImport from "./CreateOrUpdateContactServiceForImport"; // Importar o serviço
-import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 
 export async function ImportContactsService(
   companyId: number,
@@ -499,18 +498,6 @@ export async function ImportContactsService(
             const tagNameForReport = mapping.newTagName || "Sem etiqueta";
             perTagApplied[tagNameForReport] = (perTagApplied[tagNameForReport] || 0) + 1;
           }
-        }
-      }
-
-      if (!dryRun && hasTagAssociation && contact && (contact as any).id) {
-        try {
-          await SyncContactWalletsAndPersonalTagsService({
-            companyId: (contact as any).companyId || companyId,
-            contactId: (contact as any).id,
-            source: "tags"
-          });
-        } catch (err) {
-          logger.warn("[ImportContactsService] Falha ao sincronizar carteiras e tags pessoais", err);
         }
       }
 

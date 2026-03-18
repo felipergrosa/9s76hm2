@@ -24,7 +24,6 @@ import Company from "./Company";
 import Schedule from "./Schedule";
 import ContactTag from "./ContactTag";
 import Tag from "./Tag";
-import ContactWallet from "./ContactWallet";
 import User from "./User";
 import Whatsapp from "./Whatsapp";
 import { safeNormalizePhoneNumber } from "../utils/phone";
@@ -329,23 +328,37 @@ class Contact extends Model<Contact> {
   @Column
   get urlPicture(): string | null {
     if (this.getDataValue("urlPicture")) {
-      const file = this.getDataValue("urlPicture");
+      let file = this.getDataValue("urlPicture");
       if (file === 'nopicture.png') {
         return `${process.env.FRONTEND_URL}/nopicture.png`;
       }
       
+      // CRÍTICO: Corrigir URLs duplicadas/corrompidas no banco
+      // Ex: "https://dominio.comhttps//dominio.com/..." ou "dominio.comhttps//..."
+      // Extrair apenas o caminho relativo se detectar duplicação
+      if (file.includes('http') && (file.includes('/public/company') || file.includes('/contacts/'))) {
+        // Extrair o caminho relativo a partir de /contacts/ ou após /public/companyX/
+        const contactsMatch = file.match(/\/contacts\/([^?]+)/);
+        if (contactsMatch) {
+          file = `contacts/${contactsMatch[1]}`;
+        } else {
+          const publicMatch = file.match(/\/public\/company\d+\/(.+?)(\?|$)/);
+          if (publicMatch) {
+            file = publicMatch[1];
+          }
+        }
+      }
+      
       // CRÍTICO: Detectar URLs absolutas (mesmo mal formatadas) para evitar concatenação dupla
       // Ex: trata 'https://...', 'http://...' e erros comuns como 'https//...'
-      // Também detecta quando já contém o domínio do backend/frontend
       const backendUrl = (process.env.BACKEND_URL || '').replace(/:\d+$/, '');
       const frontendUrl = (process.env.FRONTEND_URL || '').replace(/:\d+$/, '');
       
       const isAbsoluteUrl = file.startsWith('http://') || 
                             file.startsWith('https://') || 
                             file.startsWith('https//') ||
-                            file.includes('chatsapi.') ||
-                            file.includes(backendUrl) ||
-                            file.includes(frontendUrl);
+                            (backendUrl && file.includes(backendUrl)) ||
+                            (frontendUrl && file.includes(frontendUrl));
       
       if (isAbsoluteUrl) {
         // Corrigir typo comum 'https//' -> 'https://'
@@ -353,7 +366,17 @@ class Contact extends Model<Contact> {
         if (correctedUrl.startsWith('https//')) {
           correctedUrl = correctedUrl.replace('https//', 'https://');
         }
-        return correctedUrl;
+        // Se ainda tiver duplicação, extrair caminho relativo
+        if (correctedUrl.match(/https?:\/\/.*https?:\/\//)) {
+          const lastMatch = correctedUrl.match(/\/contacts\/([^?]+)/);
+          if (lastMatch) {
+            file = `contacts/${lastMatch[1]}`;
+          } else {
+            return correctedUrl; // Retornar como está se não conseguir extrair
+          }
+        } else {
+          return correctedUrl;
+        }
       }
 
       // Se já vier com subpastas, considerar relativo à raiz da company
@@ -400,11 +423,46 @@ class Contact extends Model<Contact> {
     return String(number);
   }
 
-  @BelongsToMany(() => User, () => ContactWallet, "contactId", "walletId")
-  wallets: ContactWallet[];
+  /**
+   * Retorna os IDs dos usuários donos deste contato baseado nas tags pessoais.
+   * Após migração Wallet→Tag, busca usuários cuja tag pessoal está vinculada ao contato.
+   */
+  async getWalletOwners(): Promise<User[]> {
+    const ContactTag = (await import("./ContactTag")).default;
+    const User = (await import("./User")).default;
+    const Tag = (await import("./Tag")).default;
 
-  @HasMany(() => ContactWallet)
-  contactWallets: ContactWallet[];
+    // Buscar tags do contato que são pessoais (começam com #)
+    const contactTags = await ContactTag.findAll({
+      where: { contactId: this.id },
+      include: [{
+        model: Tag,
+        where: {
+          name: {
+            [require("sequelize").Op.and]: [
+              { [require("sequelize").Op.like]: "#%" },
+              { [require("sequelize").Op.notLike]: "##%" }
+            ]
+          }
+        }
+      }]
+    });
+
+    if (!contactTags.length) return [];
+
+    const personalTagIds = contactTags.map(ct => ct.tagId);
+
+    // Buscar usuários que têm essas tags como allowedContactTags
+    const users = await User.findAll({
+      where: {
+        allowedContactTags: {
+          [require("sequelize").Op.overlap]: personalTagIds
+        }
+      }
+    });
+
+    return users;
+  }
 
   @ForeignKey(() => Whatsapp)
   @Column

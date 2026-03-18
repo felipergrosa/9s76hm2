@@ -285,8 +285,8 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
           showAll: true,
           queueIds,
           statusFilters,
-          // Apenas filtrar por carteira se NÃO for superadmin/admin
-          walletOnly: isSuperUser ? false : true
+          // Apenas filtrar por tag pessoal se NÃO for superadmin/admin
+          personalTagOnly: isSuperUser ? false : true
         },
       });
       setTickets(data.tickets || []);

@@ -145,7 +145,7 @@ const ListMessagesService = async ({
 
   const { count, rows: messages } = await Message.findAndCountAll({
     where: { ticketId: tickets, companyId },
-    attributes: ["id", "fromMe", "mediaUrl", "body", "mediaType", "ack", "createdAt", "ticketId", "isDeleted", "queueId", "isForwarded", "isEdited", "isPrivate", "isStarred", "companyId", "dataJson", "audioTranscription", "participant", "senderName", "wid", "contactId"],
+    attributes: ["id", "fromMe", "mediaUrl", "body", "mediaType", "ack", "createdAt", "ticketId", "isDeleted", "queueId", "isForwarded", "isEdited", "isPrivate", "isStarred", "companyId", "dataJson", "audioTranscription", "participant", "senderName", "wid", "contactId", "quotedMsgId"],
     limit,
     include: [
       {
@@ -288,7 +288,7 @@ const ListMessagesService = async ({
 
           const { count: newCount, rows: newMessages } = await Message.findAndCountAll({
             where: { ticketId: tickets, companyId },
-            attributes: ["id", "fromMe", "mediaUrl", "body", "mediaType", "ack", "createdAt", "ticketId", "isDeleted", "queueId", "isForwarded", "isEdited", "isPrivate", "isStarred", "companyId", "dataJson", "audioTranscription", "participant", "senderName", "wid", "contactId"],
+            attributes: ["id", "fromMe", "mediaUrl", "body", "mediaType", "ack", "createdAt", "ticketId", "isDeleted", "queueId", "isForwarded", "isEdited", "isPrivate", "isStarred", "companyId", "dataJson", "audioTranscription", "participant", "senderName", "wid", "contactId", "quotedMsgId"],
             limit,
             include: [
               {

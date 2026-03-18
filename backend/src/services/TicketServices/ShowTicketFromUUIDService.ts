@@ -70,11 +70,7 @@ const ShowTicketUUIDService = async (uuid: string,
         ],
         include: [
           "extraInfo",
-          "tags",
-          {
-            association: "wallets",
-            attributes: ["id", "name"]
-          }
+          "tags"
         ]
       },
       {

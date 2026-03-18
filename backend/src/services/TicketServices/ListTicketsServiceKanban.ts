@@ -12,7 +12,7 @@ import TicketTag from "../../models/TicketTag";
 import { intersection } from "lodash";
 import Whatsapp from "../../models/Whatsapp";
 import ContactTag from "../../models/ContactTag";
-import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
+import GetUserPersonalTagContactIds from "../../helpers/GetUserPersonalTagContactIds";
 import UserQueue from "../../models/UserQueue";
 import { withCache } from "../../utils/serviceCache";
 
@@ -269,7 +269,7 @@ const ListTicketsServiceKanban = async ({
     // Cache: evita query repetida no Kanban
     const walletResult = await withCache(
       `wallet:${userId}:${companyId}`,
-      () => GetUserWalletContactIds(Number(userId), companyId),
+      () => GetUserPersonalTagContactIds(Number(userId), companyId),
       60000 // 1 minuto
     );
 

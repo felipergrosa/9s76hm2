@@ -14,7 +14,6 @@ import Tag from "../models/Tag";
 import KanbanListService from "../services/TagServices/KanbanListService";
 import ContactTag from "../models/ContactTag";
 import ListAllTagsService from "../services/TagServices/ListAllTagsService";
-import SyncContactWalletsAndPersonalTagsService from "../services/ContactServices/SyncContactWalletsAndPersonalTagsService";
 import InMemoryCache from "../helpers/InMemoryCache";
 
 type IndexQuery = {
@@ -29,8 +28,6 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   const { pageNumber, searchParam, kanban, tagId } = req.query as IndexQuery;
   const { companyId, profile, id } = req.user;
 
-  console.log("[TagController.index] Request:", { pageNumber, searchParam, kanban, tagId, companyId, profile, userId: id });
-
   try {
     const { tags, count, hasMore } = await ListService({
       searchParam,
@@ -42,9 +39,6 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
       userId: id
     });
 
-    console.log("[TagController.index] Tags retornadas:", tags?.length);
-    console.log("[TagController.index] Tags (nomes):", tags?.map(t => t.name));
-    
     return res.json({ tags, count, hasMore });
   } catch (err) {
     console.error("[TagController.index] Erro ao buscar tags:", err);
@@ -179,8 +173,6 @@ export const list = async (req: Request, res: Response): Promise<Response> => {
   const { searchParam, kanban } = req.query as IndexQuery;
   const { companyId, profile, id } = req.user;
 
-  console.log("[TagController.list] Request:", { searchParam, kanban, companyId, profile, userId: id });
-
   try {
     // Cache apenas para listagens simples sem filtro de busca
     const cacheKey = `tags:list:${companyId}:${profile}:${id}:${kanban || 'all'}`;
@@ -188,13 +180,11 @@ export const list = async (req: Request, res: Response): Promise<Response> => {
     if (!searchParam) {
       const cached = InMemoryCache.get<any[]>(cacheKey);
       if (cached) {
-        console.log("[TagController.list] ✅ Cache hit - retornando do cache");
         return res.json(cached);
       }
     }
 
     const tags = await SimpleListService({ searchParam, kanban, companyId, profile, userId: id });
-    console.log("[TagController.list] Tags retornadas:", tags?.length);
     
     // Salva no cache apenas se não houver filtro de busca
     if (!searchParam) {
@@ -334,8 +324,6 @@ export const removeContactTag = async (
   const { tagId, contactId } = req.params;
   const { companyId } = req.user;
 
-  console.log(tagId, contactId)
-
   await ContactTag.destroy({
     where: {
       tagId,
@@ -351,16 +339,6 @@ export const removeContactTag = async (
       action: "update",
       tag
     });
-
-  try {
-    await SyncContactWalletsAndPersonalTagsService({
-      companyId,
-      contactId,
-      source: "tags"
-    });
-  } catch (err) {
-    console.warn("[TagController.removeContactTag] Falha ao sincronizar carteiras e tags pessoais", err);
-  }
 
   return res.status(200).json({ message: "Tag deleted" });
 };

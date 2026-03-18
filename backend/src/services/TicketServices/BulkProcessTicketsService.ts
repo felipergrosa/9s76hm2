@@ -322,64 +322,16 @@ const BulkProcessTicketsService = async (
           }
         }
 
-        // 6. Atualizar carteira do contato (se configurado)
-        const walletsToProcess = options.walletIds || (options.walletId ? [options.walletId] : null);
-        
-        if (walletsToProcess && walletsToProcess.length > 0 && ticket.contactId) {
-          try {
-            const mode = options.walletMode || 'replace';
-            
-            if (mode === 'append') {
-              // Modo APPEND: buscar carteiras atuais e adicionar novas
-              const Contact = (await import("../../models/Contact")).default;
-              const contact = await Contact.findByPk(ticket.contactId, {
-                include: [{
-                  association: 'wallets',
-                  attributes: ['id']
-                }]
-              });
-              
-              const currentWalletIds = contact?.wallets?.map((w: any) => w.id) || [];
-              // Adicionar novas carteiras evitando duplicados
-              const uniqueNewWallets = walletsToProcess.filter(id => !currentWalletIds.includes(id));
-              const finalWalletIds = [...currentWalletIds, ...uniqueNewWallets];
-              
-              const UpdateContactWalletsService = (await import("../ContactServices/UpdateContactWalletsService")).default;
-              await UpdateContactWalletsService({
-                contactId: String(ticket.contactId),
-                wallets: finalWalletIds,
-                companyId
-              });
-              ticketResult.actions?.push(`${uniqueNewWallets.length} carteira(s) adicionada(s)`);
-              contactUpdated = true;
-            } else {
-              // Modo REPLACE: substituir carteira atual
-              const UpdateContactWalletsService = (await import("../ContactServices/UpdateContactWalletsService")).default;
-              await UpdateContactWalletsService({
-                contactId: String(ticket.contactId),
-                wallets: walletsToProcess,
-                companyId
-              });
-              ticketResult.actions?.push(`Carteira substituída (${walletsToProcess.length} responsável/eis)`);
-              contactUpdated = true;
-            }
-          } catch (error) {
-            logger.error(`[BulkProcess] Erro ao atualizar carteira do contato ${ticket.contactId}:`, error);
-            ticketResult.actions?.push('Erro ao atualizar carteira');
-          }
-        }
+        // 6. Carteiras agora são representadas por tags pessoais (#) - funcionalidade removida
+        // A atribuição de responsáveis é feita via tags pessoais no ContactModal/BulkEditContactsModal
 
-        // 7. Emitir eventos Socket.IO para contatos atualizados (carteiras)
+        // 7. Emitir eventos Socket.IO para contatos atualizados
         // Nota: eventos de ticket já são emitidos pelo UpdateTicketService via ticketEventBus
         if (contactUpdated && ticket.contactId) {
           try {
             const updatedContact = await Contact.findByPk(ticket.contactId, {
               attributes: ["id", "name", "number", "profilePicUrl", "email"],
               include: [
-                {
-                  association: "wallets",
-                  attributes: ["id", "name"]
-                },
                 {
                   association: "tags",
                   attributes: ["id", "name", "color", "kanban"]

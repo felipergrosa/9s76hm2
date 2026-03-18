@@ -2,7 +2,7 @@ import Contact from "../../models/Contact";
 import AppError from "../../errors/AppError";
 import fs from "fs";
 import path from "path";
-import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
+import GetUserPersonalTagContactIds from "../../helpers/GetUserPersonalTagContactIds";
 
 interface Request {
   id: string;
@@ -25,7 +25,7 @@ const DeleteContactService = async ({ id, companyId, userId }: Request): Promise
 
   // Restrição de carteira: se usuário é restrito, só permite excluir contato dentro da carteira
   if (userId) {
-    const walletResult = await GetUserWalletContactIds(userId, companyId);
+    const walletResult = await GetUserPersonalTagContactIds(userId, companyId);
     if (walletResult.hasWalletRestriction) {
       const allowedContactIds = walletResult.contactIds;
       if (!allowedContactIds.includes(Number(contact.id))) {

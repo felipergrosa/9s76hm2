@@ -6,7 +6,6 @@ import { safeNormalizePhoneNumber } from "../../utils/phone";
 import { getIO } from "../../libs/socket";
 import ContactTag from "../../models/ContactTag";
 import Tag from "../../models/Tag";
-import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 
 interface ProcessNormalizationParams {
   companyId: number;
@@ -149,18 +148,6 @@ const ProcessContactsNormalizationService = async ({
         });
     }
   });
-
-  for (const contactId of contactIds) {
-    try {
-      await SyncContactWalletsAndPersonalTagsService({
-        companyId,
-        contactId,
-        source: "tags"
-      });
-    } catch (err) {
-      console.warn("[ProcessContactsNormalizationService] Falha ao sincronizar carteiras e tags pessoais", err);
-    }
-  }
 
   return {
     updatedContacts,

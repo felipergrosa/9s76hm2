@@ -3,7 +3,6 @@ import Tag from "../../models/Tag";
 import ContactTag from "../../models/ContactTag";
 import GetDeviceContactsService from "../WbotServices/GetDeviceContactsService";
 import logger from "../../utils/logger";
-import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 import { getIO } from "../../libs/socket";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
 import { Op } from "sequelize";
@@ -316,19 +315,6 @@ const ImportDeviceContactsAutoService = async ({
         } else if (created > 0) {
           logStatus = 'CREATED';
           logAction = 'Contato criado com sucesso';
-        }
-
-        // Sincronizar carteiras se teve tags
-        if (tags.length > 0 || tagApplied) {
-          try {
-            await SyncContactWalletsAndPersonalTagsService({
-              companyId,
-              contactId: contact.id,
-              source: "tags"
-            });
-          } catch (err) {
-            // Não falha a importação por causa de sync de carteiras
-          }
         }
 
         // Registrar log detalhado se ativado

@@ -175,11 +175,23 @@ const BulkEditContactsModal = ({ open, onClose, selectedContactIds = [], onSucce
         }
       }
 
-      // Carteira: enviar se clearWallets = true (walletIds: []) OU se houver seleção
+      // Carteira: converter usuários em tags pessoais para o backend
+      // Cada usuário selecionado tem uma tag pessoal (#) que deve ser aplicada aos contatos
       if (values.clearWallets) {
-        data.walletIds = [];
+        // Limpar todas as tags pessoais - precisamos identificar quais tags são pessoais
+        // O backend vai precisar tratar isso de forma especial
+        data.clearPersonalTags = true;
       } else if (Array.isArray(values.wallets) && values.wallets.length > 0) {
-        data.walletIds = values.wallets.map((u) => u.id);
+        // Converter usuários selecionados em suas tags pessoais
+        const personalTagIds = values.wallets
+          .map((u) => u.allowedContactTags?.[0]) // Pegar primeira tag pessoal de cada usuário
+          .filter(Boolean); // Remover null/undefined
+        
+        if (personalTagIds.length > 0) {
+          // Adicionar tags pessoais à lista de tags existente (se houver)
+          const existingTagIds = data.tagIds || [];
+          data.tagIds = [...new Set([...existingTagIds, ...personalTagIds])];
+        }
       }
 
       // Chatbot: enviar se diferente de __KEEP__

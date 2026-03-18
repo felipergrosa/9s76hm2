@@ -3,26 +3,17 @@ import CompaniesSettings from "../../models/CompaniesSettings";
 import Contact from "../../models/Contact";
 import ContactCustomField from "../../models/ContactCustomField";
 import logger from "../../utils/logger";
-import ContactWallet from "../../models/ContactWallet";
-import { Op, literal } from "sequelize";
+import { Op } from "sequelize";
 import User from "../../models/User";
 import Tag from "../../models/Tag";
 import ContactTag from "../../models/ContactTag";
 import { safeNormalizePhoneNumber } from "../../utils/phone";
-import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 import DispatchContactWebhookService from "./DispatchContactWebhookService";
-import GetUserWalletContactIds from "../../helpers/GetUserWalletContactIds";
 import CreateContactReleaseRequestService from "./CreateContactReleaseRequestService";
 
 interface ExtraInfo extends ContactCustomField {
   name: string;
   value: string;
-}
-
-interface Wallet {
-  walletId: number | string;
-  contactId: number | string;
-  companyId: number | string;
 }
 
 interface Request {
@@ -35,8 +26,7 @@ interface Request {
   companyId: number;
   extraInfo?: ExtraInfo[];
   remoteJid?: string;
-  wallets?: null | number[] | string[];
-  userId?: string | number; // Adicionando o userId
+  userId?: string | number;
 
   // Novos campos
   cpfCnpj?: string;
@@ -139,7 +129,6 @@ const CreateContactService = async ({
   extraInfo = [],
   remoteJid = "",
   userId,
-  wallets,
 
   // Novos campos
   cpfCnpj,
@@ -196,67 +185,29 @@ const CreateContactService = async ({
     });
     if (!user) return false;
 
-    // Admin sem restrição normalmente vê tudo; porém o modo exclude é tratado abaixo via GetUserWalletContactIds
+    // Admin vê tudo (exceto se houver lógica de exclusão específica)
     if (user.profile === "admin") {
-      const walletResult = await GetUserWalletContactIds(uid, companyId);
-      if (Array.isArray(walletResult.excludedUserIds) && walletResult.excludedUserIds.length > 0) {
-        // Se o contato estiver na carteira de algum usuário bloqueado, admin não deve ver.
-        const blockedUsers = await User.findAll({
-          where: { id: { [Op.in]: walletResult.excludedUserIds } },
-          attributes: ["id", "allowedContactTags"]
-        });
-
-        const blockedTagIdsRaw: number[] = [];
-        for (const bu of blockedUsers) {
-          const ids = Array.isArray((bu as any).allowedContactTags) ? ((bu as any).allowedContactTags as number[]) : [];
-          blockedTagIdsRaw.push(...ids);
-        }
-
-        if (blockedTagIdsRaw.length > 0) {
-          const blockedPersonalTags = await Tag.findAll({
-            where: {
-              id: { [Op.in]: blockedTagIdsRaw },
-              companyId,
-              name: {
-                [Op.and]: [{ [Op.like]: "#%" }, { [Op.notLike]: "##%" }]
-              }
-            },
-            attributes: ["id"]
-          });
-          const blockedPersonalTagIds = blockedPersonalTags.map(t => t.id);
-          if (blockedPersonalTagIds.length > 0) {
-            const blocked = await ContactTag.findOne({
-              where: { contactId, tagId: { [Op.in]: blockedPersonalTagIds } }
-            });
-            if (blocked) return false;
-          }
-        }
-      }
-
       return true;
     }
 
-    // 1) Carteira (include): se houver restrição, contato deve estar no conjunto permitido
-    const walletResult = await GetUserWalletContactIds(uid, companyId);
-    if (walletResult.hasWalletRestriction) {
-      const allowedIds = walletResult.contactIds || [];
-      if (!allowedIds.includes(contactId)) return false;
-    }
-
-    // 2) allowedContactTags: se configurado, contato deve ter ao menos uma
-    const allowedTagIds = Array.isArray((user as any).allowedContactTags)
-      ? ((user as any).allowedContactTags as number[])
-      : [];
-    if (allowedTagIds.length > 0) {
-      const hasAnyAllowed = await ContactTag.findOne({
+    // Verificar se usuário tem tag pessoal configurada
+    const userTagId = (user as any).getPersonalTagId?.() || 
+                      (Array.isArray((user as any).allowedContactTags) && (user as any).allowedContactTags.length > 0 
+                        ? (user as any).allowedContactTags[0] 
+                        : null);
+    
+    if (userTagId) {
+      // Contato deve ter a tag pessoal do usuário
+      const hasTag = await ContactTag.findOne({
         where: {
           contactId,
-          tagId: { [Op.in]: allowedTagIds }
+          tagId: userTagId
         }
       });
-      if (!hasAnyAllowed) return false;
+      return !!hasTag;
     }
 
+    // Usuário sem tag pessoal pode ver todos os contatos
     return true;
   };
 
@@ -427,36 +378,6 @@ const CreateContactService = async ({
       vlUltCompra: vlUltCompraValue
     });
 
-    if (wallets) {
-      await ContactWallet.destroy({
-        where: {
-          companyId,
-          contactId: existingContact.id
-        }
-      });
-
-      const contactWallets: Wallet[] = [];
-      wallets.forEach((wallet: any) => {
-        contactWallets.push({
-          walletId: !wallet.id ? wallet : wallet.id,
-          contactId: existingContact.id,
-          companyId
-        });
-      });
-
-      await ContactWallet.bulkCreate(contactWallets);
-
-      try {
-        await SyncContactWalletsAndPersonalTagsService({
-          companyId,
-          contactId: existingContact.id,
-          source: "wallet"
-        });
-      } catch (err) {
-        logger.warn("[CreateContactService] Falha ao sincronizar carteiras e tags pessoais (existingContact)", err);
-      }
-    }
-
     return merged;
   }
 
@@ -466,13 +387,7 @@ const CreateContactService = async ({
   }
 
   const contact = await Contact.create(contactData, {
-    include: [
-      "extraInfo",
-      {
-        association: "wallets",
-        attributes: ["id", "name"]
-      }
-    ]
+    include: ["extraInfo"]
   });
 
   // Chama o serviço centralizado para atualizar nome/avatar com proteção
@@ -492,37 +407,6 @@ const CreateContactService = async ({
       logger.warn(`Falha ao aplicar regras de tags no contato ${contact.id}`, err);
     }
   });
-
-  if (wallets) {
-    await ContactWallet.destroy({
-      where: {
-        companyId,
-        contactId: contact.id
-      }
-    });
-
-    const contactWallets: Wallet[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    wallets.forEach((wallet: any) => {
-      contactWallets.push({
-        walletId: !wallet.id ? wallet : wallet.id,
-        contactId: contact.id,
-        companyId
-      });
-    });
-
-    await ContactWallet.bulkCreate(contactWallets);
-
-    try {
-      await SyncContactWalletsAndPersonalTagsService({
-        companyId,
-        contactId: contact.id,
-        source: "wallet"
-      });
-    } catch (err) {
-      logger.warn("[CreateContactService] Falha ao sincronizar carteiras e tags pessoais (new contact)", err);
-    }
-  }
 
   try {
     await DispatchContactWebhookService({

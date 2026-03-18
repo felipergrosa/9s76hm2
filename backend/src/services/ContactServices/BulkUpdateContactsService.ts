@@ -4,10 +4,7 @@ import Contact from "../../models/Contact";
 import ContactTag from "../../models/ContactTag";
 import Tag from "../../models/Tag";
 import Whatsapp from "../../models/Whatsapp";
-import ContactWallet from "../../models/ContactWallet";
-import User from "../../models/User";
 import ShowContactService from "./ShowContactService";
-import SyncContactWalletsAndPersonalTagsService from "./SyncContactWalletsAndPersonalTagsService";
 
 export type SituationType = 'Ativo' | 'Baixado' | 'Ex-Cliente' | 'Excluido' | 'Futuro' | 'Inativo';
 
@@ -92,45 +89,13 @@ const BulkUpdateContactsService = async ({ companyId, contactIds, data }: BulkUp
       await ContactTag.destroy({ where: { contactId: c.id } });
       const list = validTagIds.map(tagId => ({ tagId, contactId: c.id }));
       if (list.length > 0) await ContactTag.bulkCreate(list);
-
-      try {
-        await SyncContactWalletsAndPersonalTagsService({
-          companyId,
-          contactId: c.id,
-          source: "tags"
-        });
-      } catch (err) {
-        console.warn("[BulkUpdateContactsService] Falha ao sincronizar carteiras e tags pessoais", err);
-      }
     }
 
     const reloaded = await ShowContactService(c.id, companyId);
     updatedContacts.push(reloaded);
   }
 
-  // Atualiza carteiras em massa (fora do loop para eficiência)
-  if (Array.isArray(walletIds)) {
-    // Valida que os usuários existem na empresa
-    const validUsers = await User.findAll({
-      where: { id: { [Op.in]: walletIds }, companyId },
-      attributes: ['id']
-    });
-    const validUserIds = validUsers.map(u => u.id);
-
-    // Para cada contato, remove carteiras antigas e adiciona novas
-    for (const c of contacts) {
-      await ContactWallet.destroy({ where: { contactId: c.id } });
-
-      if (validUserIds.length > 0) {
-        const walletEntries = validUserIds.map(userId => ({
-          walletId: userId,
-          contactId: c.id,
-          companyId
-        }));
-        await ContactWallet.bulkCreate(walletEntries as any);
-      }
-    }
-  }
+  // Carteiras agora são representadas por tags pessoais (#) - não há mais tabela ContactWallet
 
   return updatedContacts;
 };

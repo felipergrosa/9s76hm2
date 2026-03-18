@@ -10,6 +10,16 @@ import App from "./App";
 
 window.Buffer = Buffer;
 
+// Suprimir erro não crítico do ResizeObserver que ocorre em desmontagem de componentes
+// Este erro não afeta a funcionalidade, apenas polui o console
+const resizeObserverErr = window.onerror;
+window.onerror = (message, source, lineno, colno, error) => {
+  if (message && message.toString().includes('ResizeObserver loop')) {
+    return true; // Suprimir erro
+  }
+  return resizeObserverErr ? resizeObserverErr(message, source, lineno, colno, error) : false;
+};
+
 ReactDOM.render(
 	<>
 		<CssBaseline />

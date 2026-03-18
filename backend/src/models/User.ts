@@ -70,6 +70,9 @@ class User extends Model<User> {
   @Column
   online: boolean;
 
+  @Column(DataType.DATE)
+  lastActivityAt: Date;
+
   @Default("00:00")
   @Column
   startWork: string;
@@ -185,9 +188,25 @@ class User extends Model<User> {
   @Column(DataType.DATE) // Added for password reset expiration
   passwordResetExpires: Date | null;
 
+  /**
+   * Tag pessoal única do usuário (obrigatória após migração Wallet→Tag).
+   * Array mantido para compatibilidade, mas sistema agora força 1 tag apenas.
+   * Use getPersonalTagId() para acessar a tag única.
+   */
   @Default([])
   @Column(DataType.ARRAY(DataType.INTEGER))
   allowedContactTags: number[];
+
+  /**
+   * Retorna a tag pessoal única do usuário.
+   * Após migração, cada usuário deve ter exatamente 1 tag pessoal.
+   */
+  public getPersonalTagId(): number | null {
+    if (Array.isArray(this.allowedContactTags) && this.allowedContactTags.length > 0) {
+      return this.allowedContactTags[0];
+    }
+    return null;
+  }
 
   @Default([])
   @Column(DataType.ARRAY(DataType.INTEGER))

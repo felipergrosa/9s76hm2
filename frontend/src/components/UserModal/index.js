@@ -128,7 +128,7 @@ const UserSchema = Yup.object().shape({
   password: Yup.string().min(5, "Parâmetros incompletos!").max(50, "Parâmetros acima do esperado!"),
   email: Yup.string().email("E-mail inválido").required("Required"),
   allHistoric: Yup.string().nullable(),
-  allowedContactTags: Yup.array().of(Yup.number()).nullable(),
+  allowedContactTags: Yup.array().of(Yup.number()).min(1, "Tag pessoal obrigatória").max(1, "Apenas 1 tag pessoal permitida").required("Tag pessoal obrigatória"),
   allowedConnectionIds: Yup.array().of(Yup.number()).nullable(),
   isPrivate: Yup.boolean().nullable(),
 });
@@ -189,22 +189,15 @@ const UserModal = ({ open, onClose, userId }) => {
   const { tags, loading: tagsLoading } = useTags(); // Usar o hook
   const { users: allUsers, loading: usersLoading } = useUsers(); // Lista de usuários para selecionar gerenciados
 
-  // DEBUG: Log das tags carregadas
+  // DEBUG removido - não logar tags
   useEffect(() => {
-    console.log("[UserModal DEBUG] Tags carregadas:", tags);
-    console.log("[UserModal DEBUG] Tags loading:", tagsLoading);
-    console.log("[UserModal DEBUG] Total tags:", tags?.length);
-    
     // Categorizar tags
     const personal = tags?.filter(t => t.name?.startsWith('#') && !t.name?.startsWith('##')) || [];
     const group = tags?.filter(t => t.name?.startsWith('##')) || [];
     const region = tags?.filter(t => t.name?.startsWith('###')) || [];
     const others = tags?.filter(t => !t.name?.startsWith('#')) || [];
     
-    console.log("[UserModal DEBUG] Tags pessoais (#):", personal);
-    console.log("[UserModal DEBUG] Tags grupo (##):", group);
-    console.log("[UserModal DEBUG] Tags região (###):", region);
-    console.log("[UserModal DEBUG] Tags outras:", others);
+    // Logs removidos
   }, [tags, tagsLoading]);
 
   useEffect(() => {
@@ -249,9 +242,6 @@ const UserModal = ({ open, onClose, userId }) => {
   };
 
   const handleSaveUser = async (values) => {
-    console.log("[UserModal] handleSaveUser chamado", values);
-    console.log("[UserModal] userId:", userId);
-    
     const uploadAvatar = async (file) => {
       try {
         const formData = new FormData();
@@ -333,7 +323,6 @@ const UserModal = ({ open, onClose, userId }) => {
           enableReinitialize={true}
           validationSchema={UserSchema}
           onSubmit={(values, actions) => {
-            console.log("[UserModal] onSubmit chamado", values);
             setTimeout(() => {
               handleSaveUser(values);
               actions.setSubmitting(false);
@@ -698,13 +687,8 @@ const UserModal = ({ open, onClose, userId }) => {
                                   const personalTags = tags.filter(t =>
                                     t.name && t.name.startsWith('#') && !t.name.startsWith('##')
                                   );
+                                  // DEBUG removido
                                   const selectedObjects = personalTags.filter(t => selectedIds.includes(t.id));
-                                  
-                                  // DEBUG: Log das tags no dropdown
-                                  console.log("[UserModal] Tags disponíveis:", tags?.length);
-                                  console.log("[UserModal] Tags pessoais filtradas:", personalTags?.length, personalTags?.map(t => t.name));
-                                  console.log("[UserModal] selectedIds:", selectedIds);
-                                  console.log("[UserModal] tagsLoading:", tagsLoading);
                                   
                                   // Avisar se há tags sem formato correto
                                   const invalidTags = tags.filter(t => 
@@ -714,34 +698,25 @@ const UserModal = ({ open, onClose, userId }) => {
                                   return (
                                     <>
                                       <Autocomplete
-                                        multiple
+                                        multiple={false}  // Apenas 1 tag pessoal
                                         options={personalTags}
-                                        value={selectedObjects}
+                                        value={selectedObjects[0] || null}  // Apenas primeiro valor
                                         getOptionLabel={(option) => option?.name || ""}
                                         isOptionEqualToValue={(option, value) => option.id === value.id}
-                                        onChange={(e, value) => form.setFieldValue("allowedContactTags", (value || []).map(v => v.id))}
+                                        onChange={(e, value) => form.setFieldValue("allowedContactTags", value ? [value.id] : [])}
                                         loading={tagsLoading}
                                         filterSelectedOptions
-                                        renderTags={(value, getTagProps) =>
-                                          value.map((option, index) => (
-                                            <Chip
-                                              {...getTagProps({ index })}
-                                              key={option.id}
-                                              label={option.name}
-                                              style={{ backgroundColor: option.color || undefined, color: "#fff" }}
-                                            />
-                                          ))
-                                        }
                                         renderInput={(params) => (
                                           <TextField
                                             {...params}
                                             variant="outlined"
                                             margin="dense"
-                                            label="Tags Pessoais (Carteiras)"
-                                            placeholder="Selecione tags que começam com #"
+                                            label="Tag Pessoal (Carteira) *"
+                                            placeholder="Selecione uma tag que começa com #"
                                             fullWidth
+                                            required
                                             InputLabelProps={{ shrink: true }}
-                                            helperText={personalTags.length === 0 ? "⚠️ Nenhuma tag pessoal encontrada. Crie tags com # no início (ex: #João)" : ""}
+                                            helperText={personalTags.length === 0 ? "⚠️ Nenhuma tag pessoal encontrada. Crie tags com # no início (ex: #João)" : "Obrigatório - define quais contatos o usuário vê"}
                                           />
                                         )}
                                       />
@@ -967,11 +942,7 @@ const UserModal = ({ open, onClose, userId }) => {
                   className={classes.btnWrapper}
                   title={!canSave ? "Você não tem permissão para editar este perfil" : ""}
                   onClick={() => {
-                    console.log("[UserModal] Botão Salvar clicado");
-                    console.log("[UserModal] canSave:", canSave);
-                    console.log("[UserModal] isSubmitting:", isSubmitting);
-                    console.log("[UserModal] errors:", errors);
-                    console.log("[UserModal] touched:", touched);
+                    // Logs removidos
                   }}
                 >
                   {userId

@@ -34,11 +34,7 @@ const ToggleUseQueuesContactService = async ({
             "acceptAudioMessage",
             "urlPicture"
         ],
-        include: ["extraInfo",
-        {
-          association: "wallets",
-          attributes: ["id", "name"]
-        }]
+        include: ["extraInfo"]
     });
 
     return contact;

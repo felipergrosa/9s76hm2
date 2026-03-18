@@ -187,7 +187,32 @@ export function ContactForm ({ initialContact, onSave, onCancel }) {
                                     labelId="wallets-label"
                                     multiple
                                     value={values.wallets || []}
-                                    onChange={(e) => setFieldValue("wallets", e.target.value)}
+                                    onChange={(e) => {
+                                        const selectedUserIds = e.target.value;
+                                        setFieldValue("wallets", selectedUserIds);
+                                        
+                                        // Sincronizar com tags: converter usuários em tags pessoais
+                                        const currentTags = values.tags || [];
+                                        
+                                        // Pegar tags pessoais dos usuários selecionados
+                                        const selectedUsers = userOptions.filter(u => selectedUserIds.includes(u.id));
+                                        const personalTagsToAdd = selectedUsers
+                                            .map(u => u.allowedContactTags?.[0])
+                                            .filter(Boolean);
+                                        
+                                        // Tags pessoais de usuários que foram removidos
+                                        const removedUsers = userOptions.filter(u => 
+                                            (values.wallets || []).includes(u.id) && !selectedUserIds.includes(u.id)
+                                        );
+                                        const tagsToRemove = removedUsers
+                                            .map(u => u.allowedContactTags?.[0])
+                                            .filter(Boolean);
+                                        
+                                        // Atualizar tags
+                                        const newTags = [...currentTags, ...personalTagsToAdd]
+                                            .filter(t => !tagsToRemove.includes(t));
+                                        setFieldValue("tags", [...new Set(newTags)]);
+                                    }}
                                     label="Carteira (responsáveis)"
                                     renderValue={(selected) => {
                                         const ids = Array.isArray(selected) ? selected : [];

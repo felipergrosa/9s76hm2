@@ -62,11 +62,6 @@ export const checkPermission = (permission: string) => {
         return next();
       }
 
-      // Log detalhado para debugging
-      console.log(`[PERMISSÃO NEGADA] Usuário ${user.id} (${user.name || user.email}) tentou acessar: ${permission}`);
-      console.log(`[PERMISSÃO NEGADA] Perfil: ${user.profile}, Super: ${user.super}`);
-      console.log(`[PERMISSÃO NEGADA] Permissões do usuário:`, user.permissions);
-      
       throw new AppError(`ERR_NO_PERMISSION: ${permission}`, 403);
     } catch (err) {
       return next(err);
