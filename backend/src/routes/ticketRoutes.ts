@@ -17,7 +17,7 @@ ticketRoutes.get("/ticket/kanban", isAuth, checkPermission("kanban.view"), Ticke
 
 ticketRoutes.get("/ticketreport/reports", isAuth, checkPermission("reports.view"), TicketController.report);
 
-ticketRoutes.get("/tickets/u/:uuid", isAuth, checkPermission("tickets.view"), TicketController.showFromUUID);
+ticketRoutes.get("/tickets/u/:uuid", isAuth, TicketController.showFromUUID);
 
 ticketRoutes.post("/tickets", isAuth, checkPermission("tickets.create"), TicketController.store);
 
