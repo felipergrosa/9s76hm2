@@ -1,6 +1,7 @@
-import { Op, Sequelize } from "sequelize";
+import { Op, Sequelize, literal } from "sequelize";
 import Tag from "../../models/Tag";
 import TicketTag from "../../models/TicketTag";
+import ContactTag from "../../models/ContactTag";
 import removeAccents from "remove-accents";
 
 interface Request {
@@ -13,8 +14,18 @@ interface Request {
   userId?: number | string;
 }
 
+interface TagWithCount {
+  id: number;
+  name: string;
+  color: string;
+  kanban: number;
+  userId: number | null;
+  companyId: number;
+  contactCount: number;
+}
+
 interface Response {
-  tags: Tag[];
+  tags: TagWithCount[];
   count: number;
   hasMore: boolean;
 }
@@ -47,15 +58,12 @@ const ListService = async ({
             )
           },
           { color: { [Op.like]: `%${sanitizedSearchParam}%` } }
-          // { kanban: { [Op.like]: `%${searchParam}%` } }
         ]
       };
     }
 
     // Usuários não-admin veem apenas tags transacionais (sem #)
     // E apenas tags globais ou suas próprias tags
-    // EXCEÇÃO: Se tem permissão users.edit, vê todas (para poder atribuir a outros usuários)
-    
     if (profile !== "admin" && !userId) {
       whereCondition = {
         ...whereCondition,
@@ -82,10 +90,44 @@ const ListService = async ({
       order: [["name", "ASC"]],
     });
 
+    // ULTRALEVE: Buscar contagens de contatos para todas as tags em uma query só
+    const tagIds = tags.map(t => t.id);
+    let contactCounts: Map<number, number> = new Map();
+    
+    if (tagIds.length > 0) {
+      const counts = await ContactTag.findAll({
+        where: { 
+          tagId: { [Op.in]: tagIds },
+          companyId 
+        },
+        attributes: [
+          ["tagId", "tagId"],
+          [literal("COUNT(*)"), "count"]
+        ],
+        group: ["tagId"],
+        raw: true
+      });
+      
+      counts.forEach((row: any) => {
+        contactCounts.set(Number(row.tagId), Number(row.count));
+      });
+    }
+
+    // Adicionar contactCount a cada tag
+    const tagsWithCount: TagWithCount[] = tags.map(tag => ({
+      id: tag.id,
+      name: tag.name,
+      color: tag.color,
+      kanban: tag.kanban,
+      userId: tag.userId,
+      companyId: tag.companyId,
+      contactCount: contactCounts.get(tag.id) || 0
+    }));
+
     const hasMore = count > offset + tags.length;
 
     return {
-      tags,
+      tags: tagsWithCount,
       count,
       hasMore
     };
@@ -102,7 +144,6 @@ const ListService = async ({
             )
           },
           { color: { [Op.like]: `%${sanitizedSearchParam}%` } }
-          // { kanban: { [Op.like]: `%${searchParam}%` } }
         ]
       };
     }
@@ -114,7 +155,6 @@ const ListService = async ({
       }
     }
 
-    // console.log(whereCondition)
     const { count, rows: tags } = await Tag.findAndCountAll({
       where: { ...whereCondition, companyId, kanban },
       limit,
@@ -132,13 +172,48 @@ const ListService = async ({
         'name',
         'color',
         'kanban',
+        'userId',
+        'companyId'
       ],
     });
+
+    // ULTRALEVE: Buscar contagens para tags do kanban também
+    const tagIds = tags.map(t => t.id);
+    let contactCounts: Map<number, number> = new Map();
+    
+    if (tagIds.length > 0) {
+      const counts = await ContactTag.findAll({
+        where: { 
+          tagId: { [Op.in]: tagIds },
+          companyId 
+        },
+        attributes: [
+          ["tagId", "tagId"],
+          [literal("COUNT(*)"), "count"]
+        ],
+        group: ["tagId"],
+        raw: true
+      });
+      
+      counts.forEach((row: any) => {
+        contactCounts.set(Number(row.tagId), Number(row.count));
+      });
+    }
+
+    const tagsWithCount: TagWithCount[] = tags.map(tag => ({
+      id: tag.id,
+      name: tag.name,
+      color: tag.color,
+      kanban: tag.kanban,
+      userId: tag.userId,
+      companyId: tag.companyId,
+      contactCount: contactCounts.get(tag.id) || 0
+    }));
 
     const hasMore = count > offset + tags.length;
 
     return {
-      tags,
+      tags: tagsWithCount,
       count,
       hasMore
     };

@@ -381,6 +381,11 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
         responseMessage: responseType === 'standard' ? responseMessage : undefined,
         aiAgentId: responseType === 'ai' ? aiAgentId : undefined,
         tagIds: selectedTags.map((t) => t.id),
+        newStatus: newStatus || undefined,
+        queueId: selectedQueue || undefined,
+        userId: selectedUserId || undefined,
+        closeTicket: closeTicket || undefined,
+        addNote: addNote || undefined,
       };
 
       setProcessLog((prev) => [

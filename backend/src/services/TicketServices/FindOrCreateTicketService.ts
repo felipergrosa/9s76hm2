@@ -186,25 +186,10 @@ const FindOrCreateTicketService = async (
       order: [["id", "DESC"]]
     });
     
-    if (!ticket) {
-      // Verificar se existe ticket fechado para rastreabilidade
-      const closedTicket = await Ticket.findOne({
-        where: {
-          contactId: contact?.id,
-          companyId,
-          whatsappId: whatsapp.id,
-          status: "closed"
-        },
-        order: [["id", "DESC"]]
-      });
-      
-      if (closedTicket) {
-        logger.info(`[FindOrCreateTicket] Ticket fechado #${closedTicket.id} encontrado. Criando novo ticket para novo ciclo.`);
-      } else {
-        logger.info(`[FindOrCreateTicket] Nenhum ticket encontrado para contactId=${contact?.id}. Será criado novo.`);
-      }
-    } else {
+    if (ticket) {
       logger.info(`[FindOrCreateTicket] Ticket aberto encontrado: ${ticket.id} (status=${ticket.status}, userId=${ticket.userId}, queueId=${ticket.queueId})`);
+    } else {
+      logger.info(`[FindOrCreateTicket] Nenhum ticket aberto encontrado para contactId=${contact?.id}. Será criado novo ticket.`);
     }
   }
 
@@ -347,51 +332,6 @@ const FindOrCreateTicketService = async (
 
     return ticket
 
-  }
-
-  const timeCreateNewTicket = whatsapp.timeCreateNewTicket;
-
-  // timeCreateNewTicket NÃO se aplica a grupos — grupos sempre reutilizam o mesmo ticket
-  if (!ticket && !groupContact && timeCreateNewTicket !== 0) {
-
-    // @ts-ignore: Unreachable code error
-    if (timeCreateNewTicket !== 0 && timeCreateNewTicket !== "0") {
-      ticket = await Ticket.findOne({
-        where: {
-          updatedAt: {
-            [Op.between]: [
-              +sub(new Date(), {
-                minutes: Number(timeCreateNewTicket)
-              }),
-              +new Date()
-            ]
-          },
-          contactId: contact.id,
-          companyId,
-          whatsappId: whatsapp.id
-        },
-        order: [["updatedAt", "DESC"]]
-      });
-    }
-
-    if (ticket && ticket.status !== "nps") {
-      const oldStatus = ticket.status;
-      const newStatus = ticket.isGroup ? "group" : "pending";
-      (ticket as any)._skipHookEmit = true; // Evitar evento duplicado
-      await ticket.update({
-        // Grupos SEMPRE mantêm status "group" ao reabrir
-        status: newStatus,
-        unreadMessages,
-        companyId,
-        // queueId: timeCreateNewTicket === 0 ? null : ticket.queueId
-      });
-      // Emitir evento de mudança de status para real-time
-      if (oldStatus !== newStatus) {
-        ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, oldStatus, newStatus);
-      } else {
-        ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
-      }
-    }
   }
 
   if (!ticket) {

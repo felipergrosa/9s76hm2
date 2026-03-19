@@ -821,19 +821,43 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
-										<Field
-											as={TextField}
-											label="Valor Última Compra"
-											name="vlUltCompra"
-											variant="outlined"
-											margin="dense"
-											InputLabelProps={{
-												shrink: true,
+										<Field name="vlUltCompra">
+											{({ field, form }) => {
+												// Formata valor para exibição
+												const formatCurrency = (val) => {
+													if (!val || val === 0) return '';
+													return new Intl.NumberFormat('pt-BR', {
+														style: 'currency',
+														currency: 'BRL',
+														minimumFractionDigits: 2
+													}).format(val);
+												};
+												// Parse valor digitado
+												const parseCurrency = (val) => {
+													const numbers = String(val).replace(/\D/g, '');
+													if (!numbers) return 0;
+													return parseInt(numbers, 10) / 100;
+												};
+												return (
+													<TextField
+														name={field.name}
+														value={formatCurrency(field.value)}
+														onChange={(e) => {
+															const val = parseCurrency(e.target.value);
+															form.setFieldValue('vlUltCompra', val);
+														}}
+														label="Valor Última Compra"
+														variant="outlined"
+														margin="dense"
+														InputLabelProps={{
+															shrink: true,
+														}}
+														fullWidth
+														disabled={!canEditFields}
+													/>
+												);
 											}}
-											fullWidth
-											disabled={!canEditFields}
-											placeholder="R$ 0,00"
-										/>
+										</Field>
 									</Grid>
 									<Grid item xs={12} md={6}>
 										<Autocomplete
@@ -865,63 +889,43 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
-										<Autocomplete
-											freeSolo
-											options={regionOptions}
-											value={values.region || ''}
-											onChange={(e, newValue) => setFieldValue('region', newValue || '')}
-											onInputChange={(e, newInputValue) => setFieldValue('region', newInputValue)}
-											disabled={!canEditFields}
-											loading={regionLoading}
-											ListboxProps={{
-												onScroll: (event) => {
-													const listboxNode = event.currentTarget;
-													if (listboxNode.scrollTop + listboxNode.clientHeight >= listboxNode.scrollHeight - 20) {
-														loadMoreRegions();
-													}
-												}
+										<Field name="creditLimit">
+											{({ field, form }) => {
+												// Formata valor para exibição
+												const formatCurrency = (val) => {
+													if (!val || val === 0) return '';
+													return new Intl.NumberFormat('pt-BR', {
+														style: 'currency',
+														currency: 'BRL',
+														minimumFractionDigits: 2
+													}).format(val);
+												};
+												// Parse valor digitado
+												const parseCurrency = (val) => {
+													const numbers = String(val).replace(/\D/g, '');
+													if (!numbers) return 0;
+													return parseInt(numbers, 10) / 100;
+												};
+												return (
+													<TextField
+														name={field.name}
+														value={formatCurrency(field.value)}
+														onChange={(e) => {
+															const val = parseCurrency(e.target.value);
+															form.setFieldValue('creditLimit', val);
+														}}
+														label="Limite de Crédito"
+														variant="outlined"
+														margin="dense"
+														InputLabelProps={{
+															shrink: true,
+														}}
+														fullWidth
+														disabled={!canEditFields}
+													/>
+												);
 											}}
-											renderInput={(params) => (
-												<TextField
-													{...params}
-													label="Região"
-													variant="outlined"
-													margin="dense"
-													fullWidth
-													InputLabelProps={{ shrink: true }}
-												/>
-											)}
-										/>
-									</Grid>
-									<Grid item xs={12} md={6}>
-										<Field
-											as={TextField}
-											label="Data de Fundação"
-											name="foundationDate"
-											type="date"
-											InputLabelProps={{
-												shrink: true,
-											}}
-											variant="outlined"
-											margin="dense"
-											disabled={!canEditFields}
-											fullWidth
-										/>
-									</Grid>
-									<Grid item xs={12} md={6}>
-										<Field
-											as={TextField}
-											label="Limite de Crédito"
-											name="creditLimit"
-											InputLabelProps={{
-												shrink: true,
-											}}
-											variant="outlined"
-											margin="dense"
-											disabled={!canEditFields}
-											placeholder="Insira numeros"
-											fullWidth
-										/>
+										</Field>
 									</Grid>
 									<Grid item xs={12} md={6}>
 										<Autocomplete

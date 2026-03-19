@@ -322,11 +322,18 @@ const Tags = () => {
                           />
                         </TableCell>
                         <TableCell align="center">
-                          {tag?.contacts?.length}
+                          <Tooltip title={`${tag?.contactCount || 0} contatos`}>
+                            <Chip
+                              label={tag?.contactCount || 0}
+                              size="small"
+                              color={tag?.contactCount > 0 ? "primary" : "default"}
+                              style={{ fontWeight: 'bold' }}
+                            />
+                          </Tooltip>
                           <IconButton
                             size="small"
                             onClick={() => handleShowContacts(tag?.contacts, tag)}
-                            disabled={tag?.contacts?.length === 0}
+                            disabled={!tag?.contactCount}
                           >
                             <MoreHoriz />
                           </IconButton>

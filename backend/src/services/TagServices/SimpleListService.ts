@@ -1,5 +1,6 @@
-import { Op } from "sequelize";
+import { Op, literal } from "sequelize";
 import Tag from "../../models/Tag";
+import ContactTag from "../../models/ContactTag";
 
 interface Request {
   companyId: number;
@@ -9,13 +10,24 @@ interface Request {
   userId?: number | string;
 }
 
+// Interface de retorno estendida com contactCount
+interface TagWithCount {
+  id: number;
+  name: string;
+  color: string;
+  kanban: number;
+  userId: number | null;
+  companyId: number;
+  contactCount: number;
+}
+
 const ListService = async ({
   companyId,
   searchParam,
   kanban = 0,
   profile = "user",
   userId
-}: Request): Promise<Tag[]> => {
+}: Request): Promise<TagWithCount[]> => {
   let whereCondition: any = {};
 
   if (searchParam) {
@@ -47,7 +59,42 @@ const ListService = async ({
       attributes: ["id", "name", "color", "kanban", "userId", "companyId"]
     });
 
-    return tags;
+    // ULTRALEVE: Buscar contagens de contatos para todas as tags em uma query só
+    const tagIds = tags.map(t => t.id);
+    let contactCounts: Map<number, number> = new Map();
+    
+    if (tagIds.length > 0) {
+      const counts = await ContactTag.findAll({
+        where: { 
+          tagId: { [Op.in]: tagIds },
+          companyId 
+        },
+        attributes: [
+          ["tagId", "tagId"],
+          [literal("COUNT(*)"), "count"]
+        ],
+        group: ["tagId"],
+        raw: true
+      });
+      
+      // Criar mapa de contagem
+      counts.forEach((row: any) => {
+        contactCounts.set(Number(row.tagId), Number(row.count));
+      });
+    }
+
+    // Adicionar contactCount a cada tag
+    const tagsWithCount: TagWithCount[] = tags.map(tag => ({
+      id: tag.id,
+      name: tag.name,
+      color: tag.color,
+      kanban: tag.kanban,
+      userId: tag.userId,
+      companyId: tag.companyId,
+      contactCount: contactCounts.get(tag.id) || 0
+    }));
+
+    return tagsWithCount;
   } catch (err) {
     console.error("[SimpleListService] Erro ao buscar tags:", err);
     throw err;

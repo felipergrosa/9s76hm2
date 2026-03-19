@@ -1117,7 +1117,10 @@ export const update = async (
   });
 
   // Se usuário tem permissão contacts.edit, pode editar qualquer contato (bypass da restrição de carteira)
+  // 'user' já foi carregado anteriormente na linha 1080
   const canEditAnyContact = user ? hasPermission(user, "contacts.edit") : false;
+  
+  logger.info(`[Contacts.update] Usuário ${req.user.id} - permissões: ${JSON.stringify(user?.permissions)}, canEditAnyContact: ${canEditAnyContact}`);
 
   const contact = await UpdateContactService({
     contactData,

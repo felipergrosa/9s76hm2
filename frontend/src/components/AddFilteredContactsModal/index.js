@@ -39,6 +39,7 @@ import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
 import useAuth from "../../hooks/useAuth.js";
 import usePermissions from "../../hooks/usePermissions.js";
+import CurrencyInput from "../CurrencyInput";
 import { DateRangePicker } from 'materialui-daterange-picker';
 import { format, parseISO, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
 
@@ -135,13 +136,46 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
   ];
 
   // Helpers de formato/parsing BRL e edição inline
+  // Formata número para exibição R$
   const formatBRL0 = (n) => `R$ ${Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  
+  // Parser que remove símbolos e retorna número
   const parseCurrency = (s, max) => {
     if (s == null) return 0;
     const num = parseFloat(String(s).replace(/R\$?\s*/gi, '').replace(/\./g, '').replace(/,/g, '.'));
     if (isNaN(num)) return 0;
     if (typeof max === 'number') return Math.max(0, Math.min(num, max));
     return Math.max(0, num);
+  };
+  
+  // Máscara automática: aceita apenas números, formata como R$ enquanto digita
+  const formatCurrencyMask = (value) => {
+    // Remove tudo que não é número
+    const numbers = String(value).replace(/\D/g, '');
+    if (!numbers) return '';
+    
+    // Converte para número e divide por 100 para considerar centavos
+    const numericValue = parseInt(numbers, 10) / 100;
+    
+    // Formata como moeda brasileira
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(numericValue);
+  };
+  
+  // Extrai valor numérico da string formatada
+  const parseCurrencyMask = (formattedValue) => {
+    if (!formattedValue) return 0;
+    const cleaned = String(formattedValue)
+      .replace(/R\$/g, '')
+      .replace(/\./g, '')
+      .replace(/,/g, '.')
+      .trim();
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? 0 : num;
   };
 
   const [editMinCredit, setEditMinCredit] = useState(false);
@@ -305,7 +339,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
       }
       if (!companyId) return;
 
-      const { data } = await api.get("/contacts/segments");
+      const { data } = await api.get("/api/contacts/segments");
       const list = Array.isArray(data) ? data : (Array.isArray(data?.segments) ? data.segments : []);
       const normalized = list
         .map(s => (s == null ? "" : String(s).trim()))
@@ -331,7 +365,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
       }
       if (!companyId) return;
 
-      const { data } = await api.get("/contacts/empresas");
+      const { data } = await api.get("/api/contacts/empresas");
       const list = Array.isArray(data) ? data : (Array.isArray(data?.empresas) ? data.empresas : []);
       const normalized = list
         .map(e => (e == null ? "" : String(e).trim()))
@@ -1125,19 +1159,17 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                         <Box display="flex" justifyContent="space-between" alignItems="center" mt={-1}>
                           <Typography variant="caption" color="textSecondary">
                             {editMinCredit ? (
-                              <InputBase
+                              <CurrencyInput
                                 autoFocus
-                                defaultValue={values.minCreditLimit !== null ? Number(values.minCreditLimit) : ""}
-                                onBlur={(e) => {
-                                  const val = e.target.value.trim();
+                                value={values.minCreditLimit || 0}
+                                onBlur={(val) => {
                                   const maxAllowed = form.values.creditLimitNoMax ? 100000 : Number(form.values.maxCreditLimit || 100000);
-                                  let v = val === "" ? null : parseCurrency(val, maxAllowed);
+                                  let v = val === 0 ? null : val;
                                   if (v !== null && v > maxAllowed) v = maxAllowed;
                                   form.setFieldValue('minCreditLimit', v);
                                   setEditMinCredit(false);
                                 }}
-                                onKeyDown={(e)=>{ if(e.key==='Enter'){ e.currentTarget.blur(); } if(e.key==='Escape'){ setEditMinCredit(false);} }}
-                                style={{ width: 90 }}
+                                style={{ width: 110 }}
                               />
                             ) : (
                               <span style={{ cursor: 'pointer' }} onClick={() => setEditMinCredit(true)}>
@@ -1148,18 +1180,16 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             {values.creditLimitNoMax ? (
                               '∞'
                             ) : editMaxCredit ? (
-                              <InputBase
+                              <CurrencyInput
                                 autoFocus
-                                defaultValue={values.maxCreditLimit !== null ? Number(values.maxCreditLimit) : ""}
-                                onBlur={(e) => {
-                                  const val = e.target.value.trim();
-                                  let v = val === "" ? null : parseCurrency(val, 100000);
+                                value={values.maxCreditLimit || 0}
+                                onBlur={(val) => {
+                                  let v = val === 0 ? null : val;
                                   if (v !== null && v < Number(form.values.minCreditLimit || 0)) v = Number(form.values.minCreditLimit || 0);
                                   form.setFieldValue('maxCreditLimit', v);
                                   setEditMaxCredit(false);
                                 }}
-                                onKeyDown={(e)=>{ if(e.key==='Enter'){ e.currentTarget.blur(); } if(e.key==='Escape'){ setEditMaxCredit(false);} }}
-                                style={{ width: 90 }}
+                                style={{ width: 110 }}
                               />
                             ) : (
                               <span style={{ cursor: 'pointer' }} onClick={() => setEditMaxCredit(true)}>
@@ -1221,19 +1251,17 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                         <Box display="flex" justifyContent="space-between" alignItems="center" mt={-1}>
                           <Typography variant="caption" color="textSecondary">
                             {editMinVl ? (
-                              <InputBase
+                              <CurrencyInput
                                 autoFocus
-                                defaultValue={values.minVlUltCompra !== null ? Number(values.minVlUltCompra) : ""}
-                                onBlur={(e) => {
-                                  const val = e.target.value.trim();
+                                value={values.minVlUltCompra || 0}
+                                onBlur={(val) => {
                                   const maxAllowed = form.values.vlUltCompraNoMax ? 30000 : Number(form.values.maxVlUltCompra || 30000);
-                                  let v = val === "" ? null : parseCurrency(val, maxAllowed);
+                                  let v = val === 0 ? null : val;
                                   if (v !== null && v > maxAllowed) v = maxAllowed;
                                   form.setFieldValue('minVlUltCompra', v);
                                   setEditMinVl(false);
                                 }}
-                                onKeyDown={(e)=>{ if(e.key==='Enter'){ e.currentTarget.blur(); } if(e.key==='Escape'){ setEditMinVl(false);} }}
-                                style={{ width: 90 }}
+                                style={{ width: 110 }}
                               />
                             ) : (
                               <span style={{ cursor: 'pointer' }} onClick={() => setEditMinVl(true)}>
@@ -1244,18 +1272,16 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                             {values.vlUltCompraNoMax ? (
                               '∞'
                             ) : editMaxVl ? (
-                              <InputBase
+                              <CurrencyInput
                                 autoFocus
-                                defaultValue={values.maxVlUltCompra !== null ? Number(values.maxVlUltCompra) : ""}
-                                onBlur={(e) => {
-                                  const val = e.target.value.trim();
-                                  let v = val === "" ? null : parseCurrency(val, 30000);
+                                value={values.maxVlUltCompra || 0}
+                                onBlur={(val) => {
+                                  let v = val === 0 ? null : val;
                                   if (v !== null && v < Number(form.values.minVlUltCompra || 0)) v = Number(form.values.minVlUltCompra || 0);
                                   form.setFieldValue('maxVlUltCompra', v);
                                   setEditMaxVl(false);
                                 }}
-                                onKeyDown={(e)=>{ if(e.key==='Enter'){ e.currentTarget.blur(); } if(e.key==='Escape'){ setEditMaxVl(false);} }}
-                                style={{ width: 90 }}
+                                style={{ width: 110 }}
                               />
                             ) : (
                               <span style={{ cursor: 'pointer' }} onClick={() => setEditMaxVl(true)}>

@@ -472,19 +472,19 @@ const TicketActionButtonsCustom = ({ ticket, onSearchClick
                         </ButtonWithSpinner>
                     )}
                     {(ticket.status === "open" || ticket.status === "group") && !ticket.isGroup && [
-                        <IconButton key="close" className={classes.bottomButtonVisibilityIcon}>
+                        <IconButton key="close" className={classes.bottomButtonVisibilityIcon} onClick={handleCloseTicket}>
                             <Tooltip title={i18n.t("messagesList.header.buttons.resolve")}>
-                                <HighlightOffIcon onClick={handleCloseTicket} />
+                                <HighlightOffIcon />
                             </Tooltip>
                         </IconButton>,
-                        <IconButton key="return" className={classes.bottomButtonVisibilityIcon}>
+                        <IconButton key="return" className={classes.bottomButtonVisibilityIcon} onClick={(e) => handleUpdateTicketStatus(e, "pending", null)}>
                             <Tooltip title={i18n.t("tickets.buttons.returnQueue")}>
-                                <UndoIcon onClick={(e) => handleUpdateTicketStatus(e, "pending", null)} />
+                                <UndoIcon />
                             </Tooltip>
                         </IconButton>,
-                        <IconButton key="transfer" className={classes.bottomButtonVisibilityIcon}>
+                        <IconButton key="transfer" className={classes.bottomButtonVisibilityIcon} onClick={handleOpenTransferModal}>
                             <Tooltip title="Transferir Ticket">
-                                <SwapHorizOutlined onClick={handleOpenTransferModal} />
+                                <SwapHorizOutlined />
                             </Tooltip>
                         </IconButton>,
                         <MenuItem key="bot" className={classes.bottomButtonVisibilityIcon}>
