@@ -9,6 +9,7 @@ import AppError from "../../errors/AppError";
 import ShowTicketService from "./ShowTicketService";
 import UpdateTicketService from "./UpdateTicketService";
 import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
+import ContactTag from "../../models/ContactTag";
 import logger from "../../utils/logger";
 import { Op } from "sequelize";
 
@@ -216,10 +217,20 @@ const BulkProcessTicketsService = async (
             if (ticket.contactId) {
               const contact = await Contact.findByPk(ticket.contactId);
               if (contact) {
-                logger.info(`[BulkProcess] Contato ${contact.id} encontrado. Adicionando tags: ${JSON.stringify(tagIds)}`);
+                logger.info(`[BulkProcess] Adicionando ${tagIds.length} tags ao contato ${contact.id}`);
                 
                 // ADICIONAR tags sem limpar as existentes (comportamento correto)
-                await contact.$add('tags', tagIds);
+                // Usar ContactTag.bulkCreate em vez de $add para incluir companyId
+                
+                const contactTagsData = tagIds.map((tagId: number) => ({
+                  tagId,
+                  contactId: contact.id,
+                  companyId
+                }));
+                
+                await ContactTag.bulkCreate(contactTagsData, { 
+                  ignoreDuplicates: true  // Ignora se já existir (contactId + tagId único)
+                });
                 ticketResult.actions?.push(`${tagIds.length} tag(s) adicionada(s) ao contato`);
                 contactUpdated = true;
                 
@@ -252,8 +263,8 @@ const BulkProcessTicketsService = async (
               ticketResult.actions?.push('Erro: ticket sem contato');
             }
           } catch (error) {
-            logger.error(`[BulkProcess] Erro ao adicionar tags ao contato do ticket ${ticket.id}:`, error);
-            ticketResult.actions?.push('Erro ao adicionar tags ao contato');
+            logger.error(`[BulkProcess] Erro ao adicionar tags ao contato do ticket ${ticket.id}: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
+            ticketResult.actions?.push(`Erro ao adicionar tags ao contato: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
           }
         } else {
           logger.info(`[BulkProcess] Nenhuma tag para adicionar (tagIds: ${JSON.stringify(tagIds)})`);
