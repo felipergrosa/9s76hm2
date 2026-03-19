@@ -341,24 +341,19 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			}
 			
 			try {
-				// Buscar dados dos usuários específicos (endpoint pode ser acessado sem permissão de admin)
-				const walletData = [];
-				for (const userId of contact.wallets) {
-					try {
-						const { data } = await api.get(`/users/${userId}`);
-						if (data) {
-							walletData.push(data);
-						}
-					} catch (err) {
-						// Silencioso - usuário pode não ter permissão para ver detalhes
-					}
-				}
+				// Buscar dados dos usuários disponíveis (endpoint não requer permissão users.view)
+				const { data: availableUsers } = await api.get("/users/available");
+				
+				// Filtrar apenas os usuários que estão na carteira do contato
+				const walletData = availableUsers.filter(user => 
+					contact.wallets.includes(user.id)
+				);
 				
 				if (walletData.length > 0) {
 					setWalletUsers(walletData);
 				}
 			} catch (err) {
-				// Silencioso
+				// Silencioso - usuário pode não ter permissão
 			}
 		};
 		
