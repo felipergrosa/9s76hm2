@@ -81,12 +81,8 @@ const ListTicketsService = async ({
   // BackendPerfMonitor.start('ListTicketsService:Total');
   // BackendPerfMonitor.mark('ListTicketsService:Start', { searchParam, status, pageNumber });
   
-  // Cache: evita queries repetidas durante carregamento inicial (5 abas simultâneas)
-  const user = await withCache(
-    `user:${userId}:${companyId}`,
-    () => ShowUserService(userId, companyId),
-    60000 // 1 minuto
-  );
+  // Cache removido temporariamente para investigar erro de permissão
+  const user = await ShowUserService(userId, companyId);
 
   const showTicketAllQueues = user.allHistoric === "enabled";
   const showTicketWithoutQueue = user.allTicket === "enable";

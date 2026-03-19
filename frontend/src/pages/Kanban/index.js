@@ -169,8 +169,9 @@ const Kanban = () => {
     if (user.profile === "admin" || user.super || (user.managedUserIds && user.managedUserIds.length > 0)) {
       const fetchUsers = async () => {
         try {
-          const { data } = await api.get("/users", { params: { pageNumber: 1, pageSize: 1000 } });
-          let allowedUsers = data.users;
+          // Usa /users/list que não requer permissão users.view
+          const { data } = await api.get("/users/list");
+          let allowedUsers = data;
           if (user.profile !== "admin" && !user.super) {
             const permissions = user.managedUserIds || [];
             // permissions pode ser array de strings ou ints, converte para int
@@ -188,7 +189,7 @@ const Kanban = () => {
       };
       fetchUsers();
     }
-  }, [user]);
+  }, [user.profile, user.super, user.managedUserIds]);
 
   const jsonString = useMemo(() => user.queues.map(queue => queue.UserQueue.queueId), [user.queues]);
 
