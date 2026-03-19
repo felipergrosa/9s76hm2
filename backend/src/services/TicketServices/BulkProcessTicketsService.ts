@@ -210,26 +210,53 @@ const BulkProcessTicketsService = async (
         // 3. Adicionar tags ao CONTATO APENAS (não ao ticket)
         if (tagIds && tagIds.length > 0) {
           try {
+            logger.info(`[BulkProcess] Processando ${tagIds.length} tags para ticket ${ticket.id}, contactId: ${ticket.contactId}`);
+            
             // Tags vão APENAS para o contato, NÃO para o ticket
             if (ticket.contactId) {
               const contact = await Contact.findByPk(ticket.contactId);
               if (contact) {
-                await contact.$set('tags', []);
+                logger.info(`[BulkProcess] Contato ${contact.id} encontrado. Adicionando tags: ${JSON.stringify(tagIds)}`);
+                
+                // ADICIONAR tags sem limpar as existentes (comportamento correto)
                 await contact.$add('tags', tagIds);
                 ticketResult.actions?.push(`${tagIds.length} tag(s) adicionada(s) ao contato`);
                 contactUpdated = true;
                 
-                // Emitir evento de atualização do contato
+                logger.info(`[BulkProcess] Tags adicionadas com sucesso ao contato ${contact.id}`);
+                
+                // Emitir evento de atualização do contato com tags atualizadas
+                const contactWithTags = await Contact.findByPk(contact.id, {
+                  include: [
+                    {
+                      association: "tags",
+                      attributes: ["id", "name", "color", "kanban"]
+                    }
+                  ]
+                });
+                
+                logger.info(`[BulkProcess] Contato recarregado com ${contactWithTags?.tags?.length || 0} tags`);
+                
                 io.of(`/workspace-${companyId}`).emit(`company-${companyId}-contact`, {
                   action: "update",
-                  contact: contact
+                  contact: contactWithTags
                 });
+                
+                logger.info(`[BulkProcess] Evento socket emitido para contato ${contact.id}`);
+              } else {
+                logger.warn(`[BulkProcess] Contato ${ticket.contactId} não encontrado para ticket ${ticket.id}`);
+                ticketResult.actions?.push('Erro: contato não encontrado');
               }
+            } else {
+              logger.warn(`[BulkProcess] Ticket ${ticket.id} não tem contactId`);
+              ticketResult.actions?.push('Erro: ticket sem contato');
             }
           } catch (error) {
             logger.error(`[BulkProcess] Erro ao adicionar tags ao contato do ticket ${ticket.id}:`, error);
             ticketResult.actions?.push('Erro ao adicionar tags ao contato');
           }
+        } else {
+          logger.info(`[BulkProcess] Nenhuma tag para adicionar (tagIds: ${JSON.stringify(tagIds)})`);
         }
 
         // 4. Atualizar status/fila/usuário
