@@ -1,6 +1,5 @@
-import { Op, Sequelize } from "sequelize";
+import { Op } from "sequelize";
 import Tag from "../../models/Tag";
-import Contact from "../../models/Contact";
 
 interface Request {
   companyId: number;
@@ -41,30 +40,11 @@ const ListService = async ({
   }
 
   try {
+    // Query otimizada: busca tags sem incluir todos os contatos
     const tags = await Tag.findAll({
       where: { ...whereCondition, companyId, kanban },
       order: [["name", "ASC"]],
-      include: [
-        {
-          model: Contact,
-          as: "contacts"
-        }
-      ],
-      attributes: {
-        exclude: ["createdAt", "updatedAt"],
-        include: [
-          [Sequelize.fn("COUNT", Sequelize.col("contacts.id")), "contactsCount"]
-        ]
-      },
-      group: [
-        "Tag.id",
-        "contacts.ContactTag.tagId",
-        "contacts.ContactTag.contactId",
-        "contacts.ContactTag.companyId",
-        "contacts.ContactTag.createdAt",
-        "contacts.ContactTag.updatedAt",
-        "contacts.id"
-      ]
+      attributes: ["id", "name", "color", "kanban", "userId", "companyId"]
     });
 
     return tags;

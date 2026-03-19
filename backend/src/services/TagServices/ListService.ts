@@ -1,10 +1,7 @@
-import { Op, literal, fn, col, Sequelize } from "sequelize";
+import { Op, Sequelize } from "sequelize";
 import Tag from "../../models/Tag";
-import ContactTag from "../../models/ContactTag";
 import TicketTag from "../../models/TicketTag";
-
 import removeAccents from "remove-accents";
-import Contact from "../../models/Contact";
 
 interface Request {
   companyId: number;
@@ -73,23 +70,13 @@ const ListService = async ({
     const { count, rows: tags } = await Tag.findAndCountAll({
       where: { ...whereCondition, companyId, kanban },
       limit,
-      include: [
-        {
-          // model: ContactTag,
-          // as: "contactTags",
-          // include: [
-          //   {
-          model: Contact,
-          as: "contacts",
-          //   }
-          // ]
-        },
-      ],
       attributes: [
         'id',
         'name',
         'color',
         'kanban',
+        'userId',
+        'companyId'
       ],
       offset,
       order: [["name", "ASC"]],
