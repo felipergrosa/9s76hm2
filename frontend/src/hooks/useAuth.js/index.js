@@ -41,24 +41,38 @@ const useAuth = () => {
       const status = error?.response?.status;
       const isAuthRefreshCall = originalRequest?.url?.includes("/auth/refresh_token");
       
-      if (status === 401 && !originalRequest._retry && !isAuthRefreshCall) {
+      // Evita múltiplas tentativas de refresh simultâneas
+      if (status === 401 && !originalRequest._retry && !isAuthRefreshCall && !window._isRefreshing) {
         originalRequest._retry = true;
+        window._isRefreshing = true;
+        
         try {
           const { data } = await api.post("/auth/refresh_token");
           if (data?.token) {
             localStorage.setItem("token", JSON.stringify(data.token));
             api.defaults.headers.Authorization = `Bearer ${data.token}`;
+            window._isRefreshing = false;
             return api(originalRequest);
           }
         } catch (e) {
-          // queda para logout abaixo
+          console.error("[useAuth] Falha no refresh token:", e);
+          window._isRefreshing = false;
         }
       }
+      
       if (status === 401) {
         localStorage.removeItem("token");
+        localStorage.removeItem("user");
         api.defaults.headers.Authorization = undefined;
         setIsAuth(false);
+        setUser({});
+        
+        // Redireciona para login apenas se não estiver já na página de login
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
       }
+      
       return Promise.reject(error);
     }
   );
