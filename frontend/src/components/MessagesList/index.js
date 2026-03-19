@@ -2005,6 +2005,9 @@ const MessagesList = ({
     let currentTicket = message.ticketId;
 
     if (lastTicket !== currentTicket && lastTicket !== undefined) {
+      // Obter nome do usuário que atendeu o ticket
+      const userName = message?.ticket?.user?.name || user?.name || "Sem Atendente";
+      
       if (message?.ticket?.queue) {
         return (
           <span
@@ -2016,7 +2019,7 @@ const MessagesList = ({
                 className={classes.currentTicktText}
                 style={{ color: message?.ticket?.queue?.color || "#666" }}
               >
-                #{i18n.t("ticketsList.called")} {message?.ticketId} - {message?.ticket?.queue?.name}
+                #{message?.ticketId} | {message?.ticket?.queue?.name} | {userName}
               </div>
               <div className={classes.currentTickSubText}>
                 {format(parseISO(message?.ticket?.createdAt || message.createdAt), "dd/MM/yy - HH'h'mm")}
@@ -2036,7 +2039,7 @@ const MessagesList = ({
                 className={classes.currentTicktText}
                 style={{ color: "#666" }}
               >
-                #{i18n.t("ticketsList.called")} {message.ticketId} - {i18n.t("ticketsList.noQueue")}
+                #{message.ticketId} | {i18n.t("ticketsList.noQueue")} | {userName}
               </div>
               <div className={classes.currentTickSubText}>
                 {format(parseISO(message?.ticket?.createdAt || message.createdAt), "dd/MM/yyyy HH:mm")}

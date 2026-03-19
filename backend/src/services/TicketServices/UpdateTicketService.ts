@@ -236,76 +236,9 @@ const UpdateTicketService = async ({
         }
       }
 
-    // Grupos NUNCA são fechados - eles permanecem sempre abertos na aba "Grupos"
-    if (ticket.isGroup) {
-      // Grupos não recebem mensagem de encerramento
-    } else if (((!isNil(user?.farewellMessage) && user?.farewellMessage !== "") ||
-        (!isNil(complationMessage) && complationMessage !== "")) &&
-        (sendFarewellMessage || sendFarewellMessage === undefined)) {
-
-        let body: any
-
-        if ((ticket.status !== 'pending') || (ticket.status === 'pending' && settings.sendFarewellWaitingTicket === 'enabled')) {
-          if (!isNil(user) && !isNil(user?.farewellMessage) && user?.farewellMessage !== "") {
-            body = `\u200e ${user.farewellMessage}`;
-          } else {
-            body = `\u200e ${complationMessage}`;
-          }
-          if (ticket.channel === "whatsapp" && (!ticket.isGroup || groupAsTicket === "enabled") && ticket.whatsapp.status === 'CONNECTED') {
-            const sentMessage = await SendWhatsAppMessage({ body, ticket, isForwarded: false });
-
-            await verifyMessage(sentMessage, ticket, ticket.contact);
-
-          }
-
-          if (["facebook", "instagram"].includes(ticket.channel) && (!ticket.isGroup || groupAsTicket === "enabled")) {
-            const sentMessage = await sendFaceMessage({ body, ticket });
-
-            // await verifyMessageFace(sentMessage, body, ticket, ticket.contact );
-          }
-        }
-      }
-
-      ticketTraking.finishedAt = moment().toDate();
-      ticketTraking.closedAt = moment().toDate();
-      ticketTraking.whatsappId = ticket?.whatsappId;
-      ticketTraking.userId = ticket.userId;
-
-      // queueId = null;
-      // userId = null;
-      //loga fim de atendimento
-      await CreateLogTicketService({
-        userId,
-        queueId: ticket.queueId,
-        ticketId,
-        type: "closed"
-      });
-
-      // try {
-      //   // Retrieve tagIds associated with the provided ticketId from TicketTags
-      //   const ticketTags = await TicketTag.findAll({ where: { ticketId } });
-      //   const tagIds = ticketTags.map((ticketTag) => ticketTag.tagId);
-
-      //   // Find the tagIds with kanban = 1 in the Tags table
-      //   const tagsWithKanbanOne = await Tag.findAll({
-      //     where: {
-      //       id: tagIds,
-      //       kanban: 1,
-      //     },
-      //   });
-
-      //   // Remove the tagIds with kanban = 1 from TicketTags
-      //   const tagIdsWithKanbanOne = tagsWithKanbanOne.map((tag) => tag.id);
-      //   if (tagIdsWithKanbanOne)
-      //     await TicketTag.destroy({ where: { ticketId, tagId: tagIdsWithKanbanOne } });
-      // } catch (error) {
-      //   Sentry.captureException(error);
-      // }
-
-      await ticketTraking.save();
-
-      // Grupos NUNCA são fechados
+    // Grupos NUNCA são fechados
       if (!ticket.isGroup) {
+        // Primeiro atualiza o status para closed
         await ticket.update({
           status: "closed",
           lastFlowId: null,
@@ -313,9 +246,61 @@ const UpdateTicketService = async ({
           hashFlowId: null,
         });
 
-        // CQRS: Emitir evento via TicketEventBus
+        // Emitir evento IMEDIATAMENTE após o update para garantir real-time
         ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, oldStatus);
-        logger.debug(`[UpdateTicketService] CQRS delete emitido (closed) ticket=${ticket.id}`)
+        logger.debug(`[UpdateTicketService] CQRS delete emitido IMEDIATAMENTE (closed) ticket=${ticket.id}`);
+
+        // Salvar informações de tracking e log
+        ticketTraking.finishedAt = moment().toDate();
+        ticketTraking.closedAt = moment().toDate();
+        ticketTraking.whatsappId = ticket?.whatsappId;
+        ticketTraking.userId = ticket.userId;
+
+        // Loga fim de atendimento
+        await CreateLogTicketService({
+          userId,
+          queueId: ticket.queueId,
+          ticketId,
+          type: "closed"
+        });
+
+        await ticketTraking.save();
+
+        // Depois envia mensagem de despedida (se aplicável)
+        if (((!isNil(user?.farewellMessage) && user?.farewellMessage !== "") ||
+            (!isNil(complationMessage) && complationMessage !== "")) &&
+            (sendFarewellMessage || sendFarewellMessage === undefined)) {
+
+          let body: any
+
+          if ((ticket.status !== 'pending') || (ticket.status === 'pending' && settings.sendFarewellWaitingTicket === 'enabled')) {
+            if (!isNil(user) && !isNil(user?.farewellMessage) && user?.farewellMessage !== "") {
+              body = `\u200e ${user.farewellMessage}`;
+            } else {
+              body = `\u200e ${complationMessage}`;
+            }
+            if (ticket.channel === "whatsapp" && (!ticket.isGroup || groupAsTicket === "enabled") && ticket.whatsapp.status === 'CONNECTED') {
+              try {
+                const sentMessage = await SendWhatsAppMessage({ body, ticket, isForwarded: false });
+                await verifyMessage(sentMessage, ticket, ticket.contact);
+                logger.debug(`[UpdateTicketService] Mensagem de despedida enviada com sucesso ticket=${ticket.id}`);
+              } catch (err) {
+                logger.error(`[UpdateTicketService] Erro ao enviar mensagem de despedida ticket=${ticket.id}:`, err);
+                // Não falha o fechamento do ticket se a mensagem de despedida falhar
+              }
+            }
+
+            if (["facebook", "instagram"].includes(ticket.channel) && (!ticket.isGroup || groupAsTicket === "enabled")) {
+              try {
+                const sentMessage = await sendFaceMessage({ body, ticket });
+                logger.debug(`[UpdateTicketService] Mensagem de despedida Facebook/Instagram enviada ticket=${ticket.id}`);
+              } catch (err) {
+                logger.error(`[UpdateTicketService] Erro ao enviar mensagem de despedida Facebook/Instagram ticket=${ticket.id}:`, err);
+                // Não falha o fechamento do ticket se a mensagem de despedida falhar
+              }
+            }
+          }
+        }
       } else {
         logger.info(`[UpdateTicketService] Grupo ${ticket.id} - fechamento ignorado, grupo permanece aberto`);
       }
