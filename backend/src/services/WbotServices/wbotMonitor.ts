@@ -928,6 +928,14 @@ const wbotMonitor = async (
             
             // Se falhar E passou mais de 5 minutos OU 3 detecções consecutivas = reconectar
             if (timeSinceLastActivity > ANDROID_FORCE_RECONNECT_THRESHOLD || consecutiveStalledDetections >= 3) {
+              // PROTEÇÃO: Verificar se já está tentando reconectar para evitar loop
+              const { getWbotIsReconnecting } = require("../../libs/wbot");
+              if (getWbotIsReconnecting(whatsapp.id)) {
+                logger.warn(`[AndroidSync] Sessão ${whatsapp.id} já está em processo de reconexão. Ignorando solicitação duplicada.`);
+                consecutiveStalledDetections = 0;
+                return;
+              }
+              
               logger.error(`[AndroidSync] STALLED CONNECTION CRÍTICA detectada para whatsappId=${whatsapp.id}. Forçando RECONEXÃO IMEDIATA.`);
               
               // Forçar reconexão via circuit breaker (delay curto para Android)

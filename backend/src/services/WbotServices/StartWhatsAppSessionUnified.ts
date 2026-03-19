@@ -55,6 +55,10 @@ export const StartWhatsAppSessionUnified = async (
 
       // se retornou null, é pq houve algum erro na inicialização
       if (!wbot) {
+        logger.error(`[StartSession] initWASocket retornou null para whatsappId=${whatsapp.id}, limpando flag de reconexão`);
+        // LIMPAR FLAG de reconexão para permitir novas tentativas
+        const { clearReconnectingFlag } = await import("../../libs/wbot");
+        clearReconnectingFlag(whatsapp.id);
         return;
       }
 

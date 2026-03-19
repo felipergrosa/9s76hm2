@@ -127,7 +127,7 @@ export const getWbotIsReconnecting = (whatsappId: number): boolean => {
 };
 
 // Helper para limpar flag de reconexão (usado em timeout e quando conexão estabelecida)
-const clearReconnectingFlag = (whatsappId: number) => {
+export const clearReconnectingFlag = (whatsappId: number) => {
   reconnectingWhatsapps.delete(whatsappId);
   logger.debug(`[wbot] Flag de reconexão limpa para whatsappId=${whatsappId}`);
 };
