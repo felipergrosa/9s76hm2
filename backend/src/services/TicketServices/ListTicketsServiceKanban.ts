@@ -292,22 +292,18 @@ const ListTicketsServiceKanban = async ({
       // Inclui o próprio userId + IDs dos usuários gerenciados
       const allowedUserIds = [Number(userId), ...walletResult.managedUserIds];
 
-      const orConditions: any[] = [
-        { contactId: { [Op.in]: allowedContactIds.length > 0 ? allowedContactIds : [0] } },
-        { userId: { [Op.in]: allowedUserIds } }
-      ];
-
-      if (walletResult.managedUserIds && walletResult.managedUserIds.length > 0) {
-        orConditions.push({ userId: null });
-      }
-
+      // Lógica: contato tem PELO MENOS UMA tag pessoal do usuário
+      // - Tickets com userId permitido: pode ver
+      // - Tickets com contactId permitido: pode ver
       whereCondition = {
         [Op.and]: [
           whereCondition,
           {
-            [Op.or]: orConditions
+            [Op.or]: [
+              { userId: { [Op.in]: allowedUserIds } },
+              { contactId: { [Op.in]: allowedContactIds.length > 0 ? allowedContactIds : [0] } }
+            ]
           }
-
         ]
       } as any;
     } else if (showAll === "true") {

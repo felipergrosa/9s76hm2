@@ -190,21 +190,36 @@ const CreateContactService = async ({
       return true;
     }
 
-    // Verificar se usuário tem tag pessoal configurada
-    const userTagId = (user as any).getPersonalTagId?.() || 
-                      (Array.isArray((user as any).allowedContactTags) && (user as any).allowedContactTags.length > 0 
-                        ? (user as any).allowedContactTags[0] 
-                        : null);
+    // Verificar se usuário tem tags pessoais configuradas
+    const userAllowedContactTags = (user as any).allowedContactTags || [];
     
-    if (userTagId) {
-      // Contato deve ter a tag pessoal do usuário
-      const hasTag = await ContactTag.findOne({
+    if (userAllowedContactTags.length > 0) {
+      // Filtrar apenas tags pessoais (começam com # mas não com ##)
+      const personalTags = await Tag.findAll({
         where: {
-          contactId,
-          tagId: userTagId
-        }
+          id: { [Op.in]: userAllowedContactTags },
+          companyId,
+          name: {
+            [Op.and]: [
+              { [Op.like]: "#%" },
+              { [Op.notLike]: "##%" }
+            ]
+          }
+        },
+        attributes: ["id"]
       });
-      return !!hasTag;
+      const personalTagIds = personalTags.map(t => t.id);
+      
+      if (personalTagIds.length > 0) {
+        // Contato deve ter PELO MENOS UMA das tags pessoais do usuário
+        const hasAnyTag = await ContactTag.findOne({
+          where: {
+            contactId,
+            tagId: { [Op.in]: personalTagIds }
+          }
+        });
+        return !!hasAnyTag;
+      }
     }
 
     // Usuário sem tag pessoal pode ver todos os contatos

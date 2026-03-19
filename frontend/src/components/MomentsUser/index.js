@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useContext, useMemo } from "react";
+import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
 import { makeStyles } from "@material-ui/core/styles";
+import clsx from "clsx";
 import {
   Paper,
   Typography,
@@ -18,6 +19,7 @@ import {
   DialogContentText,
   DialogActions,
   Button,
+  IconButton,
 } from "@material-ui/core";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import api from "../../services/api";
@@ -36,6 +38,8 @@ import {
 import ContactAvatar from "../ContactAvatar";
 import { grey, green, red, blue, orange } from "@material-ui/core/colors";
 import { getBackendUrl } from "../../config";
+import MarkdownWrapper from "../MarkdownWrapper";
+import { Eye as VisibilityIcon, X as CloseIcon } from "lucide-react";
 
 const backendUrl = getBackendUrl();
 
@@ -218,6 +222,72 @@ const useStyles = makeStyles((theme) => ({
     height: 20,
     minWidth: 20,
   },
+  // Estilos para modal de espiar conversa
+  dialogTitle: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: theme.palette.primary.main,
+    color: "white",
+    paddingBottom: theme.spacing(1),
+  },
+  closeButton: {
+    color: "white",
+  },
+  messagesContainer: {
+    height: "60vh",
+    maxHeight: "600px",
+    overflowY: "auto",
+    padding: theme.spacing(2),
+    scrollBehavior: "smooth",
+  },
+  messagesHeader: {
+    display: "flex",
+    alignItems: "center",
+    padding: theme.spacing(1, 2),
+    backgroundColor: theme.palette.grey[100],
+  },
+  messageAvatar: {
+    marginRight: theme.spacing(1),
+  },
+  messageItem: {
+    padding: theme.spacing(1),
+    margin: theme.spacing(1, 0),
+    borderRadius: theme.spacing(1),
+    maxWidth: "80%",
+    position: "relative",
+  },
+  fromMe: {
+    backgroundColor: "#dcf8c6",
+    marginLeft: "auto",
+  },
+  fromThem: {
+    backgroundColor: "#f5f5f5",
+  },
+  messageTime: {
+    fontSize: "0.75rem",
+    color: grey[500],
+    position: "absolute",
+    bottom: "2px",
+    right: "8px",
+  },
+  messageText: {
+    marginBottom: theme.spacing(2),
+    wordBreak: "break-word",
+  },
+  emptyMessages: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    height: "100%",
+    color: grey[500],
+  },
+  loadingMessages: {
+    display: "flex",
+    justifyContent: "center",
+    padding: theme.spacing(3),
+  },
 }));
 
 const MomentsUser = ({ onPanStart }) => {
@@ -226,11 +296,18 @@ const MomentsUser = ({ onPanStart }) => {
   const { user, socket } = useContext(AuthContext);
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const isMounted = useRef(true);
 
   // Estados para modal de confirmação de transferência
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
+
+  // Estados para modal de espiar conversa
+  const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
+  const [ticketMessages, setTicketMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [selectedTicketForView, setSelectedTicketForView] = useState(null);
 
   // Manipulador seguro para iniciar o arrasto apenas no cabeçalho
   const handleHeaderPointerDown = (e) => {
@@ -243,6 +320,9 @@ const MomentsUser = ({ onPanStart }) => {
 
   useEffect(() => {
     fetchTickets();
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -421,6 +501,31 @@ const MomentsUser = ({ onPanStart }) => {
     setSelectedTicket(null);
   };
 
+  // Função para buscar mensagens do ticket
+  const fetchTicketMessages = async (ticketId) => {
+    if (!ticketId) return;
+
+    setLoadingMessages(true);
+    try {
+      const { data } = await api.get(`/messages/${ticketId}`);
+      if (isMounted.current) {
+        setTicketMessages(data.messages);
+      }
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  // Handler para abrir o modal de mensagens
+  const handleOpenMessageDialog = (e, ticket) => {
+    e.stopPropagation();
+    setSelectedTicketForView(ticket);
+    setOpenTicketMessageDialog(true);
+    fetchTicketMessages(ticket.id);
+  };
+
   const renderTicketCard = (ticket) => (
     <Card key={ticket.id} className={classes.ticketCard}>
       <CardActionArea
@@ -460,8 +565,14 @@ const MomentsUser = ({ onPanStart }) => {
               </div>
             </div>
             {canAccessTicket(ticket) && (
-              <Tooltip title="Visualizar">
-                <Visibility className={classes.actionButton} fontSize="small" />
+              <Tooltip title="Espiar Conversa">
+                <IconButton
+                  size="small"
+                  onClick={(e) => handleOpenMessageDialog(e, ticket)}
+                  style={{ padding: 4, color: blue[700] }}
+                >
+                  <VisibilityIcon size={20} />
+                </IconButton>
               </Tooltip>
             )}
           </div>
@@ -639,6 +750,85 @@ const MomentsUser = ({ onPanStart }) => {
             {isTransferring ? 'Transferindo...' : 'Sim, Assumir'}
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Modal de espiar conversa */}
+      <Dialog
+        open={openTicketMessageDialog}
+        onClose={() => setOpenTicketMessageDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle disableTypography className={classes.dialogTitle}>
+          <Typography variant="h6">
+            Espiando a conversa
+          </Typography>
+          <IconButton
+            aria-label="close"
+            className={classes.closeButton}
+            onClick={() => setOpenTicketMessageDialog(false)}
+          >
+            <CloseIcon size={24} />
+          </IconButton>
+        </DialogTitle>
+
+        <div className={classes.messagesHeader}>
+          <ContactAvatar
+            contact={selectedTicketForView?.contact}
+            className={classes.messageAvatar}
+          />
+          <div>
+            <Typography variant="subtitle1">
+              {selectedTicketForView?.contact?.name}
+            </Typography>
+            <Typography variant="caption" color="textSecondary">
+              {selectedTicketForView?.whatsapp?.name || selectedTicketForView?.channel}
+            </Typography>
+          </div>
+        </div>
+
+        <Divider />
+
+        <DialogContent className={classes.messagesContainer}>
+          {loadingMessages ? (
+            <div className={classes.loadingMessages}>
+              <Typography>Carregando mensagens...</Typography>
+            </div>
+          ) : ticketMessages.length === 0 ? (
+            <div className={classes.emptyMessages}>
+              <Visibility fontSize="large" />
+              <Typography variant="body1">
+                {i18n.t("ticketsList.noMessages")}
+              </Typography>
+            </div>
+          ) : (
+            ticketMessages.map((message) => (
+              <Paper
+                key={message.id}
+                className={clsx(
+                  classes.messageItem,
+                  message.fromMe ? classes.fromMe : classes.fromThem
+                )}
+                elevation={0}
+              >
+                <Typography className={classes.messageText}>
+                  {message.body?.includes('data:image/png;base64') ? (
+                    <MarkdownWrapper>Localização</MarkdownWrapper>
+                  ) : message.body?.includes('BEGIN:VCARD') ? (
+                    <MarkdownWrapper>Contato</MarkdownWrapper>
+                  ) : message.body?.includes('fb.me') ? (
+                    <MarkdownWrapper>Clique de Anúncio</MarkdownWrapper>
+                  ) : (
+                    <MarkdownWrapper>{message.body}</MarkdownWrapper>
+                  )}
+                </Typography>
+                <Typography variant="caption" className={classes.messageTime}>
+                  {format(parseISO(message.createdAt), "HH:mm")}
+                </Typography>
+              </Paper>
+            ))
+          )}
+        </DialogContent>
       </Dialog>
     </div>
   );

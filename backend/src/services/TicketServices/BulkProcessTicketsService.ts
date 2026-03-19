@@ -32,9 +32,6 @@ interface BulkProcessOptions {
   addNote?: string;
   queueId?: number;
   assignedUserId?: number; // ID do usuário para atribuir os tickets
-  walletId?: number; // Deprecated: usar walletIds
-  walletIds?: number[]; // Múltiplas carteiras
-  walletMode?: 'replace' | 'append'; // Modo de alteração de carteira
 }
 
 interface TicketProcessResult {
@@ -71,8 +68,7 @@ const BulkProcessTicketsService = async (
     closeTicket,
     addNote,
     queueId,
-    assignedUserId,
-    walletId
+    assignedUserId
   } = options;
 
   const io = getIO();

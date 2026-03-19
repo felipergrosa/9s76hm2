@@ -102,19 +102,30 @@ const ListContactsService = async ({
   }
 
   // Filtro de segurança: tags permitidas do usuário (allowedContactTags)
-  // REGRA CORRETA: O contato deve ter PELO MENOS UMA das tags que o usuário possui.
-  // Exemplo: Usuário com [#FERNANDA, #REPRESENTANTES] vê contatos que tenham qualquer uma dessas tags.
+  // REGRA CORRETA: O contato deve ter PELO MENOS UMA das tags pessoais (#) do usuário.
+  // Exemplo: Usuário com [#FERNANDA] vê contatos que tenham #FERNANDA (podem ter outras tags também).
   // EXCEÇÃO: Admin não tem restrição de tags (vê todos os contatos)
   if (profile !== "admin" && Array.isArray(allowedContactTags) && allowedContactTags.length > 0) {
-    const allowedTags = await Tag.findAll({
-      where: { id: { [Op.in]: allowedContactTags }, companyId },
+    // Filtrar apenas tags pessoais (começam com # mas não com ##)
+    const personalTags = await Tag.findAll({
+      where: { 
+        id: { [Op.in]: allowedContactTags }, 
+        companyId,
+        name: {
+          [Op.and]: [
+            { [Op.like]: "#%" },
+            { [Op.notLike]: "##%" }
+          ]
+        }
+      },
       attributes: ["id"]
     });
-    const allowedTagIds = allowedTags.map(t => t.id);
-    if (allowedTagIds.length > 0) {
-      // Busca contatos que têm PELO MENOS UMA das tags
+    const personalTagIds = personalTags.map(t => t.id);
+    
+    if (personalTagIds.length > 0) {
+      // Busca contatos que têm PELO MENOS UMA das tags pessoais do usuário
       const contactsWithAnyTag = await ContactTag.findAll({
-        where: { tagId: { [Op.in]: allowedTagIds } },
+        where: { tagId: { [Op.in]: personalTagIds }, companyId },
         attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
         raw: true
       });

@@ -71,7 +71,8 @@ const ApplyUserPersonalTagService = async ({
       if (!existingContactTag) {
         await ContactTag.create({
           contactId,
-          tagId: tag.id
+          tagId: tag.id,
+          companyId
         });
         console.log(`[ApplyUserPersonalTag] Tag "${tag.name}" aplicada ao contato ${contactId}`);
       }

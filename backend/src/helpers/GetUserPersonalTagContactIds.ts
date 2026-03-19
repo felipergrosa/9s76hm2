@@ -89,18 +89,17 @@ const GetUserPersonalTagContactIds = async (
     };
   }
 
-  // Buscar contatos que têm TODAS as tags pessoais do usuário
-  const contactsWithAllTags = await ContactTag.findAll({
+  // Buscar contatos que têm PELO MENOS UMA das tags pessoais do usuário
+  const contactsWithAnyTag = await ContactTag.findAll({
     where: {
       tagId: { [Op.in]: personalTagIds },
       companyId
     },
-    attributes: ["contactId"],
-    group: ["contactId"],
-    having: literal(`COUNT(DISTINCT "tagId") = ${personalTagIds.length}`)
+    attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
+    raw: true
   });
 
-  const contactIds = contactsWithAllTags.map(ct => ct.contactId);
+  const contactIds = contactsWithAnyTag.map((ct: any) => Number(ct.contactId)).filter(Number.isInteger);
 
   return {
     hasWalletRestriction: true,

@@ -238,17 +238,23 @@ const useStyles = makeStyles((theme) => ({
 
   appBarSpacer: {
     minHeight: "48px",
+    [theme.breakpoints.down("sm")]: {
+      minHeight: "48px",
+    },
   },
   content: {
     flex: 1,
     overflow: "visible", position: "relative",
     width: "100%",
     maxWidth: "100%",
+    [theme.breakpoints.down("sm")]: {
+      paddingTop: "0px", // Espaço adicional em mobile
+    },
   },
   contentShift: {
     marginLeft: drawerWidth,
     [theme.breakpoints.down("sm")]: {
-      marginLeft: 0,
+      marginLeft: drawerWidth, // Empurra conteúdo em mobile quando drawer aberto
     },
   },
   contentShiftClose: {

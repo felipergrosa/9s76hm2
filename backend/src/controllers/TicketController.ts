@@ -537,9 +537,7 @@ export const bulkProcess = async (req: Request, res: Response): Promise<Response
     closeTicket,
     addNote,
     queueId,
-    userId,        // ID do usuário para atribuir os tickets
-    walletIds,     // IDs dos usuários para carteira do contato
-    walletMode     // 'replace' ou 'append'
+    userId        // ID do usuário para atribuir os tickets
   } = req.body;
 
   try {
@@ -576,9 +574,7 @@ export const bulkProcess = async (req: Request, res: Response): Promise<Response
       closeTicket,
       addNote,
       queueId,
-      assignedUserId: userId ? Number(userId) : undefined, // Usuário para atribuir tickets
-      walletIds,
-      walletMode
+      assignedUserId: userId ? Number(userId) : undefined // Usuário para atribuir tickets
     });
 
     return res.status(200).json(result);

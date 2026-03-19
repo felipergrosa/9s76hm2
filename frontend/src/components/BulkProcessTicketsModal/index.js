@@ -149,7 +149,6 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
   const canEditQueue = hasPermission('tickets.bulk-edit-queue');
   const canEditUser = hasPermission('tickets.bulk-edit-user');
   const canEditTags = hasPermission('tickets.bulk-edit-tags');
-  const canEditWallets = hasPermission('tickets.bulk-edit-wallets');
   const canEditResponse = hasPermission('tickets.bulk-edit-response');
   const canEditClose = hasPermission('tickets.bulk-edit-close');
   const canEditNotes = hasPermission('tickets.bulk-edit-notes');
@@ -179,8 +178,6 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
   const [queues, setQueues] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [users, setUsers] = useState([]);
-  const [selectedWallets, setSelectedWallets] = useState([]);
-  const [walletMode, setWalletMode] = useState('replace'); // 'replace' ou 'append'
 
   // Progresso
   const [progress, setProgress] = useState(0);
@@ -384,13 +381,6 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
         responseMessage: responseType === 'standard' ? responseMessage : undefined,
         aiAgentId: responseType === 'ai' ? aiAgentId : undefined,
         tagIds: selectedTags.map((t) => t.id),
-        newStatus: newStatus || undefined,
-        closeTicket,
-        addNote: addNote.trim() || undefined,
-        queueId: selectedQueue || undefined,
-        userId: selectedUserId || undefined,
-        walletIds: selectedWallets.length > 0 ? selectedWallets.map(w => w.id) : undefined,
-        walletMode: selectedWallets.length > 0 ? walletMode : undefined, // 'replace' ou 'append'
       };
 
       setProcessLog((prev) => [
@@ -764,7 +754,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                     {canEditTags && (
                       <Autocomplete
                         multiple
-                        options={availableTags}
+                        options={availableTags.filter(tag => tag.name && tag.name.startsWith('#') && !tag.name.startsWith('##'))}
                         getOptionLabel={(option) => option.name}
                         value={selectedTags}
                         onChange={(_, newValue) => setSelectedTags(newValue)}
@@ -772,54 +762,6 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                           <TextField {...params} variant="outlined" label="Tags (contato)" placeholder="Selecione tags" />
                         )}
                       />
-                    )}
-
-                    {/* Carteira - apenas para usuários com permissão */}
-                    {canEditWallets && (
-                      <>
-                        <FormControl variant="outlined" fullWidth>
-                          <InputLabel>Modo de Alteração de Carteira (contato)</InputLabel>
-                          <Select
-                            value={walletMode}
-                            onChange={(e) => setWalletMode(e.target.value)}
-                            label="Modo de Alteração de Carteira (contato)"
-                          >
-                            <MenuItem value="replace">
-                              Substituir carteira atual
-                            </MenuItem>
-                            <MenuItem value="append">
-                              Adicionar à carteira existente
-                            </MenuItem>
-                          </Select>
-                        </FormControl>
-                        <Autocomplete
-                          multiple
-                          options={users}
-                          getOptionLabel={(option) => option.name}
-                          value={selectedWallets}
-                          onChange={(e, newValue) => setSelectedWallets(newValue)}
-                          filterSelectedOptions
-                          renderTags={(value, getTagProps) =>
-                            value.map((option, index) => (
-                              <Chip
-                                {...getTagProps({ index })}
-                                key={option.id}
-                                label={option.name}
-                                color="primary"
-                              />
-                            ))
-                          }
-                          renderInput={(params) => (
-                            <TextField
-                              {...params}
-                              variant="outlined"
-                              label="Carteira (Responsável) (contato)"
-                              placeholder="Selecione responsáveis"
-                              fullWidth
-                            />
-                          )}
-                        />
-                      </>
                     )}
                   </Box>
 

@@ -13,6 +13,7 @@ import ContactCustomField from "../../models/ContactCustomField";
 import RefreshContactAvatarService from "../ContactServices/RefreshContactAvatarService";
 import { queueImportHistory } from "../MessageServices/ImportHistoryQueue";
 import logger from "../../utils/logger";
+import GetUserPersonalTagContactIds from "../../helpers/GetUserPersonalTagContactIds";
 
 // Throttle de atualização de avatar/nome por contato (24h)
 const lastAvatarCheck = new Map<string, number>();

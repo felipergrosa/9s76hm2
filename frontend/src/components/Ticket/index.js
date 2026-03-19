@@ -131,6 +131,9 @@ const Ticket = () => {
 
   useEffect(() => {
     setLoading(true);
+    // Resetar estado para evitar mostrar dados do ticket anterior
+    setContact({});
+    setTicket({});
     const delayDebounceFn = setTimeout(() => {
       const fetchTicket = async () => {
         try {

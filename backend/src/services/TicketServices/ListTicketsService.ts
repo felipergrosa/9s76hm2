@@ -109,7 +109,7 @@ const ListTicketsService = async ({
 
   whereCondition = {
     [Op.or]: [{ userId }, { status: "pending" }],
-    queueId: showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : { [Op.or]: [queueIds] },
+    queueId: (showTicketWithoutQueue || user.profile === "admin" || user.super) ? { [Op.or]: [queueIds, null] } : { [Op.or]: [queueIds] },
     companyId
   };
 
@@ -226,7 +226,7 @@ const ListTicketsService = async ({
           whereCondition = {
             companyId,
             status: "campaign",
-            queueId: showTicketWithoutQueue
+            queueId: (showTicketWithoutQueue || user.profile === "admin" || user.super)
               ? { [Op.or]: [queueIds, null] }
               : { [Op.or]: [queueIds] }
           };
@@ -240,7 +240,7 @@ const ListTicketsService = async ({
                 ...whereCondition,
                 userId: { [Op.or]: [user.id, null] },
                 status: "pending",
-                queueId: { [Op.in]: effectiveQueueIds }
+                queueId: { [Op.or]: [effectiveQueueIds, null] } // Incluir tickets sem fila
               };
             } else {
               whereCondition = {
@@ -266,7 +266,7 @@ const ListTicketsService = async ({
       whereCondition = { companyId };
     } else if (user.allHistoric === "enabled" && !showTicketWithoutQueue) {
       whereCondition = { companyId, queueId: { [Op.ne]: null } };
-    } else if (user.allHistoric === "disabled" && showTicketWithoutQueue) {
+    } else if (user.allHistoric === "disabled" && (showTicketWithoutQueue || user.profile === "admin" || user.super)) {
       whereCondition = { companyId, queueId: { [Op.or]: [queueIds, null] } };
     } else if (user.allHistoric === "disabled" && !showTicketWithoutQueue) {
       whereCondition = { companyId, queueId: queueIds };
@@ -535,13 +535,17 @@ const ListTicketsService = async ({
   } else if (walletResult.hasWalletRestriction || forceWallet) {
     const allowedContactIds = walletResult.contactIds;
     const allowedUserIds = [userId, ...(walletResult.managedUserIds || [])];
+    
+    // Lógica: contato tem PELO MENOS UMA tag pessoal do usuário
+    // - Tickets com userId permitido: pode ver
+    // - Tickets com contactId permitido: pode ver
     whereCondition = {
       [Op.and]: [
         whereCondition,
         {
           [Op.or]: [
-            { contactId: { [Op.in]: allowedContactIds.length > 0 ? allowedContactIds : [0] } },
-            { userId: { [Op.in]: allowedUserIds.length > 0 ? allowedUserIds : [userId] } }
+            { userId: { [Op.in]: allowedUserIds.length > 0 ? allowedUserIds : [userId] } },
+            { contactId: { [Op.in]: allowedContactIds.length > 0 ? allowedContactIds : [0] } }
           ]
         }
       ]

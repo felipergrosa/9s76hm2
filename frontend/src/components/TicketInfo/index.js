@@ -230,4 +230,13 @@ const TicketInfo = ({ contact, ticket, onClick }) => {
 	);
 };
 
-export default TicketInfo;
+export default React.memo(TicketInfo, (prevProps, nextProps) => {
+	// Só re-renderiza se o ticket ou contato mudarem
+	return (
+		prevProps.ticket?.id === nextProps.ticket?.id &&
+		prevProps.contact?.id === nextProps.contact?.id &&
+		prevProps.contact?.name === nextProps.contact?.name &&
+		prevProps.contact?.profilePicUrl === nextProps.contact?.profilePicUrl &&
+		prevProps.ticket?.user?.id === nextProps.ticket?.user?.id
+	);
+});

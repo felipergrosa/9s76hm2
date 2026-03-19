@@ -17,6 +17,7 @@ const useStyles = makeStyles(theme => ({
 		padding: "8px 0px 8px 20px",
 		position: 'relative',
 		alignItems: 'flex-start',
+		zIndex: theme.zIndex.drawer + 2, // Acima do drawer em mobile
 		[theme.breakpoints.down("sm")]: {
 			flexWrap: "nowrap",
 			alignItems: 'center',

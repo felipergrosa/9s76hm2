@@ -59,6 +59,9 @@ const useStyles = makeStyles((theme) => ({
         alignItems: "stretch",
         padding: theme.spacing(0, 1, 0, 1),
         borderBottom: "1px solid rgba(0, 0, 0, 0.08)",
+        [theme.breakpoints.down('sm')]: {
+            padding: theme.spacing(1, 2, 0.5, 2),
+        },
     },
 
     pendingTicket: {
@@ -167,6 +170,8 @@ const useStyles = makeStyles((theme) => ({
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
         lineHeight: 1.3,
+        fontWeight: 700,
+        fontSize: '0.95rem',
     },
 
     lastMessageTime: {
