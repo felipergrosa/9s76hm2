@@ -717,23 +717,23 @@ const wbotMonitor = async (
     const healthCheck = async () => {
       try {
         // Verificar se o socket ainda existe no pool de sessões
-        const { getWbot, getWbotIsReconnecting } = require("../../libs/wbot");
+        const { getWbot, getWbotIsReconnecting, removeWbot } = require("../../libs/wbot");
         const session = getWbot(whatsapp.id);
-        
+
         if (!session) {
           logger.warn(`[HealthCheck] Sessão ${whatsapp.id} não encontrada no pool`);
           return;
         }
-        
+
         // Verificar se está reconectando
         if (getWbotIsReconnecting(whatsapp.id)) {
           logger.debug(`[HealthCheck] Sessão ${whatsapp.id} está reconectando, pulando health check`);
           failedPings = 0;
           return;
         }
-        
-        // Verificar readyState do WebSocket
-        const ws = (wbot as any).ws;
+
+        // Usar SESSION (obtido via getWbot) ao invés de wbot (parâmetro stale)
+        const ws = (session as any).ws;
         if (ws && typeof ws.readyState === "number") {
           // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
           if (ws.readyState === 2 || ws.readyState === 3) {
@@ -742,64 +742,75 @@ const wbotMonitor = async (
               `[HealthCheck] Socket ${whatsapp.id} com readyState=${ws.readyState} ` +
               `(${failedPings}/${MAX_FAILED_PINGS} falhas)`
             );
-            
+
             if (failedPings >= MAX_FAILED_PINGS) {
               logger.error(`[HealthCheck] Socket ${whatsapp.id} morto (readyState=${ws.readyState}), forçando reconexão`);
               failedPings = 0;
-              
-              // Disparar reconexão via Circuit Breaker
-              const { removeWbot } = require("../../libs/wbot");
+
+              // MARCAR FLAG DE RECONEXÃO ANTES de disparar (evita race condition)
+              const { reconnectingWhatsapps } = require("../../libs/wbot");
+              if (reconnectingWhatsapps && !reconnectingWhatsapps.get(whatsapp.id)) {
+                reconnectingWhatsapps.set(whatsapp.id, Date.now());
+              }
+
+              // Disparar reconexão
               removeWbot(whatsapp.id, false);
-              
+
               // Registrar falha no circuit breaker
               const { getCircuitBreakerStatus } = require("../../libs/wbot");
               const cbStatus = getCircuitBreakerStatus(whatsapp.id);
-              
+
               if (cbStatus.status !== 'open') {
                 // Só tentar reconectar se o circuit breaker não estiver aberto
                 const Whatsapp = require("../../models/Whatsapp").default;
                 const wa = await Whatsapp.findByPk(whatsapp.id);
                 if (wa && wa.status !== "PENDING") {
                   const { StartWhatsAppSessionUnified } = require("./StartWhatsAppSessionUnified");
-                  setTimeout(() => StartWhatsAppSessionUnified(wa, companyId), 2000); // Reduzido de 5s para 2s
+                  setTimeout(() => StartWhatsAppSessionUnified(wa, companyId), 2000);
                 }
               }
             }
             return;
           }
         }
-        
+
         // Tentar ping leve: sendPresenceUpdate com timeout mais curto
+        // Usar SESSION ao invés de wbot
         try {
           await Promise.race([
-            wbot.sendPresenceUpdate("available"),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000)) // Reduzido de 5s para 3s
+            (session as any).sendPresenceUpdate("available"),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
           ]);
-          
+
           // Ping bem-sucedido
           if (failedPings > 0) {
             logger.info(`[HealthCheck] Socket ${whatsapp.id} recuperado (${failedPings} falhas anteriores)`);
           }
           failedPings = 0;
-          
+
         } catch (pingErr: any) {
           failedPings++;
           logger.warn(
             `[HealthCheck] Ping falhou para ${whatsapp.id}: ${pingErr?.message} ` +
             `(${failedPings}/${MAX_FAILED_PINGS} falhas)`
           );
-          
+
           if (failedPings >= MAX_FAILED_PINGS) {
             logger.error(`[HealthCheck] Socket ${whatsapp.id} não responde a pings, forçando reconexão`);
             failedPings = 0;
-            
+
+            // MARCAR FLAG DE RECONEXÃO ANTES de disparar (evita race condition)
+            const { reconnectingWhatsapps } = require("../../libs/wbot");
+            if (reconnectingWhatsapps && !reconnectingWhatsapps.get(whatsapp.id)) {
+              reconnectingWhatsapps.set(whatsapp.id, Date.now());
+            }
+
             // Disparar reconexão
-            const { removeWbot } = require("../../libs/wbot");
             removeWbot(whatsapp.id, false);
-            
+
             const { getCircuitBreakerStatus } = require("../../libs/wbot");
             const cbStatus = getCircuitBreakerStatus(whatsapp.id);
-            
+
             if (cbStatus.status !== 'open') {
               const Whatsapp = require("../../models/Whatsapp").default;
               const wa = await Whatsapp.findByPk(whatsapp.id);
@@ -810,7 +821,7 @@ const wbotMonitor = async (
             }
           }
         }
-        
+
       } catch (err: any) {
         logger.error(`[HealthCheck] Erro no health check para ${whatsapp.id}: ${err?.message}`);
       }
@@ -846,22 +857,26 @@ const wbotMonitor = async (
     const androidKeepalive = async () => {
       try {
         const timeSinceLastKeepalive = Date.now() - lastKeepaliveTimestamp;
-        
+
         // Só enviar se passou 45s desde o último
         if (timeSinceLastKeepalive >= ANDROID_KEEPALIVE_INTERVAL) {
-          // Verificar se socket está realmente aberto antes de tentar
-          const ws = (wbot as any).ws;
+          // Usar sessão atual do pool (não wbot stale)
+          const { getWbot } = require("../../libs/wbot");
+          const session = getWbot(whatsapp.id);
+          if (!session) return;
+
+          const ws = (session as any).ws;
           if (ws && ws.readyState === 1) {
             try {
               // Enviar presence update para "despertar" conexão
               await Promise.race([
-                wbot.sendPresenceUpdate("available"),
+                (session as any).sendPresenceUpdate("available"),
                 new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
               ]);
-              
+
               lastKeepaliveTimestamp = Date.now();
               lastActivityTimestamp = Date.now(); // Contar como atividade
-              
+
               // Resetar contador de stalled se keepalive funcionou
               if (consecutiveStalledDetections > 0) {
                 logger.info(`[AndroidKeepalive] whatsappId=${whatsapp.id} - conexão recuperada após ${consecutiveStalledDetections} detecções`);
@@ -878,70 +893,82 @@ const wbotMonitor = async (
         // Silenciar erros não críticos
       }
     };
-    
+
     // Iniciar keepalive a cada 45 segundos
     const androidKeepaliveInterval = setInterval(androidKeepalive, ANDROID_KEEPALIVE_INTERVAL);
-    
+
     // Atualizar timestamp de atividade quando receber mensagens
     // (o wbotMessageListener já emite eventos que podemos usar)
     const activityCheckInterval = setInterval(() => {
-      // Verificar se há atividade recente consultando o wbot
-      const ws = (wbot as any).ws;
-      if (ws && ws.readyState === 1) {
-        // WebSocket está OPEN, considerar como atividade
-        lastActivityTimestamp = Date.now();
+      // Usar sessão atual do pool
+      const { getWbot } = require("../../libs/wbot");
+      const session = getWbot(whatsapp.id);
+      if (session) {
+        const ws = (session as any).ws;
+        if (ws && ws.readyState === 1) {
+          // WebSocket está OPEN, considerar como atividade
+          lastActivityTimestamp = Date.now();
+        }
       }
     }, 20000); // Checar a cada 20s (era 30s - mais frequente)
-    
+
     const androidSync = async () => {
       try {
         const timeSinceLastActivity = Date.now() - lastActivityTimestamp;
         const timeSinceLastSync = Date.now() - lastSyncAttempt;
-        
+
         // ESTRATÉGIA AGRESSIVA PARA ANDROID:
         // Se passou mais de 2 minutos sem atividade e 3 minutos desde último sync
         if (timeSinceLastActivity > ANDROID_STALLED_THRESHOLD && timeSinceLastSync > 3 * 60 * 1000) {
           logger.info(`[AndroidSync] whatsappId=${whatsapp.id} sem atividade há ${Math.round(timeSinceLastActivity/1000)}s, forçando sync AGRESSIVO`);
-          
+
+          // Usar sessão atual do pool
+          const { getWbot, getWbotIsReconnecting, removeWbot, getCircuitBreakerStatus, reconnectingWhatsapps } = require("../../libs/wbot");
+          const session = getWbot(whatsapp.id);
+          if (!session) return;
+
           try {
             // 1. Tentar resync do estado do app (similar ao LabelSyncService)
-            if (typeof (wbot as any)?.resyncAppState === "function") {
-              await (wbot as any).resyncAppState(["critical_unblock_low"], true);
+            if (typeof (session as any)?.resyncAppState === "function") {
+              await (session as any).resyncAppState(["critical_unblock_low"], true);
               logger.info(`[AndroidSync] resyncAppState executado para whatsappId=${whatsapp.id}`);
             }
-            
+
             // 2. Tentar atualizar presença para "despertar" conexão
             await Promise.race([
-              wbot.sendPresenceUpdate("available"),
+              (session as any).sendPresenceUpdate("available"),
               new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
             ]);
-            
+
             // 3. Se chegou aqui, sync funcionou
             lastSyncAttempt = Date.now();
             lastActivityTimestamp = Date.now();
             consecutiveStalledDetections = 0;
             logger.info(`[AndroidSync] Sync AGRESSIVO concluído com sucesso para whatsappId=${whatsapp.id}`);
-            
+
           } catch (syncErr: any) {
             consecutiveStalledDetections++;
             logger.warn(`[AndroidSync] Erro no sync AGRESSIVO: ${syncErr?.message} (stalled #${consecutiveStalledDetections})`);
-            
+
             // Se falhar E passou mais de 5 minutos OU 3 detecções consecutivas = reconectar
             if (timeSinceLastActivity > ANDROID_FORCE_RECONNECT_THRESHOLD || consecutiveStalledDetections >= 3) {
               // PROTEÇÃO: Verificar se já está tentando reconectar para evitar loop
-              const { getWbotIsReconnecting } = require("../../libs/wbot");
               if (getWbotIsReconnecting(whatsapp.id)) {
                 logger.warn(`[AndroidSync] Sessão ${whatsapp.id} já está em processo de reconexão. Ignorando solicitação duplicada.`);
                 consecutiveStalledDetections = 0;
                 return;
               }
-              
+
               logger.error(`[AndroidSync] STALLED CONNECTION CRÍTICA detectada para whatsappId=${whatsapp.id}. Forçando RECONEXÃO IMEDIATA.`);
-              
+
+              // MARCAR FLAG DE RECONEXÃO ANTES de disparar
+              if (reconnectingWhatsapps && !reconnectingWhatsapps.get(whatsapp.id)) {
+                reconnectingWhatsapps.set(whatsapp.id, Date.now());
+              }
+
               // Forçar reconexão via circuit breaker (delay curto para Android)
-              const { removeWbot, getCircuitBreakerStatus } = require("../../libs/wbot");
               removeWbot(whatsapp.id, false);
-              
+
               const cbStatus = getCircuitBreakerStatus(whatsapp.id);
               if (cbStatus.status !== 'open') {
                 const Whatsapp = require("../../models/Whatsapp").default;
@@ -952,7 +979,7 @@ const wbotMonitor = async (
                   setTimeout(() => StartWhatsAppSessionUnified(wa, companyId), 3000);
                 }
               }
-              
+
               // Resetar contador após tentativa de reconexão
               consecutiveStalledDetections = 0;
             }

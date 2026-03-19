@@ -458,12 +458,38 @@ export const removeWbot = async (
   try {
     const sessionIndex = sessions.findIndex(s => s.id === whatsappId);
     if (sessionIndex !== -1) {
+      const session = sessions[sessionIndex];
+
+      // LIMPAR INTERVALS DO wbotMonitor para evitar loop de reconexão
+      // Isso é CRÍTICO para prevenir conflitos (conflict: replaced)
+      const intervalsToClear = [
+        '_healthCheckInterval',
+        '_androidSyncInterval',
+        '_androidKeepaliveInterval',
+        '_lidPollInterval',
+        '_activityCheckInterval'
+      ];
+
+      for (const intervalKey of intervalsToClear) {
+        const interval = (session as any)[intervalKey];
+        if (interval) {
+          try {
+            clearInterval(interval);
+            logger.debug(`[removeWbot] Interval ${intervalKey} limpo para whatsappId=${whatsappId}`);
+          } catch (e) {
+            // Ignorar erro ao limpar interval
+          }
+          (session as any)[intervalKey] = undefined;
+        }
+      }
+
       if (isLogout) {
-        sessions[sessionIndex].logout();
-        sessions[sessionIndex].ws.close();
+        session.logout();
+        session.ws.close();
       }
 
       sessions.splice(sessionIndex, 1);
+      logger.info(`[removeWbot] Sessão ${whatsappId} removida do pool (isLogout=${isLogout})`);
     }
   } catch (err) {
     logger.error(err);
