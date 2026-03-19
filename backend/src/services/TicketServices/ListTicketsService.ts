@@ -296,8 +296,9 @@ const ListTicketsService = async ({
 
 
   if (status === "closed") {
-    // Ao invés de trazer milhares de IDs para a memória do Node (o que trava o servidor),
-    // aplicamos as regras diretamente no whereCondition principal.
+    // Para status "closed", aplicar filtros padrão
+    // A deduplicação por contato+conexão é aplicada globalmente no final do serviço
+    
     let whereCondition2: any = { status: "closed" };
 
     if (!showTicketAllQueues) {
@@ -620,6 +621,49 @@ const ListTicketsService = async ({
       }
     ]
   } as any;
+
+  // 4. REGRA GLOBAL: Apenas o último ticket por contato + conexão
+  // Aplica-se a TODOS os status exceto "open" (tickets em atendimento)
+  // Isso evita múltiplos contatos iguais em buscas e listagens
+  if (status !== "open") {
+    // Para busca (status="search") e outros status, aplicar regra de deduplicação
+    // Grupos são exceção: cada grupo é único por natureza
+    const shouldApplyDeduplication = status === "search" || 
+                                    status === "pending" || 
+                                    status === "closed" ||
+                                    (!status && showAll === "true");
+
+    if (shouldApplyDeduplication) {
+      // Montar condição de status para a subquery
+      let statusCondition = "";
+      if (status === "search") {
+        // Para busca, considerar todos os status exceto "open" em atendimento de outros usuários
+        statusCondition = `AND (t.status != 'open' OR t."userId" = ${userId})`;
+      } else if (status) {
+        // Para status específico, filtrar por esse status
+        statusCondition = `AND t.status = '${status}'`;
+      } else {
+        // Para showAll, considerar todos os status exceto "open" em atendimento de outros
+        statusCondition = `AND (t.status != 'open' OR t."userId" = ${userId})`;
+      }
+
+      whereCondition = {
+        [Op.and]: [
+          whereCondition,
+          literal(`
+            "Ticket"."id" IN (
+              SELECT MAX(t.id) 
+              FROM "Tickets" t 
+              WHERE t."companyId" = ${companyId}
+                AND t."isGroup" = false
+                ${statusCondition}
+              GROUP BY t."contactId", t."whatsappId"
+            )
+          `)
+        ]
+      } as any;
+    }
+  }
 
   // Limite/paginação: para showAll === "true", retornamos até 500 registros (otimizado para performance)
   const limit = showAll === "true" ? 500 : 40;
