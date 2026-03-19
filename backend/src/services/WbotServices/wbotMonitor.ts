@@ -36,6 +36,10 @@ setInterval(() => {
   i = 0;
 }, 5000);
 
+// Rate limiting para contacts.upsert
+let lastContactsUpsert = 0;
+const CONTACTS_UPSERT_COOLDOWN = 30000; // 30 segundos
+
 type Session = WASocket & {
   id?: number;
 };
@@ -154,54 +158,85 @@ const wbotMonitor = async (
     }
 
     wbot.ev.on("contacts.upsert", async (contacts: BContact[]) => {
+      const now = Date.now();
+      
+      // Rate limiting: ignorar se chamado muito frequente (possível loop)
+      if (now - lastContactsUpsert < CONTACTS_UPSERT_COOLDOWN) {
+        logger.warn(`[contacts.upsert] Rate limiting active - ignorando ${contacts.length} contatos`);
+        return;
+      }
+      
+      lastContactsUpsert = now;
       const filteredContacts: BContact[] = [];
 
       try {
-        // Await the Promise.all to ensure all contacts are processed
-        await Promise.all(
-          contacts.map(async (contact) => {
-            if (
-              !isJidBroadcast(contact.id) &&
-              !isJidStatusBroadcast(contact.id) &&
-              isJidUser(contact.id)
-            ) {
-              const contactArray: BContact = {
-                id: contact.id,
-                name: contact.name
-                  ? cleanStringForJSON(contact.name)
-                  : contact.id.split("@")[0].split(":")[0],
-              };
-              filteredContacts.push(contactArray);
-            }
-          })
-        );
+        // Limitar número de contatos processados para evitar memory leak
+        const maxContacts = 1000;
+        const contactsToProcess = contacts.slice(0, maxContacts);
 
-        // Validate that filteredContacts is serializable
-        try {
-          JSON.stringify(filteredContacts);
-        } catch (err) {
-          logger.error(`Failed to serialize filteredContacts: ${err.message}`);
-          Sentry.captureException(err);
-          return;
+        // Processar contatos em batches para evitar sobrecarga
+        const batchSize = 50;
+        for (let i = 0; i < contactsToProcess.length; i += batchSize) {
+          const batch = contactsToProcess.slice(i, i + batchSize);
+          
+          await Promise.all(
+            batch.map(async (contact) => {
+              if (
+                !isJidBroadcast(contact.id) &&
+                !isJidStatusBroadcast(contact.id) &&
+                isJidUser(contact.id)
+              ) {
+                const contactArray: BContact = {
+                  id: contact.id,
+                  name: contact.name
+                    ? cleanStringForJSON(contact.name)
+                    : contact.id.split("@")[0].split(":")[0],
+                };
+                filteredContacts.push(contactArray);
+              }
+            })
+          );
         }
 
-        // Write to file
+        // Validar serialização com try-catch específico
+        let serializedData: string;
+        try {
+          serializedData = JSON.stringify(filteredContacts, null, 2);
+        } catch (err) {
+          logger.error(`Failed to serialize filteredContacts: ${err?.message || err}`);
+          Sentry.captureException(err);
+          return; // Sair da função se não conseguir serializar
+        }
+
+        // Write to file com tratamento melhorado
         const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
         const companyFolder = path.join(publicFolder, `company${companyId}`);
         const contactJson = path.join(companyFolder, "contactJson.txt");
 
         try {
+          // Garantir que pasta existe com permissões corretas
           if (!fs.existsSync(companyFolder)) {
             fs.mkdirSync(companyFolder, { recursive: true });
-            fs.chmodSync(companyFolder, 0o777);
+            fs.chmodSync(companyFolder, 0o755); // Permissões mais seguras
           }
+
+          // Remover arquivo apenas se existir
           if (fs.existsSync(contactJson)) {
             await fs.promises.unlink(contactJson);
           }
-          await fs.promises.writeFile(contactJson, JSON.stringify(filteredContacts, null, 2));
+
+          // Escrever novo arquivo
+          await fs.promises.writeFile(contactJson, serializedData, 'utf8');
+          
+          // Log de sucesso (apenas em debug)
+          if (process.env.NODE_ENV === 'development') {
+            logger.debug(`contactJson.txt atualizado com ${filteredContacts.length} contatos`);
+          }
+          
         } catch (err) {
-          logger.error(`Failed to write contactJson.txt: ${err.message}`);
+          logger.error(`Failed to write contactJson.txt: ${err?.message || err}`);
           Sentry.captureException(err);
+          // Continuar execução mesmo se falhar arquivo
         }
 
         // Pass filteredContacts as an array to createOrUpdateBaileysService
@@ -212,12 +247,15 @@ const wbotMonitor = async (
           });
 
         } catch (err) {
-          logger.error(`Error in createOrUpdateBaileysService: ${err.message}`);
+          logger.error(`Error in createOrUpdateBaileysService: ${err?.message || err}`);
           Sentry.captureException(err);
-          console.log("Filtered Contacts:", filteredContacts); // Debug output
+          // Remover debug output que pode causar memory leak
+          if (process.env.NODE_ENV === 'development') {
+            console.log("Filtered Contacts count:", filteredContacts.length);
+          }
         }
       } catch (err) {
-        logger.error(`Error in contacts.upsert: ${err.message}`);
+        logger.error(`Error in contacts.upsert: ${err?.message || err}`);
         Sentry.captureException(err);
       }
     });
