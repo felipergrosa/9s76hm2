@@ -36,6 +36,22 @@ const ALLOWED_ORIGINS = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(",").map((url) => url.trim())
   : ["http://localhost:3000", "https://chats.nobreluminarias.com.br"];
 
+// Função para verificar se origem é permitida (mais flexível)
+const isOriginAllowed = (origin: string | undefined): boolean => {
+  if (!origin) return true; // Permitir requisições sem origin
+  
+  // Verificar se a origem está na lista explícita
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  
+  // Verificar se é subdomínio de nobreluminarias.com.br
+  if (origin.endsWith('nobreluminarias.com.br')) return true;
+  
+  // Verificar localhost para desenvolvimento
+  if (origin.includes('localhost')) return true;
+  
+  return false;
+};
+
 // Ajuste da classe AppError para compatibilidade com Error
 class SocketCompatibleAppError extends Error {
   constructor(public message: string, public statusCode: number) {
@@ -52,10 +68,10 @@ export const initIO = (httpServer: Server): SocketIO => {
   io = new SocketIO(httpServer, {
     cors: {
       origin: (origin, callback) => {
-        if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+        if (isOriginAllowed(origin)) {
           callback(null, true);
         } else {
-          logger.warn(`Origem não autorizada: ${origin}`);
+          logger.warn(`[SOCKET CORS] Origem não autorizada: ${origin}`);
           callback(new SocketCompatibleAppError("Violação da política CORS", 403));
         }
       },

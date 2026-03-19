@@ -58,6 +58,22 @@ const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:3000,https
   .map(s => s.trim())
   .filter(Boolean);
 
+// Função para verificar se origem é permitida (mais flexível)
+const isOriginAllowed = (origin: string | undefined): boolean => {
+  if (!origin) return true; // Permitir requisições sem origin (ex: Postman, mobile apps)
+  
+  // Verificar se a origem está na lista explícita
+  if (allowedOrigins.includes(origin)) return true;
+  
+  // Verificar se é subdomínio de nobreluminarias.com.br
+  if (origin.endsWith('nobreluminarias.com.br')) return true;
+  
+  // Verificar localhost para desenvolvimento
+  if (origin.includes('localhost')) return true;
+  
+  return false;
+};
+
 // Configuração do BullBoard
 if (String(process.env.BULL_BOARD).toLocaleLowerCase() === 'true' && process.env.REDIS_URI_ACK !== '') {
   BullBoard.setQueues(BullQueue.queues.map(queue => queue && queue.bull));
@@ -89,7 +105,14 @@ app.use(bodyParser.urlencoded({ limit: '5mb', extended: true }));
 app.use(
   cors({
     credentials: true,
-    origin: allowedOrigins
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+      } else {
+        logger.warn(`CORS bloqueado para origem: ${origin}`);
+        callback(new Error('Origem não autorizada pelo CORS'));
+      }
+    }
   })
 );
 app.use(cookieParser());

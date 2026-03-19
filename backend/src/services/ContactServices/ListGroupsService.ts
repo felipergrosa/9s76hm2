@@ -38,9 +38,12 @@ const ListGroupsService = async ({
   isPrivate = false,
   limit = "20"
 }: Request): Promise<Response> => {
+  // Filtrar apenas grupos REAIS: isGroup=true E número termina com @g.us
+  // Isso evita exibir contatos individuais marcados incorretamente como grupo
   let whereCondition: Filterable["where"] = {
     companyId,
-    isGroup: true // Sempre filtrar apenas grupos
+    isGroup: true,
+    number: { [Op.like]: '%@g.us' } // Grupos reais sempre terminam com @g.us
   };
 
   // REGRA DE PERMISSÃO: Quais conexões o usuário pode ver grupos?

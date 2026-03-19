@@ -7092,7 +7092,9 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
     if (!groupUpdate[0]?.id) return;
     if (groupUpdate.length === 0) return;
     groupUpdate.forEach(async (group: GroupMetadata) => {
-      const number = group.id.replace(/\D/g, "");
+      // IMPORTANTE: Manter o @g.us no número para identificar como grupo real
+      // Formato: 120363267090360023@g.us (não remover o sufixo)
+      const number = group.id; // Manter ID completo com @g.us
       const nameGroup = group.subject && group.subject.trim() !== "" ? group.subject : "Grupo desconhecido";
 
       let profilePicUrl: string = "";

@@ -1,5 +1,4 @@
 import Contact from "../../models/Contact";
-import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
 import { Op } from "sequelize";
 
@@ -20,60 +19,72 @@ interface GroupsByConnection {
 
 /**
  * Lista todos os grupos disponíveis na empresa, agrupados por conexão.
- * Busca contatos isGroup=true que possuem tickets associados.
+ * Busca contatos isGroup=true diretamente (sem duplicatas).
+ * Filtra apenas conexões ativas (CONNECTED).
  */
 const ListAvailableGroupsService = async (
   companyId: number
 ): Promise<GroupsByConnection[]> => {
-  // Buscar todos os tickets de grupo da empresa com seus contatos e conexões
-  const groupTickets = await Ticket.findAll({
+  // Buscar conexões ativas da empresa
+  const activeWhatsapps = await Whatsapp.findAll({
+    where: {
+      companyId,
+      status: "CONNECTED"
+    },
+    attributes: ["id", "name"]
+  });
+
+  const activeWhatsappIds = activeWhatsapps.map(w => w.id);
+  const whatsappMap = new Map<number, string>();
+  activeWhatsapps.forEach(w => whatsappMap.set(w.id, w.name));
+
+  if (activeWhatsappIds.length === 0) {
+    return [];
+  }
+
+  // Buscar contatos de grupo diretamente (sem passar por tickets)
+  // Isso evita duplicatas e é mais eficiente
+  const groupContacts = await Contact.findAll({
     where: {
       companyId,
       isGroup: true,
+      whatsappId: { [Op.in]: activeWhatsappIds },
+      // Filtrar apenas grupos reais (número termina com @g.us ou tem formato de grupo)
+      number: { [Op.like]: '%@g.us' }
     },
-    attributes: ["id", "contactId", "whatsappId"],
-    include: [
-      {
-        model: Contact,
-        as: "contact",
-        attributes: ["id", "name", "number", "profilePicUrl"],
-        where: { isGroup: true },
-      },
-      {
-        model: Whatsapp,
-        as: "whatsapp",
-        attributes: ["id", "name"],
-      },
-    ],
-    group: ["Ticket.contactId", "Ticket.whatsappId", "Ticket.id", "contact.id", "whatsapp.id"],
+    attributes: ["id", "name", "number", "profilePicUrl", "whatsappId"],
+    order: [["name", "ASC"]]
   });
 
-  // Agrupar por conexão, evitando duplicatas de contactId
+  // Agrupar por conexão
   const connectionMap = new Map<number, GroupsByConnection>();
-  const seenContacts = new Set<string>(); // chave: `${whatsappId}-${contactId}`
+  const seenContactIds = new Set<number>(); // Evitar duplicatas por contactId
 
-  for (const ticket of groupTickets) {
-    if (!ticket.whatsapp || !ticket.contact) continue;
+  for (const contact of groupContacts) {
+    if (!contact.whatsappId) continue;
+    
+    // Evitar duplicatas
+    if (seenContactIds.has(contact.id)) continue;
+    seenContactIds.add(contact.id);
 
-    const key = `${ticket.whatsappId}-${ticket.contactId}`;
-    if (seenContacts.has(key)) continue;
-    seenContacts.add(key);
+    const whatsappName = whatsappMap.get(contact.whatsappId);
+    if (!whatsappName) continue; // Conexão não está ativa
 
-    if (!connectionMap.has(ticket.whatsappId)) {
-      connectionMap.set(ticket.whatsappId, {
-        whatsappId: ticket.whatsappId,
-        whatsappName: ticket.whatsapp.name,
+    if (!connectionMap.has(contact.whatsappId)) {
+      connectionMap.set(contact.whatsappId, {
+        whatsappId: contact.whatsappId,
+        whatsappName,
         groups: [],
       });
     }
 
-    connectionMap.get(ticket.whatsappId)!.groups.push({
-      contactId: ticket.contact.id,
-      name: ticket.contact.name,
-      number: ticket.contact.number,
-      profilePicUrl: ticket.contact.profilePicUrl,
-      whatsappId: ticket.whatsappId,
-      whatsappName: ticket.whatsapp.name,
+    connectionMap.get(contact.whatsappId)!.groups.push({
+      contactId: contact.id,
+      name: contact.name,
+      number: contact.number,
+      profilePicUrl: contact.profilePicUrl,
+      whatsappId: contact.whatsappId,
+      whatsappName,
     });
   }
 

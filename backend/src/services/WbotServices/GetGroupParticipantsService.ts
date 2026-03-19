@@ -39,6 +39,7 @@ interface Request {
 /**
  * Busca metadados e participantes de um grupo WhatsApp via Baileys.
  * Requer que a conexão esteja ativa.
+ * OTIMIZADO: Timeouts reduzidos e queries simplificadas para resposta rápida.
  */
 const GetGroupParticipantsService = async ({
   contactId,
@@ -74,18 +75,18 @@ const GetGroupParticipantsService = async ({
     throw new Error("Conexão WhatsApp não está ativa");
   }
 
-  // Obter instância do Baileys com auto-recovery
-  // Aguarda até 30s pela sessão se estiver sendo recuperada
-  const wbot = await getWbotOrRecover(whatsappId, 30000);
+  // Obter instância do Baileys - timeout reduzido para 5s
+  // Se não estiver pronta em 5s, provavelmente há problema na conexão
+  const wbot = await getWbotOrRecover(whatsappId, 5000);
   if (!wbot) {
-    throw new Error("Não foi possível obter a sessão WhatsApp. Tente novamente em alguns segundos.");
+    throw new Error("Sessão WhatsApp não disponível. Verifique se a conexão está ativa.");
   }
 
   // Buscar metadados do grupo via Baileys
-  // PROTEÇÃO: Timeout para prevenir travamento do websocket
+  // PROTEÇÃO: Timeout de 5s para resposta rápida
   let groupMetadata: any;
   try {
-    const TIMEOUT_MS = 10000; // 10 segundos timeout
+    const TIMEOUT_MS = 5000; // 5 segundos timeout (reduzido de 10s)
     
     groupMetadata = await Promise.race([
       wbot.groupMetadata(groupJid),
@@ -172,161 +173,85 @@ const GetGroupParticipantsService = async ({
     }
   }
 
-  // Para participantes @lid: buscar mapeamento participant→contact das mensagens salvas
-  // Essa é a mesma fonte que o chat usa para exibir nomes corretamente
+  // Para participantes @lid: buscar mapeamento participant→contact
+  // OTIMIZADO: Query única consolidada para performance
   const lidParticipantJids = (groupMetadata.participants || [])
     .filter((p: any) => p.id.includes("@lid"))
     .map((p: any) => p.id);
 
-  logger.info(`[GetGroupParticipants] Total de participantes LID: ${lidParticipantJids.length}`);
-
-  const lidContactMap = new Map<string, Contact>();
+  const lidContactMap = new Map<string, any>();
+  
   if (lidParticipantJids.length > 0) {
     try {
-      // Buscar tickets deste grupo
-      const groupTickets = await Ticket.findAll({
-        where: { contactId, companyId, isGroup: true },
-        attributes: ["id"]
-      });
-      const ticketIds = groupTickets.map(t => t.id);
-
-      logger.info(`[GetGroupParticipants] Tickets do grupo: ${ticketIds.length}`);
-
-      if (ticketIds.length > 0) {
-        // Buscar senderName diretamente das mensagens (não depende do contactId)
-        // Isso resolve o problema de mensagens salvas com contactId do grupo
-        const sequelize = Contact.sequelize!;
-        
-        // PRIMEIRA BUSCA: Apenas no grupo atual
-        const senderMappings: any[] = await sequelize.query(`
-          SELECT DISTINCT ON (m.participant)
+      const sequelize = Contact.sequelize!;
+      
+      // QUERY ÚNICA: Buscar senderName e contatos em uma só query
+      // Prioriza: 1) Contato real com número, 2) senderName das mensagens
+      const mappings: any[] = await sequelize.query(`
+        WITH ranked AS (
+          SELECT 
             m.participant,
-            m."senderName"
-          FROM "Messages" m
-          WHERE m."ticketId" IN (:ticketIds)
-            AND m."fromMe" = false
-            AND m.participant IN (:participants)
-            AND m."senderName" IS NOT NULL
-            AND m."senderName" != ''
-          ORDER BY m.participant, m.id DESC
-        `, {
-          replacements: { ticketIds, participants: lidParticipantJids },
-          type: QueryTypes.SELECT
-        });
-
-        logger.info(`[GetGroupParticipants] senderName no grupo atual: ${senderMappings.length}`);
-        senderMappings.forEach(m => {
-          logger.info(`[GetGroupParticipants] senderName: ${m.participant} → "${m.senderName}"`);
-        });
-
-        // Salvar senderNames no mapa para uso posterior
-        for (const row of senderMappings) {
-          if (row.senderName) {
-            lidContactMap.set(row.participant, {
-              name: row.senderName,
-              number: null,
-              canonicalNumber: null,
-              profilePicUrl: null
-            } as any);
-          }
-        }
-
-        // SEGUNDA BUSCA: Buscar senderName em TODOS os grupos da empresa para LIDs não encontrados
-        const missingLids = lidParticipantJids.filter((lid: string) => !lidContactMap.has(lid));
-        if (missingLids.length > 0) {
-          logger.info(`[GetGroupParticipants] Buscando ${missingLids.length} LIDs em outros grupos da empresa...`);
-          
-          const globalSenderMappings: any[] = await sequelize.query(`
-            SELECT DISTINCT ON (m.participant)
-              m.participant,
-              m."senderName"
-            FROM "Messages" m
-            JOIN "Tickets" t ON t.id = m."ticketId"
-            WHERE t."companyId" = :companyId
-              AND t."isGroup" = true
-              AND m."fromMe" = false
-              AND m.participant IN (:participants)
-              AND m."senderName" IS NOT NULL
-              AND m."senderName" != ''
-            ORDER BY m.participant, m.id DESC
-          `, {
-            replacements: { companyId, participants: missingLids },
-            type: QueryTypes.SELECT
-          });
-
-          logger.info(`[GetGroupParticipants] senderName em outros grupos: ${globalSenderMappings.length}`);
-          globalSenderMappings.forEach(m => {
-            logger.info(`[GetGroupParticipants] senderName global: ${m.participant} → "${m.senderName}"`);
-            lidContactMap.set(m.participant, {
-              name: m.senderName,
-              number: null,
-              canonicalNumber: null,
-              profilePicUrl: null
-            } as any);
-          });
-        }
-
-        // Buscar também contatos individuais via contactId (para ter número real)
-        const contactMappings: any[] = await sequelize.query(`
-          SELECT DISTINCT ON (m.participant)
-            m.participant,
+            m."senderName",
             m."contactId",
-            c.name,
-            c.number,
+            c.name as contact_name,
+            c.number as contact_number,
             c."canonicalNumber",
-            c."profilePicUrl"
+            c."profilePicUrl",
+            c.id as real_contact_id,
+            ROW_NUMBER() OVER (PARTITION BY m.participant ORDER BY 
+              CASE WHEN c."isGroup" = false AND c.number IS NOT NULL THEN 0 ELSE 1 END,
+              m.id DESC
+            ) as rn
           FROM "Messages" m
-          JOIN "Contacts" c ON c.id = m."contactId"
-          WHERE m."ticketId" IN (:ticketIds)
+          LEFT JOIN "Contacts" c ON c.id = m."contactId" AND c."isGroup" = false
+          JOIN "Tickets" t ON t.id = m."ticketId"
+          WHERE t."companyId" = :companyId
+            AND t."isGroup" = true
             AND m."fromMe" = false
             AND m.participant IN (:participants)
-            AND c."isGroup" = false
-          ORDER BY m.participant, m.id DESC
-        `, {
-          replacements: { ticketIds, participants: lidParticipantJids },
-          type: QueryTypes.SELECT
-        });
+        )
+        SELECT * FROM ranked WHERE rn = 1
+      `, {
+        replacements: { companyId, participants: lidParticipantJids },
+        type: QueryTypes.SELECT
+      });
 
-        logger.info(`[GetGroupParticipants] Contatos individuais encontrados: ${contactMappings.length}`);
-        contactMappings.forEach(m => {
-          logger.info(`[GetGroupParticipants] Contato: ${m.participant} → ${m.name} (${m.number})`);
+      for (const row of mappings) {
+        lidContactMap.set(row.participant, {
+          name: row.contact_name || row.senderName,
+          number: row.contact_number,
+          canonicalNumber: row.canonicalNumber,
+          profilePicUrl: row.profilePicUrl,
+          id: row.real_contact_id
         });
+      }
 
-        // Sobrescrever com contatos reais (têm mais dados)
-        for (const row of contactMappings) {
-          const contact = await Contact.findByPk(row.contactId);
-          if (contact) {
-            lidContactMap.set(row.participant, contact);
+      // Fallback: buscar contatos por lidJid/remoteJid para LIDs não encontrados
+      const missingLids = lidParticipantJids.filter((lid: string) => !lidContactMap.has(lid));
+      if (missingLids.length > 0) {
+        const lidContacts = await Contact.findAll({
+          where: {
+            companyId,
+            isGroup: false,
+            [Op.or]: [
+              { lidJid: { [Op.in]: missingLids } },
+              { remoteJid: { [Op.in]: missingLids } }
+            ]
+          },
+          attributes: ["id", "name", "number", "canonicalNumber", "profilePicUrl", "lidJid", "remoteJid"]
+        });
+        
+        for (const c of lidContacts) {
+          const key = c.lidJid || c.remoteJid;
+          if (key && !lidContactMap.has(key)) {
+            lidContactMap.set(key, c);
           }
         }
       }
     } catch (err) {
-      logger.warn(`[GetGroupParticipants] Erro ao buscar mapeamento LID→Contact: ${err}`);
-    }
-
-    // Fallback: buscar contatos que tenham lidJid ou remoteJid @lid
-    try {
-      const lidContacts = await Contact.findAll({
-        where: {
-          companyId,
-          isGroup: false,
-          [Op.or]: [
-            { lidJid: { [Op.in]: lidParticipantJids } },
-            { remoteJid: { [Op.in]: lidParticipantJids } }
-          ]
-        }
-      });
-      logger.info(`[GetGroupParticipants] Contatos com LID no banco: ${lidContacts.length}`);
-      for (const c of lidContacts) {
-        if (c.lidJid && !lidContactMap.has(c.lidJid)) lidContactMap.set(c.lidJid, c);
-        if (c.remoteJid && !lidContactMap.has(c.remoteJid)) lidContactMap.set(c.remoteJid, c);
-      }
-    } catch (err) {
-      logger.warn(`[GetGroupParticipants] Erro ao buscar contatos por LID: ${err}`);
+      logger.warn(`[GetGroupParticipants] Erro ao buscar mapeamento LID: ${err}`);
     }
   }
-
-  logger.info(`[GetGroupParticipants] lidContactMap final: ${lidContactMap.size} entradas`);
 
   for (const p of groupMetadata.participants || []) {
     const participantJid = p.id;
@@ -352,45 +277,25 @@ const GetGroupParticipantsService = async ({
       // BAILEYS V7: Quando id é LID, phoneNumber vem no próprio participante
       const baileysPhoneNumber = (p as any).phoneNumber;
       
-      // LOG DETALHADO: Mostrar objeto completo do participante
-      logger.info(`[GetGroupParticipants] LID ${participantJid} - Dados do participante:`, {
-        id: p.id,
-        phoneNumber: (p as any).phoneNumber,
-        name: p.name,
-        notify: p.notify,
-        admin: p.admin,
-        // Mostrar todas as propriedades disponíveis
-        allKeys: Object.keys(p)
-      });
-      
       if (baileysPhoneNumber && typeof baileysPhoneNumber === 'string') {
         const { canonical } = normalizePhoneNumber(baileysPhoneNumber);
         if (canonical) {
           participantNumber = canonical;
           isValidPhoneNumber = true;
-          logger.info(`[GetGroupParticipants] LID ${participantJid} resolvido via phoneNumber direto: ${participantNumber}`);
         }
       }
 
       // Buscar contato pelo mapeamento das mensagens salvas (se ainda não temos número)
       if (!isValidPhoneNumber) {
-        contactRecord = lidContactMap.get(participantJid) || null;
-
-        if (contactRecord) {
-          logger.info(`[GetGroupParticipants] LID ${participantJid} encontrado no lidContactMap:`, {
-            name: contactRecord.name,
-            number: contactRecord.number,
-            canonicalNumber: contactRecord.canonicalNumber
-          });
-          // Usar número real do contato encontrado
-          const contactNum = (contactRecord.canonicalNumber || contactRecord.number || "").replace(/\D/g, "");
+        const mappedContact = lidContactMap.get(participantJid);
+        if (mappedContact) {
+          const contactNum = (mappedContact.canonicalNumber || mappedContact.number || "").replace(/\D/g, "");
           if (contactNum.length >= 7 && contactNum.length <= 15) {
             participantNumber = contactNum;
             isValidPhoneNumber = true;
           }
-          resolvedName = contactRecord.name || null;
-        } else {
-          logger.info(`[GetGroupParticipants] LID ${participantJid} NÃO encontrado no lidContactMap`);
+          resolvedName = mappedContact.name || null;
+          contactRecord = mappedContact as Contact;
         }
       }
     } else {
@@ -401,54 +306,27 @@ const GetGroupParticipantsService = async ({
       contactRecord = contactsMap.get(participantNumber) || contactsMap.get(rawNumber) || null;
     }
 
-    // NOVO: Tentar resolver via store do Baileys (chats/contacts) para TODOS os tipos de participantes
-    // O store mantém mapeamento LID -> phoneNumber e também pushNames (notify)
-    // NOTA: Para Baileys v7, phoneNumber já vem diretamente no objeto do participante quando é LID
+    // Tentar resolver via store do Baileys (pushNames)
     if (!resolvedName) {
       try {
         const store = (wbot as any).store;
-        if (store && store.contacts) {
-          const allContacts = Object.values(store.contacts) as any[];
-          const baileysContact = allContacts.find(c => c.id === participantJid);
-
-          if (baileysContact) {
-            logger.info(`[GetGroupParticipants] LID ${participantJid} encontrado no store:`, {
-              id: baileysContact.id,
-              name: baileysContact.name,
-              notify: baileysContact.notify,
-              verifiedName: baileysContact.verifiedName,
-              phoneNumber: baileysContact.phoneNumber,
-              allKeys: Object.keys(baileysContact)
-            });
-            
-            // Capturar phoneNumber do store (fallback para quando não veio diretamente no participante)
-            if (isLid && !isValidPhoneNumber) {
-              const realNumber = baileysContact.phoneNumber ||
-                baileysContact.id?.split("@")[0]?.replace(/\D/g, "");
-              if (realNumber && realNumber.length >= 7 && realNumber.length <= 15) {
-                participantNumber = realNumber;
-                isValidPhoneNumber = true;
-                logger.info(`[GetGroupParticipants] LID ${participantJid} resolvido via store: ${participantNumber}`);
-              }
+        if (store?.contacts?.[participantJid]) {
+          const bc = store.contacts[participantJid];
+          
+          // Capturar phoneNumber do store se ainda não temos
+          if (isLid && !isValidPhoneNumber && bc.phoneNumber) {
+            const realNumber = bc.phoneNumber.replace(/\D/g, "");
+            if (realNumber.length >= 7 && realNumber.length <= 15) {
+              participantNumber = realNumber;
+              isValidPhoneNumber = true;
             }
-
-            // Capturar pushName (notify) se não tivermos nome ainda
-            if (!resolvedName) {
-              resolvedName = baileysContact.name ||
-                baileysContact.notify ||
-                baileysContact.verifiedName || null;
-              if (resolvedName) {
-                logger.info(`[GetGroupParticipants] LID ${participantJid} nome resolvido via store: ${resolvedName}`);
-              }
-            }
-          } else {
-            logger.info(`[GetGroupParticipants] LID ${participantJid} NÃO encontrado no store (total contatos: ${allContacts.length})`);
           }
-        } else {
-          logger.warn(`[GetGroupParticipants] Store não disponível ou sem contatos`);
+
+          // Capturar nome
+          resolvedName = bc.name || bc.notify || bc.verifiedName || null;
         }
-      } catch (err) {
-        logger.warn(`[GetGroupParticipants] Erro ao acessar store para ${participantJid}: ${err}`);
+      } catch {
+        // Ignorar erros do store
       }
     }
 
@@ -485,39 +363,21 @@ const GetGroupParticipantsService = async ({
       }
     }
 
-    // Determinar nome: 1) resolvido anteriormente, 2) contato do sistema, 3) pushName do WhatsApp, 4) nome direto do Baileys, 5) número formatado
+    // Determinar nome: prioridade 1) resolvido, 2) contato, 3) pushName, 4) número
     let contactName: string;
-    
-    logger.info(`[GetGroupParticipants] Resolvendo nome para ${participantJid}:`, {
-      resolvedName,
-      contactRecordName: contactRecord?.name,
-      pName: p.name,
-      pNotify: p.notify,
-      isValidPhoneNumber,
-      participantNumber
-    });
     
     if (resolvedName) {
       contactName = resolvedName;
-      logger.info(`[GetGroupParticipants] Usando resolvedName: "${contactName}"`);
     } else if (contactRecord?.name) {
       contactName = contactRecord.name;
-      logger.info(`[GetGroupParticipants] Usando contactRecord.name: "${contactName}"`);
     } else if (p.name) {
-      // Nome direto do participante no metadata do grupo
       contactName = p.name;
-      logger.info(`[GetGroupParticipants] Usando p.name: "${contactName}"`);
     } else if (p.notify) {
-      // pushName do WhatsApp (campo "notify" no Baileys)
       contactName = p.notify;
-      logger.info(`[GetGroupParticipants] Usando p.notify: "${contactName}"`);
     } else if (isValidPhoneNumber) {
       contactName = `+${participantNumber}`;
-      logger.info(`[GetGroupParticipants] Usando número: "${contactName}"`);
     } else {
-      // Fallback final: Se for LID ou inválido, não exibir o número
       contactName = "Participante";
-      logger.warn(`[GetGroupParticipants] FALLBACK para "Participante" - participantJid: ${participantJid}`);
     }
 
     // Número exibido: preferir número real formatado com DDI
