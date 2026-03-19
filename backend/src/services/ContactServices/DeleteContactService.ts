@@ -8,9 +8,10 @@ interface Request {
   id: string;
   companyId: number;
   userId?: number;
+  bypassWalletRestriction?: boolean;
 }
 
-const DeleteContactService = async ({ id, companyId, userId }: Request): Promise<void> => {
+const DeleteContactService = async ({ id, companyId, userId, bypassWalletRestriction = false }: Request): Promise<void> => {
   const contact = await Contact.findOne({
     where: { id }
   });
@@ -24,7 +25,8 @@ const DeleteContactService = async ({ id, companyId, userId }: Request): Promise
   }
 
   // Restrição de carteira: se usuário é restrito, só permite excluir contato dentro da carteira
-  if (userId) {
+  // EXCEÇÃO: Se bypassWalletRestriction=true (usuário tem contacts.delete), ignora restrição
+  if (userId && !bypassWalletRestriction) {
     const walletResult = await GetUserPersonalTagContactIds(userId, companyId);
     if (walletResult.hasWalletRestriction) {
       const allowedContactIds = walletResult.contactIds;

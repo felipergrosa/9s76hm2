@@ -55,13 +55,15 @@ interface Request {
   contactId: string;
   companyId: number;
   userId?: number;
+  bypassWalletRestriction?: boolean; // Se true, ignora restrição de carteira (usuário tem contacts.edit)
 }
 
 const UpdateContactService = async ({
   contactData,
   contactId,
   companyId,
-  userId
+  userId,
+  bypassWalletRestriction = false
 }: Request): Promise<Contact> => {
   const {
     email,
@@ -175,7 +177,8 @@ const UpdateContactService = async ({
   }
 
   // Restrição por tags pessoais: se usuário é restrito, só permite editar contato dentro da sua carteira
-  if (userId) {
+  // EXCEÇÃO: Se bypassWalletRestriction=true (usuário tem contacts.edit), ignora restrição
+  if (userId && !bypassWalletRestriction) {
     const walletResult = await GetUserPersonalTagContactIds(userId, companyId);
     if (walletResult.hasWalletRestriction) {
       const allowedContactIds = walletResult.contactIds;

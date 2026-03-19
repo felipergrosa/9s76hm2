@@ -1116,11 +1116,15 @@ export const update = async (
     logger.warn({ contactId: Number(contactId), companyId, error: err?.message }, "[Contacts.update] validação assíncrona falhou");
   });
 
+  // Se usuário tem permissão contacts.edit, pode editar qualquer contato (bypass da restrição de carteira)
+  const canEditAnyContact = user ? hasPermission(user, "contacts.edit") : false;
+
   const contact = await UpdateContactService({
     contactData,
     contactId,
     companyId,
-    userId: req.user?.id ? parseInt(req.user.id, 10) : undefined
+    userId: req.user?.id ? parseInt(req.user.id, 10) : undefined,
+    bypassWalletRestriction: canEditAnyContact
   });
 
   await emitToCompanyNamespace(
@@ -1142,7 +1146,11 @@ export const remove = async (
   const { contactId } = req.params;
   const { companyId } = req.user;
 
-  await DeleteContactService({ id: contactId, companyId, userId: Number(req.user.id) });
+  // Se usuário tem permissão contacts.delete, pode deletar qualquer contato (bypass da restrição de carteira)
+  const user = await User.findByPk(req.user.id);
+  const canDeleteAnyContact = user ? hasPermission(user, "contacts.delete") : false;
+
+  await DeleteContactService({ id: contactId, companyId, userId: Number(req.user.id), bypassWalletRestriction: canDeleteAnyContact });
 
   await emitToCompanyNamespace(
     companyId,
