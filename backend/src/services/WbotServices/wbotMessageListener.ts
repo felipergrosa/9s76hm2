@@ -5466,7 +5466,7 @@ const handleMessage = async (
 
     // Usa lock por JID para evitar race conditions na criação de contatos
     let ticket = await withJidLock(`ticket-${contact.id}-${companyId}`, async () => {
-      console.log(`[wbotMessageListener] Dentro do lock JID - criando/buscando ticket para contactId=${contact.id}, whatsappId=${whatsapp.id}, companyId=${companyId}`);
+      logger.debug(`[wbotMessageListener] Lock JID - criando/buscando ticket para contactId=${contact.id}`);
       
       try {
         const result = await FindOrCreateTicketService(
@@ -6801,7 +6801,8 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
 
   wbot.ev.on("contacts.update", (contacts: any) => {
     contacts.forEach(async (contact: any) => {
-      console.log(`[contacts.update] contato: ${contact.id} | notify:`, contact.notify, '| objeto completo:', contact);
+      // Log limitado para evitar OOM - NÃO logar objeto completo
+      logger.debug(`[contacts.update] contato: ${contact.id} | notify: ${contact.notify || 'N/A'}`);
       if (!contact?.id) return;
 
       // Tratamento especial para LIDs: atualizar contatos existentes e capturar mapeamentos PN
@@ -7014,45 +7015,45 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
 
       // Se notify estiver vazio (comum em contatos LID), busca outras fontes
       if (!finalName || finalName.trim() === "") {
-        console.log(`[contacts.update] notify vazio para ${contact.id}, buscando outras fontes`);
+        logger.debug(`[contacts.update] notify vazio para ${contact.id}, buscando outras fontes`);
 
         // PRIORIDADE 2: Nome já cadastrado no CRM (se não for apenas o número)
         const existingContact = await Contact.findOne({ where: { remoteJid: contact.id, companyId } });
         if (existingContact?.name && existingContact.name.replace(/\D/g, "") !== numero) {
           finalName = existingContact.name;
-          console.log(`[contacts.update] Usando nome do CRM: ${finalName}`);
+          logger.debug(`[contacts.update] Usando nome do CRM: ${finalName}`);
         } else {
           // PRIORIDADE 3: Nome do perfil do usuário (businessProfile)
           try {
-            console.log(`[contacts.update] Tentando buscar perfil do usuário: ${contact.id}`);
+            logger.debug(`[contacts.update] Tentando buscar perfil do usuário: ${contact.id}`);
             const businessProfile = await wbot.getBusinessProfile(contact.id).catch(() => null);
 
             if (businessProfile?.email) {
               finalName = businessProfile.email;
-              console.log(`[contacts.update] Email do perfil encontrado: ${finalName}`);
+              logger.debug(`[contacts.update] Email do perfil encontrado: ${finalName}`);
             } else if (businessProfile?.description) {
               // LIMITAR description para evitar mensagens de marketing completas
               const desc = businessProfile.description.trim();
               if (desc.length <= 100 && !desc.includes('\n')) {
                 finalName = desc;
-                console.log(`[contacts.update] Description do perfil encontrada (curta): ${finalName}`);
+                logger.debug(`[contacts.update] Description do perfil encontrada (curta): ${finalName}`);
               } else {
                 // Description muito longa = mensagem de marketing, ignorar
                 finalName = numero;
-                console.log(`[contacts.update] Description muito longa (${desc.length} chars), usando número: ${numero}`);
+                logger.debug(`[contacts.update] Description muito longa (${desc.length} chars), usando número: ${numero}`);
               }
             } else {
               finalName = numero;
-              console.log(`[contacts.update] Nenhum nome encontrado, usando número: ${numero}`);
+              logger.debug(`[contacts.update] Nenhum nome encontrado, usando número: ${numero}`);
             }
           } catch (err) {
             finalName = numero;
-            console.log(`[contacts.update] Erro ao buscar perfil, usando número:`, err);
+            logger.debug(`[contacts.update] Erro ao buscar perfil, usando número`);
           }
 
         }
       } else {
-        console.log(`[contacts.update] Usando notify da agenda: ${finalName}`);
+        logger.debug(`[contacts.update] Usando notify da agenda: ${finalName}`);
       }
 
       // VALIDAÇÃO ROBUSTA: Determinar se é grupo ou indivíduo
