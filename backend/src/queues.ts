@@ -19,6 +19,7 @@ import sequelize from "./database";
 import { getMessageOptions } from "./services/WbotServices/SendWhatsAppMedia";
 import { getIO } from "./libs/socket";
 import path from "path";
+import fs from "fs";
 import User from "./models/User";
 import Company from "./models/Company";
 import Contact from "./models/Contact";
@@ -2175,6 +2176,9 @@ async function handleDispatchCampaign(job) {
           const perUrl: string | null = msgIdx ? (campaign as any)[`mediaUrl${msgIdx}`] : null;
           const perName: string | null = msgIdx ? (campaign as any)[`mediaName${msgIdx}`] : null;
 
+          // LOG DE DIAGNÓSTICO - Mídia por mensagem
+          logger.info(`[DispatchCampaign][MEDIA-DEBUG] Campanha=${campaign.id} | msgIdx=${msgIdx} | perUrl=${perUrl} | perName=${perName} | mediaPath(global)=${campaign.mediaPath} | mediaName(global)=${campaign.mediaName}`);
+
           const publicFolder = path.resolve(__dirname, "..", "public");
           const urlToLocalPath = (url: string | null | undefined): string | null => {
             try {
@@ -2201,11 +2205,13 @@ async function handleDispatchCampaign(job) {
           const perMessageFilePath = urlToLocalPath(perUrl);
           const hasPerMessageMedia = Boolean(perMessageFilePath && perName);
 
+          // LOG DE DIAGNÓSTICO - Caminho do arquivo
+          logger.info(`[DispatchCampaign][MEDIA-DEBUG] perMessageFilePath=${perMessageFilePath} | hasPerMessageMedia=${hasPerMessageMedia} | fileExists=${perMessageFilePath ? fs.existsSync(perMessageFilePath) : 'N/A'}`);
+
           if (!hasPerMessageMedia && !campaign.mediaPath) {
             const sentMessage = await wbot.sendMessage(chatId, {
               text: `\u200c ${campaignShipping.message}`
             });
-
             await verifyMessage(sentMessage, ticket, contact, null, true, false, true); // isCampaign=true
           }
 
@@ -2215,15 +2221,29 @@ async function handleDispatchCampaign(job) {
               : path.join(publicFolder, `company${campaign.companyId}`, campaign.mediaPath);
 
             const fileName = hasPerMessageMedia ? (perName as string) : campaign.mediaName;
-            const options = await getMessageOptions(fileName, filePath, String(campaign.companyId), `\u200c ${campaignShipping.message}`);
-            if (Object.keys(options).length) {
-              if (options.mimetype === "audio/mp4") {
-                const audioMessage = await wbot.sendMessage(chatId, {
+            
+            // Detectar se é áudio ANTES de processar (getMessageOptions converte para ogg)
+            const mimeType = require("mime-types").lookup(filePath);
+            const isAudio = mimeType && mimeType.startsWith("audio/");
+            
+            // Verificar se deve enviar mídia separada do texto
+            const sendSeparately = (campaign as any).sendMediaSeparately === true;
+            const hasText = campaignShipping.message && campaignShipping.message.trim();
+            
+            // Se sendMediaSeparately OU áudio → enviar texto primeiro (2 mensagens)
+            // Senão → enviar mídia com caption (1 mensagem)
+            const captionText = (sendSeparately || isAudio) ? null : `\u200c ${campaignShipping.message}`;
+            
+            const options = await getMessageOptions(fileName, filePath, String(campaign.companyId), captionText || "");
+            if (options && Object.keys(options).length) {
+              // Enviar texto primeiro se: sendMediaSeparately OU áudio (PTT não suporta caption)
+              if ((sendSeparately || isAudio) && hasText) {
+                const textMessage = await wbot.sendMessage(chatId, {
                   text: `\u200c ${campaignShipping.message}`
                 });
-
-                await verifyMessage(audioMessage, ticket, contact, null, true, false, true); // isCampaign=true
+                await verifyMessage(textMessage, ticket, contact, null, true, false, true); // isCampaign=true
               }
+              
               const sentMessage = await wbot.sendMessage(chatId, { ...options });
 
               // FIX: Ensure caption is present in the returned message object so verifyMediaMessage can save it

@@ -20,6 +20,15 @@ window.onerror = (message, source, lineno, colno, error) => {
   return resizeObserverErr ? resizeObserverErr(message, source, lineno, colno, error) : false;
 };
 
+// Handler adicional para capturar erros de runtime (React error overlay)
+window.addEventListener('error', (event) => {
+  if (event.message && event.message.includes('ResizeObserver loop')) {
+    event.stopImmediatePropagation();
+    event.preventDefault();
+    return true;
+  }
+});
+
 ReactDOM.render(
 	<>
 		<CssBaseline />

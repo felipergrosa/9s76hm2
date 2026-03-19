@@ -166,6 +166,10 @@ class Campaign extends Model<Campaign> {
   @Column
   mediaName5: string;
 
+  // Flag para enviar mídia separada do texto (2 mensagens)
+  @Column({ defaultValue: false })
+  sendMediaSeparately: boolean;
+
   // Template oficial da Meta (API Oficial)
   @Column({ type: DataType.TEXT, allowNull: true })
   metaTemplateName: string;

@@ -141,23 +141,34 @@ const TicketsListViewport = ({
         const container = listContainerRef.current;
         if (!container) return;
 
+        let rafId = null;
+
         const updateHeight = () => {
-            if (container) {
-                setListHeight(container.clientHeight);
-            }
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+                if (container) {
+                    setListHeight(container.clientHeight);
+                }
+            });
         };
 
         updateHeight();
 
         if (typeof ResizeObserver === "undefined") {
             window.addEventListener("resize", updateHeight);
-            return () => window.removeEventListener("resize", updateHeight);
+            return () => {
+                window.removeEventListener("resize", updateHeight);
+                if (rafId) cancelAnimationFrame(rafId);
+            };
         }
 
         const resizeObserver = new ResizeObserver(updateHeight);
         resizeObserver.observe(container);
 
-        return () => resizeObserver.disconnect();
+        return () => {
+            resizeObserver.disconnect();
+            if (rafId) cancelAnimationFrame(rafId);
+        };
     }, []);
 
     useEffect(() => {

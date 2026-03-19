@@ -78,7 +78,7 @@ const ListMessagesService = async ({
     logger.info(`[ListMessages] GRUPO: contactId=${ticket.contactId} ticketIds=${JSON.stringify(ids)}`);
   } else {
     // Histórico unificado: buscar mensagens de TODOS os tickets do mesmo contato
-    // Filtro de fila conforme permissões do usuário (comportamento original)
+    // CORREÇÃO: Buscar TODOS os tickets do contato (não apenas anteriores)
     const isAllHistoricEnabled = await isQueueIdHistoryBlocked({ userRequest: user.id });
     
     let ticketIds = [];
@@ -86,7 +86,6 @@ const ListMessagesService = async ({
       // Com filtro de fila (usuário restrito)
       ticketIds = await Ticket.findAll({
         where: {
-          id: { [Op.lte]: ticket.id },
           companyId: ticket.companyId,
           contactId: ticket.contactId,
           whatsappId: ticket.whatsappId,
@@ -99,9 +98,9 @@ const ListMessagesService = async ({
       });
     } else {
       // Sem filtro de fila (admin, allTicket, ou histórico liberado)
+      // Buscar TODOS os tickets do mesmo contato para unificação completa
       ticketIds = await Ticket.findAll({
         where: {
-          id: { [Op.lte]: ticket.id },
           companyId: ticket.companyId,
           contactId: ticket.contactId,
           whatsappId: ticket.whatsappId,
@@ -113,6 +112,7 @@ const ListMessagesService = async ({
 
     if (ticketIds && ticketIds.length > 0) {
       ticketsFilter.push(ticketIds.map(t => t.id));
+      logger.info(`[ListMessages] UNIFICADO: contactId=${ticket.contactId} ticketIds=${JSON.stringify(ticketIds.map(t => t.id))}`);
     } else {
       // Fallback: usar apenas o ticket atual se não encontrou outros
       ticketsFilter.push([ticket.id]);
@@ -129,8 +129,12 @@ const ListMessagesService = async ({
   const limit = 20;
   const offset = limit * (+pageNumber - 1);
 
-  // Verificar cache apenas para página 1 (mensagens mais recentes)
-  if (+pageNumber === 1) {
+  // NOTA: Cache desabilitado para histórico unificado (múltiplos tickets)
+  // O cache é por ticketId individual e não funciona bem com unificação
+  const hasMultipleTickets = tickets.length > 1;
+  
+  // Verificar cache apenas para página 1 e ticket único (sem unificação)
+  if (+pageNumber === 1 && !hasMultipleTickets) {
     const cached = await getCachedTicketMessages(companyId, ticket.id, 1);
     if (cached) {
       logger.debug(`[ListMessages] Cache HIT para ticket ${ticket.id}`);

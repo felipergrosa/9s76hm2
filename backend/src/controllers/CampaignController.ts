@@ -61,6 +61,7 @@ type StoreData = {
   metaTemplateName?: string | null;
   metaTemplateLanguage?: string | null;
   metaTemplateVariables?: Record<string, any> | null;  // Mapeamento de variáveis do template
+  sendMediaSeparately?: boolean;  // Enviar mídia separada do texto
 };
 
 type FindParams = {

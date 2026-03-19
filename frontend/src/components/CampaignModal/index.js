@@ -36,6 +36,7 @@ import toastError from "../../errors/toastError";
 import {
   Box,
   FormControl,
+  FormControlLabel,
   Grid,
   InputLabel,
   MenuItem,
@@ -45,6 +46,7 @@ import {
   Paper,
   Divider,
   FormHelperText,
+  Checkbox,
 } from "@material-ui/core";
 import { Alert } from "@material-ui/lab";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -158,6 +160,7 @@ const CampaignModal = ({
     metaTemplateName: null,
     metaTemplateLanguage: null,
     metaTemplateVariables: {},  // NOVO: mapeamento de variáveis
+    sendMediaSeparately: false,  // Enviar mídia separada do texto (2 mensagens)
   };
 
   // Validação de mídia permitida
@@ -2114,6 +2117,33 @@ const CampaignModal = ({
                                 {renderTabAttachment(4, values, !campaignEditable)}
                               </>
                             )}
+                            
+                            {/* Checkbox para enviar mídia separada do texto */}
+                            <Box sx={{ mt: 2, p: 1.5, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                              <FormControlLabel
+                                control={
+                                  <Field
+                                    as={Checkbox}
+                                    type="checkbox"
+                                    name="sendMediaSeparately"
+                                    checked={values.sendMediaSeparately}
+                                    disabled={!campaignEditable}
+                                    color="primary"
+                                  />
+                                }
+                                label={
+                                  <Box>
+                                    <Typography variant="body2" color="textPrimary">
+                                      <strong>Enviar anexo separado</strong>
+                                    </Typography>
+                                    <Typography variant="caption" color="textSecondary">
+                                      Quando ativado, envia o texto e o anexo em mensagens separadas (2 mensagens). 
+                                      Quando desativado, envia o texto como legenda do anexo (1 mensagem).
+                                    </Typography>
+                                  </Box>
+                                }
+                              />
+                            </Box>
                           </Box>
                         </Grid>
                       </Grid>

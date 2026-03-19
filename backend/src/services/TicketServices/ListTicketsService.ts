@@ -357,37 +357,45 @@ const ListTicketsService = async ({
         }
       ];
       whereCondition = {
-        ...whereCondition,
-        [Op.or]: [
+        [Op.and]: [
+          whereCondition,
           {
-            "$contact.name$": where(
-              fn("LOWER", fn("unaccent", col("contact.name"))),
-              "LIKE",
-              `%${sanitizedSearchParam}%`
-            )
-          },
-          { "$contact.number$": { [Op.like]: `%${sanitizedSearchParam}%` } },
-          {
-            "$message.body$": where(
-              fn("LOWER", fn("unaccent", col("body"))),
-              "LIKE",
-              `%${sanitizedSearchParam}%`
-            )
+            [Op.or]: [
+              {
+                "$contact.name$": where(
+                  fn("LOWER", fn("unaccent", col("contact.name"))),
+                  "LIKE",
+                  `%${sanitizedSearchParam}%`
+                )
+              },
+              { "$contact.number$": { [Op.like]: `%${sanitizedSearchParam}%` } },
+              {
+                "$message.body$": where(
+                  fn("LOWER", fn("unaccent", col("body"))),
+                  "LIKE",
+                  `%${sanitizedSearchParam}%`
+                )
+              }
+            ]
           }
         ]
       };
     } else {
       whereCondition = {
-        ...whereCondition,
-        [Op.or]: [
+        [Op.and]: [
+          whereCondition,
           {
-            "$contact.name$": where(
-              fn("LOWER", fn("unaccent", col("contact.name"))),
-              "LIKE",
-              `%${sanitizedSearchParam}%`
-            )
-          },
-          { "$contact.number$": { [Op.like]: `%${sanitizedSearchParam}%` } }
+            [Op.or]: [
+              {
+                "$contact.name$": where(
+                  fn("LOWER", fn("unaccent", col("contact.name"))),
+                  "LIKE",
+                  `%${sanitizedSearchParam}%`
+                )
+              },
+              { "$contact.number$": { [Op.like]: `%${sanitizedSearchParam}%` } }
+            ]
+          }
         ]
       };
     }

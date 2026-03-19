@@ -88,19 +88,22 @@ const ListMessagesServiceOptimized = async ({
   }
 
   // Determina quais tickets buscar mensagens
+  // UNIFICAÇÃO: Buscar mensagens de TODOS os tickets do mesmo contato
   let ticketIds = [ticket.id];
 
-  // Para grupos: buscar mensagens de todos os tickets do mesmo contato
-  if (ticket.isGroup) {
-    const groupTickets = await Ticket.findAll({
-      where: {
-        contactId: ticket.contactId,
-        companyId: ticket.companyId,
-        isGroup: true
-      },
-      attributes: ["id"]
-    });
-    ticketIds = groupTickets.map(t => t.id);
+  const allContactTickets = await Ticket.findAll({
+    where: {
+      contactId: ticket.contactId,
+      companyId: ticket.companyId,
+      whatsappId: ticket.whatsappId,
+      isGroup: ticket.isGroup
+    },
+    attributes: ["id"]
+  });
+  
+  if (allContactTickets.length > 0) {
+    ticketIds = allContactTickets.map(t => t.id);
+    console.log(`[ListMessages] UNIFICADO: contactId=${ticket.contactId} ticketIds=${JSON.stringify(ticketIds)}`);
   }
 
   // Conta total de mensagens

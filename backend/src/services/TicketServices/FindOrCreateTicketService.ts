@@ -174,22 +174,21 @@ const FindOrCreateTicketService = async (
       return ticket;
     }
   } else {
-    // Para contatos individuais: buscar ticket ABERTO mais recente
-    // Tickets fechados permanecem fechados - novo ciclo = novo ticket
+    // Buscar ticket mais recente INDEPENDENTE de status
     ticket = await Ticket.findOne({
       where: {
         contactId: contact?.id,
         companyId,
         whatsappId: whatsapp.id,
-        status: { [Op.notIn]: ["closed"] } // Ignorar tickets fechados
+        isGroup: false
       },
       order: [["id", "DESC"]]
     });
     
     if (ticket) {
-      logger.info(`[FindOrCreateTicket] Ticket aberto encontrado: ${ticket.id} (status=${ticket.status}, userId=${ticket.userId}, queueId=${ticket.queueId})`);
+      logger.info(`[FindOrCreateTicket] Ticket existente encontrado para unificação: ${ticket.id} (status=${ticket.status})`);
     } else {
-      logger.info(`[FindOrCreateTicket] Nenhum ticket aberto encontrado para contactId=${contact?.id}. Será criado novo ticket.`);
+      logger.info(`[FindOrCreateTicket] Nenhum ticket encontrado para contactId=${contact?.id}. Será criado novo ticket.`);
     }
   }
 
@@ -200,10 +199,27 @@ const FindOrCreateTicketService = async (
         queueId: queueId !== ticket.queueId ? ticket.queueId : queueId,
       })
     } else {
+      // Verificar se ticket está fechado e reabrir para unificação do chat
+      const wasClosed = ticket.status === "closed" || ticket.status === "lgpd" || ticket.status === "nps";
+      if (wasClosed && !isFromMe) {
+        logger.info(`[FindOrCreateTicket] Reabrindo ticket ${ticket.id} (estava ${ticket.status}) para unificação do chat`);
+        const oldStatus = ticket.status;
+        (ticket as any)._skipHookEmit = true;
+        await ticket.update({
+          status: "pending",
+          unreadMessages,
+          queueId: ticket.queueId || null,
+          userId: null // Resetar atribuição para nova rodada
+        });
+        // Emitir evento de mudança de status
+        ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, oldStatus, "pending");
+      } else {
+        // Atualizar mensagens não lidas normalmente
+        await ticket.update({ unreadMessages });
+      }
+
       // Não forçar isBot: false! Manter estado atual do bot
-      // Se ticket está em "bot", continua bot. Se está em "pending", continua pending.
       logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} encontrado: status=${ticket.status}, queueId=${ticket.queueId}, isBot=${ticket.isBot}`);
-      await ticket.update({ unreadMessages });
       // Se ticket está "pending", verificar se conexão tem fila com bot agora
       if (ticket.status === "pending" && !isFromMe) {
         logger.info(
