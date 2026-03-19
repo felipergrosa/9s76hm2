@@ -8,6 +8,9 @@ import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 
+// Memory monitor para detectar memory leaks
+import "./utils/memoryMonitor";
+
 const getBackendVersion = async () => {
   const version = await Version.findByPk(1);
   return version ? version.versionBackend : "N/A";

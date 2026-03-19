@@ -56,6 +56,8 @@ RUN npm prune --omit=dev \
 FROM node:20-bullseye-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# Aumentar heap limit para 4GB para evitar OOM com múltiplas sessões WhatsApp
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 # Dependências de runtime necessárias (FFmpeg, Chromium, bash para scripts, e libs para canvas/PDF thumbnails)

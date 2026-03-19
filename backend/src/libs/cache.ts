@@ -84,8 +84,36 @@ class CacheSingleton {
 }
 
 // Fallback simples em memória quando REDIS_URI não estiver configurado
+// ⚠️ ATENÇÃO: Cache com LIMITE para evitar memory leak
+const MAX_CACHE_SIZE = 10000; // Máximo de 10k entradas
+const CLEANUP_INTERVAL = 60000; // Limpeza a cada 1 minuto
+
 function createInMemoryRedis() {
   const store = new Map<string, { value: string; expires?: number }>();
+
+  // Cleanup automático para evitar memory leak
+  setInterval(() => {
+    const now = Date.now();
+    let expired = 0;
+    for (const [key, item] of store.entries()) {
+      if (item.expires && now > item.expires) {
+        store.delete(key);
+        expired++;
+      }
+    }
+    // Se cache está muito grande, remover entradas mais antigas (LRU)
+    if (store.size > MAX_CACHE_SIZE) {
+      const keysToDelete = Array.from(store.keys()).slice(0, store.size - MAX_CACHE_SIZE);
+      for (const key of keysToDelete) {
+        store.delete(key);
+      }
+      console.warn(`[Cache] LRU cleanup: removidas ${keysToDelete.length} entradas antigas`);
+    }
+    if (expired > 0) {
+      console.log(`[Cache] Limpeza automática: ${expired} entradas expiradas removidas`);
+    }
+  }, CLEANUP_INTERVAL);
+
   return {
     async set(key: string, value: string, ...args: any[]) {
       let expires: number | undefined;
@@ -93,6 +121,16 @@ function createInMemoryRedis() {
       if (args.length >= 2 && args[0] === "EX") {
         expires = Date.now() + (args[1] as number) * 1000;
       }
+
+      // LRU: Se cache está cheio, remover entrada mais antiga
+      if (store.size >= MAX_CACHE_SIZE && !store.has(key)) {
+        const oldestKey = store.keys().next().value;
+        if (oldestKey) {
+          store.delete(oldestKey);
+          console.warn(`[Cache] LRU: removida entrada antiga para dar espaço`);
+        }
+      }
+
       store.set(key, { value, expires });
       return "OK";
     },

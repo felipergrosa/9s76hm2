@@ -1,6 +1,8 @@
 FROM node:20-bullseye-slim
 WORKDIR /app
 ENV NODE_ENV=production
+# Aumentar heap limit para 4GB para evitar OOM com múltiplas sessões WhatsApp
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg chromium libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libjpeg62-turbo libgif7 librsvg2-2 graphicsmagick ghostscript && rm -rf /var/lib/apt/lists/*
 COPY backend/package*.json ./
 COPY backend/node_modules ./node_modules

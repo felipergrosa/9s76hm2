@@ -12,6 +12,10 @@ const labelsByWpp = new Map<number, Map<string, DeviceLabel>>();
 // whatsappId -> (chatId -> Set<labelId>)
 const chatLabelsByWpp = new Map<number, Map<string, Set<string>>>();
 
+// Limites para evitar memory leak
+const MAX_CHATS_PER_WPP = 50000; // Máximo de chats com labels por conexão
+const MAX_LABELS_PER_WPP = 1000; // Máximo de labels por conexão
+
 export const upsertLabel = (whatsappId: number, label: DeviceLabel & { deleted?: boolean }) => {
   let map = labelsByWpp.get(whatsappId);
   if (!map) {
@@ -33,6 +37,13 @@ export const addChatLabelAssociation = (whatsappId: number, chatId: string, labe
     map = new Map();
     chatLabelsByWpp.set(whatsappId, map);
   }
+  
+  // Limite de chats para evitar memory leak
+  if (map.size >= MAX_CHATS_PER_WPP && !map.has(String(chatId))) {
+    logger.warn(`[labelCache] Limite de chats atingido para whatsappId=${whatsappId}. Ignorando nova associação.`);
+    return;
+  }
+  
   const key = String(chatId);
   let set = map.get(key);
   if (!set) {

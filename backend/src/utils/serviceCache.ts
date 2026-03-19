@@ -11,6 +11,7 @@ interface CacheEntry<T> {
 class ServiceCache {
   private cache: Map<string, CacheEntry<any>>;
   private readonly DEFAULT_TTL = 5 * 60 * 1000; // 5 minutos
+  private readonly MAX_SIZE = 500; // Limite máximo de entradas
 
   constructor() {
     this.cache = new Map();
@@ -42,6 +43,14 @@ class ServiceCache {
    * Armazena valor no cache
    */
   set<T>(key: string, data: T): void {
+    // LRU: Se cache está cheio, remover entrada mais antiga
+    if (this.cache.size >= this.MAX_SIZE && !this.cache.has(key)) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey) {
+        this.cache.delete(oldestKey);
+      }
+    }
+    
     this.cache.set(key, {
       data,
       timestamp: Date.now()
