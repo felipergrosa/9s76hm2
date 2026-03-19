@@ -328,6 +328,15 @@ class Whatsapp extends Model<Whatsapp> {
   @AllowNull(true)
   @Column(DataType.JSONB)
   allowedTemplates: string[];
+
+  // Plataforma do dispositivo conectado (android/ios/web)
+  // Usado para aplicar estratégias específicas de keepalive/sync
+  // Android: Doze Mode requer keepalive mais frequente
+  // iOS: Menos agressivo, sistema gerencia melhor
+  // Web: Não precisa de tratamento especial
+  @Default("android")
+  @Column(DataType.STRING(10))
+  devicePlatform: "android" | "ios" | "web";
 }
 
 export default Whatsapp;

@@ -839,21 +839,38 @@ const wbotMonitor = async (
     logger.info(`[wbotMonitor] Health check iniciado para whatsappId=${whatsapp.id} (interval: 30s)`);
 
     // =================================================================
-    // ANDROID SYNC: Forçar sync periódico AGRESSIVO para conexões Android
-    // Android tem Doze Mode que suspende WhatsApp em background rapidamente
-    // Estratégia: Keepalive frequente + detecção precoce + reconexão rápida
+    // DEVICE PLATFORM SYNC: Sync periódico específico por plataforma
+    // Android: Doze Mode requer keepalive mais frequente
+    // iOS/Web: Não precisa de tratamento especial (sistema gerencia melhor)
     // =================================================================
-    const ANDROID_SYNC_INTERVAL = 60 * 1000; // 1 minuto (era 2min - MAIS AGRESSIVO)
-    const ANDROID_KEEPALIVE_INTERVAL = 45 * 1000; // 45s entre keepalives
-    const ANDROID_STALLED_THRESHOLD = 2 * 60 * 1000; // 2min sem atividade = stalled (era 3min)
-    const ANDROID_FORCE_RECONNECT_THRESHOLD = 5 * 60 * 1000; // 5min = forçar reconexão (era 10min)
+    const devicePlatform = whatsapp.devicePlatform || "android";
+    const isAndroid = devicePlatform === "android";
+    
+    // Só aplicar AndroidSync para conexões Android
+    if (!isAndroid) {
+      logger.info(`[wbotMonitor] whatsappId=${whatsapp.id} é ${devicePlatform.toUpperCase()} - AndroidSync DESABILITADO (não necessário)`);
+      return;
+    }
+
+    logger.info(`[wbotMonitor] whatsappId=${whatsapp.id} é ANDROID - AndroidSync ATIVADO`);
+
+    // =================================================================
+    // ANDROID SYNC: Sync periódico conservador para conexões Android
+    // Android tem Doze Mode que suspende WhatsApp em background
+    // Estratégia: Keepalive moderado + detecção com margem + reconexão com delay adequado
+    // REVERTIDO: Valores agressivos causavam erros xml-not-well-formed e ciclos de reconexão
+    // =================================================================
+    const ANDROID_SYNC_INTERVAL = 2 * 60 * 1000; // 2 minutos (conservador)
+    const ANDROID_KEEPALIVE_INTERVAL = 60 * 1000; // 60s entre keepalives (menos agressivo)
+    const ANDROID_STALLED_THRESHOLD = 3 * 60 * 1000; // 3min sem atividade = stalled
+    const ANDROID_FORCE_RECONNECT_THRESHOLD = 10 * 60 * 1000; // 10min = forçar reconexão
     
     let lastActivityTimestamp = Date.now();
     let lastSyncAttempt = 0;
     let lastKeepaliveTimestamp = Date.now();
     let consecutiveStalledDetections = 0;
     
-    // Keepalive AGRESSIVO para Android: enviar presence a cada 45s para manter vivo
+    // Keepalive moderado para Android: enviar presence a cada 60s para manter vivo
     const androidKeepalive = async () => {
       try {
         const timeSinceLastKeepalive = Date.now() - lastKeepaliveTimestamp;
@@ -894,7 +911,7 @@ const wbotMonitor = async (
       }
     };
 
-    // Iniciar keepalive a cada 45 segundos
+    // Iniciar keepalive a cada 60 segundos (menos agressivo)
     const androidKeepaliveInterval = setInterval(androidKeepalive, ANDROID_KEEPALIVE_INTERVAL);
 
     // Atualizar timestamp de atividade quando receber mensagens
@@ -910,17 +927,17 @@ const wbotMonitor = async (
           lastActivityTimestamp = Date.now();
         }
       }
-    }, 20000); // Checar a cada 20s (era 30s - mais frequente)
+    }, 30000); // Checar a cada 30s (conservador)
 
     const androidSync = async () => {
       try {
         const timeSinceLastActivity = Date.now() - lastActivityTimestamp;
         const timeSinceLastSync = Date.now() - lastSyncAttempt;
 
-        // ESTRATÉGIA AGRESSIVA PARA ANDROID:
-        // Se passou mais de 2 minutos sem atividade e 3 minutos desde último sync
-        if (timeSinceLastActivity > ANDROID_STALLED_THRESHOLD && timeSinceLastSync > 3 * 60 * 1000) {
-          logger.info(`[AndroidSync] whatsappId=${whatsapp.id} sem atividade há ${Math.round(timeSinceLastActivity/1000)}s, forçando sync AGRESSIVO`);
+        // ESTRATÉGIA CONSERVADORA PARA ANDROID:
+        // Se passou mais de 3 minutos sem atividade e 5 minutos desde último sync
+        if (timeSinceLastActivity > ANDROID_STALLED_THRESHOLD && timeSinceLastSync > 5 * 60 * 1000) {
+          logger.info(`[AndroidSync] whatsappId=${whatsapp.id} sem atividade há ${Math.round(timeSinceLastActivity/1000)}s, tentando sync`);
 
           // Usar sessão atual do pool
           const { getWbot, getWbotIsReconnecting, removeWbot, getCircuitBreakerStatus, reconnectingWhatsapps } = require("../../libs/wbot");
@@ -944,14 +961,14 @@ const wbotMonitor = async (
             lastSyncAttempt = Date.now();
             lastActivityTimestamp = Date.now();
             consecutiveStalledDetections = 0;
-            logger.info(`[AndroidSync] Sync AGRESSIVO concluído com sucesso para whatsappId=${whatsapp.id}`);
+            logger.info(`[AndroidSync] Sync concluído com sucesso para whatsappId=${whatsapp.id}`);
 
           } catch (syncErr: any) {
             consecutiveStalledDetections++;
-            logger.warn(`[AndroidSync] Erro no sync AGRESSIVO: ${syncErr?.message} (stalled #${consecutiveStalledDetections})`);
+            logger.warn(`[AndroidSync] Erro no sync: ${syncErr?.message} (stalled #${consecutiveStalledDetections})`);
 
-            // Se falhar E passou mais de 5 minutos OU 3 detecções consecutivas = reconectar
-            if (timeSinceLastActivity > ANDROID_FORCE_RECONNECT_THRESHOLD || consecutiveStalledDetections >= 3) {
+            // Se falhar E passou mais de 10 minutos OU 5 detecções consecutivas = reconectar
+            if (timeSinceLastActivity > ANDROID_FORCE_RECONNECT_THRESHOLD || consecutiveStalledDetections >= 5) {
               // PROTEÇÃO: Verificar se já está tentando reconectar para evitar loop
               if (getWbotIsReconnecting(whatsapp.id)) {
                 logger.warn(`[AndroidSync] Sessão ${whatsapp.id} já está em processo de reconexão. Ignorando solicitação duplicada.`);
@@ -975,8 +992,8 @@ const wbotMonitor = async (
                 const wa = await Whatsapp.findByPk(whatsapp.id);
                 if (wa && wa.status !== "PENDING") {
                   const { StartWhatsAppSessionUnified } = require("./StartWhatsAppSessionUnified");
-                  // Delay menor para Android: 3s ao invés de 10s
-                  setTimeout(() => StartWhatsAppSessionUnified(wa, companyId), 3000);
+                  // Delay padrão para reconexão segura
+                  setTimeout(() => StartWhatsAppSessionUnified(wa, companyId), 10000);
                 }
               }
 
@@ -995,7 +1012,7 @@ const wbotMonitor = async (
     (wbot as any)._androidSyncInterval = androidSyncInterval;
     (wbot as any)._androidKeepaliveInterval = androidKeepaliveInterval;
     
-    logger.info(`[wbotMonitor] Android sync AGRESSIVO iniciado para whatsappId=${whatsapp.id} (sync: 1min, keepalive: 45s, stalled: 2min)`);
+    logger.info(`[wbotMonitor] Android sync conservador iniciado para whatsappId=${whatsapp.id} (sync: 2min, keepalive: 60s, stalled: 3min)`);
 
   } catch (err) {
     logger.error(`Error in wbotMonitor: ${err.message}`);

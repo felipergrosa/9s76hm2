@@ -61,6 +61,8 @@ interface WhatsappData {
   // Templates permitidos para API Oficial
   allowedTemplates?: string[];
   color?: string;
+  // Plataforma do dispositivo (android/ios/web)
+  devicePlatform?: "android" | "ios" | "web";
 }
 
 interface Request {
@@ -142,7 +144,9 @@ const UpdateWhatsAppService = async ({
     sessionWindowRenewalMinutes,
     // Templates permitidos para API Oficial
     allowedTemplates,
-    color
+    color,
+    // Plataforma do dispositivo
+    devicePlatform
   } = whatsappData;
 
   const normalizedColor = typeof color === "string" && color.trim()
@@ -234,7 +238,9 @@ const UpdateWhatsAppService = async ({
     sessionWindowRenewalMinutes,
     // Templates permitidos para API Oficial
     allowedTemplates,
-    color: finalColor
+    color: finalColor,
+    // Plataforma do dispositivo
+    devicePlatform
   });
 
   if (!requestQR) {

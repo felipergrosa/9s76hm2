@@ -56,10 +56,8 @@ const isAuth = async (req: ExtendedRequest, res: Response, next: NextFunction): 
     if (err.name === 'TokenExpiredError') {
       throw new AppError("ERR_SESSION_EXPIRED", 401);
     } else if (err.name === 'JsonWebTokenError') {
-      throw new AppError(
-        "Invalid token. We'll try to assign a new one on next request",
-        403
-      );
+      // Token inválido/malformado - deve retornar 401 para frontend tentar refresh
+      throw new AppError("ERR_INVALID_TOKEN", 401);
     }
 
     // Erro genérico

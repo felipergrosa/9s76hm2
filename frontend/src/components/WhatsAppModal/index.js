@@ -193,7 +193,9 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
     contactTagId: "",
     // Mensagem de renovação de janela 24h (API Oficial)
     sessionWindowRenewalMessage: "",
-    sessionWindowRenewalMinutes: 60
+    sessionWindowRenewalMinutes: 60,
+    // Plataforma do dispositivo (android/ios/web)
+    devicePlatform: "android"
   };
   const [whatsApp, setWhatsApp] = useState(initialState);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
@@ -809,6 +811,49 @@ const WhatsAppModal = ({ open, onClose, whatsAppId, initialChannelType }) => {
                           />
                         </Tooltip>
                       </Grid>
+
+                      {/* Plataforma do dispositivo - apenas para Baileys */}
+                      {values.channelType === "baileys" && (
+                        <Grid item xs={12} sm={6}>
+                          <FormControl variant="outlined" margin="dense" fullWidth>
+                            <InputLabel>Plataforma do Dispositivo</InputLabel>
+                            <Field
+                              as={Select}
+                              name="devicePlatform"
+                              label="Plataforma do Dispositivo"
+                              value={values.devicePlatform || "android"}
+                            >
+                              <MenuItem value="android">
+                                <Box display="flex" alignItems="center">
+                                  <Typography>Android</Typography>
+                                  <Typography variant="caption" color="textSecondary" style={{ marginLeft: 8 }}>
+                                    (Doze Mode - keepalive agressivo)
+                                  </Typography>
+                                </Box>
+                              </MenuItem>
+                              <MenuItem value="ios">
+                                <Box display="flex" alignItems="center">
+                                  <Typography>iOS</Typography>
+                                  <Typography variant="caption" color="textSecondary" style={{ marginLeft: 8 }}>
+                                    (Sem tratamento especial)
+                                  </Typography>
+                                </Box>
+                              </MenuItem>
+                              <MenuItem value="web">
+                                <Box display="flex" alignItems="center">
+                                  <Typography>Web/Desktop</Typography>
+                                  <Typography variant="caption" color="textSecondary" style={{ marginLeft: 8 }}>
+                                    (Sem tratamento especial)
+                                  </Typography>
+                                </Box>
+                              </MenuItem>
+                            </Field>
+                          </FormControl>
+                          <Typography variant="caption" color="textSecondary" style={{ marginTop: 4, display: "block" }}>
+                            Android requer keepalive periódico devido ao Doze Mode. iOS/Web não precisam.
+                          </Typography>
+                        </Grid>
+                      )}
                     </Grid>
 
                     {/* CAMPOS DA API OFICIAL - Mostrar apenas se oficial */}

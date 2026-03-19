@@ -25,10 +25,7 @@ const isAuthCompany = async (
       throw new AppError("ERR_SESSION_EXPIRED", 401);
     }
   } catch (err) {
-    throw new AppError(
-      "Invalid token. We'll try to assign a new one on next request",
-      403
-    );
+    throw new AppError("ERR_SESSION_EXPIRED", 401);
   }
 
   return next();

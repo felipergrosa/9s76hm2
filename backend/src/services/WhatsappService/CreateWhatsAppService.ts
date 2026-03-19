@@ -67,6 +67,8 @@ interface Request {
   color?: string;
   // Templates permitidos para API Oficial
   allowedTemplates?: string[];
+  // Plataforma do dispositivo (android/ios/web)
+  devicePlatform?: "android" | "ios" | "web";
 }
 
 interface Response {
@@ -135,6 +137,8 @@ const CreateWhatsAppService = async ({
   color,
   // Templates permitidos para API Oficial
   allowedTemplates,
+  // Plataforma do dispositivo
+  devicePlatform,
 }: Request): Promise<Response> => {
   const company = await Company.findOne({
     where: {
@@ -294,6 +298,8 @@ const CreateWhatsAppService = async ({
       color: normalizedColor,
       // Templates permitidos para API Oficial
       allowedTemplates,
+      // Plataforma do dispositivo
+      devicePlatform,
     }
   );
 
