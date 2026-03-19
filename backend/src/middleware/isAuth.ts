@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from "express";
 
 import AppError from "../errors/AppError";
 import authConfig from "../config/auth";
+import logger from "../utils/logger";
 
 import { updateUser } from "../helpers/updateUser";
 
@@ -54,13 +55,16 @@ const isAuth = async (req: ExtendedRequest, res: Response, next: NextFunction): 
     return next();
   } catch (err: any) {
     if (err.name === 'TokenExpiredError') {
+      logger.debug(`[isAuth] Token expirado: ${req.method} ${req.originalUrl}`);
       throw new AppError("ERR_SESSION_EXPIRED", 401);
     } else if (err.name === 'JsonWebTokenError') {
       // Token inválido/malformado - deve retornar 401 para frontend tentar refresh
+      logger.warn(`[isAuth] Token inválido: ${req.method} ${req.originalUrl} - ${err.message}`);
       throw new AppError("ERR_INVALID_TOKEN", 401);
     }
 
     // Erro genérico
+    logger.error(`[isAuth] Erro de autenticação: ${req.method} ${req.originalUrl} - ${err?.message}`);
     throw new AppError("Authentication failed", 401);
   }
 };
