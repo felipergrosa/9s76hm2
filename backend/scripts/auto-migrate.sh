@@ -3,10 +3,14 @@ set -e
 
 echo "[auto-migrate] Inicializando startup com auto-migration..."
 
+# Heap limit padrão se não definido
+HEAP_LIMIT="${NODE_OPTIONS:-"--max-old-space-size=4096"}"
+echo "[auto-migrate] Heap limit: $HEAP_LIMIT"
+
 # Controla se deve rodar migrations automaticamente (default: true)
 if [ "${AUTO_MIGRATE:-true}" != "true" ]; then
   echo "[auto-migrate] AUTO_MIGRATE != true -> iniciando apenas o servidor."
-  exec node dist/server.js
+  exec node $HEAP_LIMIT dist/server.js
 fi
 
 # Aguarda o banco ficar acessível tentando o status das migrations
@@ -36,6 +40,6 @@ if ! npx sequelize db:migrate; then
   echo "[auto-migrate] Verifique logs/variáveis de ambiente. Prosseguindo com start do servidor."
 fi
 
-# Inicia a aplicação
-echo "[auto-migrate] Iniciando servidor..."
-exec node dist/server.js
+# Inicia a aplicação COM heap limit
+echo "[auto-migrate] Iniciando servidor com heap limit: $HEAP_LIMIT"
+exec node $HEAP_LIMIT dist/server.js
