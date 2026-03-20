@@ -231,16 +231,17 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
 
       for (const tagName of tagList) {
         try {
+          // Limpar nome da tag
+          const cleanTagName = tagName.trim().replace(/\s+/g, ' ');
+          if (!cleanTagName) continue;
+          
           // Primeiro tenta encontrar tag existente apenas por nome e companyId
           let tag = await Tag.findOne({
-            where: { name: tagName, companyId }
+            where: { name: cleanTagName, companyId }
           });
 
-          // Se não encontrou, cria nova tag com valores padrão
+          // Se não encontrou, tenta criar nova tag
           if (!tag) {
-            // Limpar nome da tag para evitar problemas
-            const cleanTagName = tagName.trim().replace(/\s+/g, ' ');
-            
             // Verificar se existe usuário sistema (ID 1), senão usar qualquer usuário da empresa
             let systemUserId = 1;
             try {
@@ -254,27 +255,53 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
               logger.warn(`Não foi possível verificar usuário sistema, usando ID 1:`, err);
             }
             
-            tag = await Tag.create({
-              name: cleanTagName,
-              companyId,
-              color: "#A4CCCC",
-              kanban: 0,
-              userId: systemUserId // ✅ API usa usuário sistema ou primeiro usuário da empresa
-            });
-            
-            logger.info(`Tag '${cleanTagName}' criada com sucesso para companyId ${companyId} (API - userId: ${systemUserId})`);
+            try {
+              tag = await Tag.create({
+                name: cleanTagName,
+                companyId,
+                color: "#A4CCCC",
+                kanban: 0,
+                userId: systemUserId
+              });
+              
+              logger.info(`Tag '${cleanTagName}' criada com sucesso para companyId ${companyId} (API - userId: ${systemUserId})`);
+            } catch (createError: any) {
+              // Se falhar criação, pode ser que já foi criada por outro processo
+              if (createError?.name === 'SequelizeUniqueConstraintError' || 
+                  createError?.code === '23505') {
+                logger.info(`Tag '${cleanTagName}' já existe (criação concorrente), buscando novamente...`);
+                tag = await Tag.findOne({
+                  where: { name: cleanTagName, companyId }
+                });
+              } else {
+                throw createError; // Re-lançar outros erros
+              }
+            }
           }
 
-          await ContactTag.findOrCreate({
-            where: {
-              contactId: contact.id,
-              tagId: tag.id
+          if (tag) {
+            // Tenta associar tag ao contato
+            try {
+              await ContactTag.findOrCreate({
+                where: {
+                  contactId: contact.id,
+                  tagId: tag.id
+                }
+              });
+              hasTagAssociation = true;
+            } catch (associationError: any) {
+              // Se já existe associação, ignora
+              if (associationError?.name === 'SequelizeUniqueConstraintError' || 
+                  associationError?.code === '23505') {
+                logger.info(`Tag '${cleanTagName}' já associada ao contato ${contact.id}`);
+              } else {
+                throw associationError; // Re-lançar outros erros
+              }
             }
-          });
-          hasTagAssociation = true;
+          }
         } catch (error: any) {
           // Log detalhado para debug
-          logger.info(`Erro ao processar Tag '${tagName}' para o contato ${contact.id}:`, {
+          logger.warn(`Erro ao processar Tag '${tagName}' para o contato ${contact.id}:`, {
             error: error?.message,
             tagName,
             contactId: contact.id,
@@ -282,16 +309,6 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
             errorCode: error?.code,
             errorType: error?.constructor?.name
           });
-          
-          // Se for erro de duplicidade, ignora silenciosamente
-          if (error?.name === 'SequelizeUniqueConstraintError' || 
-              error?.code === '23505' || 
-              error?.message?.includes('duplicate key')) {
-            logger.info(`Tag '${tagName}' já existe ou já está associada ao contato ${contact.id}`);
-          } else {
-            // Outros erros, log mas continua processando
-            logger.warn(`Erro inesperado ao processar tag '${tagName}':`, error);
-          }
         }
       }
     }
