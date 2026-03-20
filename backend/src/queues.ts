@@ -2241,6 +2241,26 @@ async function handleDispatchCampaign(job) {
                 const textMessage = await wbot.sendMessage(chatId, {
                   text: `\u200c ${campaignShipping.message}`
                 });
+                await verifyMessage(textMessage, ticket, contact, null, true, false, true); // isCampaign=true
+              }
+              
+              const sentMessage = await wbot.sendMessage(chatId, { ...options });
+
+              // FIX: Ensure caption is present in the returned message object so verifyMediaMessage can save it
+              // Para campanhas com sendMediaSeparately OU áudio, não duplicar caption pois já foi enviado como mensagem separada
+              if (sentMessage.message && options.caption && !(sendSeparately || isAudio)) {
+                if (sentMessage.message.videoMessage) {
+                  sentMessage.message.videoMessage.caption = options.caption;
+                } else if (sentMessage.message.imageMessage) {
+                  sentMessage.message.imageMessage.caption = options.caption;
+                } else if (sentMessage.message.documentMessage) {
+                  sentMessage.message.documentMessage.caption = options.caption;
+                }
+              }
+
+              await verifyMediaMessage(sentMessage, ticket, contact, null, false, true, wbot); // isCampaign=true
+            }
+          }
           // Fechar ticket se statusTicket for "closed"
           if (campaign?.statusTicket === 'closed' && ticket.status !== 'closed') {
             await ticket.update({ status: "closed" });
