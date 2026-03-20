@@ -237,12 +237,17 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
 
           // Se não encontrou, cria nova tag com valores padrão
           if (!tag) {
+            // Limpar nome da tag para evitar problemas
+            const cleanTagName = tagName.trim().replace(/\s+/g, ' ');
+            
             tag = await Tag.create({
-              name: tagName,
+              name: cleanTagName,
               companyId,
               color: "#A4CCCC",
               kanban: 0
             });
+            
+            logger.info(`Tag '${cleanTagName}' criada com sucesso para companyId ${companyId}`);
           }
 
           await ContactTag.findOrCreate({
@@ -252,8 +257,26 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
             }
           });
           hasTagAssociation = true;
-        } catch (error) {
-          logger.info(`Erro ao processar Tag '${tagName}' para o contato ${contact.id}:`, error);
+        } catch (error: any) {
+          // Log detalhado para debug
+          logger.info(`Erro ao processar Tag '${tagName}' para o contato ${contact.id}:`, {
+            error: error?.message,
+            tagName,
+            contactId: contact.id,
+            companyId,
+            errorCode: error?.code,
+            errorType: error?.constructor?.name
+          });
+          
+          // Se for erro de duplicidade, ignora silenciosamente
+          if (error?.name === 'SequelizeUniqueConstraintError' || 
+              error?.code === '23505' || 
+              error?.message?.includes('duplicate key')) {
+            logger.info(`Tag '${tagName}' já existe ou já está associada ao contato ${contact.id}`);
+          } else {
+            // Outros erros, log mas continua processando
+            logger.warn(`Erro inesperado ao processar tag '${tagName}':`, error);
+          }
         }
       }
     }
