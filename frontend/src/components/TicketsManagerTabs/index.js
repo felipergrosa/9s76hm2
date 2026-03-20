@@ -477,15 +477,6 @@ const TicketsManagerTabs = () => {
   const botCount = ticketsByStatus.bot.reduce((sum, t) => sum + (t.unreadMessages || 0), 0);
   const campaignCount = ticketsByStatus.campaign.reduce((sum, t) => sum + (t.unreadMessages || 0), 0);
 
-  // Debug para verificar contagem de todas as abas
-  console.log('[DEBUG] Open tickets:', ticketsByStatus.open.length, 'unread:', openCount);
-  console.log('[DEBUG] Pending tickets:', ticketsByStatus.pending.length, 'unread:', pendingCount);
-  console.log('[DEBUG] Group tickets:', ticketsByStatus.group.length, 'unread:', groupingCount);
-  console.log('[DEBUG] Bot tickets:', ticketsByStatus.bot.length, 'unread:', botCount);
-  console.log('[DEBUG] Campaign tickets:', ticketsByStatus.campaign.length, 'unread:', campaignCount);
-  console.log('[DEBUG] Campaign unread messages detail:', ticketsByStatus.campaign.map(t => ({ id: t.id, unreadMessages: t.unreadMessages })));
-  console.log('[DEBUG] All ticketsByStatus:', Object.keys(ticketsByStatus).map(key => ({ key, count: ticketsByStatus[key].length })));
-
   const resetHovers = () => {
     setIsHoveredAll(false);
     setIsHoveredNew(false);
@@ -1394,7 +1385,7 @@ const TicketsManagerTabs = () => {
                         badgeContent={campaignCount}
                         max={99999}
                         color="primary"
-                        invisible={false} // Forçar a aparecer para debug
+                        invisible={campaignCount === 0}
                       >
                         <CampaignIcon
                           style={{

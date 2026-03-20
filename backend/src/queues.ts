@@ -1581,7 +1581,7 @@ async function handlePrepareContact(job) {
         enrichedContact
       );
 
-      campaignShipping.message = message === null ? "" : `\u200c ${message}`;
+      campaignShipping.message = message === null ? "" : `\u200c${message}`;
       // Salva o índice da mensagem (1..5) para uso de mídia por mensagem
       campaignShipping.messageIndex = (radomIndex || 0) + 1;
     }
@@ -1602,7 +1602,7 @@ async function handlePrepareContact(job) {
           variables,
           enrichedContact
         );
-        campaignShipping.confirmationMessage = `\u200c ${message}`;
+        campaignShipping.confirmationMessage = `\u200c${message}`;
       }
     }
     // Verifica supressão antes de prosseguir
@@ -2163,7 +2163,7 @@ async function handleDispatchCampaign(job) {
       if (whatsapp.status === "CONNECTED") {
         if (campaign.confirmation && campaignShipping.confirmation === null) {
           const confirmationMessage = await wbot.sendMessage(chatId, {
-            text: `\u200c ${campaignShipping.confirmationMessage}`
+            text: `\u200c${campaignShipping.confirmationMessage}`
           });
 
           await verifyMessage(confirmationMessage, ticket, contact, null, true, false, true); // isCampaign=true
@@ -2210,7 +2210,7 @@ async function handleDispatchCampaign(job) {
 
           if (!hasPerMessageMedia && !campaign.mediaPath) {
             const sentMessage = await wbot.sendMessage(chatId, {
-              text: `\u200c ${campaignShipping.message}`
+              text: `\u200c${campaignShipping.message}`
             });
             await verifyMessage(sentMessage, ticket, contact, null, true, false, true); // isCampaign=true
           }
@@ -2232,14 +2232,14 @@ async function handleDispatchCampaign(job) {
             
             // Se sendMediaSeparately OU áudio → enviar texto primeiro (2 mensagens)
             // Senão → enviar mídia com caption (1 mensagem)
-            const captionText = (sendSeparately || isAudio) ? null : `\u200c ${campaignShipping.message}`;
+            const captionText = (sendSeparately || isAudio) ? null : `\u200c${campaignShipping.message}`;
             
             const options = await getMessageOptions(fileName, filePath, String(campaign.companyId), captionText || "");
             if (options && Object.keys(options).length) {
               // Enviar texto primeiro se: sendMediaSeparately OU áudio (PTT não suporta caption)
               if ((sendSeparately || isAudio) && hasText) {
                 const textMessage = await wbot.sendMessage(chatId, {
-                  text: `\u200c ${campaignShipping.message}`
+                  text: `\u200c${campaignShipping.message}`
                 });
                 await verifyMessage(textMessage, ticket, contact, null, true, false, true); // isCampaign=true
               }
