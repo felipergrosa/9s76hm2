@@ -212,8 +212,9 @@ export const initIO = (httpServer: Server): SocketIO => {
         return;
       }
       await socket.join(normalizedId);
-      logger.info(`Cliente entrou no canal de ticket ${ticketId} no namespace ${socket.nsp.name}`);
+      // Reduzir logs: só logar em modo debug
       if (process.env.SOCKET_DEBUG === "true") {
+        logger.info(`Cliente entrou no canal de ticket ${ticketId} no namespace ${socket.nsp.name}`);
         try {
           const sockets = await socket.nsp.in(normalizedId).fetchSockets();
           logger.info(`[SOCKET JOIN DEBUG] ns=${socket.nsp.name} room=${normalizedId} count=${sockets.length}`);

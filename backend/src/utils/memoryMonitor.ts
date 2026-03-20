@@ -1,11 +1,12 @@
 /**
- * Monitor de memória para detectar memory leaks
- * Executar a cada 30 segundos para acompanhar uso
+ * Monitor de memória otimizado para detectar memory leaks
+ * Executar a cada 60 segundos (reduzido overhead)
  */
 
 // Contador para forçar GC a cada X ciclos
 let gcCounter = 0;
-const GC_FORCE_INTERVAL = 5; // Forçar GC a cada 5 ciclos (2.5 minutos)
+const GC_FORCE_INTERVAL = 10; // Forçar GC a cada 10 ciclos (10 minutos)
+const MONITOR_INTERVAL = 60000; // 60 segundos (reduzido de 30s)
 
 function monitorMemory() {
   const used = process.memoryUsage();
@@ -16,7 +17,10 @@ function monitorMemory() {
   
   const usage = Math.round((heapUsedMB / heapTotalMB) * 100);
   
-  console.log(`[MEMORY] Heap: ${heapUsedMB}MB / ${heapTotalMB}MB (${usage}%) | RSS: ${rssMB}MB | External: ${externalMB}MB`);
+  // Só logar se uso estiver alto (> 70%) para reduzir ruído
+  if (usage > 70) {
+    console.log(`[MEMORY] Heap: ${heapUsedMB}MB / ${heapTotalMB}MB (${usage}%) | RSS: ${rssMB}MB | External: ${externalMB}MB`);
+  }
   
   // Alertar se uso está alto
   if (usage > 80) {
@@ -44,7 +48,7 @@ function monitorMemory() {
   
   // Forçar GC periódico mesmo com uso normal (prevenção)
   gcCounter++;
-  if (gcCounter >= GC_FORCE_INTERVAL && global.gc) {
+  if (gcCounter >= GC_FORCE_INTERVAL && global.gc && usage > 60) {
     console.log('[MEMORY] GC preventivo executado');
     global.gc();
     gcCounter = 0;
@@ -53,8 +57,17 @@ function monitorMemory() {
   return { heapUsedMB, heapTotalMB, usage };
 }
 
-// Executar monitoramento a cada 30 segundos
-setInterval(monitorMemory, 30000);
+// Executar monitoramento a cada 60 segundos (otimizado)
+const monitorInterval = setInterval(monitorMemory, MONITOR_INTERVAL);
+
+// Limpar interval ao desligar
+process.on('SIGTERM', () => {
+  clearInterval(monitorInterval);
+});
+
+process.on('SIGINT', () => {
+  clearInterval(monitorInterval);
+});
 
 // Exportar para uso manual
 export default monitorMemory;
