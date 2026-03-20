@@ -198,7 +198,7 @@ const MessagesAPI = () => {
 
       <Alert severity="warning" icon={<WarningIcon />} className={classes.alert}>
         <AlertTitle>Instruções</AlertTitle>
-        Antes de enviar mensagens, é necessário o cadastro do token vinculado à conexão que enviará as mensagens. <br />Para realizar o cadastro acesse o menu 'Conexões', clique no botão editar da conexão e insira o token no devido campo.
+        Antes de enviar mensagens, utilize o token da empresa: <strong>qsFj2s8e2XY85oHcNMAvEw</strong><br />Para ambientes de desenvolvimento, acesse o menu 'Conexões', clique no botão editar da conexão e insira o token no devido campo.
         <br />O número para envio não deve ter mascara ou caracteres especiais e deve ser composto por: Código do País+DDD+Número 5511999999999
       </Alert>
 
@@ -218,7 +218,7 @@ const MessagesAPI = () => {
               <code>
                 {`POST ${getEndpoint('/api/messages/send')}
 Host: ${window.location.host}
-Authorization: Bearer <seu_token>
+Authorization: Bearer qsFj2s8e2XY85oHcNMAvEw
 Content-Type: application/json
 
 {
@@ -238,7 +238,7 @@ Content-Type: application/json
           </Grid>
           <Grid item xs={12} md={6}>
             <Typography variant="h6">Teste de Envio</Typography>
-            <Formik initialValues={{ token: '', number: '', body: '', userId: '', queueId: '' }} onSubmit={handleSendTextMessage}>
+            <Formik initialValues={{ token: 'qsFj2s8e2XY85oHcNMAvEw', number: '', body: '', userId: '', queueId: '' }} onSubmit={handleSendTextMessage}>
               {({ isSubmitting }) => (
                 <Form className={classes.formContainer}>
                   <Field as={TextField} name="token" label="Token Cadastrado" variant="outlined" required className={classes.formField} />
@@ -268,7 +268,7 @@ Content-Type: application/json
               <code>
                 {`POST ${getEndpoint('/api/messages/send')}
 Host: ${window.location.host}
-Authorization: Bearer <seu_token>
+Authorization: Bearer qsFj2s8e2XY85oHcNMAvEw
 Content-Type: multipart/form-data
 
 // FormData com os campos:
@@ -280,7 +280,7 @@ Content-Type: multipart/form-data
           </Grid>
           <Grid item xs={12} md={6}>
             <Typography variant="h6">Teste de Envio</Typography>
-            <Formik initialValues={{ token: '', number: '', body: '', userId: '', queueId: '' }} onSubmit={handleSendMediaMessage}>
+            <Formik initialValues={{ token: 'qsFj2s8e2XY85oHcNMAvEw', number: '', body: '', userId: '', queueId: '' }} onSubmit={handleSendMediaMessage}>
               {({ isSubmitting }) => (
                 <Form className={classes.formContainer}>
                   <Field as={TextField} name="token" label="Token Cadastrado" variant="outlined" required className={classes.formField} />
@@ -309,7 +309,7 @@ Content-Type: multipart/form-data
               <code>
                 {`POST ${getEndpoint('/api/contacts/sync')}
 Host: ${window.location.host}
-Authorization: Bearer <seu_token>
+Authorization: Bearer qsFj2s8e2XY85oHcNMAvEw
 Content-Type: application/json
 
 {
@@ -343,7 +343,7 @@ Content-Type: application/json
             <Typography variant="h6">Teste de Sincronização</Typography>
             <Formik
               initialValues={{
-                token: '', name: '', number: '', email: '', contactName: '', cpfCnpj: '', clientCode: '',
+                token: 'qsFj2s8e2XY85oHcNMAvEw', name: '', number: '', email: '', contactName: '', cpfCnpj: '', clientCode: '',
                 representativeCode: '', city: '', region: '', instagram: '', situation: '',
                 fantasyName: '', foundationDate: '', creditLimit: '', segment: '', florder: false, dtUltCompra: '', disableBot: false, tagIds: '', tags: ''
               }}
