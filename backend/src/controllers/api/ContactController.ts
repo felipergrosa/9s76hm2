@@ -91,6 +91,7 @@ interface ContactData {
   clientCode?: string;
   dtUltCompra?: Date | string | null;
   vlUltCompra?: number | string | null;
+  contactName?: string; // ✅ Adicionado campo faltante
 }
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
@@ -156,6 +157,7 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
       .nullable(),
     clientCode: Yup.string().nullable(),
     tagIds: Yup.array().of(Yup.number()).nullable(),
+    contactName: Yup.string().nullable(), // ✅ Adicionado validação do campo faltante
   });
 
   try {

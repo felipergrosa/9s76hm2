@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "description": "WhatApp Ticket System",
   "scripts": {
+    "docker:restart": "powershell -ExecutionPolicy Bypass -File scripts/restart-docker.ps1",
+    "docker:restart:fast": "cmd /c scripts\\restart-docker.bat",
     "docker:builder:create": "docker buildx create --name whaticket-builder --use --driver docker-container 2>nul || docker buildx use whaticket-builder",
     "docker:clean:images": "powershell -NoProfile -Command \"$ErrorActionPreference='SilentlyContinue'; $imgs = docker images felipergrosa/9s76hm2-frontend -q; if ($imgs) { $imgs | ForEach-Object { docker rmi -f $_ } }; $imgs2 = docker images felipergrosa/9s76hm2-backend -q; if ($imgs2) { $imgs2 | ForEach-Object { docker rmi -f $_ } }\"",
     "docker:prebuild": "npm run docker:builder:create && npm run docker:clean:images",

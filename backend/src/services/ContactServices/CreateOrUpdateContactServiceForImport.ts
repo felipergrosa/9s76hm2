@@ -29,6 +29,7 @@ interface Request {
   segment?: string;
   bzEmpresa?: string;
   clientCode?: string;
+  contactName?: string; // ✅ Adicionado campo faltante
   silentMode?: boolean;
   dtUltCompra?: Date | string | null;
   vlUltCompra?: number | string | null;
@@ -55,6 +56,7 @@ const CreateOrUpdateContactServiceForImport = async ({
   segment,
   bzEmpresa,
   clientCode,
+  contactName, // ✅ Adicionado parâmetro
   silentMode,
   dtUltCompra,
   vlUltCompra
@@ -155,6 +157,7 @@ const CreateOrUpdateContactServiceForImport = async ({
     segment: normalizeSegment(segment),
     bzEmpresa: normalizeBzEmpresa(bzEmpresa),
     clientCode: clientCode || undefined,
+    contactName: contactName || undefined, // ✅ Adicionado campo ao contactData
     dtUltCompra: parseDate(dtUltCompra),
     vlUltCompra: parseMoney(vlUltCompra)
   };
@@ -168,16 +171,13 @@ const CreateOrUpdateContactServiceForImport = async ({
   });
 
   if (contact) {
-    // Proteção: não sobrescrever nome personalizado já válido
-    const currentName = (contact.name || "").trim();
-    const currentIsNumber = currentName.replace(/\D/g, "") === String(number);
-    const hasValidExistingName = currentName !== "" && !currentIsNumber;
-
+    // API sempre prevalece: nome vindo da API sobrescreve qualquer nome existente
     const incomingName = (name || "").trim();
-    const incomingIsNumber = incomingName.replace(/\D/g, "") === String(number);
+    const finalName = incomingName || String(number); // Se não vier nome, usa número
 
     const updatePayload: any = {
       ...contactData,
+      name: finalName, // Sempre atualiza com o nome da API
       situation: situation || contact.situation,
       creditLimit: normalizeCreditLimit(creditLimit) ?? contact.creditLimit
     };
@@ -190,14 +190,6 @@ const CreateOrUpdateContactServiceForImport = async ({
     // Não sobrescrever 'region' se não enviado
     if (typeof contactData.region === 'undefined') {
       delete updatePayload.region;
-    }
-
-    if (hasValidExistingName) {
-      // Não atualizar o campo name
-      delete updatePayload.name;
-    } else {
-      // Atualiza apenas se vier um nome melhor que não seja número; senão mantém número
-      updatePayload.name = incomingName && !incomingIsNumber ? incomingName : String(number);
     }
 
     await contact.update({

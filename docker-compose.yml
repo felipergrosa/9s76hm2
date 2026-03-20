@@ -17,7 +17,7 @@ services:
       # Heap limit 4GB para evitar OOM com múltiplas sessões WhatsApp
       NODE_OPTIONS: "--max-old-space-size=4096"
       DB_DIALECT: postgres
-      DB_HOST: postgres
+      DB_HOST: postgres  # Serviço externo na rede nobreluminarias
       DB_PORT: 5432
       DB_NAME: whaticket
       DB_USER: postgres
@@ -25,7 +25,7 @@ services:
       TZ: America/Sao_Paulo
       FRONTEND_URL: ${FRONTEND_URL:-https://chats.nobreluminarias.com.br}
       BACKEND_URL: ${BACKEND_URL:-https://chatsapi.nobreluminarias.com.br}
-      REDIS_URI: redis://redis:6379/0
+      REDIS_URI: redis://redis:6379/0  # Serviço externo na rede nobreluminarias
       REDIS_URI_ACK: redis://redis:6379/0
       BULL_USER: admin
       BULL_PASS: admin
@@ -65,40 +65,15 @@ services:
     volumes:
       - ./frontend:/app
 
-  postgres:
-    image: postgres:15-alpine
-    container_name: whaticket-postgres
-    restart: always
-    environment:
-      POSTGRES_DB: whaticket
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: efe487b6a861100fb704ad9f5c160cb8
-      TZ: America/Sao_Paulo
-    ports:
-      - "5432:5432"
-    networks:
-      - nobreluminarias
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:6.2-alpine
-    container_name: whaticket-redis
-    restart: always
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
-    networks:
-      - nobreluminarias
-    volumes:
-      - redis-data:/data
-
 networks:
   nobreluminarias:
     external: true
 
 volumes:
-  postgres-data:
-  redis-data:
+  # Volumes para backend (uploads e sessões)
   backend-public:
   backend-private:
+  # IMPORTANTE: Postgres e Redis são serviços EXTERNOS
+  # Se precisar incluí-los no compose, use estes volumes:
+  # whaticket_postgres_data  # Dados do banco (361 tickets, 395 contatos)
+  # whaticket_redis-data     # Cache e sessões Redis
