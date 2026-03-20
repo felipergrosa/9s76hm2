@@ -61,6 +61,41 @@ interface SessionGemini extends GoogleGenerativeAI {
 const sessionsOpenAi: SessionOpenAi[] = [];
 const sessionsGemini: SessionGemini[] = [];
 
+// Limpeza periódica de sessões órfãs (a cada 10 minutos)
+// Remove sessões de tickets que não existem mais
+setInterval(async () => {
+  try {
+    const Ticket = (await import("../../models/Ticket")).default;
+    const activeTicketIds = await Ticket.findAll({
+      attributes: ["id"],
+      where: { status: ["open", "pending"] },
+      raw: true
+    }).then(tickets => tickets.map(t => t.id));
+    
+    // Limpar sessões OpenAI órfãs
+    const openAiBefore = sessionsOpenAi.length;
+    for (let i = sessionsOpenAi.length - 1; i >= 0; i--) {
+      if (!activeTicketIds.includes(sessionsOpenAi[i].id)) {
+        sessionsOpenAi.splice(i, 1);
+      }
+    }
+    
+    // Limpar sessões Gemini órfãs
+    const geminiBefore = sessionsGemini.length;
+    for (let i = sessionsGemini.length - 1; i >= 0; i--) {
+      if (!activeTicketIds.includes(sessionsGemini[i].id)) {
+        sessionsGemini.splice(i, 1);
+      }
+    }
+    
+    if (openAiBefore !== sessionsOpenAi.length || geminiBefore !== sessionsGemini.length) {
+      console.log(`[OpenAiService] Limpeza: OpenAI ${openAiBefore}→${sessionsOpenAi.length}, Gemini ${geminiBefore}→${sessionsGemini.length}`);
+    }
+  } catch (err) {
+    console.error("[OpenAiService] Erro na limpeza de sessões:", err);
+  }
+}, 10 * 60 * 1000); // 10 minutos
+
 const deleteFileSync = (path: string): void => {
   try {
     fs.unlinkSync(path);

@@ -3,8 +3,8 @@ set -e
 
 echo "[auto-migrate] Inicializando startup com auto-migration..."
 
-# Heap limit padrão se não definido
-HEAP_LIMIT="${NODE_OPTIONS:-"--max-old-space-size=4096"}"
+# Heap limit padrão se não definido (com GC exposto para limpeza forçada)
+HEAP_LIMIT="${NODE_OPTIONS:-"--max-old-space-size=4096 --expose-gc"}"
 echo "[auto-migrate] Heap limit: $HEAP_LIMIT"
 
 # Controla se deve rodar migrations automaticamente (default: true)

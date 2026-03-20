@@ -84,9 +84,9 @@ class CacheSingleton {
 }
 
 // Fallback simples em memória quando REDIS_URI não estiver configurado
-// ⚠️ ATENÇÃO: Cache com LIMITE para evitar memory leak
-const MAX_CACHE_SIZE = 10000; // Máximo de 10k entradas
-const CLEANUP_INTERVAL = 60000; // Limpeza a cada 1 minuto
+// ⚠️ ATENÇÃO: Cache com LIMITE REDUZIDO para evitar memory leak em produção
+const MAX_CACHE_SIZE = 1000; // Reduzido de 10k para 1k entradas
+const CLEANUP_INTERVAL = 30000; // Limpeza a cada 30 segundos (mais frequente)
 
 function createInMemoryRedis() {
   const store = new Map<string, { value: string; expires?: number }>();
