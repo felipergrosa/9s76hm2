@@ -13,6 +13,8 @@ apiContactRoutes.get("/contacts/segments", isAuth, ContactController.segments);
 apiContactRoutes.get("/contacts/empresas", isAuth, ContactController.empresas);
 // /contacts/sync aceita COMPANY_TOKEN (isAuthCompany) ou JWT de sessão (isAuth)
 apiContactRoutes.post("/contacts/sync", isAuthCompany, ContactController.sync);
+// /contacts/:id para exclusão via API (usa COMPANY_TOKEN)
+apiContactRoutes.delete("/contacts/:id", isAuthCompany, ContactController.remove);
 
 
 export default apiContactRoutes;

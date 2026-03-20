@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import FindAllContactService from "../../services/ContactServices/FindAllContactsServices";
 import CreateOrUpdateContactServiceForImport from "../../services/ContactServices/CreateOrUpdateContactServiceForImport";
 import ShowContactService from "../../services/ContactServices/ShowContactService"; // ✅ Importação faltante
+import DeleteContactService from "../../services/ContactServices/DeleteContactService"; // ✅ Importação para exclusão
 import { getIO } from "../../libs/socket";
 import logger from "../../utils/logger";
 import AppError from "../../errors/AppError";
@@ -383,5 +384,43 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
   } catch (error: any) {
     logger.error(error);
     return res.status(500).json({ error: error?.message || "Internal server error" });
+  }
+};
+
+export const remove = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { id } = req.params;
+    
+    // Para API, o companyId deve vir do body ou query (isAuthCompany não adiciona ao req.user)
+    const companyId = req.body.companyId || req.query.companyId;
+
+    if (!companyId || Number.isNaN(companyId)) {
+      throw new AppError("companyId é obrigatório (envie no body ou query)", 400);
+    }
+
+    if (!id) {
+      throw new AppError("ID do contato é obrigatório", 400);
+    }
+
+    // Para API, não há usuário autenticado via JWT, então bypassWalletRestriction=true
+    await DeleteContactService({ 
+      id, 
+      companyId: Number(companyId), 
+      userId: undefined, 
+      bypassWalletRestriction: true 
+    });
+
+    const io = getIO();
+    io.of(`/workspace-${companyId}`).emit(`company-${companyId}-contact`, {
+      action: "delete",
+      contactId: id
+    });
+
+    return res.status(200).json({ message: "Contact deleted" });
+  } catch (error: any) {
+    logger.error("Erro ao excluir contato via API:", error);
+    return res.status(error?.statusCode || 500).json({ 
+      error: error?.message || "Internal server error" 
+    });
   }
 };
