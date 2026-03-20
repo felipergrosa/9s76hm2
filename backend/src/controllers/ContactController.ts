@@ -348,7 +348,16 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
     if (Array.isArray(tagIds) && tagIds.length > 0) {
       const rows = await Tag.findAll({ where: { id: tagIds, companyId } });
       for (const tag of rows) {
-        await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: tag.id } });
+        await ContactTag.findOrCreate({ 
+  where: { 
+    contactId: contact.id, 
+    tagId: tag.id,
+    companyId: companyId // ✅ Adicionado companyId obrigatório
+  },
+  defaults: {
+    companyId: companyId // ✅ Adicionado companyId para criação
+  }
+});
         hasTagAssociation = true;
       }
     } else if (tags) {
@@ -358,7 +367,16 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
           where: { name: tagName, companyId },
           defaults: { color: "#A4CCCC", kanban: 0 }
         });
-        await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: tag.id } });
+        await ContactTag.findOrCreate({ 
+  where: { 
+    contactId: contact.id, 
+    tagId: tag.id,
+    companyId: companyId // ✅ Adicionado companyId obrigatório
+  },
+  defaults: {
+    companyId: companyId // ✅ Adicionado companyId para criação
+  }
+});
         hasTagAssociation = true;
       }
     }
@@ -891,7 +909,16 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
     if (Array.isArray(tagIds) && tagIds.length > 0) {
       const rows = await Tag.findAll({ where: { id: tagIds, companyId } });
       for (const tag of rows) {
-        await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: tag.id } });
+        await ContactTag.findOrCreate({ 
+  where: { 
+    contactId: contact.id, 
+    tagId: tag.id,
+    companyId: companyId // ✅ Adicionado companyId obrigatório
+  },
+  defaults: {
+    companyId: companyId // ✅ Adicionado companyId para criação
+  }
+});
         hasTagAssociation = true;
       }
     } else if (typeof tags === 'string' && tags.trim() !== '') {
@@ -901,7 +928,16 @@ export const store = async (req: AuthenticatedRequest, res: Response): Promise<R
           where: { name: tagName, companyId },
           defaults: { color: "#A4CCCC", kanban: 0 }
         });
-        await ContactTag.findOrCreate({ where: { contactId: contact.id, tagId: tag.id } });
+        await ContactTag.findOrCreate({ 
+  where: { 
+    contactId: contact.id, 
+    tagId: tag.id,
+    companyId: companyId // ✅ Adicionado companyId obrigatório
+  },
+  defaults: {
+    companyId: companyId // ✅ Adicionado companyId para criação
+  }
+});
         hasTagAssociation = true;
       }
     }

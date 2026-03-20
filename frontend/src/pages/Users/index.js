@@ -233,7 +233,9 @@ const Users = () => {
           dispatch({ type: "DELETE_USER", payload: +data.userId });
         }
       };
+      
       socket.on(`company-${companyId}-user`, onCompanyUser);
+      
       return () => {
         socket.off(`company-${companyId}-user`, onCompanyUser);
       };

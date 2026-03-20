@@ -18,6 +18,8 @@ const startUserStatusJob = () => {
       const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
       const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
 
+      console.log(`[UserStatusJob] Verificando status - ${now.toISOString()}`);
+
       // 1. Usuários online há mais de 3h -> marcar como offline
       const usersToOffline = await User.findAll({
         where: {
@@ -29,11 +31,15 @@ const startUserStatusJob = () => {
         attributes: ["id", "companyId", "name"]
       });
 
+      if (usersToOffline.length > 0) {
+        console.log(`[UserStatusJob] ${usersToOffline.length} usuários para offline`);
+      }
+
       for (const user of usersToOffline) {
-        await user.update({ 
-          online: false,
-          status: null
-        });
+        await User.update(
+          { online: false, status: null },
+          { where: { id: user.id } }
+        );
 
         // Emitir evento
         const io = getIO();
@@ -46,8 +52,8 @@ const startUserStatusJob = () => {
               status: null
             }
           });
-        
-        console.log(`[UserStatusJob] ${user.name} (${user.id}) → offline (3h+ inativo)`);
+
+        console.log(`[UserStatusJob] Usuário ${user.name} (ID: ${user.id}) -> offline`);
       }
 
       // 2. Usuários online entre 2h e 3h -> marcar como ausente
@@ -55,63 +61,78 @@ const startUserStatusJob = () => {
         where: {
           online: true,
           lastActivityAt: {
-            [Op.gte]: threeHoursAgo,
-            [Op.lt]: twoHoursAgo
-          },
-          [Op.or]: [
-            { status: null },
-            { status: { [Op.ne]: "ausente" } }
-          ]
+            [Op.gte]: twoHoursAgo,
+            [Op.lt]: threeHoursAgo
+          }
         },
-        attributes: ["id", "companyId", "name"]
+        attributes: ["id", "companyId", "name", "status"]
       });
 
-      for (const user of usersToAway) {
-        await user.update({ status: "ausente" });
-
-        // Emitir evento
-        const io = getIO();
-        io.of(`/workspace-${user.companyId}`)
-          .emit(`company-${user.companyId}-user`, {
-            action: "update",
-            user: {
-              id: user.id,
-              online: true,
-              status: "ausente"
-            }
-          });
-        
-        console.log(`[UserStatusJob] ${user.name} (${user.id}) → ausente (2-3h inativo)`);
+      if (usersToAway.length > 0) {
+        console.log(`[UserStatusJob] ${usersToAway.length} usuários para ausente`);
       }
 
-      // 3. Usuários online há menos de 2h -> garantir status online
+      for (const user of usersToAway) {
+        // Só atualiza se não estiver já como ausente
+        if (user.status !== "ausente") {
+          await User.update(
+            { status: "ausente" },
+            { where: { id: user.id } }
+          );
+
+          // Emitir evento
+          const io = getIO();
+          io.of(`/workspace-${user.companyId}`)
+            .emit(`company-${user.companyId}-user`, {
+              action: "update",
+              user: {
+                id: user.id,
+                online: true,
+                status: "ausente"
+              }
+            });
+
+          console.log(`[UserStatusJob] Usuário ${user.name} (ID: ${user.id}) -> ausente`);
+        }
+      }
+
+      // 3. Usuários online há menos de 2h -> garantir status null
       const usersToOnline = await User.findAll({
         where: {
           online: true,
           lastActivityAt: {
             [Op.gte]: twoHoursAgo
-          },
-          status: { [Op.ne]: null }
+          }
         },
-        attributes: ["id", "companyId", "name"]
+        attributes: ["id", "companyId", "name", "status"]
       });
 
-      for (const user of usersToOnline) {
-        await user.update({ status: null });
+      if (usersToOnline.length > 0) {
+        console.log(`[UserStatusJob] ${usersToOnline.length} usuários online confirmados`);
+      }
 
-        // Emitir evento
-        const io = getIO();
-        io.of(`/workspace-${user.companyId}`)
-          .emit(`company-${user.companyId}-user`, {
-            action: "update",
-            user: {
-              id: user.id,
-              online: true,
-              status: null
-            }
-          });
-        
-        console.log(`[UserStatusJob] ${user.name} (${user.id}) → online (<2h inativo)`);
+      for (const user of usersToOnline) {
+        // Limpar status se estiver como ausente
+        if (user.status === "ausente") {
+          await User.update(
+            { status: null },
+            { where: { id: user.id } }
+          );
+
+          // Emitir evento
+          const io = getIO();
+          io.of(`/workspace-${user.companyId}`)
+            .emit(`company-${user.companyId}-user`, {
+              action: "update",
+              user: {
+                id: user.id,
+                online: true,
+                status: null
+              }
+            });
+
+          console.log(`[UserStatusJob] Usuário ${user.name} (ID: ${user.id}) -> online (status limpo)`);
+        }
       }
 
       if (usersToOffline.length > 0 || usersToAway.length > 0 || usersToOnline.length > 0) {

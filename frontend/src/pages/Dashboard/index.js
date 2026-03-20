@@ -57,7 +57,7 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState(0);
 
   const { find } = useDashboard();
-  const { user } = useContext(AuthContext);
+  const { user: loggedInUser, socket } = useContext(AuthContext);
   const { colorMode } = useContext(ColorModeContext);
   const { viewMode } = colorMode || {};
   const { hasPermission } = usePermissions();
@@ -77,6 +77,30 @@ const Dashboard = () => {
       firstLoad();
     }, 1000);
   }, [fetchDataFilter]);
+
+  useEffect(() => {
+    if (loggedInUser && socket) {
+      const companyId = loggedInUser.companyId;
+      const onCompanyUser = (data) => {
+        if (data.action === "update" && data.user) {
+          // Atualizar lista de atendentes se o usuário estiver nela
+          setAttendants(prevAttendants => {
+            return prevAttendants.map(attendant => 
+              attendant.id === data.user.id 
+                ? { ...attendant, ...data.user }
+                : attendant
+            );
+          });
+        }
+      };
+      
+      socket.on(`company-${companyId}-user`, onCompanyUser);
+      
+      return () => {
+        socket.off(`company-${companyId}-user`, onCompanyUser);
+      };
+    }
+  }, [socket, loggedInUser]);
 
   async function fetchData() {
     setLoading(true);

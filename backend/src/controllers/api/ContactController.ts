@@ -290,7 +290,11 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
               await ContactTag.findOrCreate({
                 where: {
                   contactId: contact.id,
-                  tagId: tag.id
+                  tagId: tag.id,
+                  companyId: companyId // ✅ Adicionado companyId obrigatório
+                },
+                defaults: {
+                  companyId: companyId // ✅ Adicionado companyId para criação
                 }
               });
               hasTagAssociation = true;
@@ -359,7 +363,11 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
           await ContactTag.findOrCreate({
             where: {
               contactId: contact.id,
-              tagId: tagId
+              tagId: tagId,
+              companyId: companyId // ✅ Adicionado companyId obrigatório
+            },
+            defaults: {
+              companyId: companyId // ✅ Adicionado companyId para criação
             }
           });
           hasTagAssociation = true;

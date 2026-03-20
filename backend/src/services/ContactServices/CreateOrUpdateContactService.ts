@@ -38,8 +38,16 @@ const applyAutoTagFromWhatsapp = async (
   if (!tag) return;
 
   await ContactTag.findOrCreate({
-    where: { contactId: contact.id, tagId: tag.id },
-    defaults: { contactId: contact.id, tagId: tag.id }
+    where: { 
+      contactId: contact.id, 
+      tagId: tag.id,
+      companyId: contact.companyId // ✅ Adicionado companyId obrigatório
+    },
+    defaults: { 
+      contactId: contact.id, 
+      tagId: tag.id,
+      companyId: contact.companyId // ✅ Adicionado companyId para criação
+    }
   });
 
 };
