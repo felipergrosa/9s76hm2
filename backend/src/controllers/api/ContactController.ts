@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 
 import FindAllContactService from "../../services/ContactServices/FindAllContactsServices";
 import CreateOrUpdateContactServiceForImport from "../../services/ContactServices/CreateOrUpdateContactServiceForImport";
+import ShowContactService from "../../services/ContactServices/ShowContactService"; // ✅ Importação faltante
 import { getIO } from "../../libs/socket";
 import logger from "../../utils/logger";
 import AppError from "../../errors/AppError";
@@ -337,7 +338,10 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
       contact
     });
 
-    return res.status(200).json(contact);
+    // Buscar contato atualizado COM tags para retornar
+    const contactWithTags = await ShowContactService(contact.id, companyId);
+
+    return res.status(200).json(contactWithTags);
   } catch (error: any) {
     logger.error(error);
     return res.status(500).json({ error: error?.message || "Internal server error" });
