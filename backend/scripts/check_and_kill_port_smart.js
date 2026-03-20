@@ -30,7 +30,7 @@ async function checkIfDockerProcess(port) {
     if (process.platform === 'win32') {
       exec(`netstat -ano | findstr :${port}`, (err, stdout, stderr) => {
         if (err) {
-          resolve(false);
+          resolve({ isDocker: false, isWhaticket: false });
           return;
         }
         
@@ -46,6 +46,7 @@ async function checkIfDockerProcess(port) {
         if (pids.length > 0) {
           // Verificar se algum PID é um processo Docker
           let dockerFound = false;
+          let whaticketFound = false;
           let checked = 0;
           
           pids.forEach(pid => {
@@ -53,25 +54,33 @@ async function checkIfDockerProcess(port) {
               checked++;
               if (stdout && (stdout.includes('Docker') || stdout.includes('com.docker'))) {
                 dockerFound = true;
+                // Verificar se é o container whaticket-backend pelo nome do processo
+                if (stdout.toLowerCase().includes('whaticket') || 
+                    stdout.toLowerCase().includes('backend')) {
+                  whaticketFound = true;
+                }
               }
               
               if (checked === pids.length) {
-                resolve(dockerFound);
+                resolve({ isDocker: dockerFound, isWhaticket: whaticketFound });
               }
             });
           });
         } else {
-          resolve(false);
+          resolve({ isDocker: false, isWhaticket: false });
         }
       });
     } else {
       // Linux/macOS - verificar se é Docker
       exec(`lsof -i :${port}`, (err, stdout, stderr) => {
         if (err) {
-          resolve(false);
+          resolve({ isDocker: false, isWhaticket: false });
           return;
         }
-        resolve(stdout.includes('docker'));
+        const isDocker = stdout.includes('docker');
+        const isWhaticket = stdout.toLowerCase().includes('whaticket') || 
+                           stdout.toLowerCase().includes('backend');
+        resolve({ isDocker, isWhaticket });
       });
     }
   });
@@ -144,17 +153,39 @@ async function killProcessOnPort(port, maxAttempts = 5) {
     const inUse = await checkPort(port);
     if (inUse) {
       // Verificar se é um processo Docker
-      const isDocker = await checkIfDockerProcess(port);
+      const { isDocker, isWhaticket } = await checkIfDockerProcess(port);
       
-      if (isDocker) {
-        console.log(`Porta ${port} está em uso por um processo Docker.`);
-        console.log(`⚠️  Para desenvolvimento local, pare o container whaticket-backend:`);
-        console.log(`   docker stop whaticket-backend`);
-        console.log(`   Ou use uma porta diferente alterando PORT no .env`);
-        console.log(`   Ex: PORT=8081 pnpm run dev`);
-        process.exit(1);
+      if (isDocker && isWhaticket) {
+        // É o whaticket-backend - para automaticamente (comportamento original)
+        console.log(`Porta ${port} está em uso pelo container whaticket-backend.`);
+        console.log(`🛑 Parando container para liberar porta...`);
+        
+        await new Promise((resolve) => {
+          exec('docker stop whaticket-backend', (err, stdout, stderr) => {
+            if (err) {
+              console.error(`❌ Erro ao parar container: ${stderr}`);
+              // Se falhar, tenta matar o processo na porta diretamente
+              console.log(`⚠️ Tentando liberar porta diretamente...`);
+            } else {
+              console.log(`✅ Container parado.`);
+            }
+            resolve();
+          });
+        });
+        
+        // Aguardar porta ser liberada
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+      } else if (isDocker) {
+        // É outro container Docker (não whaticket) - tenta parar também
+        console.log(`Porta ${port} está em uso por outro processo Docker.`);
+        console.log(`🛑 Tentando liberar porta...`);
+        await killProcessOnPort(port);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
       } else {
-        console.log(`Porta ${port} está em uso por outro processo. Tentando liberar...`);
+        // Não é Docker - tenta liberar a porta (comportamento original)
+        console.log(`Porta ${port} está em uso. Tentando liberar...`);
         await killProcessOnPort(port);
         // Dar um pequeno tempo para o processo ser finalizado
         await new Promise(resolve => setTimeout(resolve, 1000));

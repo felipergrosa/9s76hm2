@@ -17,17 +17,18 @@ function monitorMemory() {
   
   const usage = Math.round((heapUsedMB / heapTotalMB) * 100);
   
-  // Só logar se uso estiver alto (> 70%) para reduzir ruído
-  if (usage > 70) {
+  // Só logar se uso estiver alto (> 85%) para reduzir ruído
+  if (usage > 85) {
     console.log(`[MEMORY] Heap: ${heapUsedMB}MB / ${heapTotalMB}MB (${usage}%) | RSS: ${rssMB}MB | External: ${externalMB}MB`);
   }
   
-  // Alertar se uso está alto
-  if (usage > 80) {
+  // Alertar apenas se uso está MUITO alto (> 95%)
+  if (usage > 95) {
     console.warn(`[MEMORY] ⚠️ USO ALTO DE MEMÓRIA: ${usage}%`);
   }
   
-  if (usage > 90) {
+  // Crítico apenas se > 98% (quase esgotado)
+  if (usage > 98) {
     console.error(`[MEMORY] 🚨 CRÍTICO: Memória quase esgotada! ${usage}%`);
     
     // Forçar garbage collection se disponível
@@ -46,9 +47,9 @@ function monitorMemory() {
     }
   }
   
-  // Forçar GC periódico mesmo com uso normal (prevenção)
+  // Forçar GC periódico apenas se uso > 90% (não em uso normal)
   gcCounter++;
-  if (gcCounter >= GC_FORCE_INTERVAL && global.gc && usage > 60) {
+  if (gcCounter >= GC_FORCE_INTERVAL && global.gc && usage > 90) {
     console.log('[MEMORY] GC preventivo executado');
     global.gc();
     gcCounter = 0;
