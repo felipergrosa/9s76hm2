@@ -8,8 +8,8 @@ import { getIO } from "../libs/socket";
  * 
  * Regras:
  * - Online: lastActivityAt < 2 horas
- * - Ausente: lastActivityAt entre 2h e 3h
- * - Offline: lastActivityAt > 3h OU online=false
+ * - Ausente: lastActivityAt entre 2h e 3h (online=true, status="ausente")
+ * - Offline: lastActivityAt > 3h (online=false, status=null)
  */
 const startUserStatusJob = () => {
   const job = new CronJob("*/5 * * * *", async () => {
@@ -18,61 +18,104 @@ const startUserStatusJob = () => {
       const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
       const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
 
-      // Buscar usuários que estão online mas inativos
-      const usersToUpdate = await User.findAll({
+      // 1. Usuários online há mais de 3h -> marcar como offline
+      const usersToOffline = await User.findAll({
         where: {
           online: true,
           lastActivityAt: {
-            [Op.lt]: twoHoursAgo // Inativos por mais de 2h
+            [Op.lt]: threeHoursAgo
           }
         },
-        attributes: ["id", "companyId", "lastActivityAt", "online"]
+        attributes: ["id", "companyId", "name"]
       });
 
-      for (const user of usersToUpdate) {
-        const lastActivity = user.lastActivityAt;
-        let newStatus: "online" | "ausente" | "offline" = "online";
-        
-        if (lastActivity && lastActivity < threeHoursAgo) {
-          // Offline: mais de 3h sem atividade
-          newStatus = "offline";
-        } else if (lastActivity && lastActivity < twoHoursAgo) {
-          // Ausente: entre 2h e 3h sem atividade
-          newStatus = "ausente";
-        }
+      for (const user of usersToOffline) {
+        await user.update({ 
+          online: false,
+          status: null
+        });
 
-        if (newStatus === "offline") {
-          // Atualiza para offline
-          await user.update({ online: false });
-          
-          // Emite evento socket
-          const io = getIO();
-          io.of(`/workspace-${user.companyId}`)
-            .emit(`company-${user.companyId}-user`, {
-              action: "update",
-              user: {
-                id: user.id,
-                online: false,
-                status: "offline"
-              }
-            });
-          
-          console.log(`[UserStatusJob] Usuário ${user.id} → offline (inativo por 3h+)`);
-        } else if (newStatus === "ausente") {
-          // Emite evento de ausente (não muda online, apenas status visual)
-          const io = getIO();
-          io.of(`/workspace-${user.companyId}`)
-            .emit(`company-${user.companyId}-user`, {
-              action: "update",
-              user: {
-                id: user.id,
-                online: true,
-                status: "ausente"
-              }
-            });
-          
-          console.log(`[UserStatusJob] Usuário ${user.id} → ausente (inativo por 2-3h)`);
-        }
+        // Emitir evento
+        const io = getIO();
+        io.of(`/workspace-${user.companyId}`)
+          .emit(`company-${user.companyId}-user`, {
+            action: "update",
+            user: {
+              id: user.id,
+              online: false,
+              status: null
+            }
+          });
+        
+        console.log(`[UserStatusJob] ${user.name} (${user.id}) → offline (3h+ inativo)`);
+      }
+
+      // 2. Usuários online entre 2h e 3h -> marcar como ausente
+      const usersToAway = await User.findAll({
+        where: {
+          online: true,
+          lastActivityAt: {
+            [Op.gte]: threeHoursAgo,
+            [Op.lt]: twoHoursAgo
+          },
+          [Op.or]: [
+            { status: null },
+            { status: { [Op.ne]: "ausente" } }
+          ]
+        },
+        attributes: ["id", "companyId", "name"]
+      });
+
+      for (const user of usersToAway) {
+        await user.update({ status: "ausente" });
+
+        // Emitir evento
+        const io = getIO();
+        io.of(`/workspace-${user.companyId}`)
+          .emit(`company-${user.companyId}-user`, {
+            action: "update",
+            user: {
+              id: user.id,
+              online: true,
+              status: "ausente"
+            }
+          });
+        
+        console.log(`[UserStatusJob] ${user.name} (${user.id}) → ausente (2-3h inativo)`);
+      }
+
+      // 3. Usuários online há menos de 2h -> garantir status online
+      const usersToOnline = await User.findAll({
+        where: {
+          online: true,
+          lastActivityAt: {
+            [Op.gte]: twoHoursAgo
+          },
+          status: { [Op.ne]: null }
+        },
+        attributes: ["id", "companyId", "name"]
+      });
+
+      for (const user of usersToOnline) {
+        await user.update({ status: null });
+
+        // Emitir evento
+        const io = getIO();
+        io.of(`/workspace-${user.companyId}`)
+          .emit(`company-${user.companyId}-user`, {
+            action: "update",
+            user: {
+              id: user.id,
+              online: true,
+              status: null
+            }
+          });
+        
+        console.log(`[UserStatusJob] ${user.name} (${user.id}) → online (<2h inativo)`);
+      }
+
+      if (usersToOffline.length > 0 || usersToAway.length > 0 || usersToOnline.length > 0) {
+        console.log(`[UserStatusJob] Atualizados: ${usersToOffline.length} offline, ${usersToAway.length} ausente, ${usersToOnline.length} online`);
       }
     } catch (error) {
       console.error("[UserStatusJob] Erro:", error);

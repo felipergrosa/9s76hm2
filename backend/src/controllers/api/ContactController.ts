@@ -231,13 +231,16 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
       const tagList = contactData.tags.split(',').map(tag => tag.trim());
 
       for (const tagName of tagList) {
+        let tag: any = null;
+        let cleanTagName = "";
+        
         try {
           // Limpar nome da tag
-          const cleanTagName = tagName.trim().replace(/\s+/g, ' ');
+          cleanTagName = tagName.trim().replace(/\s+/g, ' ');
           if (!cleanTagName) continue;
           
           // Primeiro tenta encontrar tag existente apenas por nome e companyId
-          let tag = await Tag.findOne({
+          tag = await Tag.findOne({
             where: { name: cleanTagName, companyId }
           });
 
@@ -301,7 +304,42 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
             }
           }
         } catch (error: any) {
-          // Log detalhado para debug
+          // Log EXTREMAMENTE detalhado para debug - FORÇADO sempre
+          console.error(`[TAG-ERROR] Erro completo ao processar Tag '${tagName}':`, {
+            errorMessage: error?.message,
+            errorName: error?.name,
+            errorCode: error?.code,
+            errorType: error?.constructor?.name,
+            stack: error?.stack,
+            sql: error?.sql,
+            fields: error?.fields,
+            originalError: error,
+            tagName,
+            cleanTagName,
+            contactId: contact.id,
+            companyId,
+            tagExists: !!tag,
+            contactData: {
+              name: contactData.name,
+              number: contactData.number,
+              tags: contactData.tags,
+              tagIds: contactData.tagIds
+            }
+          });
+          
+          // Também log como INFO para garantir que apareça nos logs normais
+          logger.info(`[TAG-ERROR-DETALHADO] Erro ao processar Tag '${tagName}' para o contato ${contact.id}:`, {
+            error: error?.message,
+            tagName,
+            contactId: contact.id,
+            companyId,
+            errorCode: error?.code,
+            errorType: error?.constructor?.name,
+            sql: error?.sql,
+            fields: error?.fields,
+            stack: error?.stack
+          });
+          
           logger.warn(`Erro ao processar Tag '${tagName}' para o contato ${contact.id}:`, {
             error: error?.message,
             tagName,

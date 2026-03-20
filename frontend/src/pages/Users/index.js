@@ -59,14 +59,11 @@ const reducer = (state, action) => {
 
   if (action.type === "UPDATE_USERS") {
     const user = action.payload;
-    console.log("[Users] UPDATE_USERS recebido:", user);
-    console.log("[Users] user.online =", user.online, "tipo:", typeof user.online);
     const userIndex = state.findIndex((u) => u.id === user.id);
 
     if (userIndex !== -1) {
       // Faz merge dos dados preservando campos existentes
       const merged = { ...state[userIndex], ...user };
-      console.log("[Users] Usuário após merge, online =", merged.online);
       state[userIndex] = merged;
       return [...state];
     } else {

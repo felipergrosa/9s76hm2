@@ -42,7 +42,7 @@ const UpdateUserOnlineStatusService = async ({
     
     // Busca dados atualizados do usuário para emitir
     const updatedUser = await User.findByPk(userId, {
-      attributes: ["id", "name", "email", "profile", "online", "companyId", "profileImage", "startWork", "endWork", "lastActivityAt"]
+      attributes: ["id", "name", "email", "profile", "online", "companyId", "profileImage", "startWork", "endWork", "lastActivityAt", "status"]
     });
     
     io.of(`/workspace-${companyId}`)
@@ -53,8 +53,6 @@ const UpdateUserOnlineStatusService = async ({
           online: online  // Garante que o campo online está presente
         }
       });
-
-    console.log(`[UpdateUserOnlineStatus] Evento emitido: company-${companyId}-user, user=${userId}, online=${online}`);
 
     console.log(`[UpdateUserOnlineStatus] Usuário ${userId} → online=${online}`);
   } catch (error) {

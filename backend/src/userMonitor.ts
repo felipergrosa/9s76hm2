@@ -46,19 +46,7 @@ userMonitor.process("UserConnection", handleUserConnection);
 userMonitor.process("VerifyLoginStatus", handleLoginStatus);
 
 export async function initUserMonitorQueues() {
-  const repeatableJobs = await userMonitor.getRepeatableJobs();
-  for (let job of repeatableJobs) {
-    await userMonitor.removeRepeatableByKey(job.key);
-  }
-
-  userMonitor.add(
-    "VerifyLoginStatus",
-    {},
-    {
-      repeat: { cron: "* * * * *", key: "verify-login-status"},
-      removeOnComplete: { age: 60 * 60, count: 10 },
-      removeOnFail: { age: 60 * 60, count: 10 }
-    }
-  );
-  logger.info("Queue: monitoramento de status de usuário inicializado");
+  // DESATIVADO - Conflita com UserStatusJob
+  // UserStatusJob agora gerencia status online/ausente/offline
+  logger.info("Queue: userMonitor desativado - usando UserStatusJob");
 }

@@ -73,6 +73,10 @@ class User extends Model<User> {
   @Column(DataType.DATE)
   lastActivityAt: Date;
 
+  @Default(null)
+  @Column
+  status: string;
+
   @Default("00:00")
   @Column
   startWork: string;
