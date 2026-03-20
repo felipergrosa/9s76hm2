@@ -1106,11 +1106,11 @@ async function getCapBackoffSettings(companyId: number, isOfficialApi: boolean =
       attributes: ["key", "value"]
     });
 
-    // Defaults para Baileys (conservadores)
-    let capHourly = Number(process.env.CAP_HOURLY) || 300;
-    let capDaily = Number(process.env.CAP_DAILY) || 2000;
-    let backoffErrorThreshold = Number(process.env.BACKOFF_ERROR_THRESHOLD) || 5;
-    let backoffPauseMinutes = Number(process.env.BACKOFF_PAUSE_MINUTES) || 10;
+    // Defaults para Baileys (conservadores - atualizados para prevencao de ban)
+    let capHourly = Number(process.env.CAP_HOURLY) || 30;
+    let capDaily = Number(process.env.CAP_DAILY) || 150;
+    let backoffErrorThreshold = Number(process.env.BACKOFF_ERROR_THRESHOLD) || 3;
+    let backoffPauseMinutes = Number(process.env.BACKOFF_PAUSE_MINUTES) || 15;
 
     // Defaults para API Oficial (muito mais altos - Meta permite milhares por dia)
     let officialCapHourly = Number(process.env.OFFICIAL_API_CAP_HOURLY) || 1000;
@@ -1150,15 +1150,15 @@ async function getCapBackoffSettings(companyId: number, isOfficialApi: boolean =
       return {
         capHourly: Number(process.env.OFFICIAL_API_CAP_HOURLY) || 1000,
         capDaily: Number(process.env.OFFICIAL_API_CAP_DAILY) || 10000,
-        backoffErrorThreshold: Number(process.env.BACKOFF_ERROR_THRESHOLD) || 5,
-        backoffPauseMinutes: Number(process.env.BACKOFF_PAUSE_MINUTES) || 10
+        backoffErrorThreshold: Number(process.env.BACKOFF_ERROR_THRESHOLD) || 3,
+        backoffPauseMinutes: Number(process.env.BACKOFF_PAUSE_MINUTES) || 15
       };
     }
     return {
-      capHourly: Number(process.env.CAP_HOURLY) || 300,
-      capDaily: Number(process.env.CAP_DAILY) || 2000,
-      backoffErrorThreshold: Number(process.env.BACKOFF_ERROR_THRESHOLD) || 5,
-      backoffPauseMinutes: Number(process.env.BACKOFF_PAUSE_MINUTES) || 10
+      capHourly: Number(process.env.CAP_HOURLY) || 30,
+      capDaily: Number(process.env.CAP_DAILY) || 150,
+      backoffErrorThreshold: Number(process.env.BACKOFF_ERROR_THRESHOLD) || 3,
+      backoffPauseMinutes: Number(process.env.BACKOFF_PAUSE_MINUTES) || 15
     };
   }
 }
@@ -1267,7 +1267,7 @@ async function getIntervalSettings(companyId: number, isOfficialApi: boolean = f
   }
 }
 
-function getPacingDeferDelayMs(whatsappId: number, s: IntervalSettings): number {
+function getPacingDeferDelayMs(whatsappId: number, s: IntervalSettings, isOfficialApi: boolean = false): number {
   const now = Date.now();
   const st = pacingMap.get(whatsappId) || { sentSinceLonger: 0 } as PacingState;
 
@@ -1287,8 +1287,11 @@ function getPacingDeferDelayMs(whatsappId: number, s: IntervalSettings): number 
   // Respeita intervalo mínimo entre mensagens
   if (st.lastSentAt) {
     const elapsed = now - st.lastSentAt;
-    if (elapsed < s.messageIntervalMs) {
-      return (s.messageIntervalMs - elapsed) + randomValue(100, 300);
+    // Variacao aleatoria de 0-7 segundos para Baileys (nao-oficial) - evita padrao previsivel
+    const randomVariationMs = isOfficialApi ? 0 : randomValue(0, 7000);
+    const effectiveIntervalMs = s.messageIntervalMs + randomVariationMs;
+    if (elapsed < effectiveIntervalMs) {
+      return (effectiveIntervalMs - elapsed) + randomValue(100, 300);
     }
   }
 
@@ -1818,7 +1821,7 @@ async function handleDispatchCampaign(job) {
 
     const capDelayMs = await getCapDeferDelayMs(selectedWhatsappId, caps);
     const backoffDelayMs = getBackoffDeferDelayMs(selectedWhatsappId);
-    const pacingDelayMs = getPacingDeferDelayMs(selectedWhatsappId, intervals);
+    const pacingDelayMs = getPacingDeferDelayMs(selectedWhatsappId, intervals, isOfficial);
     const deferMs = Math.max(capDelayMs, backoffDelayMs, pacingDelayMs);
     if (deferMs > 0) {
       const nextJob = await campaignQueue.add(
