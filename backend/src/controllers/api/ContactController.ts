@@ -10,6 +10,7 @@ import Contact from "../../models/Contact";
 import { Op } from "sequelize";
 import Tag from "../../models/Tag";
 import ContactTag from "../../models/ContactTag";
+import User from "../../models/User"; // ✅ Importação faltante
 
 type IndexQuery = {
   companyId: number;
@@ -240,14 +241,28 @@ export const sync = async (req: Request, res: Response): Promise<Response> => {
             // Limpar nome da tag para evitar problemas
             const cleanTagName = tagName.trim().replace(/\s+/g, ' ');
             
+            // Verificar se existe usuário sistema (ID 1), senão usar qualquer usuário da empresa
+            let systemUserId = 1;
+            try {
+              const systemUser = await User.findByPk(1);
+              if (!systemUser) {
+                // Buscar primeiro usuário da empresa
+                const firstUser = await User.findOne({ where: { companyId } });
+                systemUserId = firstUser?.id || 1;
+              }
+            } catch (err) {
+              logger.warn(`Não foi possível verificar usuário sistema, usando ID 1:`, err);
+            }
+            
             tag = await Tag.create({
               name: cleanTagName,
               companyId,
               color: "#A4CCCC",
-              kanban: 0
+              kanban: 0,
+              userId: systemUserId // ✅ API usa usuário sistema ou primeiro usuário da empresa
             });
             
-            logger.info(`Tag '${cleanTagName}' criada com sucesso para companyId ${companyId}`);
+            logger.info(`Tag '${cleanTagName}' criada com sucesso para companyId ${companyId} (API - userId: ${systemUserId})`);
           }
 
           await ContactTag.findOrCreate({
