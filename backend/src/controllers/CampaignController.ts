@@ -66,10 +66,12 @@ type StoreData = {
 
 type FindParams = {
   companyId: string;
+  searchParam: string;
+  pageNumber: string;
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
-  const { searchParam, pageNumber } = req.query as IndexQuery;
+  const { searchParam, pageNumber } = req.query as FindParams;
   const { companyId } = req.user;
 
   const { records, count, hasMore } = await ListService({
@@ -79,6 +81,19 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   });
 
   return res.json({ records, count, hasMore });
+};
+
+export const countActiveCampaigns = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+
+  const count = await Campaign.count({
+    where: {
+      companyId,
+      status: ["EM_ANDAMENTO", "PROGRAMADA"]
+    }
+  });
+
+  return res.json({ count });
 };
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
