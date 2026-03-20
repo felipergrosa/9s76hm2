@@ -2235,15 +2235,20 @@ async function handleDispatchCampaign(job) {
             const captionText = (sendSeparately || isAudio) ? null : `\u200c${campaignShipping.message}`;
             
             const options = await getMessageOptions(fileName, filePath, String(campaign.companyId), captionText || "");
+            
+            logger.info(`[CAMPAIGN-AUDIO-DEBUG] msgIdx=${msgIdx} | isAudio=${isAudio} | sendSeparately=${sendSeparately} | hasText=${hasText} | captionText=${captionText ? 'presente' : 'null'}`);
+            
             if (options && Object.keys(options).length) {
               // Enviar texto primeiro se: sendMediaSeparately OU áudio (PTT não suporta caption)
               if ((sendSeparately || isAudio) && hasText) {
+                logger.info(`[CAMPAIGN-AUDIO-DEBUG] Enviando TEXTO separado para ticket ${ticket.id}`);
                 const textMessage = await wbot.sendMessage(chatId, {
                   text: `\u200c${campaignShipping.message}`
                 });
                 await verifyMessage(textMessage, ticket, contact, null, true, false, true); // isCampaign=true
               }
               
+              logger.info(`[CAMPAIGN-AUDIO-DEBUG] Enviando MÍDIA para ticket ${ticket.id}`);
               const sentMessage = await wbot.sendMessage(chatId, { ...options });
 
               // FIX: Ensure caption is present in the returned message object so verifyMediaMessage can save it
@@ -2258,6 +2263,7 @@ async function handleDispatchCampaign(job) {
                 }
               }
 
+              logger.info(`[CAMPAIGN-AUDIO-DEBUG] Salvando MÍDIA no banco para ticket ${ticket.id}`);
               await verifyMediaMessage(sentMessage, ticket, contact, null, false, true, wbot); // isCampaign=true
             }
           }

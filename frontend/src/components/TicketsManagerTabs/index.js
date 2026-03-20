@@ -475,7 +475,8 @@ const TicketsManagerTabs = () => {
   const pendingCount = ticketsByStatus.pending.reduce((sum, t) => sum + (t.unreadMessages || 0), 0);
   const groupingCount = ticketsByStatus.group.reduce((sum, t) => sum + (t.unreadMessages || 0), 0);
   const botCount = ticketsByStatus.bot.reduce((sum, t) => sum + (t.unreadMessages || 0), 0);
-  const campaignCount = ticketsByStatus.campaign.reduce((sum, t) => sum + (t.unreadMessages || 0), 0);
+  // Para campanhas: mostrar quantidade de tickets (não apenas unread)
+  const campaignCount = ticketsByStatus.campaign.length;
 
   const resetHovers = () => {
     setIsHoveredAll(false);
