@@ -71,7 +71,9 @@ const ListMessagesService = async ({
         companyId: ticket.companyId,
         isGroup: true
       },
-      attributes: ["id"]
+      attributes: ["id"],
+      limit: 100,
+      order: [['createdAt', 'DESC']]
     });
     const ids = groupTicketIds.map(t => t.id);
     ticketsFilter.push(ids.length > 0 ? ids : [ticket.id]);
@@ -94,7 +96,9 @@ const ListMessagesService = async ({
             { [Op.or]: [queues, null] } :
             { [Op.in]: queues }
         },
-        attributes: ["id"]
+        attributes: ["id"],
+        limit: 100,
+        order: [['createdAt', 'DESC']]
       });
     } else {
       // Sem filtro de fila (admin, allTicket, ou histórico liberado)
@@ -106,7 +110,9 @@ const ListMessagesService = async ({
           whatsappId: ticket.whatsappId,
           isGroup: ticket.isGroup
         },
-        attributes: ["id"]
+        attributes: ["id"],
+        limit: 100,
+        order: [['createdAt', 'DESC']]
       });
     }
 
@@ -229,7 +235,8 @@ const ListMessagesService = async ({
             { lidJid: { [Op.in]: participantJids } }
           ]
         },
-        attributes: ["id", "name", "number", "profilePicUrl", "urlPicture", "remoteJid", "lidJid"]
+        attributes: ["id", "name", "number", "profilePicUrl", "urlPicture", "remoteJid", "lidJid"],
+        limit: 200
       });
 
       // Criar mapa participant → contact

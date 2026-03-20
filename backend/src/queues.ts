@@ -672,10 +672,23 @@ async function getCampaign(id) {
   // Salvar no cache
   if (campaign) {
     campaignCache.set(id, { data: campaign, expiry: Date.now() + CAMPAIGN_CACHE_TTL_MS });
-  } else {
-    logger.error(`[getCampaign] Campaign ${id} não encontrada!`);
   }
 
+  return campaign;
+}
+
+// OTIMIZAÇÃO: Versão leve para dispatch (reduz uso de memória)
+async function getCampaignLight(id) {
+  const campaign = await Campaign.findByPk(id, {
+    attributes: [
+      'id', 'name', 'status', 'companyId', 'whatsappId', 'queueId', 'userId',
+      'message1', 'message2', 'message3', 'message4', 'message5',
+      'mediaPath', 'mediaName',
+      'mediaUrl1', 'mediaUrl2', 'mediaUrl3', 'mediaUrl4', 'mediaUrl5',
+      'mediaName1', 'mediaName2', 'mediaName3', 'mediaName4', 'mediaName5',
+      'sendMediaSeparately', 'confirmation', 'statusTicket'
+    ]
+  });
   return campaign;
 }
 
