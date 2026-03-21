@@ -17,8 +17,8 @@ const ShowContactService = async (
     ]
   });
 
-  if (contact?.companyId !== companyId) {
-    throw new AppError("Não é possível excluir registro de outra empresa");
+  if (Number(contact?.companyId) !== Number(companyId)) {
+    throw new AppError("Não é possível visualizar registro de outra empresa", 403);
   }
 
   if (!contact) {
