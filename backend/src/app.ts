@@ -9,6 +9,7 @@ import compression from "compression";
 import * as Sentry from "@sentry/node";
 import { config as dotenvConfig } from "dotenv";
 import bodyParser from 'body-parser';
+import debugRequest from "../debug-middleware"; // ✅ Debug temporário
 
 import "./database";
 import uploadConfig from "./config/upload";
@@ -128,6 +129,9 @@ app.use((req, res, next) => {
 
 // Middleware de tracking de atividade do usuário
 app.use(trackUserActivity);
+
+// ✅ Debug temporário - REMOVER APÓS IDENTIFICAR PROBLEMA
+app.use(debugRequest);
 
 // Rotas
 app.use(routes);
