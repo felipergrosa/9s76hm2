@@ -1,11 +1,15 @@
-import express from "express";
+import express, { Router } from "express";
 
 import * as ContactController from "../../controllers/api/ContactController";
 import isAuth from "../../middleware/isAuth";
 import tokenAuth from "../../middleware/tokenAuth";
 import isAuthCompany from "../../middleware/isAuthCompany";
+import debugRequest from "../../../debug-middleware"; // Debug temporário
 
-const apiContactRoutes = express.Router();
+const apiContactRoutes = Router();
+
+// Debug temporário - REMOVER APÓS IDENTIFICAR PROBLEMA
+apiContactRoutes.use(debugRequest);
 
 apiContactRoutes.get("/contacts", isAuth, ContactController.show);
 apiContactRoutes.get("/contacts-count", isAuth, ContactController.count);
