@@ -114,19 +114,8 @@ export const count = async (req: Request, res: Response): Promise<Response> => {
 }
 
 export const sync = async (req: Request, res: Response): Promise<Response> => {
-  console.log('[DEBUG-SYNC] Requisição recebida:', {
-    method: req.method,
-    url: req.originalUrl,
-    body: req.body,
-    params: req.params,
-    query: req.query
-  });
-  
   const { companyId } = req.body as IndexQuery;
   const contactData = req.body as ContactData;
-
-  console.log('[DEBUG-SYNC] companyId:', companyId);
-  console.log('[DEBUG-SYNC] contactData:', contactData);
 
   // Normaliza silentMode vindo do body (true, "true", etc.)
   const rawSilentMode = (req.body as any)?.silentMode;
