@@ -260,6 +260,54 @@ export async function resolveMessageContact(
       whatsappId: wbot.id
     });
 
+    // ═══════════════════════════════════════════════════════════════════
+    // VERIFICAÇÃO DE NOME: Se contato existe mas tem nome genérico,
+    // buscar nome da agenda WhatsApp proativamente
+    // ═══════════════════════════════════════════════════════════════════
+    const currentName = existingContact.name || "";
+    const currentNumber = existingContact.number || "";
+    const nameDigitsOnly = currentName.replace(/\D/g, "");
+    const numberDigitsOnly = currentNumber.replace(/\D/g, "");
+    
+    // Detectar nome "ruim": vazio, igual ao número, ou apenas "Contato"
+    const hasBadName = !currentName || 
+                       currentName.trim() === "" ||
+                       nameDigitsOnly === numberDigitsOnly ||
+                       currentName === currentNumber ||
+                       currentName.startsWith("Contato ");
+    
+    if (hasBadName && ids.pnJid) {
+      try {
+        // Buscar nome da agenda via onWhatsApp
+        const results = await wbot.onWhatsApp(ids.pnJid);
+        if (Array.isArray(results) && results.length > 0) {
+          const result = results[0] as { jid: string; exists: boolean; notify?: string; verifiedName?: string };
+          let betterName: string | null = null;
+          
+          if (result.notify && result.notify.trim().length > 0) {
+            betterName = result.notify;
+          } else if (result.verifiedName && result.verifiedName.trim().length > 0) {
+            betterName = result.verifiedName;
+          }
+          
+          if (betterName && betterName !== currentName) {
+            await existingContact.update({ name: betterName });
+            logger.info({
+              contactId: existingContact.id,
+              oldName: currentName,
+              newName: betterName,
+              source: result.notify ? "onWhatsApp.notify" : "onWhatsApp.verifiedName"
+            }, "[resolveMessageContact] Nome do contato atualizado da agenda WhatsApp");
+            
+            // Atualizar o objeto em memória também
+            existingContact.name = betterName;
+          }
+        }
+      } catch (err: any) {
+        logger.debug({ err: err?.message }, "[resolveMessageContact] Erro ao buscar nome da agenda para contato existente");
+      }
+    }
+
     return {
       contact: existingContact,
       identifiers: ids,

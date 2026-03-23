@@ -1,9 +1,10 @@
 import { Op } from "sequelize";
-import { sub } from "date-fns";
+import { sub, addHours, differenceInHours } from "date-fns";
 import { v5 as uuidv5 } from "uuid";
 
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
+import LogTicket from "../../models/LogTicket";
 import ShowTicketService from "./ShowTicketService";
 import FindOrCreateATicketTrakingService from "./FindOrCreateATicketTrakingService";
 import { isNil } from "lodash";
@@ -197,26 +198,75 @@ const FindOrCreateTicketService = async (
       await ticket.update({
         userId: userId !== ticket.userId ? ticket.userId : userId,
         queueId: queueId !== ticket.queueId ? ticket.queueId : queueId,
-      })
+      });
+      ticket = await ShowTicketService(ticket.id, companyId);
+      ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+      return ticket;
     } else {
-      // Verificar se ticket está fechado e reabrir para unificação do chat
+      // Verificar se ticket está fechado - CRIAR NOVO TICKET (não reabrir)
+      // Histórico será unificado pelo ListMessagesService
       const wasClosed = ticket.status === "closed" || ticket.status === "lgpd" || ticket.status === "nps";
       if (wasClosed && !isFromMe) {
-        logger.info(`[FindOrCreateTicket] Reabrindo ticket ${ticket.id} (estava ${ticket.status}) para unificação do chat`);
-        const oldStatus = ticket.status;
-        (ticket as any)._skipHookEmit = true;
-        await ticket.update({
-          status: "pending",
-          unreadMessages,
-          queueId: ticket.queueId || null,
-          userId: null // Resetar atribuição para nova rodada
+        // Verificar janela de 24h:
+        // - Se mesmo usuário que fechou interage dentro de 24h → reabre
+        // - Se usuário diferente interage dentro de 24h → cria novo ticket
+        // - Se após 24h → cria novo ticket
+        const lastClosedLog = await LogTicket.findOne({
+          where: {
+            ticketId: ticket.id,
+            type: "closed"
+          },
+          order: [["createdAt", "DESC"]]
         });
-        // Emitir evento de mudança de status
-        ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, oldStatus, "pending");
+
+        let shouldReopen = false;
+        let reopenUserId = null;
+        
+        const closedByUserId = lastClosedLog?.userId || ticket.userId;
+        const hoursSinceClosed = lastClosedLog ? differenceInHours(new Date(), lastClosedLog.createdAt) : 999;
+        
+        // Dentro da janela de 24h
+        if (hoursSinceClosed < 24 && closedByUserId) {
+          // Se userId foi passado (atendente específico interagindo)
+          if (userId && userId !== closedByUserId) {
+            // Usuário diferente do que fechou → criar novo ticket
+            logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} fechado há ${hoursSinceClosed}h por usuário ${closedByUserId}. Usuário ${userId} é diferente. Criando NOVO ticket.`);
+            ticket = null;
+          } else {
+            // Mesmo usuário ou userId null (mensagem do WhatsApp) → reabre para o usuário que fechou
+            shouldReopen = true;
+            reopenUserId = closedByUserId;
+            logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} fechado há ${hoursSinceClosed}h pelo usuário ${closedByUserId}. Reabrindo dentro da janela de 24h.`);
+          }
+        } else {
+          // Após 24h → criar novo ticket
+          logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} fechado há ${hoursSinceClosed}h. Criando NOVO ticket.`);
+          ticket = null;
+        }
+
+        if (shouldReopen) {
+          // Reabrir ticket existente para o mesmo usuário dentro da janela de 24h
+          const oldStatus = ticket.status;
+          (ticket as any)._skipHookEmit = true;
+          await ticket.update({ 
+            status: "open",
+            unreadMessages,
+            userId: reopenUserId
+          });
+          ticket = await ShowTicketService(ticket.id, companyId);
+          ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, oldStatus, "open");
+          await CreateLogTicketService({ ticketId: ticket.id, type: "reopen", userId: reopenUserId });
+          logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} reaberto dentro da janela de 24h para usuário ${reopenUserId}.`);
+          return ticket;
+        }
       } else {
         // Atualizar mensagens não lidas normalmente
         await ticket.update({ unreadMessages });
       }
+    }
+
+    // Se ticket ainda existe (não foi fechado OU é campanha), processar normalmente
+    if (ticket) {
 
       // Não forçar isBot: false! Manter estado atual do bot
       logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} encontrado: status=${ticket.status}, queueId=${ticket.queueId}, isBot=${ticket.isBot}`);
@@ -317,37 +367,36 @@ const FindOrCreateTicketService = async (
           ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, oldStatus, "bot");
         }
       }
-    }
 
-    ticket = await ShowTicketService(ticket.id, companyId);
-    // Emitir evento de atualização para real-time (quando ticket foi encontrado e atualizado)
-    // Nota: se houve mudança de status, já foi emitido acima
-    if (ticket.status !== "closed") {
-      ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
-    }
-
-    if (!isCampaign && !isForward) {
-      // @ts-ignore: Unreachable code error
-      if ((Number(ticket?.userId) !== Number(userId) && userId !== 0 && userId !== "" && userId !== "0" && !isNil(userId) && !ticket.isGroup)
-        // @ts-ignore: Unreachable code error 
-        || (queueId !== 0 && Number(ticket?.queueId) !== Number(queueId) && queueId !== "" && queueId !== "0" && !isNil(queueId))) {
-        throw new AppError(
-          JSON.stringify({
-            id: ticket.id,
-            uuid: ticket.uuid,
-            userId: ticket.userId,
-            status: ticket.status,
-            user: ticket.user ? { id: ticket.user.id, name: ticket.user.name } : null,
-            queue: ticket.queue ? { id: ticket.queue.id, name: ticket.queue.name } : null
-          })
-        );
+      ticket = await ShowTicketService(ticket.id, companyId);
+      // Emitir evento de atualização para real-time (quando ticket foi encontrado e atualizado)
+      // Nota: se houve mudança de status, já foi emitido acima
+      if (ticket.status !== "closed") {
+        ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
       }
+
+      if (!isCampaign && !isForward) {
+        // @ts-ignore: Unreachable code error
+        if ((Number(ticket?.userId) !== Number(userId) && userId !== 0 && userId !== "" && userId !== "0" && !isNil(userId) && !ticket.isGroup)
+          // @ts-ignore: Unreachable code error 
+          || (queueId !== 0 && Number(ticket?.queueId) !== Number(queueId) && queueId !== "" && queueId !== "0" && !isNil(queueId))) {
+          throw new AppError(
+            JSON.stringify({
+              id: ticket.id,
+              uuid: ticket.uuid,
+              userId: ticket.userId,
+              status: ticket.status,
+              user: ticket.user ? { id: ticket.user.id, name: ticket.user.name } : null,
+              queue: ticket.queue ? { id: ticket.queue.id, name: ticket.queue.name } : null
+            })
+          );
+        }
+      }
+
+      // isCreated = true;
+
+      return ticket
     }
-
-    // isCreated = true;
-
-    return ticket
-
   }
 
   if (!ticket) {
