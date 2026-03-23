@@ -343,6 +343,75 @@ export const initIO = (httpServer: Server): SocketIO => {
       }
     });
 
+    // Heartbeat: atualiza lastActivityAt do usuário em tempo real
+    socket.on("userHeartbeat", async (data: { userId: number | string }, callback?: (result: any) => void) => {
+      try {
+        const { userId } = data;
+        if (!userId) {
+          callback?.({ error: "userId obrigatório" });
+          return;
+        }
+
+        // Importação dinâmica para evitar dependência circular
+        const { default: User } = await import("../models/User");
+        const { default: UpdateUserOnlineStatusService } = await import("../services/UserServices/UpdateUserOnlineStatusService");
+
+        // Extrair companyId do namespace (formato: /workspace-{companyId})
+        const namespaceMatch = socket.nsp.name.match(/workspace-(\d+)/);
+        const companyId = namespaceMatch ? parseInt(namespaceMatch[1], 10) : null;
+
+        if (!companyId) {
+          callback?.({ error: "companyId não encontrado" });
+          return;
+        }
+
+        const user = await User.findByPk(userId, {
+          attributes: ["id", "online", "lastActivityAt", "status", "companyId"]
+        });
+
+        if (!user) {
+          callback?.({ error: "Usuário não encontrado" });
+          return;
+        }
+
+        const now = new Date();
+        const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+
+        // Se usuário está offline ou inativo há mais de 3h, colocar online
+        if (!user.online || user.lastActivityAt < threeHoursAgo) {
+          console.log(`[Heartbeat] Usuário ${userId} voltando à atividade - online=${user.online}, lastActivity=${user.lastActivityAt}`);
+          
+          // Atualizar para online
+          await User.update(
+            { 
+              online: true, 
+              lastActivityAt: now,
+              status: null // Limpar status "ausente" se existir
+            },
+            { where: { id: userId }, silent: true }
+          );
+
+          // Emitir evento Socket.IO para atualizar frontend
+          await UpdateUserOnlineStatusService({
+            userId,
+            companyId,
+            online: true
+          });
+        } else {
+          // Apenas atualizar lastActivityAt
+          await User.update(
+            { lastActivityAt: now },
+            { where: { id: userId }, silent: true }
+          );
+        }
+
+        callback?.({ success: true, timestamp: now.toISOString() });
+      } catch (e) {
+        console.error("[Heartbeat] Erro:", e);
+        callback?.({ error: (e as Error).message });
+      }
+    });
+
     socket.on("disconnect", () => {
       logger.info(`Cliente desconectado do namespace ${socket.nsp.name} (IP: ${clientIp})`);
     });

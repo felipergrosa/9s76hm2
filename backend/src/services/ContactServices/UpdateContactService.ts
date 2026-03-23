@@ -158,7 +158,7 @@ const UpdateContactService = async ({
   const contact = await Contact.findOne({
     where: { id: contactId },
     attributes: [
-      "id", "name", "number", "channel", "email", "companyId",
+      "id", "name", "number", "channels", "email", "companyId",
       "acceptAudioMessage", "active", "disableBot", "profilePicUrl", "remoteJid",
       "urlPicture", "florder", "contactName",
       // Adicionar novos campos aos atributos

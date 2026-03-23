@@ -151,6 +151,9 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
     cpfCnpj: initialContact?.cpfCnpj || '',
     representativeCode: initialContact?.representativeCode || '',
     city: initialContact?.city || '',
+    region: initialContact?.region || '',
+    segment: initialContact?.segment || '',
+    channels: initialContact?.channels || [],
     instagram: initialContact?.instagram || '',
     situation: initialContact?.situation || 'Ativo',
     fantasyName: initialContact?.fantasyName || '',
@@ -167,6 +170,9 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
       cpfCnpj: initialContact?.cpfCnpj || '',
       representativeCode: initialContact?.representativeCode || '',
       city: initialContact?.city || '',
+      region: initialContact?.region || '',
+      segment: initialContact?.segment || '',
+      channels: initialContact?.channels || [],
       instagram: initialContact?.instagram || '',
       situation: initialContact?.situation || 'Ativo',
       fantasyName: initialContact?.fantasyName || '',
@@ -295,7 +301,7 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
               </div>
             </Grid>
 
-            {/* Linha 3 - Cidade e CPF/CNPJ */}
+            {/* Linha 3 - Cidade e Região */}
             <Grid item xs={12} sm={6}>
               <Field
                 as={TextField}
@@ -307,6 +313,68 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
                 className={classes.field}
               />
             </Grid>
+            <Grid item xs={12} sm={6}>
+              <Field
+                as={TextField}
+                label="Região"
+                name="region"
+                variant="outlined"
+                margin="dense"
+                fullWidth
+                className={classes.field}
+              />
+            </Grid>
+
+            {/* Linha 3.1 - Segmento e Canal */}
+            <Grid item xs={12} sm={6}>
+              <Field
+                as={TextField}
+                label="Segmento de Mercado"
+                name="segment"
+                variant="outlined"
+                margin="dense"
+                fullWidth
+                className={classes.field}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Field
+                name="channels"
+                render={({ field }) => (
+                  <Autocomplete
+                    multiple
+                    freeSolo
+                    options={['WhatsApp', 'Instagram', 'Messenger', 'Telegram', 'WebChat']}
+                    value={field.value || []}
+                    onChange={(e, newValue) => field.onChange(newValue || [])}
+                    renderTags={(value, getTagProps) =>
+                      value.map((option, index) => (
+                        <Chip
+                          {...getTagProps({ index })}
+                          key={option}
+                          label={option}
+                          size="small"
+                          color="primary"
+                        />
+                      ))
+                    }
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Canais"
+                        variant="outlined"
+                        margin="dense"
+                        fullWidth
+                        placeholder="WhatsApp, Instagram, Telegram..."
+                      />
+                    )}
+                  />
+                )}
+                className={classes.field}
+              />
+            </Grid>
+
+            {/* Linha 3.1 - CPF/CNPJ */}
             <Grid item xs={12} sm={6}>
               <div className={classes.field}>
                 <TextField

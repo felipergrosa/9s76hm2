@@ -294,55 +294,24 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
     }
   }, [isOpen, initialFilter]);
 
+  // Carregamento lazy inteligente - busca dados atualizados do banco sem cache
   const loadChannels = async () => {
-    const cached = getCache("channels");
-    if (Array.isArray(cached) && cached.length) { setChannels(cached); return; }
     setLoadingChannels(true);
     try {
-      // Prévia rápida com primeira página
-      let page = 1;
-      let hasMore = true;
-      const map = new Map();
-
-      const firstResp = await api.get("/contacts", {
-        params: { pageNumber: page, limit: 500, orderBy: "channel", order: "ASC" },
-      });
-      const firstList = Array.isArray(firstResp?.data?.contacts) ? firstResp.data.contacts : [];
-      for (const c of firstList) {
-        const raw = c?.channel; if (!raw) continue;
-        const value = String(raw).trim(); if (!value) continue;
-        const key = value.toLowerCase(); if (!map.has(key)) map.set(key, value);
-      }
-      hasMore = Boolean(firstResp?.data?.hasMore);
-      page += 1;
-
-      // monta preview + garante valores do initialFilter
-      const basePreview = Array.from(map.values()).sort((a,b)=>a.localeCompare(b,"pt-BR")).slice(0,5);
-      const setPreview = new Set(basePreview);
+      // Buscar valores únicos de canal diretamente do banco
+      const { data } = await api.get("/contacts", { params: { limit: 1, searchParam: "" } });
+      // Usar endpoint de unique-values para canais (precisa adicionar no backend ou usar alternativa)
+      // Por ora, buscar da lista de contatos
+      const resp = await api.get("/contacts", { params: { limit: 500, orderBy: "channel", order: "ASC" } });
+      const list = Array.isArray(resp?.data?.contacts) ? resp.data.contacts : [];
+      const set = new Set();
+      list.forEach(c => { const v = String(c?.channel || "").trim(); if (v) set.add(v); });
+      
+      // Garante valores do initialFilter
       if (initialFilter && Array.isArray(initialFilter.channel)) {
-        initialFilter.channel.forEach(v => { const s = String(v||"").trim(); if (s) setPreview.add(s); });
+        initialFilter.channel.forEach(v => { const s = String(v || "").trim(); if (s) set.add(s); });
       }
-      setChannels(Array.from(setPreview).sort((a,b)=>a.localeCompare(b,"pt-BR")));
-
-      // Continuação em background
-      while (hasMore) {
-        const { data } = await api.get("/contacts", {
-          params: { pageNumber: page, limit: 500, orderBy: "channel", order: "ASC" },
-        });
-        const list = Array.isArray(data?.contacts) ? data.contacts : [];
-        for (const c of list) {
-          const raw = c?.channel; if (!raw) continue;
-          const value = String(raw).trim(); if (!value) continue;
-          const key = value.toLowerCase(); if (!map.has(key)) map.set(key, value);
-        }
-        hasMore = Boolean(data?.hasMore);
-        page += 1;
-        if (list.length === 0) break;
-      }
-
-      const all = Array.from(map.values()).sort((a,b)=>a.localeCompare(b,"pt-BR"));
-      setChannels(all);
-      setCache("channels", all);
+      setChannels(Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR")));
     } catch (err) {
       toastError(err);
     }
@@ -350,25 +319,19 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
   };
 
   const loadSegments = async () => {
-    const cached = getCache("segments");
-    if (Array.isArray(cached) && cached.length) { setSegments(cached); return; }
     setLoadingSegments(true);
     try {
-      let companyId = user?.companyId;
-      if (!companyId) {
-        const info = await getCurrentUserInfo?.();
-        companyId = info?.user?.companyId || info?.companyId;
+      const { data } = await api.get("/contacts/unique-values");
+      const list = Array.isArray(data?.segments) ? data.segments : [];
+      const normalized = list.map(s => (s == null ? "" : String(s).trim())).filter(Boolean).sort((a, b) => a.localeCompare(b, "pt-BR"));
+      // Garante valores do initialFilter
+      if (initialFilter && Array.isArray(initialFilter.segment)) {
+        const set = new Set(normalized);
+        initialFilter.segment.forEach(v => { const s = String(v || "").trim(); if (s) set.add(s); });
+        setSegments(Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR")));
+      } else {
+        setSegments(normalized);
       }
-      if (!companyId) return;
-
-      const { data } = await api.get("/api/contacts/segments");
-      const list = Array.isArray(data) ? data : (Array.isArray(data?.segments) ? data.segments : []);
-      const normalized = list
-        .map(s => (s == null ? "" : String(s).trim()))
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b, "pt-BR"));
-      setSegments(normalized);
-      setCache("segments", normalized);
     } catch (err) {
       toastError(err);
     }
@@ -376,25 +339,19 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
   };
 
   const loadEmpresas = async () => {
-    const cached = getCache("empresas");
-    if (Array.isArray(cached) && cached.length) { setEmpresas(cached); return; }
     setLoadingEmpresas(true);
     try {
-      let companyId = user?.companyId;
-      if (!companyId) {
-        const info = await getCurrentUserInfo?.();
-        companyId = info?.user?.companyId || info?.companyId;
+      const { data } = await api.get("/contacts/unique-values");
+      const list = Array.isArray(data?.companies) ? data.companies : [];
+      const normalized = list.map(e => (e == null ? "" : String(e).trim())).filter(Boolean).sort((a, b) => a.localeCompare(b, "pt-BR"));
+      // Garante valores do initialFilter
+      if (initialFilter && Array.isArray(initialFilter.bzEmpresa)) {
+        const set = new Set(normalized);
+        initialFilter.bzEmpresa.forEach(v => { const s = String(v || "").trim(); if (s) set.add(s); });
+        setEmpresas(Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR")));
+      } else {
+        setEmpresas(normalized);
       }
-      if (!companyId) return;
-
-      const { data } = await api.get("/contacts/empresas");
-      const list = Array.isArray(data) ? data : (Array.isArray(data?.empresas) ? data.empresas : []);
-      const normalized = list
-        .map(e => (e == null ? "" : String(e).trim()))
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b, "pt-BR"));
-      setEmpresas(normalized);
-      setCache("empresas", normalized);
     } catch (err) {
       toastError(err);
     }
@@ -402,187 +359,87 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
   };
 
   const loadCities = async () => {
-    const cached = getCache("cities");
-    if (Array.isArray(cached) && cached.length) { setCities(cached); return; }
     setLoadingCities(true);
     try {
-      // Prévia rápida com primeira página
-      let page = 1;
-      let hasMore = true;
-      const map = new Map(); // key lower -> exibido
-
-      const firstResp = await api.get("/contacts", {
-        params: { pageNumber: page, limit: 500, orderBy: "city", order: "ASC" },
-      });
-      const firstList = Array.isArray(firstResp?.data?.contacts) ? firstResp.data.contacts : [];
-      for (const c of firstList) {
-        const raw = c?.city; if (!raw) continue;
-        const value = String(raw).trim(); if (!value) continue;
-        const key = value.toLowerCase(); if (!map.has(key)) map.set(key, value);
-      }
-      hasMore = Boolean(firstResp?.data?.hasMore);
-      page += 1;
-
-      const basePreview = Array.from(map.values()).sort((a,b)=>a.localeCompare(b,"pt-BR")).slice(0,5);
-      const setPreview = new Set(basePreview);
+      const { data } = await api.get("/contacts/unique-values");
+      const list = Array.isArray(data?.cities) ? data.cities : [];
+      const normalized = list.map(c => (c == null ? "" : String(c).trim())).filter(Boolean).sort((a, b) => a.localeCompare(b, "pt-BR"));
+      // Garante valores do initialFilter
       if (initialFilter && Array.isArray(initialFilter.city)) {
-        initialFilter.city.forEach(v => { const s = String(v||"").trim(); if (s) setPreview.add(s); });
+        const set = new Set(normalized);
+        initialFilter.city.forEach(v => { const s = String(v || "").trim(); if (s) set.add(s); });
+        setCities(Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR")));
+      } else {
+        setCities(normalized);
       }
-      setCities(Array.from(setPreview).sort((a,b)=>a.localeCompare(b,"pt-BR")));
-
-      // Continuação em background
-      while (hasMore) {
-        const { data } = await api.get("/contacts", {
-          params: { pageNumber: page, limit: 500, orderBy: "city", order: "ASC" },
-        });
-        const list = Array.isArray(data?.contacts) ? data.contacts : [];
-        for (const c of list) {
-          const raw = c?.city; if (!raw) continue;
-          const value = String(raw).trim(); if (!value) continue;
-          const key = value.toLowerCase(); if (!map.has(key)) map.set(key, value);
-        }
-        hasMore = Boolean(data?.hasMore);
-        page += 1;
-        if (list.length === 0) break;
-      }
-
-      const all = Array.from(map.values()).sort((a,b)=>a.localeCompare(b,"pt-BR"));
-      setCities(all);
-      setCache("cities", all);
     } catch (err) {
       toastError(err);
-    } finally {
-      setLoadingCities(false);
     }
+    setLoadingCities(false);
   };
 
   const loadRegions = async () => {
-    const cached = getCache("regions");
-    if (Array.isArray(cached) && cached.length) { setRegions(cached); return; }
     setLoadingRegions(true);
     try {
-      // Prévia rápida com primeira página
-      let page = 1;
-      let hasMore = true;
-      const map = new Map(); // key lower -> exibido
-
-      const firstResp = await api.get("/contacts", {
-        params: { pageNumber: page, limit: 500, orderBy: "region", order: "ASC" },
-      });
-      const firstList = Array.isArray(firstResp?.data?.contacts) ? firstResp.data.contacts : [];
-      for (const c of firstList) {
-        const raw = c?.region; if (!raw) continue;
-        const value = String(raw).trim(); if (!value) continue;
-        const key = value.toLowerCase(); if (!map.has(key)) map.set(key, value);
-      }
-      hasMore = Boolean(firstResp?.data?.hasMore);
-      page += 1;
-
-      const basePreview = Array.from(map.values()).sort((a,b)=>a.localeCompare(b,"pt-BR")).slice(0,5);
-      const setPreview = new Set(basePreview);
+      const { data } = await api.get("/contacts/unique-values");
+      const list = Array.isArray(data?.regions) ? data.regions : [];
+      const normalized = list.map(r => (r == null ? "" : String(r).trim())).filter(Boolean).sort((a, b) => a.localeCompare(b, "pt-BR"));
+      // Garante valores do initialFilter
       if (initialFilter && Array.isArray(initialFilter.region)) {
-        initialFilter.region.forEach(v => { const s = String(v||"").trim(); if (s) setPreview.add(s); });
+        const set = new Set(normalized);
+        initialFilter.region.forEach(v => { const s = String(v || "").trim(); if (s) set.add(s); });
+        setRegions(Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR")));
+      } else {
+        setRegions(normalized);
       }
-      setRegions(Array.from(setPreview).sort((a,b)=>a.localeCompare(b,"pt-BR")));
-
-      // Continuação em background
-      while (hasMore) {
-        const { data } = await api.get("/contacts", {
-          params: { pageNumber: page, limit: 500, orderBy: "region", order: "ASC" },
-        });
-        const list = Array.isArray(data?.contacts) ? data.contacts : [];
-        for (const c of list) {
-          const raw = c?.region; if (!raw) continue;
-          const value = String(raw).trim(); if (!value) continue;
-          const key = value.toLowerCase(); if (!map.has(key)) map.set(key, value);
-        }
-        hasMore = Boolean(data?.hasMore);
-        page += 1;
-        if (list.length === 0) break;
-      }
-
-      const all = Array.from(map.values()).sort((a,b)=>a.localeCompare(b,"pt-BR"));
-      setRegions(all);
-      setCache("regions", all);
     } catch (err) {
       toastError(err);
-    } finally {
-      setLoadingRegions(false);
     }
+    setLoadingRegions(false);
   };
 
   const loadRepresentativeCodes = async () => {
-    const cached = getCache("representativeCodes");
-    if (Array.isArray(cached) && cached.length) { setRepresentativeCodes(cached); return; }
     setLoadingRepresentatives(true);
     try {
-      // Paginação com pré-visualização rápida (primeira página)
-      let page = 1;
-      let hasMore = true;
-      const map = new Map(); // chave normalizada -> valor exibido
-
-      // Busca primeira página rapidamente e mostra os 5 primeiros
-      const firstResp = await api.get("/contacts", {
-        params: {
-          pageNumber: page,
-          limit: 500,
-          orderBy: "representativeCode",
-          order: "ASC",
-        },
-      });
-      const firstList = Array.isArray(firstResp?.data?.contacts) ? firstResp.data.contacts : [];
-      for (const contact of firstList) {
-        const raw = contact?.representativeCode;
-        if (!raw) continue;
-        const value = String(raw).trim();
-        if (!value) continue;
-        const key = value.toLowerCase();
-        if (!map.has(key)) map.set(key, value);
-      }
-      hasMore = Boolean(firstResp?.data?.hasMore);
-      page += 1;
-
-      const basePreview = Array.from(map.values()).sort((a, b) => a.localeCompare(b, "pt-BR")).slice(0, 5);
-      const setPreview = new Set(basePreview);
+      const { data } = await api.get("/contacts/unique-values");
+      const list = Array.isArray(data?.representatives) ? data.representatives : [];
+      const normalized = list.map(r => (r == null ? "" : String(r).trim())).filter(Boolean).sort((a, b) => a.localeCompare(b, "pt-BR"));
+      // Garante valores do initialFilter
       if (initialFilter && Array.isArray(initialFilter.representativeCode)) {
-        initialFilter.representativeCode.forEach(v => { const s = String(v||"").trim(); if (s) setPreview.add(s); });
+        const set = new Set(normalized);
+        initialFilter.representativeCode.forEach(v => { const s = String(v || "").trim(); if (s) set.add(s); });
+        setRepresentativeCodes(Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR")));
+      } else {
+        setRepresentativeCodes(normalized);
       }
-      const preview = Array.from(setPreview).sort((a,b)=>a.localeCompare(b,"pt-BR"));
-      if (preview.length) setRepresentativeCodes(preview);
-
-      // Continua carregando o restante em background
-      while (hasMore) {
-        const { data } = await api.get("/contacts", {
-          params: {
-            pageNumber: page,
-            limit: 500,
-            orderBy: "representativeCode",
-            order: "ASC",
-          },
-        });
-
-        const list = Array.isArray(data?.contacts) ? data.contacts : [];
-        for (const contact of list) {
-          const raw = contact?.representativeCode;
-          if (!raw) continue;
-          const value = String(raw).trim();
-          if (!value) continue;
-          const key = value.toLowerCase();
-          if (!map.has(key)) map.set(key, value);
-        }
-
-        hasMore = Boolean(data?.hasMore);
-        page += 1;
-        if (list.length === 0) break;
-      }
-
-      const all = Array.from(map.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
-      setRepresentativeCodes(all);
-      setCache("representativeCodes", all);
     } catch (err) {
       toastError(err);
     }
     setLoadingRepresentatives(false);
+  };
+
+  const loadUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const { data } = await api.get("/users");
+      const list = Array.isArray(data) ? data : (data && Array.isArray(data.users) ? data.users : []);
+      setUsers(list);
+    } catch (err) {
+      toastError(err);
+    }
+    setLoadingUsers(false);
+  };
+
+  const loadWhatsapps = async () => {
+    setLoadingWhatsapps(true);
+    try {
+      const { data } = await api.get("/whatsapp");
+      const list = Array.isArray(data) ? data : (data && Array.isArray(data.whatsapps) ? data.whatsapps : []);
+      setWhatsapps(list);
+    } catch (err) {
+      toastError(err);
+    }
+    setLoadingWhatsapps(false);
   };
 
   const loadTags = async () => {
@@ -598,48 +455,6 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
     } catch (err) {
       toastError(err);
     }
-  };
-
-  // Novo: Carregar usuários para filtro de carteira
-  const loadUsers = async () => {
-    const cached = getCache("users");
-    if (Array.isArray(cached) && cached.length) { setUsers(cached); return; }
-    setLoadingUsers(true);
-    try {
-      const { data } = await api.get("/users");
-      const list = Array.isArray(data) ? data : (data && Array.isArray(data.users) ? data.users : []);
-      // Filtrar apenas usuários ativos
-      const activeUsers = list.filter(user => user.active !== false);
-      setUsers(activeUsers);
-      setCache("users", activeUsers);
-    } catch (err) {
-      // 403 = sem permissão users.view (admin)
-      // Silencia o erro, lista de usuários fica vazia
-      if (err?.response?.status !== 403) {
-        toastError(err);
-      }
-    }
-    setLoadingUsers(false);
-  };
-
-  // Novo: Carregar conexões WhatsApp
-  const loadWhatsapps = async () => {
-    const cached = getCache("whatsapps");
-    if (Array.isArray(cached) && cached.length) { setWhatsapps(cached); return; }
-    setLoadingWhatsapps(true);
-    try {
-      const { data } = await api.get("/whatsapp");
-      const list = Array.isArray(data) ? data : (data && Array.isArray(data.whatsapps) ? data.whatsapps : []);
-      setWhatsapps(list);
-      setCache("whatsapps", list);
-    } catch (err) {
-      // 403 = sem permissão connections.view (admin)
-      // Silencia o erro, lista de conexões fica vazia
-      if (err?.response?.status !== 403) {
-        toastError(err);
-      }
-    }
-    setLoadingWhatsapps(false);
   };
 
   const handleClose = () => {

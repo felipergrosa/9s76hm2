@@ -103,9 +103,14 @@ class SocketWorker {
       } finally {
         this.joinBuffer.clear();
       }
+
+      // Iniciar heartbeat para manter lastActivityAt atualizado
+      this.startHeartbeat();
     });
 
     this.socket.on("disconnect", (reason) => {
+      // Parar heartbeat ao desconectar
+      this.stopHeartbeat();
       this.reconnectAfterDelay();
     });
 
@@ -280,6 +285,37 @@ class SocketWorker {
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
       this.healthCheckInterval = null;
+    }
+  }
+
+  // Inicia heartbeat para manter lastActivityAt atualizado
+  // Envia a cada 1 minuto para indicar que o usuário está ativo
+  startHeartbeat() {
+    this.stopHeartbeat();
+    
+    // Envia heartbeat imediatamente ao conectar
+    this.sendHeartbeat();
+    
+    // Configura intervalo de 1 minuto
+    this.heartbeatInterval = setInterval(() => {
+      this.sendHeartbeat();
+    }, 60000); // 1 minuto
+  }
+
+  // Para o heartbeat
+  stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  // Envia heartbeat para o backend
+  sendHeartbeat() {
+    if (this.connected && this.userId) {
+      this.socket.emit("userHeartbeat", { userId: this.userId }, (result) => {
+        // Callback silencioso - sucesso ou erro são tratados no backend
+      });
     }
   }
 

@@ -179,7 +179,7 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
             name: remoteNumber, // Será atualizado se houver info
             isGroup: true,
             companyId,
-            channel: "whatsapp",
+            channels: ["whatsapp"],
             whatsappId: whatsApp.id,
             remoteJid: remoteJid,
             checkProfilePic: false // CRÍTICO: Pular download de foto
@@ -191,7 +191,7 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
             name: contactNumber,
             isGroup: false,
             companyId,
-            channel: "whatsapp",
+            channels: ["whatsapp"],
             whatsappId: whatsApp.id,
             remoteJid: jidNormalizedUser(msgContactId),
             checkProfilePic: false // CRÍTICO: Pular download de foto
@@ -203,7 +203,7 @@ const ImportWhatsAppMessageService = async (whatsappId: number | string) => {
             name: remoteNumber,
             isGroup: false,
             companyId,
-            channel: "whatsapp",
+            channels: ["whatsapp"],
             whatsappId: whatsApp.id,
             remoteJid: remoteJid,
             checkProfilePic: false // CRÍTICO: Pular download de foto

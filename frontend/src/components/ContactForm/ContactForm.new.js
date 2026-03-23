@@ -157,6 +157,9 @@ const ContactSchema = Yup.object().shape({
   situation: Yup.mixed().oneOf(['Ativo', 'Inativo', 'Suspenso']).default('Ativo'),
   representativeCode: Yup.string().nullable(),
   city: Yup.string().nullable(),
+  region: Yup.string().nullable(),
+  segment: Yup.string().nullable(),
+  channels: Yup.array().of(Yup.string()).nullable(),
   instagram: Yup.string().nullable(),
   fantasyName: Yup.string().nullable(),
   foundationDate: Yup.string().nullable(),
@@ -173,6 +176,9 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
     cpfCnpj: '',
     representativeCode: '',
     city: '',
+    region: '',
+    segment: '',
+    channels: [],
     instagram: '',
     situation: 'Ativo',
     fantasyName: '',
@@ -189,6 +195,9 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
         cpfCnpj: initialContact.cpfCnpj || '',
         representativeCode: initialContact.representativeCode || '',
         city: initialContact.city || '',
+        region: initialContact.region || '',
+        segment: initialContact.segment || '',
+        channels: initialContact.channels || [],
         instagram: initialContact.instagram || '',
         situation: initialContact.situation || 'Ativo',
         fantasyName: initialContact.fantasyName || '',
@@ -332,6 +341,66 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
                 margin="normal"
                 fullWidth
                 className={classes.field}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Field
+                as={TextField}
+                label="Região"
+                name="region"
+                variant="outlined"
+                margin="normal"
+                fullWidth
+                className={classes.field}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Field
+                as={TextField}
+                label="Segmento de Mercado"
+                name="segment"
+                variant="outlined"
+                margin="normal"
+                fullWidth
+                className={classes.field}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Field
+                name="channels"
+                render={({ field }) => (
+                  <Autocomplete
+                    multiple
+                    freeSolo
+                    options={['WhatsApp', 'Instagram', 'Messenger', 'Telegram', 'WebChat']}
+                    value={field.value || []}
+                    onChange={(e, newValue) => field.onChange(newValue || [])}
+                    renderTags={(value, getTagProps) =>
+                      value.map((option, index) => (
+                        <Chip
+                          {...getTagProps({ index })}
+                          key={option}
+                          label={option}
+                          size="small"
+                          color="primary"
+                        />
+                      ))
+                    }
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Canais"
+                        variant="outlined"
+                        margin="normal"
+                        fullWidth
+                        placeholder="WhatsApp, Instagram, Telegram..."
+                      />
+                    )}
+                  />
+                )}
               />
             </Grid>
 

@@ -97,9 +97,12 @@ class Contact extends Model<Contact> {
   @Column
   active: boolean;
 
-  @Default("whatsapp")
-  @Column
-  channel: string;
+  @Column({
+    type: DataType.ARRAY(DataType.STRING),
+    allowNull: true,
+    defaultValue: []
+  })
+  channels: string[];
 
   // Novos campos adicionados
   @Column({

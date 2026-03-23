@@ -45,6 +45,7 @@ interface Request {
   vlUltCompra?: number | string | null;
   bzEmpresa?: string;
   clientCode?: string;
+  channels?: string[];
 }
 
 const shouldReplaceName = (currentName: string | null | undefined, fallbackNumber: string): boolean => {
@@ -147,6 +148,7 @@ const CreateContactService = async ({
   vlUltCompra,
   bzEmpresa,
   clientCode,
+  channels,
 }: Request): Promise<Contact> => {
   const { canonical } = safeNormalizePhoneNumber(number);
 
@@ -350,6 +352,7 @@ const CreateContactService = async ({
     vlUltCompra?: number | null;
     bzEmpresa?: string | null;
     clientCode?: string | null;
+    channels?: string[];
     canonicalNumber: string;
   } = {
     name: name || '',
@@ -382,6 +385,7 @@ const CreateContactService = async ({
     vlUltCompra: vlUltCompraValue,
     bzEmpresa: emptyToNull(bzEmpresa),
     clientCode: emptyToNull(clientCode),
+    channels: channels || [],
     canonicalNumber: canonical,
   };
 

@@ -64,7 +64,7 @@ interface Request {
   email?: string;
   profilePicUrl?: string;
   companyId: number;
-  channel?: string;
+  channels?: string[];
   extraInfo?: ExtraInfo[];
   remoteJid?: string;
   lidJid?: string; // LID para contatos com identificador LID
@@ -131,7 +131,7 @@ const CreateOrUpdateContactService = async ({
   profilePicUrl,
   isGroup,
   email,
-  channel = "whatsapp",
+  channels = ["whatsapp"],
   companyId,
   extraInfo = [],
   remoteJid,
@@ -495,7 +495,7 @@ const CreateOrUpdateContactService = async ({
         shouldEmitUpdate = true;
       }
 
-    } else if (wbot && ['whatsapp'].includes(channel)) {
+    } else if (wbot && channels.includes('whatsapp')) {
       const settings = await CompaniesSettings.findOne({ where: { companyId } });
       const { acceptAudioMessageContact } = settings;
       let newRemoteJid = remoteJid;
@@ -574,7 +574,7 @@ const CreateOrUpdateContactService = async ({
           contact = await Contact.create({
             ...contactData,
             name: effectiveName,
-            channel,
+            channels,
             acceptAudioMessage: acceptAudioMessageContact === 'enabled' ? true : false,
             remoteJid: newRemoteJid,
             whatsappId,
@@ -601,7 +601,7 @@ const CreateOrUpdateContactService = async ({
               await contact.update({
                 ...contactData,
                 name: contact.name || effectiveName,
-                channel,
+                channels,
                 acceptAudioMessage: acceptAudioMessageContact === 'enabled' ? true : false,
                 remoteJid: newRemoteJid,
                 whatsappId,
@@ -616,7 +616,7 @@ const CreateOrUpdateContactService = async ({
           }
         }
       }
-    } else if (['facebook', 'instagram'].includes(channel)) {
+    } else if (channels.some(c => ['facebook', 'instagram'].includes(c))) {
       // Mesma proteção ao criar via outros canais
       {
         const incomingName = (name || "").trim();
@@ -625,7 +625,7 @@ const CreateOrUpdateContactService = async ({
           contact = await Contact.create({
             ...contactData,
             name: effectiveName,
-            channel,
+            channels,
             whatsappId,
             canonicalNumber: isGroup ? null : number
           });
@@ -650,7 +650,7 @@ const CreateOrUpdateContactService = async ({
               await contact.update({
                 ...contactData,
                 name: contact.name || effectiveName,
-                channel,
+                channels,
                 whatsappId,
                 canonicalNumber: isGroup ? null : number
               });
@@ -687,7 +687,7 @@ const CreateOrUpdateContactService = async ({
       await contact.reload();
       shouldEmitUpdate = true; // Avatar atualizado
     } else {
-      if (['facebook', 'instagram'].includes(channel)) {
+      if (channels.includes('facebook') || channels.includes('instagram')) {
         let filename;
 
         filename = await downloadProfileImage({

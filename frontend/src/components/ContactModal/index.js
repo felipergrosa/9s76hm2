@@ -120,6 +120,7 @@ const ContactSchema = Yup.object().shape({
 	foundationDate: Yup.date().nullable().transform((value, originalValue) => originalValue === "" ? null : value),
 	creditLimit: Yup.string().nullable(),
 	segment: Yup.string().nullable(),
+	channels: Yup.array().of(Yup.string()).nullable(),
 	dtUltCompra: Yup.date().nullable().transform((value, originalValue) => originalValue === "" ? null : value),
 	vlUltCompra: Yup.mixed().nullable(),
 	bzEmpresa: Yup.string().nullable(),
@@ -168,6 +169,11 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	const [segmentHasMore, setSegmentHasMore] = useState(true);
 	const [segmentOffset, setSegmentOffset] = useState(0);
 	const [segmentLoading, setSegmentLoading] = useState(false);
+	
+	const [channelOptions, setChannelOptions] = useState([]);
+	const [channelHasMore, setChannelHasMore] = useState(true);
+	const [channelOffset, setChannelOffset] = useState(0);
+	const [channelLoading, setChannelLoading] = useState(false);
 	
 	const [repOptions, setRepOptions] = useState([]);
 	const [repHasMore, setRepHasMore] = useState(true);
@@ -226,10 +232,11 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		const fetchUniqueValues = async () => {
 			try {
 				const limit = 50;
-				const [citiesRes, regionsRes, segmentsRes, repsRes, companiesRes] = await Promise.all([
+				const [citiesRes, regionsRes, segmentsRes, channelsRes, repsRes, companiesRes] = await Promise.all([
 					api.get(`/contacts/unique-values?field=city&limit=${limit}&offset=0`),
 					api.get(`/contacts/unique-values?field=region&limit=${limit}&offset=0`),
 					api.get(`/contacts/unique-values?field=segment&limit=${limit}&offset=0`),
+					api.get(`/contacts/unique-values?field=channel&limit=${limit}&offset=0`),
 					api.get(`/contacts/unique-values?field=representativeCode&limit=${limit}&offset=0`),
 					api.get(`/contacts/unique-values?field=bzEmpresa&limit=${limit}&offset=0`)
 				]);
@@ -247,6 +254,10 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 				setSegmentOptions(segmentsRes.data.values || []);
 				setSegmentHasMore(segmentsRes.data.hasMore);
 				setSegmentOffset(limit);
+				
+				setChannelOptions(channelsRes.data.values || []);
+				setChannelHasMore(channelsRes.data.hasMore);
+				setChannelOffset(limit);
 				
 				setRepOptions(repsRes.data.values || []);
 				setRepHasMore(repsRes.data.hasMore);
@@ -283,6 +294,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		foundationDate: "",
 		creditLimit: "",
 		segment: "",
+		channels: [],
 		contactName: "",
 		florder: false,
 		dtUltCompra: "",
@@ -490,6 +502,21 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		}
 	};
 
+	const loadMoreChannels = async () => {
+		if (channelLoading || !channelHasMore) return;
+		try {
+			setChannelLoading(true);
+			const limit = 50;
+			const { data } = await api.get(`/contacts/unique-values?field=channel&limit=${limit}&offset=${channelOffset}`);
+			setChannelOptions(prev => [...prev, ...(data.values || [])]);
+			setChannelHasMore(data.hasMore);
+			setChannelOffset(prev => prev + limit);
+		} catch (err) {
+		} finally {
+			setChannelLoading(false);
+		}
+	};
+
 	const loadMoreReps = async () => {
 		if (repLoading || !repHasMore) return;
 		try {
@@ -538,6 +565,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			fantasyName: values.fantasyName?.trim?.() || values.fantasyName || null,
 			creditLimit: values.creditLimit?.trim?.() || values.creditLimit || null,
 			segment: values.segment?.trim?.() || values.segment || null,
+			channel: values.channel?.trim?.() || values.channel || null,
 			contactName: values.contactName?.trim?.() || values.contactName || null,
 			bzEmpresa: values.bzEmpresa?.trim?.() || values.bzEmpresa || null
 		};
@@ -884,43 +912,33 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
-										<Field name="creditLimit">
-											{({ field, form }) => {
-												// Formata valor para exibição
-												const formatCurrency = (val) => {
-													if (!val || val === 0) return '';
-													return new Intl.NumberFormat('pt-BR', {
-														style: 'currency',
-														currency: 'BRL',
-														minimumFractionDigits: 2
-													}).format(val);
-												};
-												// Parse valor digitado
-												const parseCurrency = (val) => {
-													const numbers = String(val).replace(/\D/g, '');
-													if (!numbers) return 0;
-													return parseInt(numbers, 10) / 100;
-												};
-												return (
-													<TextField
-														name={field.name}
-														value={formatCurrency(field.value)}
-														onChange={(e) => {
-															const val = parseCurrency(e.target.value);
-															form.setFieldValue('creditLimit', val);
-														}}
-														label="Limite de Crédito"
-														variant="outlined"
-														margin="dense"
-														InputLabelProps={{
-															shrink: true,
-														}}
-														fullWidth
-														disabled={!canEditFields}
-													/>
-												);
+										<Autocomplete
+											freeSolo
+											options={regionOptions}
+											value={values.region || ''}
+											onChange={(e, newValue) => setFieldValue('region', newValue || '')}
+											onInputChange={(e, newInputValue) => setFieldValue('region', newInputValue)}
+											disabled={!canEditFields}
+											loading={regionLoading}
+											ListboxProps={{
+												onScroll: (event) => {
+													const listboxNode = event.currentTarget;
+													if (listboxNode.scrollTop + listboxNode.clientHeight >= listboxNode.scrollHeight - 20) {
+														loadMoreRegions();
+													}
+												}
 											}}
-										</Field>
+											renderInput={(params) => (
+												<TextField
+													{...params}
+													label="Região"
+													variant="outlined"
+													margin="dense"
+													fullWidth
+													InputLabelProps={{ shrink: true }}
+												/>
+											)}
+										/>
 									</Grid>
 									<Grid item xs={12} md={6}>
 										<Autocomplete
@@ -950,6 +968,72 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 												/>
 											)}
 										/>
+									</Grid>
+									<Grid item xs={12} md={6}>
+										<Autocomplete
+											multiple
+											freeSolo
+											options={channelOptions}
+											value={values.channels || []}
+											onChange={(e, newValue) => setFieldValue('channels', newValue || [])}
+											disabled={!canEditFields}
+											loading={channelLoading}
+											ListboxProps={{
+												onScroll: (event) => {
+													const listboxNode = event.currentTarget;
+													if (listboxNode.scrollTop + listboxNode.clientHeight >= listboxNode.scrollHeight - 20) {
+														loadMoreChannels();
+													}
+												}
+											}}
+											renderInput={(params) => (
+												<TextField
+													{...params}
+													label="Canais"
+													variant="outlined"
+													margin="dense"
+													fullWidth
+													InputLabelProps={{ shrink: true }}
+													placeholder="WhatsApp, Instagram, Telegram..."
+												/>
+											)}
+										/>
+									</Grid>
+									<Grid item xs={12} md={6}>
+										<Field name="creditLimit">
+											{({ field, form }) => {
+												// Formata valor para exibição
+												const formatCurrency = (val) => {
+													if (!val || val === 0) return '';
+													return new Intl.NumberFormat('pt-BR', {
+														style: 'currency',
+														currency: 'BRL',
+														minimumFractionDigits: 2
+													}).format(val);
+												};
+												// Parse valor digitado
+												const parseCurrency = (val) => {
+													const numbers = String(val).replace(/\D/g, '');
+													if (!numbers) return 0;
+													return parseInt(numbers, 10) / 100;
+												};
+												return (
+													<TextField
+														name={field.name}
+														value={formatCurrency(field.value)}
+														onChange={(e) => {
+															const val = parseCurrency(e.target.value);
+															form.setFieldValue('creditLimit', val);
+														}}
+														label="Limite de Crédito"
+														variant="outlined"
+														margin="dense"
+														fullWidth
+														disabled={!canEditFields}
+													/>
+												);
+											}}
+										</Field>
 									</Grid>
 									<Grid item xs={12} md={6}>
 										<Field

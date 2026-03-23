@@ -199,12 +199,17 @@ const ListMessagesService = async ({
       {
         model: Ticket,
         required: true,
-        attributes: ["id", "whatsappId", "queueId", "createdAt"],
+        attributes: ["id", "whatsappId", "queueId", "createdAt", "userId"],
         include: [
           {
             model: Queue,
             as: "queue",
             attributes: ["id", "name", "color"]
+          },
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "name"]
           }
         ],
       }

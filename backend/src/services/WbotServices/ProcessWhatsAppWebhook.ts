@@ -382,7 +382,7 @@ async function processIncomingMessage(
         number: actualPhoneNumber,
         isGroup: false,
         companyId,
-        channel: "whatsapp",
+        channels: ["whatsapp"],
         whatsappId: whatsapp.id,
         checkProfilePic: true
       });

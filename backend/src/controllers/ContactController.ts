@@ -5,7 +5,7 @@ import { emitToCompanyNamespace } from "../libs/socketEmit";
 
 import { head } from "lodash";
 
-import { Op } from "sequelize";
+import { Op, Sequelize, QueryTypes } from "sequelize";
 
 // Interface estendida para incluir o usuário autenticado
 interface AuthenticatedRequest extends Request {
@@ -2493,7 +2493,7 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
 
   try {
     // Se field especificado, retorna apenas aquele campo (lazy loading)
-    if (field && ['city', 'region', 'segment', 'representativeCode', 'bzEmpresa'].includes(field)) {
+    if (field && ['city', 'region', 'segment', 'channel', 'representativeCode', 'bzEmpresa'].includes(field)) {
       const columnName = field === 'bzEmpresa' ? 'bzEmpresa' : field;
       
       const whereClause: any = {
@@ -2573,14 +2573,28 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
       limit: 200
     }).then((results: any[]) => [...new Set(results.map(r => r.bzEmpresa).filter(Boolean))]);
 
-    const [cities, regions, segments, representatives, companies] = await Promise.all([
-      citiesPromise, regionsPromise, segmentsPromise, representativesPromise, companiesPromise
+    const channelsPromise = Contact.sequelize?.query(`
+      SELECT DISTINCT UNNEST("channels") as channel 
+      FROM "Contacts" 
+      WHERE "companyId" = :companyId 
+        AND "channels" IS NOT NULL 
+        AND array_length("channels", 1) > 0
+      ORDER BY channel ASC
+      LIMIT 200
+    `, {
+      replacements: { companyId },
+      type: QueryTypes.SELECT
+    }).then((results: any[]) => [...new Set(results.map(r => r.channel).filter(Boolean))]) || Promise.resolve([]);
+
+    const [cities, regions, segments, channels, representatives, companies] = await Promise.all([
+      citiesPromise, regionsPromise, segmentsPromise, channelsPromise, representativesPromise, companiesPromise
     ]);
 
     return res.json({
       cities,
       regions,
       segments,
+      channels,
       representatives,
       companies
     });
