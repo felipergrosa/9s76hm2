@@ -145,7 +145,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
     const resolvedWhatsappId = contact.whatsappId || whatsappId;
     // Logs detalhados removidos para reduzir ruído
 
-    if (contact.channel === "whatsapp" && resolvedWhatsappId) {
+    if (contact.channels?.includes("whatsapp") && resolvedWhatsappId) {
       try {
         // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
         const wbot = await getWbotOrRecover(resolvedWhatsappId, 30000);

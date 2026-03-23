@@ -28,8 +28,8 @@ const ValidateContactService = async ({
   if (!contact) return null;
 
   // Apenas canal WhatsApp e não grupo
-  if (contact.channel !== "whatsapp" || contact.isGroup) {
-    logger.info({ contactId, companyId, channel: contact.channel, isGroup: contact.isGroup }, "[ValidateContact] ignorado: não é whatsapp ou é grupo");
+  if (!contact.channels?.includes("whatsapp") || contact.isGroup) {
+    logger.info({ contactId, companyId, channels: contact.channels, isGroup: contact.isGroup }, "[ValidateContact] ignorado: não é whatsapp ou é grupo");
     return contact;
   }
 

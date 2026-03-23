@@ -612,7 +612,7 @@ export const index = async (req: AuthenticatedRequest, res: Response): Promise<R
     const ttlMs = ttlHours * 60 * 60 * 1000;
 
     const toValidate = result.contacts.filter(c => {
-      const isWhats = c.channel === "whatsapp";
+      const isWhats = c.channels?.includes("whatsapp");
       const notGroup = !c.isGroup;
       const last = c.validatedAt ? new Date(c.validatedAt as any).getTime() : 0;
       const stale = !last || now - last > ttlMs || c.isWhatsappValid === null || typeof c.isWhatsappValid === "undefined";
@@ -1129,7 +1129,7 @@ export const update = async (
     }
   }
 
-  if (oldContact.number != contactData.number && oldContact.channel == "whatsapp") {
+  if (oldContact.number != contactData.number && oldContact.channels?.includes("whatsapp")) {
     const isGroup = oldContact && oldContact.remoteJid ? oldContact.remoteJid.endsWith("@g.us") : oldContact.isGroup;
     try {
       const validNumber = await CheckContactNumber(contactData.number, companyId, isGroup);
@@ -1544,7 +1544,7 @@ export const listWhatsapp = async (req: Request, res: Response): Promise<Respons
 
   const contactsAll = await SimpleListService({ name, companyId });
 
-  const contacts = contactsAll.filter(contact => contact.channel == "whatsapp");
+  const contacts = contactsAll.filter(contact => contact.channels?.includes("whatsapp"));
 
   return res.json(contacts);
 };
