@@ -67,6 +67,7 @@ class User extends Model<User> {
   @Column
   super: boolean;
 
+  @Default(false)
   @Column
   online: boolean;
 
