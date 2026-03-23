@@ -1291,6 +1291,8 @@ const downloadMedia = async (msg: proto.IWebMessageInfo, isImported: Date = null
       console.log(
         "Falha ao fazer o download de uma mensagem importada, provavelmente a mensagem já não esta mais disponível"
       );
+    } else if (err?.message?.includes("bad decrypt") || err?.code === "ERR_OSSL_BAD_DECRYPT") {
+      // Silencioso: mídia expirou no servidor WhatsApp (comum em grupos)
     } else {
       console.error("Erro ao baixar mídia:", err);
     }
