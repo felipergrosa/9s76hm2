@@ -278,10 +278,90 @@ export async function resolveMessageContact(
   // Não usar pushName para nomear contato em mensagens enviadas pelo próprio usuário
   const effectivePushName = ids.isFromMe ? null : ids.pushName;
 
+  // ═══════════════════════════════════════════════════════════════════
+  // BUSCA PROATIVA DO NOME DA AGENDA WHATSAPP (Baileys v7)
+  // Quando não temos um nome adequado (pushName vazio ou igual ao número),
+  // buscar ativamente na agenda do WhatsApp via onWhatsApp()
+  // ═══════════════════════════════════════════════════════════════════
+  async function fetchContactNameFromWhatsApp(
+    jid: string,
+    wbot: Session,
+    fallbackName: string
+  ): Promise<string> {
+    try {
+      // Só buscar se o nome atual parece ser apenas o número ou está vazio
+      const digitsOnly = fallbackName.replace(/\D/g, "");
+      const looksLikeNumber = digitsOnly.length >= 10 && digitsOnly.length <= 15;
+      
+      if (!looksLikeNumber && fallbackName.trim().length > 0) {
+        // Já temos um nome que não parece ser número, usar ele
+        return fallbackName;
+      }
+
+      // Buscar na agenda do WhatsApp via onWhatsApp
+      const results = await wbot.onWhatsApp(jid);
+      if (Array.isArray(results) && results.length > 0) {
+        const result = results[0] as { jid: string; exists: boolean; notify?: string; verifiedName?: string };
+        
+        // PRIORIDADE 1: notify (nome da agenda)
+        if (result.notify && result.notify.trim().length > 0) {
+          logger.info({
+            jid,
+            name: result.notify,
+            source: "onWhatsApp.notify"
+          }, "[ContactResolver] Nome encontrado na agenda WhatsApp");
+          return result.notify;
+        }
+        
+        // PRIORIDADE 2: verifiedName (WhatsApp Business)
+        if (result.verifiedName && result.verifiedName.trim().length > 0) {
+          logger.info({
+            jid,
+            name: result.verifiedName,
+            source: "onWhatsApp.verifiedName"
+          }, "[ContactResolver] Nome verificado encontrado");
+          return result.verifiedName;
+        }
+      }
+
+      // Fallback: tentar buscar do store.contacts
+      try {
+        const store = (wbot as any).store;
+        if (store?.contacts?.[jid]) {
+          const storeContact = store.contacts[jid];
+          if (storeContact.notify && storeContact.notify.trim().length > 0) {
+            logger.info({
+              jid,
+              name: storeContact.notify,
+              source: "store.contacts.notify"
+            }, "[ContactResolver] Nome encontrado no store");
+            return storeContact.notify;
+          }
+          if (storeContact.name && storeContact.name.trim().length > 0) {
+            return storeContact.name;
+          }
+        }
+      } catch {
+        // Ignorar erro do store
+      }
+
+      return fallbackName;
+    } catch (err: any) {
+      logger.debug({ err: err?.message, jid }, "[ContactResolver] Erro ao buscar nome na agenda");
+      return fallbackName;
+    }
+  }
+
   if (!isLidOnly) {
     // CASO A: Temos o número real (PN) → criar contato normalmente
     // Para fromMe, usar número como nome se não houver outra fonte
-    const contactName = effectivePushName || ids.pnDigits;
+    let contactName = effectivePushName || ids.pnDigits;
+    
+    // Se nome parece ser apenas número, buscar na agenda do WhatsApp
+    if (ids.pnJid && contactName === ids.pnDigits) {
+      contactName = await fetchContactNameFromWhatsApp(ids.pnJid, wbot, contactName);
+    }
+    
     const contactNumber = ids.pnDigits || "";
 
     logger.info({
