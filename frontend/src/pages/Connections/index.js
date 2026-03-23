@@ -45,6 +45,7 @@ import {
   DeleteSweep,
   PowerSettingsNew,
   Chat as WebChatIcon,
+  Sync,
 } from "@material-ui/icons";
 
 import FacebookLogin from "react-facebook-login/dist/facebook-login-render-props";
@@ -240,6 +241,7 @@ const Connections = () => {
   const [confirmModalInfo, setConfirmModalInfo] = useState(confirmationModalInitialState);
   const [planConfig, setPlanConfig] = useState(false);
   const [clearAuthById, setClearAuthById] = useState({});
+  const [syncingById, setSyncingById] = useState({}); // Rastreia sync em andamento por ID
 
   const { user, socket } = useContext(AuthContext);
 
@@ -371,6 +373,40 @@ const Connections = () => {
       });
     }
     setConfirmModalOpen(true);
+  };
+
+  // Sincronização completa de histórico (organizada, ticket a ticket)
+  const handleSyncFullHistory = async (whatsAppId) => {
+    if (syncingById[whatsAppId]) {
+      toast.warn("Sincronização já em andamento para esta conexão");
+      return;
+    }
+
+    const isBaileys = !whatsApps.find(w => w.id === whatsAppId)?.channelType || 
+                      whatsApps.find(w => w.id === whatsAppId)?.channelType === "baileys";
+    
+    if (!isBaileys) {
+      toast.error("Sincronização de histórico não disponível para API Oficial");
+      return;
+    }
+
+    try {
+      setSyncingById(prev => ({ ...prev, [whatsAppId]: true }));
+      
+      const { data } = await api.post(`/whatsapp/${whatsAppId}/sync-full-history`, {
+        periodMonths: 0,
+        downloadMedia: false
+      });
+      
+      toast.success(data.message || "Sincronização iniciada");
+    } catch (err) {
+      toastError(err);
+    } finally {
+      // Libera após 5 segundos para evitar cliques duplicados
+      setTimeout(() => {
+        setSyncingById(prev => ({ ...prev, [whatsAppId]: false }));
+      }, 5000);
+    }
   };
 
   const handleSubmitConfirmationModal = async () => {
@@ -557,6 +593,26 @@ const Connections = () => {
               perform="connections.edit"
               yes={() => (
                 <>
+                  {/* Botão de Sincronização de Histórico - só para Baileys */}
+                  {isBaileys && (
+                    <Tooltip title={syncingById[whatsApp.id] ? "Sincronizando..." : "Sincronizar Histórico"}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          style={{ color: syncingById[whatsApp.id] ? green[500] : "#25D366" }}
+                          onClick={() => handleSyncFullHistory(whatsApp.id)}
+                          disabled={syncingById[whatsApp.id]}
+                        >
+                          {syncingById[whatsApp.id] ? (
+                            <CircularProgress size={18} className={classes.buttonProgress} />
+                          ) : (
+                            <Sync />
+                          )}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
+
                   <Tooltip title={i18n.t("connections.buttons.disconnect")}>
                     <span>
                       <IconButton

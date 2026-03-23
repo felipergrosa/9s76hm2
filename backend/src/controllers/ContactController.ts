@@ -541,7 +541,7 @@ export const index = async (req: AuthenticatedRequest, res: Response): Promise<R
     return undefined;
   };
 
-  const channel = parseStringArrayParam("channel");
+  const channels = parseStringArrayParam("channels");
   const representativeCodes = parseStringArrayParam("representativeCode");
   const cities = parseStringArrayParam("city");
   const situations = parseStringArrayParam("situation");
@@ -581,7 +581,7 @@ export const index = async (req: AuthenticatedRequest, res: Response): Promise<R
     segment,
     dtUltCompraStart,
     dtUltCompraEnd,
-    channel,
+    channels,
     representativeCode: representativeCodes,
     city: cities,
     situation: situations,
@@ -2493,7 +2493,7 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
 
   try {
     // Se field especificado, retorna apenas aquele campo (lazy loading)
-    if (field && ['city', 'region', 'segment', 'channel', 'representativeCode', 'bzEmpresa'].includes(field)) {
+    if (field && ['city', 'region', 'segment', 'channels', 'representativeCode', 'bzEmpresa'].includes(field)) {
       const columnName = field === 'bzEmpresa' ? 'bzEmpresa' : field;
       
       const whereClause: any = {
@@ -2573,18 +2573,17 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
       limit: 200
     }).then((results: any[]) => [...new Set(results.map(r => r.bzEmpresa).filter(Boolean))]);
 
-    const channelsPromise = Contact.sequelize?.query(`
-      SELECT DISTINCT UNNEST("channels") as channel 
-      FROM "Contacts" 
-      WHERE "companyId" = :companyId 
-        AND "channels" IS NOT NULL 
-        AND array_length("channels", 1) > 0
-      ORDER BY channel ASC
-      LIMIT 200
-    `, {
-      replacements: { companyId },
-      type: QueryTypes.SELECT
-    }).then((results: any[]) => [...new Set(results.map(r => r.channel).filter(Boolean))]) || Promise.resolve([]);
+    const channelsPromise = Contact.findAll({
+      where: {
+        companyId,
+        channels: { [Op.ne]: null }
+      },
+      attributes: ["channels"],
+      group: ["channels"],
+      order: [["channels", "ASC"]],
+      raw: true,
+      limit: 200
+    }).then((results: any[]) => [...new Set(results.map(r => r.channels).filter(Boolean))]);
 
     const [cities, regions, segments, channels, representatives, companies] = await Promise.all([
       citiesPromise, regionsPromise, segmentsPromise, channelsPromise, representativesPromise, companiesPromise

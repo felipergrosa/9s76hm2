@@ -24,7 +24,7 @@ interface Request {
   segment?: string | string[];
   dtUltCompraStart?: string;
   dtUltCompraEnd?: string;
-  channel?: string[];
+  channels?: string[];
   representativeCode?: string[];
   city?: string[];
   situation?: string[];
@@ -60,7 +60,7 @@ const ListContactsService = async ({
   segment,
   dtUltCompraStart,
   dtUltCompraEnd,
-  channel,
+  channels,
   representativeCode,
   city,
   situation,
@@ -258,10 +258,10 @@ const ListContactsService = async ({
     companyId
   };
 
-  if (Array.isArray(channel) && channel.length > 0) {
+  if (Array.isArray(channels) && channels.length > 0) {
     whereCondition = {
       ...whereCondition,
-      channel: { [Op.in]: channel }
+      channels: { [Op.overlap]: channels } as any
     };
   }
 
@@ -458,7 +458,7 @@ const ListContactsService = async ({
       "urlPicture",
       "active",
       "companyId",
-      "channel",
+      "channels",
       // Adiciona novos campos aos atributos
       "contactName",
       "cpfCnpj",

@@ -15,7 +15,7 @@ interface ImportHistoryJob {
   companyId: number;
   periodMonths: number;
   downloadMedia?: boolean;
-  requestedBy: "lazy_open" | "manual_resync" | "manual_import" | "auto_sync";
+  requestedBy: "lazy_open" | "manual_resync" | "manual_import" | "auto_sync" | "sync_full_history";
   deferredCount?: number;
 }
 

@@ -17,6 +17,7 @@ import ListWhatsAppsService from "../services/WhatsappService/ListWhatsAppsServi
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
 import UpdateWhatsAppService from "../services/WhatsappService/UpdateWhatsAppService";
 import { closeTicketsImported } from "../services/WhatsappService/ImportWhatsAppMessageService";
+import SyncFullHistoryService, { getSyncProgress } from "../services/MessageServices/SyncFullHistoryService";
 import ShowWhatsAppServiceAdmin from "../services/WhatsappService/ShowWhatsAppServiceAdmin";
 import UpdateWhatsAppServiceAdmin from "../services/WhatsappService/UpdateWhatsAppServiceAdmin";
 import ListAllWhatsAppsService from "../services/WhatsappService/ListAllWhatsAppService";
@@ -607,5 +608,50 @@ export const showAdmin = async (req: Request, res: Response): Promise<Response> 
 
 
   return res.status(200).json(whatsapp);
+};
+
+/**
+ * Inicia sincronização completa de histórico de forma organizada
+ * POST /whatsapp/:whatsappId/sync-full-history
+ */
+export const syncFullHistory = async (req: Request, res: Response): Promise<Response> => {
+  const { whatsappId } = req.params;
+  const { companyId } = req.user;
+  const { periodMonths = 0, downloadMedia = false } = req.body;
+
+  const result = await SyncFullHistoryService({
+    whatsappId: Number(whatsappId),
+    companyId,
+    periodMonths: Number(periodMonths),
+    downloadMedia: Boolean(downloadMedia)
+  });
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.message });
+  }
+
+  return res.status(200).json({
+    message: result.message,
+    totalTickets: result.totalTickets
+  });
+};
+
+/**
+ * Retorna progresso da sincronização
+ * GET /whatsapp/:whatsappId/sync-progress
+ */
+export const getSyncProgressStatus = async (req: Request, res: Response): Promise<Response> => {
+  const { whatsappId } = req.params;
+
+  const progress = getSyncProgress(Number(whatsappId));
+
+  if (!progress) {
+    return res.status(200).json({ 
+      status: "idle",
+      message: "Nenhuma sincronização em andamento"
+    });
+  }
+
+  return res.status(200).json(progress);
 };
 

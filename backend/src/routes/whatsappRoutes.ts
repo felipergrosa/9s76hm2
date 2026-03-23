@@ -44,4 +44,8 @@ whatsappRoutes.get("/whatsapp/:whatsappId/templates", isAuth, checkPermission("c
 whatsappRoutes.get("/whatsapp/:whatsappId/session-window", isAuth, checkPermission("connections.view"), MetaController.getSessionWindow);
 whatsappRoutes.post("/whatsapp/:whatsappId/send-template-to-contact", isAuth, checkPermission("tickets.create"), MetaController.sendTemplateToContact);
 
+// Sync Full History - Sincronização organizada de histórico
+whatsappRoutes.post("/whatsapp/:whatsappId/sync-full-history", isAuth, checkPermission("connections.edit"), WhatsAppController.syncFullHistory);
+whatsappRoutes.get("/whatsapp/:whatsappId/sync-progress", isAuth, checkPermission("connections.view"), WhatsAppController.getSyncProgressStatus);
+
 export default whatsappRoutes;

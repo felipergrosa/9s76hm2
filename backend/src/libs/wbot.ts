@@ -608,7 +608,9 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           connectTimeoutMs: 25_000,
           keepAliveIntervalMs: 30_000,
           getMessage: msgDB.get,
-          syncFullHistory: !!whatsapp.importOldMessages,
+          // syncFullHistory DESABILITADO por padrão - causa sobrecarga na reconexão
+          // Use o botão "Sincronizar Histórico" na página de conexões para sync manual organizado
+          syncFullHistory: false, // Era: !!whatsapp.importOldMessages
         });
 
         // Turbo Connector: Aplicar wrapper se habilitado
@@ -631,6 +633,10 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           }
         });
 
+        // Handler de messaging-history.set DESABILITADO - syncFullHistory agora é sob demanda
+        // O sync automático causava sobrecarga ao reconectar após dias desconectado
+        // Use o endpoint POST /whatsapp/:id/sync-full-history para sync manual organizado
+        /*
         setTimeout(async () => {
           const wpp = await Whatsapp.findByPk(whatsapp.id);
           if (wpp?.importOldMessages && wpp.status === "CONNECTED") {
@@ -706,6 +712,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             });
           }
         }, 2500);
+        */
+        // FIM DO CÓDIGO COMENTADO - sync automático desabilitado
 
         wsocket.ev.on(
           "connection.update",
