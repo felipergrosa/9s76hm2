@@ -87,7 +87,7 @@ const BulkUpdateContactsService = async ({ companyId, contactIds, data }: BulkUp
 
     if (typeof validTagIds !== "undefined") {
       await ContactTag.destroy({ where: { contactId: c.id } });
-      const list = validTagIds.map(tagId => ({ tagId, contactId: c.id }));
+      const list = validTagIds.map(tagId => ({ tagId, contactId: c.id, companyId }));
       if (list.length > 0) await ContactTag.bulkCreate(list);
     }
 

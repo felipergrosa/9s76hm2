@@ -13,14 +13,16 @@ const SyncTags = async ({
 }: Request): Promise<Contact | null> => {
   const contact = await Contact.findByPk(contactId, { include: [Tag] });
 
-  const tagList = tags.map(t => ({ tagId: t.id, contactId }));
+  if (!contact) {
+    return null;
+  }
+
+  const tagList = tags.map(t => ({ tagId: t.id, contactId, companyId: contact.companyId }));
 
   await ContactTag.destroy({ where: { contactId } });
   await ContactTag.bulkCreate(tagList);
 
-  if (contact) {
-    await contact.reload();
-  }
+  await contact.reload();
 
   return contact;
 };

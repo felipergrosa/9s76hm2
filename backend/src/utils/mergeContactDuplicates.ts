@@ -314,7 +314,8 @@ const applyAutoTagsFromConnections = async (
         if (!dryRun) {
           await ContactTag.create({
             contactId: contact.id,
-            tagId: tag.id
+            tagId: tag.id,
+            companyId
           });
         }
         tagsAppliedForConnection++;
