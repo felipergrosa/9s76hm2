@@ -377,8 +377,8 @@ export const initIO = (httpServer: Server): SocketIO => {
         const now = new Date();
         const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
 
-        // Se usuário está offline ou inativo há mais de 3h, colocar online
-        if (!user.online || user.lastActivityAt < threeHoursAgo) {
+        // Se usuário está offline ou inativo há mais de 3h (ou lastActivityAt é null), colocar online
+        if (!user.online || !user.lastActivityAt || user.lastActivityAt < threeHoursAgo) {
           console.log(`[Heartbeat] Usuário ${userId} voltando à atividade - online=${user.online}, lastActivity=${user.lastActivityAt}`);
           
           // Atualizar para online

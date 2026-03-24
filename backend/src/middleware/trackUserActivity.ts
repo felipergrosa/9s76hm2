@@ -16,6 +16,8 @@ const trackUserActivity = async (req: Request, res: Response, next: NextFunction
   const userId = req.user.id;
   const companyId = req.user.companyId;
 
+  console.log(`[TrackActivity] Requisição detectada - User ${userId}`);
+
   // Atualiza lastActivityAt e verifica status de forma assíncrona
   (async () => {
     try {
@@ -24,13 +26,18 @@ const trackUserActivity = async (req: Request, res: Response, next: NextFunction
         attributes: ["id", "online", "lastActivityAt", "status"]
       });
 
-      if (!user) return;
+      if (!user) {
+        console.log(`[TrackActivity] Usuário ${userId} não encontrado`);
+        return;
+      }
 
       const now = new Date();
       const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
 
+      console.log(`[TrackActivity] User ${userId} - online=${user.online}, lastActivity=${user.lastActivityAt}, now=${now}`);
+
       // Se usuário está offline ou inativo há mais de 3h, colocar online
-      if (!user.online || user.lastActivityAt < threeHoursAgo) {
+      if (!user.online || !user.lastActivityAt || user.lastActivityAt < threeHoursAgo) {
         console.log(`[TrackActivity] Usuário ${userId} voltando à atividade - online=${user.online}, lastActivity=${user.lastActivityAt}`);
         
         // Atualizar para online
@@ -51,6 +58,7 @@ const trackUserActivity = async (req: Request, res: Response, next: NextFunction
         });
       } else {
         // Apenas atualizar lastActivityAt
+        console.log(`[TrackActivity] User ${userId} - apenas atualizando lastActivityAt`);
         await User.update(
           { lastActivityAt: now },
           { where: { id: userId }, silent: true }

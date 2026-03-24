@@ -228,7 +228,8 @@ const ApplyTagRulesService = async ({
       if (!existing) {
         await ContactTag.create({
           contactId: contactIdToTag,
-          tagId: currentTagId
+          tagId: currentTagId,
+          companyId
         });
         contactsAffected++;
         contactsNeedingSync.add(contactIdToTag);

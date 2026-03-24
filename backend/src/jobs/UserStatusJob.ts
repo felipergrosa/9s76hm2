@@ -20,6 +20,27 @@ const startUserStatusJob = () => {
 
       console.log(`[UserStatusJob] Verificando status - ${now.toISOString()}`);
 
+      // 0. Primeiro, atualizar usuários com lastActivityAt=null que estão online
+      // Isso acontece quando o usuário fica online mas lastActivityAt não foi setado
+      const usersWithNullActivity = await User.findAll({
+        where: {
+          online: true,
+          lastActivityAt: null
+        },
+        attributes: ["id", "companyId", "name"]
+      });
+
+      if (usersWithNullActivity.length > 0) {
+        console.log(`[UserStatusJob] ${usersWithNullActivity.length} usuários online com lastActivityAt=null - atualizando`);
+        for (const user of usersWithNullActivity) {
+          await User.update(
+            { lastActivityAt: now },
+            { where: { id: user.id } }
+          );
+          console.log(`[UserStatusJob] Usuário ${user.name} (ID: ${user.id}) - lastActivityAt atualizado`);
+        }
+      }
+
       // 1. Usuários online há mais de 3h -> marcar como offline
       const usersToOffline = await User.findAll({
         where: {
