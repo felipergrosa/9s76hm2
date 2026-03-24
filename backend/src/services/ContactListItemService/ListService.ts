@@ -81,7 +81,7 @@ const ListService = async ({
           "segment",
           "situation",
           "creditLimit",
-          "channel",
+          "channels",
           "representativeCode",
           "bzEmpresa"
         ],
@@ -129,7 +129,7 @@ const ListService = async ({
           "segment",
           "situation",
           "creditLimit",
-          "channel",
+          "channels",
           "representativeCode",
           "bzEmpresa"
         ],

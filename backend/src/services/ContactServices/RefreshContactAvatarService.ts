@@ -83,7 +83,7 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
         "name",
         "number",
         "isGroup",
-        "channel",
+        "channels",
         "remoteJid",
         "whatsappId",
         "profilePicUrl",
