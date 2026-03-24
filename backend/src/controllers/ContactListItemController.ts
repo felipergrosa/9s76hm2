@@ -23,6 +23,7 @@ type IndexQuery = {
   contactListId: string | number;
   orderBy?: string;
   order?: "asc" | "desc" | "ASC" | "DESC";
+  limit?: string | number; // 30, 100, 500, 1000 ou "all"
 };
 
 type StoreData = {
@@ -39,7 +40,7 @@ type FindParams = {
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
-  const { searchParam, pageNumber, contactListId, orderBy, order } = req.query as IndexQuery;
+  const { searchParam, pageNumber, contactListId, orderBy, order, limit } = req.query as IndexQuery;
   const { companyId } = req.user;
 
   const { contacts, count, hasMore } = await ListService({
@@ -48,7 +49,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     companyId,
     contactListId,
     orderBy,
-    order
+    order,
+    limit
   });
 
   return res.json({ contacts, count, hasMore });

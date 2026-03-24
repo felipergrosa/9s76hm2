@@ -10,6 +10,7 @@ interface Request {
   contactListId: number | string;
   orderBy?: string;
   order?: "asc" | "desc" | "ASC" | "DESC";
+  limit?: string | number; // 30, 100, 500, 1000 ou "all"
 }
 
 interface Response {
@@ -24,7 +25,8 @@ const ListService = async ({
   companyId,
   contactListId,
   orderBy,
-  order
+  order,
+  limit: limitParam
 }: Request): Promise<Response> => {
   const whereCondition = {
     [Op.or]: [
@@ -41,8 +43,11 @@ const ListService = async ({
     contactListId
   };
 
-  const limit = 20;
-  const offset = limit * (+pageNumber - 1);
+  // Define limite de resultados: 30, 100, 500, 1000 ou todos
+  const validLimits = [30, 100, 500, 1000];
+  const limitValue = typeof limitParam === "string" ? limitParam.toLowerCase() : limitParam;
+  const limit = limitValue === "all" || limitValue === "todos" ? null : (validLimits.includes(Number(limitValue)) ? Number(limitValue) : 20);
+  const offset = (limit || 0) * (+pageNumber - 1);
 
   // Define ordenação segura
   const dir = (String(order || "ASC").toUpperCase() === "DESC" ? "DESC" : "ASC") as "ASC" | "DESC";
@@ -63,10 +68,10 @@ const ListService = async ({
 
   const { count, rows: contacts } = await ContactListItem.findAndCountAll({
     where: whereCondition,
-    limit,
-    offset,
+    ...(limit ? { limit, offset } : {}),
     order: orderClause as any,
     subQuery: false,
+    distinct: true, // Evita contagem duplicada por JOIN com tags
     include: [
       {
         model: Contact,
@@ -167,7 +172,7 @@ const ListService = async ({
     }
   }
 
-  const hasMore = count > offset + contacts.length;
+  const hasMore = limit ? count > offset + contacts.length : false;
 
   return {
     contacts,

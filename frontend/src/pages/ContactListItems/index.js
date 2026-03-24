@@ -118,6 +118,7 @@ const ContactListItems = () => {
 
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
+  const [pageSize, setPageSize] = useState(30); // 30, 100, 500, 1000 ou "all"
   const [searchParam, setSearchParam] = useState("");
   const [contacts, dispatch] = useReducer(reducer, []);
   const [selectedContactId, setSelectedContactId] = useState(null);
@@ -221,7 +222,8 @@ const ContactListItems = () => {
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
   const [totalContacts, setTotalContacts] = useState(0);
-  const [contactsPerPage, setContactsPerPage] = useState(20); // espelha backend (ListService.limit)
+  // contactsPerPage é dinâmico baseado no pageSize selecionado (30, 100, 500, 1000 ou todos)
+  const contactsPerPage = pageSize === "all" ? totalContacts : (Number(pageSize) || 30);
   // Ordenação
   const [sortField, setSortField] = useState("name");
   const [sortDirection, setSortDirection] = useState("asc"); // 'asc' | 'desc'
@@ -261,7 +263,7 @@ const ContactListItems = () => {
   useEffect(() => {
     dispatch({ type: "RESET" });
     setPageNumber(1);
-  }, [searchParam]);
+  }, [searchParam, pageSize]);
 
   useEffect(() => {
     setLoading(true);
@@ -272,7 +274,7 @@ const ContactListItems = () => {
           const orderByParam = (sortField === 'creditLimit') ? 'creditlimit' : sortField;
           const orderParam = (sortDirection || 'asc');
           const { data } = await api.get(`contact-list-items`, {
-            params: { searchParam, pageNumber, contactListId, orderBy: orderByParam, order: orderParam },
+            params: { searchParam, pageNumber, contactListId, orderBy: orderByParam, order: orderParam, limit: pageSize },
           });
           // Substitui a lista pelo resultado da página atual
           dispatch({ type: "SET_CONTACTS", payload: data.contacts });
@@ -287,7 +289,7 @@ const ContactListItems = () => {
       fetchContacts();
     }, 400);
     return () => clearTimeout(delayDebounceFn);
-  }, [searchParam, pageNumber, contactListId, refreshKey, sortField, sortDirection]);
+  }, [searchParam, pageNumber, contactListId, refreshKey, sortField, sortDirection, pageSize]);
 
   // Persistência da ordenação por usuário/lista
   useEffect(() => {
@@ -527,14 +529,16 @@ const ContactListItems = () => {
   }, [contacts]);
 
   // Paginação fixa (sem infinite scroll), espelhando /contatos
+  // Quando "todos" está selecionado, não há paginação
   const handlePageChange = (page) => {
+    if (pageSize === "all") return; // Sem paginação quando exibe todos
     const pages = totalContacts === 0 ? 1 : Math.ceil(totalContacts / contactsPerPage);
     if (page >= 1 && page <= pages) {
       setPageNumber(page);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
-  const totalPages = totalContacts === 0 ? 1 : Math.ceil(totalContacts / contactsPerPage);
+  const totalPages = pageSize === "all" ? 1 : (totalContacts === 0 ? 1 : Math.ceil(totalContacts / contactsPerPage));
   const renderPageNumbers = () => {
     const pages = [];
     if (totalPages <= 3) {
@@ -1122,8 +1126,29 @@ const ContactListItems = () => {
 
                 {/* Paginação (Desktop) */}
                 <div className="hidden lg:flex justify-between items-center mt-4">
-                  <div className="text-sm text-gray-600 dark:text-gray-300">
-                    Página {pageNumber} de {totalPages} • {totalContacts} itens
+                  <div className="flex items-center gap-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-300">
+                      Página {pageNumber} de {totalPages} • {totalContacts} itens
+                    </div>
+                    {/* Seletor de quantidade por página */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Exibir:</span>
+                      <select
+                        value={pageSize}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPageSize(val === "all" ? "all" : Number(val));
+                          setPageNumber(1);
+                        }}
+                        className="h-8 px-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value={30}>30</option>
+                        <option value={100}>100</option>
+                        <option value={500}>500</option>
+                        <option value={1000}>1000</option>
+                        <option value="all">Todos</option>
+                      </select>
+                    </div>
                   </div>
                   <nav>
                     <ul className="inline-flex -space-x-px">
@@ -1234,11 +1259,32 @@ const ContactListItems = () => {
                 </div>
 
                 {/* Paginação (Mobile) */}
-                <div className="lg:hidden flex justify-between items-center mt-4">
-                  <div className="text-sm text-gray-600 dark:text-gray-300">
-                    Página {pageNumber} de {totalPages}
+                <div className="lg:hidden flex flex-col gap-3 mt-4">
+                  <div className="flex justify-between items-center">
+                    <div className="text-sm text-gray-600 dark:text-gray-300">
+                      Página {pageNumber} de {totalPages}
+                    </div>
+                    {/* Seletor de quantidade por página (Mobile) */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Exibir:</span>
+                      <select
+                        value={pageSize}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPageSize(val === "all" ? "all" : Number(val));
+                          setPageNumber(1);
+                        }}
+                        className="h-7 px-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value={30}>30</option>
+                        <option value={100}>100</option>
+                        <option value={500}>500</option>
+                        <option value={1000}>1000</option>
+                        <option value="all">Todos</option>
+                      </select>
+                    </div>
                   </div>
-                  <nav>
+                  <nav className="self-center">
                     <ul className="inline-flex -space-x-px">
                       <li>
                         <button onClick={() => handlePageChange(1)} className="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
