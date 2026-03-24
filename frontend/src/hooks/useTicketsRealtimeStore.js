@@ -246,10 +246,11 @@ const reducer = (state, action) => {
       let changed = false;
 
       // Otimização: Só itera se o contato realmente estiver em algum ticket
-      // Em uma versão futura, poderíamos ter um índice contactId -> ticketIds
       Object.keys(ticketsById).forEach(id => {
         const ticket = ticketsById[id];
-        if (ticket?.contactId === action.contact.id) {
+        // Verifica tanto ticket.contactId quanto ticket.contact.id
+        const ticketContactId = ticket?.contactId || ticket?.contact?.id;
+        if (ticketContactId === action.contact.id) {
           ticketsById[id] = {
             ...ticket,
             contact: {

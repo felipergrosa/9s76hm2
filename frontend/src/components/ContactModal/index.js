@@ -1413,10 +1413,24 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 				<DialogContent style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
 					{(() => {
 						const avatarImageUrl = contact?.profilePicUrl || contact?.urlPicture;
-						return avatarImageUrl ? (
-							<img src={avatarImageUrl} alt="Avatar" style={{ maxWidth: '90vw', maxHeight: '80vh', borderRadius: 8 }} />
-						) : (
-							<ContactAvatar contact={contact} style={{ width: 270, height: 270, borderRadius: 10 }} />
+						const [imgError, setImgError] = React.useState(false);
+						
+						if (imgError || !avatarImageUrl) {
+							return (
+								<div style={{ textAlign: 'center', padding: 40 }}>
+									<ContactAvatar contact={contact} style={{ width: 270, height: 270, borderRadius: 10 }} />
+									<p style={{ marginTop: 16, color: '#666' }}>Imagem não disponível</p>
+								</div>
+							);
+						}
+						
+						return (
+							<img 
+								src={avatarImageUrl} 
+								alt="Avatar" 
+								style={{ maxWidth: '90vw', maxHeight: '80vh', borderRadius: 8 }}
+								onError={() => setImgError(true)}
+							/>
 						);
 					})()}
 				</DialogContent>
