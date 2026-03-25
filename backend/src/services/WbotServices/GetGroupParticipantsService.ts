@@ -181,13 +181,57 @@ const GetGroupParticipantsService = async ({
     .filter((p: any) => p.id.includes("@lid"))
     .map((p: any) => p.id);
 
+  // TODOS os participantes (LID e não-LID) - buscar senderName de mensagens
+  const allParticipantJids = (groupMetadata.participants || []).map((p: any) => p.id);
+
   const lidContactMap = new Map<string, any>();
+  const senderNameMap = new Map<string, string>(); // participant -> senderName
+  
+  if (allParticipantJids.length > 0) {
+    try {
+      const sequelize = Contact.sequelize!;
+      
+      // QUERY: Buscar senderName de TODOS os grupos da empresa (não só o grupo atual)
+      // Isso garante que pegamos nomes mesmo se participante só falou em outro grupo
+      const senderNameRows: any[] = await sequelize.query(`
+        WITH ranked AS (
+          SELECT 
+            m.participant,
+            m."senderName",
+            ROW_NUMBER() OVER (PARTITION BY m.participant ORDER BY m.id DESC) as rn
+          FROM "Messages" m
+          JOIN "Tickets" t ON t.id = m."ticketId"
+          WHERE t."companyId" = :companyId
+            AND t."isGroup" = true
+            AND m."fromMe" = false
+            AND m.participant IN (:participants)
+            AND m."senderName" IS NOT NULL
+            AND m."senderName" != ''
+        )
+        SELECT participant, "senderName" FROM ranked WHERE rn = 1
+      `, {
+        replacements: { companyId, participants: allParticipantJids },
+        type: QueryTypes.SELECT
+      });
+
+      for (const row of senderNameRows) {
+        if (row.senderName) {
+          senderNameMap.set(row.participant, row.senderName);
+          logger.debug(`[GetGroupParticipants] senderName encontrado: ${row.participant} -> ${row.senderName}`);
+        }
+      }
+
+      logger.info(`[GetGroupParticipants] Encontrados ${senderNameMap.size} senderNames para ${allParticipantJids.length} participantes`);
+    } catch (err) {
+      logger.warn(`[GetGroupParticipants] Erro ao buscar senderName: ${err}`);
+    }
+  }
   
   if (lidParticipantJids.length > 0) {
     try {
       const sequelize = Contact.sequelize!;
       
-      // QUERY ÚNICA: Buscar senderName e contatos em uma só query
+      // QUERY ÚNICA: Buscar senderName e contatos em uma só query (já temos senderName acima, mas mantemos para compatibilidade)
       // Prioriza: 1) Contato real com número, 2) senderName das mensagens
       const mappings: any[] = await sequelize.query(`
         WITH ranked AS (
@@ -226,6 +270,10 @@ const GetGroupParticipantsService = async ({
           profilePicUrl: row.profilePicUrl,
           id: row.real_contact_id
         });
+        // Também popula senderNameMap se ainda não temos
+        if (row.senderName && !senderNameMap.has(row.participant)) {
+          senderNameMap.set(row.participant, row.senderName);
+        }
       }
 
       // Fallback: buscar contatos por lidJid/remoteJid para LIDs não encontrados
@@ -371,10 +419,14 @@ const GetGroupParticipantsService = async ({
       }
     }
 
-    // Determinar nome: prioridade 1) resolvido, 2) contato, 3) pushName, 4) número
+    // Determinar nome: prioridade 1) senderName do chat, 2) resolvido (Baileys), 3) contato do banco, 4) pushName, 5) número
     let contactName: string;
+    const senderNameFromChat = senderNameMap.get(participantJid);
     
-    if (resolvedName) {
+    if (senderNameFromChat && senderNameFromChat.trim() !== '') {
+      contactName = senderNameFromChat;
+      logger.debug(`[GetGroupParticipants] Usando senderName do chat para ${participantJid}: ${contactName}`);
+    } else if (resolvedName) {
       contactName = resolvedName;
     } else if (contactRecord?.name) {
       contactName = contactRecord.name;

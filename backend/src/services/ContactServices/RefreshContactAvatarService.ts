@@ -194,7 +194,11 @@ const RefreshContactAvatarService = async ({ contactId, companyId, whatsappId }:
           const nomeAtual = (contact.name || '').trim();
           // Verifica se o nome é igual ao número (apenas dígitos, sem +, espaços, etc)
           const soNumero = nomeAtual.replace(/\D/g, "");
-          if (soNumero === contact.number) {
+          // Verifica se é um nome genérico que deve ser atualizado
+          const isGenericName = nomeAtual === "[Mensagem Template]" ||
+                                nomeAtual.startsWith("[Mensagem") ||
+                                nomeAtual.startsWith("Contato ");
+          if (soNumero === contact.number || isGenericName) {
             let nomeNovo = nomeAtual;
             try {
               const contatoMeta = await wbot.onWhatsApp(jid) as Array<{ jid: string; exists: unknown; lid?: unknown; notify?: string }>;

@@ -274,12 +274,22 @@ export async function resolveMessageContact(
                        currentName.trim() === "" ||
                        nameDigitsOnly === numberDigitsOnly ||
                        currentName === currentNumber ||
-                       currentName.startsWith("Contato ");
+                       currentName.startsWith("Contato ") ||
+                       currentName === "[Mensagem Template]" ||
+                       currentName.startsWith("[Mensagem");
     
-    if (hasBadName && ids.pnJid) {
+    // CORREÇÃO: Usar pnJid extraído OU número do contato encontrado
+    // Quando contato é encontrado via LID, ids.pnJid pode ser null,
+    // mas o contato tem número válido no banco
+    const jidForNameLookup = ids.pnJid || 
+                             (currentNumber && !currentNumber.startsWith("PENDING_") && !currentNumber.includes("@")
+                               ? `${currentNumber}@s.whatsapp.net`
+                               : null);
+    
+    if (hasBadName && jidForNameLookup) {
       try {
         // Buscar nome da agenda via onWhatsApp
-        const results = await wbot.onWhatsApp(ids.pnJid);
+        const results = await wbot.onWhatsApp(jidForNameLookup);
         if (Array.isArray(results) && results.length > 0) {
           const result = results[0] as { jid: string; exists: boolean; notify?: string; verifiedName?: string };
           let betterName: string | null = null;
