@@ -606,6 +606,32 @@ const CampaignModal = ({
     }
   };
 
+  // Listener para atualização de status dos usuários em tempo real
+  useEffect(() => {
+    if (open && user?.companyId) {
+      const onCompanyUser = (data) => {
+        if (data.action === "update") {
+          // Atualiza o usuário na lista se existir
+          setOptions(prev => {
+            const index = prev.findIndex(u => u.id === data.user.id);
+            if (index !== -1) {
+              const updated = [...prev];
+              updated[index] = { ...updated[index], ...data.user };
+              return updated;
+            }
+            return prev;
+          });
+        }
+      };
+      
+      socket.on(`company-${user.companyId}-user`, onCompanyUser);
+      
+      return () => {
+        socket.off(`company-${user.companyId}-user`, onCompanyUser);
+      };
+    }
+  }, [open, user?.companyId, socket]);
+
   useEffect(() => {
     if (!open || !isMounted.current) return;
 

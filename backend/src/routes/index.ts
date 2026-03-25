@@ -67,6 +67,7 @@ import contactReleaseRequestRoutes from "./contactReleaseRequestRoutes";
 import mediaRoutes from "./mediaRoutes";
 import userGroupPermissionRoutes from "./userGroupPermissionRoutes";
 import debugRoutes from "./debugRoutes";
+import promptRoutes from "./promptRoutes";
 
 
 const routes = Router();
@@ -149,5 +150,6 @@ routes.use(contactReleaseRequestRoutes);
 routes.use("/media", mediaRoutes);
 routes.use(userGroupPermissionRoutes);
 routes.use(debugRoutes);
+routes.use(promptRoutes);
 
 export default routes;

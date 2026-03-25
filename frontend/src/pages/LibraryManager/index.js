@@ -231,6 +231,26 @@ const LibraryManager = () => {
                     toast.info('Funcionalidade de compartilhar em breve!');
                     break;
 
+                case 'copyLink':
+                    if (item.fileOption?.url) {
+                        try {
+                            await navigator.clipboard.writeText(item.fileOption.url);
+                            toast.success('Link copiado para a área de transferência!');
+                        } catch (e) {
+                            // Fallback para navegadores antigos
+                            const textArea = document.createElement('textarea');
+                            textArea.value = item.fileOption.url;
+                            document.body.appendChild(textArea);
+                            textArea.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(textArea);
+                            toast.success('Link copiado para a área de transferência!');
+                        }
+                    } else {
+                        toast.error('URL do arquivo não encontrada');
+                    }
+                    break;
+
                 case 'copy':
                     toast.info('Funcionalidade de copiar em breve!');
                     break;

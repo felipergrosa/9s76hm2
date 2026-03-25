@@ -226,6 +226,7 @@ const Users = () => {
     if (loggedInUser) {
       const companyId = loggedInUser.companyId;
       const onCompanyUser = (data) => {
+        console.log('[Users] Evento recebido:', data.action, data.user?.id, 'online=', data.user?.online, 'status=', data.user?.status);
         if (data.action === "update" || data.action === "create") {
           dispatch({ type: "UPDATE_USERS", payload: data.user });
         }
@@ -235,6 +236,7 @@ const Users = () => {
       };
       
       socket.on(`company-${companyId}-user`, onCompanyUser);
+      console.log('[Users] Socket listener registrado para company-' + companyId + '-user');
       
       return () => {
         socket.off(`company-${companyId}-user`, onCompanyUser);

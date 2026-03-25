@@ -478,9 +478,39 @@ const CreateOrUpdateContactService = async ({
         // Não atualizar o campo name em hipótese alguma
         delete (contactData as any).name;
       } else {
-        // Nome salvo é vazio ou igual ao número: podemos definir um melhor, senão manter número
+        // Nome salvo é vazio ou igual ao número: podemos definir um melhor
+        let effectiveName = incomingName;
         const incomingIsNumber = incomingName.replace(/\D/g, "") === String(number);
-        contactData.name = incomingName && !incomingIsNumber ? incomingName : String(number);
+        
+        // Se nome informado é genérico E temos wbot, buscar nome da agenda WhatsApp
+        if ((!effectiveName || incomingIsNumber) && wbot && !isGroup) {
+          try {
+            const jid = `${rawNumber}@s.whatsapp.net`;
+            const results = await Promise.race([
+              wbot.onWhatsApp(jid),
+              new Promise<any[]>((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout onWhatsApp')), 5000)
+              )
+            ]);
+            
+            if (Array.isArray(results) && results.length > 0) {
+              const result = results[0] as { jid: string; exists: boolean; notify?: string; verifiedName?: string };
+              
+              if (result.notify && result.notify.trim() !== "" && result.notify.replace(/\D/g, "") !== rawNumber) {
+                effectiveName = result.notify.trim();
+                logger.info(`[CreateOrUpdateContactService] Nome da agenda via onWhatsApp.notify: "${effectiveName}" para ${rawNumber}`);
+              } else if (result.verifiedName && result.verifiedName.trim() !== "" && result.verifiedName.replace(/\D/g, "") !== rawNumber) {
+                effectiveName = result.verifiedName.trim();
+                logger.info(`[CreateOrUpdateContactService] Nome da agenda via onWhatsApp.verifiedName: "${effectiveName}" para ${rawNumber}`);
+              }
+            }
+          } catch (err: any) {
+            logger.debug({ err: err?.message }, `[CreateOrUpdateContactService] Falha ao buscar nome via onWhatsApp para ${rawNumber}`);
+          }
+        }
+        
+        // Fallback final: usar número se não encontrou nome melhor
+        contactData.name = effectiveName && !incomingIsNumber ? effectiveName : String(number);
       }
 
       // Garantir que email não fique null ao salvar
@@ -507,10 +537,42 @@ const CreateOrUpdateContactService = async ({
       // Busca de avatar centralizada no RefreshContactAvatarService
       profilePicUrl = profilePicUrl || `${process.env.FRONTEND_URL}/nopicture.png`;
 
-      // Definir nome efetivo na criação: se não vier nome válido, usa o número como fallback
+      // Definir nome efetivo na criação: se não vier nome válido, buscar da agenda WhatsApp
       {
         const incomingName = (name || "").trim();
-        const effectiveName = incomingName && incomingName !== number ? incomingName : number;
+        let effectiveName = incomingName && incomingName !== number ? incomingName : "";
+        
+        // Se não tem nome válido E temos wbot, buscar nome da agenda WhatsApp
+        if (!effectiveName && wbot && !isGroup) {
+          try {
+            const jid = `${rawNumber}@s.whatsapp.net`;
+            const results = await Promise.race([
+              wbot.onWhatsApp(jid),
+              new Promise<any[]>((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout onWhatsApp')), 5000)
+              )
+            ]);
+            
+            if (Array.isArray(results) && results.length > 0) {
+              const result = results[0] as { jid: string; exists: boolean; notify?: string; verifiedName?: string };
+              
+              if (result.notify && result.notify.trim() !== "" && result.notify.replace(/\D/g, "") !== rawNumber) {
+                effectiveName = result.notify.trim();
+                logger.info(`[CreateOrUpdateContactService] Nome da agenda (criação) via onWhatsApp.notify: "${effectiveName}" para ${rawNumber}`);
+              } else if (result.verifiedName && result.verifiedName.trim() !== "" && result.verifiedName.replace(/\D/g, "") !== rawNumber) {
+                effectiveName = result.verifiedName.trim();
+                logger.info(`[CreateOrUpdateContactService] Nome da agenda (criação) via onWhatsApp.verifiedName: "${effectiveName}" para ${rawNumber}`);
+              }
+            }
+          } catch (err: any) {
+            logger.debug({ err: err?.message }, `[CreateOrUpdateContactService] Falha ao buscar nome (criação) via onWhatsApp para ${rawNumber}`);
+          }
+        }
+        
+        // Fallback final: usar número se não encontrou nome
+        if (!effectiveName) {
+          effectiveName = number;
+        }
 
         // =================================================================
         // PROTEÇÃO CONTRA DUPLICAÇÃO DE LIDs

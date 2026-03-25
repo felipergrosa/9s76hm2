@@ -62,13 +62,18 @@ const startUserStatusJob = () => {
           { where: { id: user.id } }
         );
 
-        // Emitir evento
+        // Buscar dados completos do usuário para emitir
+        const fullUser = await User.findByPk(user.id, {
+          attributes: ["id", "name", "email", "profile", "online", "companyId", "profileImage", "startWork", "endWork", "lastActivityAt", "status"]
+        });
+
+        // Emitir evento com dados completos
         const io = getIO();
         io.of(`/workspace-${user.companyId}`)
           .emit(`company-${user.companyId}-user`, {
             action: "update",
             user: {
-              id: user.id,
+              ...fullUser.toJSON(),
               online: false,
               status: null
             }
@@ -101,13 +106,18 @@ const startUserStatusJob = () => {
             { where: { id: user.id } }
           );
 
-          // Emitir evento
+          // Buscar dados completos do usuário para emitir
+          const fullUser = await User.findByPk(user.id, {
+            attributes: ["id", "name", "email", "profile", "online", "companyId", "profileImage", "startWork", "endWork", "lastActivityAt", "status"]
+          });
+
+          // Emitir evento com dados completos
           const io = getIO();
           io.of(`/workspace-${user.companyId}`)
             .emit(`company-${user.companyId}-user`, {
               action: "update",
               user: {
-                id: user.id,
+                ...fullUser.toJSON(),
                 online: true,
                 status: "ausente"
               }
@@ -140,13 +150,18 @@ const startUserStatusJob = () => {
             { where: { id: user.id } }
           );
 
-          // Emitir evento
+          // Buscar dados completos do usuário para emitir
+          const fullUser = await User.findByPk(user.id, {
+            attributes: ["id", "name", "email", "profile", "online", "companyId", "profileImage", "startWork", "endWork", "lastActivityAt", "status"]
+          });
+
+          // Emitir evento com dados completos
           const io = getIO();
           io.of(`/workspace-${user.companyId}`)
             .emit(`company-${user.companyId}-user`, {
               action: "update",
               user: {
-                id: user.id,
+                ...fullUser.toJSON(),
                 online: true,
                 status: null
               }

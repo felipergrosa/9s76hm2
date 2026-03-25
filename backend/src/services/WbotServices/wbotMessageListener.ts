@@ -262,6 +262,144 @@ const isRateLimitError = (error: any): boolean => {
   return dataCode === 429 || outputCode === 429 || message.includes("rate-overlimit") || message.includes("overlimit");
 };
 
+/**
+ * Garante que o contato individual do participante de grupo existe e tem avatar.
+ * Busca ou cria contato pelo participantJid e atualiza profilePicUrl.
+ * Retorna o contato individual ou null se não for possível resolver.
+ */
+const ensureParticipantContact = async (
+  participantJid: string,
+  pushName: string | undefined,
+  wbot: Session,
+  companyId: number,
+  whatsappId: number
+): Promise<Contact | null> => {
+  if (!participantJid) return null;
+
+  // Ignorar se for o próprio bot (fromMe)
+  if (participantJid.includes("@lid") && !pushName) return null;
+
+  const isLid = participantJid.includes("@lid");
+  const rawNumber = participantJid.split("@")[0].replace(/\D/g, "");
+
+  // Validar número - deve ter entre 10 e 13 dígitos
+  if (!isLid && (rawNumber.length < 10 || rawNumber.length > 13)) {
+    return null;
+  }
+
+  try {
+    // 1. Buscar contato existente por participant JID ou número
+    let contact = await Contact.findOne({
+      where: {
+        companyId,
+        isGroup: false,
+        [Op.or]: [
+          { remoteJid: participantJid },
+          { lidJid: participantJid },
+          ...(rawNumber.length >= 10 && rawNumber.length <= 13 ? [
+            { number: rawNumber },
+            { canonicalNumber: rawNumber }
+          ] : [])
+        ]
+      }
+    });
+
+    // 2. Se não encontrou e é LID, tentar resolver via signalRepository
+    if (!contact && isLid) {
+      try {
+        const lidStore = (wbot as any).signalRepository?.lidMapping;
+        if (lidStore?.getPNForLID) {
+          const lidId = participantJid.replace("@lid", "");
+          const resolvedPN = await lidStore.getPNForLID(lidId);
+          if (resolvedPN) {
+            const pnDigits = resolvedPN.replace(/\D/g, "");
+            if (pnDigits.length >= 10 && pnDigits.length <= 13) {
+              contact = await Contact.findOne({
+                where: {
+                  companyId,
+                  isGroup: false,
+                  [Op.or]: [
+                    { number: pnDigits },
+                    { canonicalNumber: pnDigits }
+                  ]
+                }
+              });
+
+              // Salvar mapeamento para futuro
+              try {
+                const LidMapping = require("../../models/LidMapping").default;
+                await LidMapping.upsert({
+                  lid: participantJid,
+                  phoneNumber: pnDigits,
+                  companyId,
+                  whatsappId,
+                  source: "ensureParticipantContact",
+                  confidence: 0.9
+                });
+              } catch (e) { }
+            }
+          }
+        }
+      } catch (e) { }
+    }
+
+    // 3. Buscar avatar via Baileys (profilePictureUrl)
+    let profilePicUrl: string | undefined;
+    try {
+      profilePicUrl = await Promise.race([
+        wbot.profilePictureUrl(participantJid, "image"),
+        new Promise<string>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout')), 3000)
+        )
+      ]);
+    } catch (e) {
+      // Avatar não disponível
+    }
+
+    // 4. Determinar nome do participante
+    const participantName = pushName || contact?.name || (rawNumber.length >= 10 ? `+${rawNumber}` : "Participante");
+
+    // 5. Criar ou atualizar contato
+    if (contact) {
+      // Atualizar avatar se conseguiu buscar
+      if (profilePicUrl && profilePicUrl !== contact.profilePicUrl) {
+        await contact.update({
+          profilePicUrl,
+          ...(isLid && { lidJid: participantJid }),
+          ...(pushName && contact.name === contact.number && { name: pushName })
+        });
+        logger.info(`[ensureParticipantContact] Avatar atualizado para participante ${participantJid}`);
+      }
+      return contact;
+    }
+
+    // Criar novo contato individual
+    if (rawNumber.length >= 10 && rawNumber.length <= 13) {
+      const { canonical } = safeNormalizePhoneNumber(rawNumber);
+      const newContact = await Contact.create({
+        name: participantName,
+        number: rawNumber,
+        canonicalNumber: canonical || rawNumber,
+        isGroup: false,
+        companyId,
+        remoteJid: isLid ? undefined : participantJid,
+        lidJid: isLid ? participantJid : undefined,
+        profilePicUrl,
+        whatsappId,
+        channels: ["whatsapp"]
+      });
+
+      logger.info(`[ensureParticipantContact] Contato criado para participante ${participantJid} - ID: ${newContact.id}`);
+      return newContact;
+    }
+
+    return null;
+  } catch (err) {
+    logger.warn(`[ensureParticipantContact] Erro ao processar participante ${participantJid}: ${err}`);
+    return null;
+  }
+};
+
 function removeFile(directory) {
   fs.unlink(directory, error => {
     if (error) throw error;
@@ -1787,7 +1925,38 @@ const verifyContact = async (
     verifiedName = baileysContact?.verifiedName || baileysContact?.notify;
     if (verifiedName && verifiedName.trim() !== "" && verifiedName.replace(/\D/g, "") !== cleaned) {
       nomeContato = verifiedName.trim();
-      logger.info(`[verifyContact] Usando nome da agenda: "${nomeContato}" para ${cleaned}`);
+      logger.info(`[verifyContact] Usando nome da agenda (cache): "${nomeContato}" para ${cleaned}`);
+    }
+
+    // PRIORIDADE 2.5: Buscar nome da agenda PROATIVAMENTE via onWhatsApp()
+    // Se não achou no cache, fazer chamada ao servidor WhatsApp
+    if (!nomeContato && !isGroup && normalizedJid.includes("@s.whatsapp.net")) {
+      try {
+        const results = await Promise.race([
+          wbot.onWhatsApp(normalizedJid),
+          new Promise<any[]>((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout onWhatsApp')), 5000)
+          )
+        ]);
+        
+        if (Array.isArray(results) && results.length > 0) {
+          const result = results[0] as { jid: string; exists: boolean; notify?: string; verifiedName?: string };
+          
+          // notify = nome que o contato aparece na agenda do usuário
+          // verifiedName = nome verificado pelo WhatsApp (business)
+          if (result.notify && result.notify.trim() !== "" && result.notify.replace(/\D/g, "") !== cleaned) {
+            nomeContato = result.notify.trim();
+            verifiedName = result.notify;
+            logger.info(`[verifyContact] Nome da agenda via onWhatsApp.notify: "${nomeContato}" para ${cleaned}`);
+          } else if (result.verifiedName && result.verifiedName.trim() !== "" && result.verifiedName.replace(/\D/g, "") !== cleaned) {
+            nomeContato = result.verifiedName.trim();
+            verifiedName = result.verifiedName;
+            logger.info(`[verifyContact] Nome da agenda via onWhatsApp.verifiedName: "${nomeContato}" para ${cleaned}`);
+          }
+        }
+      } catch (err: any) {
+        logger.debug({ err: err?.message }, `[verifyContact] Falha ao buscar nome via onWhatsApp para ${cleaned}`);
+      }
     }
 
     // PRIORIDADE 3: pushName (nome definido pelo usuário no WhatsApp)
@@ -2066,6 +2235,14 @@ export const verifyMediaMessage = async (
 
     // BUSCAR NOME DO REMETENTE: prioridade 1) pushName da mensagem, 2) store do Baileys, 3) contato do banco
     const participantJid = msg.key.participant || msg.participant;
+
+    // GARANTIR CONTATO INDIVIDUAL DO PARTICIPANTE (para avatares em grupos)
+    // Executar em background para não bloquear o fluxo principal
+    if (ticket.isGroup && participantJid && !msg.key.fromMe && wbot) {
+      ensureParticipantContact(participantJid, msg.pushName, wbot, ticket.companyId, ticket.whatsappId)
+        .catch(err => logger.debug(`[verifyMediaMessage] Erro ao garantir contato do participante: ${err}`));
+    }
+
     let senderName = msg.pushName;
   
     logger.info(`[verifyMediaMessage] Capturando senderName - pushName: "${msg.pushName || 'vazio'}" | participantJid: ${participantJid || 'vazio'}`);
@@ -2232,6 +2409,13 @@ export const verifyMessage = async (
   const companyId = ticket.companyId;
 
   const participantJid = msg.key.participant || msg.participant;
+
+  // GARANTIR CONTATO INDIVIDUAL DO PARTICIPANTE (para avatares em grupos)
+  // Executar em background para não bloquear o fluxo principal
+  if (ticket.isGroup && participantJid && !msg.key.fromMe && wbot) {
+    ensureParticipantContact(participantJid, msg.pushName, wbot, ticket.companyId, ticket.whatsappId)
+      .catch(err => logger.debug(`[verifyMessage] Erro ao garantir contato do participante: ${err}`));
+  }
 
   // BUSCAR NOME DO REMETENTE: prioridade 1) pushName da mensagem, 2) store do Baileys, 3) contato do banco
   let senderName = msg.pushName;
@@ -6470,6 +6654,14 @@ const filterMessages = (msg: any): boolean => {
   
   if (msg.message?.protocolMessage) {
     logger.debug(`[filterMessages] Rejeitando protocolMessage: wid=${msg.key?.id}, type=${msg.message?.protocolMessage?.type}`);
+    return false;
+  }
+
+  // senderKeyDistributionMessage: mensagem de infraestrutura de criptografia para grupos
+  // Não é conteúdo de usuário - é distribuição de chaves Signal para descriptografia
+  // Ignorar silenciosamente para evitar logs de "type undefined"
+  if (msg.message?.senderKeyDistributionMessage) {
+    logger.debug(`[filterMessages] Rejeitando senderKeyDistributionMessage: wid=${msg.key?.id}, groupId=${msg.message?.senderKeyDistributionMessage?.groupId}`);
     return false;
   }
 

@@ -33,7 +33,8 @@ import {
     OpenWith as MoveIcon,
     GetApp as DownloadIcon,
     Edit as RenameIcon,
-    Delete as DeleteIcon
+    Delete as DeleteIcon,
+    Link as LinkIcon
 } from '@material-ui/icons';
 import { FolderOpen as FolderOpenIcon } from '@material-ui/icons';
 import useStyles from '../styles';
@@ -218,6 +219,13 @@ const FolderList = ({ folders, files, onFolderClick, onFileClick, onMenuAction, 
                     <ListItemIcon><ShareIcon fontSize="small" /></ListItemIcon>
                     <ListItemText primary="Compartilhar" />
                 </MenuItem>
+
+                {!isFolder && (
+                    <MenuItem onClick={() => handleAction('copyLink')}>
+                        <ListItemIcon><LinkIcon fontSize="small" /></ListItemIcon>
+                        <ListItemText primary="Copiar Link" />
+                    </MenuItem>
+                )}
 
                 <MenuItem onClick={() => handleAction('copy')}>
                     <ListItemIcon><FileCopyIcon fontSize="small" /></ListItemIcon>

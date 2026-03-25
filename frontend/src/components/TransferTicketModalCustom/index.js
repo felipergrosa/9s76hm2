@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
 import { useHistory } from "react-router-dom";
 
 import Button from "@material-ui/core/Button";
@@ -25,6 +25,7 @@ import toastError from "../../errors/toastError";
 import useQueues from "../../hooks/useQueues";
 import UserStatusIcon from "../UserModal/statusIcon";
 import { isNil } from "lodash";
+import { AuthContext } from "../../context/Auth/AuthContext";
 
 const useStyles = makeStyles((theme) => ({
   maxWidth: {
@@ -49,6 +50,7 @@ const filterOptions = createFilterOptions({
 
 const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode }) => {
   const history = useHistory();
+  const { user, socket } = useContext(AuthContext);
   const [options, setOptions] = useState([]);
   const [queues, setQueues] = useState([]);
   const [allQueues, setAllQueues] = useState([]);
@@ -108,6 +110,32 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
       fetchUsers();
     }
   }, [modalOpen, mode]);
+
+  // Listener para atualização de status dos usuários em tempo real
+  useEffect(() => {
+    if (modalOpen && user?.companyId && mode !== "bot") {
+      const onCompanyUser = (data) => {
+        if (data.action === "update") {
+          // Atualiza o usuário na lista se existir
+          setOptions(prev => {
+            const index = prev.findIndex(u => u.id === data.user.id);
+            if (index !== -1) {
+              const updated = [...prev];
+              updated[index] = { ...updated[index], ...data.user };
+              return updated;
+            }
+            return prev;
+          });
+        }
+      };
+      
+      socket.on(`company-${user.companyId}-user`, onCompanyUser);
+      
+      return () => {
+        socket.off(`company-${user.companyId}-user`, onCompanyUser);
+      };
+    }
+  }, [modalOpen, user?.companyId, socket, mode]);
 
   const handleMsgTransferChange = (event) => {
     setMsgTransfer(event.target.value);

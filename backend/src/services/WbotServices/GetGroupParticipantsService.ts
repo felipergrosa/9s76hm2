@@ -164,12 +164,14 @@ const GetGroupParticipantsService = async ({
           ]
         }
       });
+      logger.info(`[GetGroupParticipants] Encontrados ${contacts.length} contatos para ${pnNumbers.length} números de participantes`);
       for (const c of contacts) {
         if (c.canonicalNumber) contactsMap.set(c.canonicalNumber, c);
         if (c.number) contactsMap.set(c.number, c);
+        logger.debug(`[GetGroupParticipants] Contato mapeado: ${c.number} / ${c.canonicalNumber} -> ${c.name} (ID: ${c.id}, avatar: ${c.profilePicUrl ? 'sim' : 'não'})`);
       }
-    } catch {
-      // Ignorar erros na busca batch
+    } catch (err) {
+      logger.warn(`[GetGroupParticipants] Erro ao buscar contatos batch: ${err}`);
     }
   }
 
@@ -304,6 +306,12 @@ const GetGroupParticipantsService = async ({
       participantNumber = canonical || rawNumber;
       isValidPhoneNumber = isValidCanonicalPhoneNumber(participantNumber) && participantNumber.replace(/\D/g, "").length <= 14;
       contactRecord = contactsMap.get(participantNumber) || contactsMap.get(rawNumber) || null;
+      
+      if (contactRecord) {
+        logger.info(`[GetGroupParticipants] Contato encontrado para ${participantJid}: ${contactRecord.name} (ID: ${contactRecord.id}, avatar: ${contactRecord.profilePicUrl ? 'sim' : 'não'})`);
+      } else {
+        logger.debug(`[GetGroupParticipants] Contato NÃO encontrado para ${participantJid} (número: ${participantNumber}, raw: ${rawNumber})`);
+      }
     }
 
     // Tentar resolver via store do Baileys (pushNames)
@@ -429,7 +437,7 @@ const GetGroupParticipantsService = async ({
       name: contactName,
       isAdmin,
       isSuperAdmin,
-      profilePicUrl,
+      profilePicUrl: contactRecord?.profilePicUrl || contactRecord?.urlPicture || profilePicUrl,
       imgUrlBaileys,
       contactId: contactRecord?.id
     });

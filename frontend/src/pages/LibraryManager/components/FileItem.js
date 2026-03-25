@@ -27,7 +27,8 @@ import {
     Edit as RenameIcon,
     Delete as DeleteIcon,
     Star as StarIcon,
-    StarBorder as StarBorderIcon
+    StarBorder as StarBorderIcon,
+    Link as LinkIcon
 } from '@material-ui/icons';
 import useStyles from '../styles';
 
@@ -103,6 +104,13 @@ const FileItem = ({ item, type, onClick, onMenuAction }) => {
                     <ListItemIcon><ShareIcon fontSize="small" /></ListItemIcon>
                     <ListItemText primary="Compartilhar" />
                 </MenuItem>
+
+                {!isFolder && (
+                    <MenuItem onClick={() => handleAction('copyLink')}>
+                        <ListItemIcon><LinkIcon fontSize="small" /></ListItemIcon>
+                        <ListItemText primary="Copiar Link" />
+                    </MenuItem>
+                )}
 
                 <MenuItem onClick={() => handleAction('copy')}>
                     <ListItemIcon><FileCopyIcon fontSize="small" /></ListItemIcon>

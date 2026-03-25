@@ -403,6 +403,64 @@ const ListContactsService = async ({
     }
   }
 
+  // FILTRO: Ocultar contatos de participantes de grupo sem ticket individual
+  // Contatos criados automaticamente pelo ensureParticipantContact têm:
+  // - isGroup=false
+  // - name = número (ex: "+5511999999999")
+  // - Sem ticket individual
+  // Esses contatos só devem aparecer na listagem se tiverem ticket individual
+  if (isGroup !== "true") {
+    // Buscar IDs de contatos que têm pelo menos um ticket individual (não-grupo)
+    const contactsWithTicket = await Ticket.findAll({
+      attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
+      where: {
+        companyId,
+        isGroup: false
+      },
+      raw: true
+    });
+    const ticketContactIds = new Set(contactsWithTicket.map((t: any) => Number(t.contactId)).filter(Number.isInteger));
+
+    // Buscar contatos que NÃO têm ticket individual e têm nome igual ao número
+    // (criados automaticamente por ensureParticipantContact)
+    const hiddenContacts = await Contact.findAll({
+      attributes: ['id'],
+      where: {
+        companyId,
+        isGroup: false,
+        id: { [Op.notIn]: Array.from(ticketContactIds) },
+        // Nome é igual ao número ou começa com + (número formatado)
+        [Op.or]: [
+          where(col('name'), col('number')),
+          { name: { [Op.like]: '+%' } },
+          { name: '' },
+          literal('"name" IS NULL')
+        ]
+      },
+      raw: true
+    });
+    const hiddenContactIds = hiddenContacts.map((c: any) => c.id);
+
+    // Excluir contatos ocultos da listagem
+    if (hiddenContactIds.length > 0) {
+      const currentIdFilter: any = (whereCondition as any).id;
+      if (currentIdFilter?.[Op.in]) {
+        // Intersecção: remover hidden IDs
+        const allowed = (currentIdFilter[Op.in] as number[]).filter(id => !hiddenContactIds.includes(id));
+        (whereCondition as any).id = { [Op.in]: allowed };
+      } else if (currentIdFilter?.[Op.notIn]) {
+        // Já tem filtro notIn, adicionar mais
+        (whereCondition as any).id = { 
+          ...currentIdFilter,
+          [Op.notIn]: [...(currentIdFilter[Op.notIn] || []), ...hiddenContactIds]
+        };
+      } else {
+        // Adicionar filtro notIn
+        (whereCondition as any).id = { [Op.notIn]: hiddenContactIds };
+      }
+    }
+  }
+
   // Filtro por conexões WhatsApp
   if (Array.isArray(whatsappIds) && whatsappIds.length > 0) {
     whereCondition = {

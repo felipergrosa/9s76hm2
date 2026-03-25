@@ -230,31 +230,52 @@ const ListMessagesService = async ({
       .filter((v, i, a) => a.indexOf(v) === i); // unique
 
     if (participantJids.length > 0) {
-      // Buscar contatos individuais por participant ou lidJid
+      // Extrair números dos participant JIDs para busca adicional
+      const participantNumbers = participantJids
+        .map(jid => jid.replace(/@.*/, "").replace(/\D/g, ""))
+        .filter(num => num.length >= 10 && num.length <= 13);
+
+      // Buscar contatos individuais por participant JID, lidJid ou número
       const participantContacts = await Contact.findAll({
         where: {
           companyId,
           isGroup: false,
           [Op.or]: [
             { remoteJid: { [Op.in]: participantJids } },
-            { lidJid: { [Op.in]: participantJids } }
+            { lidJid: { [Op.in]: participantJids } },
+            ...(participantNumbers.length > 0 ? [
+              { number: { [Op.in]: participantNumbers } },
+              { canonicalNumber: { [Op.in]: participantNumbers } }
+            ] : [])
           ]
         },
-        attributes: ["id", "name", "number", "profilePicUrl", "urlPicture", "remoteJid", "lidJid"],
+        attributes: ["id", "name", "number", "profilePicUrl", "urlPicture", "remoteJid", "lidJid", "canonicalNumber"],
         limit: 200
       });
 
-      // Criar mapa participant → contact
+      // Criar mapa participant → contact (por JID e por número)
       const participantMap = new Map();
       participantContacts.forEach(c => {
         if (c.remoteJid) participantMap.set(c.remoteJid, c);
         if (c.lidJid) participantMap.set(c.lidJid, c);
+        // Também mapear por número para fallback
+        if (c.number) participantMap.set(c.number, c);
+        if (c.canonicalNumber) participantMap.set(c.canonicalNumber, c);
       });
 
       // Enriquecer mensagens com dados do participante
       messages.forEach((msg: any) => {
         if (!msg.fromMe && msg.participant) {
-          const participantContact = participantMap.get(msg.participant);
+          let participantContact = participantMap.get(msg.participant);
+
+          // Fallback: buscar por número extraído do participant JID
+          if (!participantContact) {
+            const participantNumber = msg.participant.replace(/@.*/, "").replace(/\D/g, "");
+            if (participantNumber.length >= 10) {
+              participantContact = participantMap.get(participantNumber);
+            }
+          }
+
           if (participantContact) {
             // Substituir contact do grupo pelo contact do participante individual
             msg.contact = {
@@ -269,7 +290,7 @@ const ListMessagesService = async ({
         }
       });
 
-      logger.info(`[ListMessages] Enriquecidas ${messages.filter((m: any) => !m.fromMe && m.participant).length} mensagens de grupo com profilePicUrl dos participantes`);
+      logger.info(`[ListMessages] Enriquecidas ${messages.filter((m: any) => !m.fromMe && m.participant && m.contact?.isGroup === false).length} mensagens de grupo com profilePicUrl dos participantes`);
     }
   }
 
