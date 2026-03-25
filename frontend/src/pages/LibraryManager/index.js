@@ -6,6 +6,7 @@ import { Folder as FolderIcon } from '@material-ui/icons';
 import MainContainer from '../../components/MainContainer';
 import { AuthContext } from '../../context/Auth/AuthContext';
 import toastError from '../../errors/toastError';
+import ConfirmationModal from '../../components/ConfirmationModal';
 
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
@@ -19,6 +20,7 @@ import UploadModal from './components/UploadModal';
 import BulkActionsBar from './components/BulkActionsBar';
 import FileViewerModal from './components/FileViewerModal';
 import EditFileModal from './components/EditFileModal';
+import RenameModal from './components/RenameModal';
 
 import useLibraryNavigation from './hooks/useLibraryNavigation';
 import useStyles from './styles';
@@ -50,6 +52,13 @@ const LibraryManager = () => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [editFileModalOpen, setEditFileModalOpen] = useState(false);
     const [fileToEdit, setFileToEdit] = useState(null);
+
+    // Estados para modais de confirmação e rename
+    const [renameModalOpen, setRenameModalOpen] = useState(false);
+    const [itemToRename, setItemToRename] = useState(null);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [itemToDelete, setItemToDelete] = useState(null);
+    const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
 
     const fetchData = useCallback(async () => {
         try {
@@ -257,17 +266,8 @@ const LibraryManager = () => {
                     break;
 
                 case 'rename':
-                    const newName = window.prompt('Novo nome:', item.name || item.title);
-                    if (newName && newName.trim()) {
-                        if (item.title) {
-                            await libraryApi.updateFile(item.id, { title: newName.trim() });
-                        } else {
-                            await libraryApi.updateFolder(item.id, { name: newName.trim() });
-                        }
-                        toast.success('Renomeado com sucesso!');
-                        fetchData();
-                        fetchAllFoldersList();
-                    }
+                    setItemToRename(item);
+                    setRenameModalOpen(true);
                     break;
 
                 case 'index':
@@ -286,16 +286,8 @@ const LibraryManager = () => {
                     break;
 
                 case 'delete':
-                    if (window.confirm(`Deletar ${item.name || item.title}?`)) {
-                        if (item.title) {
-                            await libraryApi.deleteFile(item.id);
-                        } else {
-                            await libraryApi.deleteFolder(item.id);
-                        }
-                        toast.success('Deletado com sucesso!');
-                        fetchData();
-                        fetchAllFoldersList();
-                    }
+                    setItemToDelete(item);
+                    setDeleteConfirmOpen(true);
                     break;
 
                 default:
@@ -308,16 +300,18 @@ const LibraryManager = () => {
 
     // Bulk Actions
     const handleBulkDelete = async () => {
-        if (window.confirm(`Deletar ${selectedItems.length} ${selectedItems.length === 1 ? 'item' : 'itens'}?`)) {
-            try {
-                await libraryApi.bulkDelete(selectedItems);
-                toast.success('Itens deletados com sucesso!');
-                setSelectedItems([]);
-                fetchData();
-                fetchAllFoldersList();
-            } catch (err) {
-                toastError(err);
-            }
+        setBulkDeleteConfirmOpen(true);
+    };
+
+    const executeBulkDelete = async () => {
+        try {
+            await libraryApi.bulkDelete(selectedItems);
+            toast.success('Itens deletados com sucesso!');
+            setSelectedItems([]);
+            fetchData();
+            fetchAllFoldersList();
+        } catch (err) {
+            toastError(err);
         }
     };
 
@@ -354,6 +348,40 @@ const LibraryManager = () => {
             setEditFileModalOpen(false);
             setFileToEdit(null);
             fetchData();
+        } catch (err) {
+            toastError(err);
+        }
+    };
+
+    // Handler para renomear item
+    const handleRename = async (newName) => {
+        if (!itemToRename) return;
+        try {
+            if (itemToRename.title) {
+                await libraryApi.updateFile(itemToRename.id, { title: newName });
+            } else {
+                await libraryApi.updateFolder(itemToRename.id, { name: newName });
+            }
+            toast.success('Renomeado com sucesso!');
+            fetchData();
+            fetchAllFoldersList();
+        } catch (err) {
+            toastError(err);
+        }
+    };
+
+    // Handler para deletar item
+    const handleDeleteItem = async () => {
+        if (!itemToDelete) return;
+        try {
+            if (itemToDelete.title) {
+                await libraryApi.deleteFile(itemToDelete.id);
+            } else {
+                await libraryApi.deleteFolder(itemToDelete.id);
+            }
+            toast.success('Deletado com sucesso!');
+            fetchData();
+            fetchAllFoldersList();
         } catch (err) {
             toastError(err);
         }
@@ -564,6 +592,40 @@ const LibraryManager = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Modal de Renomear */}
+            <RenameModal
+                open={renameModalOpen}
+                onClose={() => {
+                    setRenameModalOpen(false);
+                    setItemToRename(null);
+                }}
+                onConfirm={handleRename}
+                item={itemToRename}
+            />
+
+            {/* Modal de Confirmação de Delete */}
+            <ConfirmationModal
+                title="Confirmar exclusão"
+                open={deleteConfirmOpen}
+                onClose={() => {
+                    setDeleteConfirmOpen(false);
+                    setItemToDelete(null);
+                }}
+                onConfirm={handleDeleteItem}
+            >
+                {`Deletar "${itemToDelete?.name || itemToDelete?.title}"?`}
+            </ConfirmationModal>
+
+            {/* Modal de Confirmação de Bulk Delete */}
+            <ConfirmationModal
+                title="Confirmar exclusão em lote"
+                open={bulkDeleteConfirmOpen}
+                onClose={() => setBulkDeleteConfirmOpen(false)}
+                onConfirm={executeBulkDelete}
+            >
+                {`Deletar ${selectedItems.length} ${selectedItems.length === 1 ? 'item' : 'itens'}?`}
+            </ConfirmationModal>
         </MainContainer>
     );
 };

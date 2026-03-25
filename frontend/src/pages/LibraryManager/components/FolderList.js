@@ -111,8 +111,8 @@ const FolderList = ({ folders, files, onFolderClick, onFileClick, onMenuAction, 
                             />
                         </TableCell>
                         <TableCell>Nome</TableCell>
-                        <TableCell>Última Abertura</TableCell>
-                        <TableCell>Membros</TableCell>
+                        <TableCell>Atualizado</TableCell>
+                        <TableCell>Status RAG</TableCell>
                         <TableCell align="right">Ações</TableCell>
                     </TableRow>
                 </TableHead>
@@ -175,9 +175,19 @@ const FolderList = ({ folders, files, onFolderClick, onFileClick, onMenuAction, 
                                 </TableCell>
 
                                 <TableCell>
-                                    <Typography variant="body2" color="textSecondary">
-                                        Somente Eu
-                                    </Typography>
+                                    {item.type === 'folder' ? (
+                                        <Typography variant="body2" color="textSecondary">
+                                            {item.files?.length || 0} arquivos
+                                        </Typography>
+                                    ) : (
+                                        <Chip
+                                            label={item.statusRag === 'indexed' ? 'Indexado' :
+                                                item.statusRag === 'indexing' ? 'Indexando' :
+                                                    item.statusRag === 'failed' ? 'Falhou' : 'Pendente'}
+                                            size="small"
+                                            color={item.statusRag === 'indexed' ? 'primary' : 'default'}
+                                        />
+                                    )}
                                 </TableCell>
 
                                 <TableCell align="right">

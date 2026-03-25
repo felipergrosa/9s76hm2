@@ -59,17 +59,24 @@ export const getTrainingMetrics = async (
     });
 
     const testResultWhere: any = { companyId };
-    const testsTotal = await AITestResult.count({ where: testResultWhere });
+    if (agentId) testResultWhere.agentId = agentId;
+    if (stageId) testResultWhere.stageId = stageId;
+
+    // Contar total de cenários de teste (não resultados)
+    const testsTotal = await AITestScenario.count({ where: testResultWhere });
+
+    // Contar resultados com passRate >= 80% como "passando"
     const testsPassed = await AITestResult.count({
-      where: { ...testResultWhere, passed: true }
+      where: { ...testResultWhere, passRate: { [Op.gte]: 80 } }
     });
 
-    const avgSimilarityResult = await AITestResult.findOne({
-      attributes: [[fn("AVG", col("similarity")), "avgSimilarity"]],
+    // Média do overallScore (não existe coluna similarity)
+    const avgScoreResult = await AITestResult.findOne({
+      attributes: [[fn("AVG", col("overallScore")), "avgScore"]],
       where: testResultWhere,
       raw: true
     });
-    const avgSimilarity = (avgSimilarityResult as any)?.avgSimilarity || 0;
+    const avgSimilarity = (avgScoreResult as any)?.avgScore || 0;
 
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -114,13 +121,14 @@ export const getTrainingMetrics = async (
       });
     }
 
+    // Distribuição por categoria vem de AITrainingImprovement, não de AITrainingFeedback
     const categoryDistribution: Record<string, number> = {};
-    const categories = await AITrainingFeedback.findAll({
+    const categories = await AITrainingImprovement.findAll({
       attributes: [
         "category",
         [fn("COUNT", col("id")), "count"]
       ],
-      where: { ...feedbackWhere, category: { [Op.ne]: null } },
+      where: { ...improvementWhere, category: { [Op.ne]: null } },
       group: ["category"],
       raw: true
     });
