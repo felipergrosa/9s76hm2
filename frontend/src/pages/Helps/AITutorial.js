@@ -397,11 +397,11 @@ const AITutorial = () => {
             </Button>
             <Button
               component={Link}
-              to="/prompts"
+              to="/ai-agents"
               variant="outlined"
               color="primary"
             >
-              Prompts
+              Agentes IA
             </Button>
             <Button
               component={Link}
@@ -565,11 +565,11 @@ const AITutorial = () => {
         </Button>
         <Button
           component={Link}
-          to="/prompts"
+          to="/ai-agents"
           variant="outlined"
           color="primary"
         >
-          Prompts
+          Agentes IA
         </Button>
       </Box>
     </div>
@@ -581,12 +581,12 @@ const AITutorial = () => {
         <CardContent>
           <Typography variant="h4" gutterBottom>
             <AIIcon style={{ marginRight: 8, verticalAlign: "middle" }} />
-            IA Automática por Conexão
+            IA Automática por Fila
           </Typography>
           <Typography variant="body1" paragraph>
-            A IA Automática é ativada automaticamente quando uma mensagem chega
-            em uma conexão WhatsApp que possui um prompt configurado, antes de
-            ser direcionada para qualquer fila ou atendente.
+            A IA Automática é ativada quando uma mensagem chega em uma fila que
+            possui um Agente IA configurado. O agente responde automaticamente
+            seguindo as instruções definidas no seu System Prompt.
           </Typography>
           <div className={classes.infoBox}>
             <Typography variant="body2">
@@ -657,10 +657,10 @@ const AITutorial = () => {
             <CardContent>
               <Box display="flex" alignItems="center" marginBottom={2}>
                 <div className={classes.stepNumber}>2</div>
-                <Typography variant="h6">Criar Prompt</Typography>
+                <Typography variant="h6">Criar Agente IA</Typography>
               </Box>
               <Typography variant="body2" paragraph>
-                Vá em <strong>IA → Prompts</strong> e crie um novo prompt
+                Vá em <strong>Configurações → Agentes IA</strong> e crie um novo agente
               </Typography>
               <List dense>
                 <ListItem>
@@ -668,8 +668,8 @@ const AITutorial = () => {
                     <DocIcon />
                   </ListItemIcon>
                   <ListItemText
-                    primary="Nome do Prompt"
-                    secondary="Ex: 'Atendimento Inicial - Vendas'"
+                    primary="Nome do Agente"
+                    secondary="Ex: 'Atendente Vendas'"
                   />
                 </ListItem>
                 <ListItem>
@@ -677,8 +677,8 @@ const AITutorial = () => {
                     <AIIcon />
                   </ListItemIcon>
                   <ListItemText
-                    primary="Selecione a Integração"
-                    secondary="Escolha a integração OpenAI/Gemini configurada"
+                    primary="Configure o System Prompt"
+                    secondary="Defina o comportamento e instruções do agente"
                   />
                 </ListItem>
               </List>
@@ -689,10 +689,10 @@ const AITutorial = () => {
             <CardContent>
               <Box display="flex" alignItems="center" marginBottom={2}>
                 <div className={classes.stepNumber}>3</div>
-                <Typography variant="h6">Associar à Conexão</Typography>
+                <Typography variant="h6">Associar à Fila</Typography>
               </Box>
               <Typography variant="body2" paragraph>
-                Edite sua conexão WhatsApp e associe o prompt criado
+                Edite sua fila e associe o agente criado
               </Typography>
               <List dense>
                 <ListItem>
@@ -700,8 +700,8 @@ const AITutorial = () => {
                     <SettingsIcon />
                   </ListItemIcon>
                   <ListItemText
-                    primary="Conexões → Editar WhatsApp"
-                    secondary="Selecione o prompt no campo 'Prompt IA'"
+                    primary="Filas → Editar Fila"
+                    secondary="Selecione o agente no campo 'Agente IA'"
                   />
                 </ListItem>
               </List>
@@ -757,11 +757,11 @@ Se precisar de atendimento personalizado, digite "ATENDENTE".`}
             </Button>
             <Button
               component={Link}
-              to="/prompts"
+              to="/ai-agents"
               variant="outlined"
               color="primary"
             >
-              Prompts
+              Agentes IA
             </Button>
             <Button
               component={Link}
@@ -877,11 +877,11 @@ Se precisar de atendimento personalizado, digite "ATENDENTE".`}
       <Box mt={2} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         <Button
           component={Link}
-          to="/prompts"
+          to="/ai-agents"
           variant="contained"
           color="primary"
         >
-          Abrir Prompts
+          Abrir Agentes IA
         </Button>
         <Button
           component={Link}
@@ -1063,40 +1063,482 @@ Responda apenas:
             <BookIcon style={{ marginRight: 8, verticalAlign: "middle" }} />
             Base de Conhecimento (RAG)
           </Typography>
-          <Alert severity="info" style={{ marginBottom: 12 }}>
-            A configuração e o gerenciamento da RAG foram movidos para o menu{" "}
-            <strong>Integrações → Queue Integration</strong>, criando a
-            integração <strong>Base de Conhecimento</strong>.
-          </Alert>
           <Typography variant="body1" paragraph>
-            Nesta página permanecem apenas conteúdos de ajuda e tutoriais. Para
-            configurar embeddings, ativar RAG, indexar textos/arquivos,
-            pesquisar e gerenciar documentos, acesse Integrações.
+            O sistema de <strong>RAG (Retrieval-Augmented Generation)</strong> permite que a IA 
+            consulte sua base de conhecimento interna antes de responder, trazendo informações 
+            precisas sobre produtos, políticas, procedimentos e muito mais.
           </Typography>
-          <Box mt={2} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Button
-              component={Link}
-              to="/queue-integration"
-              variant="contained"
-              color="primary"
-            >
-              Abrir Integrações
-            </Button>
-            <Button
-              component={Link}
-              to="/helps"
-              variant="outlined"
-              color="primary"
-            >
-              Ver Tutoriais
-            </Button>
-          </Box>
+          <Alert severity="success" style={{ marginBottom: 12 }}>
+            <strong>Novo!</strong> RAG agora suporta múltiplos tipos de conteúdo: textos, PDFs, 
+            imagens, vídeos, áudios, planilhas Excel e URLs.
+          </Alert>
         </CardContent>
       </Card>
+
+      <Card className={classes.sectionCard}>
+        <CardContent>
+          <Typography variant="h5" gutterBottom>
+            Como Funciona
+          </Typography>
+          <div className={classes.flowDiagram}>
+            <Typography variant="body1">
+              📄 <strong>Indexa Documentos</strong> → 🔍 <strong>Busca Semântica</strong> → 
+              🤖 <strong>IA Responde com Contexto</strong>
+            </Typography>
+          </div>
+          <List dense>
+            <ListItem>
+              <ListItemIcon>
+                <CheckIcon />
+              </ListItemIcon>
+              <ListItemText
+                primary="Chunking Inteligente"
+                secondary="Textos são divididos em pedaços (chunks) de ~1200 caracteres com sobreposição de 200 caracteres"
+              />
+            </ListItem>
+            <ListItem>
+              <ListItemIcon>
+                <CheckIcon />
+              </ListItemIcon>
+              <ListItemText
+                primary="Embeddings Vetoriais"
+                secondary="Cada chunk é convertido em um vetor numérico usando OpenAI text-embedding-3-small"
+              />
+            </ListItem>
+            <ListItem>
+              <ListItemIcon>
+                <CheckIcon />
+              </ListItemIcon>
+              <ListItemText
+                primary="Busca Semântica"
+                secondary="A pergunta do cliente é comparada vetorialmente com os chunks, retornando os mais relevantes"
+              />
+            </ListItem>
+            <ListItem>
+              <ListItemIcon>
+                <CheckIcon />
+              </ListItemIcon>
+              <ListItemText
+                primary="Filtro por Tags"
+                secondary="Organize documentos com tags para buscas direcionadas (ex: 'produtos', 'políticas')"
+              />
+            </ListItem>
+          </List>
+        </CardContent>
+      </Card>
+
+      <Card className={classes.sectionCard}>
+        <CardContent>
+          <Typography variant="h5" gutterBottom>
+            Tipos de Conteúdo Suportados
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Card className={classes.stepCard}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>📄 Textos & Documentos</Typography>
+                  <List dense>
+                    <ListItem><ListItemText primary="Textos puros (digitados)" /></ListItem>
+                    <ListItem><ListItemText primary="PDFs (com OCR automático)" /></ListItem>
+                    <ListItem><ListItemText primary="Planilhas Excel (.xlsx)" /></ListItem>
+                    <ListItem><ListItemText primary="URLs e Sitemaps" /></ListItem>
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Card className={classes.stepCard}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>🖼️ Mídia & Multimídia</Typography>
+                  <List dense>
+                    <ListItem><ListItemText primary="Imagens (JPG, PNG, GIF, WebP)" /></ListItem>
+                    <ListItem><ListItemText primary="Vídeos (transcrição automática)" /></ListItem>
+                    <ListItem><ListItemText primary="Áudios (transcrição via Whisper)" /></ListItem>
+                    <ListItem><ListItemText primary="GIFs animados" /></ListItem>
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
+      <Card className={classes.sectionCard}>
+        <CardContent>
+          <Typography variant="h5" gutterBottom>
+            Configuração Passo a Passo
+          </Typography>
+          <Card className={classes.stepCard}>
+            <CardContent>
+              <Box display="flex" alignItems="center" marginBottom={2}>
+                <div className={classes.stepNumber}>1</div>
+                <Typography variant="h6">Ativar RAG nas Integrações</Typography>
+              </Box>
+              <Typography variant="body2" paragraph>
+                Vá em <strong>Integrações → Queue Integration</strong> e crie/edite uma integração 
+                com provedor <strong>Base de Conhecimento</strong>.
+              </Typography>
+              <List dense>
+                <ListItem>
+                  <ListItemIcon><SettingsIcon /></ListItemIcon>
+                  <ListItemText primary="Ative o RAG" secondary="Habilita busca na base de conhecimento" />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon><SettingsIcon /></ListItemIcon>
+                  <ListItemText primary="Configure Top-K" secondary="Quantos chunks retornar (padrão: 4)" />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon><SettingsIcon /></ListItemIcon>
+                  <ListItemText primary="Defina Tags" secondary="Filtre documentos por tags específicas" />
+                </ListItem>
+              </List>
+            </CardContent>
+          </Card>
+
+          <Card className={classes.stepCard}>
+            <CardContent>
+              <Box display="flex" alignItems="center" marginBottom={2}>
+                <div className={classes.stepNumber}>2</div>
+                <Typography variant="h6">Indexar Conteúdo</Typography>
+              </Box>
+              <Typography variant="body2" paragraph>
+                Use a API ou interface para indexar seus documentos:
+              </Typography>
+              <div className={classes.codeBlock}>
+{`POST /rag/index-text
+{
+  "title": "Política de Frete",
+  "text": "Conteúdo do documento...",
+  "tags": ["politicas", "frete"]
+}
+
+POST /rag/index-file (multipart)
+- Arquivo PDF, Excel, Imagem, etc.
+- Tags opcionais`}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={classes.stepCard}>
+            <CardContent>
+              <Box display="flex" alignItems="center" marginBottom={2}>
+                <div className={classes.stepNumber}>3</div>
+                <Typography variant="h6">Associar à Fila/Agente</Typography>
+              </Box>
+              <Typography variant="body2">
+                Vincule a integração RAG à Fila ou AI Agent para que a IA consulte automaticamente 
+                a base de conhecimento durante o atendimento.
+              </Typography>
+            </CardContent>
+          </Card>
+        </CardContent>
+      </Card>
+
+      <Card className={classes.sectionCard}>
+        <CardContent>
+          <Typography variant="h5" gutterBottom>
+            Casos de Uso
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <Card className={classes.exampleCard}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>📦 Catálogo de Produtos</Typography>
+                  <Typography variant="body2">
+                    Indexe fichas técnicas e especificações. A IA responde perguntas sobre 
+                    produtos com informações precisas.
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Card className={classes.exampleCard}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>📋 Políticas e Procedimentos</Typography>
+                  <Typography variant="body2">
+                    Políticas de frete, troca, devolução. A IA consulta e responde com 
+                    informações atualizadas.
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Card className={classes.exampleCard}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>🎓 Treinamento de Equipe</Typography>
+                  <Typography variant="body2">
+                    Manuais internos, FAQs, scripts de atendimento. Novos atendentes 
+                    aprendem mais rápido.
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
+      <Box mt={2} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <Button component={Link} to="/queue-integration" variant="contained" color="primary">
+          Configurar RAG
+        </Button>
+        <Button component={Link} to="/helps" variant="outlined" color="primary">
+          Ver Tutoriais
+        </Button>
+      </Box>
     </div>
   );
 
   // removidos blocos órfãos relacionados à antiga UI de RAG
+
+  const renderSkillsTab = () => (
+    <div className={classes.tabContent}>
+      <Card className={classes.sectionCard}>
+        <CardContent>
+          <Typography variant="h4" gutterBottom>
+            <AIIcon style={{ marginRight: 8, verticalAlign: "middle" }} />
+            Sistema de Skills para AI Agents
+          </Typography>
+          <Typography variant="body1" paragraph>
+            O sistema de <strong>Skills</strong> padroniza as capacidades dos agentes de IA, 
+            tornando os prompts mais estruturados, consistentes e fáceis de manter. Cada skill 
+            define gatilhos, exemplos e funções associadas.
+          </Typography>
+          <Alert severity="success" style={{ marginBottom: 12 }}>
+            <strong>Novo!</strong> Sistema de Skills permite criar, customizar e gerenciar 
+            capacidades específicas para cada AI Agent.
+          </Alert>
+        </CardContent>
+      </Card>
+
+      <Card className={classes.sectionCard}>
+        <CardContent>
+          <Typography variant="h5" gutterBottom>
+            Estrutura de uma Skill
+          </Typography>
+          <div className={classes.codeBlock}>
+{`{
+  "name": "enviar_catalogo",
+  "category": "sales",
+  "description": "Lista e envia catálogos de produtos",
+  "triggers": [
+    { "type": "keyword", "value": "catálogo", "weight": 0.9 },
+    { "type": "keyword", "value": "produtos", "weight": 0.7 }
+  ],
+  "examples": [
+    {
+      "user": "Quero ver o catálogo",
+      "assistant": "Claro! Vou listar as opções.",
+      "function": "listar_catalogos"
+    }
+  ],
+  "functions": ["listar_catalogos", "enviar_catalogo"],
+  "priority": 9,
+  "enabled": true
+}`}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className={classes.sectionCard}>
+        <CardContent>
+          <Typography variant="h5" gutterBottom>
+            Categorias de Skills
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <Card className={classes.stepCard}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>💬 Communication</Typography>
+                  <List dense>
+                    <ListItem><ListItemText primary="greeting - Cumprimentos" /></ListItem>
+                    <ListItem><ListItemText primary="farewell - Despedidas" /></ListItem>
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Card className={classes.stepCard}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>🛒 Sales</Typography>
+                  <List dense>
+                    <ListItem><ListItemText primary="send_catalog - Enviar catálogos" /></ListItem>
+                    <ListItem><ListItemText primary="send_price_table - Tabelas de preço" /></ListItem>
+                    <ListItem><ListItemText primary="send_info - Informativos" /></ListItem>
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Card className={classes.stepCard}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>🔄 Routing</Typography>
+                  <List dense>
+                    <ListItem><ListItemText primary="transfer_to_attendant" /></ListItem>
+                    <ListItem><ListItemText primary="transfer_to_seller" /></ListItem>
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Card className={classes.stepCard}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>📋 CRM</Typography>
+                  <List dense>
+                    <ListItem><ListItemText primary="update_contact - Atualizar dados" /></ListItem>
+                    <ListItem><ListItemText primary="check_registration - Verificar cadastro" /></ListItem>
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Card className={classes.stepCard}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>🎯 SDR</Typography>
+                  <List dense>
+                    <ListItem><ListItemText primary="qualify_lead - Qualificar leads" /></ListItem>
+                    <ListItem><ListItemText primary="schedule_meeting - Agendar reunião" /></ListItem>
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Card className={classes.stepCard}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>🔍 RAG</Typography>
+                  <List dense>
+                    <ListItem><ListItemText primary="search_knowledge - Buscar na base" /></ListItem>
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
+      <Card className={classes.sectionCard}>
+        <CardContent>
+          <Typography variant="h5" gutterBottom>
+            Como Funciona
+          </Typography>
+          <div className={classes.flowDiagram}>
+            <Typography variant="body1">
+              📝 <strong>Cliente Envia Mensagem</strong> → 🔍 <strong>Sistema Identifica Gatilhos</strong> → 
+              ⚡ <strong>Seleciona Skill por Prioridade</strong> → 🤖 <strong>Executa Função</strong>
+            </Typography>
+          </div>
+          <List dense>
+            <ListItem>
+              <ListItemIcon><CheckIcon /></ListItemIcon>
+              <ListItemText
+                primary="Gatilhos Inteligentes"
+                secondary="Palavras-chave, intenções, entidades e condições ativam skills automaticamente"
+              />
+            </ListItem>
+            <ListItem>
+              <ListItemIcon><CheckIcon /></ListItemIcon>
+              <ListItemText
+                primary="Priorização Automática"
+                secondary="Quando múltiplas skills aplicam, a de maior prioridade (1-10) é usada"
+              />
+            </ListItem>
+            <ListItem>
+              <ListItemIcon><CheckIcon /></ListItemIcon>
+              <ListItemText
+                primary="Condições de Uso"
+                secondary="Skills podem ter pré-requisitos (ex: cliente precisa ter CNPJ para tabela de preços)"
+              />
+            </ListItem>
+            <ListItem>
+              <ListItemIcon><CheckIcon /></ListItemIcon>
+              <ListItemText
+                primary="Exemplos no Prompt"
+                secondary="A IA aprende com exemplos de como responder em cada situação"
+              />
+            </ListItem>
+          </List>
+        </CardContent>
+      </Card>
+
+      <Card className={classes.sectionCard}>
+        <CardContent>
+          <Typography variant="h5" gutterBottom>
+            Skills Padrão (12 Pré-Configuradas)
+          </Typography>
+          <Typography variant="body2" paragraph>
+            O sistema já vem com 12 skills prontas para uso. Você pode usá-las diretamente ou 
+            customizar para seu negócio.
+          </Typography>
+          <Grid container spacing={1}>
+            {[
+              { name: "greeting", cat: "communication", desc: "Cumprimenta clientes" },
+              { name: "farewell", cat: "communication", desc: "Despedidas cordiais" },
+              { name: "send_catalog", cat: "sales", desc: "Envia catálogos" },
+              { name: "send_price_table", cat: "sales", desc: "Envia tabelas de preço" },
+              { name: "send_info", cat: "sales", desc: "Envia informativos" },
+              { name: "update_contact", cat: "crm", desc: "Atualiza cadastro" },
+              { name: "check_registration", cat: "crm", desc: "Verifica cadastro completo" },
+              { name: "transfer_to_attendant", cat: "routing", desc: "Transfere para humano" },
+              { name: "transfer_to_seller", cat: "routing", desc: "Transfere para vendedor" },
+              { name: "search_knowledge", cat: "rag", desc: "Busca na base RAG" },
+              { name: "qualify_lead", cat: "sdr", desc: "Qualifica leads (BANT)" },
+              { name: "schedule_meeting", cat: "scheduling", desc: "Agenda reuniões" },
+            ].map((skill, i) => (
+              <Grid item xs={6} md={4} key={i}>
+                <Chip
+                  icon={<CheckIcon />}
+                  label={`${skill.name} (${skill.cat})`}
+                  size="small"
+                  style={{ margin: 4 }}
+                />
+              </Grid>
+            ))}
+          </Grid>
+        </CardContent>
+      </Card>
+
+      <Card className={classes.sectionCard}>
+        <CardContent>
+          <Typography variant="h5" gutterBottom>
+            API de Skills
+          </Typography>
+          <Typography variant="body2" paragraph>
+            Gerencie skills via API REST:
+          </Typography>
+          <div className={classes.codeBlock}>
+{`# Listar skills de um agente
+GET /ai-skills/agents/:agentId/skills
+
+# Criar skill customizada
+POST /ai-skills/agents/:agentId/skills
+{
+  "name": "enviar_orcamento",
+  "category": "sales",
+  "description": "Gera e envia orçamento personalizado",
+  "triggers": [{ "type": "keyword", "value": "orçamento", "weight": 0.9 }],
+  "examples": [{ "user": "Quero orçamento", "assistant": "Vou preparar!", "function": "enviar_orcamento" }],
+  "functions": ["enviar_orcamento"],
+  "priority": 8
+}
+
+# Duplicar skill padrão para customizar
+POST /ai-skills/agents/:agentId/skills/fork/greeting
+
+# Importar skills em massa
+POST /ai-skills/agents/:agentId/skills/import`}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Box mt={2} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <Button component={Link} to="/ai-agents" variant="contained" color="primary">
+          Configurar AI Agents
+        </Button>
+        <Button component={Link} to="/helps" variant="outlined" color="primary">
+          Ver Tutoriais
+        </Button>
+      </Box>
+    </div>
+  );
 
   const renderTipsTab = () => (
     <div className={classes.tabContent}>
@@ -1187,6 +1629,7 @@ Responda apenas:
               <Tab label="IA no FlowBuilder" icon={<FlowIcon />} />
               <Tab label="Outros Canais" icon={<LinkIcon />} />
               <Tab label="RAG & Conhecimento" icon={<BookIcon />} />
+              <Tab label="Skills" icon={<AIIcon />} />
               <Tab label="Dicas & Suporte" icon={<TipsIcon />} />
             </Tabs>
           </Paper>
@@ -1213,6 +1656,9 @@ Responda apenas:
             {renderRagTab()}
           </TabPanel>
           <TabPanel value={tabValue} index={7}>
+            {renderSkillsTab()}
+          </TabPanel>
+          <TabPanel value={tabValue} index={8}>
             {renderTipsTab()}
           </TabPanel>
         </div>

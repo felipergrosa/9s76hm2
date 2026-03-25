@@ -42,8 +42,25 @@ export default class AITrainingImprovement extends Model<AITrainingImprovement> 
   @Column(DataType.TEXT)
   improvementText!: string;
 
-  @Column(DataType.ENUM("pending", "applied"))
-  status!: "pending" | "applied";
+  // Categorização estruturada
+  @Column(DataType.STRING(50))
+  category!: "tone" | "accuracy" | "empathy" | "sales" | "routing" | "knowledge" | "formatting" | "other" | null;
+
+  @Column(DataType.STRING(50))
+  severity!: "low" | "medium" | "high" | null;
+
+  @Column(DataType.STRING(100))
+  intentDetected!: string | null;
+
+  // Métricas de impacto
+  @Column(DataType.BOOLEAN)
+  verifiedInProduction!: boolean;
+
+  @Column(DataType.INTEGER)
+  improvementScore!: number | null;
+
+  @Column(DataType.ENUM("pending", "applied", "rejected", "testing"))
+  status!: "pending" | "applied" | "rejected" | "testing";
 
   @Column(DataType.DATE(6))
   appliedAt?: Date | null;

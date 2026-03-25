@@ -4,6 +4,7 @@ import ResolvePresetConfigService, { ModuleType } from "../ResolvePresetConfigSe
 import { FewShotPair } from "../IAClient";
 import FindCompanySettingOneService from "../../CompaniesSettings/FindCompanySettingOneService";
 import { search as ragSearch } from "../../RAG/RAGSearchService";
+import { buildContext, formatContextForPrompt } from "../../RAG/RAGContextBuilder";
 import GetIntegrationByTypeService from "../../QueueIntegrationServices/GetIntegrationByTypeService";
 import AIOrchestrator from "../AIOrchestrator";
 
@@ -328,11 +329,33 @@ export default class ChatAssistantService {
       } catch {}
 
       if (ragEnabled) {
-        const hits = await ragSearch({ companyId, query: params.text, k: ragTopK });
+        const hits = await ragSearch({ 
+          companyId, 
+          query: params.text, 
+          k: ragTopK,
+          hybrid: true,  // Busca híbrida ativada
+          rerank: true   // Reranking ativado
+        });
         if (Array.isArray(hits) && hits.length) {
-          const context = hits.map((h, i) => `Fonte ${i + 1}:\n${h.content}`).join("\n\n");
-          system = `${system}\n\nUse, se relevante, as fontes a seguir (não invente fatos):\n${context}`;
-          try { console.log("[IA][rag][retrieve]", { companyId, hits: hits.length, k: ragTopK }); } catch {}
+          // Usa contexto otimizado (remove duplicatas, resume se grande)
+          const { context, stats } = await buildContext(companyId, hits, {
+            maxTotalChars: 3000,
+            maxChunks: ragTopK,
+            summarizeIfOversized: true
+          });
+          
+          if (context) {
+            const formattedContext = formatContextForPrompt(context, params.text);
+            system = `${system}\n\n${formattedContext}`;
+            console.log("[IA][rag][retrieve]", { 
+              companyId, 
+              hits: hits.length, 
+              k: ragTopK,
+              contextChars: stats.totalChars,
+              duplicatesRemoved: stats.duplicatesRemoved,
+              wasSummarized: stats.wasSummarized
+            });
+          }
         }
       }
     } catch {}

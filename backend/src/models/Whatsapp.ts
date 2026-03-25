@@ -20,7 +20,6 @@ import Ticket from "./Ticket";
 import WhatsappQueue from "./WhatsappQueue";
 import Company from "./Company";
 import QueueIntegrations from "./QueueIntegrations";
-import Prompt from "./Prompt";
 import { FlowBuilderModel } from "./FlowBuilder";
 import Tag from "./Tag";
 
@@ -265,13 +264,6 @@ class Whatsapp extends Model<Whatsapp> {
     type: DataType.JSONB
   })
   schedules: [];
-
-  @ForeignKey(() => Prompt)
-  @Column
-  promptId: number;
-
-  @BelongsTo(() => Prompt)
-  prompt: Prompt;
 
   @Column
   collectiveVacationMessage: string;

@@ -40,7 +40,6 @@ import FilesOptions from "../models/FilesOptions";
 import ContactTag from "../models/ContactTag";
 import CompaniesSettings from "../models/CompaniesSettings";
 import LogTicket from "../models/LogTicket";
-import Prompt from "../models/Prompt";
 import Partner from "../models/Partner";
 import ScheduledMessages from "../models/ScheduledMessages";
 import ScheduledMessagesEnvio from "../models/ScheduledMessagesEnvio";
@@ -191,7 +190,6 @@ const models = [
   FilesOptions,
   CompaniesSettings,
   LogTicket,
-  Prompt,
   Partner,
   ScheduledMessages,
   ScheduledMessagesEnvio,

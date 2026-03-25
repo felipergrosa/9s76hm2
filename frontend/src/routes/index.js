@@ -97,7 +97,6 @@ const ChatInternoTutorial = lazy(() => import("../pages/Helps/ChatInternoTutoria
 const CampanhasTutorial = lazy(() => import("../pages/Helps/CampanhasTutorial"));
 const FlowBuilderTutorial = lazy(() => import("../pages/Helps/FlowBuilderTutorial"));
 const FilaChatbotTutorial = lazy(() => import("../pages/Helps/FilaChatbotTutorial"));
-const PromptsIATutorial = lazy(() => import("../pages/Helps/PromptsIATutorial"));
 const UsuariosTutorial = lazy(() => import("../pages/Helps/UsuariosTutorial"));
 const ConfiguracoesTutorial = lazy(() => import("../pages/Helps/ConfiguracoesTutorial"));
 const ConexoesWhatsAppTutorial = lazy(() => import("../pages/Helps/ConexoesWhatsAppTutorial"));
@@ -161,7 +160,6 @@ const Routes = () => {
                 <Route exact path="/helps/campanhas" component={CampanhasTutorial} isPrivate />
                 <Route exact path="/helps/flowbuilder" component={FlowBuilderTutorial} isPrivate />
                 <Route exact path="/helps/fila-chatbot" component={FilaChatbotTutorial} isPrivate />
-                <Route exact path="/helps/prompts-ia" component={PromptsIATutorial} isPrivate />
                 <Route exact path="/helps/usuarios" component={UsuariosTutorial} isPrivate />
                 <Route exact path="/helps/configuracoes" component={ConfiguracoesTutorial} isPrivate />
                 <Route exact path="/helps/conexoes-whatsapp" component={ConexoesWhatsAppTutorial} isPrivate />

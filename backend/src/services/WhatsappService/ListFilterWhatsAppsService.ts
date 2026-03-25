@@ -1,7 +1,6 @@
 import { FindOptions } from "sequelize/types";
 import Queue from "../../models/Queue";
 import Whatsapp from "../../models/Whatsapp";
-import Prompt from "../../models/Prompt";
 
 interface Request {
   companyId: number;

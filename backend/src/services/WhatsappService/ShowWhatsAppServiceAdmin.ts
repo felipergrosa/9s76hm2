@@ -4,7 +4,6 @@ import Queue from "../../models/Queue";
 import QueueOption from "../../models/QueueOption";
 import { FindOptions } from "sequelize/types";
 import Chatbot from "../../models/Chatbot";
-import Prompt from "../../models/Prompt";
 
 const ShowWhatsAppServiceAdmin = async (
   id: string | number,
@@ -23,10 +22,6 @@ const ShowWhatsAppServiceAdmin = async (
             attributes: ["id", "name", "greetingMessage", "closeTicket"]
           }
         ]
-      },
-      {
-        model: Prompt,
-        as: "prompt",
       }
     ],
     order: [

@@ -5948,26 +5948,6 @@ const handleMessage = async (
 
 
 
-    //openai na conexao
-    if (
-      !ticket.queue &&
-      !isGroup &&
-      !msg.key.fromMe &&
-      !ticket.userId &&
-      !isNil(whatsapp.promptId)
-    ) {
-      const { prompt } = whatsapp;
-      await handleOpenAi(
-        prompt,
-        msg,
-        wbot,
-        ticket,
-        contact,
-        mediaSent,
-        ticketTraking
-      );
-    }
-
     //integraçao na conexao
     if (
       !ticket.imported &&

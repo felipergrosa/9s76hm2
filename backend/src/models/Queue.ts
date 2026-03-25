@@ -26,7 +26,6 @@ import Chatbot from "./Chatbot";
 import QueueIntegrations from "./QueueIntegrations";
 import Files from "./Files";
 import LibraryFolder from "./LibraryFolder";
-import Prompt from "./Prompt";
 import QueueRAGSource from "./QueueRAGSource";
 
 @Table
@@ -140,13 +139,6 @@ class Queue extends Model<Queue> {
   @Column
   ragCollection: string;
 
-  @HasMany(() => Prompt, {
-    onUpdate: "SET NULL",
-    onDelete: "SET NULL",
-    hooks: true
-  })
-  prompt: Prompt[];
-
   @HasMany(() => Chatbot, {
     foreignKey: 'optQueueId', // Chave estrangeira que referencia o ID da fila
     onDelete: 'SET NULL', // Ao excluir uma fila, define optQueueId como null nos chatbots associados
@@ -167,7 +159,6 @@ class Queue extends Model<Queue> {
     // Atualizar os registros na tabela Chatbots onde optQueueId é igual ao ID da fila que será excluída
     await Chatbot.update({ optQueueId: null }, { where: { optQueueId: queue.id } });
     await Whatsapp.update({ sendIdQueue: null, timeSendQueue: 0 }, { where: { sendIdQueue: queue.id, companyId: queue.companyId } });
-    await Prompt.update({ queueId: null }, { where: { queueId: queue.id } });
   }
 
 }

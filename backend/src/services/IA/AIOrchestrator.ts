@@ -4,8 +4,8 @@ import { IAClient, ChatRequest, ChatWithHistoryRequest } from "./IAClient";
 import { search as ragSearch } from "../RAG/RAGSearchService";
 import AIUsageLogger from "./AIUsageLogger";
 
-export type ModuleContext = "campaign" | "ticket" | "prompt" | "general";
-export type AIMode = "enhance" | "translate" | "spellcheck" | "create" | "chat" | "rag";
+export type ModuleContext = "campaign" | "ticket" | "prompt" | "general" | "training";
+export type AIMode = "enhance" | "translate" | "spellcheck" | "create" | "chat" | "rag" | "analyze";
 
 export interface AIRequest {
   // Contexto da requisição

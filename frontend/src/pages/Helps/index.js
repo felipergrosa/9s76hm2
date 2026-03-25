@@ -198,8 +198,9 @@ const Helps = () => {
   };
 
   const tutorials = [
-    { icon: <AIIcon />, label: "Manual de IA", path: "/helps/ai-tutorial", tooltip: "Guia completo de IA e configurações de prompts" },
+    { icon: <AIIcon />, label: "Manual de IA", path: "/helps/ai-tutorial", tooltip: "Guia completo de IA, RAG, Skills e configurações de prompts" },
     { icon: <AIIcon />, label: "Bot Avançado", path: "/helps/bot-tutorial", tooltip: "Automação avançada com ações e function calling" },
+    { icon: <AIIcon />, label: "Skills IA", path: "/helps/ai-tutorial", tooltip: "Sistema de skills padronizadas para AI Agents" },
     { icon: <Dashboard />, label: "Dashboard", path: "/helps/dashboard", tooltip: "Visão geral e principais indicadores do sistema" },
     { icon: <Assignment />, label: "Atendimentos", path: "/helps/atendimentos", tooltip: "Gestão de tickets e conversas" },
     { icon: <QuestionAnswer />, label: "Respostas Rápidas", path: "/helps/respostas-rapidas", tooltip: "Mensagens prontas para agilizar atendimento" },

@@ -25,6 +25,7 @@ import Queue from "../../models/Queue";
 import { BOT_AVAILABLE_FUNCTIONS } from "../IA/BotFunctions";
 import ActionExecutor from "../IA/ActionExecutor";
 import ResolveAIAgentForTicketService from "../AIAgentServices/ResolveAIAgentForTicketService";
+import { DEFAULT_SKILLS, generateSkillsPrompt, findApplicableSkills } from "../IA/AISkill";
 
 type Session = WASocket & {
   id?: number;
@@ -470,6 +471,9 @@ IMPORTANTE:
   
   ${businessHoursBlock}
   ${leadQualificationBlock}
+  
+  // ========== BLOCO DE SKILLS ==========
+  ${generateSkillsPrompt(DEFAULT_SKILLS)}
   
   Prompt Específico do Agente:
   ${agentConfig.systemPrompt}

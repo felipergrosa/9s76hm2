@@ -4,7 +4,6 @@ import CreateAIAgentService from "../services/AIAgentServices/CreateAIAgentServi
 import ListAIAgentsService from "../services/AIAgentServices/ListAIAgentsService";
 import UpdateAIAgentService from "../services/AIAgentServices/UpdateAIAgentService";
 import DeleteAIAgentService from "../services/AIAgentServices/DeleteAIAgentService";
-import MigratePromptsToAgentsService from "../services/AIAgentServices/MigratePromptsToAgentsService";
 import AIAgent from "../models/AIAgent";
 import AppError from "../errors/AppError";
 
@@ -190,21 +189,4 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
     });
 
     return res.status(200).json({ message: "Agent deleted successfully" });
-};
-
-export const migrate = async (req: Request, res: Response): Promise<Response> => {
-    const { companyId, profile } = req.user;
-    const { dryRun } = req.query;
-
-    // Apenas admins podem migrar
-    if (profile !== "admin" && profile !== "super") {
-        throw new AppError("ERR_NO_PERMISSION", 403);
-    }
-
-    const result = await MigratePromptsToAgentsService({
-        companyId,
-        dryRun: dryRun === "true"
-    });
-
-    return res.status(200).json(result);
 };

@@ -465,7 +465,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                                                 <InputLabel>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                                         Coleção RAG
-                                                        <Tooltip title="Base de conhecimento que a IA usará para responder perguntas. Selecione uma coleção ou deixe vazio para desativar o bot inteligente." arrow>
+                                                        <Tooltip title="Base de conhecimento que a IA usará para responder perguntas. Suporta textos, PDFs, imagens, vídeos, áudios e Excel. Selecione uma coleção ou deixe vazio para desativar o bot inteligente. Veja mais em: Ajuda → Manual de IA → RAG" arrow>
                                                             <HelpOutlineIcon fontSize="small" color="action" style={{ cursor: 'help' }} />
                                                         </Tooltip>
                                                     </div>

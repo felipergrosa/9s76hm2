@@ -74,6 +74,28 @@ routes.post(
   AITrainingImprovementController.applyImprovements
 );
 
+// Análise de padrões e sugestões proativas
+routes.get(
+  "/ai/training/patterns",
+  isAuth,
+  checkPermission("ai-training.view"),
+  AITrainingImprovementController.getPatternAnalysis
+);
+
+routes.get(
+  "/ai/training/proactive-suggestions",
+  isAuth,
+  checkPermission("ai-training.view"),
+  AITrainingImprovementController.getProactiveSuggestions
+);
+
+routes.get(
+  "/ai/training/improvements/by-category",
+  isAuth,
+  checkPermission("ai-training.view"),
+  AITrainingImprovementController.getImprovementsByCategory
+);
+
 // ========== MÉTRICAS DO TREINAMENTO ==========
 routes.get(
   "/ai/training/metrics",

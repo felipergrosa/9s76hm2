@@ -22,7 +22,6 @@ import SetTicketMessagesAsRead from "../helpers/SetTicketMessagesAsRead";
 import { Mutex } from "async-mutex";
 import Queue from "../models/Queue";
 import Chatbot from "../models/Chatbot";
-import Prompt from "../models/Prompt";
 import AIAgent from "../models/AIAgent";
 import GetUserPersonalTagContactIds from "../helpers/GetUserPersonalTagContactIds";
 
@@ -333,12 +332,6 @@ export const transferToBot = async (req: Request, res: Response): Promise<Respon
         as: "chatbots",
         attributes: ["id"],
         required: false
-      },
-      {
-        model: Prompt,
-        as: "prompt",
-        attributes: ["id"],
-        required: false
       }
     ]
   });
@@ -348,11 +341,10 @@ export const transferToBot = async (req: Request, res: Response): Promise<Respon
   }
 
   const hasChatbots = Array.isArray((queue as any).chatbots) && (queue as any).chatbots.length > 0;
-  const hasPrompt = Array.isArray((queue as any).prompt) && (queue as any).prompt.length > 0;
   const hasRag = Boolean((queue as any).ragCollection && String((queue as any).ragCollection).trim());
 
   let hasAgent = false;
-  if (!hasChatbots && !hasPrompt && !hasRag) {
+  if (!hasChatbots && !hasRag) {
     const agents = await AIAgent.findAll({
       where: {
         companyId,
@@ -363,7 +355,7 @@ export const transferToBot = async (req: Request, res: Response): Promise<Respon
     hasAgent = agents.some(agent => Array.isArray((agent as any).queueIds) && (agent as any).queueIds.includes(parsedQueueId));
   }
 
-  if (!hasChatbots && !hasPrompt && !hasRag && !hasAgent) {
+  if (!hasChatbots && !hasRag && !hasAgent) {
     throw new AppError("ERR_QUEUE_HAS_NO_BOT", 400);
   }
 

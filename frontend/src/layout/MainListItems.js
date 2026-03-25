@@ -750,15 +750,6 @@ const MainListItems = ({ collapsed, drawerClose }) => {
                   tooltip={collapsed}
                 />
               )}
-              {hasPermission("prompts.view") && (
-                <ListItemLink
-                  to="/prompts"
-                  primary="Prompts (Legado)"
-                  icon={<AllInclusive />}
-                  viewMode={viewMode}
-                  tooltip={collapsed}
-                />
-              )}
               {hasPermission("ai-settings.view") && (
                 <ListItemLink
                   to="/ai-settings"

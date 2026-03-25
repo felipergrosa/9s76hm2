@@ -278,7 +278,6 @@ const FindOrCreateTicketService = async (
 
         const Queue = (await import("../../models/Queue")).default;
         const Chatbot = (await import("../../models/Chatbot")).default;
-        const Prompt = (await import("../../models/Prompt")).default;
 
         let firstQueue: any = null;
 
@@ -286,12 +285,11 @@ const FindOrCreateTicketService = async (
           // Ticket já tem fila: usar a própria fila do ticket
           firstQueue = await Queue.findByPk(ticket.queueId, {
             include: [
-              { model: Chatbot, as: "chatbots", attributes: ["id"] },
-              { model: Prompt, as: "prompt", attributes: ["id"] }
+              { model: Chatbot, as: "chatbots", attributes: ["id"] }
             ]
           });
           logger.info(
-            `[FindOrCreateTicket] Ticket ${ticket.id} já possui fila ${ticket.queueId}, verificando se fila tem bot/prompt...`
+            `[FindOrCreateTicket] Ticket ${ticket.id} já possui fila ${ticket.queueId}, verificando se fila tem bot...`
           );
         } else {
           // Ticket sem fila: buscar filas da conexão
@@ -302,8 +300,7 @@ const FindOrCreateTicketService = async (
                 as: "queues",
                 attributes: ["id", "name"],
                 include: [
-                  { model: Chatbot, as: "chatbots", attributes: ["id"] },
-                  { model: Prompt, as: "prompt", attributes: ["id"] }
+                  { model: Chatbot, as: "chatbots", attributes: ["id"] }
                 ]
               }
             ],
@@ -321,15 +318,13 @@ const FindOrCreateTicketService = async (
             );
             firstQueue = await Queue.findByPk(whatsappWithQueues.sendIdQueue, {
               include: [
-                { model: Chatbot, as: "chatbots", attributes: ["id"] },
-                { model: Prompt, as: "prompt", attributes: ["id"] }
+                { model: Chatbot, as: "chatbots", attributes: ["id"] }
               ]
             });
           }
         }
 
         const hasChatbot = firstQueue?.chatbots && firstQueue.chatbots.length > 0;
-        const hasPrompt = firstQueue?.prompt && firstQueue.prompt.length > 0;
         let hasAIAgentPending = false;
         if (firstQueue) {
           try {
@@ -349,7 +344,7 @@ const FindOrCreateTicketService = async (
           }
         }
 
-        const hasBotInDefaultQueuePending = hasChatbot || hasPrompt || hasAIAgentPending;
+        const hasBotInDefaultQueuePending = hasChatbot || hasAIAgentPending;
 
         if (hasBotInDefaultQueuePending) {
           // Atualizar ticket para bot se agora tem fila com bot configurado
@@ -403,7 +398,6 @@ const FindOrCreateTicketService = async (
     // Buscar filas do whatsapp para verificar se deve iniciar como bot
     const Queue = (await import("../../models/Queue")).default;
     const Chatbot = (await import("../../models/Chatbot")).default;
-    const Prompt = (await import("../../models/Prompt")).default;
 
     const whatsappWithQueues = await Whatsapp.findByPk(whatsapp.id, {
       include: [
@@ -415,11 +409,6 @@ const FindOrCreateTicketService = async (
             {
               model: Chatbot,
               as: "chatbots",
-              attributes: ["id", "name"]
-            },
-            {
-              model: Prompt,
-              as: "prompt",
               attributes: ["id", "name"]
             }
           ]
@@ -440,15 +429,13 @@ const FindOrCreateTicketService = async (
       );
       firstQueue = await Queue.findByPk(whatsappWithQueues.sendIdQueue, {
         include: [
-          { model: Chatbot, as: "chatbots", attributes: ["id", "name"] },
-          { model: Prompt, as: "prompt", attributes: ["id", "name"] }
+          { model: Chatbot, as: "chatbots", attributes: ["id", "name"] }
         ]
       });
     }
 
-    // Verificar se conexão tem fila padrão com chatbot OU prompt (IA/RAG) OU AIAgent
+    // Verificar se conexão tem fila padrão com chatbot OU AIAgent
     const hasChatbot = firstQueue?.chatbots && firstQueue.chatbots.length > 0;
-    const hasPrompt = firstQueue?.prompt && firstQueue.prompt.length > 0;
 
     // Verificar se existe AIAgent ativo vinculado a esta fila
     let hasAIAgent = false;
@@ -471,7 +458,7 @@ const FindOrCreateTicketService = async (
       }
     }
 
-    const hasBotInDefaultQueue = hasChatbot || hasPrompt || hasAIAgent;
+    const hasBotInDefaultQueue = hasChatbot || hasAIAgent;
 
     // Determinar status inicial:
     // - Se é LGPD: "lgpd"
@@ -551,10 +538,9 @@ const FindOrCreateTicketService = async (
 
   if (queueId != 0 && !isNil(queueId)) {
     //Determina qual a fila esse ticket pertence.
-    // Buscar fila com chatbots E prompts para verificar se deve ativar bot
+    // Buscar fila com chatbots para verificar se deve ativar bot
     const Queue = (await import("../../models/Queue")).default;
     const Chatbot = (await import("../../models/Chatbot")).default;
-    const Prompt = (await import("../../models/Prompt")).default;
 
     const queue = await Queue.findByPk(queueId, {
       include: [
@@ -562,21 +548,15 @@ const FindOrCreateTicketService = async (
           model: Chatbot,
           as: "chatbots",
           attributes: ["id", "name"]
-        },
-        {
-          model: Prompt,
-          as: "prompt",
-          attributes: ["id", "name"]
         }
       ]
     });
 
     if (queue) {
       const hasChatbot = queue.chatbots && queue.chatbots.length > 0;
-      const hasPrompt = queue.prompt && queue.prompt.length > 0;
-      const hasBot = hasChatbot || hasPrompt;
+      const hasBot = hasChatbot;
 
-      // Atualiza status para bot somente se fila tiver chatbot OU prompt configurado
+      // Atualiza status para bot somente se fila tiver chatbot configurado
       await ticket.update({
         queueId: queueId,
         status: ticket.status === "pending" ? (!isFromMe && hasBot ? "bot" : "pending") : ticket.status,

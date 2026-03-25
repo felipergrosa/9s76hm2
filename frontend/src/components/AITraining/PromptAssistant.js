@@ -204,8 +204,29 @@ const PromptAssistant = ({
     }, 0);
   };
 
-  const applyQuickFix = (fix) => {
-    setCommand(fix);
+  const applyQuickFix = async (fix, autoApply = false) => {
+    if (autoApply) {
+      // Auto-aplica a sugestão diretamente no prompt
+      setLoading(true);
+      try {
+        const result = await rewritePrompt({
+          currentPrompt: value,
+          command: fix,
+          agentId
+        });
+
+        if (result.ok && result.rewrittenPrompt) {
+          onChange(result.rewrittenPrompt);
+          toast.success("Sugestão aplicada automaticamente!");
+        }
+      } catch (err) {
+        toast.error("Erro ao aplicar sugestão");
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setCommand(fix);
+    }
   };
 
   const getScoreColor = (score) => {
@@ -440,22 +461,57 @@ const PromptAssistant = ({
 
               {analysis.quickFixes?.length > 0 && (
                 <Box>
-                  <Typography variant="subtitle2">
-                    Correções Rápidas (clique para aplicar)
-                  </Typography>
+                  <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                    <Typography variant="subtitle2">
+                      Correções Rápidas (clique para aplicar automaticamente)
+                    </Typography>
+                    {analysis.quickFixes.length > 1 && (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="primary"
+                        onClick={async () => {
+                          setLoading(true);
+                          try {
+                            // Aplica todas sugestões de uma vez
+                            const allFixes = analysis.quickFixes.join(". ");
+                            const result = await rewritePrompt({
+                              currentPrompt: value,
+                              command: `Aplique todas estas melhorias: ${allFixes}`,
+                              agentId
+                            });
+                            if (result.ok && result.rewrittenPrompt) {
+                              onChange(result.rewrittenPrompt);
+                              toast.success("Todas sugestões aplicadas!");
+                              setShowAnalysis(false);
+                            }
+                          } catch (err) {
+                            toast.error("Erro ao aplicar sugestões");
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                        disabled={loading}
+                      >
+                        {loading ? <CircularProgress size={16} /> : "Aplicar Todas"}
+                      </Button>
+                    )}
+                  </Box>
                   <Box display="flex" flexWrap="wrap">
                     {analysis.quickFixes.map((fix, i) => (
-                      <Chip
-                        key={i}
-                        className={classes.quickFixChip}
-                        label={fix}
-                        onClick={() => {
-                          applyQuickFix(fix);
-                          setShowAnalysis(false);
-                        }}
-                        color="primary"
-                        variant="outlined"
-                      />
+                      <Tooltip key={i} title="Clique para aplicar automaticamente no prompt">
+                        <Chip
+                          className={classes.quickFixChip}
+                          label={fix}
+                          onClick={() => {
+                            applyQuickFix(fix, true);
+                            setShowAnalysis(false);
+                          }}
+                          color="primary"
+                          variant="outlined"
+                          icon={<AutoFixHighIcon style={{ fontSize: 16 }} />}
+                        />
+                      </Tooltip>
                     ))}
                   </Box>
                 </Box>
@@ -465,6 +521,36 @@ const PromptAssistant = ({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowAnalysis(false)}>Fechar</Button>
+          {analysis?.suggestions?.length > 0 && (
+            <Button
+              color="primary"
+              variant="outlined"
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  // Gera prompt melhorado baseado em todas as sugestões
+                  const allSuggestions = analysis.suggestions.map(s => s.description).join(". ");
+                  const result = await rewritePrompt({
+                    currentPrompt: value,
+                    command: `Melhore o prompt seguindo estas sugestões: ${allSuggestions}`,
+                    agentId
+                  });
+                  if (result.ok && result.rewrittenPrompt) {
+                    onChange(result.rewrittenPrompt);
+                    toast.success("Prompt melhorado com todas sugestões!");
+                    setShowAnalysis(false);
+                  }
+                } catch (err) {
+                  toast.error("Erro ao melhorar prompt");
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+            >
+              {loading ? <CircularProgress size={16} /> : "Aplicar Todas Sugestões"}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

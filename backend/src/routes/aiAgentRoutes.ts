@@ -37,8 +37,4 @@ aiAgentRoutes.put("/ai-agents/:id", isAuth, checkPermission("ai-agents.edit"), A
 // Deletar agente
 aiAgentRoutes.delete("/ai-agents/:id", isAuth, checkPermission("ai-agents.delete"), AIAgentController.remove);
 
-// Migration endpoint (admin only) - deve vir DEPOIS das rotas específicas
-// Mantendo sem checkPermission específico além de isAuth por enquanto, ou poderia ser ai-agents.create
-aiAgentRoutes.post("/ai-agents/migrate", isAuth, checkPermission("ai-agents.create"), AIAgentController.migrate);
-
 export default aiAgentRoutes;

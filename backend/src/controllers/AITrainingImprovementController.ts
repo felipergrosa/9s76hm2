@@ -4,6 +4,7 @@ import AIAgent from "../models/AIAgent";
 import FunnelStage from "../models/FunnelStage";
 import AITrainingImprovement from "../models/AITrainingImprovement";
 import AIOrchestrator from "../services/IA/AIOrchestrator";
+import { categorizeImprovement, analyzeErrorPatterns, generateProactiveSuggestions } from "../services/AIAgentServices/TrainingPatternAnalyzer";
 
 const buildConsolidationSystemPrompt = () => {
   return [
@@ -61,10 +62,25 @@ export const createImprovement = async (req: Request, res: Response): Promise<Re
     stageId: stage.id,
     feedbackId: feedbackId ? Number(feedbackId) : null,
     improvementText: String(improvementText).trim(),
+    category: null,
+    severity: null,
+    intentDetected: null,
+    verifiedInProduction: false,
     status: "pending",
     appliedAt: null,
     consolidatedPrompt: null
   });
+
+  // Categoriza de forma assíncrona (não bloqueia a resposta)
+  categorizeImprovement(companyId, improvementText)
+    .then(async (categorization) => {
+      await improvement.update({
+        category: categorization.category,
+        severity: categorization.severity,
+        intentDetected: categorization.intentDetected
+      });
+    })
+    .catch(err => console.error("Erro ao categorizar melhoria:", err));
 
   return res.status(201).json({ improvement });
 };
@@ -153,4 +169,88 @@ export const applyImprovements = async (req: Request, res: Response): Promise<Re
     applied: improvements.length,
     systemPrompt: consolidated
   });
+};
+
+/**
+ * Analisa padrões de erro nos feedbacks de treinamento
+ */
+export const getPatternAnalysis = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+
+  const agentId = Number(req.query.agentId);
+  const stageId = req.query.stageId ? Number(req.query.stageId) : undefined;
+  const daysBack = req.query.daysBack ? Number(req.query.daysBack) : 30;
+
+  if (!agentId) {
+    throw new AppError("agentId é obrigatório", 400);
+  }
+
+  const agent = await AIAgent.findOne({ where: { id: agentId, companyId } });
+  if (!agent) throw new AppError("ERR_AGENT_NOT_FOUND", 404);
+
+  const analysis = await analyzeErrorPatterns(companyId, agentId, stageId, daysBack);
+
+  return res.status(200).json(analysis);
+};
+
+/**
+ * Gera sugestões proativas de melhoria baseadas em padrões históricos
+ */
+export const getProactiveSuggestions = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+
+  const agentId = Number(req.query.agentId);
+
+  if (!agentId) {
+    throw new AppError("agentId é obrigatório", 400);
+  }
+
+  const agent = await AIAgent.findOne({ where: { id: agentId, companyId } });
+  if (!agent) throw new AppError("ERR_AGENT_NOT_FOUND", 404);
+
+  // Busca prompt atual da primeira etapa
+  const stages = await FunnelStage.findAll({ 
+    where: { agentId: agent.id }, 
+    order: [["order", "ASC"]], 
+    limit: 1 
+  });
+
+  const currentPrompt = stages[0]?.systemPrompt || "";
+
+  const suggestions = await generateProactiveSuggestions(companyId, agentId, currentPrompt);
+
+  return res.status(200).json({ suggestions });
+};
+
+/**
+ * Lista melhorias por categoria
+ */
+export const getImprovementsByCategory = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+
+  const agentId = Number(req.query.agentId);
+  const category = req.query.category as string;
+
+  if (!agentId) {
+    throw new AppError("agentId é obrigatório", 400);
+  }
+
+  const whereClause: any = { companyId, agentId };
+  if (category) whereClause.category = category;
+
+  const improvements = await AITrainingImprovement.findAll({
+    where: whereClause,
+    order: [["createdAt", "DESC"]],
+    limit: 50
+  });
+
+  // Agrupa por categoria
+  const grouped = improvements.reduce((acc, imp) => {
+    const cat = imp.category || "other";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(imp);
+    return acc;
+  }, {} as Record<string, AITrainingImprovement[]>);
+
+  return res.status(200).json({ grouped, total: improvements.length });
 };

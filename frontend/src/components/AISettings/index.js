@@ -56,7 +56,6 @@ import {
   Tooltip as RechartsTooltip,
   Legend
 } from "recharts";
-import PromptEnhancements from "../PromptEnhancements";
 import { showAIErrorToast } from "../../utils/aiErrorHandler";
 import AIConfigValidator from "../AIConfigValidator";
 import AIModelSelector from "../AIModelSelector";
@@ -126,8 +125,6 @@ export default function AISettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState({});
-  const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
-  const [selectedProviderForTemplate, setSelectedProviderForTemplate] = useState(null);
 
   // Estados das configurações
   const [providers, setProviders] = useState({
@@ -290,14 +287,11 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
     providers: [],
     modules: [],
     dailyUsage: [],
-    // Estatísticas de Prompts (mantidas)
-    prompts: {
-      totalPrompts: 0,
-      activePrompts: 0,
-      totalTokens: 0,
-      avgResponseTime: 0,
-      promptSuccessRate: 0
-    }
+    totalRequests: 0,
+    todayRequests: 0,
+    totalTokens: 0,
+    avgProcessingTimeMs: 0,
+    successRate: 0
   });
 
   const [currentWindow, setCurrentWindow] = useState("7");
@@ -393,11 +387,9 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
         const query = params.toString();
         const endpoint = query ? `/ai/orchestrator/stats?${query}` : "/ai/orchestrator/stats";
         const { data: statsData } = await api.get(endpoint);
-        const { data: promptStats } = await api.get("/prompts/stats");
         setStats(prev => ({
           ...prev,
-          ...statsData,
-          prompts: promptStats
+          ...statsData
         }));
       } catch (error) {
         console.warn("Falha ao recarregar stats com filtro:", error);
@@ -611,28 +603,9 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
       // Carrega estatísticas
       try {
         const { data: statsData } = await api.get("/ai/orchestrator/stats");
-
-        // Carrega estatísticas de prompts
-        const { data: promptStats } = await api.get("/prompts/stats");
-        console.log("Estatísticas de prompts carregadas:", promptStats);
-
-        setStats({
-          ...statsData,
-          prompts: promptStats
-        });
+        setStats(statsData);
       } catch (error) {
         console.warn("Não foi possível carregar estatísticas:", error);
-        // Carrega apenas estatísticas de prompts se a API principal falhar
-        try {
-          const { data: promptStats } = await api.get("/prompts/stats");
-          console.log("Estatísticas de prompts carregadas (fallback):", promptStats);
-          setStats(prevStats => ({
-            ...prevStats,
-            prompts: promptStats
-          }));
-        } catch (promptError) {
-          console.warn("Não foi possível carregar estatísticas de prompts:", promptError);
-        }
       }
 
       // Carrega tags disponíveis (campos mustache)
@@ -784,67 +757,6 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
     }
   };
 
-  const handleOpenTemplates = (providerName) => {
-    setSelectedProviderForTemplate(providerName);
-    setTemplatesModalOpen(true);
-  };
-
-  const handleSelectTemplate = (template) => {
-    if (!selectedProviderForTemplate) return;
-
-    // Aplicar TODAS as configurações do template ao provedor selecionado
-    const updatedConfig = {
-      ...providers[selectedProviderForTemplate],
-      // Configurações técnicas
-      temperature: template.temperature || providers[selectedProviderForTemplate].temperature,
-      maxTokens: template.maxTokens || providers[selectedProviderForTemplate].maxTokens,
-      // Ajustar criatividade baseado na temperatura
-      creativity: template.temperature >= 0.8 ? 'Alta' : template.temperature >= 0.6 ? 'Média' : 'Baixa',
-      // Configurações de personalidade e tom
-      tone: template.tone || providers[selectedProviderForTemplate].tone,
-      emotions: template.emotions || providers[selectedProviderForTemplate].emotions,
-      hashtags: template.hashtags || providers[selectedProviderForTemplate].hashtags,
-      length: template.length || providers[selectedProviderForTemplate].length,
-      language: template.language || providers[selectedProviderForTemplate].language,
-      // Voz da marca
-      brandVoice: template.brandVoice || providers[selectedProviderForTemplate].brandVoice,
-      // Variáveis permitidas (liberar todas do sistema + específicas do template)
-      allowedVariables: template.allowedVariables || providers[selectedProviderForTemplate].allowedVariables,
-    };
-
-    setProviders(prev => ({
-      ...prev,
-      [selectedProviderForTemplate]: updatedConfig
-    }));
-
-    setTemplatesModalOpen(false);
-    setSelectedProviderForTemplate(null);
-
-    toast.success(`Template "${template.name}" aplicado completamente às configurações ${selectedProviderForTemplate.toUpperCase()}! Todos os campos foram preenchidos automaticamente.`);
-  };
-
-  const handleSelectTemplateForPreset = (template) => {
-    // Aplicar template ao preset
-    setNewPreset({
-      name: template.name,
-      module: "general", // Pode ser ajustado baseado na categoria do template
-      systemPrompt: template.prompt,
-      temperature: template.temperature || 0.7,
-      maxTokens: template.maxTokens || 500,
-      tone: template.tone || "Profissional",
-      emotions: template.emotions || "Médio",
-      hashtags: template.hashtags || "Sem hashtags",
-      length: template.length || "Médio",
-      language: template.language || "Português (Brasil)",
-      brandVoice: template.brandVoice || "",
-      allowedVariables: template.allowedVariables || "{nome} {cidade}"
-    });
-
-    setTemplatesModalOpen(false);
-    setSelectedProviderForTemplate(null);
-
-    toast.success(`Template "${template.name}" aplicado ao preset! Todos os campos foram preenchidos automaticamente.`);
-  };
   const saveSettings = async () => {
     try {
       setSaving(true);
@@ -1780,17 +1692,6 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                   <AddIcon />
                   Adicionar Preset
                 </Typography>
-                <Button
-                  variant="outlined"
-                  color="secondary"
-                  startIcon={<DescriptionIcon />}
-                  onClick={() => {
-                    setSelectedProviderForTemplate('preset');
-                    setTemplatesModalOpen(true);
-                  }}
-                >
-                  📋 Templates
-                </Button>
               </Box>
 
               <Grid container spacing={2}>
@@ -2198,19 +2099,19 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
               </Grid>
             </Grid>
 
-            {/* Seção de Prompts */}
+            {/* Seção de Agentes IA */}
             <Grid item xs={12}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 32, marginBottom: 16 }}>
                 <Typography variant="h6" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  🤖 Estatísticas de Prompts
+                  🤖 Agentes de IA
                 </Typography>
                 <Button
                   variant="outlined"
                   size="small"
-                  onClick={() => window.location.href = '/prompts'}
+                  onClick={() => window.location.href = '/ai-agents'}
                   style={{ textTransform: 'none' }}
                 >
-                  Gerenciar Prompts
+                  Gerenciar Agentes
                 </Button>
               </div>
             </Grid>
@@ -2221,10 +2122,10 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                   <Card className={classes.metricCard}>
                     <CardContent>
                       <Typography variant="h6" color="textSecondary">
-                        Total de Prompts
+                        Total de Requisições
                       </Typography>
                       <Typography className={classes.metricValue}>
-                        {stats.prompts?.totalPrompts || 0}
+                        {stats.totalRequests || 0}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -2233,10 +2134,10 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                   <Card className={classes.metricCard}>
                     <CardContent>
                       <Typography variant="h6" color="textSecondary">
-                        Prompts Ativos
+                        Requisições Hoje
                       </Typography>
                       <Typography className={classes.metricValue} style={{ color: '#4caf50' }}>
-                        {stats.prompts?.activePrompts || 0}
+                        {stats.todayRequests || 0}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -2248,7 +2149,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                         Tokens Consumidos
                       </Typography>
                       <Typography className={classes.metricValue} style={{ color: '#ff9800' }}>
-                        {(stats.prompts?.totalTokens || 0).toLocaleString()}
+                        {(stats.totalTokens || 0).toLocaleString()}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -2260,7 +2161,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                         Tempo Médio
                       </Typography>
                       <Typography className={classes.metricValue} style={{ color: '#2196f3' }}>
-                        {stats.prompts?.avgResponseTime || 0}s
+                        {formatDuration(stats.avgProcessingTimeMs)}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -2277,7 +2178,7 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
                         Taxa de Sucesso
                       </Typography>
                       <Typography className={classes.metricValue} style={{ color: '#4caf50' }}>
-                        {stats.prompts?.successRate || 0}%
+                        {stats.successRate || 0}%
                       </Typography>
                     </CardContent>
                   </Card>
@@ -2505,18 +2406,6 @@ Estou pronto para ajudar a aprimorar sua comunicação! 📝`,
           </Grid>
         </TabPanel>
       </Paper>
-
-      {/* Modal de Templates */}
-      <PromptEnhancements
-        open={templatesModalOpen}
-        onClose={() => {
-          setTemplatesModalOpen(false);
-          setSelectedProviderForTemplate(null);
-        }}
-        onSelectTemplate={selectedProviderForTemplate === 'preset' ? handleSelectTemplateForPreset : handleSelectTemplate}
-        filterByProvider={selectedProviderForTemplate === 'preset' ? null : selectedProviderForTemplate}
-        isPresetMode={selectedProviderForTemplate === 'preset'}
-      />
     </div>
   );
 };

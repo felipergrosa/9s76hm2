@@ -3,7 +3,6 @@ import AppError from "../../errors/AppError";
 import Queue from "../../models/Queue";
 import Chatbot from "../../models/Chatbot";
 import { FindOptions } from "sequelize/types";
-import Prompt from "../../models/Prompt";
 import { FlowBuilderModel } from "../../models/FlowBuilder";
 
 const ShowWhatsAppService = async (
@@ -27,10 +26,6 @@ const ShowWhatsAppService = async (
             attributes: ["id", "name", "greetingMessage", "closeTicket"]
           }
         ]
-      },
-      {
-        model: Prompt,
-        as: "prompt",
       }
     ],
     order: [

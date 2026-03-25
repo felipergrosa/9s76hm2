@@ -5,7 +5,6 @@ import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import Contact from "../../models/Contact";
 import Whatsapp from "../../models/Whatsapp";
-import Prompt from "../../models/Prompt";
 import Queue from "../../models/Queue";
 import { handleOpenAi } from "../IntegrationsServices/OpenAiService";
 
@@ -21,9 +20,8 @@ interface ProcessOfficialBotParams {
  * Processa bot/IA para mensagens recebidas via API Oficial do WhatsApp
  * 
  * Fluxo:
- * 1. Busca prompt da fila
- * 2. Se tem prompt, chama IA (OpenAI/Gemini)
- * 3. Se não tem prompt mas tem chatbot, ignora (já foi processado)
+ * 1. Busca AI Agent da fila
+ * 2. Chama IA (OpenAI/Gemini) via handleOpenAi
  */
 export async function processOfficialBot({
   message,
@@ -36,17 +34,8 @@ export async function processOfficialBot({
   try {
     logger.info(`[ProcessOfficialBot] Iniciando processamento para ticket ${ticket.id}`);
 
-    // Buscar fila com prompt
-    const queue = await Queue.findByPk(ticket.queueId, {
-      include: [
-        {
-          model: Prompt,
-          as: "prompt",
-          where: { companyId },
-          required: false
-        }
-      ]
-    });
+    // Buscar fila
+    const queue = await Queue.findByPk(ticket.queueId);
 
     if (!queue) {
       logger.warn(`[ProcessOfficialBot] Fila ${ticket.queueId} não encontrada`);
@@ -57,7 +46,7 @@ export async function processOfficialBot({
     // tenha acesso a folderId e fileListId
     ticket.queue = queue;
 
-    // 🛡️ VERIFICAÇÕES DE SEGURANÇA (Legacy Validations)
+    // 🛡️ VERIFICAÇÕES DE SEGURANÇA
 
     // 1. Verificar status do ticket - CRÍTICO!
     // Só processar IA se ticket estiver em modo bot
@@ -89,39 +78,11 @@ export async function processOfficialBot({
       // silencioso
     }
 
-    // Verificar se fila tem prompt (sistema legado - BAIXA PRIORIDADE)
-    const prompts = queue.prompt;
-    let prompt = null;
+    // AI Agent tem PRIORIDADE TOTAL (sistema antigo de Prompt foi removido)
+    logger.info(`[ProcessOfficialBot] Processando com AI Agent - sem prompt legado`);
 
-    if (prompts && prompts.length > 0) {
-      prompt = prompts[0];
-      logger.info(`[ProcessOfficialBot] Prompt legado encontrado: "${prompt.name}" (ID: ${prompt.id})`);
-    } else {
-      logger.info(`[ProcessOfficialBot] Sem prompt legado - AI Agent terá prioridade total`);
-    }
-
-    // IMPORTANTE: Se NÃO houver Prompt, passar undefined para openAiSettings
-    // Isso força o handleOpenAi a usar APENAS o AI Agent (PRIORITY 1)
-    // Se houver Prompt, usar como fallback
-    const aiConfig = prompt ? {
-      name: prompt.name,
-      prompt: prompt.prompt,
-      voice: prompt.voice || "",
-      voiceKey: prompt.voiceKey || "",
-      voiceRegion: prompt.voiceRegion || "",
-      maxTokens: Number(prompt.maxTokens) || 500,
-      temperature: Number(prompt.temperature) || 0.7,
-      apiKey: prompt.apiKey || "",
-      queueId: prompt.queueId,
-      maxMessages: Number(prompt.maxMessages) || 10,
-      model: prompt.model || "gpt-3.5-turbo-1106"
-    } : undefined; // undefined = AI Agent tem PRIORIDADE TOTAL
-
-    if (aiConfig) {
-      logger.info(`[ProcessOfficialBot] Config Prompt (fallback): modelo=${aiConfig.model}`);
-    } else {
-      logger.info(`[ProcessOfficialBot] Sem Prompt - AI Agent terá 100% prioridade`);
-    }
+    // Chamar IA (handleOpenAi) - aiConfig undefined = AI Agent tem prioridade
+    const aiConfig = undefined;
 
     // Chamar IA (handleOpenAi)
     // NOTA: handleOpenAi foi feito para Baileys (proto.IWebMessageInfo e wbot: Session)

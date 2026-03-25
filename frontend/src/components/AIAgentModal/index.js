@@ -1244,7 +1244,7 @@ ${stage?.systemPrompt || ""}
                                             📊 Funil de Vendas ({values.funnelStages?.length || 0} etapas)
                                         </Typography>
                                         <Tooltip
-                                            title="Crie uma jornada com múltiplas etapas (Qualificação, Apresentação, Negociação, Fechamento). Cada etapa tem seu próprio prompt, tom e objetivo. O cliente avança automaticamente quando condições são atendidas."
+                                            title="Crie uma jornada com múltiplas etapas (Qualificação, Apresentação, Negociação, Fechamento). Cada etapa tem seu próprio prompt, tom, objetivo e skills habilitadas. O cliente avança automaticamente quando condições são atendidas. Skills são capacidades padronizadas (ex: enviar_catálogo, transferir_para_vendedor). Veja mais em: Ajuda → Manual de IA → Skills."
                                             arrow
                                             placement="right"
                                         >
