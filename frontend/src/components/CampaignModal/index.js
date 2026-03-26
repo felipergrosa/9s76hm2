@@ -1955,7 +1955,7 @@ const CampaignModal = ({
 
                                 {availableTemplates.length > 0 && (
                                   <FormHelperText style={{ color: "#4caf50" }}>
-                                    ✅ {availableTemplates.length} template(s) disponível(is)
+                                    ✅ {availableTemplates.length} template(s) disponível(is) - Caso o template não eseja nesta lista, selecione dentro da conexão!
                                   </FormHelperText>
                                 )}
 

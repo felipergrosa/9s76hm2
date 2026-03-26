@@ -181,7 +181,7 @@ const OfficialTemplateStartModal = ({
 
           {templates.length > 0 && !loadingTemplates && (
             <FormHelperText>
-              {templates.length} template(s) disponível(is)
+              {templates.length} template(s) disponível(is) - Caso o template não eseja nesta lista, selecione dentro da conexão!
             </FormHelperText>
           )}
 

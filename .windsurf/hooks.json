@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "beforeReadFile": [
+      {
+        "command": "node .windsurf/hooks/before-read-file.js",
+        "event": "beforeReadFile",
+        "description": "Warn when reading sensitive files (.env, .key, .pem)"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "node .windsurf/hooks/before-submit-prompt.js",
+        "event": "beforeSubmitPrompt",
+        "description": "Detect secrets in prompts (sk-, ghp_, AKIA patterns)"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "node .windsurf/hooks/after-file-edit.js",
+        "event": "afterFileEdit",
+        "description": "Auto-format, TypeScript check, console.log warning"
+      }
+    ]
+  }
+}
