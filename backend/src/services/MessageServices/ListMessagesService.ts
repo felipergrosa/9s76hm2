@@ -222,6 +222,10 @@ const ListMessagesService = async ({
 
   logger.info(`[ListMessages] ticketId=${ticket.id} isGroup=${ticket.isGroup} tickets=${JSON.stringify(tickets)} count=${count} messages=${messages.length} offset=${offset}`);
 
+  // DEBUG: Listar ticketIds únicos nas mensagens
+  const uniqueTicketIds = [...new Set(messages.map((m: any) => m.ticketId))];
+  logger.info(`[ListMessages] DEBUG: ticketIds únicos nas mensagens: ${JSON.stringify(uniqueTicketIds)}`);
+
   // CORREÇÃO: Para grupos, enriquecer mensagens com profilePicUrl do participante individual
   if (ticket.isGroup) {
     const participantJids = messages
