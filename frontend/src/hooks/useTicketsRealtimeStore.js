@@ -329,7 +329,14 @@ const shouldIncludeTicketInStatus = ({
   if (!canViewTicket({ ticket, user, showAll: config.showAll })) return false;
   if (ticket?.userId && ticket.userId === user?.id) return true;
 
-  return (!ticket?.queueId && showTicketWithoutQueue) || selectedQueueIds.includes(ticket?.queueId);
+  const result = (!ticket?.queueId && showTicketWithoutQueue) || selectedQueueIds.includes(ticket?.queueId);
+  
+  // DEBUG: Log quando ticket é REJEITADO por filtro de fila
+  if (!result && (process.env.REACT_APP_DEBUG_SOCKET === "true" || localStorage.getItem("DEBUG_SOCKET") === "true")) {
+    console.log(`[DEBUG shouldIncludeTicketInStatus] REJEITADO: ticketId=${ticket?.id} statusKey=${statusKey} queueId=${ticket?.queueId} selectedQueueIds=${JSON.stringify(selectedQueueIds)} showTicketWithoutQueue=${showTicketWithoutQueue}`);
+  }
+  
+  return result;
 };
 
 const buildRequestParams = ({ status, selectedQueueIds, showAll, sortTickets, withUnreadMessages }) => ({
@@ -554,6 +561,18 @@ const useTicketsRealtimeStore = ({
     };
 
     const onCompanyTicket = (data) => {
+      // DEBUG: Log de eventos recebidos
+      if (process.env.REACT_APP_DEBUG_SOCKET === "true" || localStorage.getItem("DEBUG_SOCKET") === "true") {
+        console.log("[DEBUG onCompanyTicket]", {
+          action: data.action,
+          ticketId: data.ticket?.id,
+          status: data.ticket?.status,
+          userId: data.ticket?.userId,
+          queueId: data.ticket?.queueId,
+          oldStatus: data.oldStatus,
+        });
+      }
+
       if (data.action === "updateUnread") {
         dispatch({ type: "UPDATE_UNREAD", ticketId: data.ticketId, unreadCount: data.unreadCount });
         return;
@@ -568,10 +587,23 @@ const useTicketsRealtimeStore = ({
         return;
       }
 
+      // DEBUG: Log de decisões de status
+      const statusDecisions = buildStatusDecisions(data.ticket);
+      if (process.env.REACT_APP_DEBUG_SOCKET === "true" || localStorage.getItem("DEBUG_SOCKET") === "true") {
+        console.log("[DEBUG onCompanyTicket] StatusDecisions:", {
+          ticketId: data.ticket.id,
+          status: data.ticket.status,
+          decisions: statusDecisions,
+          selectedQueueIds: selectedQueueIdsRef.current,
+          showTicketWithoutQueue: showTicketWithoutQueueRef.current,
+          user: { id: userRef.current?.id, profile: userRef.current?.profile },
+        });
+      }
+
       // Em vez de dispatch imediato, adiciona ao buffer
       addToBuffer({
         ticket: data.ticket,
-        statusDecisions: buildStatusDecisions(data.ticket),
+        statusDecisions,
         adjustCount: data.action === "create" || data.oldStatus !== data.ticket.status,
       });
     };

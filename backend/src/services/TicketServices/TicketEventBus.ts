@@ -66,6 +66,7 @@ class TicketEventBus extends EventEmitter {
     // Ticket criado
     this.on("TICKET_CREATED", async (event: TicketEvent) => {
       try {
+        logger.info(`[TicketEventBus] TICKET_CREATED: ticketId=${event.ticketId} status=${event.payload?.ticket?.status} queueId=${event.payload?.ticket?.queueId} userId=${event.payload?.ticket?.userId} companyId=${event.companyId}`);
         const payload = await enrichTicket(event.companyId, event.payload);
         await emitSocketEvent(
           event.companyId,
@@ -114,6 +115,7 @@ class TicketEventBus extends EventEmitter {
     // Status do ticket mudou
     this.on("TICKET_STATUS_CHANGED", async (event: TicketEvent) => {
       try {
+        logger.info(`[TicketEventBus] TICKET_STATUS_CHANGED: ticketId=${event.ticketId} oldStatus=${event.payload?.oldStatus} newStatus=${event.payload?.newStatus} queueId=${event.payload?.ticket?.queueId} userId=${event.payload?.ticket?.userId} companyId=${event.companyId}`);
         const payload = await enrichTicket(event.companyId, event.payload);
         await emitSocketEvent(
           event.companyId,

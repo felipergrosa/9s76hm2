@@ -2004,6 +2004,16 @@ const MessagesList = ({
     let lastTicket = filteredMessages[index - 1]?.ticketId;
     let currentTicket = message.ticketId;
 
+    // DEBUG: Log para verificar ticketIds nas mensagens
+    if (process.env.REACT_APP_DEBUG_SOCKET === "true" || localStorage.getItem("DEBUG_SOCKET") === "true") {
+      if (index === 0) {
+        console.log(`[DEBUG renderTicketsSeparator] Primeira mensagem: ticketId=${currentTicket}`);
+      }
+      if (lastTicket !== currentTicket) {
+        console.log(`[DEBUG renderTicketsSeparator] MUDANÇA: index=${index} lastTicket=${lastTicket} currentTicket=${currentTicket}`);
+      }
+    }
+
     if (lastTicket !== currentTicket && lastTicket !== undefined) {
       // Obter nome do usuário que atendeu o ticket
       const userName = message?.ticket?.user?.name || user?.name || "Sem Atendente";

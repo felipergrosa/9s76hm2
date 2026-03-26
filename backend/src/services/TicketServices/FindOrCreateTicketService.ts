@@ -525,6 +525,7 @@ const FindOrCreateTicketService = async (
     }
 
     ticket = await Ticket.create(ticketData);
+    logger.info(`[FindOrCreateTicket] Ticket CRIADO: id=${ticket.id}, status=${ticket.status}, queueId=${ticket.queueId}, userId=${ticket.userId}, companyId=${companyId}`);
     // Emitir evento de criação para real-time
     ticketEventBus.publishTicketCreated(companyId, ticket.id, ticket.uuid, ticket);
 
