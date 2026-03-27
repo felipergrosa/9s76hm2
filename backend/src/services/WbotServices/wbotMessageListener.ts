@@ -642,15 +642,22 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
       ptvMessage: msg.message?.ptvMessage?.caption,
       extendedTextMessage: msg?.message?.extendedTextMessage?.text,
       buttonsResponseMessage:
-        msg.message?.buttonsResponseMessage?.selectedDisplayText,
+        msg.message?.buttonsResponseMessage?.selectedDisplayText ||
+        msg.message?.buttonsResponseMessage?.selectedButtonId ||
+        "🔘 Resposta de botão",
       listResponseMessage:
         msg.message?.listResponseMessage?.title ||
-        msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId,
+        msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+        msg.message?.listResponseMessage?.description ||
+        "📋 Opção selecionada",
       templateButtonReplyMessage:
-        msg.message?.templateButtonReplyMessage?.selectedId,
+        msg.message?.templateButtonReplyMessage?.selectedId ||
+        msg.message?.templateButtonReplyMessage?.selectedDisplayText ||
+        "🎯 Resposta de template",
       messageContextInfo:
         msg.message?.buttonsResponseMessage?.selectedButtonId ||
-        msg.message?.listResponseMessage?.title,
+        msg.message?.listResponseMessage?.title ||
+        "Resposta interativa",
       buttonsMessage:
         getBodyButton(msg) || msg.message?.listResponseMessage?.title,
       stickerMessage: "sticker",

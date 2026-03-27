@@ -358,6 +358,8 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
   const [activeItemIndex, setActiveItemIndex] = useState(0);
   const [quickMessages, setQuickMessages] = useState([]);
   const [previewItem, setPreviewItem] = useState(null);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
 
   useEffect(() => {
     if (!open) return;
@@ -436,6 +438,14 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
       let recordId = quickemessageId;
       const newFlowItems = [...flowItems];
 
+      // Contar arquivos pendentes para upload
+      const filesToUpload = newFlowItems.filter(item => item.type === 'media' && item.file);
+      
+      if (filesToUpload.length > 0) {
+        setUploadingFiles(true);
+        setUploadProgress({ current: 0, total: filesToUpload.length });
+      }
+
       // 1. Se for novo, cria primeiro para obter ID (necessário para upload de arquivos)
       if (!recordId) {
         const { data } = await api.post("/quick-messages", {
@@ -452,9 +462,13 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
       }
 
       // 2. Upload de arquivos pendentes
+      let uploadedCount = 0;
       for (let i = 0; i < newFlowItems.length; i++) {
         const item = newFlowItems[i];
         if (item.type === 'media' && item.file) {
+          uploadedCount++;
+          setUploadProgress({ current: uploadedCount, total: filesToUpload.length });
+          
           const formData = new FormData();
           formData.append("medias", item.file);
           
@@ -523,6 +537,9 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
       handleClose();
     } catch (err) {
       toastError(err);
+    } finally {
+      setUploadingFiles(false);
+      setUploadProgress({ current: 0, total: 0 });
     }
   };
 
@@ -1191,47 +1208,96 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                   </Popover>
                 </Grid>
               </DialogContent>
-              <DialogActions style={{ flexShrink: 0 }}>
-                <input
-                  type="file"
-                  multiple
-                  style={{ display: "none" }}
-                  ref={attachmentFile}
-                  onChange={handleAttachmentFile}
-                />
-                <Button
-                  color="primary"
-                  onClick={() => attachmentFile.current.click()}
-                  disabled={isSubmitting || (quickemessageId && values.visao && !values.geral && values.userId !== user.id)}
-                  variant="outlined"
-                >
-                  {i18n.t("quickMessages.buttons.attach")}
-                </Button>
-                <Button
-                  onClick={handleClose}
-                  color="secondary"
-                  disabled={isSubmitting}
-                  variant="outlined"
-                >
-                  {i18n.t("quickMessages.buttons.cancel")}
-                </Button>
-                <Button
-                  type="submit"
-                  color="primary"
-                  disabled={isSubmitting || (quickemessageId && values.visao && !values.geral && values.userId !== user.id)}
-                  variant="contained"
-                  className={classes.btnWrapper}
-                >
-                  {quickemessageId
-                    ? "Salvar"
-                    : i18n.t("quickMessages.buttons.add")}
-                  {isSubmitting && (
-                    <CircularProgress
-                      size={24}
-                      className={classes.buttonProgress}
-                    />
-                  )}
-                </Button>
+              <DialogActions style={{ flexShrink: 0, flexDirection: 'column', alignItems: 'stretch', padding: '16px 24px' }}>
+                {/* Indicador de progresso de upload */}
+                {uploadingFiles && (
+                  <Box 
+                    mb={2} 
+                    p={2} 
+                    style={{ 
+                      backgroundColor: 'rgba(59, 130, 246, 0.05)', 
+                      borderRadius: '8px',
+                      border: '1px solid rgba(59, 130, 246, 0.2)'
+                    }}
+                  >
+                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <CircularProgress size={20} style={{ color: '#3B82F6' }} />
+                        <Typography variant="body2" style={{ fontWeight: 600, color: '#3B82F6' }}>
+                          Enviando arquivos...
+                        </Typography>
+                      </Box>
+                      <Typography variant="caption" style={{ color: '#3B82F6', fontWeight: 700 }}>
+                        {uploadProgress.current} de {uploadProgress.total}
+                      </Typography>
+                    </Box>
+                    <Box 
+                      style={{ 
+                        width: '100%', 
+                        height: '6px', 
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)', 
+                        borderRadius: '3px',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      <Box 
+                        style={{ 
+                          width: `${(uploadProgress.current / uploadProgress.total) * 100}%`, 
+                          height: '100%', 
+                          backgroundColor: '#3B82F6',
+                          transition: 'width 0.3s ease',
+                          borderRadius: '3px'
+                        }}
+                      />
+                    </Box>
+                    <Typography variant="caption" color="textSecondary" style={{ display: 'block', marginTop: '8px' }}>
+                      Por favor, aguarde enquanto os arquivos são enviados...
+                    </Typography>
+                  </Box>
+                )}
+
+                <Box display="flex" justifyContent="flex-end" gap={1}>
+                  <input
+                    type="file"
+                    multiple
+                    style={{ display: "none" }}
+                    ref={attachmentFile}
+                    onChange={handleAttachmentFile}
+                  />
+                  <Button
+                    color="primary"
+                    onClick={() => attachmentFile.current.click()}
+                    disabled={isSubmitting || uploadingFiles || (quickemessageId && values.visao && !values.geral && values.userId !== user.id)}
+                    variant="outlined"
+                  >
+                    {i18n.t("quickMessages.buttons.attach")}
+                  </Button>
+                  <Button
+                    onClick={handleClose}
+                    color="secondary"
+                    disabled={isSubmitting || uploadingFiles}
+                    variant="outlined"
+                  >
+                    {i18n.t("quickMessages.buttons.cancel")}
+                  </Button>
+                  <Button
+                    type="submit"
+                    color="primary"
+                    disabled={isSubmitting || uploadingFiles || (quickemessageId && values.visao && !values.geral && values.userId !== user.id)}
+                    variant="contained"
+                    className={classes.btnWrapper}
+                  >
+                    {quickemessageId
+                      ? "Salvar"
+                      : i18n.t("quickMessages.buttons.add")}
+                    {isSubmitting && (
+                      <CircularProgress
+                        size={24}
+                        className={classes.buttonProgress}
+                      />
+                    )}
+                  </Button>
+                </Box>
               </DialogActions>
                <MediaPreviewModal 
                  item={previewItem} 
