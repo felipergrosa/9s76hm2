@@ -446,6 +446,11 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
         recordId = data.id;
       }
 
+      // Validação crítica: garantir que recordId existe antes de fazer upload
+      if (!recordId) {
+        throw new Error("Erro ao obter ID da mensagem rápida");
+      }
+
       // 2. Upload de arquivos pendentes
       for (let i = 0; i < newFlowItems.length; i++) {
         const item = newFlowItems[i];
@@ -454,6 +459,11 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
           formData.append("medias", item.file);
           
           const { data: uploadData } = await api.post(`/quick-messages/${recordId}/media-upload`, formData);
+          
+          if (!uploadData || !uploadData.filenames || uploadData.filenames.length === 0) {
+            throw new Error("Erro ao fazer upload do arquivo");
+          }
+          
           const filename = uploadData.filenames[0];
           
           item.value = filename;

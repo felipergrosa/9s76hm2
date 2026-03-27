@@ -191,7 +191,15 @@ export const mediaUpload = async (
   const files = req.files as Express.Multer.File[];
 
   try {
+    if (!files || files.length === 0) {
+      throw new AppError("Nenhum arquivo foi enviado", 400);
+    }
+
     const quickmessage = await QuickMessage.findByPk(id);
+
+    if (!quickmessage) {
+      throw new AppError("Mensagem rápida não encontrada", 404);
+    }
 
     let currentPaths: string[] = [];
     let currentNames: string[] = [];
@@ -280,6 +288,11 @@ export const deleteMedia = async (
 
   try {
     const quickmessage = await QuickMessage.findByPk(id);
+
+    if (!quickmessage) {
+      throw new AppError("Mensagem rápida não encontrada", 404);
+    }
+
     const rawPath = quickmessage.getDataValue("mediaPath");
     const rawName = quickmessage.getDataValue("mediaName");
 
