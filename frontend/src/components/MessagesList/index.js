@@ -2004,9 +2004,6 @@ const MessagesList = ({
     let lastTicket = filteredMessages[index - 1]?.ticketId;
     let currentTicket = message.ticketId;
 
-    // DEBUG: Sempre logar para verificar
-    console.log(`[DEBUG] index=${index} lastTicket=${lastTicket} currentTicket=${currentTicket}`);
-
     if (lastTicket !== currentTicket && lastTicket !== undefined) {
       // Obter nome do usuário que atendeu o ticket
       const userName = message?.ticket?.user?.name || user?.name || "Sem Atendente";
@@ -2016,15 +2013,28 @@ const MessagesList = ({
           <span
             className={classes.currentTick}
             key={`timestamp-${message.id}a`}
+            style={{
+              display: 'flex',
+              width: '95%',
+              margin: '15px auto',
+              padding: '12px',
+              borderRadius: '8px',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
           >
             <div className={classes.currentTickContent}>
               <div
                 className={classes.currentTicktText}
-                style={{ color: message?.ticket?.queue?.color || "#666" }}
+                style={{ 
+                  color: message?.ticket?.queue?.color || "#666",
+                  fontWeight: 'bold',
+                  fontSize: '13px'
+                }}
               >
                 #{message?.ticketId} | {message?.ticket?.queue?.name} | {userName}
               </div>
-              <div className={classes.currentTickSubText}>
+              <div className={classes.currentTickSubText} style={{ fontSize: '11px', color: '#666' }}>
                 {format(parseISO(message?.ticket?.createdAt || message.createdAt), "dd/MM/yy - HH'h'mm")}
               </div>
             </div>
@@ -2036,15 +2046,26 @@ const MessagesList = ({
           <span
             className={classes.currentTick}
             key={`timestamp-${message.id}b`}
+            style={{
+              display: 'flex',
+              width: '95%',
+              margin: '15px auto',
+              backgroundColor: 'rgba(0, 0, 0, 0.05)',
+              padding: '12px',
+              borderRadius: '8px',
+              justifyContent: 'center',
+              alignItems: 'center',
+              border: '2px solid #999'
+            }}
           >
             <div className={classes.currentTickContent}>
               <div
                 className={classes.currentTicktText}
-                style={{ color: "#666" }}
+                style={{ color: "#666", fontWeight: 'bold', fontSize: '13px' }}
               >
                 #{message.ticketId} | {i18n.t("ticketsList.noQueue")} | {userName}
               </div>
-              <div className={classes.currentTickSubText}>
+              <div className={classes.currentTickSubText} style={{ fontSize: '11px', color: '#666' }}>
                 {format(parseISO(message?.ticket?.createdAt || message.createdAt), "dd/MM/yyyy HH:mm")}
               </div>
             </div>

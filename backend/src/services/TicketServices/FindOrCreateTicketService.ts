@@ -203,18 +203,17 @@ const FindOrCreateTicketService = async (
       ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
       return ticket;
     } else {
-      // Verificar se ticket está fechado - CRIAR NOVO TICKET (não reabrir)
-      // Histórico será unificado pelo ListMessagesService
-      const wasClosed = ticket.status === "closed" || ticket.status === "lgpd" || ticket.status === "nps";
-      if (wasClosed && !isFromMe) {
-        // Verificar janela de 24h:
-        // - Se mesmo usuário que fechou interage dentro de 24h → reabre
-        // - Se usuário diferente interage dentro de 24h → cria novo ticket
-        // - Se após 24h → cria novo ticket
-        const lastClosedLog = await LogTicket.findOne({
+      // Verificar se ticket NÃO está aberto (open)
+      // Para qualquer outro status (closed, pending, campaign, lgpd, nps, etc.)
+      // aplicar lógica de janela de 24h
+      const isNotOpen = ticket.status !== "open";
+      
+      if (isNotOpen && !isFromMe) {
+        // Buscar último log de mudança de status para calcular tempo
+        const lastStatusLog = await LogTicket.findOne({
           where: {
             ticketId: ticket.id,
-            type: "closed"
+            type: { [Op.in]: ["closed", "pending", "campaign"] }
           },
           order: [["createdAt", "DESC"]]
         });
@@ -222,41 +221,77 @@ const FindOrCreateTicketService = async (
         let shouldReopen = false;
         let reopenUserId = null;
         
-        const closedByUserId = lastClosedLog?.userId || ticket.userId;
-        const hoursSinceClosed = lastClosedLog ? differenceInHours(new Date(), lastClosedLog.createdAt) : 999;
+        const lastActionUserId = lastStatusLog?.userId || ticket.userId;
+        const hoursSinceLastAction = lastStatusLog ? differenceInHours(new Date(), lastStatusLog.createdAt) : differenceInHours(new Date(), ticket.updatedAt);
+        
+        logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} com status '${ticket.status}' há ${hoursSinceLastAction}h. Verificando janela de 24h...`);
         
         // Dentro da janela de 24h
-        if (hoursSinceClosed < 24 && closedByUserId) {
-          // Se userId foi passado (atendente específico interagindo)
-          if (userId && userId !== closedByUserId) {
-            // Usuário diferente do que fechou → criar novo ticket
-            logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} fechado há ${hoursSinceClosed}h por usuário ${closedByUserId}. Usuário ${userId} é diferente. Criando NOVO ticket.`);
+        if (hoursSinceLastAction < 24) {
+          // Se userId foi passado (atendente específico aceitando/interagindo)
+          if (userId && userId !== lastActionUserId) {
+            // Usuário diferente → criar novo ticket
+            logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} em '${ticket.status}' há ${hoursSinceLastAction}h. Usuário ${userId} é diferente de ${lastActionUserId}. Criando NOVO ticket.`);
             ticket = null;
           } else {
-            // Mesmo usuário ou userId null (mensagem do WhatsApp) → reabre para o usuário que fechou
+            // Mesmo usuário ou userId null (mensagem do WhatsApp) → reabre
             shouldReopen = true;
-            reopenUserId = closedByUserId;
-            logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} fechado há ${hoursSinceClosed}h pelo usuário ${closedByUserId}. Reabrindo dentro da janela de 24h.`);
+            reopenUserId = lastActionUserId || userId;
+            logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} em '${ticket.status}' há ${hoursSinceLastAction}h. Reabrindo dentro da janela de 24h para usuário ${reopenUserId}.`);
           }
         } else {
           // Após 24h → criar novo ticket
-          logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} fechado há ${hoursSinceClosed}h. Criando NOVO ticket.`);
+          logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} em '${ticket.status}' há ${hoursSinceLastAction}h (>24h). Criando NOVO ticket.`);
           ticket = null;
         }
 
         if (shouldReopen) {
-          // Reabrir ticket existente para o mesmo usuário dentro da janela de 24h
+          // Reabrir ticket existente dentro da janela de 24h
           const oldStatus = ticket.status;
           (ticket as any)._skipHookEmit = true;
+          
+          // NOVO: Verificar se fila tem bot configurado
+          const Queue = (await import("../../models/Queue")).default;
+          const Chatbot = (await import("../../models/Chatbot")).default;
+          
+          let shouldActivateBot = false;
+          let targetQueueId = ticket.queueId;
+          
+          if (ticket.queueId) {
+            const queue = await Queue.findByPk(ticket.queueId, {
+              include: [{ model: Chatbot, as: "chatbots", attributes: ["id"] }]
+            });
+            
+            const hasChatbot = queue?.chatbots && queue.chatbots.length > 0;
+            
+            // Verificar AIAgent
+            const AIAgent = (await import("../../models/AIAgent")).default;
+            const aiAgent = await AIAgent.findOne({
+              where: {
+                companyId,
+                status: "active",
+                queueIds: { [Op.contains]: [ticket.queueId] }
+              }
+            });
+            
+            shouldActivateBot = hasChatbot || !!aiAgent;
+            
+            if (shouldActivateBot) {
+              logger.info(`[FindOrCreateTicket] Fila ${ticket.queueId} tem bot configurado. Ticket será reaberto como 'bot'.`);
+            }
+          }
+          
           await ticket.update({ 
-            status: "open",
+            status: shouldActivateBot ? "bot" : "open",
+            isBot: shouldActivateBot,
             unreadMessages,
-            userId: reopenUserId
+            userId: shouldActivateBot ? null : reopenUserId
           });
+          
           ticket = await ShowTicketService(ticket.id, companyId);
-          ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, oldStatus, "open");
+          ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, oldStatus, shouldActivateBot ? "bot" : "open");
           await CreateLogTicketService({ ticketId: ticket.id, type: "reopen", userId: reopenUserId });
-          logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} reaberto dentro da janela de 24h para usuário ${reopenUserId}.`);
+          logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} reaberto de '${oldStatus}' para '${shouldActivateBot ? "bot" : "open"}' dentro da janela de 24h.`);
           return ticket;
         }
       } else {
@@ -332,10 +367,11 @@ const FindOrCreateTicketService = async (
             const aiAgent = await AIAgent.findOne({
               where: {
                 companyId,
-                status: "active"
+                status: "active",
+                queueIds: { [Op.contains]: [firstQueue.id] }
               }
             });
-            if (aiAgent && Array.isArray(aiAgent.queueIds) && aiAgent.queueIds.includes(firstQueue.id)) {
+            if (aiAgent) {
               hasAIAgentPending = true;
               logger.info(`[FindOrCreateTicket] AIAgent "${aiAgent.name}" encontrado para fila ${firstQueue.id} (ticket pending)`);
             }
@@ -445,11 +481,11 @@ const FindOrCreateTicketService = async (
         const aiAgent = await AIAgent.findOne({
           where: {
             companyId,
-            status: "active"
+            status: "active",
+            queueIds: { [Op.contains]: [firstQueue.id] }
           }
         });
-        // AIAgent armazena queueIds como array JSON
-        if (aiAgent && Array.isArray(aiAgent.queueIds) && aiAgent.queueIds.includes(firstQueue.id)) {
+        if (aiAgent) {
           hasAIAgent = true;
           logger.info(`[FindOrCreateTicket] AIAgent "${aiAgent.name}" encontrado para fila ${firstQueue.id}`);
         }

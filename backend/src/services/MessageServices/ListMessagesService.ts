@@ -102,18 +102,37 @@ const ListMessagesService = async ({
       });
     } else {
       // Sem filtro de fila (admin, allTicket, ou histórico liberado)
-      // Buscar TODOS os tickets do mesmo contato para unificação completa
+      // REGRA DE UNIFICAÇÃO:
+      // 1. Tickets com mesmo whatsappId → unificar
+      // 2. Tickets órfãos (whatsappId=null) → unificar com ticket atual
+      // 3. Tickets com whatsappId diferente (ambos não-null) → NÃO unificar
+      
+      const whereClause: any = {
+        companyId: ticket.companyId,
+        contactId: ticket.contactId,
+        isGroup: ticket.isGroup
+      };
+      
+      // Se o ticket atual tem whatsappId definido, buscar:
+      // - Tickets com mesmo whatsappId
+      // - Tickets com whatsappId=null (órfãos históricos)
+      if (ticket.whatsappId) {
+        whereClause[Op.or] = [
+          { whatsappId: ticket.whatsappId },
+          { whatsappId: null }
+        ];
+      }
+      // Se o ticket atual é órfão (whatsappId=null), busca todos
+      // (para incluir tickets que podem ter sido migrados)
+      
       ticketIds = await Ticket.findAll({
-        where: {
-          companyId: ticket.companyId,
-          contactId: ticket.contactId,
-          whatsappId: ticket.whatsappId,
-          isGroup: ticket.isGroup
-        },
-        attributes: ["id"],
+        where: whereClause,
+        attributes: ["id", "whatsappId"],
         limit: 100,
         order: [['createdAt', 'DESC']]
       });
+      
+      logger.info(`[ListMessages] UNIFICADO: contactId=${ticket.contactId} whatsappIdAtual=${ticket.whatsappId} ticketIds=${JSON.stringify(ticketIds.map(t => `${t.id}(${t.whatsappId})`))}`);
     }
 
     if (ticketIds && ticketIds.length > 0) {

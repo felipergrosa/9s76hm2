@@ -6416,37 +6416,10 @@ const handleMessage = async (
         return;
       }
 
-      const hasChatbot = Boolean(ticket.queue?.chatbots && ticket.queue.chatbots.length > 0);
-      const queuePrompt = (ticket.queue as any)?.prompt;
-      const hasPrompt = Boolean(queuePrompt && Array.isArray(queuePrompt) && queuePrompt.length > 0);
-
-      if (hasChatbot && (!ticket.user || ticket.queue?.chatbots?.length > 0)) {
-        await sayChatbot(
-          ticket.queueId,
-          wbot,
-          ticket,
-          contact,
-          msg,
-          ticketTraking
-        );
-      } else if (ticket.isBot && hasPrompt) {
-        try {
-          await handleOpenAi(
-            queuePrompt[0],
-            msg,
-            wbot,
-            ticket,
-            contact,
-            mediaSent,
-            ticketTraking
-          );
-        } catch (e) {
-          Sentry.captureException(e);
-          logger.error(`[wbotMessageListener] Erro ao processar IA por Prompt da fila. ticketId=${ticket.id}; queueId=${ticket.queueId}; err=${(e as any)?.message || e}`);
-        }
-      } else if (ticket.isBot && !hasPrompt) {
-        // Agent-only: quando existe AIAgent na fila mas não há Prompt legado, ainda assim precisamos disparar a IA.
-        // handleOpenAi resolve o AIAgent automaticamente a partir do ticket.queueId.
+      // PROCESSAMENTO SIMPLIFICADO: Apenas AIAgent
+      // Todos os agentes IA devem ter FunnelStages com systemPrompt configurado.
+      // handleOpenAi resolve automaticamente o AIAgent a partir do ticket.queueId.
+      if (ticket.isBot) {
         try {
           await handleOpenAi(
             undefined as any,
@@ -6459,7 +6432,7 @@ const handleMessage = async (
           );
         } catch (e) {
           Sentry.captureException(e);
-          logger.error(`[wbotMessageListener] Erro ao processar IA por AIAgent (sem prompt). ticketId=${ticket.id}; queueId=${ticket.queueId}; err=${(e as any)?.message || e}`);
+          logger.error(`[wbotMessageListener] Erro ao processar IA por AIAgent. ticketId=${ticket.id}; queueId=${ticket.queueId}; err=${(e as any)?.message || e}`);
         }
       }
 
