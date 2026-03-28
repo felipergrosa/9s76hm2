@@ -466,9 +466,6 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
       for (let i = 0; i < newFlowItems.length; i++) {
         const item = newFlowItems[i];
         if (item.type === 'media' && item.file) {
-          uploadedCount++;
-          setUploadProgress({ current: uploadedCount, total: filesToUpload.length });
-          
           const formData = new FormData();
           formData.append("medias", item.file);
           
@@ -486,6 +483,10 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
           item.filenameOriginal = uploadData.files[0];
           item.size = item.size || item.file?.size;
           delete item.file;
+          
+          // Atualizar progresso APÓS upload bem-sucedido
+          uploadedCount++;
+          setUploadProgress({ current: uploadedCount, total: filesToUpload.length });
         }
       }
 
