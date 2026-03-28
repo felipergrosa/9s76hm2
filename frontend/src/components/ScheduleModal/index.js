@@ -8,6 +8,8 @@ import { useHistory } from "react-router-dom";
 import { makeStyles } from "@material-ui/core/styles";
 import { green } from "@material-ui/core/colors";
 import Button from "@material-ui/core/Button";
+import CloseIcon from "@material-ui/icons/Close";
+import SendIcon from "@material-ui/icons/Send";
 import TextField from "@material-ui/core/TextField";
 import Dialog from "@material-ui/core/Dialog";
 import DialogActions from "@material-ui/core/DialogActions";
@@ -788,6 +790,13 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 										onClick={() => attachmentFile.current.click()}
 										disabled={isSubmitting}
 										variant="outlined"
+										size="medium"
+										style={{
+											textTransform: 'none',
+											fontWeight: 500,
+											borderRadius: '8px',
+											padding: '8px 16px'
+										}}
 									>
 										{i18n.t("quickMessages.buttons.attach")}
 									</Button>
@@ -797,6 +806,16 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 									color="secondary"
 									disabled={isSubmitting}
 									variant="outlined"
+									size="medium"
+									startIcon={<CloseIcon />}
+									style={{
+										textTransform: 'none',
+										fontWeight: 500,
+										borderRadius: '8px',
+										padding: '8px 16px',
+										borderColor: '#d32f2f',
+										color: '#d32f2f'
+									}}
 								>
 									{i18n.t("scheduleModal.buttons.cancel")}
 								</Button>
@@ -807,6 +826,15 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 										disabled={isSubmitting}
 										variant="contained"
 										className={classes.btnWrapper}
+										size="medium"
+										startIcon={isSubmitting ? <CircularProgress size={16} /> : <SendIcon />}
+										style={{
+											textTransform: 'none',
+											fontWeight: 600,
+											borderRadius: '8px',
+											padding: '8px 20px',
+											boxShadow: '0 2px 8px rgba(25, 118, 210, 0.3)'
+										}}
 									>
 										{scheduleId
 											? `${i18n.t("scheduleModal.buttons.okEdit")}`

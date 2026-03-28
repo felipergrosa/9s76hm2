@@ -1375,15 +1375,21 @@ const MessageInput = ({
 
     const executeFlow = async () => {
       setLoading(true);
+      
+      // Buscar o primeiro texto do fluxo para usar como legenda
+      const firstTextItem = flow.find(item => item.type === 'text');
+      const captionText = (value.sendAsCaption && firstTextItem) 
+        ? expandPlaceholders(firstTextItem.value, contactData, ticketData, user) 
+        : null;
+      
       for (let i = 0; i < flow.length; i++) {
         const item = flow[i];
 
         if (item.type === 'text') {
           const message = expandPlaceholders(item.value, contactData, ticketData, user);
           
-          // Lógica de Legenda: se este é o primeiro texto e o próximo item é mídia e sendAsCaption está ativo
-          if (i === 0 && flow[i+1]?.type === 'media' && value.sendAsCaption) {
-            // Não envia agora, enviaremos junto com a mídia abaixo
+          // Lógica de Legenda: se sendAsCaption está ativo e este é o primeiro texto, pular (será enviado como legenda da mídia)
+          if (value.sendAsCaption && item === firstTextItem) {
             continue;
           }
           
@@ -1396,9 +1402,9 @@ const MessageInput = ({
         } 
         else if (item.type === 'media') {
           const mediaUrl = buildQuickMessageMediaUrl(item.serverFilename || item.value);
-          const caption = (i === 1 && flow[0]?.type === 'text' && value.sendAsCaption) 
-            ? expandPlaceholders(flow[0].value, contactData, ticketData, user) 
-            : "";
+          
+          // Se sendAsCaption está ativo, usar o caption preparado
+          const caption = captionText || "";
 
           try {
             const { data } = await axios.get(mediaUrl, { responseType: "blob" });

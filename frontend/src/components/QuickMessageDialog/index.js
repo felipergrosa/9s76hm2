@@ -17,8 +17,9 @@ import AttachFileIcon from "@material-ui/icons/AttachFile";
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import IconButton from "@material-ui/core/IconButton";
 import ClickAwayListener from "@material-ui/core/ClickAwayListener";
-import { Smile } from "lucide-react";
+import { Smile, Sparkles, GripVertical, Bold, Italic, Strikethrough, Code } from "lucide-react";
 import WhatsAppPopover from "../WhatsAppPopover";
+import FormattedTextField from "../FormattedTextField";
 import { i18n } from "../../translate/i18n";
 import { head, cloneDeep } from "lodash";
 import api from "../../services/api";
@@ -40,7 +41,6 @@ import ConfirmationModal from "../ConfirmationModal";
 import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete";
 import { Tooltip, Popover, Box, Paper } from "@material-ui/core";
 import ChatAssistantPanel from "../ChatAssistantPanel";
-import StarsIcon from "@material-ui/icons/Stars";
 import LocalOfferIcon from "@material-ui/icons/LocalOffer";
 import AddIcon from "@material-ui/icons/Add";
 import AccessTimeIcon from "@material-ui/icons/AccessTime";
@@ -50,6 +50,14 @@ import MoreVertIcon from "@material-ui/icons/MoreVert";
 
 
 const useStyles = makeStyles((theme) => ({
+  '@keyframes pulse': {
+    '0%, 100%': {
+      opacity: 1,
+    },
+    '50%': {
+      opacity: 0.5,
+    },
+  },
   root: {
     display: "flex",
     flexWrap: "wrap",
@@ -188,17 +196,24 @@ const useStyles = makeStyles((theme) => ({
   nodeItem: {
     position: "relative",
     marginBottom: "16px",
+    zIndex: 1,
     "&::before": {
       content: '""',
       position: "absolute",
-      left: "-23px",
-      top: "12px",
-      width: "12px",
-      height: "12px",
+      left: "-18px",
+      top: "20px",
+      width: "10px",
+      height: "10px",
       borderRadius: "50%",
-      backgroundColor: "#fff",
-      border: `2px solid ${theme.palette.primary.main}`,
+      backgroundColor: "white",
+      border: "2px solid",
+      borderColor: "var(--node-color, #002d6e)",
       zIndex: 2,
+    },
+    '&[data-rbd-draggable-context-id]': {
+      position: 'relative !important',
+      left: '0 !important',
+      right: '0 !important',
     }
   },
   nodeCard: {
@@ -360,6 +375,8 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
   const [previewItem, setPreviewItem] = useState(null);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
 
   useEffect(() => {
     if (!open) return;
@@ -633,9 +650,61 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
   };
 
   const removeFlowItem = (index) => {
+    setFlowItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.currentTarget);
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (draggedIndex === index) return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midpoint = rect.top + rect.height / 2;
+    const dropPosition = e.clientY < midpoint ? index : index + 1;
+    
+    setDragOverIndex(dropPosition);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    
+    if (draggedIndex === null || dragOverIndex === null) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
     const items = [...flowItems];
-    items.splice(index, 1);
+    const draggedItem = items[draggedIndex];
+    
+    items.splice(draggedIndex, 1);
+    
+    let insertIndex = dragOverIndex;
+    if (dragOverIndex > draggedIndex) {
+      insertIndex = dragOverIndex - 1;
+    }
+    
+    items.splice(insertIndex, 0, draggedItem);
+    
     setFlowItems(items);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   const updateFlowItem = (index, value) => {
@@ -963,7 +1032,35 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                       />
                     <Box className={classes.flowContainer}>
                       {flowItems.map((item, index) => (
-                        <div key={index} className={`${classes.nodeItem} ${index === flowItems.length - 1 ? classes.lastNodeItem : ''}`}>
+                        <React.Fragment key={index}>
+                          {/* Linha indicadora de drop ANTES do item */}
+                          {dragOverIndex === index && draggedIndex !== null && (
+                            <Box
+                              style={{
+                                height: '3px',
+                                backgroundColor: '#3B82F6',
+                                borderRadius: '2px',
+                                margin: '8px 0',
+                                boxShadow: '0 0 8px rgba(59, 130, 246, 0.5)',
+                                animation: 'pulse 1s ease-in-out infinite'
+                              }}
+                            />
+                          )}
+                          
+                        <div
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, index)}
+                          onDragOver={(e) => handleDragOver(e, index)}
+                          onDragLeave={handleDragLeave}
+                          onDrop={handleDrop}
+                          onDragEnd={handleDragEnd}
+                          className={`${classes.nodeItem} ${index === flowItems.length - 1 ? classes.lastNodeItem : ''}`}
+                          style={{
+                            opacity: draggedIndex === index ? 0.4 : 1,
+                            transition: 'opacity 0.2s ease',
+                            cursor: 'move'
+                          }}
+                        >
                            <Paper 
                              elevation={0}
                              className={`${classes.nodeCard} qm-node-card`}
@@ -974,6 +1071,11 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                            >
                             <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
                               <Box display="flex" alignItems="center" gap={1}>
+                                <Tooltip title="Arrastar para reordenar">
+                                  <div style={{ display: 'flex', cursor: 'grab', padding: '4px' }}>
+                                    <GripVertical size={16} style={{ color: '#999' }} />
+                                  </div>
+                                </Tooltip>
                                 {item.type === 'text' && <TextFieldsIcon fontSize="small" color="primary" />}
                                 {item.type === 'delay' && <AccessTimeIcon fontSize="small" style={{ color: '#F59E0B' }} />}
                                 {item.type === 'media' && <AttachFileIcon fontSize="small" style={{ color: '#10B981' }} />}
@@ -983,40 +1085,45 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                               </Box>
                               <Box>
                                 {item.type === 'text' && (
-                                  <IconButton size="small" onClick={() => { setActiveItemIndex(index); setAiAssistantOpen(true); }} color="primary" style={{ padding: 4 }}>
-                                    <StarsIcon style={{ fontSize: 18 }} />
-                                  </IconButton>
+                                  <Tooltip title="Assistente IA">
+                                    <IconButton size="small" onClick={() => { setActiveItemIndex(index); setAiAssistantOpen(true); }} color="primary" style={{ padding: 4 }}>
+                                      <Sparkles size={18} />
+                                    </IconButton>
+                                  </Tooltip>
                                 )}
                                 {item.type === 'text' && (
                                   <>
-                                    <IconButton size="small" onClick={(e) => { setTagAnchorEl(e.currentTarget); setActiveItemIndex(index); }} style={{ padding: 4 }}>
-                                      <LocalOfferIcon style={{ fontSize: 18 }} />
-                                    </IconButton>
-                                    <WhatsAppPopover
-                                      onSelectEmoji={(emoji) => handleEmojiSelect(emoji, index)}
-                                      disabled={false}
-                                    />
+                                    <Tooltip title="Inserir variável">
+                                      <IconButton size="small" onClick={(e) => { setTagAnchorEl(e.currentTarget); setActiveItemIndex(index); }} style={{ padding: 4 }}>
+                                        <LocalOfferIcon style={{ fontSize: 18 }} />
+                                      </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Inserir emoji">
+                                      <span>
+                                        <WhatsAppPopover
+                                          onSelectEmoji={(emoji) => handleEmojiSelect(emoji, index)}
+                                          disabled={false}
+                                        />
+                                      </span>
+                                    </Tooltip>
                                   </>
                                 )}
-                                <IconButton size="small" onClick={() => removeFlowItem(index)} color="secondary" style={{ padding: 4 }}>
-                                  <DeleteOutlineIcon style={{ fontSize: 18 }} />
-                                </IconButton>
+                                <Tooltip title="Excluir item">
+                                  <IconButton size="small" onClick={() => removeFlowItem(index)} color="secondary" style={{ padding: 4 }}>
+                                    <DeleteOutlineIcon style={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
                               </Box>
                             </Box>
 
                             {item.type === 'text' && (
                               <>
-                                <TextField
+                                <FormattedTextField
                                   id={`flow-item-${index}`}
-                                  fullWidth
-                                  multiline
-                                  rows={3}
-                                  variant="outlined"
-                                  margin="dense"
                                   value={item.value}
                                   onChange={(e) => updateFlowItem(index, e.target.value)}
                                   placeholder="Digite sua mensagem..."
-                                  size="small"
+                                  rows={3}
                                 />
                                 <Box mt={0.5} display="flex" justifyContent="space-between" alignItems="center">
                                   <Box>
@@ -1161,7 +1268,23 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                             )}
                           </Paper>
                         </div>
+                        
+                        {/* Linha indicadora de drop DEPOIS do último item */}
+                        {dragOverIndex === flowItems.length && index === flowItems.length - 1 && draggedIndex !== null && (
+                          <Box
+                            style={{
+                              height: '3px',
+                              backgroundColor: '#3B82F6',
+                              borderRadius: '2px',
+                              margin: '8px 0',
+                              boxShadow: '0 0 8px rgba(59, 130, 246, 0.5)',
+                              animation: 'pulse 1s ease-in-out infinite'
+                            }}
+                          />
+                        )}
+                        </React.Fragment>
                       ))}
+                    </Box>
 
                       <Box display="flex" justifyContent="center" mt={2} mb={2} style={{ gap: '16px', position: 'relative', zIndex: 1, flexWrap: 'wrap' }}>
                         <Button
@@ -1192,7 +1315,6 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                           Anexo
                         </Button>
                       </Box>
-                    </Box>
                   </Grid>
 
                   {/* Popover de Tags */}
@@ -1207,6 +1329,7 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                       <MessageVariablesPicker onClick={(val) => handleTagSelect(val, activeItemIndex)} />
                     </Box>
                   </Popover>
+
                 </Grid>
               </DialogContent>
               <DialogActions style={{ flexShrink: 0, flexDirection: 'column', alignItems: 'stretch', padding: '16px 24px' }}>
@@ -1257,7 +1380,7 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                   </Box>
                 )}
 
-                <Box display="flex" justifyContent="flex-end" gap={1}>
+                <Box display="flex" justifyContent="flex-end" style={{ gap: '12px' }}>
                   <input
                     type="file"
                     multiple

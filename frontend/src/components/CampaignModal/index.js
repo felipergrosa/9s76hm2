@@ -56,7 +56,7 @@ import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete
 import useQueues from "../../hooks/useQueues";
 import ChatAssistantPanel from "../ChatAssistantPanel";
 import WhatsAppPreview from "./WhatsAppPreview";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Smile } from "lucide-react";
 import TemplateVariableMapper from "../TemplateVariableMapper";  // NOVO
 import * as libraryApi from "../../services/libraryApi";
 import Sidebar from "../../pages/LibraryManager/components/Sidebar";
@@ -67,7 +67,13 @@ import FolderGrid from "../../pages/LibraryManager/components/FolderGrid";
 import UploadModal from "../../pages/LibraryManager/components/UploadModal";
 import CampaignHowItWorks from "./CampaignHowItWorks";
 import HelpOutlineIcon from "@material-ui/icons/HelpOutline";
+import LocalOfferIcon from "@material-ui/icons/LocalOffer";
+import SaveIcon from "@material-ui/icons/Save";
+import SendIcon from "@material-ui/icons/Send";
+import AccessTimeIcon from "@material-ui/icons/AccessTime";
 import WhatsAppPopover from "../WhatsAppPopover";
+import FormattedTextField from "../FormattedTextField";
+import InputAdornment from '@material-ui/core/InputAdornment';
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -217,30 +223,7 @@ const CampaignModal = ({
     );
   };
 
-  const renderTagsToolbar = (values, setFieldValue, targetField) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 8px' }}>
-      <Button size="small" variant="outlined" onClick={(e) => { setTagsTargetField(targetField); handleOpenTags(e); }}>#Tags</Button>
-
-      <Tooltip title="Como usar as tags?">
-        <IconButton size="small" onClick={handleOpenInfo} aria-label="como usar as tags">
-          <InfoOutlinedIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-      <Tooltip title="Assistente de IA">
-        <span>
-          <IconButton
-            size="small"
-            onClick={() => handleOpenAssistant(targetField, values)}
-            aria-label="assistente de ia"
-            disabled={!campaignEditable}
-          >
-            <Sparkles size={16} />
-          </IconButton>
-        </span>
-      </Tooltip>
-    </div>
-  );
-
+  
   const renderTabAttachment = (idx, values, disabled) => {
     const nameField = getMediaNameFieldByTab(idx);
     const urlField = getMediaUrlFieldByTab(idx);
@@ -262,7 +245,7 @@ const CampaignModal = ({
           <>
             <Chip size="small" label={currentName} />
             <IconButton size="small" onClick={() => clearTabMedia(idx)} disabled={disabled}>
-              <DeleteOutlineIcon color="secondary" />
+              <DeleteOutlineIcon fontSize="small" color="secondary" />
             </IconButton>
             {renderMediaPreview(currentUrl, currentName)}
           </>
@@ -895,6 +878,69 @@ const CampaignModal = ({
   };
 
   /**
+   * Salva a campanha como rascunho (status INATIVA)
+   * - Não agenda envio mesmo que tenha data preenchida
+   */
+  const handleSaveRascunho = async (values, setSubmitting) => {
+    try {
+      setSubmitting(true);
+
+      // Primeiro processa os values do Formik
+      const processedValues = {};
+      Object.entries(values).forEach(([key, value]) => {
+        if (key === "scheduledAt" && value !== "" && value !== null) {
+          processedValues[key] = moment(value).format("YYYY-MM-DD HH:mm:ss");
+        } else {
+          processedValues[key] = value === "" ? null : value;
+        }
+      });
+
+      // Força status INATIVA mesmo que tenha agendamento
+      processedValues.status = "INATIVA";
+
+      const userIds = selectedUsers.length > 0
+        ? JSON.stringify(selectedUsers.map(u => u.id))
+        : null;
+
+      const queueIds = selectedQueues.length > 0
+        ? JSON.stringify(selectedQueues.map(q => q.id))
+        : null;
+
+      const campaignData = {
+        ...processedValues,
+        userIds,
+        queueIds,
+        whatsappId: whatsapp ? whatsapp.id : null,
+        tagListId: tagListId === "Nenhuma" ? null : tagListId,
+        contactListId: contactListId === "Nenhuma" ? null : contactListId,
+        confirmation: values.confirmation || false,
+        mediaPath: attachment ? attachment.name : campaign.mediaPath || null,
+        mediaName: attachment ? attachment.name : campaign.mediaName || null,
+        templateVariables: metaTemplateVariables
+      };
+
+      if (campaignId) {
+        await api.put(`/campaigns/${campaignId}`, campaignData);
+      } else {
+        const { data } = await api.post("/campaigns", campaignData);
+        setCampaignId(data.id);
+      }
+
+      if (typeof reload === 'function') {
+        reload();
+      }
+
+      toast.success("Campanha salva como rascunho!");
+      handleClose();
+    } catch (err) {
+      console.error('[CampaignModal] Erro ao salvar rascunho:', err);
+      toastError(err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /**
    * Salva a campanha sem disparar imediatamente
    * - Se tiver scheduledAt: status = PROGRAMADA (aguarda agendamento)
    * - Se não tiver scheduledAt: status = INATIVA (parada)
@@ -1028,48 +1074,124 @@ const CampaignModal = ({
 
   const renderMessageField = (identifier, setFieldValue, values) => {
     return (
-      <Box display="flex" alignItems="flex-start" gap={1}>
-        <Field
-          as={TextField}
+      <>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+          <Typography variant="h6" style={{ fontSize: '1rem', fontWeight: 500 }}>
+            {i18n.t(`campaigns.dialog.form.${identifier}`)}
+          </Typography>
+          <Box display="flex" alignItems="center" gap={1}>
+            <Tooltip title="Como usar as tags?">
+              <IconButton size="small" onClick={handleOpenInfo} aria-label="como usar as tags" disabled={!campaignEditable}>
+                <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Assistente de IA">
+              <IconButton
+                size="small"
+                aria-label="assistente de ia"
+                onClick={() => setAssistantOpen(prev => !prev)}
+                disabled={!campaignEditable}
+              >
+                <Sparkles size={16} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Tags">
+              <IconButton 
+                size="small" 
+                onClick={(e) => { setTagsTargetField(identifier); handleOpenTags(e); }} 
+                disabled={!campaignEditable}
+                aria-label="tags"
+              >
+                <LocalOfferIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Emoji">
+              <WhatsAppPopover
+                onSelectEmoji={(emoji) => handleEmojiSelect(identifier, emoji, setFieldValue, values)}
+                disabled={!campaignEditable}
+              >
+                <IconButton
+                  size="small"
+                  aria-label="emoji"
+                  disabled={!campaignEditable}
+                >
+                  <Smile size={16} />
+                </IconButton>
+              </WhatsAppPopover>
+            </Tooltip>
+          </Box>
+        </Box>
+        <FormattedTextField
           id={identifier}
-          name={identifier}
-          fullWidth
-          rows={5}
-          label={i18n.t(`campaigns.dialog.form.${identifier}`)}
+          value={values[identifier] || ""}
+          onChange={(e) => setFieldValue(identifier, e.target.value)}
           placeholder={i18n.t("campaigns.dialog.form.messagePlaceholder")}
-          multiline={true}
-          variant="outlined"
+          rows={5}
+          disabled={!campaignEditable && campaign.status !== "CANCELADA"}
           helperText="Utilize variáveis como {nome}, {numero}, {email} ou defina variáveis personalizadas."
-          disabled={!campaignEditable && campaign.status !== "CANCELADA"}
         />
-        <WhatsAppPopover
-          onSelectEmoji={(emoji) => handleEmojiSelect(identifier, emoji, setFieldValue, values)}
-          disabled={!campaignEditable && campaign.status !== "CANCELADA"}
-        />
-      </Box>
+      </>
     );
   };
 
   const renderConfirmationMessageField = (identifier, setFieldValue, values) => {
     return (
-      <Box display="flex" alignItems="flex-start" gap={1}>
-        <Field
-          as={TextField}
+      <>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+          <Typography variant="h6" style={{ fontSize: '1rem', fontWeight: 500 }}>
+            {i18n.t(`campaigns.dialog.form.${identifier}`)}
+          </Typography>
+          <Box display="flex" alignItems="center" gap={1}>
+            <Tooltip title="Como usar as tags?">
+              <IconButton size="small" onClick={handleOpenInfo} aria-label="como usar as tags" disabled={!campaignEditable}>
+                <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Assistente de IA">
+              <IconButton
+                size="small"
+                aria-label="assistente de ia"
+                onClick={() => setAssistantOpen(prev => !prev)}
+                disabled={!campaignEditable}
+              >
+                <Sparkles size={16} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Tags">
+              <IconButton 
+                size="small" 
+                onClick={(e) => { setTagsTargetField(identifier); handleOpenTags(e); }} 
+                disabled={!campaignEditable}
+                aria-label="tags"
+              >
+                <LocalOfferIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Emoji">
+              <WhatsAppPopover
+                onSelectEmoji={(emoji) => handleEmojiSelect(identifier, emoji, setFieldValue, values)}
+                disabled={!campaignEditable}
+              >
+                <IconButton
+                  size="small"
+                  aria-label="emoji"
+                  disabled={!campaignEditable}
+                >
+                  <Smile size={16} />
+                </IconButton>
+              </WhatsAppPopover>
+            </Tooltip>
+          </Box>
+        </Box>
+        <FormattedTextField
           id={identifier}
-          name={identifier}
-          fullWidth
-          rows={5}
-          label={i18n.t(`campaigns.dialog.form.${identifier}`)}
+          value={values[identifier] || ""}
+          onChange={(e) => setFieldValue(identifier, e.target.value)}
           placeholder={i18n.t("campaigns.dialog.form.messagePlaceholder")}
-          multiline={true}
-          variant="outlined"
+          rows={5}
           disabled={!campaignEditable && campaign.status !== "CANCELADA"}
         />
-        <WhatsAppPopover
-          onSelectEmoji={(emoji) => handleEmojiSelect(identifier, emoji, setFieldValue, values)}
-          disabled={!campaignEditable && campaign.status !== "CANCELADA"}
-        />
-      </Box>
+      </>
     );
   };
 
@@ -2025,7 +2147,6 @@ const CampaignModal = ({
                           <Box style={{ paddingTop: 20, border: "none" }}>
                             {messageTab === 0 && (
                               <>
-                                {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(0))}
                                 {values.confirmation ? (
                                   <Grid spacing={2} container>
                                     <Grid xs={12} md={8} item>
@@ -2049,7 +2170,6 @@ const CampaignModal = ({
                             )}
                             {messageTab === 1 && (
                               <>
-                                {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(1))}
                                 {values.confirmation ? (
                                   <Grid spacing={2} container>
                                     <Grid xs={12} md={8} item>
@@ -2073,7 +2193,6 @@ const CampaignModal = ({
                             )}
                             {messageTab === 2 && (
                               <>
-                                {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(2))}
                                 {values.confirmation ? (
                                   <Grid spacing={2} container>
                                     <Grid xs={12} md={8} item>
@@ -2097,7 +2216,6 @@ const CampaignModal = ({
                             )}
                             {messageTab === 3 && (
                               <>
-                                {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(3))}
                                 {values.confirmation ? (
                                   <Grid spacing={2} container>
                                     <Grid xs={12} md={8} item>
@@ -2121,7 +2239,6 @@ const CampaignModal = ({
                             )}
                             {messageTab === 4 && (
                               <>
-                                {renderTagsToolbar(values, setFieldValue, getMessageFieldByTab(4))}
                                 {values.confirmation ? (
                                   <Grid spacing={2} container>
                                     <Grid xs={12} md={8} item>
@@ -2365,6 +2482,13 @@ const CampaignModal = ({
                         onClick={() => setFileLibraryOpen(true)}
                         disabled={isSubmitting}
                         variant="outlined"
+                        size="medium"
+                        style={{
+                          textTransform: 'none',
+                          fontWeight: 500,
+                          borderRadius: '8px',
+                          padding: '8px 16px'
+                        }}
                       >
                         {i18n.t("campaigns.dialog.buttons.attach")}
                       </Button>
@@ -2372,55 +2496,82 @@ const CampaignModal = ({
                     <Button
                       onClick={handleClose}
                       disabled={isSubmitting}
-                      variant="contained"
+                      variant="outlined"
                       startIcon={<CloseIcon />}
+                      size="medium"
                       style={{
-                        background: 'linear-gradient(145deg, rgba(150, 150, 150, 0.95), rgba(100, 100, 100, 0.9))',
-                        backdropFilter: 'blur(12px)',
-                        WebkitBackdropFilter: 'blur(12px)',
-                        border: '1px solid rgba(255, 255, 255, 0.2)',
-                        color: '#fff',
-                        boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
                         textTransform: 'none',
-                        fontWeight: 600,
+                        fontWeight: 500,
                         borderRadius: '8px',
+                        padding: '8px 16px',
+                        borderColor: '#d32f2f',
+                        color: '#d32f2f',
+                        '&:hover': {
+                          borderColor: '#b71c1c',
+                          backgroundColor: 'rgba(211, 47, 47, 0.04)'
+                        }
                       }}
                     >
                       {i18n.t("campaigns.dialog.buttons.close")}
                     </Button>
                     {(campaignEditable || campaign.status === "CANCELADA") && (
                       <>
-                        {/* Botão Salvar - salva sem disparar, aguarda agendamento ou fica inativa */}
+                        {/* Botão Salvar Rascunho - salva sem agendar, fica inativa */}
                         <Button
-                          color="default"
+                          color="primary"
                           disabled={isSubmitting}
                           variant="outlined"
-                          onClick={() => handleSaveOnly(values, setSubmitting)}
-                          style={{ marginRight: 8 }}
+                          onClick={() => handleSaveRascunho(values, setSubmitting)}
+                          size="medium"
+                          startIcon={isSubmitting ? <CircularProgress size={16} /> : <SaveIcon />}
+                          style={{
+                            marginRight: 8,
+                            textTransform: 'none',
+                            fontWeight: 500,
+                            borderRadius: '8px',
+                            padding: '8px 16px'
+                          }}
                         >
-                          Salvar
-                          {isSubmitting && (
-                            <CircularProgress
-                              size={20}
-                              style={{ marginLeft: 8 }}
-                            />
-                          )}
+                          Salvar Rascunho
                         </Button>
-                        {/* Botão Enviar Agora - dispara imediatamente */}
+                        {/* Botão Programar Envio - salva e agenda para data/hora específica */}
+                        <Button
+                          color="primary"
+                          disabled={isSubmitting || !values.scheduledAt}
+                          variant="outlined"
+                          onClick={() => handleSaveOnly(values, setSubmitting)}
+                          size="medium"
+                          startIcon={isSubmitting ? <CircularProgress size={16} /> : <AccessTimeIcon />}
+                          style={{
+                            marginRight: 8,
+                            textTransform: 'none',
+                            fontWeight: 500,
+                            borderRadius: '8px',
+                            padding: '8px 16px',
+                            borderColor: '#ff9800',
+                            color: '#ff9800'
+                          }}
+                        >
+                          Programar Envio
+                        </Button>
+                        {/* Botão Enviar Imediatamente - dispara imediatamente */}
                         <Button
                           type="submit"
                           color="primary"
                           disabled={isSubmitting}
                           variant="contained"
                           className={classes.btnWrapper}
+                          size="medium"
+                          startIcon={isSubmitting ? <CircularProgress size={16} /> : <SendIcon />}
+                          style={{
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            borderRadius: '8px',
+                            padding: '8px 20px',
+                            boxShadow: '0 2px 8px rgba(25, 118, 210, 0.3)'
+                          }}
                         >
-                          Enviar Agora
-                          {isSubmitting && (
-                            <CircularProgress
-                              size={24}
-                              className={classes.buttonProgress}
-                            />
-                          )}
+                          Enviar Imediatamente
                         </Button>
                       </>
                     )}
