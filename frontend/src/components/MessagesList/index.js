@@ -2050,12 +2050,12 @@ const MessagesList = ({
               display: 'flex',
               width: '95%',
               margin: '15px auto',
-              backgroundColor: 'rgba(0, 0, 0, 0.05)',
+              //backgroundColor: 'rgba(0, 0, 0, 0.05)',
               padding: '12px',
               borderRadius: '8px',
               justifyContent: 'center',
               alignItems: 'center',
-              border: '2px solid #999'
+              //border: '2px solid #999'
             }}
           >
             <div className={classes.currentTickContent}>
