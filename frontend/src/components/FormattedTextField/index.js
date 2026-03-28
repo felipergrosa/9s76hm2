@@ -425,55 +425,91 @@ const FormattedTextField = ({
 
     if (selectedText.length > 0) {
       try {
+        // Tentar obter retângulo da seleção usando getRangeAt
         const selection = window.getSelection();
-        let selectionRect;
-        
-        // Tentar obter o retângulo da seleção
-        if (selection.rangeCount > 0) {
-          selectionRect = selection.getRangeAt(0).getBoundingClientRect();
-        } else {
-          // Fallback: usar posição do cursor dentro do input
-          const inputRect = inputRef.current.getBoundingClientRect();
-          const lineHeight = 20; // altura aproximada da linha
-          const charWidth = 8; // largura aproximada do caractere
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          const selectionRect = range.getBoundingClientRect();
           
-          // Calcular posição aproximada do cursor
-          const cursorX = inputRect.left + 10 + (start * charWidth);
-          const cursorY = inputRect.top + (start > 0 ? lineHeight : 0);
-          
-          selectionRect = {
-            left: cursorX,
-            top: cursorY,
-            width: 100,
-            height: 20
-          };
+          // Se tivermos uma seleção válida, usar coordenadas exatas
+          if (selectionRect && selectionRect.width > 0) {
+            let toolbarX = selectionRect.left + selectionRect.width / 2;
+            let toolbarY = selectionRect.top - 10;
+            
+            // Ajustar horizontalmente para não cortar nas laterais
+            const toolbarWidth = 200; // largura aproximada do toolbar
+            const viewportWidth = window.innerWidth;
+            if (toolbarX < toolbarWidth / 2 + 10) {
+              toolbarX = toolbarWidth / 2 + 10;
+            }
+            if (toolbarX > viewportWidth - toolbarWidth / 2 - 10) {
+              toolbarX = viewportWidth - toolbarWidth / 2 - 10;
+            }
+            
+            // Ajustar se o toolbar ficar acima do topo da tela
+            const toolbarHeight = 40; // altura aproximada do toolbar
+            if (toolbarY < toolbarHeight + 10) {
+              // Mostrar abaixo do texto se não tiver espaço acima
+              toolbarY = selectionRect.bottom + 10;
+            }
+            
+            setTextSelection({ start, end, text: selectedText });
+            setFormatToolbar({
+              visible: true,
+              position: {
+                x: toolbarX,
+                y: toolbarY
+              }
+            });
+            return;
+          }
         }
         
-        // Usar coordenadas absolutas (viewport)
-        const absoluteX = selectionRect.left + selectionRect.width / 2;
-        const absoluteY = selectionRect.top - 50;
+        // Fallback: calcular posição aproximada
+        const inputRect = inputRef.current.getBoundingClientRect();
+        const charWidth = 8; // largura aproximada de um caractere
+        const lineHeight = 24; // altura aproximada da linha
+        
+        // Calcular posição aproximada do cursor
+        const cursorX = inputRect.left + 10 + (start * charWidth);
+        const cursorY = inputRect.top + (start > 0 ? lineHeight : 0);
+        
+        const fallbackX = cursorX;
+        let fallbackY = cursorY - 10;
+        
+        // Ajustar se o toolbar ficar acima do topo da tela
+        const toolbarHeight = 40;
+        if (fallbackY < toolbarHeight + 10) {
+          fallbackY = cursorY + 30; // Mostrar abaixo
+        }
         
         setTextSelection({ start, end, text: selectedText });
         setFormatToolbar({
           visible: true,
           position: {
-            x: absoluteX,
-            y: absoluteY
+            x: fallbackX,
+            y: fallbackY
           }
         });
       } catch (error) {
         console.error("Erro ao obter seleção:", error);
-        // Fallback: mostrar toolbar acima do input
+        // Fallback final: mostrar toolbar acima do input
         const inputRect = inputRef.current.getBoundingClientRect();
-        const absoluteX = inputRect.left + inputRect.width / 2;
-        const absoluteY = inputRect.top - 50;
+        const finalX = inputRect.left + inputRect.width / 2;
+        let finalY = inputRect.top - 10;
+        
+        // Ajustar se o toolbar ficar acima do topo da tela
+        const toolbarHeight = 40;
+        if (finalY < toolbarHeight + 10) {
+          finalY = inputRect.bottom + 10; // Mostrar abaixo do input
+        }
         
         setTextSelection({ start, end, text: selectedText });
         setFormatToolbar({
           visible: true,
           position: {
-            x: absoluteX,
-            y: absoluteY
+            x: finalX,
+            y: finalY
           }
         });
       }

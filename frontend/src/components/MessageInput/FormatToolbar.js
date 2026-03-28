@@ -109,9 +109,12 @@ const FormatToolbar = ({
     
     // Ajustar verticalmente - mostrar abaixo se não tiver espaço acima
     if (rect.top < 10) {
-      adjustedY = pos.y + 50; // Mostrar abaixo se não tiver espaço acima
+      adjustedY = pos.y + 40; // Mostrar abaixo se não tiver espaço acima
     } else if (rect.bottom > viewportHeight - 10) {
       adjustedY = viewportHeight - rect.height - 20;
+    } else {
+      // Manter próximo ao texto selecionado (acima)
+      adjustedY = pos.y - 10;
     }
     
     return { x: adjustedX, y: adjustedY };
