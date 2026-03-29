@@ -403,8 +403,10 @@ const triggerSessionRecovery = async (whatsappId: number): Promise<void> => {
     logger.info(`[triggerSessionRecovery] WhatsApp ${whatsappId} encontrado: status=${whatsapp.status}, channel=${whatsapp.channel}, name=${whatsapp.name}`);
 
     // Verificar se deve estar conectado
-    if (whatsapp.status === "DISCONNECTED" || whatsapp.channel !== "whatsapp") {
-      logger.info(`[triggerSessionRecovery] WhatsApp ${whatsappId} status=${whatsapp.status}, channel=${whatsapp.channel}. Não recuperando.`);
+    // Aceita tanto "whatsapp" (Baileys) quanto "official" (API Oficial)
+    if (whatsapp.status === "DISCONNECTED" || 
+        (whatsapp.channel !== "whatsapp" && whatsapp.channelType !== "official")) {
+      logger.info(`[triggerSessionRecovery] WhatsApp ${whatsappId} status=${whatsapp.status}, channel=${whatsapp.channel}, channelType=${whatsapp.channelType}. Não recuperando.`);
       reconnectingWhatsapps.delete(whatsappId);
       clearTimeout(safetyTimeout);
       return;

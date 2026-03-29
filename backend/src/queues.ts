@@ -1431,19 +1431,44 @@ async function handleProcessCampaign(job) {
     }
     const settings = await getSettings(campaign);
     if (campaign) {
-      // Verificação de segurança para contactList
-      if (!campaign.contactList || !campaign.contactListId) {
+      // Suporta múltiplas listas (contactListIds) com fallback para contactListId
+      let listIds: number[] = [];
+      if (campaign.contactListIds) {
+        try {
+          const parsed = typeof campaign.contactListIds === "string"
+            ? JSON.parse(campaign.contactListIds)
+            : campaign.contactListIds;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            listIds = parsed.map((v: any) => Number(v)).filter((v: number) => !isNaN(v));
+          }
+        } catch { }
+      }
+      // Fallback para lista única
+      if (listIds.length === 0 && campaign.contactListId) {
+        listIds = [campaign.contactListId];
+      }
+
+      if (listIds.length === 0) {
         logger.error(`[ProcessCampaign] Campanha ${id} não tem contactList associada`);
         return;
       }
 
-      // IMPORTANTE: Carregar contatos diretamente do banco
-      // (não vem mais via getCampaign para evitar sobrecarga)
-      const contacts = await ContactListItem.findAll({
-        where: { contactListId: campaign.contactListId },
+      // IMPORTANTE: Carregar contatos de TODAS as listas e deduplicar por número
+      const allContactsRaw = await ContactListItem.findAll({
+        where: { contactListId: listIds },
         attributes: ["id", "name", "number", "email", "isWhatsappValid", "isGroup"]
       });
-      logger.info(`[ProcessCampaign] Campanha ${id} | ContactList: ${campaign.contactList.id} | Total de contatos: ${contacts.length}`);
+
+      // Deduplicação por número de telefone (evita envio duplo se contato estiver em +1 lista)
+      const seenNumbers = new Set<string>();
+      const contacts = allContactsRaw.filter(c => {
+        const num = (c as any).number;
+        if (!num || seenNumbers.has(num)) return false;
+        seenNumbers.add(num);
+        return true;
+      });
+
+      logger.info(`[ProcessCampaign] Campanha ${id} | Listas: ${listIds.join(",")} | Total bruto: ${allContactsRaw.length} | Após dedup: ${contacts.length}`);
 
       if (!isArray(contacts) || contacts.length === 0) {
         logger.warn(`[ProcessCampaign] Campanha ${id} não tem contatos na lista. Verifique se a lista tem contatos válidos.`);

@@ -1054,7 +1054,7 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                           onDragLeave={handleDragLeave}
                           onDrop={handleDrop}
                           onDragEnd={handleDragEnd}
-                          className={`${classes.nodeItem} ${index === flowItems.length - 1 ? classes.lastNodeItem : ''}`}
+                           className={`${classes.nodeItem} ${index === flowItems.length - 1 ? classes.lastNodeItem : ''}`}
                           style={{
                             opacity: draggedIndex === index ? 0.4 : 1,
                             transition: 'opacity 0.2s ease',

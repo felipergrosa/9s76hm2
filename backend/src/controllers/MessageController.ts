@@ -18,6 +18,7 @@ import { Op } from "sequelize";
 import ListMessagesService from "../services/MessageServices/ListMessagesService";
 import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import DeleteWhatsAppMessage from "../services/WbotServices/DeleteWhatsAppMessage";
+import DeleteWhatsAppMessageUnified from "../services/WbotServices/DeleteWhatsAppMessageUnified";
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
 import SendWhatsAppMessageUnified from "../services/WbotServices/SendWhatsAppMessageUnified";
 import SendWhatsAppMediaUnified from "../services/WbotServices/SendWhatsAppMediaUnified";
@@ -1229,33 +1230,40 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
   const { companyId } = req.user;
 
   try {
-    const message = await DeleteWhatsAppMessage(messageId, companyId);
+    // Buscar ticket primeiro para passar ao serviço unificado
+    const message = await Message.findByPk(messageId, {
+      include: [
+        {
+          model: Ticket,
+          as: "ticket",
+          include: ["contact"]
+        }
+      ]
+    });
 
-    const ticket = await Ticket.findByPk(message.ticketId, { include: ["contact"] });
+    if (!message) {
+      return res.status(404).json({ error: "Mensagem não encontrada" });
+    }
+
+    // Usar serviço unificado que suporta API Oficial
+    await DeleteWhatsAppMessageUnified({ 
+      messageId, 
+      ticket: message.ticket 
+    });
+
+    const ticket = message.ticket;
     if (!ticket) {
       return res.status(404).json({ error: "Ticket não encontrado" });
     }
 
-    if (message.isPrivate) {
-      await Message.destroy({ where: { id: message.id } });
-
-      const { messageEventBus } = await import("../services/MessageServices/MessageEventBus");
-      await messageEventBus.publishMessageDeleted(
-        companyId,
-        message.ticketId,
-        ticket.uuid,
-        message.id
-      );
-    } else {
-      const { messageEventBus } = await import("../services/MessageServices/MessageEventBus");
-      await messageEventBus.publishMessageUpdated(
-        companyId,
-        message.ticketId,
-        ticket.uuid,
-        message.id,
-        message
-      );
-    }
+    // Emitir evento de mensagem deletada para atualizar frontend
+    const { messageEventBus } = await import("../services/MessageServices/MessageEventBus");
+    await messageEventBus.publishMessageDeleted(
+      companyId,
+      message.ticketId,
+      ticket.uuid,
+      message.id
+    );
 
     return res.status(200).json({ message: "Mensagem removida com sucesso" });
   } catch (error: any) {

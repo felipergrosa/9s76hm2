@@ -440,7 +440,7 @@ const Campaigns = () => {
                   </Grid>
                   <Grid item xs="auto">
                     <Button
-                      variant="contained"
+                      variant="outlined"
                       onClick={handleOpenCampaignModal}
                       color="primary"
                       size="small"
@@ -448,10 +448,34 @@ const Campaigns = () => {
                         minHeight: 36,
                         paddingLeft: 16,
                         paddingRight: 16,
-                        whiteSpace: "nowrap"
+                        whiteSpace: "nowrap",
+                        marginRight: 8,
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        borderRadius: '8px'
                       }}
                     >
-                      + {i18n.t("campaigns.buttons.add")}
+                      + {i18n.t("campaigns.buttons.add")} (Modal)
+                    </Button>
+                  </Grid>
+                  <Grid item xs="auto">
+                    <Button
+                      variant="contained"
+                      onClick={() => history.push("/campaigns/new")}
+                      color="primary"
+                      size="small"
+                      style={{
+                        minHeight: 36,
+                        paddingLeft: 16,
+                        paddingRight: 16,
+                        whiteSpace: "nowrap",
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        borderRadius: '8px',
+                        boxShadow: '0 2px 8px rgba(25, 118, 210, 0.3)'
+                      }}
+                    >
+                      + Nova Campanha (Página)
                     </Button>
                   </Grid>
                 </Grid>

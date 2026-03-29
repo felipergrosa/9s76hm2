@@ -67,6 +67,7 @@ const Companies = lazy(() => import("../pages/Companies"));
 
 // Campanhas
 const Campaigns = lazy(() => import("../pages/Campaigns"));
+const CampaignsNew = lazy(() => import("../pages/CampaignsNew"));
 const CampaignsConfig = lazy(() => import("../pages/CampaignsConfig"));
 const CampaignDetailedReport = lazy(() => import("../pages/CampaignDetailedReport"));
 const CampaignsPhrase = lazy(() => import("../pages/CampaignsPhrase"));
@@ -211,6 +212,7 @@ const Routes = () => {
                     <PrivateRoute exact path="/contact-lists" component={ContactLists} permission="contact-lists.view" />
                     <PrivateRoute exact path="/contact-lists/:contactListId/contacts" component={ContactListItems} permission="contact-lists.view" />
                     <Route exact path="/campaigns" component={Campaigns} isPrivate />
+                    <Route exact path="/campaigns/new" component={CampaignsNew} isPrivate />
                     <Route exact path="/campaign/:campaignId/detailed-report" component={CampaignDetailedReport} isPrivate />
                     <Route exact path="/campaigns-config" component={CampaignsConfig} isPrivate />
                   </>

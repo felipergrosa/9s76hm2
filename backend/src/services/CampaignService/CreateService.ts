@@ -24,6 +24,7 @@ interface Data {
   confirmationMessage3?: string;
   confirmationMessage4?: string;
   confirmationMessage5?: string;
+  contactListIds?: number[] | string | null;
   userId: number | string;
   queueId: number | string;
   statusTicket: string;
@@ -65,7 +66,7 @@ const CreateService = async (data: Data): Promise<Campaign> => {
     data.status = "PROGRAMADA";
   }
 
-  // Serializa allowedWhatsappIds se vier como array/objeto
+  // Serializa allowedWhatsappIds e contactListIds se vierem como array/objeto
   const payload: any = { ...data };
   if (
     payload.allowedWhatsappIds != null &&
@@ -75,6 +76,17 @@ const CreateService = async (data: Data): Promise<Campaign> => {
       payload.allowedWhatsappIds = JSON.stringify(payload.allowedWhatsappIds);
     } catch (e) {
       payload.allowedWhatsappIds = String(payload.allowedWhatsappIds);
+    }
+  }
+
+  if (
+    payload.contactListIds != null &&
+    typeof payload.contactListIds !== "string"
+  ) {
+    try {
+      payload.contactListIds = JSON.stringify(payload.contactListIds);
+    } catch (e) {
+      payload.contactListIds = String(payload.contactListIds);
     }
   }
 

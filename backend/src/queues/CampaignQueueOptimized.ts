@@ -87,21 +87,51 @@ async function processCampaign(job: any): Promise<void> {
       return;
     }
 
-    // Busca TODOS os contatos de uma vez (evita N+1)
-    const contacts = await ContactListItem.findAll({
-      where: { contactListId: campaign.contactListId },
+    // Suporta múltiplas listas (contactListIds) com fallback para contactListId
+    let listIds: number[] = [];
+    if ((campaign as any).contactListIds) {
+      try {
+        const parsed = typeof (campaign as any).contactListIds === "string"
+          ? JSON.parse((campaign as any).contactListIds)
+          : (campaign as any).contactListIds;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          listIds = parsed.map((v: any) => Number(v)).filter((v: number) => !isNaN(v));
+        }
+      } catch { }
+    }
+    if (listIds.length === 0 && campaign.contactListId) {
+      listIds = [campaign.contactListId];
+    }
+
+    if (listIds.length === 0) {
+      logger.warn(`[CampaignOptimized] Campanha ${campaignId} não tem lista de contatos configurada`);
+      return;
+    }
+
+    // Busca TODOS os contatos de TODAS as listas de uma vez
+    const allContactsRaw = await ContactListItem.findAll({
+      where: { contactListId: listIds },
       include: [
         {
           model: Contact,
           as: "contact",
           attributes: ["id", "name", "number", "isWhatsappValid"],
-          where: { isWhatsappValid: true } // Apenas contatos válidos
+          where: { isWhatsappValid: true }
         }
       ],
       attributes: ["id", "contactId"]
     });
 
-    logger.info(`[CampaignOptimized] Campanha ${campaignId}: ${contacts.length} contatos válidos`);
+    // Deduplicação por contactId para evitar envio duplo
+    const seenContactIds = new Set<number>();
+    const contacts = allContactsRaw.filter(item => {
+      const cid = (item as any).contactId;
+      if (!cid || seenContactIds.has(cid)) return false;
+      seenContactIds.add(cid);
+      return true;
+    });
+
+    logger.info(`[CampaignOptimized] Campanha ${campaignId} | Listas: ${listIds.join(",")} | Bruto: ${allContactsRaw.length} | Após dedup: ${contacts.length}`);
 
     if (contacts.length === 0) {
       logger.warn(`[CampaignOptimized] Campanha ${campaignId} não tem contatos válidos`);

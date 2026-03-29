@@ -96,6 +96,9 @@ class Campaign extends Model<Campaign> {
   @BelongsTo(() => ContactList)
   contactList: ContactList;
 
+  @Column({ type: DataType.TEXT, allowNull: true })
+  contactListIds: string; // JSON array de IDs de listas conjugadas
+
   @ForeignKey(() => Whatsapp)
   @Column
   whatsappId: number;
