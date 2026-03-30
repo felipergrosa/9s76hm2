@@ -110,6 +110,10 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
   const [loadingSituations, setLoadingSituations] = useState(false);
   const [loadingRepresentatives, setLoadingRepresentatives] = useState(false);
   const [loadingEmpresas, setLoadingEmpresas] = useState(false);
+  const [users, setUsers] = useState([]); // Usuários para filtro (convertido para tags pessoais)
+  const [whatsapps, setWhatsapps] = useState([]); // Conexões WhatsApp
+  const [loadingUsers, setLoadingUsers] = useState(false); // Loading para usuários
+  const [loadingWhatsapps, setLoadingWhatsapps] = useState(false); // Loading para whatsapps
   const [saveFilterFlag, setSaveFilterFlag] = useState(false);
   const [cronTime, setCronTime] = useState("02:00"); // HH:mm
   const [cronTz, setCronTz] = useState("America/Sao_Paulo");
@@ -276,10 +280,32 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
   const loadChannels = async () => {
     setLoadingChannels(true);
     try {
-      const resp = await api.get("/contacts", { params: { limit: 500, orderBy: "channel", order: "ASC" } });
+      // Buscar conexões ativas da empresa
+      const companyId = localStorage.getItem('companyId');
+      const { data: whatsapps } = await api.get('/whatsapp', { params: { companyId } });
+      const channelMap = {
+        'baileys': 'WhatsApp',
+        'official': 'WhatsApp Oficial',
+        'webchat': 'WebChat',
+        'facebook': 'Facebook',
+        'instagram': 'Instagram',
+        'telegram': 'Telegram'
+      };
+      const connectionChannels = (whatsapps || [])
+        .map(w => channelMap[w.channelType] || w.channelType)
+        .filter((v, i, a) => a.indexOf(v) === i);
+      
+      // Buscar canais já usados em contatos existentes
+      const resp = await api.get("/contacts", { params: { limit: 500 } });
       const list = Array.isArray(resp?.data?.contacts) ? resp.data.contacts : [];
-      const set = new Set();
-      list.forEach(c => { const v = String(c?.channel || "").trim(); if (v) set.add(v); });
+      const set = new Set(connectionChannels);
+      list.forEach(c => {
+        // channels é array, extrair valores
+        if (Array.isArray(c?.channels)) {
+          c.channels.forEach(ch => { const v = String(ch || "").trim(); if (v) set.add(v); });
+        }
+      });
+      
       // Garante valores do savedFilter
       if (savedFilter && Array.isArray(savedFilter.channel)) {
         savedFilter.channel.forEach(v => { const s = String(v || "").trim(); if (s) set.add(s); });
@@ -329,6 +355,30 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
       toastError(err);
     }
     setLoadingEmpresas(false);
+  };
+
+  const loadUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const { data } = await api.get("/users");
+      const list = Array.isArray(data) ? data : (data && Array.isArray(data.users) ? data.users : []);
+      setUsers(list);
+    } catch (err) {
+      toastError(err);
+    }
+    setLoadingUsers(false);
+  };
+
+  const loadWhatsapps = async () => {
+    setLoadingWhatsapps(true);
+    try {
+      const { data } = await api.get("/whatsapp");
+      const list = Array.isArray(data) ? data : (data && Array.isArray(data.whatsapps) ? data.whatsapps : []);
+      setWhatsapps(list);
+    } catch (err) {
+      toastError(err);
+    }
+    setLoadingWhatsapps(false);
   };
 
   const loadCities = async () => {
@@ -658,7 +708,10 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
             : '',
           dtUltCompraStart: (savedFilter && savedFilter.dtUltCompraStart) ? savedFilter.dtUltCompraStart : null,
           dtUltCompraEnd: (savedFilter && savedFilter.dtUltCompraEnd) ? savedFilter.dtUltCompraEnd : null,
+          whatsappInvalid: (savedFilter && savedFilter.whatsappInvalid) ? savedFilter.whatsappInvalid : false,
           bzEmpresa: (savedFilter && savedFilter.bzEmpresa) ? savedFilter.bzEmpresa : [],
+          walletIds: (savedFilter && savedFilter.walletIds) ? savedFilter.walletIds : [],
+          whatsappIds: (savedFilter && savedFilter.whatsappIds) ? savedFilter.whatsappIds : [],
         }}
         enableReinitialize={true}
         onSubmit={(values, actions) => {
@@ -1144,8 +1197,21 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                   </Box>
                 </Grid>
 
-                {/* Linha 3: Range de Data da Última Compra */}
-                <Grid item xs={12} md={12}>
+                {/* Linha 3: WhatsApp Inválido + Range de Data da Última Compra */}
+                <Grid item xs={12} md={6}>
+                  <Field name="whatsappInvalid">
+                    {({ field }) => (
+                      <FormControl variant="outlined" margin="dense" fullWidth className={field.value ? classes.activeFilter : ""}>
+                        <InputLabel id="whatsapp-invalid-label">WhatsApp Inválido</InputLabel>
+                        <Field as={Select} labelId="whatsapp-invalid-label" id="whatsapp-invalid-select" name="whatsappInvalid" label="WhatsApp Inválido">
+                          <MenuItem value={false}>Todos</MenuItem>
+                          <MenuItem value={true}>Somente Inválidos</MenuItem>
+                        </Field>
+                      </FormControl>
+                    )}
+                  </Field>
+                </Grid>
+                <Grid item xs={12} md={6}>
                   <Field name="dtUltCompraStart">
                     {({ form }) => {
                       const start = form.values.dtUltCompraStart;
@@ -1259,6 +1325,96 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                       />
                     )}
                   />
+                </Grid>
+
+                {/* Linha: Carteira (responsáveis) + Conexão (WhatsApp) */}
+                <Grid item xs={12} md={6}>
+                  <Field name="walletIds">
+                    {({ field, form }) => (
+                      <Autocomplete
+                        multiple
+                        options={users}
+                        onOpen={() => { loadUsers(); }}
+                        loading={loadingUsers}
+                        loadingText="Carregando..."
+                        noOptionsText="Sem opções"
+                        getOptionLabel={(option) => option.name}
+                        getOptionSelected={(option, value) => option.id === value}
+                        value={users.filter(user => field.value?.includes(user.id)) || []}
+                        onChange={(event, value) => {
+                          const ids = value.map(u => u.id);
+                          form.setFieldValue(field.name, ids);
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            variant="outlined"
+                            label="Carteira (Responsáveis)"
+                            placeholder="Carteira (Responsáveis)"
+                            fullWidth
+                            margin="dense"
+                            className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
+                            InputProps={{
+                              ...params.InputProps,
+                              endAdornment: (
+                                <>
+                                  {loadingUsers ? <CircularProgress color="inherit" size={20} /> : null}
+                                  {params.InputProps.endAdornment}
+                                </>
+                              )
+                            }}
+                          />
+                        )}
+                      />
+                    )}
+                  </Field>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Field name="whatsappIds">
+                    {({ field, form }) => (
+                      <Autocomplete
+                        multiple
+                        options={whatsapps}
+                        onOpen={() => { loadWhatsapps(); }}
+                        loading={loadingWhatsapps}
+                        loadingText="Carregando..."
+                        noOptionsText="Sem opções"
+                        getOptionLabel={(option) => option.name}
+                        getOptionSelected={(option, value) => option.id === value}
+                        value={whatsapps.filter(w => field.value?.includes(w.id)) || []}
+                        onChange={(event, value) => {
+                          const ids = value.map(w => w.id);
+                          form.setFieldValue(field.name, ids);
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            variant="outlined"
+                            label="Conexão (WhatsApp)"
+                            placeholder="Conexão (WhatsApp)"
+                            fullWidth
+                            margin="dense"
+                            className={field.value && field.value.length > 0 ? classes.activeFilter : ""}
+                            InputLabelProps={{
+                              shrink: true,
+                            }}
+                            InputProps={{
+                              ...params.InputProps,
+                              endAdornment: (
+                                <>
+                                  {loadingWhatsapps ? <CircularProgress color="inherit" size={20} /> : null}
+                                  {params.InputProps.endAdornment}
+                                </>
+                              )
+                            }}
+                          />
+                        )}
+                      />
+                    )}
+                  </Field>
                 </Grid>
 
                 <Grid item xs={12}>

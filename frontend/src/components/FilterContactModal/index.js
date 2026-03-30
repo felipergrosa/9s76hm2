@@ -298,14 +298,31 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
   const loadChannels = async () => {
     setLoadingChannels(true);
     try {
-      // Buscar valores únicos de canal diretamente do banco
-      const { data } = await api.get("/contacts", { params: { limit: 1, searchParam: "" } });
-      // Usar endpoint de unique-values para canais (precisa adicionar no backend ou usar alternativa)
-      // Por ora, buscar da lista de contatos
-      const resp = await api.get("/contacts", { params: { limit: 500, orderBy: "channel", order: "ASC" } });
+      // Buscar conexões ativas da empresa
+      const companyId = localStorage.getItem('companyId');
+      const { data: whatsapps } = await api.get('/whatsapp', { params: { companyId } });
+      const channelMap = {
+        'baileys': 'WhatsApp',
+        'official': 'WhatsApp Oficial',
+        'webchat': 'WebChat',
+        'facebook': 'Facebook',
+        'instagram': 'Instagram',
+        'telegram': 'Telegram'
+      };
+      const connectionChannels = (whatsapps || [])
+        .map(w => channelMap[w.channelType] || w.channelType)
+        .filter((v, i, a) => a.indexOf(v) === i);
+      
+      // Buscar canais já usados em contatos existentes
+      const resp = await api.get("/contacts", { params: { limit: 500 } });
       const list = Array.isArray(resp?.data?.contacts) ? resp.data.contacts : [];
-      const set = new Set();
-      list.forEach(c => { const v = String(c?.channel || "").trim(); if (v) set.add(v); });
+      const set = new Set(connectionChannels);
+      list.forEach(c => {
+        // channels é array, extrair valores
+        if (Array.isArray(c?.channels)) {
+          c.channels.forEach(ch => { const v = String(ch || "").trim(); if (v) set.add(v); });
+        }
+      });
       
       // Garante valores do initialFilter
       if (initialFilter && Array.isArray(initialFilter.channel)) {
