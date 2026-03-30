@@ -1998,6 +1998,12 @@ const verifyContact = async (
     }
   }
 
+  // Determinar o canal baseado no tipo da conexão WhatsApp
+  const channelType = (wbot as any)?.channelType || "baileys";
+  const channels = channelType === "official" ? ["WhatsApp Oficial"] : 
+                   channelType === "baileys" ? ["WhatsApp"] : 
+                   [channelType];
+
   const contactData = {
     name: nomeContato,
     number: cleaned,
@@ -2008,7 +2014,8 @@ const verifyContact = async (
     whatsappId: wbot.id,
     wbot,
     pushName: pushName || msg?.pushName || undefined,
-    verifiedName: verifiedName || (msg as any)?.verifiedBizName || undefined
+    verifiedName: verifiedName || (msg as any)?.verifiedBizName || undefined,
+    channels
   };
 
   const contact = await CreateOrUpdateContactService(contactData);

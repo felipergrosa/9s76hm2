@@ -168,6 +168,7 @@ const ContactSchema = Yup.object().shape({
 
 const ContactForm = ({ initialContact, onSave, onCancel }) => {
   const classes = useStyles();
+  const [channelOptions, setChannelOptions] = useState([]);
   const [contact, setContact] = useState({
     name: '',
     number: '',
@@ -186,6 +187,31 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
     creditLimit: '',
     ...initialContact
   });
+
+  useEffect(() => {
+    // Buscar conexões ativas para popular Canais
+    const fetchChannels = async () => {
+      try {
+        const companyId = initialContact?.companyId || localStorage.getItem('companyId');
+        const { data: whatsapps } = await api.get('/whatsapp', { params: { companyId } });
+        const channelMap = {
+          'baileys': 'WhatsApp',
+          'official': 'WhatsApp Oficial',
+          'webchat': 'WebChat',
+          'facebook': 'Facebook',
+          'instagram': 'Instagram',
+          'telegram': 'Telegram'
+        };
+        const channels = (whatsapps || [])
+          .map(w => channelMap[w.channelType] || w.channelType)
+          .filter((v, i, a) => a.indexOf(v) === i);
+        setChannelOptions(channels);
+      } catch (err) {
+        // Silencioso
+      }
+    };
+    fetchChannels();
+  }, [initialContact?.companyId]);
 
   useEffect(() => {
     if (initialContact) {
@@ -374,10 +400,9 @@ const ContactForm = ({ initialContact, onSave, onCancel }) => {
                 render={({ field }) => (
                   <Autocomplete
                     multiple
-                    freeSolo
-                    options={['WhatsApp', 'Instagram', 'Messenger', 'Telegram', 'WebChat']}
+                    options={Array.isArray(channelOptions) ? channelOptions : []}
                     value={field.value || []}
-                    onChange={(e, newValue) => field.onChange(newValue || [])}
+                    onChange={(e, newValue) => field.onChange(Array.isArray(newValue) ? newValue : [])}
                     renderTags={(value, getTagProps) =>
                       value.map((option, index) => (
                         <Chip

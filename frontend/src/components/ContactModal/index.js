@@ -171,9 +171,6 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	const [segmentLoading, setSegmentLoading] = useState(false);
 	
 	const [channelOptions, setChannelOptions] = useState([]);
-	const [channelHasMore, setChannelHasMore] = useState(true);
-	const [channelOffset, setChannelOffset] = useState(0);
-	const [channelLoading, setChannelLoading] = useState(false);
 	
 	const [repOptions, setRepOptions] = useState([]);
 	const [repHasMore, setRepHasMore] = useState(true);
@@ -232,11 +229,10 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		const fetchUniqueValues = async () => {
 			try {
 				const limit = 50;
-				const [citiesRes, regionsRes, segmentsRes, channelsRes, repsRes, companiesRes] = await Promise.all([
+				const [citiesRes, regionsRes, segmentsRes, repsRes, companiesRes] = await Promise.all([
 					api.get(`/contacts/unique-values?field=city&limit=${limit}&offset=0`),
 					api.get(`/contacts/unique-values?field=region&limit=${limit}&offset=0`),
 					api.get(`/contacts/unique-values?field=segment&limit=${limit}&offset=0`),
-					api.get(`/contacts/unique-values?field=channel&limit=${limit}&offset=0`),
 					api.get(`/contacts/unique-values?field=representativeCode&limit=${limit}&offset=0`),
 					api.get(`/contacts/unique-values?field=bzEmpresa&limit=${limit}&offset=0`)
 				]);
@@ -255,10 +251,6 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 				setSegmentHasMore(segmentsRes.data.hasMore);
 				setSegmentOffset(limit);
 				
-				setChannelOptions(channelsRes.data.values || []);
-				setChannelHasMore(channelsRes.data.hasMore);
-				setChannelOffset(limit);
-				
 				setRepOptions(repsRes.data.values || []);
 				setRepHasMore(repsRes.data.hasMore);
 				setRepOffset(limit);
@@ -266,6 +258,22 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 				setCompanyOptions(companiesRes.data.values || []);
 				setCompanyHasMore(companiesRes.data.hasMore);
 				setCompanyOffset(limit);
+				
+				// Buscar conexões WhatsApp da empresa para popular Canais
+				const companyId = initialValues?.companyId || localStorage.getItem('companyId');
+				const { data: whatsapps } = await api.get('/whatsapp', { params: { companyId } });
+				const channelMap = {
+					'baileys': 'WhatsApp',
+					'official': 'WhatsApp Oficial',
+					'webchat': 'WebChat',
+					'facebook': 'Facebook',
+					'instagram': 'Instagram',
+					'telegram': 'Telegram'
+				};
+				const channels = (whatsapps || [])
+					.map(w => channelMap[w.channelType] || w.channelType)
+					.filter((v, i, a) => a.indexOf(v) === i); // Remover duplicados
+				setChannelOptions(channels);
 			} catch (err) {
 				// Silencioso - campos continuam funcionando como texto livre
 				console.log("[ContactModal] Erro ao buscar valores únicos:", err);
@@ -499,21 +507,6 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		} catch (err) {
 		} finally {
 			setSegmentLoading(false);
-		}
-	};
-
-	const loadMoreChannels = async () => {
-		if (channelLoading || !channelHasMore) return;
-		try {
-			setChannelLoading(true);
-			const limit = 50;
-			const { data } = await api.get(`/contacts/unique-values?field=channel&limit=${limit}&offset=${channelOffset}`);
-			setChannelOptions(prev => [...prev, ...(data.values || [])]);
-			setChannelHasMore(data.hasMore);
-			setChannelOffset(prev => prev + limit);
-		} catch (err) {
-		} finally {
-			setChannelLoading(false);
 		}
 	};
 
@@ -972,20 +965,10 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 									<Grid item xs={12} md={6}>
 										<Autocomplete
 											multiple
-											freeSolo
-											options={channelOptions || []}
-											value={values.channels || []}
-											onChange={(e, newValue) => setFieldValue('channels', newValue || [])}
+											options={Array.isArray(channelOptions) ? channelOptions : []}
+											value={Array.isArray(values.channels) ? values.channels : []}
+											onChange={(e, newValue) => setFieldValue('channels', Array.isArray(newValue) ? newValue : [])}
 											disabled={!canEditFields}
-											loading={channelLoading}
-											ListboxProps={{
-												onScroll: (event) => {
-													const listboxNode = event.currentTarget;
-													if (listboxNode.scrollTop + listboxNode.clientHeight >= listboxNode.scrollHeight - 20) {
-														loadMoreChannels();
-													}
-												}
-											}}
 											renderTags={(value, getTagProps) => {
 												const safeValue = Array.isArray(value) ? value : [];
 												return safeValue.map((option, index) => (
@@ -1005,7 +988,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 													margin="dense"
 													fullWidth
 													InputLabelProps={{ shrink: true }}
-													placeholder="WhatsApp, Instagram, Telegram..."
+													placeholder="Selecione os canais"
 												/>
 											)}
 										/>
