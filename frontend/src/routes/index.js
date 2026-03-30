@@ -213,6 +213,7 @@ const Routes = () => {
                     <PrivateRoute exact path="/contact-lists/:contactListId/contacts" component={ContactListItems} permission="contact-lists.view" />
                     <Route exact path="/campaigns" component={Campaigns} isPrivate />
                     <Route exact path="/campaigns/new" component={CampaignsNew} isPrivate />
+                    <Route exact path="/campaignsNew/:campaignId" component={CampaignsNew} isPrivate />
                     <Route exact path="/campaign/:campaignId/detailed-report" component={CampaignDetailedReport} isPrivate />
                     <Route exact path="/campaigns-config" component={CampaignsConfig} isPrivate />
                   </>

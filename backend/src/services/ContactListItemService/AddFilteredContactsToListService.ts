@@ -10,6 +10,7 @@ interface FilterParams {
   channel?: string[];
   representativeCode?: string[];
   city?: string[];
+  region?: string[];
   segment?: string[];
   situation?: string[];
   foundationMonths?: number[]; // 1-12
@@ -21,7 +22,7 @@ interface FilterParams {
   dtUltCompraEnd?: string;   // yyyy-mm-dd
   minVlUltCompra?: number | string; // valor mínimo da última compra
   maxVlUltCompra?: number | string; // valor máximo da última compra
-  bzEmpresa?: string; // filtro por empresa
+  bzEmpresa?: string | string[]; // filtro por empresa (array ou string)
 }
 
 interface Request {
@@ -129,6 +130,7 @@ const AddFilteredContactsToListService = async ({
     filters.channel = normalizeStringArray((filters as any).channel);
     filters.representativeCode = normalizeStringArray((filters as any).representativeCode);
     filters.city = normalizeStringArray((filters as any).city);
+    filters.region = normalizeStringArray((filters as any).region);
     filters.segment = normalizeStringArray((filters as any).segment);
     filters.situation = normalizeStringArray((filters as any).situation);
 
@@ -150,6 +152,7 @@ const AddFilteredContactsToListService = async ({
       (filters.channel && filters.channel.length > 0) ||
       (filters.representativeCode && filters.representativeCode.length > 0) ||
       (filters.city && filters.city.length > 0) ||
+      (filters.region && filters.region.length > 0) ||
       (filters.segment && filters.segment.length > 0) ||
       (filters.situation && filters.situation.length > 0) ||
       (filters.bzEmpresa && String(filters.bzEmpresa).trim()) ||
@@ -181,6 +184,8 @@ const AddFilteredContactsToListService = async ({
 
       const addIn = (col: string, arr?: string[]) => {
         if (arr && arr.length > 0) {
+          // Adiciona IS NOT NULL para evitar que NULL passe pelo filtro (NULL IN (...) retorna NULL, não FALSE)
+          conds.push(`c.${col} IS NOT NULL`);
           conds.push(`c.${col} IN (:${col.replace(/\W/g, '_')})`);
           repl[col.replace(/\W/g, '_')] = arr;
         }
@@ -191,12 +196,27 @@ const AddFilteredContactsToListService = async ({
         addIn('"channel"', filters.channel);
         addIn('"representativeCode"', filters.representativeCode);
         addIn('"city"', filters.city);
+        addIn('"region"', filters.region);
         addIn('"segment"', filters.segment);
         addIn('"situation"', filters.situation);
 
-        if (filters.bzEmpresa && String(filters.bzEmpresa).trim()) {
-          repl.bzEmpresa = `%${String(filters.bzEmpresa).trim()}%`;
-          conds.push('c."bzEmpresa" ILIKE :bzEmpresa');
+        // Filtro de empresa (pode ser string ou array)
+        if (filters.bzEmpresa) {
+          const bzEmpresaArr = normalizeStringArray((filters as any).bzEmpresa);
+          if (bzEmpresaArr.length > 0) {
+            if (bzEmpresaArr.length === 1) {
+              repl.bzEmpresa = `%${bzEmpresaArr[0].trim()}%`;
+              conds.push('c."bzEmpresa" ILIKE :bzEmpresa');
+            } else {
+              // Múltiplas empresas: usa OR
+              const orConds = bzEmpresaArr.map((e, i) => {
+                const key = `bzEmpresa${i}`;
+                repl[key] = `%${e.trim()}%`;
+                return `c."bzEmpresa" ILIKE :${key}`;
+              });
+              conds.push(`(${orConds.join(' OR ')})`);
+            }
+          }
         }
 
         if ((filters as any).florder !== undefined && (filters as any).florder !== null) {
@@ -332,6 +352,11 @@ const AddFilteredContactsToListService = async ({
       whereConditions.push({ city: { [Op.in]: filters.city } });
     }
 
+    // Filtro de região
+    if (filters.region && filters.region.length > 0) {
+      whereConditions.push({ region: { [Op.in]: filters.region } });
+    }
+
     // Filtro de segmento
     if (filters.segment && filters.segment.length > 0) {
       whereConditions.push({ segment: { [Op.in]: filters.segment } });
@@ -342,13 +367,25 @@ const AddFilteredContactsToListService = async ({
       whereConditions.push({ situation: { [Op.in]: filters.situation } });
     }
 
-    // Filtro de empresa
-    if (filters.bzEmpresa && filters.bzEmpresa.trim()) {
-      whereConditions.push({
-        bzEmpresa: {
-          [Op.iLike]: `%${filters.bzEmpresa.trim()}%`
+    // Filtro de empresa (pode ser string ou array)
+    if (filters.bzEmpresa) {
+      const bzEmpresaArr = normalizeStringArray((filters as any).bzEmpresa);
+      if (bzEmpresaArr.length > 0) {
+        // Se for apenas uma empresa, usa ILIKE simples
+        if (bzEmpresaArr.length === 1) {
+          whereConditions.push({
+            bzEmpresa: {
+              [Op.iLike]: `%${bzEmpresaArr[0].trim()}%`
+            }
+          });
+        } else {
+          // Se forem múltiplas, usa OR com ILIKE para cada uma
+          const orConditions = bzEmpresaArr.map(empresa => ({
+            bzEmpresa: { [Op.iLike]: `%${empresa.trim()}%` }
+          }));
+          whereConditions.push({ [Op.or]: orConditions });
         }
-      });
+      }
     }
 
     // Filtro por mês (independente do ano) da data de fundação

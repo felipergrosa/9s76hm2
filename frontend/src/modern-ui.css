@@ -350,7 +350,7 @@
 
 /* Dashboard Metric Cards Fix */
 .modern-ui .MuiGrid-root .MuiPaper-root {
-    padding: 10px !important;
+    padding: 20px !important;
 }
 
 /* Fix específico para Moments - Remover padding forçado */

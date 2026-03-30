@@ -138,6 +138,10 @@ class Campaign extends Model<Campaign> {
   @Column({ type: DataType.TEXT, allowNull: true })
   userIds: string; // JSON array de IDs de usuários para distribuição por tags
 
+  // Tag para filtrar contatos
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  tagListId: number;
+
   // Campos de mídia por mensagem (1..5)
   @Column
   mediaUrl1: string;

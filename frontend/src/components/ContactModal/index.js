@@ -973,7 +973,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										<Autocomplete
 											multiple
 											freeSolo
-											options={channelOptions}
+											options={channelOptions || []}
 											value={values.channels || []}
 											onChange={(e, newValue) => setFieldValue('channels', newValue || [])}
 											disabled={!canEditFields}
@@ -985,6 +985,17 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 														loadMoreChannels();
 													}
 												}
+											}}
+											renderTags={(value, getTagProps) => {
+												const safeValue = Array.isArray(value) ? value : [];
+												return safeValue.map((option, index) => (
+													<Chip
+														{...getTagProps({ index })}
+														key={index}
+														label={option || ''}
+														size="small"
+													/>
+												));
 											}}
 											renderInput={(params) => (
 												<TextField
@@ -1090,12 +1101,12 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										{canEditWallets ? (
 											<Autocomplete
 												multiple
-												options={userOptions}
-												getOptionLabel={(option) => option.name?.toUpperCase() || ''}
-												value={userOptions.filter(u => (values.wallets || []).includes(u.id))}
+												options={userOptions || []}
+												getOptionLabel={(option) => option?.name?.toUpperCase() || ''}
+												value={(userOptions || []).filter(u => (values.wallets || []).includes(u?.id))}
 												onChange={(e, newValue) => {
 													// Atualizar wallets
-													setFieldValue("wallets", newValue.map(u => u.id));
+													setFieldValue("wallets", (newValue || []).map(u => u?.id));
 													
 													// Sincronizar tags: adicionar/remover tags pessoais dos usuários selecionados
 													const currentTags = values.tags || [];
@@ -1127,18 +1138,19 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 												disabled={loadingUsers}
 												loading={loadingUsers}
 												filterSelectedOptions
-												renderTags={(value, getTagProps) =>
-													value.map((option, index) => (
+												renderTags={(value, getTagProps) => {
+													const safeValue = Array.isArray(value) ? value : [];
+													return safeValue.map((option, index) => (
 														<Chip
 															{...getTagProps({ index })}
-															key={option.id}
-															label={option.name?.toUpperCase()}
+															key={option?.id || index}
+															label={option?.name?.toUpperCase() || ''}
 															color="primary"
 															size="small"
 															style={{ height: '24px', fontSize: '11px' }}
 														/>
-													))
-												}
+													));
+												}}
 												renderInput={(params) => (
 													<TextField
 														{...params}
@@ -1206,28 +1218,29 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 											<Autocomplete
 												multiple
 												options={Array.isArray(tagOptions) ? tagOptions : []}
-												getOptionLabel={(option) => option.name?.toUpperCase() || ''}
-												value={(Array.isArray(tagOptions) ? tagOptions : []).filter(t => (values.tags || []).includes(t.id))}
-												onChange={(e, newValue) => setFieldValue("tags", newValue.map(t => t.id))}
+												getOptionLabel={(option) => option?.name?.toUpperCase() || ''}
+												value={(Array.isArray(tagOptions) ? tagOptions : []).filter(t => (values.tags || []).includes(t?.id))}
+												onChange={(e, newValue) => setFieldValue("tags", (newValue || []).map(t => t?.id))}
 												disabled={loadingTags}
 												loading={loadingTags}
 												filterSelectedOptions
-												renderTags={(value, getTagProps) =>
-													value.map((option, index) => (
+												renderTags={(value, getTagProps) => {
+													const safeValue = Array.isArray(value) ? value : [];
+													return safeValue.map((option, index) => (
 														<Chip
 															{...getTagProps({ index })}
-															key={option.id}
-															label={option.name?.toUpperCase()}
+															key={option?.id || index}
+															label={option?.name?.toUpperCase() || ''}
 															style={{
-																backgroundColor: option.color || undefined,
+																backgroundColor: option?.color || undefined,
 																height: '24px',
 																fontSize: '11px',
 																color: '#fff'
 															}}
 															size="small"
 														/>
-													))
-												}
+													));
+												}}
 												renderInput={(params) => (
 													<TextField
 														{...params}

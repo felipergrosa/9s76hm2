@@ -14,6 +14,7 @@ interface Data {
   companyId: number;
   contactListId: number;
   whatsappId?: number;
+  tagListId?: string | number | null;
   message1?: string;
   message2?: string;
   message3?: string;

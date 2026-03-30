@@ -5,6 +5,7 @@ import { Formik, Form, Field } from "formik";
 import { toast } from "react-toastify";
 import { head, isNil } from "lodash";
 import moment from "moment";
+import Swal from "sweetalert2";
 
 import { makeStyles } from "@material-ui/core/styles";
 import { green } from "@material-ui/core/colors";
@@ -12,7 +13,7 @@ import {
   Button, IconButton, TextField, CircularProgress, Chip, Tooltip, Typography,
   Box, FormControl, FormControlLabel, Grid, InputLabel, MenuItem, Select,
   Tab, Tabs, Paper, Divider, FormHelperText, Checkbox, Popover,
-  Stepper, Step, StepLabel,
+  Stepper, Step, StepLabel, Dialog, DialogTitle, DialogContent,
 } from "@material-ui/core";
 import { Alert } from "@material-ui/lab";
 import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete";
@@ -23,15 +24,15 @@ import InfoOutlinedIcon from "@material-ui/icons/InfoOutlined";
 import LocalOfferIcon from "@material-ui/icons/LocalOffer";
 import SaveIcon from "@material-ui/icons/Save";
 import AccessTimeIcon from "@material-ui/icons/AccessTime";
-import { ChevronRight, ChevronLeft, ArrowLeft, Settings as SettingsIcon, Assignment as AssignmentIcon, Event as EventIcon, QuestionAnswer as QuestionAnswerIcon, Send as SendIcon, FlashOn as FlashOnIcon } from "@material-ui/icons";
+import { ChevronRight, ChevronLeft, ArrowLeft, Settings as SettingsIcon, Assignment as AssignmentIcon, Event as EventIcon, QuestionAnswer as QuestionAnswerIcon, Send as SendIcon, FlashOn as FlashOnIcon, PlayCircleOutline as PlayCircleOutlineIcon, PauseCircleOutline as PauseCircleOutlineIcon } from "@material-ui/icons";
 import { Sparkles, Smile, Settings, Rocket, Calendar, Zap } from "lucide-react";
 
 import api from "../../services/api";
+import * as libraryApi from "../../services/libraryApi";
 import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import useQueues from "../../hooks/useQueues";
-import * as libraryApi from "../../services/libraryApi";
 
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
@@ -66,7 +67,13 @@ const useStyles = makeStyles((theme) => ({
     "& .MuiStepIcon-root.MuiStepIcon-completed": { color: "#005c53" },
   },
   body: { flex: 1, overflowY: "auto", padding: theme.spacing(0, 4, 4) },
-  card: { borderRadius: 20, padding: theme.spacing(4), boxShadow: "0 2px 16px rgba(0,0,0,0.04)", backgroundColor: "#fff" },
+  card: { 
+    borderRadius: 20, 
+    padding: theme.spacing(4), 
+    boxShadow: "0 2px 16px rgba(0,0,0,0.04)", 
+    backgroundColor: "#fff",
+    "&.MuiPaper-root": { padding: "20px !important" },
+  },
   sideCard: { borderRadius: 20, padding: theme.spacing(3), backgroundColor: "#fff", boxShadow: "0 2px 12px rgba(0,0,0,0.03)", position: "sticky", top: 16 },
   stepTitle: { fontSize: "1.6rem", fontWeight: 800, color: "#0f172a", marginBottom: 4 },
   stepSub: { color: "#64748b", marginBottom: theme.spacing(4), fontSize: "0.95rem" },
@@ -93,6 +100,35 @@ const useStyles = makeStyles((theme) => ({
     padding: theme.spacing(2), borderRadius: 16, border: "1px solid #e2e8f0", cursor: "pointer",
     transition: "all 0.2s", marginBottom: theme.spacing(1.5), display: "flex", alignItems: "center", gap: 16,
     "&:hover": { borderColor: "#005c53", backgroundColor: "rgba(0,92,83,0.02)" }
+  },
+  // Campos de formulário com cantos arredondados
+  formField: {
+    "& .MuiOutlinedInput-root": {
+      borderRadius: 12,
+      minHeight: 56,
+    },
+    "& .MuiSelect-root": {
+      borderRadius: 12,
+    },
+    "& .MuiFormControl-root": {
+      "& .MuiOutlinedInput-root": {
+        borderRadius: 12,
+        minHeight: 56,
+      },
+    },
+    // Força altura consistente no renderValue do Select
+    "& .MuiSelect-select": {
+      minHeight: "unset !important",
+      paddingTop: 12,
+      paddingBottom: 12,
+    },
+  },
+  // Autocomplete com cantos arredondados
+  autoCompleteField: {
+    "& .MuiOutlinedInput-root": {
+      borderRadius: 12,
+      minHeight: 56,
+    },
   },
   dispatchCardActive: { borderColor: "#005c53", backgroundColor: "rgba(0,92,83,0.04)", borderWidth: 2 },
   btnSave: { borderRadius: 12, padding: "10px 24px", textTransform: "none", fontWeight: 700, border: "1px solid #005c53", color: "#005c53", "&:hover": { backgroundColor: "#f0fdfa" } },
@@ -121,6 +157,145 @@ const CampaignSchema = Yup.object().shape({
 });
 
 const STEPS = ["Configuração", "Regras", "Agendamento", "Mensagem"];
+
+// Função para validar e mostrar erros com SweetAlert2 (por step)
+const validateStepAndShowErrors = async (validateForm, values, whatsappId, selectedQueue, currentStep) => {
+  const errors = await validateForm();
+  
+  // Definir quais campos pertencem a cada step
+  const stepFields = {
+    0: ["name", "contactListId", "contactListIds", "whatsappId", "tagListId"],
+    1: ["openTicket", "statusTicket", "queueId", "confirmation"],
+    2: ["scheduledAt"],
+    3: ["message1", "message2", "message3", "message4", "message5"],
+  };
+  
+  // Mapear campos para labels
+  const FIELD_LABELS = {
+    name: "Nome da Campanha",
+    contactListId: "Lista de Contatos",
+    whatsappId: "Conexão WhatsApp",
+    message1: "Mensagem 1",
+    scheduledAt: "Data de Agendamento",
+    openTicket: "Abrir Ticket",
+    statusTicket: "Status do Ticket",
+    queueId: "Fila (Queue)",
+    confirmation: "Confirmação",
+  };
+  
+  // Validações customizadas por step
+  const customErrors = {};
+  
+  // Só validar campos do step atual
+  const fieldsToCheck = stepFields[currentStep] || [];
+  
+  if (currentStep === 0) {
+    if (!values.contactListId && (!values.contactListIds || values.contactListIds.length === 0)) {
+      customErrors.contactListId = "Selecione ao menos uma lista de contatos";
+    }
+    if (!whatsappId) {
+      customErrors.whatsappId = "Selecione uma conexão WhatsApp";
+    }
+  }
+  
+  if (currentStep === 1) {
+    // Step 2 (Regras) - validações
+    if (!values.openTicket) {
+      customErrors.openTicket = "Selecione se deseja abrir ticket";
+    }
+    if (!values.statusTicket) {
+      customErrors.statusTicket = "Selecione o status do ticket";
+    }
+    if (!selectedQueue) {
+      customErrors.queueId = "Selecione uma fila";
+    }
+    if (!values.confirmation && values.confirmation !== false) {
+      customErrors.confirmation = "Selecione a confirmação";
+    }
+  }
+  
+  if (currentStep === 2) {
+    // Step 3 (Agendamento) - validação
+    if (values.scheduledAt) {
+      const scheduledDate = moment(values.scheduledAt);
+      const now = moment();
+      if (scheduledDate.isBefore(now)) {
+        customErrors.scheduledAt = "A data de agendamento deve ser futura";
+      }
+    }
+  }
+  
+  if (currentStep === 3) {
+    // Step 4 (Mensagem) - validações
+    if (!values.message1 || values.message1.trim() === "") {
+      customErrors.message1 = "A mensagem 1 é obrigatória";
+    }
+    // Validação de tamanho máximo
+    if (values.message1 && values.message1.length > 1024) {
+      customErrors.message1 = "A mensagem 1 deve ter no máximo 1024 caracteres";
+    }
+  }
+  
+  // Filtrar apenas erros do step atual
+  const allErrors = {};
+  fieldsToCheck.forEach(field => {
+    if (errors[field]) allErrors[field] = errors[field];
+    if (customErrors[field]) allErrors[field] = customErrors[field];
+  });
+  
+  if (Object.keys(allErrors).length > 0) {
+    const errorList = Object.entries(allErrors)
+      .map(([field, error]) => {
+        const label = FIELD_LABELS[field] || field;
+        return `• <strong>${label}:</strong> ${error}`;
+      })
+      .join("<br>");
+    
+    const stepNames = ["Configuração", "Regras", "Agendamento", "Mensagem"];
+    
+    const result = await Swal.fire({
+      title: `<span style="color: #dc2626;">⚠️ Etapa ${currentStep + 1}: ${stepNames[currentStep]}</span>`,
+      html: `
+        <div style="text-align: left; padding: 16px; background: #fef2f2; border-radius: 12px; border: 1px solid #fecaca;">
+          <p style="margin: 0 0 12px 0; color: #991b1b; font-weight: 600;">
+            Por favor, corrija os campos desta etapa:
+          </p>
+          <div style="color: #7f1d1d; line-height: 1.8;">
+            ${errorList}
+          </div>
+        </div>
+      `,
+      icon: "warning",
+      confirmButtonText: "✓ OK, Corrigir",
+      confirmButtonColor: "#005c53",
+      width: "600px",
+      padding: "2em",
+      backdrop: `rgba(0,0,0,0.4)`,
+    });
+    
+    // Focar no primeiro campo com erro
+    if (result.isConfirmed) {
+      const firstErrorField = Object.keys(allErrors)[0];
+      setTimeout(() => {
+        const fieldElement = document.querySelector(`[name="${firstErrorField}"]`) || 
+                           document.getElementById(firstErrorField);
+        if (fieldElement) {
+          fieldElement.focus();
+          fieldElement.scrollIntoView({ behavior: "smooth", block: "center" });
+          fieldElement.style.transition = "all 0.3s ease";
+          fieldElement.style.boxShadow = "0 0 0 3px rgba(220, 38, 38, 0.3)";
+          setTimeout(() => {
+            fieldElement.style.boxShadow = "";
+          }, 2000);
+        }
+      }, 100);
+    }
+    
+    return false;
+  }
+  
+  return true;
+};
 
 const CampaignForm = () => {
   const classes = useStyles();
@@ -188,6 +363,9 @@ const CampaignForm = () => {
   const [libraryFolders, setLibraryFolders] = useState([]);
   const [libraryFiles, setLibraryFiles] = useState([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const librarySearch = librarySearchValue;
+  const setLibrarySearch = setLibrarySearchValue;
   const setFieldValueRef = useRef(null);
   const formValuesRef = useRef(initialState);
 
@@ -235,6 +413,13 @@ const CampaignForm = () => {
     const mime = (opt?.mediaType || "").toLowerCase();
     const exts = [".jpg",".jpeg",".png",".gif",".webp",".pdf",".mp4",".mp3",".ogg",".opus",".wav"];
     const mimes = ["image/","video/","audio/","application/pdf"];
+    
+    // Verifica se a URL termina com alguma extensão permitida
+    const hasAllowedExt = exts.some(ext => url.endsWith(ext));
+    // Verifica se o mime type é permitido
+    const hasAllowedMime = mimes.some(m => mime.startsWith(m));
+    
+    return hasAllowedExt || hasAllowedMime;
   };
 
   const getMediaUrlFieldByTab = (i) => `mediaUrl${i+1}`;
@@ -280,26 +465,94 @@ const CampaignForm = () => {
         if (campaignId) {
           setCampaignLoading(true);
           const { data } = await api.get(`/campaigns/${campaignId}`);
-          if (data?.userIds) { try { const ids = JSON.parse(data.userIds); setSelectedUsers((options||[]).filter(u => ids.includes(u.id))); } catch(e){} }
-          else if (data?.user) setSelectedUsers([data.user]);
+          
+          // Carregar usuários se necessário antes de filtrar
+          if (data?.userIds && (!options || options.length === 0)) {
+            try {
+              const { data: usersData } = await api.get("/users/available");
+              setOptions(usersData || []);
+              const ids = typeof data.userIds === 'string' ? JSON.parse(data.userIds) : data.userIds;
+              if (Array.isArray(ids)) {
+                setSelectedUsers((usersData || []).filter(u => ids.includes(u.id)));
+              }
+            } catch (e) {
+              console.error("Erro ao carregar usuários:", e);
+            }
+          } else if (data?.userIds) {
+            try {
+              const ids = typeof data.userIds === 'string' ? JSON.parse(data.userIds) : data.userIds;
+              if (Array.isArray(ids)) {
+                setSelectedUsers((options || []).filter(u => ids.includes(u.id)));
+              }
+            } catch (e) {}
+          } else if (data?.user) {
+            setSelectedUsers([data.user]);
+          }
+          
           if (data?.queue) setSelectedQueue(data.queue.id);
           if (data?.whatsappId) setWhatsappId(data.whatsappId);
           if (data?.dispatchStrategy) setDispatchStrategy(data.dispatchStrategy);
+          
+          const prev = {};
+          
+          // Garantir que tagListId seja "Nenhuma" quando null/vazio, ou string quando tem valor
+          console.log("[DEBUG] tagListId original:", data?.tagListId, "tipo:", typeof data?.tagListId);
+          if (!data?.tagListId || data.tagListId === null || data.tagListId === "" || data.tagListId === undefined) {
+            prev.tagListId = "Nenhuma";
+          } else {
+            prev.tagListId = String(data.tagListId);
+          }
+          console.log("[DEBUG] tagListId após processamento:", prev.tagListId);
+          
+          // Copiar demais campos, mas NÃO sobrescrever tagListId já processado
+          Object.entries(data).forEach(([k,v]) => { 
+            if (k !== "tagListId") {
+              prev[k] = k === "scheduledAt" && v ? moment(v).format("YYYY-MM-DDTHH:mm") : (v === null ? "" : v); 
+            }
+          });
+          
           if (data?.contactListIds) {
             try {
               const ids = typeof data.contactListIds === 'string' ? JSON.parse(data.contactListIds) : data.contactListIds;
               if (Array.isArray(ids)) {
-                // Ensure values contains contactListIds
                 prev.contactListIds = ids;
               }
             } catch (e) {
               console.error("Error parsing contactListIds", e);
             }
           }
+          
           if (data?.metaTemplateVariables) { try { setMetaTemplateVariables(typeof data.metaTemplateVariables === 'string' ? JSON.parse(data.metaTemplateVariables) : data.metaTemplateVariables || {}); } catch(e){ setMetaTemplateVariables({}); } }
           if (data?.allowedWhatsappIds) { try { const p = typeof data.allowedWhatsappIds === 'string' ? JSON.parse(data.allowedWhatsappIds) : data.allowedWhatsappIds; if (Array.isArray(p)) setAllowedWhatsappIds(p); } catch(e){} }
-          const prev = {};
-          Object.entries(data).forEach(([k,v]) => { prev[k] = k === "scheduledAt" && v ? moment(v).format("YYYY-MM-DDTHH:mm") : (v === null ? "" : v); });
+          
+          // Restaurar dispatchMode baseado em allowedWhatsappIds e dispatchStrategy
+          // Usa waRes.data que já está disponível aqui
+          if (data?.dispatchStrategy === "round_robin" && data?.allowedWhatsappIds) {
+            try {
+              const allowedIds = typeof data.allowedWhatsappIds === 'string' ? JSON.parse(data.allowedWhatsappIds) : data.allowedWhatsappIds;
+              const loadedWhatsapps = waRes.data || [];
+              const allIds = loadedWhatsapps.map(w => w.id).sort();
+              const allowedSorted = [...allowedIds].sort();
+              
+              if (JSON.stringify(allIds) === JSON.stringify(allowedSorted)) {
+                setDispatchMode("all");
+              } else {
+                const baileysIds = loadedWhatsapps.filter(w => w.channelType !== "official").map(w => w.id).sort();
+                const officialIds = loadedWhatsapps.filter(w => w.channelType === "official").map(w => w.id).sort();
+                
+                if (JSON.stringify(baileysIds) === JSON.stringify(allowedSorted)) {
+                  setDispatchMode("baileys");
+                } else if (JSON.stringify(officialIds) === JSON.stringify(allowedSorted)) {
+                  setDispatchMode("official");
+                } else {
+                  setDispatchMode("custom");
+                }
+              }
+            } catch (e) {}
+          } else if (data?.dispatchStrategy === "single" || !data?.dispatchStrategy) {
+            setDispatchMode("single");
+          }
+          
           setCampaign(prev);
           setCampaignLoading(false);
         }
@@ -329,6 +582,29 @@ const CampaignForm = () => {
     })();
   }, [whatsappId, whatsapps]);
 
+  // Carregar pastas/arquivos da biblioteca quando o dialog abrir
+  useEffect(() => {
+    if (!fileLibraryOpen) return;
+    let active = true;
+    (async () => {
+      try {
+        setLibraryLoading(true);
+        const foldersData = await libraryApi.fetchFolders(libraryCurrentFolder);
+        const filesData = libraryCurrentFolder ? await libraryApi.fetchFiles(libraryCurrentFolder) : [];
+        if (!active) return;
+        setLibraryFolders(Array.isArray(foldersData) ? foldersData : []);
+        setLibraryFiles(Array.isArray(filesData) ? filesData : []);
+      } catch (_) {
+        if (!active) return;
+        setLibraryFolders([]);
+        setLibraryFiles([]);
+      } finally {
+        if (active) setLibraryLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [fileLibraryOpen, libraryCurrentFolder]);
+
   const ensureUsersLoaded = async () => {
     if (options?.length > 0) return;
     try { setLoading(true); const { data } = await api.get("/users/available"); setOptions(data || []); }
@@ -347,7 +623,9 @@ const CampaignForm = () => {
       const userId = selectedUsers.length === 1 ? selectedUsers[0].id : null;
       // Convert contactListIds to JSON string if it's an array
       const contactListIds = Array.isArray(values.contactListIds) ? JSON.stringify(values.contactListIds) : values.contactListIds;
-      const dv = { ...processed, whatsappId, userId, userIds, contactListIds, queueId: selectedQueue || null, dispatchStrategy, allowedWhatsappIds, metaTemplateVariables };
+      // Process tagListId: "Nenhuma" → null, string → number
+      const tagListId = values.tagListId === "Nenhuma" ? null : (values.tagListId ? Number(values.tagListId) : null);
+      const dv = { ...processed, whatsappId, userId, userIds, contactListIds, queueId: selectedQueue || null, dispatchStrategy, allowedWhatsappIds, metaTemplateVariables, tagListId };
       if (campaignId) { await api.put(`/campaigns/${campaignId}`, dv); if (attachment) { const fd = new FormData(); fd.append("file", attachment); await api.post(`/campaigns/${campaignId}/media-upload`, fd); } }
       else { const { data } = await api.post("/campaigns", dv); if (attachment) { const fd = new FormData(); fd.append("file", attachment); await api.post(`/campaigns/${data.id}/media-upload`, fd); } }
       toast.success(i18n.t("campaigns.toasts.success"));
@@ -365,7 +643,9 @@ const CampaignForm = () => {
       const userIds = selectedUsers.length > 0 ? JSON.stringify(selectedUsers.map(u => u.id)) : null;
       // Convert contactListIds to JSON string if it's an array
       const contactListIds = Array.isArray(values.contactListIds) ? JSON.stringify(values.contactListIds) : values.contactListIds;
-      const dv = { ...processed, whatsappId, userId: selectedUsers.length === 1 ? selectedUsers[0].id : null, userIds, contactListIds, queueId: selectedQueue || null, dispatchStrategy, allowedWhatsappIds, metaTemplateVariables };
+      // Process tagListId: "Nenhuma" → null, string → number
+      const tagListId = values.tagListId === "Nenhuma" ? null : (values.tagListId ? Number(values.tagListId) : null);
+      const dv = { ...processed, whatsappId, userId: selectedUsers.length === 1 ? selectedUsers[0].id : null, userIds, contactListIds, queueId: selectedQueue || null, dispatchStrategy, allowedWhatsappIds, metaTemplateVariables, tagListId };
       if (campaignId) { await api.put(`/campaigns/${campaignId}`, dv); } else { const { data } = await api.post("/campaigns", dv); setCampaignId(data.id); }
       toast.success(hasSched ? "Campanha programada!" : "Rascunho salvo!");
       handleClose();
@@ -384,9 +664,51 @@ const CampaignForm = () => {
     } catch (e) { toastError(e); }
   };
 
+  const handleLibraryNavigateToFolder = (folder) => {
+    setLibraryCurrentFolder(folder?.id || null);
+    setLibraryBreadcrumbs((prev) => {
+      const folderId = folder?.id || null;
+      const folderName = folder?.name || "Home";
+      if (!folderId) return [{ id: null, name: "Home" }];
+      const existingIndex = prev.findIndex((crumb) => crumb.id === folderId);
+      if (existingIndex >= 0) return prev.slice(0, existingIndex + 1);
+      return [...prev, { id: folderId, name: folderName }];
+    });
+  };
+
+  const filterItemsBySearch = (items, searchTerm) => {
+    if (!searchTerm) return items;
+    const term = String(searchTerm).toLowerCase();
+    return (items || []).filter((item) => {
+      const name = (item.name || item.title || "").toLowerCase();
+      return name.includes(term);
+    });
+  };
+
   const deleteMedia = async () => {
     if (attachment) { setAttachment(null); attachmentFile.current.value = null; }
     if (campaign.mediaPath) { await api.delete(`/campaigns/${campaign.id}/media-upload`); setCampaign(p => ({ ...p, mediaPath: null, mediaName: null })); toast.success(i18n.t("campaigns.toasts.deleted")); }
+  };
+
+  // Funções de controle da campanha
+  const restartCampaign = async () => {
+    try {
+      await api.post(`/campaigns/${campaignId}/restart`);
+      toast.success(i18n.t("campaigns.toasts.restart"));
+      setCampaign((prev) => ({ ...prev, status: "EM_ANDAMENTO" }));
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const cancelCampaign = async () => {
+    try {
+      await api.post(`/campaigns/${campaignId}/cancel`);
+      toast.success(i18n.t("campaigns.toasts.cancel"));
+      setCampaign((prev) => ({ ...prev, status: "CANCELADA" }));
+    } catch (err) {
+      toast.error(err.message);
+    }
   };
 
   const handleEmojiSelect = (field, emoji, setFieldValue, values) => { setFieldValue(field, (values[field] || "") + emoji); };
@@ -444,9 +766,37 @@ const CampaignForm = () => {
   return (
     <MainContainer className={classes.root}>
       <MainHeader>
-        <Box display="flex" alignItems="center">
-          <IconButton onClick={handleClose} style={{ marginRight: 12 }}><ArrowLeft /></IconButton>
-          <Title>{campaignId ? "Editar Campanha" : "Nova Campanha"}</Title>
+        <Box display="flex" alignItems="center" justifyContent="space-between" width="100%">
+          <Box display="flex" alignItems="center">
+            <IconButton onClick={handleClose} style={{ marginRight: 12 }}><ArrowLeft /></IconButton>
+            <Title>
+              {campaignId 
+                ? (campaignEditable ? "Editar Campanha" : "Visualizar Campanha")
+                : "Nova Campanha"
+              }
+            </Title>
+          </Box>
+          {/* Badge de status da campanha */}
+          {campaignId && campaign.status && (
+            <Chip 
+              label={
+                campaign.status === "INATIVA" ? "Inativa" :
+                campaign.status === "PROGRAMADA" ? "Programada" :
+                campaign.status === "EM_ANDAMENTO" ? "Em Andamento" :
+                campaign.status === "CANCELADA" ? "Pausada" :
+                campaign.status === "FINALIZADA" ? "Finalizada" :
+                campaign.status
+              }
+              color={
+                campaign.status === "EM_ANDAMENTO" ? "primary" :
+                campaign.status === "PROGRAMADA" ? "secondary" :
+                campaign.status === "FINALIZADA" ? "default" :
+                "default"
+              }
+              size="small"
+              style={{ fontWeight: 600 }}
+            />
+          )}
         </Box>
       </MainHeader>
 
@@ -494,43 +844,46 @@ const CampaignForm = () => {
                              <label className={classes.label} style={{ marginBottom: 0 }}>Nome da Campanha</label>
                              <Tooltip title="Nome identificador interno. Use termos que ajudem a localizar a campanha na lista depois."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
                            </Box>
-                           <Field as={TextField} name="name" fullWidth variant="outlined" placeholder="Ex: Q4 Promoção Black Friday" error={touched.name && Boolean(errors.name)} helperText={touched.name && errors.name} disabled={!campaignEditable} />
+                           <Field as={TextField} name="name" fullWidth variant="outlined" placeholder="Ex: Q4 Promoção Black Friday" error={errors.name && touched.name} helperText={errors.name && touched.name ? errors.name : ""} disabled={!campaignEditable} className={classes.formField} />
                          </Box>
 
-                         <Grid container spacing={2}>
+                         <Grid container spacing={3}>
                            <Grid item xs={12} md={6}>
                              <Box display="flex" alignItems="center" mb={1} gap={0.5}>
                                 <label className={classes.label} style={{ marginBottom: 0 }}>Listas de Contatos</label>
                                 <Tooltip title="Bases de dados que receberão o disparo. Você pode selecionar múltiplas listas."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
                               </Box>
-                              <Autocomplete
-                                multiple
-                                name="contactListIds"
-                                options={contactLists}
-                                getOptionLabel={(option) => option.name}
-                                value={contactLists.filter(cl => values.contactListIds?.includes(cl.id))}
-                                onChange={(e, nv) => setFieldValue("contactListIds", nv.map(cl => cl.id))}
-                                disabled={!campaignEditable}
-                                renderTags={(value, getTagProps) =>
-                                  value.map((option, index) => (
-                                    <Chip label={option.name} size="small" {...getTagProps({ index })} />
-                                  ))
-                                }
-                                renderInput={(params) => (
-                                  <TextField {...params} variant="outlined" placeholder="Selecionar listas..." />
-                                )}
-                              />
+                              <Box className={classes.autoCompleteField}>
+                                <Autocomplete
+                                  multiple
+                                  name="contactListIds"
+                                  options={contactLists || []}
+                                  getOptionLabel={(option) => option?.name || ""}
+                                  value={(contactLists || []).filter(cl => (values.contactListIds || []).includes(cl?.id))}
+                                  onChange={(e, nv) => setFieldValue("contactListIds", (nv || []).map(cl => cl?.id))}
+                                  disabled={!campaignEditable}
+                                  renderTags={(value, getTagProps) =>
+                                    (value || []).map((option, index) => (
+                                      <Chip key={option?.id || index} label={option?.name || ""} size="small" {...getTagProps({ index })} />
+                                    ))
+                                  }
+                                  renderInput={(params) => (
+                                    <TextField {...params} variant="outlined" placeholder="Selecionar listas..." fullWidth />
+                                  )}
+                                />
+                              </Box>
                            </Grid>
                            <Grid item xs={12} md={6}>
                              <Box display="flex" alignItems="center" mb={1} gap={0.5}>
                                <label className={classes.label} style={{ marginBottom: 0 }}>Conexão</label>
                                <Tooltip title="O WhatsApp que será o remetente oficial desta campanha."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
                              </Box>
-                             <FormControl variant="outlined" fullWidth>
+                             <FormControl variant="outlined" fullWidth error={errors.whatsappId && touched.whatsappId} className={classes.formField}>
                                <Select value={whatsappId||""} onChange={e => setWhatsappId(e.target.value)} displayEmpty disabled={!campaignEditable}>
                                  <MenuItem value="" disabled>Escolher WhatsApp</MenuItem>
                                  {whatsapps.map(w => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
                                </Select>
+                               {errors.whatsappId && touched.whatsappId && <FormHelperText error>{errors.whatsappId}</FormHelperText>}
                              </FormControl>
                            </Grid>
                          </Grid>
@@ -540,10 +893,11 @@ const CampaignForm = () => {
                              <label className={classes.label} style={{ marginBottom: 0 }}>Tags (Filtrar Contatos)</label>
                              <Tooltip title="Selecione uma tag para enviar APENAS para contatos da lista que possuam essa etiqueta específica."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
                            </Box>
-                           <FormControl variant="outlined" fullWidth>
+                           <FormControl variant="outlined" fullWidth className={classes.formField}>
+                             {(() => { console.log("[DEBUG RENDER] values.tagListId:", values.tagListId, "tagLists:", tagLists); return null; })()}
                              <Select name="tagListId" value={values.tagListId||"Nenhuma"} onChange={e => setFieldValue("tagListId", e.target.value)} disabled={!campaignEditable}>
                                <MenuItem value="Nenhuma">Nenhuma</MenuItem>
-                               {tagLists.map(t => <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>)}
+                               {tagLists.map(t => <MenuItem key={t.id} value={String(t.id)}>{t.name}</MenuItem>)}
                              </Select>
                            </FormControl>
                          </Box>
@@ -571,16 +925,18 @@ const CampaignForm = () => {
                          <Typography className={classes.stepSub}>Defina como as respostas dos clientes serão gerenciadas.</Typography>
                          
                          <Grid container spacing={3}>
+                           {/* Linha 1: Abrir Ticket | Status do Ticket */}
                            <Grid item xs={12} md={6}>
                              <Box display="flex" alignItems="center" mb={1} gap={0.5}>
                                <label className={classes.label} style={{ marginBottom: 0 }}>Abrir Ticket</label>
                                <Tooltip title="Se 'Habilitado', o chat aparecerá imediatamente na tela do atendente. 'Desabilitado' só mostrará quando houver resposta."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
                              </Box>
-                             <FormControl variant="outlined" fullWidth>
+                             <FormControl variant="outlined" fullWidth error={errors.openTicket && touched.openTicket} className={classes.formField}>
                                <Field as={Select} name="openTicket" disabled={!campaignEditable}>
                                  <MenuItem value="enabled">{i18n.t("campaigns.dialog.form.enabledOpenTicket")}</MenuItem>
                                  <MenuItem value="disabled">{i18n.t("campaigns.dialog.form.disabledOpenTicket")}</MenuItem>
                                </Field>
+                               {errors.openTicket && touched.openTicket && <FormHelperText error>{errors.openTicket}</FormHelperText>}
                              </FormControl>
                            </Grid>
                            <Grid item xs={12} md={6}>
@@ -588,25 +944,28 @@ const CampaignForm = () => {
                                <label className={classes.label} style={{ marginBottom: 0 }}>Status do Ticket</label>
                                <Tooltip title="Define se o ticket nascerá como Fechado, Pendente ou Aberto no sistema."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
                              </Box>
-                             <FormControl variant="outlined" fullWidth>
+                             <FormControl variant="outlined" fullWidth error={errors.statusTicket && touched.statusTicket} className={classes.formField}>
                                <Field as={Select} name="statusTicket" disabled={!campaignEditable || values.openTicket === "disabled"}>
                                  <MenuItem value="closed">{i18n.t("campaigns.dialog.form.closedTicketStatus")}</MenuItem>
                                  <MenuItem value="pending">{i18n.t("campaigns.dialog.form.pendingTicketStatus")}</MenuItem>
                                  <MenuItem value="open">{i18n.t("campaigns.dialog.form.openTicketStatus")}</MenuItem>
                                </Field>
+                               {errors.statusTicket && touched.statusTicket && <FormHelperText error>{errors.statusTicket}</FormHelperText>}
                              </FormControl>
                            </Grid>
 
+                           {/* Linha 2: Fila (Queue) | Usuários */}
                            <Grid item xs={12} md={6}>
                              <Box display="flex" alignItems="center" mb={1} gap={0.5}>
                                <label className={classes.label} style={{ marginBottom: 0 }}>Fila (Queue)</label>
                                <Tooltip title="Para qual setor o ticket será direcionado caso o cliente responda."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
                              </Box>
-                             <FormControl variant="outlined" fullWidth>
+                             <FormControl variant="outlined" fullWidth error={errors.queueId && touched.queueId} className={classes.formField}>
                                <Select value={selectedQueue} onChange={e => setSelectedQueue(e.target.value)} displayEmpty disabled={!campaignEditable}>
                                  <MenuItem value="">Selecione a fila...</MenuItem>
                                  {queues.map(q => <MenuItem key={q.id} value={q.id}>{q.name}</MenuItem>)}
                                </Select>
+                               {errors.queueId && touched.queueId && <FormHelperText error>{errors.queueId}</FormHelperText>}
                              </FormControl>
                            </Grid>
                            <Grid item xs={12} md={6}>
@@ -614,92 +973,99 @@ const CampaignForm = () => {
                                <label className={classes.label} style={{ marginBottom: 0 }}>Usuários</label>
                                <Tooltip title="Quais atendentes terão acesso a este ticket. Se houver mais de um, o sistema distribui entre eles."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
                              </Box>
-                             <Autocomplete multiple options={options} getOptionLabel={o => o.name} value={selectedUsers} size="small" openOnFocus onOpen={ensureUsersLoaded}
-                                 onChange={(e, nv) => { setSelectedUsers(nv||[]); if (nv?.length === 1 && nv[0].queues) { setQueues(nv[0].queues); if(nv[0].queues.length===1) setSelectedQueue(nv[0].queues[0].id); } else { setQueues(allQueues); if(!nv?.length) setSelectedQueue(""); } }}
+                             <Box className={classes.autoCompleteField}>
+                               <Autocomplete multiple options={options || []} getOptionLabel={o => o?.name || ""} value={selectedUsers || []} openOnFocus onOpen={ensureUsersLoaded}
+                                 onChange={(e, nv) => { setSelectedUsers(nv||[]); if (nv?.length === 1 && nv[0]?.queues) { setQueues(nv[0].queues); if(nv[0].queues?.length===1) setSelectedQueue(nv[0].queues[0]?.id); } else { setQueues(allQueues); if(!nv?.length) setSelectedQueue(""); } }}
                                  filterOptions={filterOptions} disabled={!campaignEditable || values.openTicket === "disabled"} loading={loading}
-                                 renderTags={(v, gtp) => v.map((o,i) => <Chip key={o.id} label={o.name} size="small" {...gtp({index:i})} />)}
-                                 renderInput={p => <TextField {...p} variant="outlined" placeholder="Adicionar..." />} />
+                                 renderTags={(v, gtp) => (v || []).map((o,i) => <Chip key={o?.id || i} label={o?.name || ""} size="small" {...gtp({index:i})} />)}
+                                 renderInput={p => <TextField {...p} variant="outlined" placeholder="Adicionar..." fullWidth />} />
+                             </Box>
                            </Grid>
 
-                           <Grid item xs={12}>
-                              <Box display="flex" alignItems="center" mb={1} gap={0.5}>
-                                <label className={classes.label} style={{ marginBottom: 0 }}>Estratégia de Envio</label>
-                                <Tooltip title="Escolha entre disparar de um número só ou alternar entre vários anexados para maior segurança."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
-                              </Box>
-                              <FormControl variant="outlined" fullWidth style={{ marginBottom: 24 }}>
-                                <Select
-                                  value={dispatchMode}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    if(!campaignEditable) return;
-                                    setDispatchMode(val);
-                                    if(val==="all"){ setAllowedWhatsappIds(whatsapps.map(w=>w.id)); setDispatchStrategy("round_robin"); }
-                                    else if(val==="baileys"){ setAllowedWhatsappIds(whatsapps.filter(w=>w.channelType!=="official").map(w=>w.id)); setDispatchStrategy("round_robin"); }
-                                    else if(val==="official"){ setAllowedWhatsappIds(whatsapps.filter(w=>w.channelType==="official").map(w=>w.id)); setDispatchStrategy("round_robin"); }
-                                    else if(val==="single"){ setAllowedWhatsappIds([]); setDispatchStrategy("single"); }
-                                    else if(val==="custom"){ setDispatchStrategy("round_robin"); }
-                                  }}
-                                  disabled={!campaignEditable}
-                                  renderValue={(selected) => {
-                                    const opt = [
-                                      { id: "single", label: "Única conexão", icon: "📱" },
-                                      { id: "custom", label: "Rodízio personalizado", icon: "🎯" },
-                                      { id: "all", label: "Todas as conexões", icon: "🔄" },
-                                      { id: "baileys", label: "Apenas Baileys (Grátis)", icon: "📱" },
-                                      { id: "official", label: "Apenas API Oficial", icon: "✅" }
-                                    ].find(o => o.id === selected);
-                                    return opt ? (
-                                      <Box display="flex" alignItems="center" gap={1}>
-                                        <Typography style={{ fontSize: 20 }}>{opt.icon}</Typography>
-                                        <Typography style={{ fontWeight: 600 }}>{opt.label}</Typography>
-                                      </Box>
-                                    ) : selected;
-                                  }}
-                                >
-                                  {[
-                                    { id: "single", label: "Única conexão", icon: "📱", desc: "Usa apenas a conexão principal" },
-                                    { id: "custom", label: "Rodízio personalizado", icon: "🎯", desc: "Você escolhe quais conexões usar" },
-                                    { id: "all", label: "Todas as conexões", icon: "🔄", desc: `Usa todas as ${whatsapps.length} conexões disponíveis` },
-                                    { id: "baileys", label: "Apenas Baileys (Grátis)", icon: "📱", desc: `${whatsapps.filter(w => w.channelType !== "official").length} conexões disponíveis` },
-                                    { id: "official", label: "Apenas API Oficial", icon: "✅", desc: `${whatsapps.filter(w => w.channelType === "official").length} conexões disponíveis` }
-                                  ].map(opt => (
-                                    <MenuItem key={opt.id} value={opt.id} style={{ padding: '12px 16px' }}>
-                                      <Box display="flex" alignItems="center" gap={2} width="100%">
-                                        <Box className={classes.stepIcon} style={{ width: 40, height: 40, minWidth: 40, backgroundColor: "#f1f5f9", color: "#64748b" }}>
-                                          <Typography style={{ fontSize: 20 }}>{opt.icon}</Typography>
-                                        </Box>
-                                        <Box>
-                                          <Typography style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>{opt.label}</Typography>
-                                          <Typography variant="caption" style={{ color: '#64748b', display: 'block' }}>{opt.desc}</Typography>
-                                        </Box>
-                                      </Box>
-                                    </MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
-                            </Grid>
+                           {/* Linha 3: Estratégia de Envio | Confirmação */}
+                           <Grid item xs={12} md={6}>
+                             <Box display="flex" alignItems="center" mb={1} gap={0.5}>
+                               <label className={classes.label} style={{ marginBottom: 0 }}>Estratégia de Envio</label>
+                               <Tooltip title="Escolha entre disparar de um número só ou alternar entre vários anexados para maior segurança."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
+                             </Box>
+                             <FormControl variant="outlined" fullWidth className={classes.formField}>
+                               <Select
+                                 value={dispatchMode}
+                                 onChange={(e) => {
+                                   const val = e.target.value;
+                                   if(!campaignEditable) return;
+                                   setDispatchMode(val);
+                                   if(val==="all"){ setAllowedWhatsappIds(whatsapps.map(w=>w.id)); setDispatchStrategy("round_robin"); }
+                                   else if(val==="baileys"){ setAllowedWhatsappIds(whatsapps.filter(w=>w.channelType!=="official").map(w=>w.id)); setDispatchStrategy("round_robin"); }
+                                   else if(val==="official"){ setAllowedWhatsappIds(whatsapps.filter(w=>w.channelType==="official").map(w=>w.id)); setDispatchStrategy("round_robin"); }
+                                   else if(val==="single"){ setAllowedWhatsappIds([]); setDispatchStrategy("single"); }
+                                   else if(val==="custom"){ setDispatchStrategy("round_robin"); }
+                                 }}
+                                 disabled={!campaignEditable}
+                                 renderValue={(selected) => {
+                                   const opt = [
+                                     { id: "single", label: "Única conexão", icon: "📱" },
+                                     { id: "custom", label: "Rodízio personalizado", icon: "🎯" },
+                                     { id: "all", label: "Todas as conexões", icon: "🔄" },
+                                     { id: "baileys", label: "Apenas Baileys (Grátis)", icon: "📱" },
+                                     { id: "official", label: "Apenas API Oficial", icon: "✅" }
+                                   ].find(o => o.id === selected);
+                                   return opt ? (
+                                     <Box display="flex" alignItems="center" gap={1} style={{ height: 24 }}>
+                                       <Typography style={{ fontSize: 16, lineHeight: 1 }}>{opt.icon}</Typography>
+                                       <Typography style={{ fontWeight: 600, fontSize: '0.9rem', lineHeight: 1 }}>{opt.label}</Typography>
+                                     </Box>
+                                   ) : selected;
+                                 }}
+                               >
+                                 {[
+                                   { id: "single", label: "Única conexão", icon: "📱", desc: "Usa apenas a conexão principal" },
+                                   { id: "custom", label: "Rodízio personalizado", icon: "🎯", desc: "Você escolhe quais conexões usar" },
+                                   { id: "all", label: "Todas as conexões", icon: "🔄", desc: `Usa todas as ${whatsapps.length} conexões disponíveis` },
+                                   { id: "baileys", label: "Apenas Baileys (Grátis)", icon: "📱", desc: `${whatsapps.filter(w => w.channelType !== "official").length} conexões disponíveis` },
+                                   { id: "official", label: "Apenas API Oficial", icon: "✅", desc: `${whatsapps.filter(w => w.channelType === "official").length} conexões disponíveis` }
+                                 ].map(opt => (
+                                   <MenuItem key={opt.id} value={opt.id} style={{ padding: '12px 16px' }}>
+                                     <Box display="flex" alignItems="center" gap={2} width="100%">
+                                       <Box className={classes.stepIcon} style={{ width: 40, height: 40, minWidth: 40, backgroundColor: "#f1f5f9", color: "#64748b" }}>
+                                         <Typography style={{ fontSize: 20 }}>{opt.icon}</Typography>
+                                       </Box>
+                                       <Box>
+                                         <Typography style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>{opt.label}</Typography>
+                                         <Typography variant="caption" style={{ color: '#64748b', display: 'block' }}>{opt.desc}</Typography>
+                                       </Box>
+                                     </Box>
+                                   </MenuItem>
+                                 ))}
+                               </Select>
+                             </FormControl>
+                           </Grid>
                            <Grid item xs={12} md={6}>
                              <Box display="flex" alignItems="center" mb={1} gap={0.5}>
                                <label className={classes.label} style={{ marginBottom: 0 }}>Confirmação</label>
                                <Tooltip title="Se ativado, o bot pedirá ao cliente para digitar algo antes de iniciar o fluxo humano."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
                              </Box>
-                             <FormControl variant="outlined" fullWidth><Field as={Select} name="confirmation" disabled={!campaignEditable}>
+                             <FormControl variant="outlined" fullWidth error={errors.confirmation && touched.confirmation} className={classes.formField}>
+                               <Field as={Select} name="confirmation" disabled={!campaignEditable}>
                                  <MenuItem value={false}>Desabilitada</MenuItem>
                                  <MenuItem value={true}>Habilitada</MenuItem>
-                               </Field></FormControl>
+                               </Field>
+                               {errors.confirmation && touched.confirmation && <FormHelperText error>{errors.confirmation}</FormHelperText>}
+                             </FormControl>
                            </Grid>
 
+                           {/* Campo de conexões customizadas (ocupa linha inteira se necessário) */}
                            {dispatchMode === "custom" && (
                              <Grid item xs={12}>
                                <label className={classes.label}>Escolha as conexões para o rodízio</label>
-                               <Autocomplete multiple options={whatsapps} getOptionLabel={(option) => `${option.channelType==="official"?"✅":"📱"} ${option.name}`}
-                                 value={whatsapps.filter(w => allowedWhatsappIds.includes(w.id))}
-                                 onChange={(event, nv) => setAllowedWhatsappIds(nv.map(w => w.id))}
-                                 renderTags={(value, getTagProps) => value.map((option, index) => (
-                                     <Chip variant="outlined" size="small" color={option.channelType === "official" ? "primary" : "default"} label={option.name} {...getTagProps({ index })} />
+                               <Autocomplete multiple options={whatsapps || []} getOptionLabel={(option) => `${option?.channelType==="official"?"✅":"📱"} ${option?.name || ""}`}
+                                 value={(whatsapps || []).filter(w => (allowedWhatsappIds || []).includes(w?.id))}
+                                 onChange={(event, nv) => setAllowedWhatsappIds((nv || []).map(w => w?.id))}
+                                 renderTags={(value, getTagProps) => (value || []).map((option, index) => (
+                                     <Chip key={option?.id || index} variant="outlined" size="small" color={option?.channelType === "official" ? "primary" : "default"} label={option?.name || ""} {...getTagProps({ index })} />
                                    ))
                                  }
-                                 renderInput={(params) => <TextField {...params} variant="outlined" placeholder="Selecione as conexões..." />}
+                                 renderInput={(params) => <TextField {...params} variant="outlined" placeholder="Selecione as conexões..." fullWidth />}
                                  disableCloseOnSelect disabled={!campaignEditable}
                                />
                              </Grid>
@@ -754,7 +1120,7 @@ const CampaignForm = () => {
                                 <label className={classes.label} style={{ marginBottom: 0 }}>Data e Hora</label>
                                 <Tooltip title="Escolha uma data e horário futuros para o início automático dos disparos."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
                               </Box>
-                              <Field as={TextField} name="scheduledAt" type="datetime-local" fullWidth variant="outlined" InputLabelProps={{ shrink: true }} disabled={!campaignEditable} />
+                              <Field as={TextField} name="scheduledAt" type="datetime-local" fullWidth variant="outlined" InputLabelProps={{ shrink: true }} disabled={!campaignEditable} className={classes.formField} />
                             </Grid>
                           </Grid></Box>
                         )}
@@ -906,38 +1272,164 @@ const CampaignForm = () => {
 
                {/* Footer */}
                <div className={classes.footer}>
-                 <Button variant="outlined" onClick={handleClose} className={classes.secondaryBtn} startIcon={<ArrowLeft size={16} />}>Voltar</Button>
-                 <Box display="flex" style={{ gap: 8 }}>
-                   {activeStep === 0 && (
-                     <Button variant="contained" onClick={async () => { const errs = await validateForm(); if (Object.keys(errs).length) { toast.error("Preencha os campos obrigatórios"); return; } setActiveStep(1); }} className={classes.primaryBtn} endIcon={<ChevronRight />}>PRÓXIMO PASSO</Button>
-                   )}
-                   {activeStep === 1 && (<>
-                     <Button onClick={() => setActiveStep(0)} className={classes.secondaryBtn} startIcon={<ChevronLeft />}>Anterior</Button>
-                     <Button variant="contained" onClick={() => setActiveStep(2)} className={classes.primaryBtn} endIcon={<ChevronRight />}>PRÓXIMO PASSO</Button>
-                   </>)}
-                   {activeStep === 2 && (<>
-                     <Button onClick={() => setActiveStep(1)} className={classes.secondaryBtn} startIcon={<ChevronLeft />}>Anterior</Button>
-                     <Button variant="outlined" onClick={() => handleSaveOnly(values, setSubmitting)} className={classes.btnSave} startIcon={<SaveIcon />} disabled={isSubmitting}>Salvar Rascunho</Button>
-                     <Button variant="contained" onClick={() => setActiveStep(3)} className={classes.primaryBtn} endIcon={<ChevronRight />}>PRÓXIMO PASSO</Button>
-                   </>)}
-                   {activeStep === 3 && (<>
-                     <Button onClick={() => setActiveStep(2)} className={classes.secondaryBtn} startIcon={<ChevronLeft />}>Anterior</Button>
-                     <Button variant="outlined" onClick={() => handleSaveOnly(values, setSubmitting)} className={classes.btnSave} startIcon={<SaveIcon />} disabled={isSubmitting}>Salvar Rascunho</Button>
-                     {values.scheduledAt ? (
-                       <Button variant="contained" type="submit" disabled={isSubmitting} className={classes.btnSchedule} startIcon={<AccessTimeIcon />}>
-                         {isSubmitting ? "Agendando..." : "Programar Envio"}
-                       </Button>
-                     ) : (
-                       <Button variant="contained" type="submit" disabled={isSubmitting} className={classes.btnSend} startIcon={<FlashOnIcon />}>
-                         {isSubmitting ? "Enviando..." : "Enviar Imediatamente"}
+                 {/* Botões de controle da campanha - aparecem primeiro se campanha existente */}
+                 {campaignId && (
+                   <Box display="flex" style={{ gap: 8, marginRight: 'auto' }}>
+                     {/* Retomar/Iniciar - para campanhas pausadas ou programadas */}
+                     {(campaign.status === "CANCELADA" || campaign.status === "PROGRAMADA") && (
+                       <Button
+                         color="primary"
+                         onClick={() => restartCampaign()}
+                         variant="outlined"
+                         startIcon={<PlayCircleOutlineIcon />}
+                         className={classes.secondaryBtn}
+                       >
+                         {campaign.status === "CANCELADA" ? "Retomar" : "Iniciar"}
                        </Button>
                      )}
-                   </>)}
-                 </Box>
+                     {/* Pausar - para campanhas em andamento */}
+                     {campaign.status === "EM_ANDAMENTO" && (
+                       <Button
+                         color="secondary"
+                         onClick={() => cancelCampaign()}
+                         variant="outlined"
+                         startIcon={<PauseCircleOutlineIcon />}
+                         className={classes.secondaryBtn}
+                       >
+                         Pausar
+                       </Button>
+                     )}
+                   </Box>
+                 )}
+                 
+                 <Button variant="outlined" onClick={handleClose} className={classes.secondaryBtn} startIcon={<ArrowLeft size={16} />}>Voltar</Button>
+                 
+                 {/* Botões de navegação/salvar - só aparecem se campaignEditable ou status CANCELADA */}
+                 {(campaignEditable || campaign.status === "CANCELADA") && (
+                   <Box display="flex" style={{ gap: 8 }}>
+                     {activeStep === 0 && (
+                       <Button variant="contained" onClick={async () => { 
+                         const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 0);
+                         if (isValid) setActiveStep(1);
+                       }} className={classes.primaryBtn} endIcon={<ChevronRight />}>PRÓXIMO PASSO</Button>
+                     )}
+                     {activeStep === 1 && (<>
+                       <Button onClick={() => setActiveStep(0)} className={classes.secondaryBtn} startIcon={<ChevronLeft />}>Anterior</Button>
+                       <Button variant="contained" onClick={async () => {
+                         const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 1);
+                         if (isValid) setActiveStep(2);
+                       }} className={classes.primaryBtn} endIcon={<ChevronRight />}>PRÓXIMO PASSO</Button>
+                     </>)}
+                     {activeStep === 2 && (<>
+                       <Button onClick={() => setActiveStep(1)} className={classes.secondaryBtn} startIcon={<ChevronLeft />}>Anterior</Button>
+                       <Button variant="outlined" onClick={() => handleSaveOnly(values, setSubmitting)} className={classes.btnSave} startIcon={<SaveIcon />} disabled={isSubmitting}>Salvar Rascunho</Button>
+                       <Button variant="contained" onClick={async () => {
+                         const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 2);
+                         if (isValid) setActiveStep(3);
+                       }} className={classes.primaryBtn} endIcon={<ChevronRight />}>PRÓXIMO PASSO</Button>
+                     </>)}
+                     {activeStep === 3 && (<>
+                       <Button onClick={() => setActiveStep(2)} className={classes.secondaryBtn} startIcon={<ChevronLeft />}>Anterior</Button>
+                       <Button variant="outlined" onClick={() => handleSaveOnly(values, setSubmitting)} className={classes.btnSave} startIcon={<SaveIcon />} disabled={isSubmitting}>Salvar Rascunho</Button>
+                       {/* Botão Programar Envio - salva e agenda para data/hora específica */}
+                       <Button
+                         variant="outlined"
+                         disabled={isSubmitting || !values.scheduledAt}
+                         onClick={async () => {
+                           const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 3);
+                           if (isValid) handleSaveOnly(values, setSubmitting);
+                         }}
+                         className={classes.btnSchedule}
+                         startIcon={isSubmitting ? <CircularProgress size={16} /> : <AccessTimeIcon />}
+                       >
+                         Programar Envio
+                       </Button>
+                       {/* Botão Enviar Imediatamente - dispara imediatamente */}
+                       <Button
+                         variant="contained"
+                         disabled={isSubmitting}
+                         onClick={async (e) => {
+                           e.preventDefault();
+                           const isValid = await validateStepAndShowErrors(validateForm, values, whatsappId, selectedQueue, 3);
+                           if (isValid) {
+                             const form = e.target.closest('form');
+                             if (form) form.requestSubmit();
+                           }
+                         }}
+                         className={classes.btnSend}
+                         startIcon={isSubmitting ? <CircularProgress size={16} /> : <SendIcon />}
+                       >
+                         {isSubmitting ? "Enviando..." : "Enviar Imediatamente"}
+                       </Button>
+                     </>)}
+                   </Box>
+                 )}
                </div>
 
               <ChatAssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)}
                 onSelect={(text) => { const f = `message${messageTab+1}`; setFieldValue(f, (values[f]||"") + text); setAssistantOpen(false); }} />
+
+              {/* Modal da Biblioteca de Arquivos */}
+              <Dialog open={fileLibraryOpen} onClose={() => setFileLibraryOpen(false)} maxWidth="md" fullWidth>
+                <DialogTitle style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="h6">Biblioteca de Arquivos</Typography>
+                  <IconButton onClick={() => setFileLibraryOpen(false)}><DeleteOutlineIcon /></IconButton>
+                </DialogTitle>
+                <DialogContent dividers>
+                  <Box style={{ height: 500, display: "flex", flexDirection: "column" }}>
+                    <TopBar
+                      viewMode={libraryViewMode}
+                      onViewModeChange={setLibraryViewMode}
+                      onUploadClick={() => setUploadModalOpen(true)}
+                      searchValue={librarySearch}
+                      onSearchChange={setLibrarySearch}
+                    />
+                    <BreadcrumbNav
+                      breadcrumbs={libraryBreadcrumbs}
+                      onNavigate={(index) => {
+                        const target = libraryBreadcrumbs[index];
+                        setLibraryCurrentFolder(target?.id || null);
+                        setLibraryBreadcrumbs(libraryBreadcrumbs.slice(0, index + 1));
+                      }}
+                    />
+                    <Box flex={1} overflow="auto" mt={2}>
+                      {libraryViewMode === "list" ? (
+                        <FolderList
+                          folders={filterItemsBySearch(libraryFolders, librarySearch)}
+                          files={filterItemsBySearch(libraryFiles, librarySearch)}
+                          onFolderClick={(folder) => handleLibraryNavigateToFolder(folder)}
+                          onFileClick={(file) => handleChooseFromLibrary(file)}
+                          onMenuAction={(action, item) => { if (action === 'select') handleChooseFromLibrary(item); }}
+                          selectedItems={[]}
+                          onSelectItem={() => {}}
+                          onSelectAll={() => {}}
+                        />
+                      ) : (
+                        <FolderGrid
+                          folders={filterItemsBySearch(libraryFolders, librarySearch)}
+                          files={filterItemsBySearch(libraryFiles, librarySearch)}
+                          onFolderClick={(folder) => handleLibraryNavigateToFolder(folder)}
+                          onFileClick={(file) => handleChooseFromLibrary(file)}
+                          onMenuAction={(action, item) => { if (action === 'select') handleChooseFromLibrary(item); }}
+                          selectedItems={[]}
+                          onSelectItem={() => {}}
+                          onSelectAll={() => {}}
+                        />
+                      )}
+                    </Box>
+                  </Box>
+                </DialogContent>
+              </Dialog>
+
+              <UploadModal
+                open={uploadModalOpen}
+                onClose={() => setUploadModalOpen(false)}
+                currentFolder={libraryCurrentFolder}
+                onUploadComplete={() => {
+                  setUploadModalOpen(false);
+                  toast.success("Arquivo enviado com sucesso!");
+                }}
+              />
             </Form>
           );
         }}

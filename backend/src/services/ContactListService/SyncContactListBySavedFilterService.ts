@@ -116,6 +116,8 @@ async function getValidCanonicalNumbersForFilter(companyId: number, filters: any
   const addIn = (col: string, arr?: string[]) => {
     if (arr && arr.length > 0) {
       const key = col.replace(/\W/g, '_');
+      // Adiciona IS NOT NULL para evitar que NULL passe pelo filtro (NULL IN (...) retorna NULL, não FALSE)
+      conds.push(`c.${col} IS NOT NULL`);
       conds.push(`c.${col} IN (:${key})`);
       repl[key] = arr;
     }
@@ -139,12 +141,26 @@ async function getValidCanonicalNumbersForFilter(companyId: number, filters: any
   addIn('"channel"', normalizeArr(filters.channel));
   addIn('"representativeCode"', normalizeArr(filters.representativeCode));
   addIn('"city"', normalizeArr(filters.city));
+  addIn('"region"', normalizeArr(filters.region));
   addIn('"segment"', normalizeArr(filters.segment));
   addIn('"situation"', normalizeArr(filters.situation));
 
-  if (filters.bzEmpresa && String(filters.bzEmpresa).trim()) {
-    repl.bzEmpresa = `%${String(filters.bzEmpresa).trim()}%`;
-    conds.push('c."bzEmpresa" ILIKE :bzEmpresa');
+  if (filters.bzEmpresa) {
+    const bzEmpresaArr = normalizeArr(filters.bzEmpresa);
+    if (bzEmpresaArr.length > 0) {
+      if (bzEmpresaArr.length === 1) {
+        repl.bzEmpresa = `%${bzEmpresaArr[0].trim()}%`;
+        conds.push('c."bzEmpresa" ILIKE :bzEmpresa');
+      } else {
+        // Múltiplas empresas: usa OR
+        const orConds = bzEmpresaArr.map((e, i) => {
+          const key = `bzEmpresa${i}`;
+          repl[key] = `%${e.trim()}%`;
+          return `c."bzEmpresa" ILIKE :${key}`;
+        });
+        conds.push(`(${orConds.join(' OR ')})`);
+      }
+    }
   }
 
   if (filters.florder !== undefined && filters.florder !== null) {

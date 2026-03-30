@@ -34,7 +34,6 @@ import Title from "../../components/Title";
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
-import CampaignModal from "../../components/CampaignModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
 import { Grid } from "@material-ui/core";
@@ -194,9 +193,7 @@ const Campaigns = () => {
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
   const [totalCampaigns, setTotalCampaigns] = useState(0);
-  const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [deletingCampaign, setDeletingCampaign] = useState(null);
-  const [campaignModalOpen, setCampaignModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [showCampaigns, setShowCampaigns] = useState(false);
   const [searchParam, setSearchParam] = useState("");
@@ -271,25 +268,13 @@ const Campaigns = () => {
     }
   };
 
-  const handleOpenCampaignModal = (campaign) => {
-    console.log('[Campaigns] Abrindo modal de campanha', campaign?.id, campaign);
-    setSelectedCampaign(campaign);
-    setCampaignModalOpen(true);
-  };
-
-  const handleCloseCampaignModal = () => {
-    console.log('[Campaigns] Fechando modal de campanha');
-    setSelectedCampaign(null);
-    setCampaignModalOpen(false);
-  };
-
   const handleSearch = (event) => {
     setSearchParam(event.target.value.toLowerCase());
   };
 
   const handleEditCampaign = (campaign) => {
-    setSelectedCampaign(campaign);
-    setCampaignModalOpen(true);
+    // Redirecionar para a nova tela de edição de campanha
+    history.push(`/campaignsNew/${campaign.id}`);
   };
 
   const handleDeleteCampaign = async (campaignId) => {
@@ -400,18 +385,6 @@ const Campaigns = () => {
       >
         {i18n.t("campaigns.confirmationModal.deleteMessage")}
       </ConfirmationModal>
-      {campaignModalOpen && (
-        <CampaignModal
-          resetPagination={() => {
-            setPageNumber(1);
-            fetchCampaigns();
-          }}
-          open={campaignModalOpen}
-          onClose={handleCloseCampaignModal}
-          aria-labelledby="form-dialog-title"
-          campaignId={selectedCampaign && selectedCampaign.id}
-        />
-      )}
       {hasPermission("campaigns.view") ? (
         <>
           <MainHeader>
@@ -440,26 +413,6 @@ const Campaigns = () => {
                   </Grid>
                   <Grid item xs="auto">
                     <Button
-                      variant="outlined"
-                      onClick={handleOpenCampaignModal}
-                      color="primary"
-                      size="small"
-                      style={{
-                        minHeight: 36,
-                        paddingLeft: 16,
-                        paddingRight: 16,
-                        whiteSpace: "nowrap",
-                        marginRight: 8,
-                        textTransform: 'none',
-                        fontWeight: 500,
-                        borderRadius: '8px'
-                      }}
-                    >
-                      + {i18n.t("campaigns.buttons.add")} (Modal)
-                    </Button>
-                  </Grid>
-                  <Grid item xs="auto">
-                    <Button
                       variant="contained"
                       onClick={() => history.push("/campaigns/new")}
                       color="primary"
@@ -475,7 +428,7 @@ const Campaigns = () => {
                         boxShadow: '0 2px 8px rgba(25, 118, 210, 0.3)'
                       }}
                     >
-                      + Nova Campanha (Página)
+                      + Nova Campanha
                     </Button>
                   </Grid>
                 </Grid>
