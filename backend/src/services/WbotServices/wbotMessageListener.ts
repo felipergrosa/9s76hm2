@@ -792,14 +792,27 @@ export const getQuotedMessage = (msg: proto.IWebMessageInfo) => {
 };
 
 export const getQuotedMessageId = (msg: proto.IWebMessageInfo) => {
-  const body = extractMessageContent(msg.message)[
-    Object.keys(msg?.message).values().next().value
-  ];
+  logger.info(`[getQuotedMessageId] Iniciando extração - msg.message keys: ${Object.keys(msg?.message || {}).join(', ')}`);
+  
+  const messageContent = extractMessageContent(msg.message);
+  logger.info(`[getQuotedMessageId] messageContent keys: ${Object.keys(messageContent || {}).join(', ')}`);
+  
+  const firstKey = Object.keys(msg?.message || {}).values().next().value;
+  logger.info(`[getQuotedMessageId] firstKey: ${firstKey}`);
+  
+  const body = messageContent[firstKey];
+  logger.info(`[getQuotedMessageId] body extraído: ${JSON.stringify(body ? Object.keys(body) : 'NULL')}`);
+  logger.info(`[getQuotedMessageId] body.contextInfo: ${body?.contextInfo ? 'EXISTE' : 'NULL'}`);
+  logger.info(`[getQuotedMessageId] body.contextInfo.stanzaId: ${body?.contextInfo?.stanzaId || 'NULL'}`);
+  
   let reaction = msg?.message?.reactionMessage
     ? msg?.message?.reactionMessage?.key?.id
     : "";
 
-  return reaction ? reaction : body?.contextInfo?.stanzaId;
+  const result = reaction ? reaction : body?.contextInfo?.stanzaId;
+  logger.info(`[getQuotedMessageId] Resultado final: ${result || 'NULL'}`);
+  
+  return result;
 };
 
 const getMeSocket = (wbot: Session): IMe => {
