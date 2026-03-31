@@ -286,14 +286,24 @@ const SendWhatsAppMessage = async ({
   if (body) {
     try {
       await delay(msdelay);
+      
+      // Montar contextInfo com stanzaId se houver mensagem citada
+      const contextInfo: any = {
+        forwardingScore: isForwarded ? 2 : 0,
+        isForwarded: !!isForwarded,
+      };
+      
+      // CRÍTICO: Adicionar stanzaId para mensagens respondidas
+      if (quotedMsg && quotedMsg.wid) {
+        contextInfo.stanzaId = quotedMsg.wid;
+        logger.info(`[SendWhatsAppMessage] Enviando mensagem com quotedMsg - stanzaId: ${quotedMsg.wid}`);
+      }
+      
       const sentMessage = await wbot.sendMessage(
         number,
         {
           text: formatBody(body, ticket),
-          contextInfo: {
-            forwardingScore: isForwarded ? 2 : 0,
-            isForwarded: !!isForwarded,
-          },
+          contextInfo,
         },
         options
       );

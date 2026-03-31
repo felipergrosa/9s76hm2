@@ -10,6 +10,7 @@ const Jimp = require("jimp");
 
 import AppError from "../../errors/AppError";
 import Ticket from "../../models/Ticket";
+import Message from "../../models/Message";
 import mime from "mime-types";
 import Contact from "../../models/Contact";
 import { getWbotOrRecover } from "../../libs/wbot";
@@ -24,6 +25,7 @@ interface Request {
   body?: string;
   isPrivate?: boolean;
   isForwarded?: boolean;
+  quotedMsg?: Message;
 }
 const os = require("os");
 
@@ -218,7 +220,8 @@ const SendWhatsAppMedia = async ({
   ticket,
   body = "",
   isPrivate = false,
-  isForwarded = false
+  isForwarded = false,
+  quotedMsg
 }: Request): Promise<WAMessage> => {
   try {
     // CORREÇÃO: Usar getWbotOrRecover para aguardar sessão durante reconexão
@@ -233,6 +236,18 @@ const SendWhatsAppMedia = async ({
     let options: AnyMessageContent;
     let bodyTicket = "";
     const bodyMedia = ticket ? formatBody(body, ticket) : body;
+
+    // Montar contextInfo com stanzaId se houver mensagem citada
+    const contextInfo: any = {
+      forwardingScore: isForwarded ? 2 : 0,
+      isForwarded: !!isForwarded,
+    };
+    
+    // CRÍTICO: Adicionar stanzaId para mensagens respondidas
+    if (quotedMsg && quotedMsg.wid) {
+      contextInfo.stanzaId = quotedMsg.wid;
+      logger.info(`[SendWhatsAppMedia] Enviando mídia com quotedMsg - stanzaId: ${quotedMsg.wid}`);
+    }
 
     // console.log(media.mimetype)
     if (typeMessage === "video") {
@@ -249,7 +264,7 @@ const SendWhatsAppMedia = async ({
         caption: bodyMedia,
         fileName: media.originalname.replace('/', '-'),
         mimetype: "video/mp4",
-        contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
+        contextInfo,
       };
       if (videoPath !== pathMedia) {
         try { unlinkSync(videoPath); } catch { }
@@ -262,7 +277,7 @@ const SendWhatsAppMedia = async ({
         mimetype: "audio/ogg; codecs=opus",
         ptt: true,
         caption: bodyMedia,
-        contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
+        contextInfo,
       };
       unlinkSync(convert);
       bodyTicket = "🎵 Arquivo de áudio"
@@ -272,7 +287,7 @@ const SendWhatsAppMedia = async ({
         caption: bodyMedia,
         fileName: media.originalname.replace('/', '-'),
         mimetype: media.mimetype,
-        contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
+        contextInfo,
       };
       bodyTicket = "📂 Documento"
     } else if (typeMessage === "application") {
@@ -281,7 +296,7 @@ const SendWhatsAppMedia = async ({
         caption: bodyMedia,
         fileName: media.originalname.replace('/', '-'),
         mimetype: media.mimetype,
-        contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
+        contextInfo,
       };
       bodyTicket = "📎 Outros anexos"
     } else {
@@ -290,7 +305,7 @@ const SendWhatsAppMedia = async ({
           image: fs.readFileSync(pathMedia),
           caption: bodyMedia,
           mimetype: "image/gif",
-          contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
+          contextInfo,
           gifPlayback: true
 
         };
@@ -308,7 +323,7 @@ const SendWhatsAppMedia = async ({
           image: fs.readFileSync(outPath),
           caption: bodyMedia,
           mimetype: outMime,
-          contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
+          contextInfo,
         };
         if (outPath !== pathMedia) {
           try { unlinkSync(outPath); } catch { }

@@ -459,9 +459,15 @@ const contactsArrayMessageGet = (msg: any) => {
 
 const getTypeMessage = (msg: proto.IWebMessageInfo): string => {
   const msgType = getContentType(msg.message);
-  if (msg.message?.extendedTextMessage && msg.message?.extendedTextMessage?.contextInfo && msg.message?.extendedTextMessage?.contextInfo?.externalAdReply) {
-    return 'adMetaPreview'; // Adicionado para tratar mensagens de anúncios;
+  
+  // Link preview: externalAdReply (anúncios) ou matchedText (links normais)
+  if (msg.message?.extendedTextMessage?.contextInfo) {
+    const ctx: any = msg.message.extendedTextMessage.contextInfo;
+    if (ctx.externalAdReply || (ctx.matchedText && (ctx.previewType === 'VIDEO' || ctx.previewType === 'PHOTO'))) {
+      return 'adMetaPreview';
+    }
   }
+  
   if (msg.message?.viewOnceMessageV2) {
     return "viewOnceMessageV2";
   }
@@ -687,13 +693,34 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
           ?.caption,
       viewOnceMessageV2:
         msg.message?.viewOnceMessageV2?.message?.imageMessage?.caption,
-      adMetaPreview: msgAdMetaPreview(
-        msg.message?.extendedTextMessage?.contextInfo?.externalAdReply?.thumbnail,
-        msg.message?.extendedTextMessage?.contextInfo?.externalAdReply?.title,
-        msg.message?.extendedTextMessage?.contextInfo?.externalAdReply?.body,
-        msg.message?.extendedTextMessage?.contextInfo?.externalAdReply?.sourceUrl,
-        msg.message?.extendedTextMessage?.text
-      ), // Adicionado para tratar mensagens de anúncios;
+      adMetaPreview: (() => {
+        const ctx: any = msg.message?.extendedTextMessage?.contextInfo;
+        if (!ctx) return null;
+        
+        // externalAdReply (anúncios do Meta/Instagram)
+        if (ctx.externalAdReply) {
+          return msgAdMetaPreview(
+            ctx.externalAdReply.thumbnail,
+            ctx.externalAdReply.title,
+            ctx.externalAdReply.body,
+            ctx.externalAdReply.sourceUrl,
+            msg.message?.extendedTextMessage?.text
+          );
+        }
+        
+        // matchedText (links normais com preview)
+        if (ctx.matchedText) {
+          return msgAdMetaPreview(
+            ctx.thumbnailDirectPath ? 'has-thumbnail' : null,
+            ctx.matchedText,
+            null,
+            ctx.matchedText,
+            msg.message?.extendedTextMessage?.text
+          );
+        }
+        
+        return null;
+      })(),
       editedMessage:
         msg?.message?.protocolMessage?.editedMessage?.conversation ||
         msg?.message?.editedMessage?.message?.protocolMessage?.editedMessage
@@ -774,6 +801,12 @@ const msgAdMetaPreview = (image, title, body, sourceUrl, messageUser) => {
     let data = `data:image/png;base64, ${b64} | ${sourceUrl} | ${title} | ${body} | ${messageUser}`;
     return data;
   }
+  // Link preview sem imagem (apenas título e descrição)
+  if (title || sourceUrl) {
+    let data = `no-image | ${sourceUrl} | ${title} | ${body} | ${messageUser}`;
+    return data;
+  }
+  return null;
 };
 
 export const getQuotedMessage = (msg: proto.IWebMessageInfo) => {
@@ -807,6 +840,12 @@ export const getQuotedMessageId = (msg: proto.IWebMessageInfo) => {
   // Log completo do contextInfo para identificar onde está o stanzaId
   if (body?.contextInfo) {
     logger.info(`[getQuotedMessageId] contextInfo COMPLETO: ${JSON.stringify(body.contextInfo, null, 2)}`);
+    
+    // Verificar se tem quotedMessage (pode ser Story/Status)
+    if (body.contextInfo.quotedMessage) {
+      logger.info(`[getQuotedMessageId] quotedMessage encontrado - pode ser Story/Status`);
+      logger.info(`[getQuotedMessageId] quotedMessage keys: ${Object.keys(body.contextInfo.quotedMessage).join(', ')}`);
+    }
   }
   
   logger.info(`[getQuotedMessageId] body.contextInfo.stanzaId: ${body?.contextInfo?.stanzaId || 'NULL'}`);
