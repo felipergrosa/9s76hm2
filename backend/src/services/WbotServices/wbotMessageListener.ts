@@ -803,6 +803,12 @@ export const getQuotedMessageId = (msg: proto.IWebMessageInfo) => {
   const body = messageContent[firstKey];
   logger.info(`[getQuotedMessageId] body extraído: ${JSON.stringify(body ? Object.keys(body) : 'NULL')}`);
   logger.info(`[getQuotedMessageId] body.contextInfo: ${body?.contextInfo ? 'EXISTE' : 'NULL'}`);
+  
+  // Log completo do contextInfo para identificar onde está o stanzaId
+  if (body?.contextInfo) {
+    logger.info(`[getQuotedMessageId] contextInfo COMPLETO: ${JSON.stringify(body.contextInfo, null, 2)}`);
+  }
+  
   logger.info(`[getQuotedMessageId] body.contextInfo.stanzaId: ${body?.contextInfo?.stanzaId || 'NULL'}`);
   
   let reaction = msg?.message?.reactionMessage
