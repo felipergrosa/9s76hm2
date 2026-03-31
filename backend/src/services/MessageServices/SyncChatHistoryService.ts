@@ -207,6 +207,25 @@ const SyncChatHistoryService = async ({
           }
 
           // Criar mensagem no banco
+          // Buscar mensagem citada pelo wid (stanzaId) para obter ID interno
+          let quotedMsgId: number | null = null;
+          const quotedWid = messageContent.extendedTextMessage?.contextInfo?.stanzaId || 
+                           messageContent.imageMessage?.contextInfo?.stanzaId ||
+                           messageContent.videoMessage?.contextInfo?.stanzaId ||
+                           messageContent.audioMessage?.contextInfo?.stanzaId ||
+                           messageContent.documentMessage?.contextInfo?.stanzaId ||
+                           messageContent.stickerMessage?.contextInfo?.stanzaId;
+          
+          if (quotedWid) {
+            const quotedMsg = await Message.findOne({
+              where: { wid: quotedWid, companyId },
+              attributes: ["id"]
+            });
+            if (quotedMsg) {
+              quotedMsgId = quotedMsg.id;
+            }
+          }
+
           const messageData = {
             wid: msg.key.id,
             ticketId: ticket.id,
@@ -216,7 +235,7 @@ const SyncChatHistoryService = async ({
             mediaType,
             mediaUrl,
             read: true,
-            quotedMsgId: messageContent.extendedTextMessage?.contextInfo?.stanzaId || null,
+            quotedMsgId,
             ack: msg.key.fromMe ? 3 : 0,
             remoteJid: msg.key.remoteJid,
             participant: msg.key.participant || msg.participant || null,

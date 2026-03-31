@@ -296,25 +296,34 @@ const useStyles = makeStyles((theme) => ({
   quotedContainerLeft: {
     margin: "-3px -80px 6px -6px",
     overflow: "hidden",
-    backgroundColor: theme.mode === 'light' ? "#f0f0f0" : "#1d282f",
+    backgroundColor: theme.mode === 'light' ? "rgba(0, 0, 0, 0.05)" : "rgba(255, 255, 255, 0.05)",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
+    cursor: "pointer",
+    transition: "background-color 0.2s",
+    "&:hover": {
+      backgroundColor: theme.mode === 'light' ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.08)",
+    }
   },
 
   quotedMsg: {
-    padding: 10,
+    padding: "6px 8px",
     maxWidth: 300,
     height: "auto",
     display: "block",
     whiteSpace: "pre-wrap",
     overflow: "hidden",
+    fontSize: "13px",
+    lineHeight: "1.4",
   },
 
   quotedSideColorLeft: {
     flex: "none",
     width: "4px",
-    backgroundColor: "#388aff",
+    backgroundColor: "#06cf9c",
+    borderTopLeftRadius: "7.5px",
+    borderBottomLeftRadius: "7.5px",
   },
 
   messageRight: {
@@ -382,23 +391,32 @@ const useStyles = makeStyles((theme) => ({
   quotedContainerRight: {
     margin: "-3px -80px 6px -6px",
     overflowY: "hidden",
-    backgroundColor: theme.mode === 'light' ? "#cfe9ba" : "#025144",
+    backgroundColor: theme.mode === 'light' ? "rgba(0, 0, 0, 0.08)" : "rgba(0, 0, 0, 0.2)",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
+    cursor: "pointer",
+    transition: "background-color 0.2s",
+    "&:hover": {
+      backgroundColor: theme.mode === 'light' ? "rgba(0, 0, 0, 0.12)" : "rgba(0, 0, 0, 0.3)",
+    }
   },
 
   quotedMsgRight: {
-    padding: 10,
+    padding: "6px 8px",
     maxWidth: 300,
     height: "auto",
     whiteSpace: "pre-wrap",
+    fontSize: "13px",
+    lineHeight: "1.4",
   },
 
   quotedSideColorRight: {
     flex: "none",
     width: "4px",
-    backgroundColor: "#35cd96",
+    backgroundColor: "#06cf9c",
+    borderTopLeftRadius: "7.5px",
+    borderBottomLeftRadius: "7.5px",
   },
 
   messageActionsButton: {
@@ -418,6 +436,17 @@ const useStyles = makeStyles((theme) => ({
     marginBottom: 2,
     // Cor padrão; será sobrescrita inline por participante
     color: "#6bcbef",
+  },
+
+  quotedContactName: {
+    display: "block",
+    fontWeight: 600,
+    fontSize: "13px",
+    marginBottom: "4px",
+    color: "#06cf9c",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
 
   textContentItem: {
@@ -2104,11 +2133,11 @@ const MessagesList = ({
           })}
         ></span>
         <div className={classes.quotedMsg}>
-          {!message.quotedMsg?.fromMe && (
-            <span className={classes.messageContactName}>
-              {message.quotedMsg?.contact?.name}
-            </span>
-          )}
+          <span className={classes.quotedContactName}>
+            {message.quotedMsg?.fromMe 
+              ? "Você" 
+              : (message.quotedMsg?.contact?.name || message.quotedMsg?.senderName || "Contato")}
+          </span>
 
           {message.quotedMsg.mediaType === "audio"
             && (
@@ -2164,12 +2193,18 @@ const MessagesList = ({
             )
           }
 
-          {message.quotedMsg.mediaType === "image"
-            && (
-              <ModalImageCors imageUrl={message.quotedMsg.mediaUrl} />)
-            || message.quotedMsg?.body}
-
-          {!message.quotedMsg.mediaType === "image" && message.quotedMsg?.body}
+          {message.quotedMsg.mediaType === "image" && (
+            <ModalImageCors imageUrl={message.quotedMsg.mediaUrl} />
+          )}
+          
+          {message.quotedMsg.mediaType !== "image" && 
+           message.quotedMsg.mediaType !== "audio" && 
+           message.quotedMsg.mediaType !== "video" && 
+           message.quotedMsg.mediaType !== "application" && 
+           message.quotedMsg.mediaType !== "contactMessage" && 
+           message.quotedMsg?.body && (
+            <div style={{ whiteSpace: "pre-wrap" }}>{message.quotedMsg.body}</div>
+          )}
 
 
         </div>

@@ -710,7 +710,43 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
         msg.message?.listResponseMessage?.contextInfo?.externalAdReply?.title,
       pollCreationMessageV3: msg?.message?.pollCreationMessageV3 ? `*Enquete*\n${msg.message.pollCreationMessageV3.name}\n\n${msg.message.pollCreationMessageV3.options.map(option => option.optionName).join('\n')}` : null,
       eventMessage: msg?.message?.eventMessage?.name ? `*Nome do Evento: ${msg.message.eventMessage.name}*\n` : 'sem nome do evento\n',
-      templateMessage: msg?.message?.templateMessage?.hydratedTemplate?.hydratedContentText || '[Mensagem Template]',
+      templateMessage: (() => {
+        const tm = msg?.message?.templateMessage;
+        if (!tm) return '[Mensagem Template]';
+        
+        const template: any = tm.hydratedTemplate || tm.hydratedFourRowTemplate || tm.fourRowTemplate;
+        if (!template) return '[Mensagem Template]';
+        
+        let bodyMessage = '';
+        
+        // Texto principal
+        const contentText = template.hydratedContentText || template.title || '';
+        if (contentText) {
+          bodyMessage += contentText;
+        }
+        
+        // Footer
+        const footerText = template.hydratedFooterText || '';
+        if (footerText) {
+          bodyMessage += `\n\n${footerText}`;
+        }
+        
+        // Botões
+        if (template.hydratedButtons && template.hydratedButtons.length > 0) {
+          bodyMessage += '\n\n[BOTÕES]';
+          template.hydratedButtons.forEach((btn: any, idx: number) => {
+            if (btn.quickReplyButton) {
+              bodyMessage += `\n${idx + 1}. ${btn.quickReplyButton.displayText}`;
+            } else if (btn.urlButton) {
+              bodyMessage += `\n${idx + 1}. 🔗 ${btn.urlButton.displayText}`;
+            } else if (btn.callButton) {
+              bodyMessage += `\n${idx + 1}. 📞 ${btn.callButton.displayText}`;
+            }
+          });
+        }
+        
+        return bodyMessage || '[Mensagem Template]';
+      })(),
     };
 
     const objKey = Object.keys(types).find(key => key === type);

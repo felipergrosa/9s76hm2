@@ -538,10 +538,14 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
         };
       });
 
+      // Extrair mensagem do primeiro item de texto, ou usar placeholder se não houver
+      const firstTextItem = normalizedFlowItems.find(i => i.type === 'text');
+      const messageValue = firstTextItem?.value?.trim() || "[Mensagem sem texto]";
+
       const dataToSave = {
         ...values,
         flow: JSON.stringify(normalizedFlowItems),
-        message: normalizedFlowItems.find(i => i.type === 'text')?.value || "",
+        message: messageValue,
         mediaPath: mediaPaths.length > 0 ? JSON.stringify(mediaPaths) : null,
         mediaName: mediaNames.length > 0 ? JSON.stringify(mediaNames) : null
       };
@@ -959,7 +963,6 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                          if (categoryMsg && categoryMsg.color) {
                            setFieldValue("color", categoryMsg.color);
                          }
-                         setQuickemessage(prev => ({ ...prev, groupName: newValue }));
                        }}
                        onInputChange={(e, newInputValue) => {
                          setFieldValue("groupName", newInputValue);
@@ -967,7 +970,6 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                          if (categoryMsg && categoryMsg.color) {
                            setFieldValue("color", categoryMsg.color);
                          }
-                         setQuickemessage(prev => ({ ...prev, groupName: newInputValue }));
                        }}
                       renderInput={(params) => (
                         <TextField
@@ -992,9 +994,7 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
                         disabled={optionsGroups.includes(values.groupName)}
                         value={values.color || "#4B5563"}
                         onChange={(e) => {
-                          const newColor = e.target.value;
-                          setFieldValue("color", newColor);
-                          setQuickemessage(prev => ({ ...prev, color: newColor }));
+                          setFieldValue("color", e.target.value);
                         }}
                       >
                         {colors.map((c) => (

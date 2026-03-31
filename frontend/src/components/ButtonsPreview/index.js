@@ -146,6 +146,100 @@ const ButtonsPreview = ({ message }) => {
         };
       }
 
+      // templateMessage (templates comerciais com botões)
+      if (data?.message?.templateMessage) {
+        const tm = data.message.templateMessage;
+        
+        // Tentar extrair de hydratedTemplate
+        const template = tm.hydratedTemplate || tm.hydratedFourRowTemplate || tm.fourRowTemplate;
+        
+        if (template) {
+          const buttons = [];
+          
+          // hydratedButtons (botões rápidos)
+          if (template.hydratedButtons) {
+            template.hydratedButtons.forEach((btn) => {
+              if (btn.quickReplyButton) {
+                buttons.push({
+                  id: btn.quickReplyButton.id || "",
+                  text: btn.quickReplyButton.displayText || "",
+                  type: "quick_reply"
+                });
+              } else if (btn.urlButton) {
+                buttons.push({
+                  id: btn.urlButton.displayText || "",
+                  text: btn.urlButton.displayText || "",
+                  url: btn.urlButton.url || "",
+                  type: "url"
+                });
+              } else if (btn.callButton) {
+                buttons.push({
+                  id: btn.callButton.displayText || "",
+                  text: btn.callButton.displayText || "",
+                  phone: btn.callButton.phoneNumber || "",
+                  type: "call"
+                });
+              }
+            });
+          }
+
+          if (buttons.length > 0) {
+            return {
+              type: "template",
+              title: template.hydratedContentText || template.title || "",
+              footer: template.hydratedFooterText || "",
+              buttons,
+            };
+          }
+        }
+      }
+
+      // highlyStructuredMessage (templates da API oficial WhatsApp Business)
+      if (data?.message?.highlyStructuredMessage?.hydratedHsm) {
+        const hsm = data.message.highlyStructuredMessage.hydratedHsm;
+        const template = hsm.hydratedTemplate;
+        
+        if (template) {
+          const buttons = [];
+          
+          // hydratedButtons da API oficial
+          if (template.hydratedButtons) {
+            template.hydratedButtons.forEach((btn) => {
+              if (btn.quickReplyButton) {
+                buttons.push({
+                  id: btn.quickReplyButton.id || "",
+                  text: btn.quickReplyButton.displayText || "",
+                  type: "quick_reply"
+                });
+              } else if (btn.urlButton) {
+                buttons.push({
+                  id: btn.urlButton.displayText || "",
+                  text: btn.urlButton.displayText || "",
+                  url: btn.urlButton.url || "",
+                  type: "url"
+                });
+              } else if (btn.callButton) {
+                buttons.push({
+                  id: btn.callButton.displayText || "",
+                  text: btn.callButton.displayText || "",
+                  phone: btn.callButton.phoneNumber || "",
+                  type: "call"
+                });
+              }
+            });
+          }
+
+          if (buttons.length > 0) {
+            return {
+              type: "hsm",
+              title: template.hydratedContentText || "",
+              footer: template.hydratedFooterText || "",
+              buttons,
+            };
+          }
+        }
+      }
+
       return null;
     } catch (e) {
       console.error("Erro ao extrair botões:", e);
@@ -170,9 +264,13 @@ const ButtonsPreview = ({ message }) => {
           onClick={() => {
             if (btn.url) {
               window.open(btn.url, "_blank");
+            } else if (btn.phone) {
+              window.open(`tel:${btn.phone}`, "_self");
             }
           }}
         >
+          {btn.type === "url" && "🔗 "}
+          {btn.type === "call" && "📞 "}
           {btn.text}
         </Button>
       ))}

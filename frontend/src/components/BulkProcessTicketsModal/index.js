@@ -45,6 +45,8 @@ import {
   Send as SendIcon,
   Label as LabelIcon,
   Folder as FolderIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
 } from '@material-ui/icons';
 import { makeStyles } from '@material-ui/core/styles';
 import { toast } from 'react-toastify';
@@ -158,6 +160,10 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
   const [processing, setProcessing] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [selectedTickets, setSelectedTickets] = useState([]);
+  const [sortConfig, setSortConfig] = useState({
+    field: null,
+    direction: 'asc',
+  });
   const [filters, setFilters] = useState({
     status: initialFilters.status || 'pending',
     searchParam: '',
@@ -351,6 +357,59 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
         : [...prev, ticketId]
     );
   };
+
+  // Função de ordenação
+  const handleSort = (field) => {
+    let direction = 'asc';
+    if (sortConfig.field === field && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ field, direction });
+  };
+
+  // Tickets ordenados
+  const sortedTickets = React.useMemo(() => {
+    if (!sortConfig.field) return tickets;
+
+    const sorted = [...tickets].sort((a, b) => {
+      let valueA, valueB;
+
+      switch (sortConfig.field) {
+        case 'contact':
+          valueA = a.contact?.name || '';
+          valueB = b.contact?.name || '';
+          break;
+        case 'lastMessage':
+          valueA = a.lastMessage || '';
+          valueB = b.lastMessage || '';
+          break;
+        case 'status':
+          valueA = a.status || '';
+          valueB = b.status || '';
+          break;
+        case 'queue':
+          valueA = a.queue?.name || '';
+          valueB = b.queue?.name || '';
+          break;
+        case 'connection':
+          valueA = a.whatsapp?.name || '';
+          valueB = b.whatsapp?.name || '';
+          break;
+        case 'channels':
+          valueA = a.contact?.channels?.join(', ') || '';
+          valueB = b.contact?.channels?.join(', ') || '';
+          break;
+        default:
+          return 0;
+      }
+
+      if (valueA < valueB) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (valueA > valueB) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return sorted;
+  }, [tickets, sortConfig]);
 
   const handleProcess = async () => {
     if (selectedTickets.length === 0) {
@@ -575,26 +634,71 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                               onChange={handleSelectAll}
                             />
                           </TableCell>
-                          <TableCell>Contato</TableCell>
-                          <TableCell>Última Mensagem</TableCell>
-                          <TableCell>Status</TableCell>
+                          <TableCell onClick={() => handleSort('contact')} style={{ cursor: 'pointer' }}>
+                            <Box display="flex" alignItems="center">
+                              Contato
+                              {sortConfig.field === 'contact' && (
+                                sortConfig.direction === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                              )}
+                            </Box>
+                          </TableCell>
+                          <TableCell onClick={() => handleSort('lastMessage')} style={{ cursor: 'pointer' }}>
+                            <Box display="flex" alignItems="center">
+                              Última Mensagem
+                              {sortConfig.field === 'lastMessage' && (
+                                sortConfig.direction === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                              )}
+                            </Box>
+                          </TableCell>
+                          <TableCell onClick={() => handleSort('status')} style={{ cursor: 'pointer' }}>
+                            <Box display="flex" alignItems="center">
+                              Status
+                              {sortConfig.field === 'status' && (
+                                sortConfig.direction === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                              )}
+                            </Box>
+                          </TableCell>
+                          <TableCell onClick={() => handleSort('queue')} style={{ cursor: 'pointer' }}>
+                            <Box display="flex" alignItems="center">
+                              Fila
+                              {sortConfig.field === 'queue' && (
+                                sortConfig.direction === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                              )}
+                            </Box>
+                          </TableCell>
+                          <TableCell onClick={() => handleSort('connection')} style={{ cursor: 'pointer' }}>
+                            <Box display="flex" alignItems="center">
+                              Conexão
+                              {sortConfig.field === 'connection' && (
+                                sortConfig.direction === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                              )}
+                            </Box>
+                          </TableCell>
+                          <TableCell onClick={() => handleSort('channels')} style={{ cursor: 'pointer' }}>
+                            <Box display="flex" alignItems="center">
+                              Canais
+                              {sortConfig.field === 'channels' && (
+                                sortConfig.direction === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                              )}
+                            </Box>
+                          </TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {loading ? (
                           <TableRow>
-                            <TableCell colSpan={4} align="center">
+                            <TableCell colSpan={7} align="center">
                               Carregando...
                             </TableCell>
                           </TableRow>
                         ) : tickets.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={4} align="center">
+                            <TableCell colSpan={7} align="center">
                               Nenhum ticket encontrado
                             </TableCell>
                           </TableRow>
                         ) : (
-                          tickets.map((ticket) => (
+                          sortedTickets.map((ticket) => (
                             <TableRow key={ticket.id} hover>
                               <TableCell padding="checkbox">
                                 <Checkbox
@@ -608,6 +712,19 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                               </TableCell>
                               <TableCell>
                                 <Chip label={ticket.status} size="small" />
+                              </TableCell>
+                              <TableCell>{ticket.queue?.name || '-'}</TableCell>
+                              <TableCell>{ticket.whatsapp?.name || '-'}</TableCell>
+                              <TableCell>
+                                {ticket.contact?.channels?.length > 0 ? (
+                                  <Box display="flex" gap={0.5} flexWrap="wrap">
+                                    {ticket.contact.channels.map((channel, idx) => (
+                                      <Chip key={idx} label={channel} size="small" variant="outlined" />
+                                    ))}
+                                  </Box>
+                                ) : (
+                                  '-'
+                                )}
                               </TableCell>
                             </TableRow>
                           ))
