@@ -465,10 +465,12 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
 
       // 1. Se for novo, cria primeiro para obter ID (necessário para upload de arquivos)
       if (!recordId) {
+        const hasMedia = flowItems.some(i => i.type === 'media');
         const { data } = await api.post("/quick-messages", {
           ...values,
           flow: JSON.stringify([]),
-          message: flowItems.find(i => i.type === 'text')?.value || ""
+          message: flowItems.find(i => i.type === 'text')?.value || "",
+          isMedia: hasMedia
         });
         recordId = data.id;
       }
@@ -542,10 +544,13 @@ const QuickMessageDialog = ({ open, onClose, quickemessageId, reload, initialDat
       const firstTextItem = normalizedFlowItems.find(i => i.type === 'text');
       const messageValue = firstTextItem?.value?.trim() || "[Mensagem sem texto]";
 
+      const hasMedia = normalizedFlowItems.some(i => i.type === 'media');
+
       const dataToSave = {
         ...values,
         flow: JSON.stringify(normalizedFlowItems),
         message: messageValue,
+        isMedia: hasMedia,
         mediaPath: mediaPaths.length > 0 ? JSON.stringify(mediaPaths) : null,
         mediaName: mediaNames.length > 0 ? JSON.stringify(mediaNames) : null
       };
