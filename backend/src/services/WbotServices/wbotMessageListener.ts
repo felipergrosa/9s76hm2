@@ -2061,17 +2061,29 @@ const verifyContact = async (
 const verifyQuotedMessage = async (
   msg: proto.IWebMessageInfo
 ): Promise<Message | null> => {
-  if (!msg) return null;
+  if (!msg) {
+    logger.info(`[verifyQuotedMessage] msg é null/undefined`);
+    return null;
+  }
+  
   const quoted = getQuotedMessageId(msg);
+  logger.info(`[verifyQuotedMessage] quotedWid extraído: ${quoted || 'NENHUM'}`);
 
-  if (!quoted) return null;
+  if (!quoted) {
+    logger.info(`[verifyQuotedMessage] Nenhum quotedWid encontrado na mensagem`);
+    return null;
+  }
 
   const quotedMsg = await Message.findOne({
     where: { wid: quoted }
   });
 
-  if (!quotedMsg) return null;
+  if (!quotedMsg) {
+    logger.warn(`[verifyQuotedMessage] Mensagem citada NÃO encontrada no banco - wid: ${quoted}`);
+    return null;
+  }
 
+  logger.info(`[verifyQuotedMessage] ✅ Mensagem citada encontrada - wid: ${quoted}, id: ${quotedMsg.id}, body: "${quotedMsg.body?.substring(0, 50)}..."`);
   return quotedMsg;
 };
 
@@ -2088,6 +2100,8 @@ export const verifyMediaMessage = async (
   const io = getIO();
   const quotedMsg = await verifyQuotedMessage(msg);
   const companyId = ticket.companyId;
+
+  logger.info(`[verifyMediaMessage] quotedMsg retornado: ${quotedMsg ? `id=${quotedMsg.id}, wid=${quotedMsg.wid}` : 'NULL'}`);
 
   try {
     const media = await downloadMedia(msg, ticket?.imported, wbot, ticket);
@@ -2517,6 +2531,9 @@ export const verifyMessage = async (
 
   // Se for reação, buscar mensagem alvo pelo WID para obter ID interno
   let reactionQuotedMsgId = quotedMsg?.id;
+  
+  logger.info(`[verifyMessage] quotedMsg inicial: ${quotedMsg ? `id=${quotedMsg.id}, wid=${quotedMsg.wid}` : 'NULL'}`);
+  
   if (!reactionQuotedMsgId && msg.message?.reactionMessage?.key?.id) {
     // CRÍTICO: Se handleMessage já encontrou a mensagem alvo, usar o ID injetado
     const injectedTargetId = (msg as any).__targetMessageId;
@@ -2538,6 +2555,17 @@ export const verifyMessage = async (
         logger.warn(`[verifyMessage] Reação: mensagem alvo NÃO encontrada para WID: ${targetWid}`);
       }
     }
+  }
+  
+  logger.info(`[verifyMessage] quotedMsgId que será salvo: ${quotedMsg?.id || reactionQuotedMsgId || 'NULL'}`);
+  logger.info(`[verifyMessage] Tipo de mensagem: ${getTypeMessage(msg)}, fromMe: ${msg.key.fromMe}`);
+  
+  // Log do contextInfo para debug
+  const messageContent = extractMessageContent(msg.message);
+  const firstKey = Object.keys(messageContent || {})[0];
+  const contextInfo = messageContent?.[firstKey]?.contextInfo;
+  if (contextInfo?.stanzaId) {
+    logger.info(`[verifyMessage] contextInfo.stanzaId detectado: ${contextInfo.stanzaId}`);
   }
 
   const messageData = {

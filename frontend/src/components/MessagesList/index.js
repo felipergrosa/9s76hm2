@@ -2120,6 +2120,17 @@ const MessagesList = ({
   };
 
   const renderQuotedMessage = (message) => {
+    console.log('[renderQuotedMessage] Chamado para mensagem:', {
+      messageId: message.id,
+      hasQuotedMsg: !!message.quotedMsg,
+      quotedMsgId: message.quotedMsgId,
+      quotedMsg: message.quotedMsg ? {
+        id: message.quotedMsg.id,
+        body: message.quotedMsg.body?.substring(0, 50),
+        mediaType: message.quotedMsg.mediaType,
+        fromMe: message.quotedMsg.fromMe
+      } : null
+    });
 
     return (
       <div
@@ -2411,7 +2422,15 @@ const MessagesList = ({
                     )
                   }
                 )}>
-                  {message.quotedMsg && renderQuotedMessage(message)}
+                  {(() => {
+                    console.log('[MessagesList] Verificando quotedMsg:', {
+                      messageId: message.id,
+                      hasQuotedMsg: !!message.quotedMsg,
+                      quotedMsgId: message.quotedMsgId,
+                      body: message.body?.substring(0, 30)
+                    });
+                    return message.quotedMsg && renderQuotedMessage(message);
+                  })()}
                   {message.mediaType !== "adMetaPreview" && (
                     (() => {
                       const bodyTrim = safeTrim(message.body || "");
