@@ -787,6 +787,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
   const { body, quotedMsg, vCard, isPrivate = "false" }: MessageData = req.body;
   
+  // Log para verificar se quotedMsg está chegando do frontend
+  logger.info(`[MessageController.store] quotedMsg recebido: ${quotedMsg ? `id=${quotedMsg.id}, wid=${quotedMsg.wid}` : 'NULL'}`);
+  
   const medias = req.files as Express.Multer.File[];
   const { companyId } = req.user;
 
@@ -992,6 +995,9 @@ export const forwardMessage = async (req: Request, res: Response): Promise<Respo
   const settings = await CompaniesSettings.findOne({ where: { companyId } });
   const ticket = await ShowTicketService(message.ticketId, message.companyId);
   const mutex = new Mutex();
+  
+  // Log para verificar se quotedMsg está chegando
+  logger.info(`[MessageController] quotedMsg recebido: ${quotedMsg ? `id=${quotedMsg.id}, wid=${quotedMsg.wid}` : 'NULL'}`);
 
   const createTicket = await mutex.runExclusive(async () => {
     return FindOrCreateTicketService(

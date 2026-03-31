@@ -1635,6 +1635,21 @@ const MessagesList = ({
     setReplyingMessage(message);
   };
 
+  const scrollToQuotedMessage = (quotedMessageId) => {
+    const element = document.getElementById(`message-${quotedMessageId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Destacar brevemente a mensagem
+      element.style.backgroundColor = 'rgba(37, 211, 102, 0.2)';
+      setTimeout(() => {
+        element.style.backgroundColor = '';
+      }, 2000);
+    } else {
+      // Se não encontrou na tela atual, pode estar em outra página
+      console.warn(`[scrollToQuotedMessage] Mensagem ${quotedMessageId} não encontrada na tela atual`);
+    }
+  };
+
   const checkMessageMedia = (message) => {
     if (message.mediaType === "locationMessage" && message.body.split('|').length >= 2) {
       let locationParts = message.body.split('|')
@@ -2128,7 +2143,8 @@ const MessagesList = ({
         id: message.quotedMsg.id,
         body: message.quotedMsg.body?.substring(0, 50),
         mediaType: message.quotedMsg.mediaType,
-        fromMe: message.quotedMsg.fromMe
+        fromMe: message.quotedMsg.fromMe,
+        mediaUrl: message.quotedMsg.mediaUrl
       } : null
     });
 
@@ -2137,6 +2153,9 @@ const MessagesList = ({
         className={clsx(classes.quotedContainerLeft, {
           [classes.quotedContainerRight]: message.fromMe,
         })}
+        onClick={() => scrollToQuotedMessage(message.quotedMsg.id)}
+        style={{ cursor: 'pointer' }}
+        title="Clique para ir até a mensagem"
       >
         <span
           className={clsx(classes.quotedSideColorLeft, {
@@ -2150,63 +2169,98 @@ const MessagesList = ({
               : (message.quotedMsg?.contact?.name || message.quotedMsg?.senderName || "Contato")}
           </span>
 
-          {message.quotedMsg.mediaType === "audio"
-            && (
-              <div className={classes.downloadMedia}>
-                <AudioModal url={message.quotedMsg.mediaUrl} contact={getAvatarContactForMessage(message.quotedMsg, message?.ticket?.contact)} fromMe={message.quotedMsg?.fromMe} />
-              </div>
-            )
-          }
-          {message.quotedMsg.mediaType === "video"
-            && (
-              <VideoWithHdBadge
-                className={classes.messageMedia}
-                src={message.quotedMsg.mediaUrl}
-                isGif={/\.gif(\?.*)?$/i.test(message.quotedMsg.mediaUrl || "")}
-              />
-            )
-          }
+          {(() => {
+            if (message.quotedMsg.mediaType === "audio") {
+              console.log('[renderQuotedMessage] Renderizando áudio citado:', {
+                mediaUrl: message.quotedMsg.mediaUrl,
+                mediaType: message.quotedMsg.mediaType
+              });
+              return (
+                <div className={classes.downloadMedia}>
+                  <AudioModal url={message.quotedMsg.mediaUrl} contact={getAvatarContactForMessage(message.quotedMsg, message?.ticket?.contact)} fromMe={message.quotedMsg?.fromMe} />
+                </div>
+              );
+            }
+            return null;
+          })()}
+          {(() => {
+            if (message.quotedMsg.mediaType === "video") {
+              console.log('[renderQuotedMessage] Renderizando vídeo citado:', {
+                mediaUrl: message.quotedMsg.mediaUrl,
+                mediaType: message.quotedMsg.mediaType
+              });
+              return (
+                <VideoWithHdBadge
+                  className={classes.messageMedia}
+                  src={message.quotedMsg.mediaUrl}
+                  isGif={/\.gif(\?.*)?$/i.test(message.quotedMsg.mediaUrl || "")}
+                />
+              );
+            }
+            return null;
+          })()}
           {message.quotedMsg.mediaType === "contactMessage"
             && (
               "Contato"
             )
           }
-          {message.quotedMsg.mediaType === "application" && /\.pdf($|\?)/i.test(message.quotedMsg.mediaUrl)
-            && (
-              <div className={classes.fileFrame} onClick={(e) => { e.preventDefault(); setPdfDialog({ open: true, url: message.quotedMsg.mediaUrl }); }} style={{ cursor: 'pointer' }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>PDF</div>
-                  <div className={classes.fileName}>{getFileNameFromUrl(message.quotedMsg.mediaUrl) || 'arquivo.pdf'}</div>
+          {(() => {
+            if (message.quotedMsg.mediaType === "application" && /\.pdf($|\?)/i.test(message.quotedMsg.mediaUrl)) {
+              console.log('[renderQuotedMessage] Renderizando PDF citado:', {
+                mediaUrl: message.quotedMsg.mediaUrl,
+                mediaType: message.quotedMsg.mediaType
+              });
+              return (
+                <div className={classes.fileFrame} onClick={(e) => { e.preventDefault(); setPdfDialog({ open: true, url: message.quotedMsg.mediaUrl }); }} style={{ cursor: 'pointer' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>PDF</div>
+                    <div className={classes.fileName}>{getFileNameFromUrl(message.quotedMsg.mediaUrl) || 'arquivo.pdf'}</div>
+                    <Button
+                      startIcon={<GetApp />}
+                      variant="outlined"
+                      href={message.quotedMsg.mediaUrl}
+                      onClick={(e) => { e.preventDefault(); handleDirectDownload(message.quotedMsg.mediaUrl); }}
+                    >
+                      Baixar
+                    </Button>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
+          {(() => {
+            if (message.quotedMsg.mediaType === "application" && !/\.pdf($|\?)/i.test(message.quotedMsg.mediaUrl)) {
+              console.log('[renderQuotedMessage] Renderizando arquivo citado:', {
+                mediaUrl: message.quotedMsg.mediaUrl,
+                mediaType: message.quotedMsg.mediaType
+              });
+              return (
+                <div className={classes.downloadMedia}>
                   <Button
                     startIcon={<GetApp />}
                     variant="outlined"
                     href={message.quotedMsg.mediaUrl}
                     onClick={(e) => { e.preventDefault(); handleDirectDownload(message.quotedMsg.mediaUrl); }}
                   >
-                    Baixar
+                    Download
                   </Button>
                 </div>
-              </div>
-            )
-          }
-          {message.quotedMsg.mediaType === "application" && !/\.pdf($|\?)/i.test(message.quotedMsg.mediaUrl)
-            && (
-              <div className={classes.downloadMedia}>
-                <Button
-                  startIcon={<GetApp />}
-                  variant="outlined"
-                  href={message.quotedMsg.mediaUrl}
-                  onClick={(e) => { e.preventDefault(); handleDirectDownload(message.quotedMsg.mediaUrl); }}
-                >
-                  Download
-                </Button>
-              </div>
-            )
-          }
+              );
+            }
+            return null;
+          })()}
 
-          {message.quotedMsg.mediaType === "image" && (
-            <ModalImageCors imageUrl={message.quotedMsg.mediaUrl} />
-          )}
+          {(() => {
+            if (message.quotedMsg.mediaType === "image") {
+              console.log('[renderQuotedMessage] Renderizando imagem citada:', {
+                mediaUrl: message.quotedMsg.mediaUrl,
+                mediaType: message.quotedMsg.mediaType
+              });
+              return <ModalImageCors imageUrl={message.quotedMsg.mediaUrl} />;
+            }
+            return null;
+          })()}
           
           {message.quotedMsg.mediaType !== "image" && 
            message.quotedMsg.mediaType !== "audio" && 
