@@ -368,6 +368,8 @@ export class BaileysAdapter implements IWhatsAppAdapter {
       const { to, body, mediaType, mediaPath, mediaUrl, caption, quotedMsgId, buttons, listSections, vcard } = options;
       const toJid = this.normalizeRecipientToJid(to);
 
+      logger.info(`[BaileysAdapter] sendMessage chamado com quotedMsgId: ${quotedMsgId || 'NULL'}`);
+
       let content: any;
       let sentMsg: any;
 

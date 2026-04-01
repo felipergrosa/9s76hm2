@@ -63,6 +63,8 @@ const SendWhatsAppMessageUnified = async ({
   imageUrl,
 }: Request): Promise<IWhatsAppMessage | proto.WebMessageInfo> => {
   
+  logger.info(`[SendWhatsAppMessageUnified] quotedMsg recebido: ${quotedMsg ? `id=${quotedMsg.id}, wid=${quotedMsg.wid}` : 'NULL'}`);
+  
   try {
     // Obter adapter apropriado (Baileys ou Official API)
     const adapter = await GetTicketAdapter(ticket);
@@ -184,8 +186,11 @@ const SendWhatsAppMessageUnified = async ({
       let quotedMsgId: string | undefined;
       if (quotedMsg) {
         quotedMsgId = quotedMsg.wid || String(quotedMsg.id) || undefined;
+        logger.info(`[SendWhatsAppMessageUnified] quotedMsgId extraído: ${quotedMsgId}`);
       }
 
+      logger.info(`[SendWhatsAppMessageUnified] Enviando mensagem com quotedMsgId: ${quotedMsgId || 'NULL'}`);
+      
       sentMessage = await adapter.sendMessage({
         to: number.split("@")[0],
         body: formattedBody,
