@@ -612,9 +612,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
 
     try {
       // O messageId pode ser apenas o wid (ex: 3EB0A9A08792B5CD08A445)
-      // ou o formato antigo remoteJid_id
       // Buscar a mensagem no banco para obter o remoteJid correto
-      const { Message } = require("../../models");
       const message = await Message.findOne({
         where: { wid: messageId },
         attributes: ["id", "wid", "remoteJid", "fromMe", "participant"]
