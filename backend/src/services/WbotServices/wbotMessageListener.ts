@@ -2561,7 +2561,7 @@ export const verifyMessage = async (
   // GERAR LINK PREVIEW se for mensagem de texto com link e não tiver preview do WhatsApp
   const msgType = getTypeMessage(msg);
   if (msgType === 'extendedTextMessage' && body) {
-    const ctx = msg.message?.extendedTextMessage?.contextInfo;
+    const ctx: any = msg.message?.extendedTextMessage?.contextInfo;
     // Só gerar preview se não houver contextInfo do WhatsApp
     if (!ctx?.externalAdReply && !ctx?.matchedText) {
       logger.info(`[verifyMessage] Mensagem sem preview do WhatsApp, tentando gerar preview para: ${body.substring(0, 100)}`);
