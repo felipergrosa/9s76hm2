@@ -2159,6 +2159,7 @@ const MessagesList = ({
   const [ticketData, setTicketData] = useState(null);
   const [windowClosedOverride, setWindowClosedOverride] = useState(null);
   
+  // Buscar dados do ticket
   useEffect(() => {
     const fetchTicketData = async () => {
       if (!ticketId || ticketId === "undefined") return;
@@ -2171,6 +2172,9 @@ const MessagesList = ({
     };
     fetchTicketData();
   }, [ticketId]);
+
+  // Declarar isOfficialChannel ANTES dos useEffects que o usam
+  const isOfficialChannel = ticketData?.whatsapp?.channelType === "official";
 
   // Detectar mensagens do contato em tempo real para abrir a janela
   useEffect(() => {
@@ -2193,7 +2197,6 @@ const MessagesList = ({
     }
   }, [filteredMessages, isOfficialChannel]);
   
-  const isOfficialChannel = ticketData?.whatsapp?.channelType === "official";
   const isWindowClosed = useMemo(() => {
     if (!isOfficialChannel) return false;
     // Se há override (mensagem do contato recebida), usa ele
