@@ -439,6 +439,57 @@ const useStyles = makeStyles((theme) => ({
     boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
   },
 
+  // Estilo para mensagens de template (fundo azul claro + indicador)
+  messageTemplate: {
+    marginLeft: 20,
+    marginTop: 2,
+    minWidth: 100,
+    maxWidth: 350,
+    height: "auto",
+    display: "block",
+    position: "relative",
+    "&:hover #messageActionsButton": {
+      display: "flex",
+      position: "absolute",
+      top: 0,
+      right: 0,
+    },
+    whiteSpace: "pre-wrap",
+    backgroundColor: "#E3F2FD", // Azul claro
+    color: "#303030",
+    alignSelf: "flex-end",
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 0,
+    paddingLeft: 5,
+    paddingRight: 5,
+    paddingTop: 5,
+    paddingBottom: 0,
+    boxShadow: theme.mode === 'light' ? "0 1px 1px #b3b3b3" : "0 1px 1px #000000",
+    [theme.breakpoints.down('sm')]: {
+      marginLeft: 10,
+      maxWidth: 280,
+    },
+  },
+
+  // Badge de template para mensagens de template
+  templateBadge: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: "#2196F3",
+    borderRadius: "50%",
+    width: 20,
+    height: 20,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 12,
+    zIndex: 5,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+  },
+
   quotedContainerRight: {
     margin: "-3px -80px 6px -6px",
     overflowY: "hidden",
@@ -2472,12 +2523,41 @@ const MessagesList = ({
       const isSticker = message.mediaType === "sticker" || message.mediaType === "gif";
       // Verifica se é mensagem de campanha (ticket status = 'campaign' e enviada pelo sistema)
       const isCampaignMessage = message.fromMe && message.ticket?.status === "campaign";
+      // Verifica se é mensagem de template (mediaType = template ou flag isCampaign na mensagem)
+      const isTemplateMessage = message.fromMe && (message.mediaType === "template" || message.isCampaign === true) && !isCampaignMessage;
+      
+      // Determina qual classe aplicar
+      let bubbleClassName;
+      if (isSticker) {
+        bubbleClassName = isLeft ? classes.messageStickerLeft : classes.messageStickerRight;
+      } else if (isLeft) {
+        bubbleClassName = classes.messageLeft;
+      } else if (isCampaignMessage) {
+        bubbleClassName = classes.messageCampaign;
+      } else if (isTemplateMessage) {
+        bubbleClassName = classes.messageTemplate;
+      } else if (message.isPrivate) {
+        bubbleClassName = classes.messageRightPrivate;
+      } else {
+        bubbleClassName = classes.messageRight;
+      }
+      
       const bubbleClass = clsx(
-        isSticker
-          ? (isLeft ? classes.messageStickerLeft : classes.messageStickerRight)
-          : (isLeft ? classes.messageLeft : (isCampaignMessage ? classes.messageCampaign : (message.isPrivate ? classes.messageRightPrivate : classes.messageRight))),
+        bubbleClassName,
         { [isLeft ? classes.messageLeftAudio : classes.messageRightAudio]: message.mediaType === "audio" }
       );
+      
+      // DEBUG: Verificar dados
+      console.log('[MessagesList] Message:', {
+        id: message.id,
+        fromMe: message.fromMe,
+        ticketStatus: message.ticket?.status,
+        mediaType: message.mediaType,
+        isCampaign: message.isCampaign,
+        isCampaignMessage,
+        isTemplateMessage,
+        bubbleClass: bubbleClassName
+      });
 
       // Verifica se a mensagem está selecionada
       const isMessageSelected = showSelectMessageCheckbox && selectedMessages.some((m) => m.id === message.id);
@@ -2519,6 +2599,13 @@ const MessagesList = ({
                 {isCampaignMessage && (
                   <div className={classes.campaignBadge} title="Mensagem de campanha">
                     📢
+                  </div>
+                )}
+
+                {/* Badge de template para mensagens de template */}
+                {isTemplateMessage && (
+                  <div className={classes.templateBadge} title="Mensagem de template">
+                    📄
                   </div>
                 )}
 
