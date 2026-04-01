@@ -2157,6 +2157,7 @@ const MessagesList = ({
 
   // Verificar se é API Oficial e se a janela está fechada
   const [ticketData, setTicketData] = useState(null);
+  const [windowClosedOverride, setWindowClosedOverride] = useState(null);
   
   useEffect(() => {
     const fetchTicketData = async () => {
@@ -2170,25 +2171,66 @@ const MessagesList = ({
     };
     fetchTicketData();
   }, [ticketId]);
+
+  // Detectar mensagens do contato em tempo real para abrir a janela
+  useEffect(() => {
+    if (!isOfficialChannel) return;
+    
+    // Procura mensagens recebidas nas últimas 24h
+    const hasRecentContactMessage = filteredMessages.some(msg => {
+      if (msg.fromMe) return false;
+      const msgTime = new Date(msg.createdAt).getTime();
+      const now = new Date().getTime();
+      const hours24 = 24 * 60 * 60 * 1000;
+      return (now - msgTime) < hours24;
+    });
+    
+    // Se recebeu mensagem recente do contato, abre a janela
+    if (hasRecentContactMessage) {
+      setWindowClosedOverride(false);
+    } else {
+      setWindowClosedOverride(null); // Reseta para usar valor do ticketData
+    }
+  }, [filteredMessages, isOfficialChannel]);
   
   const isOfficialChannel = ticketData?.whatsapp?.channelType === "official";
   const isWindowClosed = useMemo(() => {
     if (!isOfficialChannel) return false;
+    // Se há override (mensagem do contato recebida), usa ele
+    if (windowClosedOverride !== null) return windowClosedOverride;
+    // Senão, usa a lógica original baseada no sessionWindowExpiresAt
     const expiresAt = ticketData?.sessionWindowExpiresAt;
     if (!expiresAt) return true;
     return new Date().getTime() > new Date(expiresAt).getTime();
-  }, [isOfficialChannel, ticketData]);
+  }, [isOfficialChannel, ticketData, windowClosedOverride]);
 
   // Verificar se template foi enviado nas últimas 24h
   const isTemplateSentRecently = useMemo(() => {
     if (!isOfficialChannel || !isWindowClosed) return false;
+    
+    // Verifica no ticketData
     const lastTemplateSentAt = ticketData?.lastTemplateSentAt;
-    if (!lastTemplateSentAt) return false;
-    const now = new Date().getTime();
-    const sentAt = new Date(lastTemplateSentAt).getTime();
-    const hours24 = 24 * 60 * 60 * 1000;
-    return (now - sentAt) < hours24;
-  }, [isOfficialChannel, isWindowClosed, ticketData]);
+    if (lastTemplateSentAt) {
+      const now = new Date().getTime();
+      const sentAt = new Date(lastTemplateSentAt).getTime();
+      const hours24 = 24 * 60 * 60 * 1000;
+      if ((now - sentAt) < hours24) return true;
+    }
+    
+    // Verifica nas mensagens do ticket (template enviado manualmente ou campanha)
+    const hasRecentTemplateMessage = filteredMessages.some(msg => {
+      if (!msg.fromMe) return false;
+      // Verifica se é template ou campanha enviada nas últimas 24h
+      const isTemplate = msg.mediaType === "template" || msg.isCampaign === true;
+      if (!isTemplate) return false;
+      const msgTime = new Date(msg.createdAt).getTime();
+      const now = new Date().getTime();
+      const hours24 = 24 * 60 * 60 * 1000;
+      return (now - msgTime) < hours24;
+    });
+    
+    return hasRecentTemplateMessage;
+  }, [isOfficialChannel, isWindowClosed, ticketData, filteredMessages]);
 
   const renderTicketsSeparator = (message, index) => {
     let lastTicket = filteredMessages[index - 1]?.ticketId;
@@ -2823,14 +2865,14 @@ const MessagesList = ({
             display: "flex",
             padding: "10px 16px",
             alignItems: "center",
-            backgroundColor: isTemplateSentRecently ? "#FFEBEE" : "#FFF3E0",
-            borderTop: isTemplateSentRecently ? "1px solid #EF5350" : "1px solid #FFB74D",
+            backgroundColor: isTemplateSentRecently ? "#E3F2FD" : "#FFF3E0",
+            borderTop: isTemplateSentRecently ? "1px solid #2196F3" : "1px solid #FFB74D",
             gap: 12,
           }}
         >
           <div
             style={{
-              backgroundColor: isTemplateSentRecently ? "#EF5350" : "#FF9800",
+              backgroundColor: isTemplateSentRecently ? "#2196F3" : "#FF9800",
               borderRadius: "50%",
               width: 32,
               height: 32,
@@ -2841,16 +2883,16 @@ const MessagesList = ({
             }}
           >
             <span style={{ color: "#fff", fontSize: 16 }}>
-              {isTemplateSentRecently ? "📤" : "⚠️"}
+              {isTemplateSentRecently ? "⏳" : "⚠️"}
             </span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-            <span style={{ fontWeight: 600, color: isTemplateSentRecently ? "#C62828" : "#E65100", fontSize: 14 }}>
-              {isTemplateSentRecently ? "Template enviado - aguardando resposta" : "Janela de 24h fechada"}
+            <span style={{ fontWeight: 600, color: isTemplateSentRecently ? "#1565C0" : "#E65100", fontSize: 14 }}>
+              {isTemplateSentRecently ? "Template enviado nas últimas 24h" : "Janela de 24h fechada"}
             </span>
-            <span style={{ color: isTemplateSentRecently ? "#B71C1C" : "#BF360C", fontSize: 12 }}>
+            <span style={{ color: isTemplateSentRecently ? "#0D47A1" : "#BF360C", fontSize: 12 }}>
               {isTemplateSentRecently 
-                ? "O contato precisa responder para abrir a janela de 24h. Você pode enviar mais templates se necessário."
+                ? "Você já enviou um template recentemente. Aguarde a resposta do contato para continuar a conversa sem custos adicionais."
                 : "Para enviar mensagens, use o botão de template ao lado do campo de texto."}
             </span>
           </div>
