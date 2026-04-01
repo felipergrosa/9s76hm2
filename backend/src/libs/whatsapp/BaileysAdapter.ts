@@ -607,17 +607,40 @@ export class BaileysAdapter implements IWhatsAppAdapter {
     }
 
     try {
+      // Validar formato do messageId
+      if (!messageId || !messageId.includes("_")) {
+        logger.error(`[BaileysAdapter] messageId inválido para deleção: ${messageId}`);
+        throw new WhatsAppAdapterError(
+          "ID de mensagem inválido",
+          "INVALID_MESSAGE_ID"
+        );
+      }
+
+      const parts = messageId.split("_");
+      const remoteJid = parts[0];
+      const id = parts.slice(1).join("_"); // Pegar tudo depois do primeiro _
+
+      if (!remoteJid || !id) {
+        logger.error(`[BaileysAdapter] Não foi possível extrair remoteJid ou id de: ${messageId}`);
+        throw new WhatsAppAdapterError(
+          "Não foi possível extrair informações da mensagem",
+          "INVALID_MESSAGE_ID"
+        );
+      }
+
       const key = {
-        remoteJid: messageId.split("_")[0],
-        id: messageId.split("_")[1],
+        remoteJid: remoteJid,
+        id: id,
         fromMe: true
       };
+
+      logger.info(`[BaileysAdapter] Deletando mensagem: remoteJid=${remoteJid}, id=${id}`);
 
       await this.socket.sendMessage(key.remoteJid, {
         delete: key
       });
 
-      logger.info(`[BaileysAdapter] Mensagem deletada: ${messageId}`);
+      logger.info(`[BaileysAdapter] Mensagem deletada com sucesso: ${messageId}`);
     } catch (error) {
       logger.error(`[BaileysAdapter] Erro ao deletar mensagem: ${error.message}`);
       throw new WhatsAppAdapterError(
