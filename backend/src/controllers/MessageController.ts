@@ -5,6 +5,7 @@ import GetTicketWbot from "../helpers/GetTicketWbot";
 import SetTicketMessagesAsRead from "../helpers/SetTicketMessagesAsRead";
 import { getIO } from "../libs/socket";
 import { emitToCompanyRoom } from "../libs/socketEmit";
+import logger from "../utils/logger";
 import Message from "../models/Message";
 import Ticket from "../models/Ticket";
 import Queue from "../models/Queue";
