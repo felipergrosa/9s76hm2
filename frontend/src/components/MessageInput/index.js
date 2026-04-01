@@ -850,6 +850,8 @@ const MessageInput = ({
   const [inputCursorPosition, setInputCursorPosition] = useState(0);
   // Lista de palavras erradas para sublinhado vermelho (ortografia)
   const [misspelledWords, setMisspelledWords] = useState([]);
+  // Ref para timeout do spell check debounce
+  const spellCheckTimeoutRef = useRef(null);
   // Lista de erros gramaticais do LanguageTool
   const [grammarErrors, setGrammarErrors] = useState([]);
   // Menu de contexto (right-click) para sugestões
