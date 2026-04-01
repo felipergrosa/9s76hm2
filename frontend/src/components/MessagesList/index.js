@@ -388,6 +388,57 @@ const useStyles = makeStyles((theme) => ({
     boxShadow: theme.mode === 'light' ? "0 1px 1px #b3b3b3" : "0 1px 1px #000000"
   },
 
+  // Estilo para mensagens de campanha (fundo laranja + indicador)
+  messageCampaign: {
+    marginLeft: 20,
+    marginTop: 2,
+    minWidth: 100,
+    maxWidth: 350,
+    height: "auto",
+    display: "block",
+    position: "relative",
+    "&:hover #messageActionsButton": {
+      display: "flex",
+      position: "absolute",
+      top: 0,
+      right: 0,
+    },
+    whiteSpace: "pre-wrap",
+    backgroundColor: "#FFE4B5", // Laranja claro
+    color: "#303030",
+    alignSelf: "flex-end",
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 0,
+    paddingLeft: 5,
+    paddingRight: 5,
+    paddingTop: 5,
+    paddingBottom: 0,
+    boxShadow: theme.mode === 'light' ? "0 1px 1px #b3b3b3" : "0 1px 1px #000000",
+    [theme.breakpoints.down('sm')]: {
+      marginLeft: 10,
+      maxWidth: 280,
+    },
+  },
+
+  // Badge de megafone para mensagens de campanha
+  campaignBadge: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: "#FF9800",
+    borderRadius: "50%",
+    width: 20,
+    height: 20,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 12,
+    zIndex: 5,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+  },
+
   quotedContainerRight: {
     margin: "-3px -80px 6px -6px",
     overflowY: "hidden",
@@ -2419,10 +2470,12 @@ const MessagesList = ({
 
       const isLeft = !message.fromMe;
       const isSticker = message.mediaType === "sticker" || message.mediaType === "gif";
+      // Verifica se é mensagem de campanha (ticket status = 'campaign' e enviada pelo sistema)
+      const isCampaignMessage = message.fromMe && message.ticket?.status === "campaign";
       const bubbleClass = clsx(
         isSticker
           ? (isLeft ? classes.messageStickerLeft : classes.messageStickerRight)
-          : (isLeft ? classes.messageLeft : (message.isPrivate ? classes.messageRightPrivate : classes.messageRight)),
+          : (isLeft ? classes.messageLeft : (isCampaignMessage ? classes.messageCampaign : (message.isPrivate ? classes.messageRightPrivate : classes.messageRight))),
         { [isLeft ? classes.messageLeftAudio : classes.messageRightAudio]: message.mediaType === "audio" }
       );
 
@@ -2462,6 +2515,13 @@ const MessagesList = ({
                 title={message.queueId && message.queue?.name}
                 onDoubleClick={(e) => hanldeReplyMessage(e, message)}
               >
+                {/* Badge de megafone para mensagens de campanha */}
+                {isCampaignMessage && (
+                  <div className={classes.campaignBadge} title="Mensagem de campanha">
+                    📢
+                  </div>
+                )}
+
                 <IconButton
                   variant="contained"
                   size="small"
