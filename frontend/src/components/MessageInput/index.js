@@ -23,28 +23,29 @@ import {
 } from "@material-ui/core/colors";
 import whatsBackground from "../../assets/wa-background.png";
 import whatsBackgroundDark from "../../assets/wa-background-dark.png";
-import {
-  Smile,
-  Sparkles,
-  Plus,
-  Image as ImageIcon,
-  Camera,
-  FileText,
-  UserRound,
-  X,
-  Check,
-  Send as SendIcon,
-  Mic as MicIcon,
-  Reply as ReplyIcon,
-  Zap,
-  Clock as ClockIcon,
-  Video,
-  PenLine,
-  MessageSquare,
-  Braces,
-  Paperclip,
-  MoreHorizontal,
-  SpellCheck2,
+import { 
+  AlertTriangle, 
+  FileText, 
+  Smile, 
+  Sparkles, 
+  Plus, 
+  Image as ImageIcon, 
+  Camera, 
+  UserRound, 
+  X, 
+  Check, 
+  Send as SendIcon, 
+  Mic as MicIcon, 
+  Reply as ReplyIcon, 
+  Zap, 
+  Clock as ClockIcon, 
+  Video, 
+  PenLine, 
+  MessageSquare, 
+  Braces, 
+  Paperclip, 
+  MoreHorizontal, 
+  SpellCheck2 
 } from "lucide-react";
 import MicRecorder from "mic-recorder-to-mp3";
 import clsx from "clsx";
@@ -66,6 +67,7 @@ const MessageUploadMedias = lazy(() => import("../MessageUploadMedias"));
 const ScheduleModal = lazy(() => import("../ScheduleModal"));
 const ChatAssistantPanel = lazy(() => import("../ChatAssistantPanel"));
 const WhatsAppPopover = lazy(() => import("../WhatsAppPopover"));
+const OfficialTemplateStartModal = lazy(() => import("../OfficialTemplateStartModal"));
 import axios from "axios";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import { ForwardMessageContext } from "../../context/ForwarMessage/ForwardMessageContext";
@@ -819,6 +821,7 @@ const MessageInput = ({
   const [privateMessageInputVisible, setPrivateMessageInputVisible] = useState(false);
   const [senVcardModalOpen, setSenVcardModalOpen] = useState(false);
   const [showModalMedias, setShowModalMedias] = useState(false);
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
 
   // Corretor ortográfico (AUTO-CORREÇÃO INSTANTÂNEA + módulo completo sob demanda)
   const [spellCheckEnabled, setSpellCheckEnabled] = useState(() => {
@@ -861,8 +864,23 @@ const MessageInput = ({
     position: { x: 0, y: 0 }
   });
 
-  // Debounce para análise ortográfica pesada
-  const spellCheckTimeoutRef = useRef(null);
+  // Helper para verificar se janela de 24h está expirada (API Oficial)
+  const isWindowExpired = useCallback(() => {
+    // Só aplica para API Oficial
+    if (ticketData?.whatsapp?.channelType !== "official") return false;
+    // Não aplica para grupos
+    if (contactData?.isGroup) return false;
+    
+    const expiresAt = ticketData?.sessionWindowExpiresAt;
+    if (!expiresAt) return true; // Sem janela = expirada
+    
+    const now = new Date().getTime();
+    const expires = new Date(expiresAt).getTime();
+    return now > expires;
+  }, [ticketData, contactData]);
+
+  // Verificar se deve bloquear input (janela expirada)
+  const shouldBlockInput = isWindowExpired();
 
   const { list: listQuickMessages } = useQuickMessages();
 
@@ -944,21 +962,23 @@ const MessageInput = ({
     } catch (_) { }
   };
 
-  // Determine o texto do placeholder com base no ticketStatus
+  // Determine o texto do placeholder com base no ticketStatus e janela 24h
   useEffect(() => {
-    if (ticketStatus === "open" || ticketStatus === "group") {
+    if (shouldBlockInput) {
+      setPlaceHolderText("Clique no botão ao lado para iniciar uma mensagem com template");
+    } else if (ticketStatus === "open" || ticketStatus === "group") {
       setPlaceHolderText(i18n.t("messagesInput.placeholderOpen"));
     } else {
       setPlaceHolderText(i18n.t("messagesInput.placeholderClosed"));
     }
 
     // Limitar o comprimento do texto do placeholder apenas em ambientes mobile
-    const maxLength = isMobile ? 20 : Infinity; // Define o limite apenas em mobile
+    const maxLength = isMobile ? 25 : Infinity; // Define o limite apenas em mobile
 
     if (isMobile && placeholderText.length > maxLength) {
       setPlaceHolderText(placeholderText.substring(0, maxLength) + "...");
     }
-  }, [ticketStatus])
+  }, [ticketStatus, shouldBlockInput])
 
   const {
     selectedMessages,
@@ -1847,6 +1867,7 @@ const MessageInput = ({
     return (
       loading ||
       recording ||
+      shouldBlockInput || // Bloqueia quando janela 24h expirada (API Oficial)
       (ticketStatus !== "open" && ticketStatus !== "group")
     );
   };
@@ -2504,6 +2525,25 @@ const MessageInput = ({
             </div>
             {!privateMessageInputVisible && (
               <>
+                {/* Botão de Template quando janela 24h fechada (API Oficial) */}
+                {shouldBlockInput && (
+                  <Tooltip title="Enviar template (janela 24h fechada)">
+                    <IconButton
+                      aria-label="sendTemplate"
+                      component="span"
+                      onClick={() => setTemplateModalOpen(true)}
+                      color="primary"
+                      tabIndex={-1}
+                      style={{ 
+                        backgroundColor: "#ff9800", 
+                        color: "#fff",
+                        marginRight: 8 
+                      }}
+                    >
+                      <AlertTriangle size={20} />
+                    </IconButton>
+                  </Tooltip>
+                )}
                 <Tooltip title="Mensagem rápida">
                   <IconButton
                     aria-label="flash"
@@ -2639,6 +2679,22 @@ const MessageInput = ({
                   open={appointmentModalOpen}
                   onClose={() => setAppointmentModalOpen(false)}
                   contactId={contactId}
+                />
+              </Suspense>
+            )}
+            {/* Modal de Template para API Oficial (janela 24h fechada) */}
+            {templateModalOpen && (
+              <Suspense fallback={<CircularProgress />}>
+                <OfficialTemplateStartModal
+                  open={templateModalOpen}
+                  onClose={() => setTemplateModalOpen(false)}
+                  whatsappId={ticketData?.whatsapp?.id || ticketData?.whatsappId}
+                  contactId={contactId}
+                  queueId={ticketData?.queue?.id || ticketData?.queueId}
+                  onCompleted={(ticket) => {
+                    setTemplateModalOpen(false);
+                    // Após enviar template, a janela será renovada quando o cliente responder
+                  }}
                 />
               </Suspense>
             )}
