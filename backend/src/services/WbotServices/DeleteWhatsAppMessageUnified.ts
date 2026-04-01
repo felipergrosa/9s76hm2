@@ -4,6 +4,8 @@ import { GetTicketAdapter } from "../../helpers/GetWhatsAppAdapter";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import logger from "../../utils/logger";
+import { getIO } from "../../libs/socket";
+import ShowTicketService from "../TicketServices/ShowTicketService";
 
 interface Request {
   messageId: string | number;
@@ -72,6 +74,24 @@ const DeleteWhatsAppMessageUnified = async ({
     // ===== DELETAR DO BANCO =====
     await message.destroy();
     logger.info(`[DeleteMessageUnified] Mensagem removida do banco: ${messageId}`);
+
+    // ===== EMITIR SOCKET PARA ATUALIZAR FRONTEND =====
+    try {
+      const io = getIO();
+      const ticketData = await ShowTicketService(ticket.id, ticket.companyId);
+      
+      // Emitir para a sala do ticket
+      io.to(`ticket-${ticket.uuid}`).emit(`company-${ticket.companyId}-appMessage`, {
+        action: "delete",
+        messageId: Number(messageId),
+        ticketId: ticket.id
+      });
+      
+      logger.info(`[DeleteMessageUnified] Socket emitido para ticket-${ticket.uuid}`);
+    } catch (socketError) {
+      logger.error(`[DeleteMessageUnified] Erro ao emitir socket: ${socketError.message}`);
+      // Não falhar a operação se o socket falhar
+    }
 
   } catch (error: any) {
     Sentry.captureException(error);

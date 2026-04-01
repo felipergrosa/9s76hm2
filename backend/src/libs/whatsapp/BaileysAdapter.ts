@@ -387,12 +387,16 @@ export class BaileysAdapter implements IWhatsAppAdapter {
             });
 
             if (quotedMessage) {
+              // O Baileys espera o quoted como uma mensagem completa
               content.quoted = {
                 key: {
                   id: quotedMsgId,
                   remoteJid: quotedMessage.remoteJid || toJid,
                   fromMe: quotedMessage.fromMe || false,
                   participant: quotedMessage.participant || undefined
+                },
+                message: {
+                  conversation: quotedMessage.body || ""
                 }
               };
               logger.debug(`[BaileysAdapter] Quote configurado com sucesso para mensagem ${quotedMsgId}`);
@@ -404,6 +408,9 @@ export class BaileysAdapter implements IWhatsAppAdapter {
                   id: quotedMsgId,
                   remoteJid: toJid,
                   fromMe: false
+                },
+                message: {
+                  conversation: ""
                 }
               };
             }
