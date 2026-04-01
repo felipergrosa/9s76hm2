@@ -695,10 +695,21 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
         msg.message?.viewOnceMessageV2?.message?.imageMessage?.caption,
       adMetaPreview: (() => {
         const ctx: any = msg.message?.extendedTextMessage?.contextInfo;
-        if (!ctx) return null;
+        if (!ctx) {
+          logger.info(`[adMetaPreview] contextInfo não existe para mensagem ${msg.key?.id}`);
+          return null;
+        }
+        
+        logger.info(`[adMetaPreview] contextInfo encontrado: ${JSON.stringify({
+          hasExternalAdReply: !!ctx.externalAdReply,
+          hasMatchedText: !!ctx.matchedText,
+          matchedText: ctx.matchedText,
+          thumbnailDirectPath: ctx.thumbnailDirectPath
+        })}`);
         
         // externalAdReply (anúncios do Meta/Instagram)
         if (ctx.externalAdReply) {
+          logger.info(`[adMetaPreview] Gerando preview de externalAdReply`);
           return msgAdMetaPreview(
             ctx.externalAdReply.thumbnail,
             ctx.externalAdReply.title,
@@ -708,29 +719,28 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
           );
         }
         
-        // matchedText (links normais com preview)
-        if (ctx.matchedText) {
-          logger.info(`[adMetaPreview] Link detectado: ${ctx.matchedText}`);
-          logger.info(`[adMetaPreview] thumbnailDirectPath: ${ctx.thumbnailDirectPath || 'NULL'}`);
-          
-          let imageUrl = null;
-          if (ctx.thumbnailDirectPath) {
-            // Construir URL real a partir do thumbnailDirectPath
-            // O thumbnailDirectPath geralmente é algo como "/v/t61.24694-24/..."
-            const thumbnailUrl = `https://web.whatsapp.net${ctx.thumbnailDirectPath}`;
-            imageUrl = thumbnailUrl;
-            logger.info(`[adMetaPreview] URL da imagem gerada: ${imageUrl}`);
-          }
-          return msgAdMetaPreview(
-            imageUrl,
-            ctx.matchedText,
-            null,
-            ctx.matchedText,
-            msg.message?.extendedTextMessage?.text
-          );
+        logger.info(`[adMetaPreview] Link detectado: ${ctx.matchedText}`);
+        logger.info(`[adMetaPreview] thumbnailDirectPath: ${ctx.thumbnailDirectPath || 'NULL'}`);
+        
+        let imageUrl = null;
+        if (ctx.thumbnailDirectPath) {
+          const thumbnailUrl = `https://web.whatsapp.net${ctx.thumbnailDirectPath}`;
+          imageUrl = thumbnailUrl;
+          logger.info(`[adMetaPreview] URL da imagem gerada: ${imageUrl}`);
+        } else {
+          logger.info(`[adMetaPreview] Nenhuma thumbnail disponível para este link`);
         }
         
-        return null;
+        const preview = msgAdMetaPreview(
+          imageUrl,
+          ctx.matchedText,
+          null,
+          ctx.matchedText,
+          msg.message?.extendedTextMessage?.text
+        );
+        
+        logger.info(`[adMetaPreview] Preview gerado: ${preview?.substring(0, 100)}...`);
+        return preview;
       })(),
       editedMessage:
         msg?.message?.protocolMessage?.editedMessage?.conversation ||
