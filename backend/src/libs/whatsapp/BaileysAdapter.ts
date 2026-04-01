@@ -381,7 +381,6 @@ export class BaileysAdapter implements IWhatsAppAdapter {
         if (quotedMsgId) {
           try {
             // Buscar mensagem original para pegar informações completas do key
-            logger.info(`[BaileysAdapter] Buscando mensagem citada com wid: ${quotedMsgId}`);
             const quotedMessage = await Message.findOne({
               where: { wid: quotedMsgId }
             });
@@ -420,8 +419,6 @@ export class BaileysAdapter implements IWhatsAppAdapter {
           }
         }
 
-        logger.info(`[BaileysAdapter] Enviando content: ${JSON.stringify(content, null, 2)}`);
-        
         // Extrair quoted do content se existir (Baileys espera no terceiro parâmetro)
         const { quoted, ...contentWithoutQuoted } = content;
         const options = quoted ? { quoted } : undefined;
@@ -614,34 +611,39 @@ export class BaileysAdapter implements IWhatsAppAdapter {
     }
 
     try {
-      // Validar formato do messageId
-      if (!messageId || !messageId.includes("_")) {
-        logger.error(`[BaileysAdapter] messageId inválido para deleção: ${messageId}`);
+      // O messageId pode ser apenas o wid (ex: 3EB0A9A08792B5CD08A445)
+      // ou o formato antigo remoteJid_id
+      // Buscar a mensagem no banco para obter o remoteJid correto
+      const { Message } = require("../../models");
+      const message = await Message.findOne({
+        where: { wid: messageId },
+        attributes: ["id", "wid", "remoteJid", "fromMe", "participant"]
+      });
+
+      if (!message) {
+        logger.error(`[BaileysAdapter] Mensagem com wid ${messageId} não encontrada no banco`);
         throw new WhatsAppAdapterError(
-          "ID de mensagem inválido",
-          "INVALID_MESSAGE_ID"
+          "Mensagem não encontrada no banco",
+          "MESSAGE_NOT_FOUND"
         );
       }
 
-      const parts = messageId.split("_");
-      const remoteJid = parts[0];
-      const id = parts.slice(1).join("_"); // Pegar tudo depois do primeiro _
-
-      if (!remoteJid || !id) {
-        logger.error(`[BaileysAdapter] Não foi possível extrair remoteJid ou id de: ${messageId}`);
+      if (!message.remoteJid) {
+        logger.error(`[BaileysAdapter] Mensagem ${messageId} não tem remoteJid`);
         throw new WhatsAppAdapterError(
-          "Não foi possível extrair informações da mensagem",
-          "INVALID_MESSAGE_ID"
+          "Mensagem não tem remoteJid",
+          "INVALID_MESSAGE_DATA"
         );
       }
 
       const key = {
-        remoteJid: remoteJid,
-        id: id,
-        fromMe: true
+        remoteJid: message.remoteJid,
+        id: message.wid,
+        fromMe: message.fromMe || true,
+        participant: message.participant || undefined
       };
 
-      logger.info(`[BaileysAdapter] Deletando mensagem: remoteJid=${remoteJid}, id=${id}`);
+      logger.info(`[BaileysAdapter] Deletando mensagem: remoteJid=${key.remoteJid}, id=${key.id}`);
 
       await this.socket.sendMessage(key.remoteJid, {
         delete: key
