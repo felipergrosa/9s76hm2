@@ -258,7 +258,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
   /**
    * Envia mensagem para o socket com retry em caso de falha de conexão
    */
-  private async sendWithRetry(jid: string, content: any): Promise<proto.WebMessageInfo> {
+  private async sendWithRetry(jid: string, content: any, options?: any): Promise<proto.WebMessageInfo> {
     try {
       // Verificar se o socket está pronto, senão tentar reinicializar
       if (!this.isSocketReady()) {
@@ -279,7 +279,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
 
       logger.debug(`[BaileysAdapter] Enviando mensagem para ${jid} via socket ${this.socket.user?.id}`);
       
-      const result = await this.socket.sendMessage(jid, content);
+      const result = await this.socket.sendMessage(jid, content, options);
       
       if (!result || !result.key || !result.key.id) {
         logger.error(`[BaileysAdapter] WhatsApp não retornou ID válido.`);
@@ -414,7 +414,12 @@ export class BaileysAdapter implements IWhatsAppAdapter {
         }
 
         logger.info(`[BaileysAdapter] Enviando content: ${JSON.stringify(content, null, 2)}`);
-        sentMsg = await this.sendWithRetry(toJid, content);
+        
+        // Extrair quoted do content se existir (Baileys espera no terceiro parâmetro)
+        const { quoted, ...contentWithoutQuoted } = content;
+        const options = quoted ? { quoted } : undefined;
+        
+        sentMsg = await this.sendWithRetry(toJid, contentWithoutQuoted, options);
       }
       // Mensagem com botões
       else if (buttons && buttons.length > 0) {
