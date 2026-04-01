@@ -206,8 +206,10 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 	}, [currentContact, channelFilter])
 
 	useEffect(() => {
+		console.log('[ScheduleModal] useEffect contactId/contacts:', { contactId, contactsCount: contacts.length });
 		if (contactId && contacts.length) {
-			const contact = contacts.find(c => c.id === contactId);
+			const contact = contacts.find(c => c.id == contactId);
+			console.log('[ScheduleModal] Contato encontrado:', contact);
 			if (contact) {
 				setCurrentContact(contact);
 			}
