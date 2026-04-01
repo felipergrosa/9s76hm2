@@ -52,6 +52,7 @@ import SendWhatsAppMessage from "./SendWhatsAppMessage";
 import sendFaceMessage from "../FacebookServices/sendFacebookMessage";
 import moment from "moment";
 import Queue from "../../models/Queue";
+import { generateLinkPreviewString } from "./LinkPreviewService";
 
 // =============================================================================
 // LOCK POR JID - Evita condição de corrida na criação de contatos
@@ -2554,8 +2555,29 @@ export const verifyMessage = async (
   // console.log("Mensagem recebida:", JSON.stringify(msg, null, 2));
   const io = getIO();
   const quotedMsg = await verifyQuotedMessage(msg);
-  const body = getBodyMessage(msg);
+  let body = getBodyMessage(msg);
   const companyId = ticket.companyId;
+  
+  // GERAR LINK PREVIEW se for mensagem de texto com link e não tiver preview do WhatsApp
+  const msgType = getTypeMessage(msg);
+  if (msgType === 'extendedTextMessage' && body) {
+    const ctx = msg.message?.extendedTextMessage?.contextInfo;
+    // Só gerar preview se não houver contextInfo do WhatsApp
+    if (!ctx?.externalAdReply && !ctx?.matchedText) {
+      logger.info(`[verifyMessage] Mensagem sem preview do WhatsApp, tentando gerar preview para: ${body.substring(0, 100)}`);
+      try {
+        const linkPreview = await generateLinkPreviewString(body);
+        if (linkPreview) {
+          logger.info(`[verifyMessage] Link preview gerado com sucesso`);
+          body = linkPreview;
+        } else {
+          logger.info(`[verifyMessage] Não foi possível gerar link preview`);
+        }
+      } catch (previewError) {
+        logger.error(`[verifyMessage] Erro ao gerar link preview: ${previewError.message}`);
+      }
+    }
+  }
 
   const participantJid = msg.key.participant || msg.participant;
 
