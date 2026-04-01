@@ -63,7 +63,8 @@ const ShowTicketService = async (
       "isOutOfHour",
       "isActiveDemand",
       "typebotSessionTime",
-      "sessionWindowExpiresAt"
+      "sessionWindowExpiresAt",
+      "lastTemplateSentAt"
     ],
     include: [
       {

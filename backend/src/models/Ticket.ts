@@ -196,6 +196,11 @@ class Ticket extends Model<Ticket> {
   // Usado para evitar envio duplicado e tracking
   @Column
   sessionWindowRenewalSentAt: Date;
+
+  // Data do último envio de template (API Oficial)
+  // Usado para indicar que template foi enviado quando janela 24h está fechada
+  @Column
+  lastTemplateSentAt: Date;
 }
 
 export default Ticket;

@@ -299,6 +299,10 @@ const SendTemplateToContact = async ({
       logger.info(`[SendTemplateToContact] Ticket #${ticket.id} fechado conforme configuração da campanha`);
     }
 
+    // Atualizar data do último template enviado no ticket
+    await ticket.update({ lastTemplateSentAt: new Date() });
+    logger.info(`[SendTemplateToContact] Ticket #${ticket.id} atualizado com lastTemplateSentAt`);
+
     return { ticket, message };
   } catch (error: any) {
     logger.error("[SendTemplateToContact] Erro ao enviar template para contato", {

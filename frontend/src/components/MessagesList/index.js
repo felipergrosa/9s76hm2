@@ -2077,6 +2077,17 @@ const MessagesList = ({
     return new Date().getTime() > new Date(expiresAt).getTime();
   }, [isOfficialChannel, ticketData]);
 
+  // Verificar se template foi enviado nas últimas 24h
+  const isTemplateSentRecently = useMemo(() => {
+    if (!isOfficialChannel || !isWindowClosed) return false;
+    const lastTemplateSentAt = ticketData?.lastTemplateSentAt;
+    if (!lastTemplateSentAt) return false;
+    const now = new Date().getTime();
+    const sentAt = new Date(lastTemplateSentAt).getTime();
+    const hours24 = 24 * 60 * 60 * 1000;
+    return (now - sentAt) < hours24;
+  }, [isOfficialChannel, isWindowClosed, ticketData]);
+
   const renderTicketsSeparator = (message, index) => {
     let lastTicket = filteredMessages[index - 1]?.ticketId;
     let currentTicket = message.ticketId;
@@ -2665,14 +2676,14 @@ const MessagesList = ({
             display: "flex",
             padding: "10px 16px",
             alignItems: "center",
-            backgroundColor: "#FFF3E0",
-            borderTop: "1px solid #FFB74D",
+            backgroundColor: isTemplateSentRecently ? "#FFEBEE" : "#FFF3E0",
+            borderTop: isTemplateSentRecently ? "1px solid #EF5350" : "1px solid #FFB74D",
             gap: 12,
           }}
         >
           <div
             style={{
-              backgroundColor: "#FF9800",
+              backgroundColor: isTemplateSentRecently ? "#EF5350" : "#FF9800",
               borderRadius: "50%",
               width: 32,
               height: 32,
@@ -2682,14 +2693,18 @@ const MessagesList = ({
               flexShrink: 0,
             }}
           >
-            <span style={{ color: "#fff", fontSize: 16 }}>⚠️</span>
+            <span style={{ color: "#fff", fontSize: 16 }}>
+              {isTemplateSentRecently ? "📤" : "⚠️"}
+            </span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-            <span style={{ fontWeight: 600, color: "#E65100", fontSize: 14 }}>
-              Janela de 24h fechada
+            <span style={{ fontWeight: 600, color: isTemplateSentRecently ? "#C62828" : "#E65100", fontSize: 14 }}>
+              {isTemplateSentRecently ? "Template enviado - aguardando resposta" : "Janela de 24h fechada"}
             </span>
-            <span style={{ color: "#BF360C", fontSize: 12 }}>
-              Para enviar mensagens, use o botão de template ao lado do campo de texto.
+            <span style={{ color: isTemplateSentRecently ? "#B71C1C" : "#BF360C", fontSize: 12 }}>
+              {isTemplateSentRecently 
+                ? "O contato precisa responder para abrir a janela de 24h. Você pode enviar mais templates se necessário."
+                : "Para enviar mensagens, use o botão de template ao lado do campo de texto."}
             </span>
           </div>
         </div>
