@@ -17,6 +17,7 @@ interface Request {
   body?: string;
   isPrivate?: boolean;
   isForwarded?: boolean;
+  quotedMsg?: any;
 }
 
 /**
@@ -34,13 +35,15 @@ const SendWhatsAppMediaUnified = async ({
   ticket,
   body,
   isPrivate = false,
-  isForwarded = false
+  isForwarded = false,
+  quotedMsg
 }: Request): Promise<IWhatsAppMessage | any> => {
   
   try {
     logger.info(`[SendMediaUnified] ========== INÍCIO ENVIO MÍDIA ==========`);
     logger.info(`[SendMediaUnified] Ticket: ${ticket.id}, ContactId: ${ticket.contactId}, CompanyId: ${ticket.companyId}`);
     logger.info(`[SendMediaUnified] Media: ${media.originalname}, Mimetype: ${media.mimetype}, Size: ${media.size}`);
+    logger.info(`[SendMediaUnified] quotedMsg recebido: ${quotedMsg ? `id=${quotedMsg.id}, wid=${quotedMsg.wid}` : 'NULL'}`);
     
     // Obter adapter apropriado
     logger.debug(`[SendMediaUnified] Obtendo adapter...`);
@@ -150,7 +153,8 @@ const SendWhatsAppMediaUnified = async ({
         mediaType,
         caption: formattedBody,
         filename: media.originalname,
-        mimetype: media.mimetype
+        mimetype: media.mimetype,
+        quotedMsgId: quotedMsg?.wid || quotedMsg?.id
       });
       
       logger.info(`[SendMediaUnified] Baileys - Mensagem enviada para ${number.split("@")[0]}, ID: ${(sentMessage as any)?.key?.id || sentMessage?.id || 'unknown'}`);
@@ -202,7 +206,8 @@ const SendWhatsAppMediaUnified = async ({
         mediaUrl,
         mediaType,
         caption: formattedBody,
-        filename: media.originalname
+        filename: media.originalname,
+        quotedMsgId: quotedMsg?.wid || quotedMsg?.id
       });
       
       logger.info(`[SendMediaUnified] Official API - Mensagem enviada para ${number.split("@")[0]}, ID: ${sentMessage?.id || 'unknown'}`);

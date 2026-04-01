@@ -844,7 +844,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
               ticket,
               body: Array.isArray(body) ? body[index] : body,
               isPrivate: isPrivate === "true",
-              isForwarded: false
+              isForwarded: false,
+              quotedMsg: quotedMsg || undefined
             });
           }
 
