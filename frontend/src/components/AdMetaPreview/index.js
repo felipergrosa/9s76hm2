@@ -62,6 +62,14 @@ const useStyles = makeStyles((theme) => ({
 const AdMetaPreview = ({ image, title, body, sourceUrl, messageUser }) => {
   const classes = useStyles();
   
+  console.log('[AdMetaPreview] Props recebidas:', {
+    image: image ? (image.startsWith('http') ? image.substring(0, 100) + '...' : image.substring(0, 50) + '...') : 'NULL',
+    title,
+    body: body ? body.substring(0, 50) + '...' : 'NULL',
+    sourceUrl,
+    hasImage: !!image
+  });
+  
   useEffect(() => {}, [image, title, body, sourceUrl, messageUser]);
 
   const handleAdClick = async () => {

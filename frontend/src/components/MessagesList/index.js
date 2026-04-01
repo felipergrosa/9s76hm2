@@ -1682,6 +1682,15 @@ const MessagesList = ({
     } else if (message.mediaType === "adMetaPreview") {
       let [image, sourceUrl, title, body] = message.body.split('|');
       let messageUser = "Olá! Tenho interesse e queria mais informações, por favor.";
+      
+      console.log('[MessagesList] Renderizando adMetaPreview:', {
+        image: image ? image.substring(0, 100) + '...' : 'NULL',
+        sourceUrl,
+        title,
+        body: body ? body.substring(0, 50) + '...' : 'NULL',
+        messageBody: message.body.substring(0, 200)
+      });
+      
       return <AdMetaPreview image={image} sourceUrl={sourceUrl} title={title} body={body} messageUser={messageUser} />;
     } else if (message.mediaType === "sticker" || message.mediaType === "gif") {
       // Stickers e GIFs - exibir como imagem animada sem fundo

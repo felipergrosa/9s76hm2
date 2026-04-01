@@ -710,8 +710,19 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
         
         // matchedText (links normais com preview)
         if (ctx.matchedText) {
+          logger.info(`[adMetaPreview] Link detectado: ${ctx.matchedText}`);
+          logger.info(`[adMetaPreview] thumbnailDirectPath: ${ctx.thumbnailDirectPath || 'NULL'}`);
+          
+          let imageUrl = null;
+          if (ctx.thumbnailDirectPath) {
+            // Construir URL real a partir do thumbnailDirectPath
+            // O thumbnailDirectPath geralmente é algo como "/v/t61.24694-24/..."
+            const thumbnailUrl = `https://web.whatsapp.net${ctx.thumbnailDirectPath}`;
+            imageUrl = thumbnailUrl;
+            logger.info(`[adMetaPreview] URL da imagem gerada: ${imageUrl}`);
+          }
           return msgAdMetaPreview(
-            ctx.thumbnailDirectPath ? 'has-thumbnail' : null,
+            imageUrl,
             ctx.matchedText,
             null,
             ctx.matchedText,
@@ -797,8 +808,14 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
 
 const msgAdMetaPreview = (image, title, body, sourceUrl, messageUser) => {
   if (image) {
-    var b64 = Buffer.from(image).toString("base64");
-    let data = `data:image/png;base64, ${b64} | ${sourceUrl} | ${title} | ${body} | ${messageUser}`;
+    // Se image já é uma URL (começa com http), usar direto
+    // Se não, converter de base64 para data URI
+    let imageUrl = image;
+    if (!image.startsWith('http') && !image.startsWith('data:')) {
+      var b64 = Buffer.from(image).toString("base64");
+      imageUrl = `data:image/png;base64, ${b64}`;
+    }
+    let data = `${imageUrl} | ${sourceUrl} | ${title} | ${body} | ${messageUser}`;
     return data;
   }
   // Link preview sem imagem (apenas título e descrição)
