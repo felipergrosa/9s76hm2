@@ -72,6 +72,7 @@ import { ForwardMessageContext } from "../../context/ForwarMessage/ForwardMessag
 import { EditMessageContext } from "../../context/EditingMessage/EditingMessageContext";
 import { OptimisticMessageContext } from "../../context/OptimisticMessage/OptimisticMessageContext";
 import { useParams } from "react-router-dom/cjs/react-router-dom.min";
+import LinkPreviewInput from "../LinkPreviewInput";
 
 // Helper para trim de strings
 const safeTrim = (value) => {
@@ -788,6 +789,7 @@ const MessageInput = ({
   const isMounted = useRef(true);
   const [buttonModalOpen, setButtonModalOpen] = useState(false);
   const [inputMessage, setInputMessage] = useState("");
+  const [linkPreview, setLinkPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false); // true apenas para upload de arquivos
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -1705,9 +1707,18 @@ const MessageInput = ({
 
     const sendMessage = expandPlaceholders(trimmedText, contactData, ticketData, user);
 
-    const messageBody = (signMessage || privateMessage) && !editingMessage
+    // Verificar se há um link preview ativo
+    let messageBody = (signMessage || privateMessage) && !editingMessage
       ? `*${userName}:*\n${sendMessage}`
       : sendMessage;
+    
+    // Se houver preview de link, formatar mensagem com preview
+    if (linkPreview && !editingMessage) {
+      const previewString = `${linkPreview.image || 'no-image'} | ${linkPreview.url} | ${linkPreview.title} | ${linkPreview.description} | ${sendMessage}`;
+      messageBody = (signMessage || privateMessage)
+        ? `*${userName}:*\n${sendMessage}\n\n${previewString}`
+        : previewString;
+    }
 
     const message = {
       read: 1,
@@ -1744,6 +1755,7 @@ const MessageInput = ({
         // Usar isCustomMessage para garantir que só limpa quando não é mensagem customizada
         if (!isCustomMessage) {
           setInputMessage("");
+          setLinkPreview(null);
         }
         setReplyingMessage(null);
         setPrivateMessage(false);
@@ -2413,6 +2425,12 @@ const MessageInput = ({
               {!privateMessageInputVisible && (
                 <div className={classes.flexItem}>
                   <div className={classes.messageInputWrapper} style={{ position: 'relative' }}>
+                    {/* Link Preview - mostra preview automaticamente quando detecta URL */}
+                    <LinkPreviewInput 
+                      text={inputMessage}
+                      onPreview={(preview) => setLinkPreview(preview)}
+                      onClear={() => setLinkPreview(null)}
+                    />
                     {/* Corretor ortográfico nativo do navegador habilitado */}
                     {/* Overlay customizado removido - causava problemas de alinhamento */}
                     <InputBase

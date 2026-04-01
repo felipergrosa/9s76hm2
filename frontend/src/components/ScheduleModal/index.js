@@ -113,6 +113,8 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 	// const [enviarQuantasVezes, setEnviarQuantasVezes] = useState(initialContact);
 	const [tipoDias, setTipoDias] = useState(4);
 	const [attachment, setAttachment] = useState(null);
+	const [uploadProgress, setUploadProgress] = useState(0);
+	const [isUploading, setIsUploading] = useState(false);
 	const attachmentFile = useRef(null);
 	const [confirmationOpen, setConfirmationOpen] = useState(false);
 	const messageInputRef = useRef();
@@ -318,19 +320,36 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 			if (scheduleId) {
 				await api.put(`/schedules/${scheduleId}`, scheduleData);
 				if (attachment != null) {
+					setIsUploading(true);
+					setUploadProgress(0);
 					const formData = new FormData();
 					formData.append("file", attachment);
 					await api.post(
 						`/schedules/${scheduleId}/media-upload`,
-						formData
+						formData,
+						{
+							onUploadProgress: (progressEvent) => {
+								const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+								setUploadProgress(progress);
+							}
+						}
 					);
+					setIsUploading(false);
 				}
 			} else {
 				const { data } = await api.post("/schedules", scheduleData);
 				if (attachment != null) {
+					setIsUploading(true);
+					setUploadProgress(0);
 					const formData = new FormData();
 					formData.append("file", attachment);
-					await api.post(`/schedules/${data.id}/media-upload`, formData);
+					await api.post(`/schedules/${data.id}/media-upload`, formData, {
+						onUploadProgress: (progressEvent) => {
+							const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+							setUploadProgress(progress);
+						}
+					});
+					setIsUploading(false);
 				}
 			}
 			toast.success(i18n.t("scheduleModal.success"));
@@ -345,9 +364,12 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 			}
 		} catch (err) {
 			toastError(err);
+			setIsUploading(false);
 		}
 		setCurrentContact(initialContact);
 		setSchedule(initialState);
+		setAttachment(null);
+		setUploadProgress(0);
 		handleClose();
 	};
 	const handleClickMsgVar = async (msgVar, setValueFunc) => {
@@ -822,32 +844,57 @@ const ScheduleModal = ({ open, onClose, scheduleId, contactId, cleanContact, rel
 									{i18n.t("scheduleModal.buttons.cancel")}
 								</Button>
 								{(schedule.sentAt === null || schedule.sentAt === "") && (
-									<Button
-										type="submit"
-										color="primary"
-										disabled={isSubmitting}
-										variant="contained"
-										className={classes.btnWrapper}
-										size="medium"
-										startIcon={isSubmitting ? <CircularProgress size={16} /> : <SendIcon />}
-										style={{
-											textTransform: 'none',
-											fontWeight: 600,
-											borderRadius: '8px',
-											padding: '8px 20px',
-											boxShadow: '0 2px 8px rgba(25, 118, 210, 0.3)'
-										}}
-									>
-										{scheduleId
-											? `${i18n.t("scheduleModal.buttons.okEdit")}`
-											: `${i18n.t("scheduleModal.buttons.okAdd")}`}
-										{isSubmitting && (
-											<CircularProgress
-												size={24}
-												className={classes.buttonProgress}
-											/>
+									<>
+										<Button
+											type="submit"
+											color="primary"
+											disabled={isSubmitting || isUploading}
+											variant="contained"
+											className={classes.btnWrapper}
+											size="medium"
+											startIcon={isSubmitting || isUploading ? <CircularProgress size={16} /> : <SendIcon />}
+											style={{
+												textTransform: 'none',
+												fontWeight: 600,
+												borderRadius: '8px',
+												padding: '8px 20px',
+												boxShadow: '0 2px 8px rgba(25, 118, 210, 0.3)'
+											}}
+										>
+											{scheduleId
+												? `${i18n.t("scheduleModal.buttons.okEdit")}`
+												: `${i18n.t("scheduleModal.buttons.okAdd")}`}
+											{isSubmitting && (
+												<CircularProgress
+													size={24}
+													className={classes.buttonProgress}
+												/>
+											)}
+										</Button>
+										{isUploading && (
+											<Box mt={1} width="100%">
+												<Typography variant="caption" color="textSecondary" align="center" display="block">
+													Enviando anexo... {uploadProgress}%
+												</Typography>
+												<Box 
+													width="100%" 
+													height={4} 
+													bgcolor="grey.300" 
+													borderRadius={2}
+													overflow="hidden"
+												>
+													<Box
+														width={`${uploadProgress}%`}
+														height={4}
+														bgcolor="primary.main"
+														style={{
+															transition: 'width 0.3s ease'
+														}}
+													/>
+												</Box>
+											</Box>
 										)}
-									</Button>
+									</>
 								)}
 							</DialogActions>
 						</Form>

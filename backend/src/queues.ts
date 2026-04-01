@@ -367,13 +367,21 @@ async function handleSendMessage(job) {
 
 async function handleVerifySchedules(job) {
   try {
+    // CORREÇÃO: Buscar agendamentos que:
+    // 1. Já passaram do horário (atrasados) OU
+    // 2. Estão dentro dos próximos 2 minutos
+    // Isso evita perder agendamentos devido a delays do cron job
+    const agora = moment();
+    const doisMinutosAtras = agora.clone().subtract(2, 'minutes');
+    const doisMinutosFrente = agora.clone().add(2, 'minutes');
+
     const { count, rows: schedules } = await Schedule.findAndCountAll({
       where: {
         status: "PENDENTE",
         sentAt: null,
         sendAt: {
-          [Op.gte]: moment().format("YYYY-MM-DD HH:mm:ss"),
-          [Op.lte]: moment().add("30", "seconds").format("YYYY-MM-DD HH:mm:ss")
+          [Op.gte]: doisMinutosAtras.format("YYYY-MM-DD HH:mm:ss"),
+          [Op.lte]: doisMinutosFrente.format("YYYY-MM-DD HH:mm:ss")
         }
       },
       include: [{ model: Contact, as: "contact" }, { model: User, as: "user", attributes: ["name"] }],
@@ -386,12 +394,19 @@ async function handleVerifySchedules(job) {
         await schedule.update({
           status: "AGENDADA"
         });
+        
+        // CORREÇÃO: Calcular delay baseado no horário do agendamento
+        const scheduleTime = moment(schedule.sendAt);
+        const now = moment();
+        const delayMs = Math.max(0, scheduleTime.diff(now, 'milliseconds'));
+        
         sendScheduledMessages.add(
           "SendMessage",
           { schedule },
-          { delay: 40000 }
+          { delay: delayMs }
         );
-        logger.info(`Disparo agendado para: ${schedule.contact.name}`);
+        
+        logger.info(`[Agendamento] ${schedule.contact.name}: envio agendado para ${delayMs}ms (${schedule.sendAt})`);
       });
     }
   } catch (e: any) {
@@ -422,7 +437,7 @@ async function handleSendScheduledMessage(job) {
     }
 
     if (!whatsapp)
-      whatsapp = await GetDefaultWhatsApp(whatsapp.id, schedule.companyId);
+      whatsapp = await GetDefaultWhatsApp(schedule.companyId, schedule.whatsappId !== null ? schedule.whatsappId : null);
 
 
     // const settings = await CompaniesSettings.findOne({
