@@ -381,6 +381,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
         if (quotedMsgId) {
           try {
             // Buscar mensagem original para pegar informações completas do key
+            logger.info(`[BaileysAdapter] Buscando mensagem citada com wid: ${quotedMsgId}`);
             const quotedMessage = await Message.findOne({
               where: { wid: quotedMsgId }
             });
@@ -412,6 +413,7 @@ export class BaileysAdapter implements IWhatsAppAdapter {
           }
         }
 
+        logger.info(`[BaileysAdapter] Enviando content: ${JSON.stringify(content, null, 2)}`);
         sentMsg = await this.sendWithRetry(toJid, content);
       }
       // Mensagem com botões
