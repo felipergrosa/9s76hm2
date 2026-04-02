@@ -11,7 +11,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
 
   try {
-    const ticketTag = await TicketTag.create({ ticketId, tagId });
+    // Log para debug
+    console.log(`[TicketTag] Criando ticketTag: ticketId=${ticketId}, tagId=${tagId}, companyId=${companyId}`);
+    
+    const ticketTag = await TicketTag.create({ ticketId, tagId, companyId });
 
     const ticket = await ShowTicketService(ticketId, companyId);
 
@@ -24,8 +27,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       });
 
     return res.status(201).json(ticketTag);
-  } catch (error) {
-    return res.status(500).json({ error: 'Failed to store ticket tag.' });
+  } catch (error: any) {
+    console.error(`[TicketTag] Erro ao criar ticketTag:`, error?.message || error);
+    return res.status(500).json({ error: 'Failed to store ticket tag.', details: error?.message });
   }
 };
 
@@ -48,8 +52,7 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
   const { ticketId } = req.params;
   const { companyId } = req.user;
 
-  //console.log("remove");
-  //console.log(req.params);
+  console.log(`[TicketTag] Removendo ticketTag: ticketId=${ticketId}, companyId=${companyId}`);
 
   try {
     // Retrieve tagIds associated with the provided ticketId from TicketTags
@@ -66,7 +69,7 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
 
     // Remove the tagIds with kanban = 1 from TicketTags
     const tagIdsWithKanbanOne = tagsWithKanbanOne.map((tag) => tag.id);
-    if (tagIdsWithKanbanOne)
+    if (tagIdsWithKanbanOne && tagIdsWithKanbanOne.length > 0)
       await TicketTag.destroy({ where: { ticketId, tagId: tagIdsWithKanbanOne } });
 
 
@@ -80,7 +83,8 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
         ticket
       });
     return res.status(200).json({ message: 'Ticket tags removed successfully.' });
-  } catch (error) {
-    return res.status(500).json({ error: 'Failed to remove ticket tags.' });
+  } catch (error: any) {
+    console.error(`[TicketTag] Erro ao remover ticketTag:`, error?.message || error);
+    return res.status(500).json({ error: 'Failed to remove ticket tags.', details: error?.message });
   }
 };

@@ -876,7 +876,7 @@ const BulkProcessTicketsModal = ({ open, onClose, initialFilters = {} }) => {
                     {canEditTags && (
                       <Autocomplete
                         multiple
-                        options={availableTags.filter(tag => tag.name && tag.name.startsWith('#') && !tag.name.startsWith('##'))}
+                        options={availableTags}
                         getOptionLabel={(option) => option.name}
                         value={selectedTags}
                         onChange={(_, newValue) => setSelectedTags(newValue)}

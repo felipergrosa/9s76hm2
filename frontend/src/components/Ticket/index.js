@@ -451,98 +451,97 @@ const Ticket = () => {
 
   return (
     <div className={classes.root} id="drawer-container">
-      <Paper
-        elevation={0}
-        square
-        className={clsx(classes.mainWrapper, {
-          [classes.mainWrapperShift]: drawerOpen,
-        })}
-        style={{ boxShadow: "none", border: 0 }}
-      >
-        {!hasExternalHeader && (
-          <TicketHeader loading={loading}>
-            {ticket.contact !== undefined && (
-              <div id="TicketHeader" style={{ flex: 1, minWidth: 0 }}>
-                <TicketInfo
+      <OptimisticMessageProvider>
+        <ReplyMessageProvider>
+          <ForwardMessageProvider>
+            <EditMessageProvider>
+              <Paper
+                elevation={0}
+                square
+                className={clsx(classes.mainWrapper, {
+                  [classes.mainWrapperShift]: drawerOpen,
+                })}
+                style={{ boxShadow: "none", border: 0 }}
+              >
+                {!hasExternalHeader && (
+                  <TicketHeader loading={loading}>
+                    {ticket.contact !== undefined && (
+                      <div id="TicketHeader" style={{ flex: 1, minWidth: 0 }}>
+                        <TicketInfo
+                            contact={contact}
+                            ticket={ticket}
+                            onClick={handleDrawerToggle}
+                          />
+                      </div>
+                    )}
+                    <TicketActionButtons
+                      ticket={ticket}
+                      onSearchClick={() => setSearchOpen(prev => !prev)}
+                    />
+                  </TicketHeader>
+                )}
+                <Suspense fallback={null}>
+                  <MessageSearchBar
+                    ticketId={ticket.id}
+                    open={searchOpen}
+                    onClose={() => setSearchOpen(false)}
+                    onNavigateToMessage={(msgId) => {
+                      const el = document.getElementById(`message-${msgId}`);
+                      if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.style.backgroundColor = "#fef3cd";
+                        setTimeout(() => { el.style.backgroundColor = ""; }, 2000);
+                      }
+                    }}
+                  />
+                </Suspense>
+                <Suspense fallback={null}>
+                  <PinnedMessages
+                    ticketId={ticket.id}
+                    onNavigateToMessage={(msgId) => {
+                      const el = document.getElementById(`message-${msgId}`);
+                      if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.style.backgroundColor = "#d9fdd3";
+                        setTimeout(() => { el.style.backgroundColor = ""; }, 2000);
+                      }
+                    }}
+                  />
+                </Suspense>
+                {importStatus && (
+                  <ImportProgressBar
+                    statusImport={importStatus}
+                  />
+                )}
+                {renderMessagesList()}
+              </Paper>
+
+              {ticket?.isGroup ? (
+                <Suspense fallback={null}>
+                  <GroupInfoDrawer
+                    open={drawerOpen}
+                    handleDrawerClose={handleDrawerClose}
                     contact={contact}
                     ticket={ticket}
-                    onClick={handleDrawerToggle}
                   />
-              </div>
-            )}
-            <TicketActionButtons
-              ticket={ticket}
-              onSearchClick={() => setSearchOpen(prev => !prev)}
-            />
-          </TicketHeader>
-        )}
-        <Suspense fallback={null}>
-          <MessageSearchBar
-            ticketId={ticket.id}
-            open={searchOpen}
-            onClose={() => setSearchOpen(false)}
-            onNavigateToMessage={(msgId) => {
-              const el = document.getElementById(`message-${msgId}`);
-              if (el) {
-                el.scrollIntoView({ behavior: "smooth", block: "center" });
-                el.style.backgroundColor = "#fef3cd";
-                setTimeout(() => { el.style.backgroundColor = ""; }, 2000);
-              }
-            }}
-          />
-        </Suspense>
-        <Suspense fallback={null}>
-          <PinnedMessages
-            ticketId={ticket.id}
-            onNavigateToMessage={(msgId) => {
-              const el = document.getElementById(`message-${msgId}`);
-              if (el) {
-                el.scrollIntoView({ behavior: "smooth", block: "center" });
-                el.style.backgroundColor = "#d9fdd3";
-                setTimeout(() => { el.style.backgroundColor = ""; }, 2000);
-              }
-            }}
-          />
-        </Suspense>
-        {importStatus && (
-          <ImportProgressBar
-            statusImport={importStatus}
-          />
-        )}
-        <OptimisticMessageProvider>
-          <ReplyMessageProvider>
-            <ForwardMessageProvider>
-              <EditMessageProvider>
-                {renderMessagesList()}
-              </EditMessageProvider>
-            </ForwardMessageProvider>
-          </ReplyMessageProvider>
-        </OptimisticMessageProvider>
-      </Paper>
-
-      {ticket?.isGroup ? (
-        <Suspense fallback={null}>
-          <GroupInfoDrawer
-            open={drawerOpen}
-            handleDrawerClose={handleDrawerClose}
-            contact={contact}
-            ticket={ticket}
-          />
-        </Suspense>
-      ) : (
-        <Suspense fallback={null}>
-          <ContactDrawer
-            open={drawerOpen}
-            handleDrawerClose={handleDrawerClose}
-            contact={contact}
-            loading={loading}
-            ticket={ticket}
-            activeTabParams={drawerTab}
-            onSendQuickMessage={handleSendQuickMessage}
-          />
-        </Suspense>
-      )}
-
+                </Suspense>
+              ) : (
+                <Suspense fallback={null}>
+                  <ContactDrawer
+                    open={drawerOpen}
+                    handleDrawerClose={handleDrawerClose}
+                    contact={contact}
+                    loading={loading}
+                    ticket={ticket}
+                    activeTabParams={drawerTab}
+                    onSendQuickMessage={handleSendQuickMessage}
+                  />
+                </Suspense>
+              )}
+            </EditMessageProvider>
+          </ForwardMessageProvider>
+        </ReplyMessageProvider>
+      </OptimisticMessageProvider>
     </div>
   );
 };

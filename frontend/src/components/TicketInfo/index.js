@@ -155,7 +155,26 @@ const TicketInfo = ({ contact, ticket, onClick }) => {
             fetchTags();
         }
         return () => { mounted = false };
-    }, [contact?.id]);
+    }, [contact?.id, contact?.tags]);
+
+    // Listener para atualização em real-time das tags do contato
+    useEffect(() => {
+        if (!socket || !user?.companyId || !contact?.id) return;
+
+        const handleContactUpdate = (data) => {
+            if (data.action === "update" && data.contact?.id === contact.id) {
+                // Atualiza as tags quando o contato for atualizado
+                if (Array.isArray(data.contact?.tags)) {
+                    setTags(normalizeTags(data.contact.tags));
+                }
+            }
+        };
+
+        socket.on(`company-${user.companyId}-contact`, handleContactUpdate);
+        return () => {
+            socket.off(`company-${user.companyId}-contact`, handleContactUpdate);
+        };
+    }, [socket, user?.companyId, contact?.id]);
 
 	const renderCardReader = () => {
 		return (
@@ -232,11 +251,13 @@ const TicketInfo = ({ contact, ticket, onClick }) => {
 
 export default React.memo(TicketInfo, (prevProps, nextProps) => {
 	// Só re-renderiza se o ticket ou contato mudarem
+	// INCLUINDO tags do contato e do ticket para atualização em real-time
 	return (
 		prevProps.ticket?.id === nextProps.ticket?.id &&
 		prevProps.contact?.id === nextProps.contact?.id &&
 		prevProps.contact?.name === nextProps.contact?.name &&
 		prevProps.contact?.profilePicUrl === nextProps.contact?.profilePicUrl &&
-		prevProps.ticket?.user?.id === nextProps.ticket?.user?.id
+		prevProps.ticket?.user?.id === nextProps.ticket?.user?.id &&
+		JSON.stringify(prevProps.contact?.tags) === JSON.stringify(nextProps.contact?.tags)
 	);
 });

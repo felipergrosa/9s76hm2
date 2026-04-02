@@ -61,7 +61,7 @@ contactRoutes.post("/contacts/:contactId(\\d+)/validate", isAuth, checkPermissio
 
 contactRoutes.put("/contacts/block/:contactId", isAuth, checkPermission("contacts.edit"), ContactController.blockUnblock);
 contactRoutes.post("/contacts/upload", isAuth, checkPermission("contacts.import"), upload.array("file"), ContactController.upload);
-contactRoutes.get("/contactTags/:contactId", isAuth, checkPermission("contacts.view"), ContactController.getContactTags);
+contactRoutes.get("/contacts/:contactId(\\d+)/status", isAuth, checkPermission("contacts.view"), ContactController.getContactStatus);
 contactRoutes.put("/contacts/toggleDisableBot/:contactId", isAuth, checkPermission("contacts.edit"), ContactController.toggleDisableBot);
 contactRoutes.post("/contacts/bulk-refresh-avatars", isAuth, checkPermission("contacts.edit"), ContactController.bulkRefreshAvatars);
 

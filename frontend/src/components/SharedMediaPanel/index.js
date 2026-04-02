@@ -12,6 +12,7 @@ import {
   ListItemIcon,
   ListItemText,
   IconButton,
+  Button,
 } from "@material-ui/core";
 import {
   Image as ImageIcon,
@@ -23,6 +24,7 @@ import {
 } from "@material-ui/icons";
 import { format, parseISO } from "date-fns";
 import api from "../../services/api";
+import MediaModal from "../MediaModal";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -123,30 +125,47 @@ const getFileName = (url = "", body = "") => {
   }
 };
 
-const SharedMediaPanel = ({ ticketId }) => {
+const SharedMediaPanel = ({ ticketId, contact }) => {
   const classes = useStyles();
   const [tab, setTab] = useState(0);
   const [media, setMedia] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [mediaModalOpen, setMediaModalOpen] = useState(false);
+  const [selectedMedia, setSelectedMedia] = useState(null);
+  const [allMediaForModal, setAllMediaForModal] = useState([]);
+  const [loadingAllMedia, setLoadingAllMedia] = useState(false);
 
   const tabTypes = ["image", "video", "document", "audio"];
   const tabLabels = ["Fotos", "Vídeos", "Docs", "Áudios"];
 
-  const fetchMedia = useCallback(async () => {
+  const fetchMedia = useCallback(async (pageNumber = 1, append = false) => {
     if (!ticketId) return;
-    setLoading(true);
+    if (pageNumber === 1) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
     try {
       const { data } = await api.get(`/messages/${ticketId}/media`, {
-        params: { type: tabTypes[tab] },
+        params: { type: tabTypes[tab], pageNumber },
       });
-      setMedia(data.messages || []);
+      if (append) {
+        setMedia(prev => [...prev, ...(data.messages || [])]);
+      } else {
+        setMedia(data.messages || []);
+      }
       setCount(data.count || 0);
+      setHasMore(data.hasMore || false);
     } catch (err) {
       console.error("[SharedMediaPanel] Erro:", err);
-      setMedia([]);
+      if (!append) setMedia([]);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, [ticketId, tab]);
 
@@ -156,11 +175,67 @@ const SharedMediaPanel = ({ ticketId }) => {
 
   const handleTabChange = (_, newValue) => {
     setTab(newValue);
+    setPage(1);
+    setMedia([]);
   };
 
-  const handleOpenMedia = (url) => {
-    if (url) window.open(url, "_blank");
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchMedia(nextPage, true);
   };
+
+  const fetchAllMedia = useCallback(async () => {
+    if (!ticketId) return;
+    setLoadingAllMedia(true);
+    try {
+      let allMedia = [];
+      let pageNum = 1;
+      let hasMoreData = true;
+
+      while (hasMoreData) {
+        const { data } = await api.get(`/messages/${ticketId}/media`, {
+          params: { type: tabTypes[tab], pageNumber: pageNum },
+        });
+        const messages = data.messages || [];
+        allMedia = [...allMedia, ...messages];
+        hasMoreData = data.hasMore && messages.length > 0;
+        pageNum++;
+
+        // Limite de segurança - máximo 20 páginas (600 mídias)
+        if (pageNum > 20) break;
+      }
+
+      setAllMediaForModal(allMedia);
+    } catch (err) {
+      console.error("[SharedMediaPanel] Erro ao buscar todas as mídias:", err);
+      setAllMediaForModal([]);
+    } finally {
+      setLoadingAllMedia(false);
+    }
+  }, [ticketId, tab]);
+
+  const handleOpenMedia = async (msg) => {
+    if (!msg?.mediaUrl) return;
+
+    // Se for documento ou áudio, faz download direto
+    if (tab === 2 || tab === 3) {
+      handleDownload(msg.mediaUrl);
+      return;
+    }
+
+    // Para imagens e vídeos, busca todas as mídias e abre no MediaModal
+    setSelectedMedia(msg);
+    setMediaModalOpen(true);
+
+    // Busca todas as mídias do histórico para o carrossel
+    await fetchAllMedia();
+  };
+
+  const handleCloseMediaModal = useCallback(() => {
+    setMediaModalOpen(false);
+    setSelectedMedia(null);
+  }, []);
 
   const handleDownload = async (url) => {
     try {
@@ -186,7 +261,7 @@ const SharedMediaPanel = ({ ticketId }) => {
         <GridListTile
           key={msg.id}
           className={classes.gridTile}
-          onClick={() => handleOpenMedia(msg.mediaUrl)}
+          onClick={() => handleOpenMedia(msg)}
         >
           {tab === 0 ? (
             <img src={msg.mediaUrl} alt="" className={classes.mediaImage} />
@@ -207,7 +282,7 @@ const SharedMediaPanel = ({ ticketId }) => {
   const renderFileList = () => (
     <List dense disablePadding>
       {media.map((msg) => (
-        <ListItem key={msg.id} className={classes.fileItem} button onClick={() => handleOpenMedia(msg.mediaUrl)}>
+        <ListItem key={msg.id} className={classes.fileItem} button onClick={() => handleOpenMedia(msg)}>
           <ListItemIcon className={classes.fileIcon}>
             {tab === 3 ? (
               <AudioIcon style={{ color: "#00a884" }} />
@@ -266,13 +341,37 @@ const SharedMediaPanel = ({ ticketId }) => {
           <>
             {(tab === 0 || tab === 1) ? renderImageGrid() : renderFileList()}
             {count > media.length && (
-              <Typography variant="caption" style={{ display: "block", textAlign: "center", padding: 8, color: "#8696a0" }}>
-                Mostrando {media.length} de {count}
-              </Typography>
+              <div style={{ textAlign: "center", padding: "12px 8px" }}>
+                <Typography variant="caption" style={{ display: "block", color: "#8696a0", marginBottom: 8 }}>
+                  Mostrando {media.length} de {count}
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  style={{ color: "#008069", borderColor: "#008069" }}
+                >
+                  {loadingMore ? <CircularProgress size={16} style={{ color: "#008069" }} /> : "Carregar mais"}
+                </Button>
+              </div>
             )}
           </>
         )}
       </div>
+
+      {/* Modal de visualização de mídia - usa o mesmo do chat */}
+      <MediaModal
+        open={mediaModalOpen}
+        onClose={handleCloseMediaModal}
+        mediaUrl={selectedMedia?.mediaUrl}
+        mediaType={selectedMedia?.mediaType}
+        message={selectedMedia}
+        allMedia={allMediaForModal.filter(m => m.mediaType === "image" || m.mediaType === "video")}
+        contactName={contact?.name || "Mídia"}
+        contactAvatar={contact?.profilePicUrl}
+        mediaDate={selectedMedia?.createdAt ? format(parseISO(selectedMedia.createdAt), "dd/MM/yyyy HH:mm") : ""}
+      />
     </div>
   );
 };

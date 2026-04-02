@@ -253,8 +253,14 @@ const MediaModal = ({
   const [isFavorite, setIsFavorite] = useState(false);
   const imageRef = useRef(null);
   
-  const { setReplyingMessage } = useContext(ReplyMessageContext);
-  const { setShowSelectMessageCheckbox, setSelectedMessages, setForwardMessageModalOpen } = useContext(ForwardMessageContext);
+  // Contextos podem não estar disponíveis quando o modal é usado fora do MessagesList
+  const replyContext = useContext(ReplyMessageContext);
+  const forwardContext = useContext(ForwardMessageContext);
+  
+  const setReplyingMessage = replyContext?.setReplyingMessage;
+  const setShowSelectMessageCheckbox = forwardContext?.setShowSelectMessageCheckbox;
+  const setSelectedMessages = forwardContext?.setSelectedMessages;
+  const setForwardMessageModalOpen = forwardContext?.setForwardMessageModalOpen;
 
   // Encontrar índice atual na lista de mídias
   useEffect(() => {
@@ -313,16 +319,32 @@ const MediaModal = ({
     };
   }, [open, currentIndex, allMedia, mediaUrl]);
 
+  // Resetar estados quando o modal fecha
+  useEffect(() => {
+    if (!open) {
+      setZoom(1);
+      setLoading(false);
+      if (blobUrl) {
+        window.URL.revokeObjectURL(blobUrl);
+        setBlobUrl("");
+      }
+      setCurrentIndex(0);
+      setIsFavorite(false);
+    }
+  }, [open]);
+
   // Navegação por teclado
   useEffect(() => {
     if (!open) return;
-    
+
     const handleKeyDown = (e) => {
       if (e.key === "ArrowLeft") {
         handlePrev();
       } else if (e.key === "ArrowRight") {
         handleNext();
       } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
         onClose();
       } else if (e.key === "+" || e.key === "=") {
         handleZoomIn();
@@ -330,10 +352,10 @@ const MediaModal = ({
         handleZoomOut();
       }
     };
-    
+
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, currentIndex, allMedia.length]);
+  }, [open, currentIndex, allMedia.length, onClose]);
 
   const handlePrev = useCallback(() => {
     if (currentIndex > 0) {

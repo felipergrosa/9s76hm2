@@ -37,6 +37,7 @@ import toastError from "../../errors/toastError";
 import api from "../../services/api";
 import { toast } from "react-toastify";
 import { TagsKanbanContainer } from "../TagsKanbanContainer";
+import SharedMediaPanel from "../SharedMediaPanel";
 
 const drawerWidth = 320;
 
@@ -159,6 +160,7 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
     const [avatarLargeUrl, setAvatarLargeUrl] = useState(null);
     const [notesOpen, setNotesOpen] = useState(true);
     const [activeTab, setActiveTab] = useState(activeTabParams);
+    const [contactStatus, setContactStatus] = useState(null);  // Status/Recado do contato
 
     useEffect(() => {
         setActiveTab(activeTabParams);
@@ -231,6 +233,23 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
         };
     }, [avatarModalOpen, avatarImageUrl]);
 
+
+    // Buscar status/recado do contato quando o drawer abrir
+    useEffect(() => {
+        const fetchContactStatus = async () => {
+            if (!open || !contact?.id || !ticket?.whatsappId) return;
+            try {
+                const { data } = await api.get(`/contacts/${contact.id}/status`, {
+                    params: { whatsappId: ticket.whatsappId }
+                });
+                setContactStatus(data.status);
+            } catch (err) {
+                // Silenciar erro - status pode não estar disponível
+                setContactStatus(null);
+            }
+        };
+        fetchContactStatus();
+    }, [open, contact?.id, ticket?.whatsappId]);
 
     const handleContactToggleAcceptAudio = async () => {
         try {
@@ -354,6 +373,17 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                                         <Typography style={{ fontSize: 12 }}>
                                             {hideNum && user.profile === "user" ? formatSerializedId(contact.number).slice(0, -6) + "**-**" + contact.number.slice(-2) : formatSerializedId(contact.number)}
                                         </Typography>
+                                        {/* Status/Recado do contato */}
+                                        {contactStatus && (
+                                            <div style={{ marginTop: 8, padding: "8px 0" }}>
+                                                <Typography style={{ color: "#8696a0", fontSize: 11 }}>
+                                                    Status
+                                                </Typography>
+                                                <Typography style={{ color: "#111b21", fontSize: 14, fontStyle: "italic" }}>
+                                                    "{contactStatus}"
+                                                </Typography>
+                                            </div>
+                                        )}
                                         {contact.clientCode && (
                                             <Typography style={{ color: "primary", fontSize: 12, fontWeight: "bold" }}>
                                                 {`Código do Cliente: ${contact.clientCode}`}
@@ -440,6 +470,37 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                                         <Typography style={{ color: "primary", fontSize: 12 }}>
                                             {`Chatbot: ${contact.disableBot ? 'Desabilitado' : 'Habilitado'}`}
                                         </Typography>
+                                        {/* Todas as Tags do Contato */}
+                                        {(() => {
+                                            const allTags = contact?.tags || [];
+                                            // Excluir tags de kanban (geralmente têm kanban=1)
+                                            const nonKanbanTags = allTags.filter(t => !t.kanban);
+                                            
+                                            if (nonKanbanTags.length === 0) return null;
+                                            
+                                            return (
+                                                <div style={{ marginTop: 8 }}>
+                                                    <Typography style={{ color: "textSecondary", fontSize: 11, marginBottom: 4 }}>
+                                                        Tags do Contato
+                                                    </Typography>
+                                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                                                        {nonKanbanTags.map(tag => (
+                                                            <Chip
+                                                                key={tag.id}
+                                                                label={tag.name}
+                                                                size="small"
+                                                                style={{
+                                                                    backgroundColor: tag.color || "#e0e0e0",
+                                                                    color: tag.color ? "#fff" : "#333",
+                                                                    fontSize: 10,
+                                                                    height: 20
+                                                                }}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
                                         {/* Carteira: exibe tags pessoais (#) como chips */}
                                         {(() => {
                                             const allTags = contact?.tags || [];
@@ -522,6 +583,25 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                         </Paper>
 
                         <TagsKanbanContainer ticket={ticket} className={classes.contactTags} />
+                        
+                        {/* Mídia, links e docs - Estilo WhatsApp Web */}
+                        <Paper square variant="outlined" style={{ marginTop: 8, backgroundColor: "#fff" }}>
+                            <Typography 
+                                className={classes.sectionTitle}
+                                style={{ 
+                                    padding: "12px 16px", 
+                                    fontSize: 14, 
+                                    fontWeight: 500, 
+                                    color: "#008069",
+                                    backgroundColor: "#f0f2f5"
+                                }}
+                            >
+                                Mídia, links e docs
+                            </Typography>
+                            <div style={{ height: 320 }}>
+                                <SharedMediaPanel ticketId={ticket?.id} contact={contact} />
+                            </div>
+                        </Paper>
                         <Paper square variant="outlined" className={classes.contactDetails}>
                             <div
                                 style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}

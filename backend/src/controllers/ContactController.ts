@@ -1178,11 +1178,14 @@ export const update = async (
     logger.warn({ contactId: Number(contactId), companyId, error: err?.message }, "[Contacts.update] validação assíncrona falhou");
   });
 
-  // Se usuário tem permissão contacts.edit, pode editar qualquer contato (bypass da restrição de carteira)
-  // 'user' já foi carregado anteriormente na linha 1080
-  const canEditAnyContact = user ? hasPermission(user, "contacts.edit") : false;
+  // Se usuário tem permissão contacts.edit, contacts.edit-tags, ou é superadmin, pode editar qualquer contato (bypass da restrição de carteira)
+  // 'user' já foi carregado anteriormente na linha 1142
+  const isSuperAdmin = user?.super === true || user?.profile === 'admin';
+  const hasEditPermission = user ? hasPermission(user, "contacts.edit") : false;
+  const hasEditTagsPermission = user ? hasPermission(user, "contacts.edit-tags") : false;
+  const canEditAnyContact = isSuperAdmin || hasEditPermission || hasEditTagsPermission;
   
-  logger.info(`[Contacts.update] Usuário ${req.user.id} - permissões: ${JSON.stringify(user?.permissions)}, canEditAnyContact: ${canEditAnyContact}`);
+  logger.info(`[Contacts.update] Usuário ${req.user.id} - permissões: ${JSON.stringify(user?.permissions)}, isSuperAdmin: ${isSuperAdmin}, hasEditPermission: ${hasEditPermission}, hasEditTagsPermission: ${hasEditTagsPermission}, canEditAnyContact: ${canEditAnyContact}`);
 
   const contact = await UpdateContactService({
     contactData,
@@ -2627,5 +2630,80 @@ export const uniqueValues = async (req: AuthenticatedRequest, res: Response): Pr
   } catch (error: any) {
     console.error("[uniqueValues] Erro:", error);
     return res.status(500).json({ error: error.message || "Erro ao buscar valores únicos" });
+  }
+};
+
+/**
+ * GET /contacts/:contactId/status
+ * Busca o status/recado do contato via Baileys (fetchStatus)
+ */
+export const getContactStatus = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<Response> => {
+  const { contactId } = req.params;
+  const { companyId } = req.user;
+  const { whatsappId } = req.query as { whatsappId?: string };
+
+  try {
+    // Buscar contato
+    const contact = await Contact.findOne({
+      where: { id: contactId, companyId }
+    });
+
+    if (!contact) {
+      return res.status(404).json({ error: "Contato não encontrado" });
+    }
+
+    // Se não tiver whatsappId, buscar o padrão
+    let targetWhatsappId = whatsappId ? Number(whatsappId) : null;
+    if (!targetWhatsappId) {
+      const defaultWhatsapp = await GetDefaultWhatsApp(undefined, companyId);
+      targetWhatsappId = defaultWhatsapp?.id;
+    }
+
+    if (!targetWhatsappId) {
+      return res.status(400).json({ error: "Nenhuma conexão WhatsApp disponível" });
+    }
+
+    // Buscar status via Baileys
+    const wbot = getWbot(targetWhatsappId) as any;
+    if (!wbot) {
+      return res.status(400).json({ error: "Conexão WhatsApp não encontrada" });
+    }
+
+    // Formatar número para JID
+    const remoteJid = contact.remoteJid || 
+      `${contact.number}@s.whatsapp.net`;
+
+    // Buscar status
+    let status = null;
+    try {
+      // Usando fetchStatus se disponível (Baileys v6+)
+      if (typeof wbot.fetchStatus === 'function') {
+        const result = await wbot.fetchStatus(remoteJid);
+        status = result?.status || null;
+      } else {
+        // Fallback: buscar nos contatos da store
+        const contacts = (wbot as any).store?.contacts || {};
+        const contactData = contacts[remoteJid];
+        status = contactData?.status || null;
+      }
+    } catch (err) {
+      logger.warn(`[getContactStatus] Erro ao buscar status de ${contactId}:`, err);
+    }
+
+    return res.status(200).json({
+      success: true,
+      status,
+      contactId: contact.id,
+      name: contact.name
+    });
+
+  } catch (error: any) {
+    logger.error(`[getContactStatus] Erro:`, error);
+    return res.status(500).json({
+      error: error?.message || "Erro ao buscar status do contato"
+    });
   }
 };
