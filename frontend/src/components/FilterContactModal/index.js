@@ -22,7 +22,9 @@ import {
   Slider,
   Box,
   IconButton,
-  InputBase
+  InputBase,
+  Tabs,
+  Tab
 } from "@material-ui/core";
 
 import Autocomplete from "@material-ui/lab/Autocomplete";
@@ -103,8 +105,9 @@ const createEmptyValues = () => ({
   dtUltCompraEnd: null,
   bzEmpresa: [],
   whatsappInvalid: false,
-  walletIds: [], // Filtro por usuário (convertido para tags pessoais no backend)
-  whatsappIds: [], // IDs de conexões WhatsApp
+  walletIds: [],
+  whatsappIds: [],
+  excludeTags: [],
 });
 
 const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} }) => {
@@ -119,6 +122,8 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
   const [empresas, setEmpresas] = useState([]);
   const [tags, setTags] = useState([]);
   const [selectedTags, setSelectedTags] = useState([]);
+  const [excludedTags, setExcludedTags] = useState([]);
+  const [activeTab, setActiveTab] = useState(0); // 0 = Filtros, 1 = Tags Excluídas
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [loadingCities, setLoadingCities] = useState(false);
   const [loadingRegions, setLoadingRegions] = useState(false);
@@ -162,6 +167,7 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
     base.bzEmpresa = normalizeArray(src.bzEmpresa);
     base.walletIds = Array.isArray(src.walletIds) ? src.walletIds.map(id => Number(id)).filter(id => Number.isInteger(id)) : [];
     base.whatsappIds = Array.isArray(src.whatsappIds) ? src.whatsappIds.map(id => Number(id)).filter(id => Number.isInteger(id)) : [];
+    base.excludeTags = Array.isArray(src.excludeTags) ? src.excludeTags.map(id => Number(id)).filter(id => Number.isInteger(id)) : [];
 
     if (Array.isArray(src.foundationMonths)) {
       base.foundationMonths = src.foundationMonths
@@ -257,6 +263,10 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
     if (isOpen && initialFilter && Array.isArray(initialFilter.tags) && tags.length > 0) {
       const preSelected = tags.filter(t => initialFilter.tags.includes(t.id));
       setSelectedTags(preSelected);
+    }
+    if (isOpen && initialFilter && Array.isArray(initialFilter.excludeTags) && tags.length > 0) {
+      const preExcluded = tags.filter(t => initialFilter.excludeTags.includes(t.id));
+      setExcludedTags(preExcluded);
     }
   }, [isOpen, initialFilter, tags]);
 
@@ -491,9 +501,10 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
         region: values.region ? values.region : null,
         segment: values.segment ? values.segment : null,
         situation: values.situation ? values.situation : null,
-        walletIds: values.walletIds ? values.walletIds : null, // Novo: IDs de usuários para carteira
-        whatsappIds: values.whatsappIds ? values.whatsappIds : null, // Novo: IDs de conexões WhatsApp
-        tags: selectedTags.map(tag => tag.id)
+        walletIds: values.walletIds ? values.walletIds : null,
+        whatsappIds: values.whatsappIds ? values.whatsappIds : null,
+        tags: selectedTags.map(tag => tag.id),
+        excludeTags: excludedTags.map(tag => tag.id)
       };
 
       // Normalizar representativeCode: remover vazios e '00000'
@@ -544,15 +555,13 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
       if (typeof values.florder !== 'undefined') {
         if (values.florder === 'Sim') filters.florder = true;
         else if (values.florder === 'Não') filters.florder = false;
-        else delete filters.florder; // vazio
+        else delete filters.florder;
       }
 
       // Mapear WhatsApp Inválido
       if (typeof values.whatsappInvalid === 'boolean' && values.whatsappInvalid) {
         filters.isWhatsappValid = false;
       } else if (typeof values.whatsappInvalid === 'boolean' && !values.whatsappInvalid) {
-        // Se "Todos" for selecionado, não aplicamos nenhum filtro de WhatsApp
-        // O campo fica como false por padrão, mas não é enviado
         delete filters.isWhatsappValid;
       }
 
@@ -575,7 +584,6 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
       }
 
       // Incluir range de valor da última compra
-      // Somente incluir se realmente definido (evita Number(null) -> 0)
       if (values.minVlUltCompra !== null && values.minVlUltCompra !== "") {
         filters.minVlUltCompra = Number(values.minVlUltCompra);
       }
@@ -629,6 +637,16 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
           </IconButton>
         </div>
       </DialogTitle>
+      <Tabs
+        value={activeTab}
+        onChange={(e, newValue) => setActiveTab(newValue)}
+        indicatorColor="primary"
+        textColor="primary"
+        variant="fullWidth"
+      >
+        <Tab label="Filtros Inclusivos" />
+        <Tab label="Filtros Exclusivos" />
+      </Tabs>
       <Formik
         initialValues={initialValues}
         enableReinitialize={true}
@@ -640,7 +658,8 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
         {({ values, errors, touched, isSubmitting, resetForm }) => (
           <Form>
             <DialogContent dividers>
-              <Grid container spacing={2}>
+              {activeTab === 0 && (
+                <Grid container spacing={2}>
 
                 <Grid item xs={12} md={6}>
                   <Field name="channel">
@@ -1202,7 +1221,7 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
                   <Autocomplete
                     multiple
                     id="tags"
-                    options={tags}
+                    options={tags.filter(t => !excludedTags.some(et => et.id === t.id))}
                     getOptionLabel={(option) => option.name}
                     value={selectedTags}
                     onChange={(e, newValue) => {
@@ -1228,13 +1247,13 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
                         fullWidth
                         margin="dense"
                         className={selectedTags && selectedTags.length > 0 ? classes.activeFilter : ""}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                />
-              )}
-            />
-          </Grid>
+                        InputLabelProps={{
+                          shrink: true,
+                        }}
+                      />
+                    )}
+                  />
+                </Grid>
 
           {/* Linha 4: Carteira (responsáveis) + Conexão (WhatsApp) */}
           <Grid item xs={12} md={6}>
@@ -1327,7 +1346,56 @@ const FilterContactModal = ({ isOpen, onClose, onFiltered, initialFilter = {} })
           </Grid>
 
         </Grid>
-      </DialogContent>
+              )}
+
+              {activeTab === 1 && (
+                <Box p={2}>
+                  <Typography variant="subtitle1" gutterBottom color="error">
+                    Tags a Excluir
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary" paragraph>
+                    Selecione as tags que devem ser excluídas da lista de contatos. Contatos que possuem qualquer uma dessas tags não aparecerão no resultado.
+                  </Typography>
+                  <Autocomplete
+                    multiple
+                    id="excludeTags"
+                    options={tags.filter(t => !selectedTags.some(st => st.id === t.id))}
+                    getOptionLabel={(option) => option.name}
+                    value={excludedTags}
+                    onChange={(e, newValue) => {
+                      setExcludedTags(newValue);
+                    }}
+                    renderTags={(value, getTagProps) =>
+                      value.map((option, index) => (
+                        <Chip
+                          variant="outlined"
+                          label={option.name}
+                          {...getTagProps({ index })}
+                          style={{
+                            backgroundColor: '#ffebee',
+                            color: '#c62828',
+                            borderColor: '#f44336'
+                          }}
+                          className={classes.chip}
+                        />
+                      ))
+                    }
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        variant="outlined"
+                        label="Tags para excluir"
+                        placeholder="Selecione tags para excluir..."
+                        fullWidth
+                        margin="dense"
+                        className={excludedTags && excludedTags.length > 0 ? classes.activeFilter : ""}
+                        InputLabelProps={{ shrink: true }}
+                      />
+                    )}
+                  />
+                </Box>
+              )}
+            </DialogContent>
       <DialogActions>
         <Button
           onClick={() => handleClearFilters(resetForm)}

@@ -28,7 +28,9 @@ import {
   Slider,
   Box,
   IconButton,
-  InputBase
+  InputBase,
+  Tabs,
+  Tab
 } from "@material-ui/core";
 
 import Autocomplete from "@material-ui/lab/Autocomplete";
@@ -103,6 +105,8 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
   const [empresas, setEmpresas] = useState([]);
   const [tags, setTags] = useState([]);
   const [selectedTags, setSelectedTags] = useState([]);
+  const [excludedTags, setExcludedTags] = useState([]);
+  const [activeTab, setActiveTab] = useState(0); // 0 = Filtros Inclusivos, 1 = Filtros Exclusivos
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [loadingCities, setLoadingCities] = useState(false);
   const [loadingRegions, setLoadingRegions] = useState(false);
@@ -234,6 +238,10 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
     if (open && savedFilter && Array.isArray(savedFilter.tags) && tags.length > 0) {
       const preSelected = tags.filter(t => savedFilter.tags.includes(t.id));
       setSelectedTags(preSelected);
+    }
+    if (open && savedFilter && Array.isArray(savedFilter.excludeTags) && tags.length > 0) {
+      const preExcluded = tags.filter(t => savedFilter.excludeTags.includes(t.id));
+      setExcludedTags(preExcluded);
     }
     if (open && savedFilter) {
       setSaveFilterFlag(true);
@@ -498,6 +506,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
   const handleClose = () => {
     onClose();
     setSelectedTags([]);
+    setExcludedTags([]);
   };
 
   const handleAddFilteredContacts = async (values) => {
@@ -528,7 +537,8 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
         region: values.region ? values.region : null,
         segment: values.segment ? values.segment : null,
         situation: values.situation ? values.situation : null,
-        tags: selectedTags.map(tag => tag.id)
+        tags: selectedTags.map(tag => tag.id),
+        excludeTags: excludedTags.map(tag => tag.id)
       };
 
       // Normalizar representativeCode: remover vazios e '00000'
@@ -685,6 +695,16 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
       <DialogTitle>
         {i18n.t("contactListItems.dialog.filter")}
       </DialogTitle>
+      <Tabs
+        value={activeTab}
+        onChange={(e, newValue) => setActiveTab(newValue)}
+        indicatorColor="primary"
+        textColor="primary"
+        variant="fullWidth"
+      >
+        <Tab label="Filtros Inclusivos" />
+        <Tab label="Filtros Exclusivos" />
+      </Tabs>
       <Formik
         initialValues={{
           channel: (savedFilter && savedFilter.channel) ? savedFilter.channel : [],
@@ -722,6 +742,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
         {({ values, errors, touched, isSubmitting }) => (
           <Form>
             <DialogContent dividers>
+              {activeTab === 0 && (
               <Grid container spacing={2}>
 
                 <Grid item xs={12} md={6}>
@@ -1293,7 +1314,7 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                   <Autocomplete
                     multiple
                     id="tags"
-                    options={tags}
+                    options={tags.filter(t => !excludedTags.some(et => et.id === t.id))}
                     getOptionLabel={(option) => option.name}
                     value={selectedTags}
                     onChange={(e, newValue) => {
@@ -1469,6 +1490,55 @@ const AddFilteredContactsModal = ({ open, onClose, contactListId, reload, savedF
                 )}
 
               </Grid>
+              )}
+
+              {activeTab === 1 && (
+                <Box p={2}>
+                  <Typography variant="subtitle1" gutterBottom color="error">
+                    Tags a Excluir
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary" paragraph>
+                    Selecione as tags que devem ser excluídas da lista de contatos. Contatos que possuem qualquer uma dessas tags não aparecerão no resultado.
+                  </Typography>
+                  <Autocomplete
+                    multiple
+                    id="excludeTags"
+                    options={tags.filter(t => !selectedTags.some(st => st.id === t.id))}
+                    getOptionLabel={(option) => option.name}
+                    value={excludedTags}
+                    onChange={(e, newValue) => {
+                      setExcludedTags(newValue);
+                    }}
+                    renderTags={(value, getTagProps) =>
+                      value.map((option, index) => (
+                        <Chip
+                          variant="outlined"
+                          label={option.name}
+                          {...getTagProps({ index })}
+                          style={{
+                            backgroundColor: '#ffebee',
+                            color: '#c62828',
+                            borderColor: '#f44336'
+                          }}
+                          className={classes.chip}
+                        />
+                      ))
+                    }
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        variant="outlined"
+                        label="Tags para excluir"
+                        placeholder="Selecione tags para excluir..."
+                        fullWidth
+                        margin="dense"
+                        className={excludedTags && excludedTags.length > 0 ? classes.activeFilter : ""}
+                        InputLabelProps={{ shrink: true }}
+                      />
+                    )}
+                  />
+                </Box>
+              )}
             </DialogContent>
             <DialogActions>
               <Button

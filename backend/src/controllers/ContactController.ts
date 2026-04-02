@@ -566,11 +566,37 @@ export const index = async (req: AuthenticatedRequest, res: Response): Promise<R
 
   const whatsappIds = parseIdArrayParam("whatsappIds");
 
+  // Parse excludeTagsIds com tratamento especial para JSON stringificado
+  let excludeTagsIds: number[] | undefined;
+  const excludeTagsRaw = (req.query as any).excludeTags;
+
+  if (excludeTagsRaw) {
+    try {
+      if (typeof excludeTagsRaw === 'string') {
+        // Tenta fazer parse de JSON se for uma string
+        const parsed = JSON.parse(excludeTagsRaw);
+        if (Array.isArray(parsed)) {
+          excludeTagsIds = parsed
+            .map((t: any) => Number(t))
+            .filter((t: number) => Number.isInteger(t) && t > 0);
+        }
+      } else if (Array.isArray(excludeTagsRaw)) {
+        // Já é um array
+        excludeTagsIds = excludeTagsRaw
+          .map((t: any) => Number(t))
+          .filter((t: number) => Number.isInteger(t) && t > 0);
+      }
+    } catch (e) {
+      // Ignora erro de parse
+    }
+  }
+
   const result = await ListContactsService({
     searchParam,
     pageNumber,
     companyId,
     tagsIds,
+    excludeTagsIds,
     isGroup,
     userId: Number(userId),
     profile,

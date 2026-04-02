@@ -17,6 +17,7 @@ interface FilterParams {
   minCreditLimit?: string;
   maxCreditLimit?: string;
   tags?: number[];
+  excludeTags?: number[]; // Tags a excluir (negativo)
   florder?: boolean | string; // encomenda Sim/Não
   dtUltCompraStart?: string; // yyyy-mm-dd
   dtUltCompraEnd?: string;   // yyyy-mm-dd
@@ -286,10 +287,22 @@ const AddFilteredContactsToListService = async ({
           }
         }
 
+        // Filtro de tags (inclusivo - contato DEVE ter TODAS as tags)
         if (filters.tags && filters.tags.length > 0) {
           repl.tagIds = filters.tags;
           repl.tagsLen = filters.tags.length;
           conds.push(`c."id" IN (SELECT "contactId" FROM (SELECT "contactId", COUNT(DISTINCT "tagId") AS tag_count FROM "ContactTags" WHERE "tagId" IN (:tagIds) GROUP BY "contactId") t WHERE t.tag_count = :tagsLen)`);
+        }
+
+        // Filtro de tags (exclusivo - contato NÃO DEVE ter NENHUMA das tags)
+        if ((filters as any).excludeTags && (filters as any).excludeTags.length > 0) {
+          const excludeTagIds: number[] = ((filters as any).excludeTags as any[])
+            .map((t: any) => typeof t === "string" ? parseInt(t, 10) : Number(t))
+            .filter((t: number) => Number.isInteger(t));
+          if (excludeTagIds.length > 0) {
+            repl.excludeTagIds = excludeTagIds;
+            conds.push(`c."id" NOT IN (SELECT DISTINCT "contactId" FROM "ContactTags" WHERE "tagId" IN (:excludeTagIds))`);
+          }
         }
       }
 
@@ -474,13 +487,12 @@ const AddFilteredContactsToListService = async ({
       }
     }
 
-    // Filtro de tags
+    // Filtro de tags (inclusivo)
     if (filters.tags && filters.tags.length > 0) {
       const tagIds = filters.tags.join(",");
       if (!tagIds) {
         return { added: 0, duplicated: 0, errors: 0 };
       }
-      // Evita alias inexistente; usa coluna "id" diretamente
       whereConditions.push(literal(`"id" IN (
         SELECT "contactId" FROM (
           SELECT "contactId", COUNT(DISTINCT "tagId") AS tag_count
@@ -490,6 +502,19 @@ const AddFilteredContactsToListService = async ({
         ) AS tag_filter
         WHERE tag_filter.tag_count = ${filters.tags.length}
       )`));
+    }
+
+    // Filtro de tags (exclusivo - contato NÃO DEVE ter NENHUMA das tags)
+    if ((filters as any).excludeTags && (filters as any).excludeTags.length > 0) {
+      const excludeTagIds: number[] = ((filters as any).excludeTags as any[])
+        .map((t: any) => Number(t))
+        .filter((t: number) => Number.isInteger(t));
+      if (excludeTagIds.length > 0) {
+        const excludeTagIdsStr = excludeTagIds.join(",");
+        whereConditions.push(literal(`"id" NOT IN (
+          SELECT DISTINCT "contactId" FROM "ContactTags" WHERE "tagId" IN (${excludeTagIdsStr})
+        )`));
+      }
     }
 
     // Filtro de "Encomenda" (florder)

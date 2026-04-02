@@ -8,12 +8,14 @@ import removeAccents from "remove-accents";
 import Whatsapp from "../../models/Whatsapp";
 import User from "../../models/User";
 import ShowUserService from "../UserServices/ShowUserService";
+import logger from "../../utils/logger";
 
 interface Request {
   searchParam?: string;
   pageNumber?: string;
   companyId: number;
   tagsIds?: number[];
+  excludeTagsIds?: number[]; // Tags a excluir (negativo)
   isGroup?: string;
   userId?: number;
   profile?: string;
@@ -50,6 +52,7 @@ const ListContactsService = async ({
   pageNumber = "1",
   companyId,
   tagsIds,
+  excludeTagsIds,
   isGroup,
   userId,
   profile,
@@ -382,6 +385,7 @@ const ListContactsService = async ({
     const contactTags = await ContactTag.findAll({
       where: { tagId: { [Op.in]: tagsIds } }
     });
+    
     if (contactTags) {
       contactTagFilter.push(contactTags.map(t => t.contactId));
     }
@@ -394,6 +398,47 @@ const ListContactsService = async ({
         [Op.in]: contactTagsIntersection
       }
     };
+  }
+
+  // Filtro de tags (exclusivo - contato NÃO DEVE ter NENHUMA das tags)
+  if (Array.isArray(excludeTagsIds) && excludeTagsIds.length > 0) {
+    const excludeTagIdsNormalized = excludeTagsIds
+      .map((t: any) => Number(t))
+      .filter((t: number) => Number.isInteger(t));
+
+    if (excludeTagIdsNormalized.length > 0) {
+      // Buscar contatos que têm as tags a serem excluídas
+      const contactsWithExcludedTags = await ContactTag.findAll({
+        where: { 
+          tagId: { [Op.in]: excludeTagIdsNormalized },
+          companyId
+        },
+        attributes: [[literal('DISTINCT "contactId"'), 'contactId']],
+        raw: true
+      });
+      
+      const excludedContactIds = contactsWithExcludedTags.map((ct: any) => Number(ct.contactId)).filter(Number.isInteger);
+
+      // Excluir esses contatos da listagem
+      if (excludedContactIds.length > 0) {
+        const currentIdFilter: any = (whereCondition as any).id;
+        
+        if (currentIdFilter?.[Op.in]) {
+          // Já tem filtro inclusivo, remover os excluídos
+          const allowed = (currentIdFilter[Op.in] as number[]).filter(id => !excludedContactIds.includes(id));
+          (whereCondition as any).id = { [Op.in]: allowed };
+        } else if (currentIdFilter?.[Op.notIn]) {
+          // Já tem filtro notIn, adicionar mais
+          (whereCondition as any).id = {
+            ...currentIdFilter,
+            [Op.notIn]: [...(currentIdFilter[Op.notIn] || []), ...excludedContactIds]
+          };
+        } else {
+          // Novo filtro notIn
+          (whereCondition as any).id = { [Op.notIn]: excludedContactIds };
+        }
+      }
+    }
   }
 
   if (isGroup === "false") {

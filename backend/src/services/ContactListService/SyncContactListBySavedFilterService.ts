@@ -218,6 +218,17 @@ async function getValidCanonicalNumbersForFilter(companyId: number, filters: any
     }
   }
 
+  // Filtro de tags (exclusivo - contato NÃO DEVE ter NENHUMA das tags)
+  if ((filters as any).excludeTags && Array.isArray((filters as any).excludeTags) && (filters as any).excludeTags.length > 0) {
+    const excludeTagIds: number[] = ((filters as any).excludeTags as any[])
+      .map((t: any) => Number(t))
+      .filter((t: number) => Number.isInteger(t));
+    if (excludeTagIds.length > 0) {
+      repl.excludeTagIds = excludeTagIds;
+      conds.push(`c."id" NOT IN (SELECT DISTINCT "contactId" FROM "ContactTags" WHERE "tagId" IN (:excludeTagIds))`);
+    }
+  }
+
   const whereSql = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
   const sql = `SELECT c."canonicalNumber" FROM "Contacts" c ${whereSql}`;
 
