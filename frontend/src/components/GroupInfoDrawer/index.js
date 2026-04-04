@@ -43,6 +43,7 @@ import {
 } from "@material-ui/icons";
 import { Switch, FormControlLabel } from "@material-ui/core";
 import SharedMediaPanel from "../SharedMediaPanel";
+import ContactAvatar from "../ContactAvatar";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -222,6 +223,13 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
 
   // Handler para iniciar conversa privada
   const handleStartPrivateChat = (participant) => {
+    if (!participant?.contactId && !participant?.number) {
+      toast.error("Não foi possível identificar este participante para iniciar a conversa privada.");
+      return;
+    }
+
+    setMenuAnchor(null);
+    setSelectedParticipant(null);
     setSelectedParticipantForChat(participant);
     setPrivateChatModalOpen(true);
   };
@@ -318,6 +326,12 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
   };
 
   const handleRemoveMember = async (participant) => {
+    if (!participant?.number) {
+      toast.error("Não foi possível identificar o número deste participante.");
+      setMenuAnchor(null);
+      return;
+    }
+
     if (!window.confirm(`Remover ${participant.name} do grupo?`)) return;
 
     try {
@@ -337,6 +351,12 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
   };
 
   const handlePromoteMember = async (participant) => {
+    if (!participant?.number) {
+      toast.error("Não foi possível identificar o número deste participante.");
+      setMenuAnchor(null);
+      return;
+    }
+
     try {
       await api.post(`/groups/${contact.id}/participants/promote`, {
         numbers: [participant.number],
@@ -354,6 +374,12 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
   };
 
   const handleDemoteMember = async (participant) => {
+    if (!participant?.number) {
+      toast.error("Não foi possível identificar o número deste participante.");
+      setMenuAnchor(null);
+      return;
+    }
+
     try {
       await api.post(`/groups/${contact.id}/participants/demote`, {
         numbers: [participant.number],
@@ -551,6 +577,9 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
     }
     return `+${clean}`;
   };
+
+  const getParticipantDisplayNumber = (participant) =>
+    participant?.displayNumber || formatPhoneNumber(participant?.number);
 
   return (
     <>
@@ -773,20 +802,19 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
                   onClick={() => handleStartPrivateChat(participant)}
                 >
                   <ListItemAvatar>
-                    <Avatar
-                      src={participant.profilePicUrl || participant.imgUrlBaileys || ""}
+                    <ContactAvatar
+                      contact={participant}
+                      enableRealtimeFetch={false}
                       className={classes.participantAvatar}
-                    >
-                      {(participant.name || "?")[0]?.toUpperCase()}
-                    </Avatar>
+                    />
                   </ListItemAvatar>
                   <ListItemText
                     primary={
                       <span style={{ display: "flex", alignItems: "center" }}>
                         <span className={classes.participantName}>
-                          {participant.name !== "Participante" && participant.name !== participant.number
+                          {participant.name !== "Participante" && participant.name !== getParticipantDisplayNumber(participant)
                             ? participant.name
-                            : formatPhoneNumber(participant.number)}
+                            : getParticipantDisplayNumber(participant)}
                         </span>
                         {participant.isSuperAdmin && (
                           <Chip
@@ -806,9 +834,9 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
                       </span>
                     }
                     secondary={
-                      participant.name !== "Participante" && participant.name !== participant.number ? (
+                      participant.name !== "Participante" && participant.name !== getParticipantDisplayNumber(participant) ? (
                         <span className={classes.participantNumber}>
-                          {formatPhoneNumber(participant.number)}
+                          {getParticipantDisplayNumber(participant)}
                         </span>
                       ) : null
                     }
@@ -858,6 +886,14 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
         open={Boolean(menuAnchor)}
         onClose={handleCloseMenu}
       >
+        {selectedParticipant && (
+          <MenuItem
+            onClick={() => handleStartPrivateChat(selectedParticipant)}
+            disabled={!selectedParticipant.contactId && !selectedParticipant.number}
+          >
+            Iniciar conversa privada
+          </MenuItem>
+        )}
         {selectedParticipant && !selectedParticipant.isSuperAdmin && (
           selectedParticipant.isAdmin ? (
             <MenuItem onClick={() => handleDemoteMember(selectedParticipant)}>
@@ -923,7 +959,6 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
         open={privateChatModalOpen}
         onClose={handlePrivateChatCreated}
         participant={selectedParticipantForChat}
-        companyId={contact?.companyId}
         whatsappId={ticket?.whatsappId}
         user={user}
       />

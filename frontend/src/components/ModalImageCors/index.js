@@ -59,7 +59,7 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
-const ModalImageCors = ({ imageUrl }) => {
+const ModalImageCors = ({ imageUrl, disableModal = false }) => {
 	const classes = useStyles();
 	const [fetching, setFetching] = useState(true);
 	const [blobUrl, setBlobUrl] = useState("");
@@ -158,14 +158,23 @@ const ModalImageCors = ({ imageUrl }) => {
 	return (
 		<div className={classes.mediaWrapper}>
 			{!isGif && isHd && <span className={classes.hdBadge}>HD</span>}
-			<ModalImage
-				className={isSticker ? classes.stickerMedia : classes.messageMedia}
-				smallSrcSet={fetching ? imageUrl : blobUrl}
-				medium={fetching ? imageUrl : blobUrl}
-				large={fetching ? imageUrl : blobUrl}
-				alt={isSticker ? "sticker" : "image"}
-				showRotate={true}
-			/>
+			{disableModal ? (
+				<img
+					className={isSticker ? classes.stickerMedia : classes.messageMedia}
+					src={fetching ? imageUrl : blobUrl}
+					alt={isSticker ? "sticker" : "image"}
+					loading="lazy"
+				/>
+			) : (
+				<ModalImage
+					className={isSticker ? classes.stickerMedia : classes.messageMedia}
+					smallSrcSet={fetching ? imageUrl : blobUrl}
+					medium={fetching ? imageUrl : blobUrl}
+					large={fetching ? imageUrl : blobUrl}
+					alt={isSticker ? "sticker" : "image"}
+					showRotate={true}
+				/>
+			)}
 		</div>
 	);
 };

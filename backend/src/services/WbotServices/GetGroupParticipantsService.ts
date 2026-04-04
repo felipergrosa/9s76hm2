@@ -4,16 +4,19 @@ import Contact from "../../models/Contact";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
+import UpsertParticipantContactService from "../ContactServices/UpsertParticipantContactService";
 import logger from "../../utils/logger";
 import { normalizePhoneNumber, isValidCanonicalPhoneNumber } from "../../utils/phone";
 
 interface GroupParticipant {
   id: string; // JID do participante (ex: 5511999999999@s.whatsapp.net)
-  number: string; // Número limpo (ex: 5511999999999)
+  number: string; // Número limpo/canônico (ex: 5511999999999)
+  displayNumber: string; // Número formatado para exibição
   name: string; // Nome do participante (pushName ou número)
   isAdmin: boolean;
   isSuperAdmin: boolean;
   profilePicUrl?: string; // URL do contato no banco
+  urlPicture?: string | null; // Avatar local do contato
   imgUrlBaileys?: string | null; // URL do avatar do Baileys store
   contactId?: number; // ID do contato no sistema, se existir
 }
@@ -462,7 +465,7 @@ const GetGroupParticipantsService = async ({
     }
 
     // Usar foto do contato do sistema ou do Baileys
-    let profilePicUrl = contactRecord?.profilePicUrl;
+    let profilePicUrl = contactRecord?.urlPicture || contactRecord?.profilePicUrl;
     let imgUrlBaileys: string | null = null;
 
     // Se temos imgUrl do Baileys e é uma URL válida, usar como fallback
@@ -483,13 +486,52 @@ const GetGroupParticipantsService = async ({
       }
     }
 
+    const effectiveRemoteProfilePic =
+      contactRecord?.profilePicUrl ||
+      (typeof profilePicUrl === "string" && profilePicUrl.startsWith("http") ? profilePicUrl : undefined) ||
+      imgUrlBaileys ||
+      undefined;
+
+    const meaningfulContactName =
+      contactName &&
+      contactName !== "Participante" &&
+      contactName.replace(/\D/g, "") !== participantNumber
+        ? contactName
+        : undefined;
+
+    const shouldUpsertParticipantContact = (
+      (!!contactRecord && (
+        (!contactRecord.urlPicture && !contactRecord.profilePicUrl && !!(profilePicUrl || imgUrlBaileys)) ||
+        ((isLid && !contactRecord.lidJid) || (!isLid && contactRecord.remoteJid !== participantJid)) ||
+        (!!meaningfulContactName && contactRecord.name?.replace(/\D/g, "") === (contactRecord.number || "").replace(/\D/g, ""))
+      )) ||
+      (!contactRecord && isValidPhoneNumber)
+    );
+
+    if (shouldUpsertParticipantContact) {
+      const ensuredContact = await UpsertParticipantContactService({
+        participantJid,
+        participantName: meaningfulContactName || contactName,
+        participantNumber: isValidPhoneNumber ? participantNumber : contactRecord?.number,
+        profilePicUrl: effectiveRemoteProfilePic,
+        companyId,
+        whatsappId
+      });
+
+      if (ensuredContact) {
+        contactRecord = ensuredContact;
+      }
+    }
+
     participants.push({
       id: participantJid,
-      number: displayNumber,
+      number: isValidPhoneNumber ? participantNumber : "",
+      displayNumber,
       name: contactName,
       isAdmin,
       isSuperAdmin,
-      profilePicUrl: contactRecord?.profilePicUrl || contactRecord?.urlPicture || profilePicUrl,
+      profilePicUrl: contactRecord?.urlPicture || contactRecord?.profilePicUrl || profilePicUrl,
+      urlPicture: contactRecord?.urlPicture || null,
       imgUrlBaileys,
       contactId: contactRecord?.id
     });

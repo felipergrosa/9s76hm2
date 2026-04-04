@@ -373,6 +373,12 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                                         <Typography style={{ fontSize: 12 }}>
                                             {hideNum && user.profile === "user" ? formatSerializedId(contact.number).slice(0, -6) + "**-**" + contact.number.slice(-2) : formatSerializedId(contact.number)}
                                         </Typography>
+                                        {/* Nome do Contato - abaixo do telefone e em negrito */}
+                                        {contact.contactName && (
+                                            <Typography style={{ color: "#111b21", fontSize: 14, fontWeight: "bold", marginTop: 4 }}>
+                                                {contact.contactName}
+                                            </Typography>
+                                        )}
                                         {/* Status/Recado do contato */}
                                         {contactStatus && (
                                             <div style={{ marginTop: 8, padding: "8px 0" }}>
@@ -385,7 +391,7 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                                             </div>
                                         )}
                                         {contact.clientCode && (
-                                            <Typography style={{ color: "primary", fontSize: 12, fontWeight: "bold" }}>
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
                                                 {`Código do Cliente: ${contact.clientCode}`}
                                             </Typography>
                                         )}
@@ -394,19 +400,14 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                                                 <Link href={`mailto:${contact.email}`}>{contact.email}</Link>
                                             </Typography>
                                         )}
-                                        {contact.contactName && (
+                                        {contact.cpfCnpj && (
                                             <Typography style={{ color: "primary", fontSize: 12 }}>
-                                                {`Nome do Contato: ${contact.contactName}`}
+                                                {`CPF/CNPJ: ${contact.cpfCnpj}`}
                                             </Typography>
                                         )}
                                         {contact.bzEmpresa && (
                                             <Typography style={{ color: "primary", fontSize: 12 }}>
                                                 {`Empresa: ${contact.bzEmpresa}`}
-                                            </Typography>
-                                        )}
-                                        {contact.cpfCnpj && (
-                                            <Typography style={{ color: "primary", fontSize: 12 }}>
-                                                {`CPF/CNPJ: ${contact.cpfCnpj}`}
                                             </Typography>
                                         )}
                                         {contact.representativeCode && (
@@ -464,12 +465,21 @@ const ContactDrawer = ({ open, handleDrawerClose, contact, ticket, loading, acti
                                                 {`Instagram: ${contact.instagram}`}
                                             </Typography>
                                         )}
-                                        <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {`Encomenda: ${contact.florder ? 'Sim' : 'Não'}`}
-                                        </Typography>
-                                        <Typography style={{ color: "primary", fontSize: 12 }}>
-                                            {`Chatbot: ${contact.disableBot ? 'Desabilitado' : 'Habilitado'}`}
-                                        </Typography>
+                                        {contact.channels && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Canais: ${contact.channels}`}
+                                            </Typography>
+                                        )}
+                                        {typeof contact.florder !== 'undefined' && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Encomenda: ${contact.florder ? 'Sim' : 'Não'}`}
+                                            </Typography>
+                                        )}
+                                        {typeof contact.disableBot !== 'undefined' && (
+                                            <Typography style={{ color: "primary", fontSize: 12 }}>
+                                                {`Chatbot: ${contact.disableBot ? 'Desabilitado' : 'Habilitado'}`}
+                                            </Typography>
+                                        )}
                                         {/* Todas as Tags do Contato */}
                                         {(() => {
                                             const allTags = contact?.tags || [];

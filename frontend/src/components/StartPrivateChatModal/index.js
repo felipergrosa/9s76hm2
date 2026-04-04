@@ -8,13 +8,15 @@ import {
   Typography,
   Box,
   CircularProgress,
-  Avatar
+  Avatar,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select
 } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
-import QueueSelectSingle from "../QueueSelectSingle";
 import toastError from "../../errors/toastError";
 import api from "../../services/api";
-import { i18n } from "../../translate/i18n";
 
 const useStyles = makeStyles((theme) => ({
   dialogTitle: {
@@ -71,38 +73,118 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const StartPrivateChatModal = ({ open, onClose, participant, companyId, whatsappId, user }) => {
+const StartPrivateChatModal = ({ open, onClose, participant, whatsappId, user }) => {
   const classes = useStyles();
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedQueueId, setSelectedQueueId] = useState("");
+  const [availableQueues, setAvailableQueues] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   // Resetar estado quando o modal abrir/fechar
   useEffect(() => {
     if (!open) {
+      setAvailableUsers([]);
+      setAvailableQueues([]);
+      setSelectedUserId("");
       setSelectedQueueId("");
       setLoading(false);
+      setLoadingUsers(false);
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    let mounted = true;
+
+    const applyDefaultSelection = (users) => {
+      const fallbackUsers = Array.isArray(users) && users.length > 0 ? users : [user].filter(Boolean);
+      const defaultUser = fallbackUsers.find((entry) => entry.id === user?.id) || fallbackUsers[0] || null;
+      const queues = Array.isArray(defaultUser?.queues) ? defaultUser.queues : [];
+
+      if (!mounted) return;
+
+      setAvailableUsers(fallbackUsers);
+      setSelectedUserId(defaultUser?.id || "");
+      setAvailableQueues(queues);
+      setSelectedQueueId(queues.length === 1 ? queues[0].id : "");
+    };
+
+    const loadUsers = async () => {
+      setLoadingUsers(true);
+      try {
+        const { data } = await api.get("/users/available");
+        applyDefaultSelection(data || []);
+      } catch (err) {
+        applyDefaultSelection([]);
+      } finally {
+        if (mounted) {
+          setLoadingUsers(false);
+        }
+      }
+    };
+
+    loadUsers();
+
+    return () => {
+      mounted = false;
+    };
+  }, [open, user]);
+
+  useEffect(() => {
+    if (!selectedUserId) {
+      setAvailableQueues([]);
+      setSelectedQueueId("");
+      return;
+    }
+
+    const selectedUser = availableUsers.find((entry) => entry.id === selectedUserId);
+    const queues = Array.isArray(selectedUser?.queues) ? selectedUser.queues : [];
+    setAvailableQueues(queues);
+
+    if (!queues.some((queue) => queue.id === selectedQueueId)) {
+      setSelectedQueueId(queues.length === 1 ? queues[0].id : "");
+    }
+  }, [availableUsers, selectedQueueId, selectedUserId]);
+
   const handleStartChat = async () => {
+    if (!selectedUserId) {
+      alert("Por favor, selecione um atendente para iniciar a conversa.");
+      return;
+    }
+
     if (!selectedQueueId) {
       alert("Por favor, selecione uma fila para iniciar a conversa.");
       return;
     }
 
-    if (!participant?.contactId) {
-      alert("Não foi possível identificar o contato deste participante.");
-      return;
-    }
-
     setLoading(true);
     try {
+      let contactId = participant?.contactId;
+
+      if (!contactId && participant?.number) {
+        const { data: createdContact } = await api.post("/contacts", {
+          name: participant?.name || participant?.displayNumber || participant.number,
+          number: participant.number,
+          email: ""
+        });
+        contactId = createdContact?.id;
+      }
+
+      if (!contactId) {
+        alert("Não foi possível identificar o contato deste participante.");
+        setLoading(false);
+        return;
+      }
+
       // Criar novo ticket privado com o participante
       const { data: ticket } = await api.post("/tickets", {
-        contactId: participant.contactId,
+        contactId,
         queueId: selectedQueueId,
         whatsappId,
-        userId: user.id,
+        userId: selectedUserId,
         status: "open",
       });
 
@@ -134,7 +216,7 @@ const StartPrivateChatModal = ({ open, onClose, participant, companyId, whatsapp
         <Box className={classes.participantInfo}>
           <Avatar 
             className={classes.participantAvatar}
-            src={participant.profilePicUrl}
+            src={participant.urlPicture || participant.profilePicUrl || participant.imgUrlBaileys || ""}
           >
             {participant.name?.charAt(0)?.toUpperCase() || "P"}
           </Avatar>
@@ -144,7 +226,7 @@ const StartPrivateChatModal = ({ open, onClose, participant, companyId, whatsapp
               {participant.name || "Participante"}
             </Typography>
             <Typography className={classes.participantNumber}>
-              {participant.number || participant.id}
+              {participant.displayNumber || participant.number || participant.id}
             </Typography>
             {participant.isAdmin && (
               <Typography variant="caption" color="primary">
@@ -154,16 +236,47 @@ const StartPrivateChatModal = ({ open, onClose, participant, companyId, whatsapp
           </Box>
         </Box>
 
+        <Box className={classes.queueSection}>
+          <Typography className={classes.queueLabel}>
+            Qual atendente ficará responsável por esta conversa?
+          </Typography>
+          <FormControl variant="outlined" fullWidth size="small" disabled={loading || loadingUsers}>
+            <InputLabel id="start-private-chat-user-label">Atendente</InputLabel>
+            <Select
+              labelId="start-private-chat-user-label"
+              value={selectedUserId}
+              onChange={(event) => setSelectedUserId(Number(event.target.value) || "")}
+              label="Atendente"
+            >
+              {availableUsers.map((availableUser) => (
+                <MenuItem key={availableUser.id} value={availableUser.id}>
+                  {availableUser.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
+
         {/* Seleção de fila */}
         <Box className={classes.queueSection}>
           <Typography className={classes.queueLabel}>
             Para qual fila deseja direcionar esta conversa?
           </Typography>
-          <QueueSelectSingle
-            selectedQueueId={selectedQueueId}
-            onChange={setSelectedQueueId}
-            label="Fila de Atendimento"
-          />
+          <FormControl variant="outlined" fullWidth size="small" disabled={loading || loadingUsers || !selectedUserId}>
+            <InputLabel id="start-private-chat-queue-label">Fila de Atendimento</InputLabel>
+            <Select
+              labelId="start-private-chat-queue-label"
+              value={selectedQueueId}
+              onChange={(event) => setSelectedQueueId(Number(event.target.value) || "")}
+              label="Fila de Atendimento"
+            >
+              {availableQueues.map((queue) => (
+                <MenuItem key={queue.id} value={queue.id}>
+                  {queue.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </Box>
 
         <Typography variant="body2" color="textSecondary">
@@ -184,7 +297,7 @@ const StartPrivateChatModal = ({ open, onClose, participant, companyId, whatsapp
           onClick={handleStartChat}
           variant="contained"
           color="primary"
-          disabled={!selectedQueueId || loading}
+          disabled={!selectedUserId || !selectedQueueId || loading || loadingUsers}
           className={classes.loadingButton}
         >
           {loading ? (

@@ -1,21 +1,22 @@
 import { Op } from "sequelize";
-import { sub, addHours, differenceInHours } from "date-fns";
 import { v5 as uuidv5 } from "uuid";
 
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import LogTicket from "../../models/LogTicket";
+import User from "../../models/User";
 import ShowTicketService from "./ShowTicketService";
-import FindOrCreateATicketTrakingService from "./FindOrCreateATicketTrakingService";
 import { isNil } from "lodash";
-import { getIO } from "../../libs/socket";
 import logger from "../../utils/logger";
 import Whatsapp from "../../models/Whatsapp";
 import CompaniesSettings from "../../models/CompaniesSettings";
 import CreateLogTicketService from "./CreateLogTicketService";
 import AppError from "../../errors/AppError";
-import UpdateTicketService from "./UpdateTicketService";
 import { ticketEventBus } from "./TicketEventBus";
+import {
+  getWorkShiftWindowForReference,
+  isWithinWorkShiftWindow
+} from "./TicketWorkShift";
 
 // Namespace fixo para gerar UUIDs v5 determinísticos para selfchat
 const SELFCHAT_UUID_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
@@ -24,6 +25,83 @@ const SELFCHAT_UUID_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 //   ticket: Ticket;
 //   // isCreated: boolean;
 // }
+
+const resolveClosedTicketReuse = async ({
+  ticket,
+  userId,
+  companyId
+}: {
+  ticket: Ticket;
+  userId: number | null;
+  companyId: number;
+}): Promise<{
+  shouldReuse: boolean;
+  reopenUserId: number | null;
+  reason: string;
+}> => {
+  const lastClosedLog = await LogTicket.findOne({
+    where: {
+      ticketId: ticket.id,
+      type: "closed"
+    },
+    order: [["createdAt", "DESC"]]
+  });
+
+  const reopenUserId = lastClosedLog?.userId || ticket.userId || null;
+  const referenceDate = lastClosedLog?.createdAt || ticket.updatedAt || ticket.createdAt;
+
+  if (!reopenUserId) {
+    return {
+      shouldReuse: false,
+      reopenUserId: null,
+      reason: "closed-ticket-without-user"
+    };
+  }
+
+  if (!isNil(userId) && Number(userId) !== 0 && Number(userId) !== Number(reopenUserId)) {
+    return {
+      shouldReuse: false,
+      reopenUserId,
+      reason: "different-user"
+    };
+  }
+
+  const responsibleUser = await User.findOne({
+    where: {
+      id: reopenUserId,
+      companyId
+    },
+    attributes: ["id", "startWork", "endWork"]
+  });
+
+  if (!responsibleUser) {
+    return {
+      shouldReuse: false,
+      reopenUserId,
+      reason: "responsible-user-not-found"
+    };
+  }
+
+  const workShiftWindow = getWorkShiftWindowForReference(
+    referenceDate,
+    responsibleUser.startWork,
+    responsibleUser.endWork
+  );
+
+  if (!isWithinWorkShiftWindow(new Date(), workShiftWindow)) {
+    return {
+      shouldReuse: false,
+      reopenUserId,
+      reason: "outside-work-shift"
+    };
+  }
+
+  return {
+    shouldReuse: true,
+    reopenUserId,
+    reason: "same-user-same-work-shift"
+  };
+};
 
 const FindOrCreateTicketService = async (
   contact: Contact,
@@ -57,8 +135,6 @@ const FindOrCreateTicketService = async (
       (settings.lgpdConsent === "enabled" ||
         (settings.lgpdConsent === "disabled" && (!contact || isNil(contact?.lgpdAcceptedAt))));
   }
-
-  const io = getIO();
 
   const DirectTicketsToWallets = settings?.DirectTicketsToWallets;
 
@@ -194,110 +270,113 @@ const FindOrCreateTicketService = async (
   }
 
   if (ticket) {
-    if (isCampaign) {
-      await ticket.update({
-        userId: userId !== ticket.userId ? ticket.userId : userId,
-        queueId: queueId !== ticket.queueId ? ticket.queueId : queueId,
-      });
+    if (isTransfered && ticket.status === "closed") {
+      logger.info(
+        `[FindOrCreateTicket] Ticket ${ticket.id} fechado por transferência. Criando novo ciclo.`
+      );
+      ticket = null;
+    }
+  }
+
+  if (ticket) {
+    if (isImported) {
+      await ticket.update({ unreadMessages });
       ticket = await ShowTicketService(ticket.id, companyId);
       ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
       return ticket;
-    } else {
-      // Verificar se ticket NÃO está aberto (open)
-      // Para qualquer outro status (closed, pending, campaign, lgpd, nps, etc.)
-      // aplicar lógica de janela de 24h
-      const isNotOpen = ticket.status !== "open";
-      
-      if (isNotOpen && !isFromMe) {
-        // Buscar último log de mudança de status para calcular tempo
-        const lastStatusLog = await LogTicket.findOne({
-          where: {
-            ticketId: ticket.id,
-            type: { [Op.in]: ["closed", "pending", "campaign"] }
-          },
-          order: [["createdAt", "DESC"]]
+    }
+
+    if (isCampaign) {
+      if (ticket.status !== "closed") {
+        await ticket.update({
+          userId: isNil(ticket.userId) ? userId : ticket.userId,
+          queueId: isNil(ticket.queueId) ? queueId : ticket.queueId,
+          unreadMessages
+        });
+        ticket = await ShowTicketService(ticket.id, companyId);
+        ticketEventBus.publishTicketUpdated(companyId, ticket.id, ticket.uuid, ticket);
+        return ticket;
+      }
+
+      logger.info(
+        `[FindOrCreateTicket] Ticket ${ticket.id} fechado não será reutilizado para campanha. Criando novo ciclo.`
+      );
+      ticket = null;
+    } else if (ticket.status === "closed") {
+      const closedTicketReuse = await resolveClosedTicketReuse({
+        ticket,
+        userId,
+        companyId
+      });
+
+      if (closedTicketReuse.shouldReuse) {
+        const oldStatus = ticket.status;
+        const reopenUserId = closedTicketReuse.reopenUserId;
+        (ticket as any)._skipHookEmit = true;
+
+        const Queue = (await import("../../models/Queue")).default;
+        const Chatbot = (await import("../../models/Chatbot")).default;
+
+        let shouldActivateBot = false;
+
+        if (ticket.queueId) {
+          const queue = await Queue.findByPk(ticket.queueId, {
+            include: [{ model: Chatbot, as: "chatbots", attributes: ["id"] }]
+          });
+
+          const hasChatbot = queue?.chatbots && queue.chatbots.length > 0;
+
+          const AIAgent = (await import("../../models/AIAgent")).default;
+          const aiAgent = await AIAgent.findOne({
+            where: {
+              companyId,
+              status: "active",
+              queueIds: { [Op.contains]: [ticket.queueId] }
+            }
+          });
+
+          shouldActivateBot = hasChatbot || !!aiAgent;
+
+          if (shouldActivateBot) {
+            logger.info(
+              `[FindOrCreateTicket] Fila ${ticket.queueId} tem bot configurado. Ticket ${ticket.id} será reaberto como 'bot'.`
+            );
+          }
+        }
+
+        await ticket.update({
+          status: shouldActivateBot ? "bot" : "open",
+          isBot: shouldActivateBot,
+          unreadMessages,
+          userId: shouldActivateBot ? null : reopenUserId
         });
 
-        let shouldReopen = false;
-        let reopenUserId = null;
-        
-        const lastActionUserId = lastStatusLog?.userId || ticket.userId;
-        const hoursSinceLastAction = lastStatusLog ? differenceInHours(new Date(), lastStatusLog.createdAt) : differenceInHours(new Date(), ticket.updatedAt);
-        
-        logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} com status '${ticket.status}' há ${hoursSinceLastAction}h. Verificando janela de 24h...`);
-        
-        // Dentro da janela de 24h
-        if (hoursSinceLastAction < 24) {
-          // Se userId foi passado (atendente específico aceitando/interagindo)
-          if (userId && userId !== lastActionUserId) {
-            // Usuário diferente → criar novo ticket
-            logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} em '${ticket.status}' há ${hoursSinceLastAction}h. Usuário ${userId} é diferente de ${lastActionUserId}. Criando NOVO ticket.`);
-            ticket = null;
-          } else {
-            // Mesmo usuário ou userId null (mensagem do WhatsApp) → reabre
-            shouldReopen = true;
-            reopenUserId = lastActionUserId || userId;
-            logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} em '${ticket.status}' há ${hoursSinceLastAction}h. Reabrindo dentro da janela de 24h para usuário ${reopenUserId}.`);
-          }
-        } else {
-          // Após 24h → criar novo ticket
-          logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} em '${ticket.status}' há ${hoursSinceLastAction}h (>24h). Criando NOVO ticket.`);
-          ticket = null;
-        }
-
-        if (shouldReopen) {
-          // Reabrir ticket existente dentro da janela de 24h
-          const oldStatus = ticket.status;
-          (ticket as any)._skipHookEmit = true;
-          
-          // NOVO: Verificar se fila tem bot configurado
-          const Queue = (await import("../../models/Queue")).default;
-          const Chatbot = (await import("../../models/Chatbot")).default;
-          
-          let shouldActivateBot = false;
-          let targetQueueId = ticket.queueId;
-          
-          if (ticket.queueId) {
-            const queue = await Queue.findByPk(ticket.queueId, {
-              include: [{ model: Chatbot, as: "chatbots", attributes: ["id"] }]
-            });
-            
-            const hasChatbot = queue?.chatbots && queue.chatbots.length > 0;
-            
-            // Verificar AIAgent
-            const AIAgent = (await import("../../models/AIAgent")).default;
-            const aiAgent = await AIAgent.findOne({
-              where: {
-                companyId,
-                status: "active",
-                queueIds: { [Op.contains]: [ticket.queueId] }
-              }
-            });
-            
-            shouldActivateBot = hasChatbot || !!aiAgent;
-            
-            if (shouldActivateBot) {
-              logger.info(`[FindOrCreateTicket] Fila ${ticket.queueId} tem bot configurado. Ticket será reaberto como 'bot'.`);
-            }
-          }
-          
-          await ticket.update({ 
-            status: shouldActivateBot ? "bot" : "open",
-            isBot: shouldActivateBot,
-            unreadMessages,
-            userId: shouldActivateBot ? null : reopenUserId
-          });
-          
-          ticket = await ShowTicketService(ticket.id, companyId);
-          ticketEventBus.publishStatusChanged(companyId, ticket.id, ticket.uuid, ticket, oldStatus, shouldActivateBot ? "bot" : "open");
-          await CreateLogTicketService({ ticketId: ticket.id, type: "reopen", userId: reopenUserId });
-          logger.info(`[FindOrCreateTicket] Ticket ${ticket.id} reaberto de '${oldStatus}' para '${shouldActivateBot ? "bot" : "open"}' dentro da janela de 24h.`);
-          return ticket;
-        }
-      } else {
-        // Atualizar mensagens não lidas normalmente
-        await ticket.update({ unreadMessages });
+        ticket = await ShowTicketService(ticket.id, companyId);
+        ticketEventBus.publishStatusChanged(
+          companyId,
+          ticket.id,
+          ticket.uuid,
+          ticket,
+          oldStatus,
+          shouldActivateBot ? "bot" : "open"
+        );
+        await CreateLogTicketService({
+          ticketId: ticket.id,
+          type: "reopen",
+          userId: reopenUserId
+        });
+        logger.info(
+          `[FindOrCreateTicket] Ticket ${ticket.id} reaberto por expediente do usuário (${closedTicketReuse.reason}).`
+        );
+        return ticket;
       }
+
+      logger.info(
+        `[FindOrCreateTicket] Ticket ${ticket.id} fechado não será reutilizado (${closedTicketReuse.reason}). Criando novo ciclo.`
+      );
+      ticket = null;
+    } else {
+      await ticket.update({ unreadMessages });
     }
 
     // Se ticket ainda existe (não foi fechado OU é campanha), processar normalmente

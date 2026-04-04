@@ -449,11 +449,8 @@ const ListContactsService = async ({
   }
 
   // FILTRO: Ocultar contatos de participantes de grupo sem ticket individual
-  // Contatos criados automaticamente pelo ensureParticipantContact têm:
-  // - isGroup=false
-  // - name = número (ex: "+5511999999999")
-  // - Sem ticket individual
-  // Esses contatos só devem aparecer na listagem se tiverem ticket individual
+  // Contatos auto-criados a partir de participantes de grupo têm isGroupParticipant=true.
+  // Eles só aparecem na listagem quando já possuem ticket individual.
   if (isGroup !== "true") {
     // Buscar IDs de contatos que têm pelo menos um ticket individual (não-grupo)
     const contactsWithTicket = await Ticket.findAll({
@@ -467,20 +464,14 @@ const ListContactsService = async ({
     const ticketContactIds = new Set(contactsWithTicket.map((t: any) => Number(t.contactId)).filter(Number.isInteger));
 
     // Buscar contatos que NÃO têm ticket individual e têm nome igual ao número
-    // (criados automaticamente por ensureParticipantContact)
+    // (criados automaticamente como participantes de grupo)
     const hiddenContacts = await Contact.findAll({
       attributes: ['id'],
       where: {
         companyId,
         isGroup: false,
+        isGroupParticipant: true,
         id: { [Op.notIn]: Array.from(ticketContactIds) },
-        // Nome é igual ao número ou começa com + (número formatado)
-        [Op.or]: [
-          where(col('name'), col('number')),
-          { name: { [Op.like]: '+%' } },
-          { name: '' },
-          literal('"name" IS NULL')
-        ]
       },
       raw: true
     });

@@ -17,7 +17,6 @@ import fs from "fs";
 import path from "path";
 import { Op } from "sequelize";
 import Contact from "../../models/Contact";
-import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
 import WhatsappLabel from "../../models/WhatsappLabel";
 import LidMapping from "../../models/LidMapping";
@@ -27,8 +26,9 @@ import { upsertLabel, addChatLabelAssociation, getChatLabelIds } from "../../lib
 import createOrUpdateBaileysService from "../BaileysServices/CreateOrUpdateBaileysService";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import CompaniesSettings from "../../models/CompaniesSettings";
+import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
 import { verifyMessage } from "./wbotMessageListener";
-import { emitTicketStatusChange, emitTicketUpdateSimple } from "../../helpers/emitTicketUpdate";
+import { emitTicketUpdateSimple } from "../../helpers/emitTicketUpdate";
 
 let i = 0;
 
@@ -84,21 +84,21 @@ const wbotMonitor = async (
 
               if (!contact) return;
 
-              const [ticket] = await Ticket.findOrCreate({
-                where: {
-                  contactId: contact.id,
-                  whatsappId: wbot.id,
-                  status: ["open", "pending", "nps", "lgpd"],
-                  companyId,
-                },
-                defaults: {
-                  companyId,
-                  contactId: contact.id,
-                  whatsappId: wbot.id,
-                  isGroup: contact.isGroup,
-                  status: "pending",
-                },
-              });
+              const ticket = await FindOrCreateTicketService(
+                contact,
+                whatsapp,
+                1,
+                companyId,
+                null,
+                null,
+                contact.isGroup ? contact : null,
+                whatsapp.channel || "whatsapp",
+                false,
+                false,
+                settings,
+                false,
+                false
+              );
 
               if (!ticket) return;
 
@@ -125,17 +125,7 @@ const wbotMonitor = async (
                 lastMessage: body,
               });
 
-              if (ticket.status === "closed") {
-                const oldStatus = ticket.status;
-                await ticket.update({
-                  status: "pending",
-                });
-                // Emitir evento de mudança de status (reabriu ticket)
-                await emitTicketStatusChange(ticket, companyId, oldStatus);
-              } else {
-                // Emitir update simples (apenas lastMessage mudou)
-                await emitTicketUpdateSimple(ticket, companyId);
-              }
+              await emitTicketUpdateSimple(ticket, companyId);
 
               return CreateMessageService({ messageData, companyId });
             }

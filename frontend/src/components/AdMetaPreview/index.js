@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { makeStyles } from "@material-ui/core/styles";
-import { Typography, Link as MuiLink } from "@material-ui/core";
+import { Typography } from "@material-ui/core";
 import { Language as LinkIcon } from "@material-ui/icons";
 import toastError from "../../errors/toastError";
 
@@ -59,18 +59,8 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const AdMetaPreview = ({ image, title, body, sourceUrl, messageUser }) => {
+const AdMetaPreview = ({ image, title, body, sourceUrl }) => {
   const classes = useStyles();
-  
-  console.log('[AdMetaPreview] Props recebidas:', {
-    image: image ? (image.startsWith('http') ? image.substring(0, 100) + '...' : image.substring(0, 50) + '...') : 'NULL',
-    title,
-    body: body ? body.substring(0, 50) + '...' : 'NULL',
-    sourceUrl,
-    hasImage: !!image
-  });
-  
-  useEffect(() => {}, [image, title, body, sourceUrl, messageUser]);
 
   const handleAdClick = async () => {
     try {
@@ -82,14 +72,21 @@ const AdMetaPreview = ({ image, title, body, sourceUrl, messageUser }) => {
     }
   };
 
-  const hasImage = image && image !== "no-image";
-  const displayUrl = sourceUrl ? new URL(sourceUrl).hostname : "";
+  const normalizedImage = typeof image === "string" ? image.trim() : image;
+  const hasImage = !!normalizedImage && normalizedImage !== "no-image";
+  const displayUrl = (() => {
+    try {
+      return sourceUrl ? new URL(sourceUrl.trim()).hostname : "";
+    } catch (error) {
+      return sourceUrl || "";
+    }
+  })();
 
   return (
     <div className={classes.linkPreviewContainer} onClick={handleAdClick}>
       {hasImage && (
         <img 
-          src={image} 
+          src={normalizedImage} 
           alt="Link preview" 
           className={classes.linkPreviewImage}
           onError={(e) => { e.target.style.display = 'none'; }}

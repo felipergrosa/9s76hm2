@@ -37,6 +37,7 @@ import { getIO } from "../../libs/socket";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import { safeNormalizePhoneNumber, isRealPhoneNumber, isLidEcho, MAX_PHONE_DIGITS } from "../../utils/phone";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
+import UpsertParticipantContactService from "../ContactServices/UpsertParticipantContactService";
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
 import { resolveMessageContact, resolveGroupContact } from "../ContactResolution/ContactResolverService";
 import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
@@ -52,7 +53,7 @@ import SendWhatsAppMessage from "./SendWhatsAppMessage";
 import sendFaceMessage from "../FacebookServices/sendFacebookMessage";
 import moment from "moment";
 import Queue from "../../models/Queue";
-import { generateLinkPreviewString } from "./LinkPreviewService";
+import { detectUrl, getLinkPreview, LinkPreviewData } from "./LinkPreviewService";
 
 // =============================================================================
 // LOCK POR JID - Evita condição de corrida na criação de contatos
@@ -277,36 +278,16 @@ const ensureParticipantContact = async (
 ): Promise<Contact | null> => {
   if (!participantJid) return null;
 
-  // Ignorar se for o próprio bot (fromMe)
-  if (participantJid.includes("@lid") && !pushName) return null;
-
   const isLid = participantJid.includes("@lid");
   const rawNumber = participantJid.split("@")[0].replace(/\D/g, "");
-
-  // Validar número - deve ter entre 10 e 13 dígitos
-  if (!isLid && (rawNumber.length < 10 || rawNumber.length > 13)) {
-    return null;
-  }
+  let resolvedNumber = !isLid && rawNumber.length >= 10 && rawNumber.length <= 13
+    ? rawNumber
+    : "";
+  let resolvedName = pushName;
+  let profilePicUrl: string | undefined;
 
   try {
-    // 1. Buscar contato existente por participant JID ou número
-    let contact = await Contact.findOne({
-      where: {
-        companyId,
-        isGroup: false,
-        [Op.or]: [
-          { remoteJid: participantJid },
-          { lidJid: participantJid },
-          ...(rawNumber.length >= 10 && rawNumber.length <= 13 ? [
-            { number: rawNumber },
-            { canonicalNumber: rawNumber }
-          ] : [])
-        ]
-      }
-    });
-
-    // 2. Se não encontrou e é LID, tentar resolver via signalRepository
-    if (!contact && isLid) {
+    if (isLid && !resolvedNumber) {
       try {
         const lidStore = (wbot as any).signalRepository?.lidMapping;
         if (lidStore?.getPNForLID) {
@@ -315,18 +296,8 @@ const ensureParticipantContact = async (
           if (resolvedPN) {
             const pnDigits = resolvedPN.replace(/\D/g, "");
             if (pnDigits.length >= 10 && pnDigits.length <= 13) {
-              contact = await Contact.findOne({
-                where: {
-                  companyId,
-                  isGroup: false,
-                  [Op.or]: [
-                    { number: pnDigits },
-                    { canonicalNumber: pnDigits }
-                  ]
-                }
-              });
+              resolvedNumber = pnDigits;
 
-              // Salvar mapeamento para futuro
               try {
                 const LidMapping = require("../../models/LidMapping").default;
                 await LidMapping.upsert({
@@ -344,8 +315,26 @@ const ensureParticipantContact = async (
       } catch (e) { }
     }
 
-    // 3. Buscar avatar via Baileys (profilePictureUrl)
-    let profilePicUrl: string | undefined;
+    if (!resolvedName) {
+      try {
+        const storeContact = (wbot as any).store?.contacts?.[participantJid];
+        if (storeContact) {
+          if (!resolvedNumber && storeContact.phoneNumber) {
+            const pnDigits = String(storeContact.phoneNumber).replace(/\D/g, "");
+            if (pnDigits.length >= 10 && pnDigits.length <= 13) {
+              resolvedNumber = pnDigits;
+            }
+          }
+
+          resolvedName =
+            storeContact.notify ||
+            storeContact.name ||
+            storeContact.verifiedName ||
+            resolvedName;
+        }
+      } catch (e) { }
+    }
+
     try {
       profilePicUrl = await Promise.race([
         wbot.profilePictureUrl(participantJid, "image"),
@@ -354,47 +343,32 @@ const ensureParticipantContact = async (
         )
       ]);
     } catch (e) {
-      // Avatar não disponível
+      try {
+        const storeContact = (wbot as any).store?.contacts?.[participantJid];
+        if (storeContact?.imgUrl && storeContact.imgUrl !== "changed" && storeContact.imgUrl.startsWith("http")) {
+          profilePicUrl = storeContact.imgUrl;
+        }
+      } catch (storeErr) { }
     }
 
-    // 4. Determinar nome do participante
-    const participantName = pushName || contact?.name || (rawNumber.length >= 10 ? `+${rawNumber}` : "Participante");
+    if (!resolvedNumber && !resolvedName && rawNumber.length >= 10 && rawNumber.length <= 13) {
+      resolvedNumber = rawNumber;
+    }
 
-    // 5. Criar ou atualizar contato
+    const contact = await UpsertParticipantContactService({
+      participantJid,
+      participantName: resolvedName,
+      participantNumber: resolvedNumber || rawNumber,
+      profilePicUrl,
+      companyId,
+      whatsappId
+    });
+
     if (contact) {
-      // Atualizar avatar se conseguiu buscar
-      if (profilePicUrl && profilePicUrl !== contact.profilePicUrl) {
-        await contact.update({
-          profilePicUrl,
-          ...(isLid && { lidJid: participantJid }),
-          ...(pushName && contact.name === contact.number && { name: pushName })
-        });
-        logger.info(`[ensureParticipantContact] Avatar atualizado para participante ${participantJid}`);
-      }
-      return contact;
+      logger.debug(`[ensureParticipantContact] Contato garantido para participante ${participantJid} - ID: ${contact.id}`);
     }
 
-    // Criar novo contato individual
-    if (rawNumber.length >= 10 && rawNumber.length <= 13) {
-      const { canonical } = safeNormalizePhoneNumber(rawNumber);
-      const newContact = await Contact.create({
-        name: participantName,
-        number: rawNumber,
-        canonicalNumber: canonical || rawNumber,
-        isGroup: false,
-        companyId,
-        remoteJid: isLid ? undefined : participantJid,
-        lidJid: isLid ? participantJid : undefined,
-        profilePicUrl,
-        whatsappId,
-        channels: ["whatsapp"]
-      });
-
-      logger.info(`[ensureParticipantContact] Contato criado para participante ${participantJid} - ID: ${newContact.id}`);
-      return newContact;
-    }
-
-    return null;
+    return contact;
   } catch (err) {
     logger.warn(`[ensureParticipantContact] Erro ao processar participante ${participantJid}: ${err}`);
     return null;
@@ -633,6 +607,31 @@ const msgLocation = (image, latitude, longitude) => {
   }
 };
 
+const buildMessageDataJson = (
+  msg: proto.IWebMessageInfo,
+  linkPreview?: (LinkPreviewData & { sourceUrl?: string; messageText?: string }) | null
+): string => {
+  if (!linkPreview) {
+    return JSON.stringify(msg);
+  }
+
+  try {
+    const payload = JSON.parse(JSON.stringify(msg));
+    payload.__linkPreview = {
+      title: linkPreview.title || "",
+      description: linkPreview.description || "",
+      image: linkPreview.image || "",
+      url: linkPreview.url || "",
+      sourceUrl: linkPreview.sourceUrl || linkPreview.url || "",
+      messageText: linkPreview.messageText || ""
+    };
+    return JSON.stringify(payload);
+  } catch (error) {
+    logger.warn(`[buildMessageDataJson] Falha ao anexar link preview ao payload: ${(error as Error)?.message}`);
+    return JSON.stringify(msg);
+  }
+};
+
 export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
   try {
     let type = getTypeMessage(msg);
@@ -698,50 +697,23 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
         const ctx: any = msg.message?.extendedTextMessage?.contextInfo;
         if (!ctx) {
           logger.info(`[adMetaPreview] contextInfo não existe para mensagem ${msg.key?.id}`);
-          return null;
+          return msg.message?.extendedTextMessage?.text || null;
         }
         
         logger.info(`[adMetaPreview] contextInfo encontrado: ${JSON.stringify({
           hasExternalAdReply: !!ctx.externalAdReply,
           hasMatchedText: !!ctx.matchedText,
           matchedText: ctx.matchedText,
+          hasJpegThumbnail: !!msg.message?.extendedTextMessage?.jpegThumbnail,
           thumbnailDirectPath: ctx.thumbnailDirectPath
         })}`);
-        
-        // externalAdReply (anúncios do Meta/Instagram)
-        if (ctx.externalAdReply) {
-          logger.info(`[adMetaPreview] Gerando preview de externalAdReply`);
-          return msgAdMetaPreview(
-            ctx.externalAdReply.thumbnail,
-            ctx.externalAdReply.title,
-            ctx.externalAdReply.body,
-            ctx.externalAdReply.sourceUrl,
-            msg.message?.extendedTextMessage?.text
-          );
-        }
-        
-        logger.info(`[adMetaPreview] Link detectado: ${ctx.matchedText}`);
-        logger.info(`[adMetaPreview] thumbnailDirectPath: ${ctx.thumbnailDirectPath || 'NULL'}`);
-        
-        let imageUrl = null;
-        if (ctx.thumbnailDirectPath) {
-          const thumbnailUrl = `https://web.whatsapp.net${ctx.thumbnailDirectPath}`;
-          imageUrl = thumbnailUrl;
-          logger.info(`[adMetaPreview] URL da imagem gerada: ${imageUrl}`);
-        } else {
-          logger.info(`[adMetaPreview] Nenhuma thumbnail disponível para este link`);
-        }
-        
-        const preview = msgAdMetaPreview(
-          imageUrl,
-          ctx.matchedText,
-          null,
-          ctx.matchedText,
-          msg.message?.extendedTextMessage?.text
+
+        return (
+          msg.message?.extendedTextMessage?.text ||
+          ctx.externalAdReply?.sourceUrl ||
+          ctx.matchedText ||
+          null
         );
-        
-        logger.info(`[adMetaPreview] Preview gerado: ${preview?.substring(0, 100)}...`);
-        return preview;
       })(),
       editedMessage:
         msg?.message?.protocolMessage?.editedMessage?.conversation ||
@@ -815,26 +787,6 @@ export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
     Sentry.captureException(error);
     console.log(error);
   }
-};
-
-const msgAdMetaPreview = (image, title, body, sourceUrl, messageUser) => {
-  if (image) {
-    // Se image já é uma URL (começa com http), usar direto
-    // Se não, converter de base64 para data URI
-    let imageUrl = image;
-    if (!image.startsWith('http') && !image.startsWith('data:')) {
-      var b64 = Buffer.from(image).toString("base64");
-      imageUrl = `data:image/png;base64, ${b64}`;
-    }
-    let data = `${imageUrl} | ${sourceUrl} | ${title} | ${body} | ${messageUser}`;
-    return data;
-  }
-  // Link preview sem imagem (apenas título e descrição)
-  if (title || sourceUrl) {
-    let data = `no-image | ${sourceUrl} | ${title} | ${body} | ${messageUser}`;
-    return data;
-  }
-  return null;
 };
 
 export const getQuotedMessage = (msg: proto.IWebMessageInfo) => {
@@ -2557,24 +2509,33 @@ export const verifyMessage = async (
   const quotedMsg = await verifyQuotedMessage(msg);
   let body = getBodyMessage(msg);
   const companyId = ticket.companyId;
+  let generatedLinkPreview: (LinkPreviewData & { sourceUrl?: string; messageText?: string }) | null = null;
   
-  // GERAR LINK PREVIEW se for mensagem de texto com link e não tiver preview do WhatsApp
+  // Enriquecer com preview apenas quando o WhatsApp não trouxe preview nativo.
   const msgType = getTypeMessage(msg);
   if (msgType === 'extendedTextMessage' && body) {
     const ctx: any = msg.message?.extendedTextMessage?.contextInfo;
-    // Só gerar preview se não houver contextInfo do WhatsApp
     if (!ctx?.externalAdReply && !ctx?.matchedText) {
-      logger.info(`[verifyMessage] Mensagem sem preview do WhatsApp, tentando gerar preview para: ${body.substring(0, 100)}`);
+      const detectedUrl = detectUrl(body);
+      logger.info(`[verifyMessage] Mensagem sem preview do WhatsApp, tentando enriquecer preview para: ${body.substring(0, 100)}`);
       try {
-        const linkPreview = await generateLinkPreviewString(body);
-        if (linkPreview) {
-          logger.info(`[verifyMessage] Link preview gerado com sucesso`);
-          body = linkPreview;
+        if (detectedUrl) {
+          const linkPreview = await getLinkPreview(detectedUrl);
+          if (linkPreview) {
+            generatedLinkPreview = {
+              ...linkPreview,
+              sourceUrl: linkPreview.url,
+              messageText: body
+            };
+            logger.info(`[verifyMessage] Link preview enriquecido com sucesso`);
+          } else {
+            logger.info(`[verifyMessage] Não foi possível enriquecer preview do link`);
+          }
         } else {
-          logger.info(`[verifyMessage] Não foi possível gerar link preview`);
+          logger.info(`[verifyMessage] Nenhuma URL detectada para enriquecer preview`);
         }
       } catch (previewError) {
-        logger.error(`[verifyMessage] Erro ao gerar link preview: ${previewError.message}`);
+        logger.error(`[verifyMessage] Erro ao enriquecer preview do link: ${previewError.message}`);
       }
     }
   }
@@ -2690,7 +2651,7 @@ export const verifyMessage = async (
     remoteJid: msg.key.remoteJid,
     participant: participantJid,
     senderName: senderName || undefined,
-    dataJson: JSON.stringify(msg),
+    dataJson: buildMessageDataJson(msg, generatedLinkPreview),
     ticketTrakingId: ticketTraking?.id,
     isPrivate,
     createdAt: new Date(

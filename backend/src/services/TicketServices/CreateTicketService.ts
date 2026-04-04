@@ -1,18 +1,14 @@
 import AppError from "../../errors/AppError";
+import { isNil } from "lodash";
 
-import { Op } from "sequelize";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
 import GetDefaultWhatsAppByUser from "../../helpers/GetDefaultWhatsAppByUser";
-import Ticket from "../../models/Ticket";
 import ShowContactService from "../ContactServices/ShowContactService";
-import { ticketEventBus } from "./TicketEventBus";
 import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
-import Queue from "../../models/Queue";
-import User from "../../models/User";
-import CheckContactOpenTickets from "../../helpers/CheckContactOpenTickets";
-
-import CreateLogTicketService from "./CreateLogTicketService";
+import CompaniesSettings from "../../models/CompaniesSettings";
+import FindOrCreateTicketService from "./FindOrCreateTicketService";
 import ShowTicketService from "./ShowTicketService";
+import Ticket from "../../models/Ticket";
 
 interface Request {
   contactId: number;
@@ -50,93 +46,45 @@ const CreateTicketService = async ({
   if (!defaultWhatsapp)
     defaultWhatsapp = await GetDefaultWhatsApp(whatsapp?.id, companyId, userIdNumber || undefined);
 
-  // console.log("defaultWhatsapp", defaultWhatsapp.id, defaultWhatsapp.channel)
-  await CheckContactOpenTickets(contactId, defaultWhatsapp.id, companyId, userIdNumber);
-
-  const { isGroup } = await ShowContactService(contactId, companyId);
-
-  // Para GRUPOS: reutilizar ticket existente (nunca criar duplicatas)
-  if (isGroup) {
-    const existingGroupTicket = await Ticket.findOne({
-      where: {
-        contactId,
-        companyId,
-        whatsappId: defaultWhatsapp.id,
-        isGroup: true
-      },
-      order: [["id", "DESC"]]
-    });
-
-    if (existingGroupTicket) {
-      // Se está fechado, reabrir como "group"
-      if (existingGroupTicket.status === "closed") {
-        await existingGroupTicket.update({
-          status: "group",
-          userId: userIdNumber
-        });
-      }
-      const reopened = await ShowTicketService(existingGroupTicket.id, companyId);
-      return reopened;
-    }
-  }
-
-  // Lógica inteligente de bot: prioriza chatbot, fallback para RAG, desabilita se não tiver nenhum
-  let shouldEnableBot = true;  // Default: bot ativo
-
-  if (queueId) {
-    const queue = await Queue.findByPk(queueId, {
-      include: [
-        {
-          association: 'chatbots',
-          required: false
-        }
-      ]
-    });
-
-    if (queue) {
-      const hasChatbot = queue.chatbots && queue.chatbots.length > 0;
-      const hasRAG = !!(queue.ragCollection && queue.ragCollection.trim());
-
-      // Ativar bot SE tiver chatbot OU RAG
-      shouldEnableBot = hasChatbot || hasRAG;
-
-      console.log(`[CreateTicket] Fila ${queue.name}: chatbot=${hasChatbot}, RAG=${hasRAG}, isBot=${shouldEnableBot}`);
-    }
-  }
-
-  let ticket = await Ticket.create({
-    contactId,
-    companyId,
-    whatsappId: defaultWhatsapp.id,
-    channel: defaultWhatsapp.channel,
-    isGroup,
-    userId: userIdNumber,
-    isBot: shouldEnableBot,  // Dinâmico baseado em chatbot OU RAG
-    queueId,
-    status: isGroup ? "group" : (status || "open"),
-    isActiveDemand: true
+  const contact = await ShowContactService(contactId, companyId);
+  const isGroup = contact.isGroup;
+  const settings = await CompaniesSettings.findOne({
+    where: { companyId }
   });
 
-  // await Ticket.update(
-  //   { companyId, queueId, userId, status: isGroup? "group": "open", isBot: true },
-  //   { where: { id } }
-  // );
+  let ticket = await FindOrCreateTicketService(
+    contact as any,
+    defaultWhatsapp as any,
+    0,
+    companyId,
+    queueId ?? null,
+    userIdNumber,
+    isGroup ? (contact as any) : null,
+    defaultWhatsapp.channel,
+    false,
+    false,
+    settings,
+    false,
+    false,
+    true
+  );
+
+  const nextStatus = isGroup ? "group" : (status || "open");
+  const nextQueueId = !isNil(queueId) ? queueId : ticket.queueId;
+  const nextUserId = nextStatus === "pending" ? null : userIdNumber;
+
+  await ticket.update({
+    status: nextStatus,
+    queueId: nextQueueId,
+    userId: nextUserId,
+    isActiveDemand: true
+  });
 
   ticket = await ShowTicketService(ticket.id, companyId);
 
   if (!ticket) {
     throw new AppError("ERR_CREATING_TICKET");
   }
-
-  // CQRS: Emitir evento via TicketEventBus
-  ticketEventBus.publishTicketCreated(companyId, ticket.id, ticket.uuid, ticket);
-
-  await CreateLogTicketService({
-    userId,
-    queueId,
-    ticketId: ticket.id,
-    type: "create"
-  });
 
   return ticket;
 };

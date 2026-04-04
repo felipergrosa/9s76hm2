@@ -87,6 +87,10 @@ class Contact extends Model<Contact> {
 
   @Default(false)
   @Column
+  isGroupParticipant: boolean;
+
+  @Default(false)
+  @Column
   disableBot: boolean;
 
   @Default(true)

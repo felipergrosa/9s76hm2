@@ -146,7 +146,8 @@ const createContact = async (
         false,
         settings,
         false,
-        false
+        false,
+        true
       );
       return ticket;
     });

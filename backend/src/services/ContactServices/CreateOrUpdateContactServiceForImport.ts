@@ -141,6 +141,7 @@ const CreateOrUpdateContactServiceForImport = async ({
     number,
     profilePicUrl,
     isGroup,
+    isGroupParticipant: false,
     email,
     commandBot,
     extraInfo,
@@ -194,6 +195,7 @@ const CreateOrUpdateContactServiceForImport = async ({
 
     await contact.update({
       ...updatePayload,
+      isGroupParticipant: false,
       ...(isGroup ? {} : { number, canonicalNumber: number })
     });
 

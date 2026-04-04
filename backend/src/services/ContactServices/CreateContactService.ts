@@ -106,6 +106,10 @@ const mergeContactData = (contact: Contact, canonicalNumber: string, payload: an
     updates.name = payload.name;
   }
 
+  if (contact.isGroupParticipant) {
+    updates.isGroupParticipant = false;
+  }
+
   updates.number = canonicalNumber;
   updates.canonicalNumber = canonicalNumber;
 
@@ -354,6 +358,7 @@ const CreateContactService = async ({
     clientCode?: string | null;
     channels?: string[];
     canonicalNumber: string;
+    isGroupParticipant: boolean;
   } = {
     name: name || '',
     number: canonical,
@@ -387,6 +392,7 @@ const CreateContactService = async ({
     clientCode: emptyToNull(clientCode),
     channels: channels || [],
     canonicalNumber: canonical,
+    isGroupParticipant: false,
   };
 
   if (existingContact) {

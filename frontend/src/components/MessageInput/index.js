@@ -1733,14 +1733,6 @@ const MessageInput = ({
     let messageBody = (signMessage || privateMessage) && !editingMessage
       ? `*${userName}:*\n${sendMessage}`
       : sendMessage;
-    
-    // Se houver preview de link, formatar mensagem com preview
-    if (linkPreview && !editingMessage) {
-      const previewString = `${linkPreview.image || 'no-image'} | ${linkPreview.url} | ${linkPreview.title} | ${linkPreview.description} | ${sendMessage}`;
-      messageBody = (signMessage || privateMessage)
-        ? `*${userName}:*\n${sendMessage}\n\n${previewString}`
-        : previewString;
-    }
 
     const message = {
       read: 1,
@@ -1754,6 +1746,16 @@ const MessageInput = ({
     // Optimistic UI: adicionar mensagem imediatamente (só para novas mensagens, não edições)
     let tempId = null;
     if (editingMessage === null && addOptimisticMessage) {
+      const optimisticLinkPreview = linkPreview && !editingMessage
+        ? JSON.stringify({
+          __linkPreview: {
+            ...linkPreview,
+            sourceUrl: linkPreview.url,
+            messageText: messageBody,
+          },
+        })
+        : null;
+
       tempId = addOptimisticMessage(ticketId, {
         body: messageBody,
         fromMe: true,
@@ -1763,6 +1765,7 @@ const MessageInput = ({
         isPrivate: privateMessage,
         contact: { name: user.name },
         ticketId: ticketId,
+        dataJson: optimisticLinkPreview,
       });
     }
 

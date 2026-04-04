@@ -565,7 +565,6 @@ export const index = async (req: AuthenticatedRequest, res: Response): Promise<R
   };
 
   const whatsappIds = parseIdArrayParam("whatsappIds");
-
   // Parse excludeTagsIds com tratamento especial para JSON stringificado
   let excludeTagsIds: number[] | undefined;
   const excludeTagsRaw = (req.query as any).excludeTags;

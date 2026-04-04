@@ -58,7 +58,7 @@ const ListMessagesService = async ({
     throw new AppError("ERR_NO_TICKET_FOUND", 404);
   }
 
-  logger.info(`[ListMessages] ticketId=${ticket.id} uuid=${ticket.uuid} isGroup=${ticket.isGroup} status=${ticket.status} pageNumber=${pageNumber} companyId=${companyId}`);
+  logger.debug(`[ListMessages] ticketId=${ticket.id} uuid=${ticket.uuid} isGroup=${ticket.isGroup} status=${ticket.status} pageNumber=${pageNumber} companyId=${companyId}`);
 
   const ticketsFilter: any[] | null = [];
 
@@ -77,7 +77,7 @@ const ListMessagesService = async ({
     });
     const ids = groupTicketIds.map(t => t.id);
     ticketsFilter.push(ids.length > 0 ? ids : [ticket.id]);
-    logger.info(`[ListMessages] GRUPO: contactId=${ticket.contactId} ticketIds=${JSON.stringify(ids)}`);
+    logger.debug(`[ListMessages] GRUPO: contactId=${ticket.contactId} ticketIds=${JSON.stringify(ids)}`);
   } else {
     // Histórico unificado: buscar mensagens de TODOS os tickets do mesmo contato
     // CORREÇÃO: Buscar TODOS os tickets do contato (não apenas anteriores)
@@ -103,28 +103,17 @@ const ListMessagesService = async ({
     } else {
       // Sem filtro de fila (admin, allTicket, ou histórico liberado)
       // REGRA DE UNIFICAÇÃO:
-      // 1. Tickets com mesmo whatsappId → unificar
-      // 2. Tickets órfãos (whatsappId=null) → unificar com ticket atual
-      // 3. Tickets com whatsappId diferente (ambos não-null) → NÃO unificar
-      
+      // 1. Mesmo contato + mesma conexão → unificar
+      // 2. Conexões diferentes → manter histórico separado
+      // 3. Tickets órfãos (whatsappId=null) só unificam entre si
+
       const whereClause: any = {
         companyId: ticket.companyId,
         contactId: ticket.contactId,
-        isGroup: ticket.isGroup
+        isGroup: ticket.isGroup,
+        whatsappId: ticket.whatsappId || null
       };
-      
-      // Se o ticket atual tem whatsappId definido, buscar:
-      // - Tickets com mesmo whatsappId
-      // - Tickets com whatsappId=null (órfãos históricos)
-      if (ticket.whatsappId) {
-        whereClause[Op.or] = [
-          { whatsappId: ticket.whatsappId },
-          { whatsappId: null }
-        ];
-      }
-      // Se o ticket atual é órfão (whatsappId=null), busca todos
-      // (para incluir tickets que podem ter sido migrados)
-      
+
       ticketIds = await Ticket.findAll({
         where: whereClause,
         attributes: ["id", "whatsappId"],
@@ -132,12 +121,12 @@ const ListMessagesService = async ({
         order: [['createdAt', 'DESC']]
       });
       
-      logger.info(`[ListMessages] UNIFICADO: contactId=${ticket.contactId} whatsappIdAtual=${ticket.whatsappId} ticketIds=${JSON.stringify(ticketIds.map(t => `${t.id}(${t.whatsappId})`))}`);
+      logger.debug(`[ListMessages] UNIFICADO: contactId=${ticket.contactId} whatsappIdAtual=${ticket.whatsappId} ticketIds=${JSON.stringify(ticketIds.map(t => `${t.id}(${t.whatsappId})`))}`);
     }
 
     if (ticketIds && ticketIds.length > 0) {
       ticketsFilter.push(ticketIds.map(t => t.id));
-      logger.info(`[ListMessages] UNIFICADO: contactId=${ticket.contactId} ticketIds=${JSON.stringify(ticketIds.map(t => t.id))}`);
+      logger.debug(`[ListMessages] UNIFICADO: contactId=${ticket.contactId} ticketIds=${JSON.stringify(ticketIds.map(t => t.id))}`);
     } else {
       // Fallback: usar apenas o ticket atual se não encontrou outros
       ticketsFilter.push([ticket.id]);
@@ -239,11 +228,11 @@ const ListMessagesService = async ({
     order: [["createdAt", "DESC"]]
   });
 
-  logger.info(`[ListMessages] ticketId=${ticket.id} isGroup=${ticket.isGroup} tickets=${JSON.stringify(tickets)} count=${count} messages=${messages.length} offset=${offset}`);
+  logger.debug(`[ListMessages] ticketId=${ticket.id} isGroup=${ticket.isGroup} tickets=${JSON.stringify(tickets)} count=${count} messages=${messages.length} offset=${offset}`);
 
   // DEBUG: Listar ticketIds únicos nas mensagens
   const uniqueTicketIds = [...new Set(messages.map((m: any) => m.ticketId))];
-  logger.info(`[ListMessages] DEBUG: ticketIds únicos nas mensagens: ${JSON.stringify(uniqueTicketIds)}`);
+  logger.debug(`[ListMessages] DEBUG: ticketIds únicos nas mensagens: ${JSON.stringify(uniqueTicketIds)}`);
 
   // CORREÇÃO: Para grupos, enriquecer mensagens com profilePicUrl do participante individual
   if (ticket.isGroup) {
@@ -313,7 +302,7 @@ const ListMessagesService = async ({
         }
       });
 
-      logger.info(`[ListMessages] Enriquecidas ${messages.filter((m: any) => !m.fromMe && m.participant && m.contact?.isGroup === false).length} mensagens de grupo com profilePicUrl dos participantes`);
+      logger.debug(`[ListMessages] Enriquecidas ${messages.filter((m: any) => !m.fromMe && m.participant && m.contact?.isGroup === false).length} mensagens de grupo com profilePicUrl dos participantes`);
     }
   }
 
@@ -334,7 +323,7 @@ const ListMessagesService = async ({
       });
 
       if (whatsapp?.status === "CONNECTED") {
-        logger.info(`[ListMessages] Histórico local esgotou, buscando mais do WhatsApp para ticketId=${ticket.id}`);
+        logger.debug(`[ListMessages] Histórico local esgotou, buscando mais do WhatsApp para ticketId=${ticket.id}`);
 
         const syncResult = await ImportContactHistoryService({
           ticketId: ticket.id,
@@ -344,7 +333,7 @@ const ListMessagesService = async ({
 
         // Se sincronizou novas mensagens, refazer a query
         if (syncResult.synced > 0) {
-          logger.info(`[ListMessages] Sincronizadas ${syncResult.synced} mensagens, refazendo query`);
+          logger.debug(`[ListMessages] Sincronizadas ${syncResult.synced} mensagens, refazendo query`);
 
           const { count: newCount, rows: newMessages } = await Message.findAndCountAll({
             where: { ticketId: tickets, companyId },

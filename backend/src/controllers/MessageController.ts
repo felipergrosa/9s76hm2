@@ -1015,7 +1015,8 @@ export const forwardMessage = async (req: Request, res: Response): Promise<Respo
       true,
       settings,
       false,
-      false
+      false,
+      true
     );
   });
 
@@ -1151,7 +1152,8 @@ export const forwardToExternalNumber = async (req: Request, res: Response): Prom
         true,
         settings,
         false,
-        false
+        false,
+        true
       );
     });
 

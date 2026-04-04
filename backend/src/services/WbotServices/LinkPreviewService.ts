@@ -1,7 +1,7 @@
 import axios from "axios";
 import logger from "../../utils/logger";
 
-interface LinkPreviewData {
+export interface LinkPreviewData {
   title: string;
   description: string;
   image: string;

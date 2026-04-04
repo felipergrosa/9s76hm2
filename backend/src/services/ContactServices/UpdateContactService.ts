@@ -160,7 +160,7 @@ const UpdateContactService = async ({
     attributes: [
       "id", "name", "number", "channels", "email", "companyId",
       "acceptAudioMessage", "active", "disableBot", "profilePicUrl", "remoteJid",
-      "urlPicture", "florder", "contactName",
+      "urlPicture", "florder", "contactName", "isGroupParticipant",
       // Adicionar novos campos aos atributos
       "cpfCnpj", "representativeCode", "city", "region", "instagram",
       "situation", "fantasyName", "foundationDate", "creditLimit", "segment", "dtUltCompra", "vlUltCompra", "clientCode"
@@ -325,7 +325,8 @@ const UpdateContactService = async ({
     florder: florder !== undefined ? !!florder : (contact as any).florder,
     bzEmpresa: bzEmpresa !== undefined ? emptyToNull(bzEmpresa) : (contact as any).bzEmpresa,
     clientCode: clientCode !== undefined ? emptyToNull(clientCode) : contact.clientCode,
-    originalNumber: targetNumber || contact.number
+    originalNumber: targetNumber || contact.number,
+    isGroupParticipant: false
   };
 
   // Apenas atualiza o userId se ele for fornecido

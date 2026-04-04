@@ -44,6 +44,7 @@ import { verifyMessage, verifyMediaMessage } from "./services/WbotServices/wbotM
 const CronJob = require('cron').CronJob;
 import CompaniesSettings from "./models/CompaniesSettings";
 import FindOrCreateTicketService from "./services/TicketServices/FindOrCreateTicketService";
+import CreateTicketService from "./services/TicketServices/CreateTicketService";
 import CreateLogTicketService from "./services/TicketServices/CreateLogTicketService";
 import formatBody from "./helpers/Mustache";
 import TicketTag from "./models/TicketTag";
@@ -461,26 +462,14 @@ async function handleSendScheduledMessage(job) {
     }
 
     if (schedule.openTicket === "enabled") {
-      let ticket = await Ticket.findOne({
-        where: {
-          contactId: schedule.contact.id,
-          companyId: schedule.companyId,
-          whatsappId: whatsapp.id,
-          status: ["open", "pending"]
-        }
-      })
-
-      if (!ticket)
-        ticket = await Ticket.create({
-          companyId: schedule.companyId,
-          contactId: schedule.contactId,
-          whatsappId: whatsapp.id,
-          queueId: schedule.queueId,
-          userId: schedule.ticketUserId,
-          status: schedule.statusTicket
-        })
-
-      ticket = await ShowTicketService(ticket.id, schedule.companyId);
+      const ticket = await CreateTicketService({
+        contactId: schedule.contactId,
+        status: schedule.statusTicket,
+        userId: schedule.ticketUserId || null,
+        companyId: schedule.companyId,
+        queueId: schedule.queueId,
+        whatsappId: String(whatsapp.id)
+      });
 
       const sentMessage = await SendMessage(whatsapp, {
         number: schedule.contact.number,

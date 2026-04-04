@@ -66,6 +66,197 @@ const safeTrim = (value) => {
   return String(value).trim();
 };
 
+const safeJsonParse = (value) => {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    return null;
+  }
+};
+
+const bytesToBase64 = (value) => {
+  if (!value) return "";
+
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  let bytes = null;
+
+  if (Array.isArray(value)) {
+    bytes = value;
+  } else if (Array.isArray(value?.data)) {
+    bytes = value.data;
+  } else if (typeof value === "object") {
+    const numericKeys = Object.keys(value)
+      .filter((key) => /^\d+$/.test(key))
+      .sort((a, b) => Number(a) - Number(b));
+
+    if (numericKeys.length > 0) {
+      bytes = numericKeys.map((key) => value[key]);
+    }
+  }
+
+  if (!bytes || bytes.length === 0) {
+    return "";
+  }
+
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.slice(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+};
+
+const normalizePreviewImage = (value, mimeType = "image/jpeg") => {
+  const normalized = bytesToBase64(value);
+
+  if (!normalized) return "";
+
+  if (normalized.startsWith("http") || normalized.startsWith("data:")) {
+    return normalized;
+  }
+
+  if (normalized === "no-image") {
+    return "";
+  }
+
+  return `data:${mimeType};base64,${normalized}`;
+};
+
+const extractExtendedTextMessage = (payload) => {
+  const message = payload?.message;
+
+  return (
+    message?.extendedTextMessage ||
+    message?.ephemeralMessage?.message?.extendedTextMessage ||
+    message?.viewOnceMessage?.message?.extendedTextMessage ||
+    message?.viewOnceMessageV2?.message?.extendedTextMessage ||
+    message?.viewOnceMessageV2Extension?.message?.extendedTextMessage ||
+    null
+  );
+};
+
+const parseLegacyLinkPreviewBody = (body) => {
+  if (typeof body !== "string" || !body.includes(" | ")) {
+    return null;
+  }
+
+  const parts = body.split(" | ");
+  if (parts.length < 4) {
+    return null;
+  }
+
+  const [rawImage, rawSourceUrl, rawTitle, rawDescription, ...rawMessageParts] = parts;
+  const image = safeTrim(rawImage);
+  const sourceUrl = safeTrim(rawSourceUrl);
+  const title = safeTrim(rawTitle);
+  const description = safeTrim(rawDescription);
+  const messageText = safeTrim(rawMessageParts.join(" | "));
+
+  const looksLikePreview =
+    image === "no-image" ||
+    image.startsWith("http") ||
+    image.startsWith("data:") ||
+    sourceUrl.startsWith("http");
+
+  if (!looksLikePreview) {
+    return null;
+  }
+
+  return {
+    image,
+    sourceUrl,
+    title,
+    description,
+    messageText,
+    isLegacyEncoded: true,
+  };
+};
+
+const extractLinkPreviewData = (message) => {
+  const payload = safeJsonParse(message?.dataJson);
+  const customPreview = payload?.__linkPreview;
+  const extendedTextMessage = extractExtendedTextMessage(payload);
+  const externalAdReply =
+    extendedTextMessage?.contextInfo?.externalAdReply ||
+    payload?.message?.listResponseMessage?.contextInfo?.externalAdReply ||
+    null;
+  const legacyPreview = parseLegacyLinkPreviewBody(message?.body);
+
+  const sourceUrl = safeTrim(
+    customPreview?.sourceUrl ||
+    customPreview?.url ||
+    externalAdReply?.sourceUrl ||
+    extendedTextMessage?.matchedText ||
+    legacyPreview?.sourceUrl
+  );
+
+  const title = safeTrim(
+    customPreview?.title ||
+    externalAdReply?.title ||
+    extendedTextMessage?.title ||
+    legacyPreview?.title
+  );
+
+  const description = safeTrim(
+    customPreview?.description ||
+    externalAdReply?.body ||
+    extendedTextMessage?.description ||
+    legacyPreview?.description
+  );
+
+  const image = normalizePreviewImage(
+    customPreview?.image ||
+    externalAdReply?.jpegThumbnail ||
+    externalAdReply?.thumbnail ||
+    extendedTextMessage?.jpegThumbnail ||
+    legacyPreview?.image
+  );
+
+  const messageText = safeTrim(
+    customPreview?.messageText ||
+    extendedTextMessage?.text ||
+    legacyPreview?.messageText
+  );
+
+  if (!sourceUrl && !title && !description && !image) {
+    return null;
+  }
+
+  return {
+    image,
+    sourceUrl,
+    title,
+    body: description,
+    messageText,
+    isLegacyEncoded: !!legacyPreview?.isLegacyEncoded,
+  };
+};
+
+const getRenderableMessageBody = (message, linkPreviewData) => {
+  if (!linkPreviewData) {
+    return message?.body || "";
+  }
+
+  if (linkPreviewData.isLegacyEncoded) {
+    return linkPreviewData.messageText || linkPreviewData.sourceUrl || "";
+  }
+
+  if (message?.mediaType === "adMetaPreview") {
+    return linkPreviewData.messageText || message?.body || linkPreviewData.sourceUrl || "";
+  }
+
+  return message?.body || linkPreviewData.messageText || "";
+};
+
 const useStyles = makeStyles((theme) => ({
   messagesListWrapper: {
     overflow: "hidden",
@@ -1752,7 +1943,7 @@ const MessagesList = ({
     }
   };
 
-  const checkMessageMedia = (message) => {
+  const checkMessageMedia = (message, linkPreviewData = null) => {
     if (message.mediaType === "locationMessage" && message.body.split('|').length >= 2) {
       let locationParts = message.body.split('|')
       let imageLocation = locationParts[0]
@@ -1781,19 +1972,15 @@ const MessagesList = ({
         }
       }
       return <VcardPreview contact={contact} numbers={obj[0]?.number} queueId={message?.ticket?.queueId} whatsappId={message?.ticket?.whatsappId} />
-    } else if (message.mediaType === "adMetaPreview") {
-      let [image, sourceUrl, title, body] = message.body.split('|');
-      let messageUser = "Olá! Tenho interesse e queria mais informações, por favor.";
-      
-      console.log('[MessagesList] Renderizando adMetaPreview:', {
-        image: image ? image.substring(0, 100) + '...' : 'NULL',
-        sourceUrl,
-        title,
-        body: body ? body.substring(0, 50) + '...' : 'NULL',
-        messageBody: message.body.substring(0, 200)
-      });
-      
-      return <AdMetaPreview image={image} sourceUrl={sourceUrl} title={title} body={body} messageUser={messageUser} />;
+    } else if (linkPreviewData) {
+      return (
+        <AdMetaPreview
+          image={linkPreviewData.image}
+          sourceUrl={linkPreviewData.sourceUrl}
+          title={linkPreviewData.title}
+          body={linkPreviewData.body}
+        />
+      );
     } else if (message.mediaType === "sticker" || message.mediaType === "gif") {
       // Stickers e GIFs - exibir como imagem animada sem fundo
       return (
@@ -1814,7 +2001,7 @@ const MessagesList = ({
       return (
         <LazyMedia threshold={0.01} rootMargin="100px">
           <div className={classes.mediaWrapper} style={{ cursor: "pointer" }} onClick={() => !message._pendingMedia && handleOpenMediaModal(message)}>
-            <ModalImageCors imageUrl={message.mediaUrl} />
+            <ModalImageCors imageUrl={message.mediaUrl} disableModal />
             {message._pendingMedia && (
               <div className={classes.mediaLoadingOverlay}>
                 <CircularProgress size={40} style={{ color: '#fff' }} />
@@ -2570,6 +2757,9 @@ const MessagesList = ({
       const isCampaignMessage = message.fromMe && message.ticket?.status === "campaign";
       // Verifica se é mensagem de template (mediaType = template ou flag isCampaign na mensagem)
       const isTemplateMessage = message.fromMe && (message.mediaType === "template" || message.isCampaign === true) && !isCampaignMessage;
+      const linkPreviewData = extractLinkPreviewData(message);
+      const renderableBody = getRenderableMessageBody(message, linkPreviewData);
+      const renderableBodyTrim = safeTrim(renderableBody || "");
       
       // Determina qual classe aplicar
       let bubbleClassName;
@@ -2693,7 +2883,7 @@ const MessagesList = ({
                   </div>
                 )}
 
-                {(message.mediaUrl || message.mediaType === "locationMessage" || message.mediaType === "contactMessage" || message.mediaType === "template" || message.mediaType === "adMetaPreview") && checkMessageMedia(message)}
+                {(message.mediaUrl || message.mediaType === "locationMessage" || message.mediaType === "contactMessage" || message.mediaType === "template" || linkPreviewData) && checkMessageMedia(message, linkPreviewData)}
 
                 <div className={clsx(
                   classes.textContentItem,
@@ -2702,12 +2892,12 @@ const MessagesList = ({
                     [classes.textContentItemCompact]: (
                       // PDFs: compacta quando body == nome do arquivo
                       (message.mediaType === "application" && /\.pdf($|\?)/i.test(message.mediaUrl || "") &&
-                        safeTrim(getFileNameFromUrl(message.mediaUrl) || "") === safeTrim(message.body || ""))
+                        safeTrim(getFileNameFromUrl(message.mediaUrl) || "") === renderableBodyTrim)
                       ||
                       // Imagens/Vídeos: compacta quando não há legenda ou quando body == nome do arquivo
                       ((message.mediaType === "image" || message.mediaType === "video") && (
-                        (safeTrim(message.body || "")) === "" ||
-                        (safeTrim(getFileNameFromUrl(message.mediaUrl) || "")) === safeTrim(message.body || "")
+                        renderableBodyTrim === "" ||
+                        (safeTrim(getFileNameFromUrl(message.mediaUrl) || "")) === renderableBodyTrim
                       ))
                     )
                   }
@@ -2721,60 +2911,60 @@ const MessagesList = ({
                     });
                     return message.quotedMsg && renderQuotedMessage(message);
                   })()}
-                  {message.mediaType !== "adMetaPreview" && (
-                    (() => {
-                      const bodyTrim = safeTrim(message.body || "");
+                  {(() => {
+                    const bodyTrim = renderableBodyTrim;
 
-                      // Stickers/GIFs: nunca exibir texto
-                      if (message.mediaType === "sticker" || message.mediaType === "gif") return null;
+                    // Stickers/GIFs: nunca exibir texto
+                    if (message.mediaType === "sticker" || message.mediaType === "gif") return null;
 
-                      // Remover texto de áudios COM player inline, arquivos, e mensagens especiais
-                      // Para áudio sem mediaUrl (history sync), NÃO filtrar - deixar cair no placeholder abaixo
-                      if (
-                        (message.mediaType === "audio" && message.mediaUrl) ||
-                        message.mediaType === "application" ||
-                        message.mediaType === "document" ||
-                        message.mediaType === "reactionMessage" ||
-                        message.mediaType === "locationMessage" ||
-                        message.mediaType === "contactMessage"
-                      ) {
-                        return null;
-                      }
-
-                      // Para imagens e vídeos: placeholder quando mídia não disponível
-                      if (message.mediaType === "image" || message.mediaType === "video") {
-                        if (!message.mediaUrl) {
-                          // Mídia do history sync sem arquivo baixado
-                          if (!bodyTrim) {
-                            const icon = message.mediaType === "image" ? "📷" : "🎥";
-                            const label = message.mediaType === "image" ? "Imagem" : "Vídeo";
-                            return <span style={{ color: '#999', fontStyle: 'italic', fontSize: 13 }}>{icon} {label} não disponível</span>;
-                          }
-                          // Se tem caption (body), exibir normalmente abaixo
-                        } else {
-                          const fileName = getFileNameFromUrl(message.mediaUrl) || "";
-                          // Se body é vazio OU é igual ao nome do arquivo, não exibir
-                          if (!bodyTrim || bodyTrim === safeTrim(fileName)) {
-                            return null;
-                          }
-                        }
-                      }
-
-                      // Áudio sem mediaUrl (history sync)
-                      if (message.mediaType === "audio" || message.mediaType === "audioMessage") {
-                        if (!message.mediaUrl && !bodyTrim) {
-                          return <span style={{ color: '#999', fontStyle: 'italic', fontSize: 13 }}>🎵 Áudio não disponível</span>;
-                        }
-                      }
-
-                      // Demais tipos (texto)
-                      return xmlRegex.test(message.body)
-                        ? <span>{formatXml(cleanButtonMarkers(message.body, message))}</span>
-                        : <MarkdownWrapper>{(lgpdDeleteMessage && message.isDeleted) ? "🚫 _Mensagem apagada_ " : cleanButtonMarkers(message.body, message)}</MarkdownWrapper>;
-
+                    // Remover texto de áudios COM player inline, arquivos, e mensagens especiais
+                    // Para áudio sem mediaUrl (history sync), NÃO filtrar - deixar cair no placeholder abaixo
+                    if (
+                      (message.mediaType === "audio" && message.mediaUrl) ||
+                      message.mediaType === "application" ||
+                      message.mediaType === "document" ||
+                      message.mediaType === "reactionMessage" ||
+                      message.mediaType === "locationMessage" ||
+                      message.mediaType === "contactMessage"
+                    ) {
                       return null;
-                    })()
-                  )}
+                    }
+
+                    // Para imagens e vídeos: placeholder quando mídia não disponível
+                    if (message.mediaType === "image" || message.mediaType === "video") {
+                      if (!message.mediaUrl) {
+                        // Mídia do history sync sem arquivo baixado
+                        if (!bodyTrim) {
+                          const icon = message.mediaType === "image" ? "📷" : "🎥";
+                          const label = message.mediaType === "image" ? "Imagem" : "Vídeo";
+                          return <span style={{ color: '#999', fontStyle: 'italic', fontSize: 13 }}>{icon} {label} não disponível</span>;
+                        }
+                        // Se tem caption (body), exibir normalmente abaixo
+                      } else {
+                        const fileName = getFileNameFromUrl(message.mediaUrl) || "";
+                        // Se body é vazio OU é igual ao nome do arquivo, não exibir
+                        if (!bodyTrim || bodyTrim === safeTrim(fileName)) {
+                          return null;
+                        }
+                      }
+                    }
+
+                    // Áudio sem mediaUrl (history sync)
+                    if (message.mediaType === "audio" || message.mediaType === "audioMessage") {
+                      if (!message.mediaUrl && !bodyTrim) {
+                        return <span style={{ color: '#999', fontStyle: 'italic', fontSize: 13 }}>🎵 Áudio não disponível</span>;
+                      }
+                    }
+
+                    if (!renderableBody) {
+                      return null;
+                    }
+
+                    // Demais tipos (texto)
+                    return xmlRegex.test(renderableBody)
+                      ? <span>{formatXml(cleanButtonMarkers(renderableBody, message))}</span>
+                      : <MarkdownWrapper>{(lgpdDeleteMessage && message.isDeleted) ? "🚫 _Mensagem apagada_ " : cleanButtonMarkers(renderableBody, message)}</MarkdownWrapper>;
+                  })()}
 
                   {/* Renderiza botões interativos se houver dataJson com botões */}
                   <ButtonsPreview message={message} />
@@ -2932,7 +3122,13 @@ const MessagesList = ({
         message={mediaModal.message}
         allMedia={getAllMediaFromConversation()}
         contactName={mediaModal.message?.contact?.name || mediaModal.message?.ticket?.contact?.name || ""}
-        contactAvatar={mediaModal.message?.contact?.profilePicUrl || mediaModal.message?.ticket?.contact?.profilePicUrl || ""}
+        contactAvatar={
+          mediaModal.message?.contact?.urlPicture ||
+          mediaModal.message?.contact?.profilePicUrl ||
+          mediaModal.message?.ticket?.contact?.urlPicture ||
+          mediaModal.message?.ticket?.contact?.profilePicUrl ||
+          ""
+        }
         mediaDate={mediaModal.message?.createdAt ? new Date(mediaModal.message.createdAt).toLocaleString('pt-BR') : ""}
       />
     </div>
