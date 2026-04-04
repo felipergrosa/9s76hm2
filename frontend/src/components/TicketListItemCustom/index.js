@@ -6,13 +6,8 @@ import { useHistory, useParams } from "react-router-dom";
 import {
     ListItem,
     Typography,
-    Divider,
     Badge,
-    Dialog,
-    DialogTitle,
-    DialogContent,
     IconButton,
-    Paper,
     Tooltip
 } from "@material-ui/core";
 import { makeStyles, useTheme } from "@material-ui/core/styles";
@@ -20,7 +15,6 @@ import { green, grey } from "@material-ui/core/colors";
 
 import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
-import MarkdownWrapper from "../MarkdownWrapper";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import toastError from "../../errors/toastError";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
@@ -38,8 +32,6 @@ import {
     RotateCcw as Replay,
     ArrowLeftRight as SwapHoriz,
     Eye as VisibilityIcon,
-    X as CloseIcon,
-    MessageSquare as MessageIcon,
 } from "lucide-react";
 
 import ConnectionIcon from "../ConnectionIcon";
@@ -49,6 +41,8 @@ import ShowTicketOpen from "../ShowTicketOpenModal";
 import { toast } from "react-toastify";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import { blue } from "@material-ui/core/colors";
+import ConversationPeekModal from "../ConversationPeekModal";
+import { canViewTicketConversation } from "../../utils/ticketPreviewPermissions";
 
 const useStyles = makeStyles((theme) => ({
     ticket: {
@@ -448,10 +442,6 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
     const [queueTicketOpen, setQueueTicketOpen] = useState("");
     const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
 
-    // New states for the ticket messages
-    const [ticketMessages, setTicketMessages] = useState([]);
-    const [loadingMessages, setLoadingMessages] = useState(false);
-
     const { ticketId } = useParams();
     const isMounted = useRef(true);
     const { setCurrentTicket } = useContext(TicketsContext);
@@ -474,6 +464,10 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
         (ticket.tags || []).find(tag => Number(tag.kanban) === 1),
         [ticket.tags]
     );
+
+    const canPreviewConversation = useMemo(() => {
+        return canViewTicketConversation({ ticket, user });
+    }, [ticket, user]);
 
 
 
@@ -690,28 +684,10 @@ const handleCloseTicket = async (id) => {
         setCurrentTicket({ id, uuid, code });
     };
 
-    // Function to fetch messages for the ticket
-    const fetchTicketMessages = async (ticketId) => {
-        if (!ticketId) return;
-
-        setLoadingMessages(true);
-        try {
-            const { data } = await api.get(`/messages/${ticketId}`);
-            if (isMounted.current) {
-                setTicketMessages(data.messages);
-            }
-        } catch (err) {
-            toastError(err);
-        } finally {
-            setLoadingMessages(false);
-        }
-    };
-
-    // Handle opening the message dialog
     const handleOpenMessageDialog = (e) => {
         e.stopPropagation();
+        if (!canPreviewConversation) return;
         setOpenTicketMessageDialog(true);
-        fetchTicketMessages(ticket.id);
     };
 
     return (
@@ -741,84 +717,11 @@ const handleCloseTicket = async (id) => {
                 />
             )}
 
-            {/* Improved Message Dialog */}
-            <Dialog
+            <ConversationPeekModal
                 open={openTicketMessageDialog}
                 onClose={() => setOpenTicketMessageDialog(false)}
-                maxWidth="sm"
-                fullWidth
-            >
-                <DialogTitle disableTypography className={classes.dialogTitle}>
-                    <Typography variant="h6">
-                        Espiando a conversa
-                    </Typography>
-                    <IconButton
-                        aria-label="close"
-                        className={classes.closeButton}
-                        onClick={() => setOpenTicketMessageDialog(false)}
-                    >
-                        <CloseIcon />
-                    </IconButton>
-                </DialogTitle>
-
-                <div className={classes.messagesHeader}>
-                    <ContactAvatar
-                        contact={ticket?.contact}
-                        className={classes.messageAvatar}
-                    />
-                    <div>
-                        <Typography variant="subtitle1">
-                            {ticket.contact?.name}
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary">
-                            {ticket.whatsapp?.name || ticket.channel}
-                        </Typography>
-                    </div>
-                </div>
-
-                <Divider />
-
-                <DialogContent className={classes.messagesContainer}>
-                    {loadingMessages ? (
-                        <div className={classes.loadingMessages}>
-                            <Typography>Carregando mensagens...</Typography>
-                        </div>
-                    ) : ticketMessages.length === 0 ? (
-                        <div className={classes.emptyMessages}>
-                            <MessageIcon fontSize="large" />
-                            <Typography variant="body1">
-                                {i18n.t("ticketsList.noMessages")}
-                            </Typography>
-                        </div>
-                    ) : (
-                        ticketMessages.map((message) => (
-                            <Paper
-                                key={message.id}
-                                className={clsx(
-                                    classes.messageItem,
-                                    message.fromMe ? classes.fromMe : classes.fromThem
-                                )}
-                                elevation={0}
-                            >
-                                <Typography className={classes.messageText}>
-                                    {message.body.includes('data:image/png;base64') ? (
-                                        <MarkdownWrapper>Localização</MarkdownWrapper>
-                                    ) : message.body.includes('BEGIN:VCARD') ? (
-                                        <MarkdownWrapper>Contato</MarkdownWrapper>
-                                    ) : message.body.includes('fb.me') ? (
-                                        <MarkdownWrapper>Clique de Anúncio</MarkdownWrapper>
-                                    ) : (
-                                        <MarkdownWrapper>{message.body}</MarkdownWrapper>
-                                    )}
-                                </Typography>
-                                <Typography variant="caption" className={classes.messageTime}>
-                                    {format(parseISO(message.createdAt), "HH:mm")}
-                                </Typography>
-                            </Paper>
-                        ))
-                    )}
-                </DialogContent>
-            </Dialog>
+                ticket={ticket}
+            />
 
             <ListItem
                 button
@@ -1041,7 +944,7 @@ const handleCloseTicket = async (id) => {
                                 </Tooltip>
                             )}
 
-                            {!ticket.isGroup && (ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
+                            {!ticket.isGroup && canPreviewConversation && (ticket.status === "open" || ticket.status === "group" || ticket.status === "bot" || ticket.status === "campaign") && (
                                 <Tooltip title="Espiar Conversa">
                                     <IconButton
                                         size="small"

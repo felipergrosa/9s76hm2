@@ -1,17 +1,15 @@
-import React, { useState, useMemo, useEffect, useContext, useRef } from "react";
+import React, { useState, useMemo, useEffect, useContext } from "react";
 import { makeStyles } from "@material-ui/core/styles";
-import clsx from "clsx";
-import { Typography, Tooltip, Card, CardContent, IconButton, Menu, MenuItem, ListItemText, Avatar, Dialog, DialogTitle, DialogContent, Divider, Paper } from "@material-ui/core";
-import { Facebook, Instagram, WhatsApp, Close as CloseIcon, MoreVert as MoreVertIcon, ChatBubbleOutline, AttachFile, EventAvailable, Visibility } from "@material-ui/icons";
+import { Typography, Tooltip, Card, CardContent, IconButton, Menu, MenuItem, ListItemText } from "@material-ui/core";
+import { Facebook, Instagram, WhatsApp, Close as CloseIcon, MoreVert as MoreVertIcon, AttachFile, EventAvailable } from "@material-ui/icons";
 import ContactAvatar from "../../components/ContactAvatar";
 import { i18n } from "../../translate/i18n";
-import { format, isSameDay, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { grey, blue } from "@material-ui/core/colors";
-import api from "../../services/api";
-import toastError from "../../errors/toastError";
-import MarkdownWrapper from "../../components/MarkdownWrapper";
-import { Eye as VisibilityIcon, X as CloseIconLucide } from "lucide-react";
+import { Eye as VisibilityIcon } from "lucide-react";
+import ConversationPeekModal from "../../components/ConversationPeekModal";
+import { canViewTicketConversation } from "../../utils/ticketPreviewPermissions";
 
 const useStyles = makeStyles(theme => ({
   ticketCard: {
@@ -292,15 +290,11 @@ const getPriorityFromUnread = (unread) => {
 export default function KanbanCard({ ticket, onClick, allTags = [], onMoveRequest }) {
   const classes = useStyles();
   const { user } = useContext(AuthContext);
-  const isMounted = useRef(true);
   const [menuEl, setMenuEl] = useState(null);
   const [moveEl, setMoveEl] = useState(null);
   const [prioritySignal, setPrioritySignal] = useState(0);
 
-  // Estados para modal de espiar conversa
   const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
-  const [ticketMessages, setTicketMessages] = useState([]);
-  const [loadingMessages, setLoadingMessages] = useState(false);
   const [selectedTicketForView, setSelectedTicketForView] = useState(null);
 
   useEffect(() => {
@@ -364,29 +358,16 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
     ? ticket.user.name.split(" ").map(p => p[0]).slice(0, 2).join("")
     : "?";
 
-  // Função para buscar mensagens do ticket
-  const fetchTicketMessages = async (ticketId) => {
-    if (!ticketId) return;
-
-    setLoadingMessages(true);
-    try {
-      const { data } = await api.get(`/messages/${ticketId}`);
-      if (isMounted.current) {
-        setTicketMessages(data.messages);
-      }
-    } catch (err) {
-      toastError(err);
-    } finally {
-      setLoadingMessages(false);
-    }
-  };
+  const canPreviewConversation = useMemo(() => {
+    return canViewTicketConversation({ ticket, user });
+  }, [ticket, user]);
 
   // Handler para abrir o modal de mensagens
   const handleOpenMessageDialog = (e) => {
     e.stopPropagation();
+    if (!canPreviewConversation) return;
     setSelectedTicketForView(ticket);
     setOpenTicketMessageDialog(true);
-    fetchTicketMessages(ticket.id);
   };
 
   return (
@@ -416,15 +397,17 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
       </Tooltip>
 
       {/* Ícone de espiar conversa */}
-      <Tooltip title="Espiar Conversa">
-        <IconButton 
-          className={classes.viewButton} 
-          size="small" 
-          onClick={handleOpenMessageDialog}
-        >
-          <VisibilityIcon size={20} />
-        </IconButton>
-      </Tooltip>
+      {canPreviewConversation && (
+        <Tooltip title="Espiar Conversa">
+          <IconButton 
+            className={classes.viewButton} 
+            size="small" 
+            onClick={handleOpenMessageDialog}
+          >
+            <VisibilityIcon size={20} />
+          </IconButton>
+        </Tooltip>
+      )}
 
       <div style={{ paddingTop: 20, cursor: 'pointer' }}>
         <CardContent className={classes.ticketContent}>
@@ -585,84 +568,11 @@ export default function KanbanCard({ ticket, onClick, allTags = [], onMoveReques
         )}
       </Menu>
 
-      {/* Modal de espiar conversa */}
-      <Dialog
+      <ConversationPeekModal
         open={openTicketMessageDialog}
         onClose={() => setOpenTicketMessageDialog(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle disableTypography className={classes.dialogTitle}>
-          <Typography variant="h6">
-            Espiando a conversa
-          </Typography>
-          <IconButton
-            aria-label="close"
-            className={classes.closeButton}
-            onClick={() => setOpenTicketMessageDialog(false)}
-          >
-            <CloseIconLucide size={24} />
-          </IconButton>
-        </DialogTitle>
-
-        <div className={classes.messagesHeader}>
-          <ContactAvatar
-            contact={selectedTicketForView?.contact}
-            className={classes.messageAvatar}
-          />
-          <div>
-            <Typography variant="subtitle1">
-              {selectedTicketForView?.contact?.name}
-            </Typography>
-            <Typography variant="caption" color="textSecondary">
-              {selectedTicketForView?.whatsapp?.name || selectedTicketForView?.channel}
-            </Typography>
-          </div>
-        </div>
-
-        <Divider />
-
-        <DialogContent className={classes.messagesContainer}>
-          {loadingMessages ? (
-            <div className={classes.loadingMessages}>
-              <Typography>Carregando mensagens...</Typography>
-            </div>
-          ) : ticketMessages.length === 0 ? (
-            <div className={classes.emptyMessages}>
-              <Visibility fontSize="large" />
-              <Typography variant="body1">
-                {i18n.t("ticketsList.noMessages")}
-              </Typography>
-            </div>
-          ) : (
-            ticketMessages.map((message) => (
-              <Paper
-                key={message.id}
-                className={clsx(
-                  classes.messageItem,
-                  message.fromMe ? classes.fromMe : classes.fromThem
-                )}
-                elevation={0}
-              >
-                <Typography className={classes.messageText}>
-                  {message.body?.includes('data:image/png;base64') ? (
-                    <MarkdownWrapper>Localização</MarkdownWrapper>
-                  ) : message.body?.includes('BEGIN:VCARD') ? (
-                    <MarkdownWrapper>Contato</MarkdownWrapper>
-                  ) : message.body?.includes('fb.me') ? (
-                    <MarkdownWrapper>Clique de Anúncio</MarkdownWrapper>
-                  ) : (
-                    <MarkdownWrapper>{message.body}</MarkdownWrapper>
-                  )}
-                </Typography>
-                <Typography variant="caption" className={classes.messageTime}>
-                  {format(parseISO(message.createdAt), "HH:mm")}
-                </Typography>
-              </Paper>
-            ))
-          )}
-        </DialogContent>
-      </Dialog>
+        ticket={selectedTicketForView}
+      />
     </Card>
   );
 }

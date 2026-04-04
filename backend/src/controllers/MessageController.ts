@@ -51,6 +51,7 @@ type IndexQuery = {
   pageNumber: string;
   ticketTrakingId: string;
   selectedQueues?: string;
+  markAsRead?: string;
 };
 
 interface TokenPayload {
@@ -731,7 +732,11 @@ export const transcribeAudioMessage = async (req: Request, res: Response): Promi
 // Listar mensagens
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
-  const { pageNumber, selectedQueues: queueIdsStringified } = req.query as IndexQuery;
+  const {
+    pageNumber,
+    selectedQueues: queueIdsStringified,
+    markAsRead
+  } = req.query as IndexQuery;
   const { companyId } = req.user;
   let queues: number[] = [];
 
@@ -755,7 +760,9 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     user: user!,
   });
 
-  if (ticket.channel === "whatsapp" && ticket.whatsappId) {
+  const shouldMarkAsRead = markAsRead !== "false";
+
+  if (shouldMarkAsRead && ticket.channel === "whatsapp" && ticket.whatsappId) {
     await SetTicketMessagesAsRead(ticket);
   }
 

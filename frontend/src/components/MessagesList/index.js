@@ -1184,7 +1184,11 @@ const MessagesList = ({
   onDrop,
   whatsappId,
   queueId,
-  channel
+  channel,
+  ticketIdOverride,
+  ticketDataOverride = null,
+  readOnly = false,
+  containerId = "messagesList",
 }) => {
   const classes = useStyles();
   const [messagesList, dispatch] = useReducer(reducer, []);
@@ -1200,9 +1204,10 @@ const MessagesList = ({
   const { setReplyingMessage } = useContext(ReplyMessageContext);
   const [anchorEl, setAnchorEl] = useState(null);
   const messageOptionsMenuOpen = Boolean(anchorEl);
-  const { ticketId } = useParams();
+  const { ticketId: routeTicketId } = useParams();
+  const activeTicketId = ticketIdOverride || routeTicketId;
 
-  const currentTicketId = useRef(ticketId);
+  const currentTicketId = useRef(activeTicketId);
   const currentTicketNumericId = useRef(null); // NOVO: Armazena o ID numérico real do ticket
   const { getAll } = useCompanySettings();
   const [dragActive, setDragActive] = useState(false);
@@ -1229,6 +1234,7 @@ const MessagesList = ({
     mediaType: "image",
     message: null
   });
+  const messagesListRef = useRef(null);
 
   // Função para obter todas as mídias (imagens e vídeos) da conversa
   const getAllMediaFromConversation = useCallback(() => {
@@ -1508,10 +1514,10 @@ const MessagesList = ({
     dispatch({ type: "RESET" });
     setPageNumber(1);
 
-    currentTicketId.current = ticketId;
+    currentTicketId.current = activeTicketId;
     setUiReady(false);
     initialLoadingRef.current = true; // Reset ao trocar de ticket
-  }, [ticketId, selectedQueuesMessage]);
+  }, [activeTicketId, selectedQueuesMessage]);
 
   const [uiReady, setUiReady] = useState(false);
   const composerReadyRef = useRef(false);
@@ -1521,17 +1527,21 @@ const MessagesList = ({
     setLoading(true);
     
     const fetchMessages = async () => {
-      if (!ticketId || ticketId === "undefined") {
+      if (!activeTicketId || activeTicketId === "undefined") {
         history.push("/tickets");
         return;
       }
-      if (isNil(ticketId)) return;
+      if (isNil(activeTicketId)) return;
       try {
-        const { data } = await api.get("/messages/" + ticketId, {
-          params: { pageNumber, selectedQueues: JSON.stringify(selectedQueuesMessage) },
+        const { data } = await api.get("/messages/" + activeTicketId, {
+          params: {
+            pageNumber,
+            selectedQueues: JSON.stringify(selectedQueuesMessage),
+            markAsRead: readOnly ? "false" : "true",
+          },
         });
 
-        if (currentTicketId.current === ticketId) {
+        if (currentTicketId.current === activeTicketId) {
           dispatch({ type: "LOAD_MESSAGES", payload: data.messages });
           setHasMore(data.hasMore);
           setLoading(false);
@@ -1565,7 +1575,9 @@ const MessagesList = ({
           const doReady = () => {
             scrollToBottom();
             setUiReady(true);
-            try { window.dispatchEvent(new Event('messages-ready')); } catch { }
+            if (!readOnly) {
+              try { window.dispatchEvent(new Event('messages-ready')); } catch { }
+            }
           };
           if (composerReadyRef.current) {
             setTimeout(doReady, 30);
@@ -1582,7 +1594,7 @@ const MessagesList = ({
     };
 
     fetchMessages();
-  }, [pageNumber, ticketId, selectedQueuesMessage, refreshCounter]);
+  }, [pageNumber, activeTicketId, selectedQueuesMessage, refreshCounter, readOnly]);
 
   // Listener para evento de refresh de mensagens (importação de histórico)
   useEffect(() => {
@@ -1597,10 +1609,12 @@ const MessagesList = ({
     return () => {
       window.removeEventListener('refreshMessages', handleRefreshMessages);
     };
-  }, [ticketId, selectedQueuesMessage]);
+  }, [activeTicketId, selectedQueuesMessage]);
 
   // Garante que, quando o composer sinalizar que está pronto, a lista role ao final
   useEffect(() => {
+    if (readOnly) return undefined;
+
     const onComposerReady = () => {
       composerReadyRef.current = true;
       setTimeout(() => {
@@ -1611,15 +1625,15 @@ const MessagesList = ({
     };
     window.addEventListener('composer-ready', onComposerReady);
     return () => window.removeEventListener('composer-ready', onComposerReady);
-  }, []);
+  }, [readOnly]);
 
   useEffect(() => {
-    if (!ticketId || ticketId === "undefined") {
+    if (!activeTicketId || activeTicketId === "undefined") {
       return;
     }
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    const normalizedTicketId = safeTrim((ticketId ?? "").toString());
+    const normalizedTicketId = safeTrim((activeTicketId ?? "").toString());
     const ticketUuidFromUrl = uuidRegex.test(normalizedTicketId) ? normalizedTicketId : null;
     // Se a rota já estiver em UUID, usamos isso como sala atual imediatamente
     if (ticketUuidFromUrl && !currentRoomIdRef.current) {
@@ -1662,9 +1676,9 @@ const MessagesList = ({
         // 1. Se UUID bate, aceitar
         if (hasUuid && currentUuid && String(evtUuid) === String(currentUuid)) {
           shouldHandle = true;
-        } 
+        }
         // 2. Se ticketId numérico bate com o ticketId da URL (quando rota é numérica)
-        else if (!urlIsUuid && evtTicketId && String(evtTicketId) === String(ticketId)) {
+        else if (!urlIsUuid && evtTicketId && String(evtTicketId) === String(activeTicketId)) {
           shouldHandle = true;
         }
         // 3. Se a rota está em UUID, comparar ticketId numérico real
@@ -1686,7 +1700,7 @@ const MessagesList = ({
           // Last Event ID: guardar ID da última mensagem recebida
           if (data.message?.id) {
             try {
-              localStorage.setItem(`lastMessageId-${ticketId}`, String(data.message.id));
+              localStorage.setItem(`lastMessageId-${activeTicketId}`, String(data.message.id));
             } catch (e) { }
           }
         }
@@ -1716,10 +1730,10 @@ const MessagesList = ({
     // Last Event ID: recuperar mensagens perdidas ao reconectar
     const recoverMissedMessages = () => {
       try {
-        const lastMessageId = localStorage.getItem(`lastMessageId-${ticketId}`);
+        const lastMessageId = localStorage.getItem(`lastMessageId-${activeTicketId}`);
         if (lastMessageId && socket?.connected) {
           socket.emit("recoverMissedMessages", {
-            ticketId: ticketId,
+            ticketId: activeTicketId,
             lastMessageId: parseInt(lastMessageId, 10)
           }, (result) => {
             if (result?.success && result?.messages?.length > 0) {
@@ -1728,7 +1742,7 @@ const MessagesList = ({
               // Atualizar último ID
               const lastMsg = result.messages[result.messages.length - 1];
               if (lastMsg?.id) {
-                localStorage.setItem(`lastMessageId-${ticketId}`, String(lastMsg.id));
+                localStorage.setItem(`lastMessageId-${activeTicketId}`, String(lastMsg.id));
               }
             }
           });
@@ -1778,7 +1792,7 @@ const MessagesList = ({
       socket.off("reconnect_attempt");
       socket.off("connect_error");
     };
-  }, [ticketId, socket, user?.companyId]);
+  }, [activeTicketId, socket, user?.companyId]);
 
   // Phase 2 removida: o SocketWorker já faz rejoin automático no connect
   // e o Ticket/index.js é o dono principal da sala.
@@ -1789,7 +1803,7 @@ const MessagesList = ({
   const consecutiveFailsRef = useRef(0);
 
   useEffect(() => {
-    if (!ticketId || ticketId === "undefined") return;
+    if (!activeTicketId || activeTicketId === "undefined") return;
 
     const pollNewMessages = async () => {
       try {
@@ -1803,8 +1817,12 @@ const MessagesList = ({
 
         const lastKnownId = lastMessageIdRef.current || messagesList[messagesList.length - 1]?.id;
 
-        const { data } = await api.get(`/messages/${ticketId}`, {
-          params: { pageNumber: 1, selectedQueues: JSON.stringify(selectedQueuesMessage) }
+        const { data } = await api.get(`/messages/${activeTicketId}`, {
+          params: {
+            pageNumber: 1,
+            selectedQueues: JSON.stringify(selectedQueuesMessage),
+            markAsRead: readOnly ? "false" : "true",
+          }
         });
 
         if (data?.messages?.length) {
@@ -1822,7 +1840,7 @@ const MessagesList = ({
             // Guardar último ID para Last Event ID pattern
             const lastMsg = newMessages[newMessages.length - 1];
             if (lastMsg?.id) {
-              localStorage.setItem(`lastMessageId-${ticketId}`, String(lastMsg.id));
+              localStorage.setItem(`lastMessageId-${activeTicketId}`, String(lastMsg.id));
             }
           }
 
@@ -1881,7 +1899,7 @@ const MessagesList = ({
       socket?.off("connect", onConnect);
       socket?.off("disconnect", onDisconnect);
     };
-  }, [ticketId, selectedQueuesMessage, messagesList, socket]);
+  }, [activeTicketId, selectedQueuesMessage, messagesList, socket, readOnly]);
 
   const loadMore = () => {
     if (loadingMore) return;
@@ -1902,7 +1920,9 @@ const MessagesList = ({
     const { scrollTop } = e.currentTarget;
 
     if (scrollTop === 0) {
-      document.getElementById("messagesList").scrollTop = 1;
+      if (messagesListRef.current) {
+        messagesListRef.current.scrollTop = 1;
+      }
     }
 
     if (loading) {
@@ -1915,6 +1935,7 @@ const MessagesList = ({
   };
 
   const handleOpenMessageOptionsMenu = (e, message) => {
+    if (readOnly) return;
     setAnchorEl(e.currentTarget);
     setSelectedMessage(message);
   };
@@ -1924,6 +1945,7 @@ const MessagesList = ({
   };
 
   const hanldeReplyMessage = (e, message) => {
+    if (readOnly) return;
     setAnchorEl(null);
     setReplyingMessage(message);
   };
@@ -2257,7 +2279,7 @@ const MessagesList = ({
     });
 
     // Adiciona mensagens otimísticas ao final (ainda não confirmadas pelo servidor)
-    const optimisticMsgs = getOptimisticMessages ? getOptimisticMessages(ticketId) : [];
+    const optimisticMsgs = getOptimisticMessages ? getOptimisticMessages(activeTicketId) : [];
     if (optimisticMsgs && optimisticMsgs.length > 0) {
       const existingIds = new Set(filtered.map(m => m.id));
       optimisticMsgs.forEach(optMsg => {
@@ -2274,7 +2296,7 @@ const MessagesList = ({
     filtered.sort((a, b) => a._createdAtTime - b._createdAtTime);
 
     return { filteredMessages: filtered, messageReactions: reactions };
-  }, [messagesList, ticketId, getOptimisticMessages]);
+  }, [messagesList, activeTicketId, getOptimisticMessages]);
 
   const renderMessageAck = (message) => {
     // Mensagem com falha de envio
@@ -2343,22 +2365,31 @@ const MessagesList = ({
 
 
   // Verificar se é API Oficial e se a janela está fechada
-  const [ticketData, setTicketData] = useState(null);
+  const [ticketData, setTicketData] = useState(ticketDataOverride || null);
   const [windowClosedOverride, setWindowClosedOverride] = useState(null);
   
   // Buscar dados do ticket
   useEffect(() => {
+    if (ticketDataOverride) {
+      setTicketData(ticketDataOverride);
+      return;
+    }
+
+    if (readOnly) {
+      return;
+    }
+
     const fetchTicketData = async () => {
-      if (!ticketId || ticketId === "undefined") return;
+      if (!activeTicketId || activeTicketId === "undefined") return;
       try {
-        const { data } = await api.get("/tickets/u/" + ticketId);
+        const { data } = await api.get("/tickets/u/" + activeTicketId);
         setTicketData(data);
       } catch (err) {
         // Silenciar erro
       }
     };
     fetchTicketData();
-  }, [ticketId]);
+  }, [activeTicketId, readOnly, ticketDataOverride]);
 
   // Declarar isOfficialChannel ANTES dos useEffects que o usam
   const isOfficialChannel = ticketData?.whatsapp?.channelType === "official";
@@ -2656,6 +2687,7 @@ const MessagesList = ({
   };
 
   const handleDrag = event => {
+    if (readOnly) return;
     event.preventDefault();
     event.stopPropagation();
     if (event.type === "dragenter" || event.type === "dragover") {
@@ -2679,6 +2711,7 @@ const MessagesList = ({
   };
 
   const handleDrop = event => {
+    if (readOnly) return;
     event.preventDefault();
     event.stopPropagation();
     setDragActive(false);
@@ -2795,7 +2828,7 @@ const MessagesList = ({
       });
 
       // Verifica se a mensagem está selecionada
-      const isMessageSelected = showSelectMessageCheckbox && selectedMessages.some((m) => m.id === message.id);
+      const isMessageSelected = !readOnly && showSelectMessageCheckbox && selectedMessages.some((m) => m.id === message.id);
 
       return (
         <React.Fragment key={message.id}>
@@ -2809,7 +2842,7 @@ const MessagesList = ({
               { [classes.messageRowWrapperSelected]: isMessageSelected }
             )}
           >
-            {showSelectMessageCheckbox && (
+            {!readOnly && showSelectMessageCheckbox && (
               <div className={classes.messageRowCheckbox}>
                 <SelectMessageCheckbox message={message} />
               </div>
@@ -2828,7 +2861,7 @@ const MessagesList = ({
               <div
                 className={bubbleClass}
                 title={message.queueId && message.queue?.name}
-                onDoubleClick={(e) => hanldeReplyMessage(e, message)}
+                onDoubleClick={readOnly ? undefined : (e) => hanldeReplyMessage(e, message)}
               >
                 {/* Badge de megafone para mensagens de campanha */}
                 {isCampaignMessage && (
@@ -2844,16 +2877,18 @@ const MessagesList = ({
                   </div>
                 )}
 
-                <IconButton
-                  variant="contained"
-                  size="small"
-                  id="messageActionsButton"
-                  disabled={message.isDeleted}
-                  className={classes.messageActionsButton}
-                  onClick={(e) => handleOpenMessageOptionsMenu(e, message)}
-                >
-                  <ExpandMore />
-                </IconButton>
+                {!readOnly && (
+                  <IconButton
+                    variant="contained"
+                    size="small"
+                    id="messageActionsButton"
+                    disabled={message.isDeleted}
+                    className={classes.messageActionsButton}
+                    onClick={(e) => handleOpenMessageOptionsMenu(e, message)}
+                  >
+                    <ExpandMore />
+                  </IconButton>
+                )}
 
                 {/* Nome do remetente em mensagens de grupo */}
                 {isGroup && !message.fromMe && (
@@ -2990,20 +3025,23 @@ const MessagesList = ({
   };
 
   return (
-    <div className={classes.messagesListWrapper} onDragEnter={handleDrag}>
-      {dragActive && <div className={classes.dragElement} onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}>Solte o arquivo aqui</div>}
+    <div className={classes.messagesListWrapper} onDragEnter={readOnly ? undefined : handleDrag}>
+      {!readOnly && dragActive && <div className={classes.dragElement} onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}>Solte o arquivo aqui</div>}
 
-      <MessageOptionsMenu
-        message={selectedMessage}
-        anchorEl={anchorEl}
-        menuOpen={messageOptionsMenuOpen}
-        handleClose={handleCloseMessageOptionsMenu}
-        isGroup={isGroup}
-        whatsappId={whatsappId}
-        queueId={queueId}
-      />
+      {!readOnly && (
+        <MessageOptionsMenu
+          message={selectedMessage}
+          anchorEl={anchorEl}
+          menuOpen={messageOptionsMenuOpen}
+          handleClose={handleCloseMessageOptionsMenu}
+          isGroup={isGroup}
+          whatsappId={whatsappId}
+          queueId={queueId}
+        />
+      )}
       <div
-        id="messagesList"
+        id={containerId}
+        ref={messagesListRef}
         className={classes.messagesList}
         onScroll={handleScroll}
       >

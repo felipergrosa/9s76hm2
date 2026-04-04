@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
 import { makeStyles } from "@material-ui/core/styles";
-import clsx from "clsx";
 import {
   Paper,
   Typography,
@@ -11,7 +10,6 @@ import {
   Card,
   CardContent,
   CardActionArea,
-  Divider,
   Tooltip,
   Dialog,
   DialogTitle,
@@ -25,7 +23,7 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { i18n } from "../../translate/i18n";
-import { format, isSameDay, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { useHistory } from "react-router-dom";
 import {
   Android,
@@ -33,13 +31,16 @@ import {
   ReportProblem,
   Person,
   WhatsApp,
-  Visibility
 } from "@material-ui/icons";
 import ContactAvatar from "../ContactAvatar";
 import { grey, green, red, blue, orange } from "@material-ui/core/colors";
 import { getBackendUrl } from "../../config";
-import MarkdownWrapper from "../MarkdownWrapper";
-import { Eye as VisibilityIcon, X as CloseIcon } from "lucide-react";
+import { Eye as VisibilityIcon } from "lucide-react";
+import ConversationPeekModal from "../ConversationPeekModal";
+import {
+  canAssumeTicketConversation,
+  canViewTicketConversation,
+} from "../../utils/ticketPreviewPermissions";
 
 const backendUrl = getBackendUrl();
 
@@ -303,10 +304,7 @@ const MomentsUser = ({ onPanStart }) => {
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
 
-  // Estados para modal de espiar conversa
   const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
-  const [ticketMessages, setTicketMessages] = useState([]);
-  const [loadingMessages, setLoadingMessages] = useState(false);
   const [selectedTicketForView, setSelectedTicketForView] = useState(null);
 
   // Manipulador seguro para iniciar o arrasto apenas no cabeçalho
@@ -403,45 +401,10 @@ const MomentsUser = ({ onPanStart }) => {
     };
   }, [tickets]);
 
-  // REGRA PRINCIPAL: Ticket em atendimento só pode ser visto/acessado pelo atendente
-  // OU por supervisores que gerenciam esse atendente
   const canAccessTicket = (ticket) => {
-    // Admin e Superadmin sempre podem ver
-    if (user.profile === "admin" || user.super) return true;
-    
-    // Verificar se é supervisor do usuário do ticket
-    const isSupervisorOfTicketOwner = user.managedUserIds && 
-      user.managedUserIds.length > 0 && 
-      ticket?.userId && 
-      user.managedUserIds.some(id => Number(id) === Number(ticket.userId));
-    
-    if (isSupervisorOfTicketOwner) return true;
-    
-    // Se ticket está em atendimento (open/group) E tem userId atribuído
-    // SOMENTE o atendente ou supervisor pode ver
-    const isBeingAttended = (ticket?.status === "open" || ticket?.status === "group") && ticket?.userId;
-    
-    if (isBeingAttended) {
-      // Só o próprio atendente pode ver/acessar (se não for supervisor)
-      return ticket?.userId === user.id;
-    }
-    
-    // Ticket sem dono (pendente) - verificar carteira
-    if (!ticket.userId) {
-      // Se não tenho restrição de carteira, posso ver pendentes
-      if (!user.allowedContactTags || user.allowedContactTags.length === 0) return true;
-      
-      // Verificar se contato tem tag da minha carteira
-      const contactTags = ticket.contact?.tags || [];
-      if (contactTags.length === 0) return true; // Sem tags = todos veem
-      
-      return contactTags.some(tag => user.allowedContactTags.includes(tag.id));
-    }
-    
-    return false;
+    return canViewTicketConversation({ ticket, user });
   };
 
-  // Verificar se deve mostrar modal de confirmação (ticket de outro usuário)
   const shouldShowConfirmModal = (ticket) => {
     const ticketUserId = ticket?.userId;
     const currentUserId = user.id;
@@ -450,15 +413,8 @@ const MomentsUser = ({ onPanStart }) => {
     if (!ticketUserId || Number(ticketUserId) === Number(currentUserId)) {
       return false;
     }
-    
-    // Se sou admin/super/supervisor do dono, mostra modal
-    const isAdmin = user.profile === "admin";
-    const isSuper = user.super === true;
-    const isSupervisor = user.managedUserIds && 
-      user.managedUserIds.length > 0 && 
-      user.managedUserIds.some(id => Number(id) === Number(ticketUserId));
-    
-    return isAdmin || isSuper || isSupervisor;
+
+    return canAssumeTicketConversation({ ticket, user });
   };
 
   // Handler para clique no ticket
@@ -501,29 +457,11 @@ const MomentsUser = ({ onPanStart }) => {
     setSelectedTicket(null);
   };
 
-  // Função para buscar mensagens do ticket
-  const fetchTicketMessages = async (ticketId) => {
-    if (!ticketId) return;
-
-    setLoadingMessages(true);
-    try {
-      const { data } = await api.get(`/messages/${ticketId}`);
-      if (isMounted.current) {
-        setTicketMessages(data.messages);
-      }
-    } catch (err) {
-      toastError(err);
-    } finally {
-      setLoadingMessages(false);
-    }
-  };
-
-  // Handler para abrir o modal de mensagens
   const handleOpenMessageDialog = (e, ticket) => {
     e.stopPropagation();
+    if (!canAccessTicket(ticket)) return;
     setSelectedTicketForView(ticket);
     setOpenTicketMessageDialog(true);
-    fetchTicketMessages(ticket.id);
   };
 
   const renderTicketCard = (ticket) => (
@@ -752,84 +690,11 @@ const MomentsUser = ({ onPanStart }) => {
         </DialogActions>
       </Dialog>
 
-      {/* Modal de espiar conversa */}
-      <Dialog
+      <ConversationPeekModal
         open={openTicketMessageDialog}
         onClose={() => setOpenTicketMessageDialog(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle disableTypography className={classes.dialogTitle}>
-          <Typography variant="h6">
-            Espiando a conversa
-          </Typography>
-          <IconButton
-            aria-label="close"
-            className={classes.closeButton}
-            onClick={() => setOpenTicketMessageDialog(false)}
-          >
-            <CloseIcon size={24} />
-          </IconButton>
-        </DialogTitle>
-
-        <div className={classes.messagesHeader}>
-          <ContactAvatar
-            contact={selectedTicketForView?.contact}
-            className={classes.messageAvatar}
-          />
-          <div>
-            <Typography variant="subtitle1">
-              {selectedTicketForView?.contact?.name}
-            </Typography>
-            <Typography variant="caption" color="textSecondary">
-              {selectedTicketForView?.whatsapp?.name || selectedTicketForView?.channel}
-            </Typography>
-          </div>
-        </div>
-
-        <Divider />
-
-        <DialogContent className={classes.messagesContainer}>
-          {loadingMessages ? (
-            <div className={classes.loadingMessages}>
-              <Typography>Carregando mensagens...</Typography>
-            </div>
-          ) : ticketMessages.length === 0 ? (
-            <div className={classes.emptyMessages}>
-              <Visibility fontSize="large" />
-              <Typography variant="body1">
-                {i18n.t("ticketsList.noMessages")}
-              </Typography>
-            </div>
-          ) : (
-            ticketMessages.map((message) => (
-              <Paper
-                key={message.id}
-                className={clsx(
-                  classes.messageItem,
-                  message.fromMe ? classes.fromMe : classes.fromThem
-                )}
-                elevation={0}
-              >
-                <Typography className={classes.messageText}>
-                  {message.body?.includes('data:image/png;base64') ? (
-                    <MarkdownWrapper>Localização</MarkdownWrapper>
-                  ) : message.body?.includes('BEGIN:VCARD') ? (
-                    <MarkdownWrapper>Contato</MarkdownWrapper>
-                  ) : message.body?.includes('fb.me') ? (
-                    <MarkdownWrapper>Clique de Anúncio</MarkdownWrapper>
-                  ) : (
-                    <MarkdownWrapper>{message.body}</MarkdownWrapper>
-                  )}
-                </Typography>
-                <Typography variant="caption" className={classes.messageTime}>
-                  {format(parseISO(message.createdAt), "HH:mm")}
-                </Typography>
-              </Paper>
-            ))
-          )}
-        </DialogContent>
-      </Dialog>
+        ticket={selectedTicketForView}
+      />
     </div>
   );
 };
