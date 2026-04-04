@@ -433,16 +433,16 @@ const MomentsUser = ({ onPanStart }) => {
     
     setIsTransferring(true);
     try {
-      // Transferir o ticket para o usuário atual
-      await api.put(`/tickets/${selectedTicket.id}`, {
+      const { data } = await api.put(`/tickets/${selectedTicket.id}`, {
         userId: user.id,
         status: "open"
       });
       
-      // Fechar modal e navegar para o ticket
       setConfirmModalOpen(false);
-      history.push(`/tickets/${selectedTicket.uuid}`);
       setSelectedTicket(null);
+      if (data?.uuid) {
+        history.push(`/tickets/${data.uuid}`);
+      }
     } catch (err) {
       console.error("Erro ao transferir ticket:", err);
       toastError("Erro ao assumir o ticket. Tente novamente.");

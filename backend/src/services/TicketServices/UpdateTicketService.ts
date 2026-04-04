@@ -56,6 +56,66 @@ interface Response {
   oldUserId: number | undefined;
 }
 
+const shouldCreateNewTicketOnUserHandoff = ({
+  ticket,
+  oldUserId,
+  nextUserId,
+  nextStatus
+}: {
+  ticket: Ticket;
+  oldUserId: number | undefined;
+  nextUserId: number | null | undefined;
+  nextStatus: string | undefined;
+}): boolean => {
+  if (ticket.isGroup) {
+    return false;
+  }
+
+  if (isNil(oldUserId) || Number(oldUserId) === 0) {
+    return false;
+  }
+
+  if (isNil(nextUserId) || Number(nextUserId) === 0) {
+    return false;
+  }
+
+  if (Number(oldUserId) === Number(nextUserId)) {
+    return false;
+  }
+
+  return nextStatus !== "closed";
+};
+
+const cloneTicketTags = async ({
+  sourceTicketId,
+  targetTicketId,
+  companyId
+}: {
+  sourceTicketId: number;
+  targetTicketId: number;
+  companyId: number;
+}): Promise<void> => {
+  const currentTags = await TicketTag.findAll({
+    where: {
+      ticketId: sourceTicketId,
+      companyId
+    },
+    attributes: ["tagId"]
+  });
+
+  if (!currentTags.length) {
+    return;
+  }
+
+  await TicketTag.bulkCreate(
+    currentTags.map(ticketTag => ({
+      ticketId: targetTicketId,
+      tagId: ticketTag.tagId,
+      companyId
+    }))
+  );
+};
+
 const UpdateTicketService = async ({
   ticketData,
   ticketId,
@@ -145,6 +205,179 @@ const UpdateTicketService = async ({
 
       // await CheckContactOpenTickets(ticket.contactId, ticket.whatsappId );
       isBot = false;
+    }
+
+    let queue;
+    if (!isNil(queueId)) {
+      queue = await Queue.findByPk(queueId);
+    }
+
+    const nextStatus = status ?? ticket.status;
+    if (
+      shouldCreateNewTicketOnUserHandoff({
+        ticket,
+        oldUserId,
+        nextUserId: userId,
+        nextStatus
+      })
+    ) {
+      const targetQueueId = !isNil(queueId) ? Number(queueId) : ticket.queueId;
+      const targetStatus = nextStatus || "open";
+      const targetLastMessage = lastMessage || ticket.lastMessage;
+      const targetUnreadMessages = !isNil(unreadMessages)
+        ? Number(unreadMessages)
+        : Number(ticket.unreadMessages || 0);
+
+      let currentTracking = null;
+      if (oldStatus !== "closed") {
+        currentTracking = await FindOrCreateATicketTrakingService({
+          ticketId,
+          companyId,
+          whatsappId: ticket?.whatsappId,
+          userId: oldUserId,
+          queueId: oldQueueId
+        });
+      }
+
+      if (oldStatus !== "closed") {
+        (ticket as any)._skipHookEmit = true;
+        await ticket.update({
+          status: "closed",
+          unreadMessages: 0,
+          lastFlowId: null,
+          dataWebhook: null,
+          hashFlowId: null
+        });
+
+        ticketEventBus.publishTicketDeleted(companyId, ticket.id, ticket.uuid, oldStatus);
+      }
+
+      if (currentTracking) {
+        await currentTracking.update({
+          finishedAt: moment().toDate(),
+          closedAt: moment().toDate(),
+          whatsappId: ticket.whatsappId,
+          userId: ticket.userId,
+          queueId: ticket.queueId
+        });
+      }
+
+      let newTicketTransfer = await FindOrCreateTicketService(
+        ticket.contact,
+        ticket.whatsapp,
+        targetUnreadMessages,
+        ticket.companyId,
+        targetQueueId,
+        userId,
+        null,
+        ticket.channel,
+        false,
+        false,
+        settings,
+        true
+      );
+
+      await cloneTicketTags({
+        sourceTicketId: ticket.id,
+        targetTicketId: newTicketTransfer.id,
+        companyId: ticket.companyId
+      });
+
+      if (!isNil(msgTransfer)) {
+        const messageData = {
+          wid: `PVT${newTicketTransfer.updatedAt.toString().replace(' ', '')}`,
+          ticketId: newTicketTransfer.id,
+          contactId: newTicketTransfer.contactId,
+          body: msgTransfer,
+          fromMe: true,
+          mediaType: 'extendedTextMessage',
+          read: true,
+          quotedMsgId: null,
+          ack: 2,
+          remoteJid: newTicketTransfer.contact?.remoteJid,
+          participant: null,
+          dataJson: null,
+          ticketTrakingId: null,
+          isPrivate: true
+        };
+
+        await CreateMessageService({ messageData, companyId: ticket.companyId });
+      }
+
+      await newTicketTransfer.update({
+        queueId: targetQueueId,
+        userId,
+        status: targetStatus,
+        isBot: false,
+        queueOptionId,
+        amountUsedBotQueues: targetStatus === "closed"
+          ? 0
+          : amountUsedBotQueues
+            ? amountUsedBotQueues
+            : newTicketTransfer.amountUsedBotQueues,
+        lastMessage: targetLastMessage,
+        useIntegration,
+        integrationId,
+        unreadMessages: targetUnreadMessages
+      });
+
+      newTicketTransfer = await ShowTicketService(newTicketTransfer.id, companyId);
+
+      const newTicketTracking = await FindOrCreateATicketTrakingService({
+        ticketId: newTicketTransfer.id,
+        companyId,
+        whatsappId: newTicketTransfer.whatsappId,
+        userId,
+        queueId: targetQueueId
+      });
+
+      await newTicketTracking.update({
+        startedAt: moment().toDate(),
+        ratingAt: null,
+        rated: false,
+        whatsappId: newTicketTransfer.whatsappId,
+        userId: newTicketTransfer.userId,
+        queueId: newTicketTransfer.queueId
+      });
+
+      if (isTransfered && settings.sendMsgTransfTicket === "enabled" && settings.transferMessage && settings.transferMessage.trim() !== "") {
+        if ((oldQueueId !== targetQueueId || oldUserId !== userId) && !isNil(oldQueueId) && !isNil(targetQueueId) && ticket.whatsapp?.status === 'CONNECTED') {
+          const wbot = await GetTicketWbot(newTicketTransfer);
+          const msgtxt = formatBody(`\u200e ${settings.transferMessage.replace("${queue.name}", queue?.name)}`, newTicketTransfer);
+          const queueChangedMessage = await wbot.sendMessage(
+            `${newTicketTransfer.contact.number}@${newTicketTransfer.isGroup ? "g.us" : "s.whatsapp.net"}`,
+            {
+              text: msgtxt
+            }
+          );
+          await verifyMessage(queueChangedMessage, newTicketTransfer, newTicketTransfer.contact, newTicketTracking);
+        }
+      }
+
+      await CreateLogTicketService({
+        userId: oldUserId,
+        queueId: oldQueueId,
+        ticketId,
+        type: "transfered"
+      });
+      await CreateLogTicketService({
+        userId,
+        queueId: targetQueueId || oldQueueId,
+        ticketId: newTicketTransfer.id,
+        type: "receivedTransfer"
+      });
+
+      ticketEventBus.publishTicketUpdated(companyId, newTicketTransfer.id, newTicketTransfer.uuid, newTicketTransfer);
+
+      if (userId && ticket.contactId) {
+        await ApplyUserPersonalTagService({
+          contactId: ticket.contactId,
+          userId,
+          companyId
+        });
+      }
+
+      return { ticket: newTicketTransfer, oldStatus, oldUserId };
     }
 
     const ticketTraking = await FindOrCreateATicketTrakingService({
@@ -306,9 +539,7 @@ const UpdateTicketService = async ({
       }
       return { ticket, oldStatus, oldUserId };
     }
-    let queue
     if (!isNil(queueId)) {
-      queue = await Queue.findByPk(queueId);
       ticketTraking.queuedAt = moment().toDate();
     }
 
