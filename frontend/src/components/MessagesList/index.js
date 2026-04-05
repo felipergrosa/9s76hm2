@@ -1966,15 +1966,16 @@ const MessagesList = ({
   };
 
   const checkMessageMedia = (message, linkPreviewData = null) => {
-    if (message.mediaType === "locationMessage" && message.body.split('|').length >= 2) {
-      let locationParts = message.body.split('|')
-      let imageLocation = locationParts[0]
-      let linkLocation = locationParts[1]
+    if (message.mediaType === "locationMessage") {
+      const locationParts = typeof message.body === "string"
+        ? message.body.split("|").map(part => safeTrim(part))
+        : [];
 
-      let descriptionLocation = null
-
-      if (locationParts.length > 2)
-        descriptionLocation = message.body.split('|')[2]
+      const imageLocation = locationParts[0] || "";
+      const linkLocation = locationParts[1] || "";
+      const descriptionLocation = locationParts.length > 2
+        ? locationParts.slice(2).join(" | ")
+        : (typeof message.body === "string" ? safeTrim(message.body) : "");
 
       return <LocationPreview image={imageLocation} link={linkLocation} description={descriptionLocation} />
     } else if (message.mediaType === "contactMessage") {

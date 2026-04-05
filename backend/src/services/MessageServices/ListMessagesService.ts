@@ -28,6 +28,97 @@ interface Response {
   hasMore: boolean;
 }
 
+const enrichGroupParticipantContacts = async ({
+  messages,
+  companyId
+}: {
+  messages: any[];
+  companyId: number;
+}): Promise<void> => {
+  const participantJids = messages
+    .filter(message => !message.fromMe && message.participant)
+    .map(message => message.participant)
+    .filter((value, index, array) => array.indexOf(value) === index);
+
+  if (!participantJids.length) {
+    return;
+  }
+
+  const participantNumbers = participantJids
+    .map(jid => String(jid).replace(/@.*/, "").replace(/\D/g, ""))
+    .filter(number => number.length >= 10 && number.length <= 13);
+
+  const participantContacts = await Contact.findAll({
+    where: {
+      companyId,
+      isGroup: false,
+      [Op.or]: [
+        { remoteJid: { [Op.in]: participantJids } },
+        { lidJid: { [Op.in]: participantJids } },
+        ...(participantNumbers.length > 0 ? [
+          { number: { [Op.in]: participantNumbers } },
+          { canonicalNumber: { [Op.in]: participantNumbers } }
+        ] : [])
+      ]
+    },
+    attributes: [
+      "id",
+      "name",
+      "number",
+      "profilePicUrl",
+      "urlPicture",
+      "updatedAt",
+      "companyId",
+      "remoteJid",
+      "lidJid",
+      "canonicalNumber"
+    ],
+    limit: 200
+  });
+
+  const participantMap = new Map();
+  participantContacts.forEach(contact => {
+    if (contact.remoteJid) participantMap.set(contact.remoteJid, contact);
+    if (contact.lidJid) participantMap.set(contact.lidJid, contact);
+    if (contact.number) participantMap.set(contact.number, contact);
+    if (contact.canonicalNumber) participantMap.set(contact.canonicalNumber, contact);
+  });
+
+  messages.forEach((message: any) => {
+    if (message.fromMe || !message.participant) {
+      return;
+    }
+
+    let participantContact = participantMap.get(message.participant);
+
+    if (!participantContact) {
+      const participantNumber = String(message.participant).replace(/@.*/, "").replace(/\D/g, "");
+      if (participantNumber.length >= 10) {
+        participantContact = participantMap.get(participantNumber);
+      }
+    }
+
+    if (!participantContact) {
+      return;
+    }
+
+    message.contact = {
+      id: participantContact.id,
+      name: participantContact.name || message.senderName,
+      isGroup: false,
+      profilePicUrl: participantContact.profilePicUrl,
+      urlPicture: participantContact.urlPicture,
+      updatedAt: participantContact.updatedAt,
+      companyId: participantContact.companyId,
+      number: participantContact.number
+    };
+  });
+
+  logger.debug(
+    `[ListMessages] Enriquecidas ${messages.filter((message: any) => !message.fromMe && message.participant && message.contact?.isGroup === false).length} mensagens de grupo com avatar dos participantes`
+  );
+};
+
 const ListMessagesService = async ({
   pageNumber = "1",
   ticketId,
@@ -234,76 +325,11 @@ const ListMessagesService = async ({
   const uniqueTicketIds = [...new Set(messages.map((m: any) => m.ticketId))];
   logger.debug(`[ListMessages] DEBUG: ticketIds únicos nas mensagens: ${JSON.stringify(uniqueTicketIds)}`);
 
-  // CORREÇÃO: Para grupos, enriquecer mensagens com profilePicUrl do participante individual
   if (ticket.isGroup) {
-    const participantJids = messages
-      .filter(m => !m.fromMe && m.participant)
-      .map(m => m.participant)
-      .filter((v, i, a) => a.indexOf(v) === i); // unique
-
-    if (participantJids.length > 0) {
-      // Extrair números dos participant JIDs para busca adicional
-      const participantNumbers = participantJids
-        .map(jid => jid.replace(/@.*/, "").replace(/\D/g, ""))
-        .filter(num => num.length >= 10 && num.length <= 13);
-
-      // Buscar contatos individuais por participant JID, lidJid ou número
-      const participantContacts = await Contact.findAll({
-        where: {
-          companyId,
-          isGroup: false,
-          [Op.or]: [
-            { remoteJid: { [Op.in]: participantJids } },
-            { lidJid: { [Op.in]: participantJids } },
-            ...(participantNumbers.length > 0 ? [
-              { number: { [Op.in]: participantNumbers } },
-              { canonicalNumber: { [Op.in]: participantNumbers } }
-            ] : [])
-          ]
-        },
-        attributes: ["id", "name", "number", "profilePicUrl", "urlPicture", "remoteJid", "lidJid", "canonicalNumber"],
-        limit: 200
-      });
-
-      // Criar mapa participant → contact (por JID e por número)
-      const participantMap = new Map();
-      participantContacts.forEach(c => {
-        if (c.remoteJid) participantMap.set(c.remoteJid, c);
-        if (c.lidJid) participantMap.set(c.lidJid, c);
-        // Também mapear por número para fallback
-        if (c.number) participantMap.set(c.number, c);
-        if (c.canonicalNumber) participantMap.set(c.canonicalNumber, c);
-      });
-
-      // Enriquecer mensagens com dados do participante
-      messages.forEach((msg: any) => {
-        if (!msg.fromMe && msg.participant) {
-          let participantContact = participantMap.get(msg.participant);
-
-          // Fallback: buscar por número extraído do participant JID
-          if (!participantContact) {
-            const participantNumber = msg.participant.replace(/@.*/, "").replace(/\D/g, "");
-            if (participantNumber.length >= 10) {
-              participantContact = participantMap.get(participantNumber);
-            }
-          }
-
-          if (participantContact) {
-            // Substituir contact do grupo pelo contact do participante individual
-            msg.contact = {
-              id: participantContact.id,
-              name: participantContact.name || msg.senderName,
-              isGroup: false,
-              profilePicUrl: participantContact.profilePicUrl,
-              urlPicture: participantContact.urlPicture,
-              number: participantContact.number
-            };
-          }
-        }
-      });
-
-      logger.debug(`[ListMessages] Enriquecidas ${messages.filter((m: any) => !m.fromMe && m.participant && m.contact?.isGroup === false).length} mensagens de grupo com profilePicUrl dos participantes`);
-    }
+    await enrichGroupParticipantContacts({
+      messages: messages as any[],
+      companyId
+    });
   }
 
   let hasMore = count > offset + messages.length;
@@ -376,6 +402,13 @@ const ListMessagesService = async ({
             subQuery: false,
             order: [["createdAt", "DESC"]]
           });
+
+          if (ticket.isGroup) {
+            await enrichGroupParticipantContacts({
+              messages: newMessages as any[],
+              companyId
+            });
+          }
 
           // Atualizar hasMore com base nos novos dados
           hasMore = newCount > offset + newMessages.length;
