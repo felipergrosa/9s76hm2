@@ -1328,10 +1328,19 @@ const MessagesList = ({
       // CORREÇÃO: Em grupos, buscar avatar do PARTICIPANTE individual, não do grupo
       if (messageIsGroup) {
         const c = msg?.contact;
+        const participantNumber = msg?.participant?.replace(/@.*/, "")?.replace(/\D/g, "");
+        const participantFallback =
+          groupParticipantsMap[msg?.participant] ||
+          groupParticipantsMap[`contact:${msg?.contact?.id}`] ||
+          groupParticipantsMap[participantNumber];
         
         // Se o contact não é o grupo (isGroup=false), usar ele (é o participante individual)
         if (c && !c.isGroup) {
           return c;
+        }
+
+        if (participantFallback) {
+          return participantFallback;
         }
         
         // Fallback: criar objeto com dados do participante para exibir iniciais
@@ -2368,6 +2377,7 @@ const MessagesList = ({
   // Verificar se é API Oficial e se a janela está fechada
   const [ticketData, setTicketData] = useState(ticketDataOverride || null);
   const [windowClosedOverride, setWindowClosedOverride] = useState(null);
+  const [groupParticipantsMap, setGroupParticipantsMap] = useState({});
   
   // Buscar dados do ticket
   useEffect(() => {
@@ -2391,6 +2401,63 @@ const MessagesList = ({
     };
     fetchTicketData();
   }, [activeTicketId, readOnly, ticketDataOverride]);
+
+  useEffect(() => {
+    if (!isGroup || !ticketData?.contact?.id) {
+      setGroupParticipantsMap({});
+      return;
+    }
+
+    let active = true;
+
+    const fetchGroupParticipants = async () => {
+      try {
+        const { data } = await api.get(`/groups/${ticketData.contact.id}/participants`);
+        if (!active || !Array.isArray(data?.participants)) {
+          return;
+        }
+
+        const nextMap = {};
+        data.participants.forEach((participant) => {
+          const avatarUrl =
+            participant?.urlPicture ||
+            participant?.profilePicUrl ||
+            participant?.imgUrlBaileys ||
+            null;
+
+          const participantContact = {
+            id: participant?.contactId || participant?.id,
+            name: participant?.name,
+            number: participant?.number,
+            urlPicture: avatarUrl,
+            profilePicUrl: participant?.profilePicUrl || participant?.imgUrlBaileys || avatarUrl,
+          };
+
+          if (participant?.id) {
+            nextMap[participant.id] = participantContact;
+          }
+
+          if (participant?.contactId) {
+            nextMap[`contact:${participant.contactId}`] = participantContact;
+          }
+
+          if (participant?.number) {
+            nextMap[participant.number] = participantContact;
+          }
+        });
+
+        setGroupParticipantsMap(nextMap);
+      } catch (error) {
+        setGroupParticipantsMap({});
+      }
+    };
+
+    fetchGroupParticipants();
+
+    return () => {
+      active = false;
+    };
+  }, [isGroup, ticketData?.contact?.id]);
 
   // Declarar isOfficialChannel ANTES dos useEffects que o usam
   const isOfficialChannel = ticketData?.whatsapp?.channelType === "official";

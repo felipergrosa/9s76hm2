@@ -551,7 +551,8 @@ async function processIncomingMessage(
         const locName = message.location?.name || "";
         const description = message.location?.address || "";
         const mapsLink = `https://maps.google.com/?q=${lat},${lng}`;
-        body = `data:image/png;base64, | ${mapsLink} | ${description}`;
+        const staticMapUrl = `https://static-maps.yandex.ru/1.x/?lang=pt_BR&ll=${lng},${lat}&z=16&l=map&size=650,320&pt=${lng},${lat},pm2rdm`;
+        body = `${staticMapUrl} | ${mapsLink} | ${description || `${lat}, ${lng}`}`;
         mediaType = "locationMessage";
         logger.info(`[WebhookProcessor] Localização recebida: ${lat}, ${lng}`);
         break;

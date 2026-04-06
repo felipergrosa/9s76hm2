@@ -1,8 +1,12 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 import { makeStyles } from "@material-ui/core/styles";
 import { Typography } from "@material-ui/core";
 import { Language as LinkIcon } from "@material-ui/icons";
+
+import api from "../../services/api";
 import toastError from "../../errors/toastError";
+
+const previewCache = new Map();
 
 const useStyles = makeStyles((theme) => ({
   linkPreviewContainer: {
@@ -59,48 +63,138 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
+const cleanText = value => {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (value == null) {
+    return "";
+  }
+
+  return String(value).trim();
+};
+
+const isLowQualityImage = image => {
+  const normalizedImage = cleanText(image);
+
+  if (!normalizedImage || normalizedImage === "no-image") {
+    return true;
+  }
+
+  if (!normalizedImage.startsWith("data:image")) {
+    return false;
+  }
+
+  const [, payload = ""] = normalizedImage.split(",");
+  return cleanText(payload).length < 15000;
+};
+
 const AdMetaPreview = ({ image, title, body, sourceUrl }) => {
   const classes = useStyles();
+  const [resolvedPreview, setResolvedPreview] = useState({
+    image,
+    title,
+    body,
+    sourceUrl
+  });
+
+  useEffect(() => {
+    setResolvedPreview({
+      image,
+      title,
+      body,
+      sourceUrl
+    });
+  }, [image, title, body, sourceUrl]);
+
+  useEffect(() => {
+    const normalizedUrl = cleanText(sourceUrl);
+    if (!normalizedUrl || !isLowQualityImage(image)) {
+      return undefined;
+    }
+
+    const cachedPreview = previewCache.get(normalizedUrl);
+    if (cachedPreview) {
+      setResolvedPreview(current => ({
+        image: cachedPreview.image || current.image,
+        title: cachedPreview.title || current.title,
+        body: cachedPreview.description || current.body,
+        sourceUrl: cachedPreview.url || current.sourceUrl
+      }));
+      return undefined;
+    }
+
+    let active = true;
+
+    const fetchPreview = async () => {
+      try {
+        const { data } = await api.post("/link-preview", {
+          url: normalizedUrl
+        });
+
+        if (!active || !data) {
+          return;
+        }
+
+        previewCache.set(normalizedUrl, data);
+        setResolvedPreview(current => ({
+          image: data.image || current.image,
+          title: data.title || current.title,
+          body: data.description || current.body,
+          sourceUrl: data.url || current.sourceUrl
+        }));
+      } catch (error) {
+        // Preview enriquecido é opcional; não quebramos a UI por isso.
+      }
+    };
+
+    fetchPreview();
+
+    return () => {
+      active = false;
+    };
+  }, [image, sourceUrl]);
 
   const handleAdClick = async () => {
     try {
-      if (sourceUrl) {
-        window.open(sourceUrl, "_blank");
+      if (resolvedPreview.sourceUrl) {
+        window.open(resolvedPreview.sourceUrl, "_blank", "noopener,noreferrer");
       }
     } catch (err) {
       toastError(err);
     }
   };
 
-  const normalizedImage = typeof image === "string" ? image.trim() : image;
+  const normalizedImage = cleanText(resolvedPreview.image);
   const hasImage = !!normalizedImage && normalizedImage !== "no-image";
-  const displayUrl = (() => {
+  const displayUrl = useMemo(() => {
     try {
-      return sourceUrl ? new URL(sourceUrl.trim()).hostname : "";
+      return resolvedPreview.sourceUrl ? new URL(cleanText(resolvedPreview.sourceUrl)).hostname : "";
     } catch (error) {
-      return sourceUrl || "";
+      return resolvedPreview.sourceUrl || "";
     }
-  })();
+  }, [resolvedPreview.sourceUrl]);
 
   return (
     <div className={classes.linkPreviewContainer} onClick={handleAdClick}>
       {hasImage && (
-        <img 
-          src={normalizedImage} 
-          alt="Link preview" 
+        <img
+          src={normalizedImage}
+          alt="Link preview"
           className={classes.linkPreviewImage}
-          onError={(e) => { e.target.style.display = 'none'; }}
+          onError={(e) => { e.target.style.display = "none"; }}
         />
       )}
       <div className={classes.linkPreviewContent}>
-        {title && (
+        {resolvedPreview.title && (
           <Typography className={classes.linkPreviewTitle}>
-            {title}
+            {resolvedPreview.title}
           </Typography>
         )}
-        {body && (
+        {resolvedPreview.body && (
           <Typography className={classes.linkPreviewDescription}>
-            {body}
+            {resolvedPreview.body}
           </Typography>
         )}
         {displayUrl && (

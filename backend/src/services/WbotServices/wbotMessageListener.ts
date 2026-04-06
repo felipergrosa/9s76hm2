@@ -2511,32 +2511,35 @@ export const verifyMessage = async (
   const companyId = ticket.companyId;
   let generatedLinkPreview: (LinkPreviewData & { sourceUrl?: string; messageText?: string }) | null = null;
   
-  // Enriquecer com preview apenas quando o WhatsApp não trouxe preview nativo.
+  // Sempre tentamos enriquecer com a OG image original.
+  // O preview nativo do WhatsApp costuma vir em jpegThumbnail de baixa qualidade.
   const msgType = getTypeMessage(msg);
   if (msgType === 'extendedTextMessage' && body) {
     const ctx: any = msg.message?.extendedTextMessage?.contextInfo;
-    if (!ctx?.externalAdReply && !ctx?.matchedText) {
-      const detectedUrl = detectUrl(body);
-      logger.info(`[verifyMessage] Mensagem sem preview do WhatsApp, tentando enriquecer preview para: ${body.substring(0, 100)}`);
-      try {
-        if (detectedUrl) {
-          const linkPreview = await getLinkPreview(detectedUrl);
-          if (linkPreview) {
-            generatedLinkPreview = {
-              ...linkPreview,
-              sourceUrl: linkPreview.url,
-              messageText: body
-            };
-            logger.info(`[verifyMessage] Link preview enriquecido com sucesso`);
-          } else {
-            logger.info(`[verifyMessage] Não foi possível enriquecer preview do link`);
-          }
+    const detectedUrl =
+      ctx?.externalAdReply?.sourceUrl ||
+      ctx?.matchedText ||
+      detectUrl(body);
+
+    logger.info(`[verifyMessage] Tentando enriquecer preview para: ${body.substring(0, 100)}`);
+    try {
+      if (detectedUrl) {
+        const linkPreview = await getLinkPreview(detectedUrl);
+        if (linkPreview) {
+          generatedLinkPreview = {
+            ...linkPreview,
+            sourceUrl: linkPreview.url,
+            messageText: body
+          };
+          logger.info(`[verifyMessage] Link preview enriquecido com sucesso`);
         } else {
-          logger.info(`[verifyMessage] Nenhuma URL detectada para enriquecer preview`);
+          logger.info(`[verifyMessage] Não foi possível enriquecer preview do link`);
         }
-      } catch (previewError) {
-        logger.error(`[verifyMessage] Erro ao enriquecer preview do link: ${previewError.message}`);
+      } else {
+        logger.info(`[verifyMessage] Nenhuma URL detectada para enriquecer preview`);
       }
+    } catch (previewError) {
+      logger.error(`[verifyMessage] Erro ao enriquecer preview do link: ${previewError.message}`);
     }
   }
 

@@ -242,6 +242,22 @@ const ListMessagesService = async ({
   if (+pageNumber === 1 && !hasMultipleTickets) {
     const cached = await getCachedTicketMessages(companyId, ticket.id, 1);
     if (cached) {
+      if (ticket.isGroup) {
+        await enrichGroupParticipantContacts({
+          messages: cached.messages as any[],
+          companyId
+        });
+
+        cacheTicketMessages(
+          companyId,
+          ticket.id,
+          1,
+          cached.messages as any,
+          cached.count,
+          cached.hasMore
+        ).catch(() => {});
+      }
+
       logger.debug(`[ListMessages] Cache HIT para ticket ${ticket.id}`);
       return {
         messages: cached.messages as any,

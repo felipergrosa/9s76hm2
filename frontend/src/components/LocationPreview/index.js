@@ -124,8 +124,7 @@ const buildStaticMapUrl = coordinates => {
   }
 
   const { latitude, longitude } = coordinates;
-  const marker = `${latitude},${longitude},red-pushpin`;
-  return `https://staticmap.openstreetmap.de/staticmap.php?center=${latitude},${longitude}&zoom=16&size=640x320&markers=${marker}`;
+  return `https://static-maps.yandex.ru/1.x/?lang=pt_BR&ll=${longitude},${latitude}&z=16&l=map&size=650,320&pt=${longitude},${latitude},pm2rdm`;
 };
 
 const LocationPreview = ({ image, link, description }) => {
