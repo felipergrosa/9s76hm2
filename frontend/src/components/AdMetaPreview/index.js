@@ -92,6 +92,11 @@ const isInstagramUrl = sourceUrl => {
 
 const isInlineImage = image => cleanText(image).startsWith("data:image");
 
+const hasUsableImage = image => {
+  const normalizedImage = cleanText(image);
+  return !!normalizedImage && normalizedImage !== "no-image";
+};
+
 const isLowQualityImage = (image, sourceUrl) => {
   const normalizedImage = cleanText(image);
 
@@ -134,6 +139,22 @@ const shouldUpgradePreview = ({ image, title, sourceUrl }) => {
   return false;
 };
 
+const shouldUseCachedPreview = (cachedPreview, sourceUrl) => {
+  if (!cachedPreview) {
+    return false;
+  }
+
+  if (!hasUsableImage(cachedPreview.image)) {
+    return false;
+  }
+
+  return !shouldUpgradePreview({
+    image: cachedPreview.image,
+    title: cachedPreview.title,
+    sourceUrl: cachedPreview.url || sourceUrl
+  });
+};
+
 const AdMetaPreview = ({ image, title, body, sourceUrl }) => {
   const classes = useStyles();
   const [resolvedPreview, setResolvedPreview] = useState({
@@ -164,7 +185,7 @@ const AdMetaPreview = ({ image, title, body, sourceUrl }) => {
     }
 
     const cachedPreview = previewCache.get(normalizedUrl);
-    if (cachedPreview) {
+    if (shouldUseCachedPreview(cachedPreview, normalizedUrl)) {
       setResolvedPreview(current => ({
         image: cachedPreview.image || current.image,
         title: cachedPreview.title || current.title,

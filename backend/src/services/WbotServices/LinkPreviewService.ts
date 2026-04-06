@@ -16,6 +16,12 @@ interface InstagramOEmbedResponse {
   thumbnail_url?: string;
 }
 
+interface YouTubeOEmbedResponse {
+  title?: string;
+  author_name?: string;
+  provider_name?: string;
+}
+
 const REQUEST_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
@@ -30,6 +36,13 @@ const IMAGE_REQUEST_HEADERS = {
 const MAX_INLINE_IMAGE_BYTES = 2 * 1024 * 1024;
 const MIN_ENHANCED_WIDTH = 640;
 const INSTAGRAM_OEMBED_RETRY_DELAYS_MS = [0, 250, 800];
+const YOUTUBE_THUMBNAIL_VARIANTS = [
+  "maxresdefault.jpg",
+  "sddefault.jpg",
+  "hqdefault.jpg",
+  "mqdefault.jpg",
+  "default.jpg"
+];
 
 const decodeHtml = (value: string): string =>
   value
@@ -105,6 +118,71 @@ const isInstagramUrl = (url: string): boolean => {
   }
 };
 
+const isYouTubeUrl = (url: string): boolean => {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+
+    return (
+      hostname === "youtube.com" ||
+      hostname.endsWith(".youtube.com") ||
+      hostname === "youtu.be" ||
+      hostname.endsWith(".youtu.be") ||
+      hostname === "youtube-nocookie.com" ||
+      hostname.endsWith(".youtube-nocookie.com")
+    );
+  } catch (error) {
+    return false;
+  }
+};
+
+const extractYouTubeVideoId = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.toLowerCase();
+    const pathParts = parsed.pathname.split("/").filter(Boolean);
+
+    if (hostname === "youtu.be" || hostname.endsWith(".youtu.be")) {
+      return cleanValue(pathParts[0]);
+    }
+
+    if (parsed.searchParams.get("v")) {
+      return cleanValue(parsed.searchParams.get("v"));
+    }
+
+    const markerIndex = pathParts.findIndex((part) => ["shorts", "embed", "live"].includes(part));
+    if (markerIndex >= 0) {
+      return cleanValue(pathParts[markerIndex + 1]);
+    }
+
+    return "";
+  } catch (error) {
+    return "";
+  }
+};
+
+const findFirstAvailableImageUrl = async (candidates: string[]): Promise<string> => {
+  for (const candidate of candidates) {
+    try {
+      const response = await axios.head(candidate, {
+        timeout: 10000,
+        headers: IMAGE_REQUEST_HEADERS,
+        validateStatus: status => status >= 200 && status < 300
+      });
+
+      const contentType = cleanValue(response.headers["content-type"]);
+      if (contentType && !contentType.toLowerCase().startsWith("image/")) {
+        continue;
+      }
+
+      return candidate;
+    } catch (error) {
+      // Tentamos a próxima variante disponível.
+    }
+  }
+
+  return "";
+};
+
 const normalizeInstagramUrl = (url: string): string => {
   const parsed = new URL(url);
   parsed.search = "";
@@ -158,6 +236,51 @@ const getInstagramPreview = async (url: string): Promise<LinkPreviewData | null>
   }
 
   return null;
+};
+
+const getYouTubePreview = async (url: string): Promise<LinkPreviewData | null> => {
+  const videoId = extractYouTubeVideoId(url);
+
+  if (!videoId) {
+    return null;
+  }
+
+  let title = "YouTube";
+  let description = "";
+
+  try {
+    const { data } = await axios.get<YouTubeOEmbedResponse>(
+      "https://www.youtube.com/oembed",
+      {
+        timeout: 10000,
+        headers: REQUEST_HEADERS,
+        params: {
+          url,
+          format: "json"
+        },
+        validateStatus: status => status >= 200 && status < 300
+      }
+    );
+
+    title = cleanValue(data?.title) || cleanValue(data?.provider_name) || title;
+    description = cleanValue(data?.author_name);
+  } catch (error) {
+    // Se o oEmbed falhar, ainda tentamos a thumbnail direta pelo videoId.
+  }
+
+  const image =
+    (await findFirstAvailableImageUrl(
+      YOUTUBE_THUMBNAIL_VARIANTS.map(
+        variant => `https://i.ytimg.com/vi/${videoId}/${variant}`
+      )
+    )) || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+  return {
+    title,
+    description,
+    image,
+    url
+  };
 };
 
 export const resolvePreviewImage = async (imageUrl?: string | null): Promise<string> => {
@@ -245,6 +368,14 @@ export const getLinkPreview = async (url: string): Promise<LinkPreviewData | nul
 
       if (instagramPreview) {
         return instagramPreview;
+      }
+    }
+
+    if (isYouTubeUrl(url)) {
+      const youtubePreview = await getYouTubePreview(url);
+
+      if (youtubePreview) {
+        return youtubePreview;
       }
     }
 
