@@ -1,29 +1,33 @@
 import { Request, Response } from "express";
-import { getLinkPreview, detectUrl } from "../services/WbotServices/LinkPreviewService";
+import {
+  getLinkPreview,
+  detectUrl,
+  resolvePreviewImage,
+  enhancePreviewImage
+} from "../services/WbotServices/LinkPreviewService";
 import logger from "../utils/logger";
 
 export const getLinkPreviewData = async (req: Request, res: Response): Promise<Response> => {
-  const { url } = req.body;
+  const { url, fallbackImage } = req.body;
 
   if (!url) {
     return res.status(400).json({ error: "URL é obrigatória" });
   }
 
   try {
-    logger.info(`[LinkPreviewController] Buscando preview para: ${url}`);
-    
     const preview = await getLinkPreview(url);
     
     if (!preview) {
       return res.status(404).json({ error: "Não foi possível extrair metadados desta URL" });
     }
-
-    logger.info(`[LinkPreviewController] Preview encontrado: ${preview.title}`);
     
+    const resolvedImage = await resolvePreviewImage(preview.image);
+    const image = resolvedImage || (await enhancePreviewImage(fallbackImage));
+
     return res.json({
       title: preview.title,
       description: preview.description,
-      image: preview.image,
+      image,
       url: preview.url
     });
   } catch (error) {
@@ -33,7 +37,7 @@ export const getLinkPreviewData = async (req: Request, res: Response): Promise<R
 };
 
 export const detectAndPreview = async (req: Request, res: Response): Promise<Response> => {
-  const { text } = req.body;
+  const { text, fallbackImage } = req.body;
 
   if (!text) {
     return res.status(400).json({ error: "Texto é obrigatório" });
@@ -45,15 +49,22 @@ export const detectAndPreview = async (req: Request, res: Response): Promise<Res
     if (!url) {
       return res.json({ hasUrl: false });
     }
-
-    logger.info(`[LinkPreviewController] URL detectada: ${url}`);
     
     const preview = await getLinkPreview(url);
     
+    const hydratedPreview = preview
+      ? {
+          ...preview,
+          image:
+            (await resolvePreviewImage(preview.image)) ||
+            (await enhancePreviewImage(fallbackImage))
+        }
+      : null;
+
     return res.json({
       hasUrl: true,
       url,
-      preview: preview || null
+      preview: hydratedPreview
     });
   } catch (error) {
     logger.error(`[LinkPreviewController] Erro: ${error.message}`);

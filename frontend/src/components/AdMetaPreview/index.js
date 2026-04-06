@@ -90,6 +90,8 @@ const isInstagramUrl = sourceUrl => {
   }
 };
 
+const isInlineImage = image => cleanText(image).startsWith("data:image");
+
 const isLowQualityImage = (image, sourceUrl) => {
   const normalizedImage = cleanText(image);
 
@@ -111,12 +113,17 @@ const isLowQualityImage = (image, sourceUrl) => {
 
 const shouldUpgradePreview = ({ image, title, sourceUrl }) => {
   const normalizedUrl = cleanText(sourceUrl);
+  const normalizedImage = cleanText(image);
 
   if (!normalizedUrl) {
     return false;
   }
 
   if (isLowQualityImage(image, normalizedUrl)) {
+    return true;
+  }
+
+  if (normalizedImage && !isInlineImage(normalizedImage)) {
     return true;
   }
 
@@ -135,6 +142,7 @@ const AdMetaPreview = ({ image, title, body, sourceUrl }) => {
     body,
     sourceUrl
   });
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
 
   useEffect(() => {
     setResolvedPreview({
@@ -144,6 +152,10 @@ const AdMetaPreview = ({ image, title, body, sourceUrl }) => {
       sourceUrl
     });
   }, [image, title, body, sourceUrl]);
+
+  useEffect(() => {
+    setImageLoadFailed(false);
+  }, [resolvedPreview.image]);
 
   useEffect(() => {
     const normalizedUrl = cleanText(sourceUrl);
@@ -167,7 +179,8 @@ const AdMetaPreview = ({ image, title, body, sourceUrl }) => {
     const fetchPreview = async () => {
       try {
         const { data } = await api.post("/link-preview", {
-          url: normalizedUrl
+          url: normalizedUrl,
+          fallbackImage: image
         });
 
         if (!active || !data) {
@@ -204,7 +217,7 @@ const AdMetaPreview = ({ image, title, body, sourceUrl }) => {
   };
 
   const normalizedImage = cleanText(resolvedPreview.image);
-  const hasImage = !!normalizedImage && normalizedImage !== "no-image";
+  const hasImage = !!normalizedImage && normalizedImage !== "no-image" && !imageLoadFailed;
   const displayUrl = useMemo(() => {
     try {
       return resolvedPreview.sourceUrl ? new URL(cleanText(resolvedPreview.sourceUrl)).hostname : "";
@@ -220,7 +233,9 @@ const AdMetaPreview = ({ image, title, body, sourceUrl }) => {
           src={normalizedImage}
           alt="Link preview"
           className={classes.linkPreviewImage}
-          onError={(e) => { e.target.style.display = "none"; }}
+          onError={() => {
+            setImageLoadFailed(true);
+          }}
         />
       )}
       <div className={classes.linkPreviewContent}>

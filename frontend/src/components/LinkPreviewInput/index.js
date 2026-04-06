@@ -1,73 +1,25 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Paper, Typography, IconButton, CircularProgress } from '@material-ui/core';
+import { Box, Typography, IconButton, CircularProgress } from '@material-ui/core';
 import { makeStyles } from '@material-ui/core/styles';
 import CloseIcon from '@material-ui/icons/Close';
 import api from '../../services/api';
+import AdMetaPreview from '../AdMetaPreview';
 
 const useStyles = makeStyles((theme) => ({
   previewContainer: {
     marginBottom: 8,
-    borderRadius: 12,
-    overflow: 'hidden',
-    border: '1px solid #e2e8f0',
-    backgroundColor: '#fff',
     maxWidth: 400,
     position: 'relative',
-  },
-  previewImage: {
-    width: '100%',
-    height: 200,
-    objectFit: 'cover',
-    backgroundColor: '#f1f5f9',
-  },
-  previewContent: {
-    padding: 12,
-  },
-  previewTitle: {
-    fontWeight: 600,
-    fontSize: '0.95rem',
-    color: '#0f172a',
-    marginBottom: 4,
-    lineHeight: 1.3,
-    display: '-webkit-box',
-    '-webkit-line-clamp': 2,
-    '-webkit-box-orient': 'vertical',
-    overflow: 'hidden',
-  },
-  previewDescription: {
-    fontSize: '0.85rem',
-    color: '#64748b',
-    lineHeight: 1.4,
-    display: '-webkit-box',
-    '-webkit-line-clamp': 2,
-    '-webkit-box-orient': 'vertical',
-    overflow: 'hidden',
-    marginBottom: 4,
-  },
-  previewUrl: {
-    fontSize: '0.75rem',
-    color: '#005c53',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
   },
   closeButton: {
     position: 'absolute',
     top: 8,
     right: 8,
     backgroundColor: 'rgba(255,255,255,0.9)',
+    zIndex: 2,
     '&:hover': {
       backgroundColor: 'rgba(255,255,255,1)',
     },
-  },
-  noImagePlaceholder: {
-    width: '100%',
-    height: 120,
-    backgroundColor: '#f1f5f9',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#94a3b8',
-    fontSize: '0.85rem',
   },
 }));
 
@@ -174,48 +126,22 @@ const LinkPreviewInput = ({ text, onPreview, onClear }) => {
   if (!preview) return null;
   
   return (
-    <Paper className={classes.previewContainer} elevation={0}>
-      <Box position="relative">
-        <IconButton 
-          size="small" 
-          className={classes.closeButton}
-          onClick={handleClose}
-        >
-          <CloseIcon fontSize="small" />
-        </IconButton>
-        
-        {preview.image ? (
-          <img 
-            src={preview.image} 
-            alt={preview.title}
-            className={classes.previewImage}
-            onError={(e) => {
-              e.target.style.display = 'none';
-            }}
-          />
-        ) : (
-          <Box className={classes.noImagePlaceholder}>
-            <Typography variant="body2">Sem imagem</Typography>
-          </Box>
-        )}
-      </Box>
-      
-      <Box className={classes.previewContent}>
-        <Typography className={classes.previewTitle}>
-          {preview.title}
-        </Typography>
-        
-        {preview.description && (
-          <Typography className={classes.previewDescription}>
-            {preview.description}
-          </Typography>
-        )}
-        
-        <Typography className={classes.previewUrl}>
-          {new URL(preview.url).hostname}
-        </Typography>
-      </Box>
-    </Paper>
+    <Box className={classes.previewContainer}>
+      <IconButton
+        size="small"
+        className={classes.closeButton}
+        onClick={handleClose}
+      >
+        <CloseIcon fontSize="small" />
+      </IconButton>
+
+      <AdMetaPreview
+        image={preview.image}
+        title={preview.title}
+        body={preview.description}
+        sourceUrl={preview.url}
+      />
+    </Box>
   );
 };
 

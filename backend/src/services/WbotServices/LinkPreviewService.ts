@@ -1,4 +1,5 @@
 import axios from "axios";
+import sharp from "sharp";
 import logger from "../../utils/logger";
 
 export interface LinkPreviewData {
@@ -21,6 +22,15 @@ const REQUEST_HEADERS = {
   "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8"
 };
 
+const IMAGE_REQUEST_HEADERS = {
+  ...REQUEST_HEADERS,
+  Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+};
+
+const MAX_INLINE_IMAGE_BYTES = 2 * 1024 * 1024;
+const MIN_ENHANCED_WIDTH = 640;
+const INSTAGRAM_OEMBED_RETRY_DELAYS_MS = [0, 250, 800];
+
 const decodeHtml = (value: string): string =>
   value
     .replace(/&amp;/gi, "&")
@@ -35,6 +45,30 @@ const cleanValue = (value?: string | null): string => {
   }
 
   return decodeHtml(value).trim();
+};
+
+const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
+const wait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+
+const parseDataImage = (
+  value?: string | null
+): { mimeType: string; buffer: Buffer } | null => {
+  const normalized = cleanValue(value);
+
+  if (!normalized.startsWith("data:image/")) {
+    return null;
+  }
+
+  const match = normalized.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    mimeType: match[1],
+    buffer: Buffer.from(match[2], "base64")
+  };
 };
 
 const getAbsoluteImageUrl = (url: string, image: string): string => {
@@ -80,41 +114,123 @@ const normalizeInstagramUrl = (url: string): string => {
 };
 
 const getInstagramPreview = async (url: string): Promise<LinkPreviewData | null> => {
-  try {
-    const canonicalUrl = normalizeInstagramUrl(url);
-    const { data, status } = await axios.get<InstagramOEmbedResponse>(
-      "https://www.instagram.com/api/v1/oembed/",
-      {
-        timeout: 10000,
-        headers: REQUEST_HEADERS,
-        params: {
-          url: canonicalUrl
-        },
-        validateStatus: responseStatus => responseStatus >= 200 && responseStatus < 300
-      }
-    );
+  const canonicalUrl = normalizeInstagramUrl(url);
 
-    const image = cleanValue(data?.thumbnail_url);
-    const title = cleanValue(data?.provider_name) || "Instagram";
-    const description =
-      cleanValue(data?.title) ||
-      (cleanValue(data?.author_name) ? `@${cleanValue(data?.author_name)}` : "");
+  for (let attempt = 0; attempt < INSTAGRAM_OEMBED_RETRY_DELAYS_MS.length; attempt += 1) {
+    const delayMs = INSTAGRAM_OEMBED_RETRY_DELAYS_MS[attempt];
 
-    if (!image && !description) {
-      return null;
+    if (delayMs > 0) {
+      await wait(delayMs);
     }
 
-    logger.info(`[LinkPreview] Instagram oEmbed encontrado para: ${canonicalUrl}`);
+    try {
+      const { data } = await axios.get<InstagramOEmbedResponse>(
+        "https://www.instagram.com/api/v1/oembed/",
+        {
+          timeout: 10000,
+          headers: REQUEST_HEADERS,
+          params: {
+            url: canonicalUrl
+          },
+          validateStatus: responseStatus => responseStatus >= 200 && responseStatus < 300
+        }
+      );
 
-    return {
-      title,
-      description,
-      image,
-      url: canonicalUrl
-    };
+      const image = cleanValue(data?.thumbnail_url);
+      const title = cleanValue(data?.provider_name) || "Instagram";
+      const description =
+        cleanValue(data?.title) ||
+        (cleanValue(data?.author_name) ? `@${cleanValue(data?.author_name)}` : "");
+
+      if (!image && !description) {
+        return null;
+      }
+
+      return {
+        title,
+        description,
+        image,
+        url: canonicalUrl
+      };
+    } catch (error) {
+      // O oEmbed do Instagram é intermitente; tentamos novamente antes de cair no parser genérico.
+    }
+  }
+
+  return null;
+};
+
+export const resolvePreviewImage = async (imageUrl?: string | null): Promise<string> => {
+  const normalizedUrl = cleanValue(imageUrl);
+
+  if (!normalizedUrl || normalizedUrl === "no-image" || normalizedUrl.startsWith("data:image")) {
+    return normalizedUrl;
+  }
+
+  if (!isHttpUrl(normalizedUrl)) {
+    return normalizedUrl;
+  }
+
+  try {
+    const response = await axios.get<ArrayBuffer>(normalizedUrl, {
+      timeout: 15000,
+      responseType: "arraybuffer",
+      headers: IMAGE_REQUEST_HEADERS,
+      validateStatus: status => status >= 200 && status < 300
+    });
+
+    const contentType = cleanValue(response.headers["content-type"]) || "image/jpeg";
+
+    if (!contentType.toLowerCase().startsWith("image/")) {
+      return normalizedUrl;
+    }
+
+    const buffer = Buffer.from(response.data);
+
+    if (buffer.byteLength > MAX_INLINE_IMAGE_BYTES) {
+      logger.warn(
+        `[LinkPreview] Imagem excede o limite inline (${buffer.byteLength} bytes): ${normalizedUrl}`
+      );
+      return normalizedUrl;
+    }
+
+    return `data:${contentType};base64,${buffer.toString("base64")}`;
   } catch (error) {
-    logger.warn(`[LinkPreview] Instagram oEmbed indisponível para ${url}: ${error.message}`);
-    return null;
+    logger.warn(`[LinkPreview] Não foi possível inline a imagem ${normalizedUrl}: ${error.message}`);
+    return normalizedUrl;
+  }
+};
+
+export const enhancePreviewImage = async (image?: string | null): Promise<string> => {
+  const parsed = parseDataImage(image);
+
+  if (!parsed) {
+    return cleanValue(image);
+  }
+
+  try {
+    const metadata = await sharp(parsed.buffer).metadata();
+    const originalWidth = metadata.width || 0;
+
+    if (originalWidth >= MIN_ENHANCED_WIDTH) {
+      return cleanValue(image);
+    }
+
+    const outputBuffer = await sharp(parsed.buffer)
+      .resize({
+        width: MIN_ENHANCED_WIDTH,
+        fit: "inside",
+        withoutEnlargement: false,
+        kernel: sharp.kernel.lanczos3
+      })
+      .sharpen({ sigma: 1.2, m1: 1.2, m2: 2 })
+      .jpeg({ quality: 88, mozjpeg: true })
+      .toBuffer();
+
+    return `data:image/jpeg;base64,${outputBuffer.toString("base64")}`;
+  } catch (error) {
+    logger.warn(`[LinkPreview] Não foi possível melhorar miniatura inline: ${error.message}`);
+    return cleanValue(image);
   }
 };
 
@@ -124,8 +240,6 @@ const getInstagramPreview = async (url: string): Promise<LinkPreviewData | null>
  */
 export const getLinkPreview = async (url: string): Promise<LinkPreviewData | null> => {
   try {
-    logger.info(`[LinkPreview] Buscando metadados para: ${url}`);
-
     if (isInstagramUrl(url)) {
       const instagramPreview = await getInstagramPreview(url);
 
@@ -172,10 +286,7 @@ export const getLinkPreview = async (url: string): Promise<LinkPreviewData | nul
       ])
     );
 
-    logger.info(`[LinkPreview] Metadados extraídos: title=${title ? 'SIM' : 'NÃO'}, desc=${description ? 'SIM' : 'NÃO'}, image=${image ? 'SIM' : 'NÃO'}`);
-
     if (!title && !image) {
-      logger.info(`[LinkPreview] Nenhum metadado útil encontrado`);
       return null;
     }
 
