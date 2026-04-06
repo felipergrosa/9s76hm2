@@ -75,7 +75,22 @@ const cleanText = value => {
   return String(value).trim();
 };
 
-const isLowQualityImage = image => {
+const isInstagramUrl = sourceUrl => {
+  const normalizedUrl = cleanText(sourceUrl);
+
+  if (!normalizedUrl) {
+    return false;
+  }
+
+  try {
+    const hostname = new URL(normalizedUrl).hostname.toLowerCase();
+    return hostname === "instagram.com" || hostname.endsWith(".instagram.com") || hostname === "instagr.am";
+  } catch (error) {
+    return normalizedUrl.includes("instagram.com") || normalizedUrl.includes("instagr.am");
+  }
+};
+
+const isLowQualityImage = (image, sourceUrl) => {
   const normalizedImage = cleanText(image);
 
   if (!normalizedImage || normalizedImage === "no-image") {
@@ -86,8 +101,30 @@ const isLowQualityImage = image => {
     return false;
   }
 
+  if (isInstagramUrl(sourceUrl)) {
+    return true;
+  }
+
   const [, payload = ""] = normalizedImage.split(",");
-  return cleanText(payload).length < 15000;
+  return cleanText(payload).length < 100000;
+};
+
+const shouldUpgradePreview = ({ image, title, sourceUrl }) => {
+  const normalizedUrl = cleanText(sourceUrl);
+
+  if (!normalizedUrl) {
+    return false;
+  }
+
+  if (isLowQualityImage(image, normalizedUrl)) {
+    return true;
+  }
+
+  if (isInstagramUrl(normalizedUrl)) {
+    return cleanText(title).toLowerCase() === "instagram";
+  }
+
+  return false;
 };
 
 const AdMetaPreview = ({ image, title, body, sourceUrl }) => {
@@ -110,7 +147,7 @@ const AdMetaPreview = ({ image, title, body, sourceUrl }) => {
 
   useEffect(() => {
     const normalizedUrl = cleanText(sourceUrl);
-    if (!normalizedUrl || !isLowQualityImage(image)) {
+    if (!shouldUpgradePreview({ image, title, sourceUrl: normalizedUrl })) {
       return undefined;
     }
 
@@ -154,7 +191,7 @@ const AdMetaPreview = ({ image, title, body, sourceUrl }) => {
     return () => {
       active = false;
     };
-  }, [image, sourceUrl]);
+  }, [image, sourceUrl, title]);
 
   const handleAdClick = async () => {
     try {
