@@ -79,7 +79,8 @@ export const listAvailable = async (req: Request, res: Response): Promise<Respon
     id: u.id,
     name: u.name,
     email: u.email,
-    profile: u.profile
+    profile: u.profile,
+    queues: (u as any).queues || []
   }));
 
   return res.json(basicUsers);
