@@ -70,9 +70,13 @@ export const list = async (req: Request, res: Response): Promise<Response> => {
 export const listAvailable = async (req: Request, res: Response): Promise<Response> => {
   const { companyId: userCompanyId } = req.user;
 
+  console.log('[UserController.listAvailable] Requisição recebida para companyId:', userCompanyId);
+
   const users = await SimpleListService({
     companyId: userCompanyId
   });
+
+  console.log('[UserController.listAvailable] Usuários retornados do service:', users?.length || 0);
 
   // Retorna apenas dados básicos para seleção
   const basicUsers = users.map(u => ({
@@ -82,6 +86,8 @@ export const listAvailable = async (req: Request, res: Response): Promise<Respon
     profile: u.profile,
     queues: (u as any).queues || []
   }));
+
+  console.log('[UserController.listAvailable] Enviando resposta com', basicUsers.length, 'usuários');
 
   return res.json(basicUsers);
 };

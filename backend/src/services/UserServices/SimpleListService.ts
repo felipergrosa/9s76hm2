@@ -13,12 +13,14 @@ const SimpleListService = async ({ companyId, requestUserId }: Params): Promise<
     companyId
   };
 
+  console.log('[SimpleListService] Buscando usuários para companyId:', companyId);
+
   // Ghost Mode NÃO filtra lista de usuários
   // Usuários Ghost devem aparecer em seletores/dropdowns
 
   const users = await User.findAll({
     where: whereCondition,
-    attributes: ["name", "id", "email"],
+    attributes: ["name", "id", "email", "profile"],
     include: [
       { 
         model: Queue, 
@@ -29,6 +31,9 @@ const SimpleListService = async ({ companyId, requestUserId }: Params): Promise<
     ],
     order: [["name", "ASC"]]
   });
+
+  console.log('[SimpleListService] Total de usuários encontrados:', users?.length || 0);
+  console.log('[SimpleListService] Usuários:', users?.map(u => ({ id: u.id, name: u.name })));
 
   if (!users) {
     throw new AppError("ERR_NO_USER_FOUND", 404);
