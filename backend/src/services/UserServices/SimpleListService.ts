@@ -23,10 +23,11 @@ const SimpleListService = async ({ companyId, requestUserId }: Params): Promise<
       { 
         model: Queue, 
         as: 'queues', 
-        attributes: ['id', 'name', 'color', 'participantName'] 
+        attributes: ['id', 'name', 'color', 'participantName'],
+        required: false // LEFT JOIN - inclui usuários mesmo sem filas
       }
     ],
-    order: [["id", "ASC"]]
+    order: [["name", "ASC"]]
   });
 
   if (!users) {
