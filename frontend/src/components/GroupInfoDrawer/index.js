@@ -812,7 +812,7 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
                     primary={
                       <span style={{ display: "flex", alignItems: "center" }}>
                         <span className={classes.participantName}>
-                          {participant.name !== "Participante" && participant.name !== getParticipantDisplayNumber(participant)
+                          {participant.name && participant.name !== "Participante" && !participant.name.replace(/\D/g, '').includes(participant.number?.replace(/\D/g, '') || '')
                             ? participant.name
                             : getParticipantDisplayNumber(participant)}
                         </span>
@@ -834,7 +834,7 @@ const GroupInfoDrawer = ({ open, handleDrawerClose, contact, ticket }) => {
                       </span>
                     }
                     secondary={
-                      participant.name !== "Participante" && participant.name !== getParticipantDisplayNumber(participant) ? (
+                      participant.name && participant.name !== "Participante" && !participant.name.replace(/\D/g, '').includes(participant.number?.replace(/\D/g, '') || '') ? (
                         <span className={classes.participantNumber}>
                           {getParticipantDisplayNumber(participant)}
                         </span>
