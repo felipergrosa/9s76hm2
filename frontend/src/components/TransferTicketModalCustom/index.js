@@ -98,8 +98,6 @@ const TransferTicketModalCustom = ({ modalOpen, onClose, ticketid, ticket, mode 
         try {
           // Usa /users/available - SEM permissão users.view
           const { data } = await api.get("/users/available");
-          console.log('[TransferTicketModal] Total de usuários carregados:', data?.length || 0);
-          console.log('[TransferTicketModal] Usuários:', data?.map(u => ({ id: u.id, name: u.name, profile: u.profile })));
           setOptions(data);
           setLoading(false);
         } catch (err) {
