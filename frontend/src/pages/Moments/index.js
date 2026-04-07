@@ -25,7 +25,7 @@ const useStyles = makeStyles((theme) => ({
     padding: theme.spacing(1),
     ...theme.scrollbarStyles,
     overflowY: "hidden",
-    overflowX: "scroll",
+    overflowX: "auto",
     scrollbarWidth: "thin",
     alignItems: "stretch",
     minHeight: 0,
@@ -33,9 +33,12 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: "transparent",
     border: "none",
     boxShadow: "none",
-    // Crítico para scroll horizontal
     maxWidth: "100%",
     width: "100%",
+    // Garantir que o scroll funcione em mobile
+    WebkitOverflowScrolling: "touch",
+    // Permitir scroll suave
+    scrollBehavior: "smooth",
   },
   fixedHeightPaper: {
     padding: theme.spacing(2),

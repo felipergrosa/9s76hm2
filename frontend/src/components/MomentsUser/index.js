@@ -52,10 +52,10 @@ const useStyles = makeStyles((theme) => ({
     gap: theme.spacing(2),
     height: "100%",
     minHeight: 0,
-    width: "fit-content", // Crítico: largura baseada no conteúdo
+    width: "fit-content",
     minWidth: "100%",
     paddingBottom: theme.spacing(2),
-    paddingRight: theme.spacing(2), // Espaço após o último lane
+    paddingRight: theme.spacing(4), // Aumentado para garantir espaço após última coluna
     alignItems: "stretch",
   },
   column: {
