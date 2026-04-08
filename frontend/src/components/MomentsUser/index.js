@@ -464,7 +464,7 @@ const MomentsUser = ({ onPanStart }) => {
     setOpenTicketMessageDialog(true);
   };
 
-  const renderTicketCard = (ticket) => (
+  const TicketCard = React.memo(({ ticket }) => (
     <Card key={ticket.id} className={classes.ticketCard}>
       <CardActionArea
         onClick={() => handleTicketClick(ticket)}
@@ -580,7 +580,13 @@ const MomentsUser = ({ onPanStart }) => {
         </CardContent>
       </CardActionArea>
     </Card>
-  );
+  ), (prevProps, nextProps) => {
+    // Otimização: só re-renderiza se o ticket mudou
+    return prevProps.ticket.id === nextProps.ticket.id &&
+           prevProps.ticket.updatedAt === nextProps.ticket.updatedAt &&
+           prevProps.ticket.unreadMessages === nextProps.ticket.unreadMessages &&
+           prevProps.ticket.status === nextProps.ticket.status;
+  });
 
   const renderColumn = (title, icon, items, color) => (
     <Paper className={classes.column} elevation={0}>
@@ -599,7 +605,7 @@ const MomentsUser = ({ onPanStart }) => {
       </div>
       <div className={classes.ticketsList}>
         {items.length > 0 ? (
-          items.map(renderTicketCard)
+          items.map(ticket => <TicketCard key={ticket.id} ticket={ticket} />)
         ) : (
           <div onPointerDown={onPanStart} style={{ padding: 20, textAlign: "center", color: "#bdbdbd", cursor: "grab" }}>
             <Typography variant="body2">Nenhum atendimento</Typography>
@@ -660,7 +666,7 @@ const MomentsUser = ({ onPanStart }) => {
             </Badge>
           </div>
           <div className={classes.ticketsList}>
-            {group.tickets.map(renderTicketCard)}
+            {group.tickets.map(ticket => <TicketCard key={ticket.id} ticket={ticket} />)}
           </div>
         </Paper>
       ))}

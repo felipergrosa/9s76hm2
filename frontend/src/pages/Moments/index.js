@@ -33,12 +33,13 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: "transparent",
     border: "none",
     boxShadow: "none",
-    maxWidth: "100%",
     width: "100%",
     // Garantir que o scroll funcione em mobile
     WebkitOverflowScrolling: "touch",
     // Permitir scroll suave
     scrollBehavior: "smooth",
+    // Forçar scroll horizontal
+    position: "relative",
   },
   fixedHeightPaper: {
     padding: theme.spacing(2),
@@ -120,11 +121,12 @@ const ChatMoments = () => {
               Visão geral em tempo real dos atendimentos organizados por categorias (Bot, Campanhas, Pendentes) e filas de usuários.
             </Typography>
           </Grid>
-          <Grid item style={{ width: "100%", height: "calc(100vh - 160px)" }}>
+          <Grid item style={{ width: "100%", height: "calc(100vh - 160px)", overflow: "hidden" }}>
             <Paper
               className={classes.mainPaper}
               variant="outlined"
               ref={momentsScrollRef}
+              onPointerDown={handlePanStart}
             >
               <MomentsUser onPanStart={handlePanStart} />
             </Paper>
