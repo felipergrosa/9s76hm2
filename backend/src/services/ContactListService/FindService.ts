@@ -1,5 +1,6 @@
+import { col, fn } from "sequelize";
 import ContactList from "../../models/ContactList";
-import Company from "../../models/Company";
+import ContactListItem from "../../models/ContactListItem";
 
 type Params = {
   companyId: string;
@@ -10,7 +11,22 @@ const FindService = async ({ companyId }: Params): Promise<ContactList[]> => {
     where: {
       companyId
     },
-    include: [{ model: Company, as: "company", attributes: ["id", "name"] }],
+    include: [
+      {
+        model: ContactListItem,
+        as: "contacts",
+        attributes: [],
+        required: false
+      }
+    ],
+    attributes: [
+      "id",
+      "name",
+      "savedFilter",
+      [fn("count", col("contacts.id")), "contactsCount"]
+    ],
+    group: ["ContactList.id"],
+    subQuery: false,
     order: [["name", "ASC"]]
   });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext, useMemo } from "react";
+import React, { useState, useEffect, useRef, useContext, useMemo, useCallback } from "react";
 import { useHistory, useParams } from "react-router-dom";
 import * as Yup from "yup";
 import { Formik, Form, Field } from "formik";
@@ -24,7 +24,7 @@ import InfoOutlinedIcon from "@material-ui/icons/InfoOutlined";
 import LocalOfferIcon from "@material-ui/icons/LocalOffer";
 import SaveIcon from "@material-ui/icons/Save";
 import AccessTimeIcon from "@material-ui/icons/AccessTime";
-import { ChevronRight, ChevronLeft, ArrowLeft, Settings as SettingsIcon, Assignment as AssignmentIcon, Event as EventIcon, QuestionAnswer as QuestionAnswerIcon, Send as SendIcon, FlashOn as FlashOnIcon, PlayCircleOutline as PlayCircleOutlineIcon, PauseCircleOutline as PauseCircleOutlineIcon } from "@material-ui/icons";
+import { ChevronRight, ChevronLeft, ArrowLeft, Settings as SettingsIcon, Assignment as AssignmentIcon, Event as EventIcon, QuestionAnswer as QuestionAnswerIcon, Send as SendIcon, FlashOn as FlashOnIcon, PlayCircleOutline as PlayCircleOutlineIcon, PauseCircleOutline as PauseCircleOutlineIcon, Refresh as RefreshIcon, OpenInNew as OpenInNewIcon } from "@material-ui/icons";
 import { Sparkles, Smile, Settings, Rocket, Calendar, Zap } from "lucide-react";
 
 import api from "../../services/api";
@@ -157,6 +157,110 @@ const CampaignSchema = Yup.object().shape({
 });
 
 const STEPS = ["Configuração", "Regras", "Agendamento", "Mensagem"];
+const META_TEMPLATE_MANAGER_URL = "https://business.facebook.com/wa/manage/message-templates";
+const CAMPAIGN_ESTIMATE_DEFAULTS = {
+  messageInterval: 20,
+  longerIntervalAfter: 20,
+  greaterInterval: 60,
+  capHourly: 100,
+  capDaily: 150,
+  officialApiMessageInterval: 5,
+  officialApiCapHourly: 1000,
+  officialApiCapDaily: 10000,
+};
+const OFFICIAL_ESTIMATE_LONGER_INTERVAL_AFTER = 100;
+const OFFICIAL_ESTIMATE_GREATER_INTERVAL = 30;
+
+const normalizeCampaignSettingValue = (value) => {
+  if (value === null || value === undefined) return value;
+
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (_) {
+    return value;
+  }
+};
+
+const getNumericSetting = (value, fallback) => {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? parsedValue : fallback;
+};
+
+const getSelectedContactListIds = (values = {}) => {
+  const ids = [];
+
+  if (Array.isArray(values.contactListIds)) {
+    ids.push(...values.contactListIds);
+  }
+
+  if (values.contactListId && values.contactListId !== "Nenhuma") {
+    ids.push(values.contactListId);
+  }
+
+  return Array.from(new Set(ids.map(id => Number(id)).filter(Number.isFinite)));
+};
+
+const formatEstimatedDuration = (totalSeconds) => {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
+    return "menos de 1 min";
+  }
+
+  const roundedSeconds = Math.max(60, Math.round(totalSeconds / 60) * 60);
+  const days = Math.floor(roundedSeconds / 86400);
+  const hours = Math.floor((roundedSeconds % 86400) / 3600);
+  const minutes = Math.floor((roundedSeconds % 3600) / 60);
+  const parts = [];
+
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0 && parts.length < 2) parts.push(`${minutes}min`);
+
+  if (parts.length === 0) {
+    return "menos de 1 min";
+  }
+
+  return parts.join(" ");
+};
+
+const getConnectionEstimateCaps = (connection, settings) => {
+  const isOfficial = connection?.channelType === "official";
+
+  if (isOfficial) {
+    const messageInterval = Math.max(0, getNumericSetting(settings.officialApiMessageInterval, CAMPAIGN_ESTIMATE_DEFAULTS.officialApiMessageInterval));
+    const capHourly = Math.max(0, getNumericSetting(settings.officialApiCapHourly, CAMPAIGN_ESTIMATE_DEFAULTS.officialApiCapHourly));
+    const capDaily = Math.max(0, getNumericSetting(settings.officialApiCapDaily, CAMPAIGN_ESTIMATE_DEFAULTS.officialApiCapDaily));
+    const pacingPerHour = messageInterval > 0
+      ? (3600 * OFFICIAL_ESTIMATE_LONGER_INTERVAL_AFTER) / ((OFFICIAL_ESTIMATE_LONGER_INTERVAL_AFTER * messageInterval) + OFFICIAL_ESTIMATE_GREATER_INTERVAL)
+      : capHourly;
+    const effectiveHourly = capHourly > 0 ? Math.min(pacingPerHour, capHourly) : pacingPerHour;
+    const effectiveDaily = capDaily > 0 ? Math.min(capDaily, Math.max(0, effectiveHourly) * 24) : Math.max(0, effectiveHourly) * 24;
+
+    return {
+      hourlyRate: Math.max(0, effectiveHourly),
+      dailyRate: Math.max(0, Math.floor(effectiveDaily)),
+    };
+  }
+
+  const messageInterval = Math.max(0, getNumericSetting(settings.messageInterval, CAMPAIGN_ESTIMATE_DEFAULTS.messageInterval));
+  const longerIntervalAfter = Math.max(0, getNumericSetting(settings.longerIntervalAfter, CAMPAIGN_ESTIMATE_DEFAULTS.longerIntervalAfter));
+  const greaterInterval = Math.max(0, getNumericSetting(settings.greaterInterval, CAMPAIGN_ESTIMATE_DEFAULTS.greaterInterval));
+  const capHourly = Math.max(0, getNumericSetting(settings.capHourly, CAMPAIGN_ESTIMATE_DEFAULTS.capHourly));
+  const capDaily = Math.max(0, getNumericSetting(settings.capDaily, CAMPAIGN_ESTIMATE_DEFAULTS.capDaily));
+  const pacingPerHour = longerIntervalAfter > 0
+    ? (3600 * longerIntervalAfter) / ((longerIntervalAfter * messageInterval) + greaterInterval)
+    : (messageInterval > 0 ? 3600 / messageInterval : capHourly);
+  const effectiveHourly = capHourly > 0 ? Math.min(pacingPerHour, capHourly) : pacingPerHour;
+  const effectiveDaily = capDaily > 0 ? Math.min(capDaily, Math.max(0, effectiveHourly) * 24) : Math.max(0, effectiveHourly) * 24;
+
+  return {
+    hourlyRate: Math.max(0, effectiveHourly),
+    dailyRate: Math.max(0, Math.floor(effectiveDaily)),
+  };
+};
 
 // Função para validar e mostrar erros com SweetAlert2 (por step)
 const validateStepAndShowErrors = async (validateForm, values, whatsappId, selectedQueue, currentStep) => {
@@ -179,7 +283,7 @@ const validateStepAndShowErrors = async (validateForm, values, whatsappId, selec
     scheduledAt: "Data de Agendamento",
     openTicket: "Abrir Ticket",
     statusTicket: "Status do Ticket",
-    queueId: "Fila (Queue)",
+    queueId: "Fila (Departamento)",
     confirmation: "Confirmação",
   };
   
@@ -332,6 +436,7 @@ const CampaignForm = () => {
   const [queues, setQueues] = useState([]);
   const [allQueues, setAllQueues] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [campaignSettings, setCampaignSettings] = useState(CAMPAIGN_ESTIMATE_DEFAULTS);
 
   // Selections
   const [selectedUsers, setSelectedUsers] = useState([]);
@@ -450,15 +555,60 @@ const CampaignForm = () => {
   }, []);
 
   useEffect(() => {
+    let active = true;
+
+    api.get("/campaign-settings")
+      .then(({ data }) => {
+        if (!active || !Array.isArray(data)) return;
+
+        const normalizedSettings = data.reduce((acc, item) => {
+          acc[item.key] = normalizeCampaignSettingValue(item.value);
+          return acc;
+        }, {});
+
+        setCampaignSettings(prev => ({
+          ...prev,
+          ...normalizedSettings
+        }));
+      })
+      .catch((error) => {
+        if (error?.response?.status !== 403) {
+          toastError(error);
+        }
+      });
+
+    return () => { active = false; };
+  }, []);
+
+  const loadAllContactLists = useCallback(async () => {
+    const allRecords = [];
+    let pageNumber = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data } = await api.get("/contact-lists", {
+        params: { pageNumber }
+      });
+
+      const records = Array.isArray(data?.records) ? data.records : [];
+      allRecords.push(...records);
+      hasMore = Boolean(data?.hasMore);
+      pageNumber += 1;
+    }
+
+    return allRecords;
+  }, []);
+
+  useEffect(() => {
     if (!isMounted.current) return;
     (async () => {
       try {
         const [clRes, waRes, tagRes] = await Promise.all([
-          api.get("/contact-lists/list", { params: { companyId } }),
+          loadAllContactLists(),
           api.get("/whatsapp", { params: { companyId, session: 0 } }),
           api.get("/tags/list", { params: { companyId, kanban: 0 } }),
         ]);
-        setContactLists(clRes.data || []);
+        setContactLists(clRes || []);
         setWhatsapps((waRes.data || []).map(w => ({ ...w, selected: false })));
         setTagLists((tagRes.data || []).map(t => ({ id: t.id, name: `${t.name} (${(t.contacts||[]).length})` })));
 
@@ -558,7 +708,7 @@ const CampaignForm = () => {
         }
       } catch (err) { if (err?.response?.status !== 403) toastError(err); setCampaignLoading(false); }
     })();
-  }, [campaignId, companyId]);
+  }, [campaignId, companyId, loadAllContactLists]);
 
   useEffect(() => {
     const now = moment(); const s = moment(campaign.scheduledAt);
@@ -566,21 +716,49 @@ const CampaignForm = () => {
     setCampaignEditable(ok);
   }, [campaign.status, campaign.scheduledAt]);
 
+  const loadOfficialTemplates = useCallback(async (targetWhatsappId, options = {}) => {
+    const { showSuccessToast = false } = options;
+
+    if (!targetWhatsappId) {
+      setAvailableTemplates([]);
+      return [];
+    }
+
+    setLoadingTemplates(true);
+
+    try {
+      const [{ data: templatesData }, { data: whatsappData }] = await Promise.all([
+        api.get(`/whatsapp/${targetWhatsappId}/templates`),
+        api.get(`/whatsapp/${targetWhatsappId}`)
+      ]);
+
+      const allTemplates = templatesData.templates || [];
+      const allowedTemplates = whatsappData.allowedTemplates;
+      const filteredTemplates = allowedTemplates?.length
+        ? allTemplates.filter(template => allowedTemplates.includes(template.id))
+        : allTemplates;
+
+      setAvailableTemplates(filteredTemplates);
+
+      if (showSuccessToast) {
+        toast.success(`Lista atualizada: ${filteredTemplates.length} template(s) carregado(s).`);
+      }
+
+      return filteredTemplates;
+    } catch (error) {
+      toastError(error);
+      return [];
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!whatsappId) { setAvailableTemplates([]); return; }
     const wa = whatsapps.find(w => w.id === whatsappId);
     if (wa?.channelType !== "official") { setAvailableTemplates([]); return; }
-    (async () => {
-      setLoadingTemplates(true);
-      try {
-        const { data: td } = await api.get(`/whatsapp/${whatsappId}/templates`);
-        const { data: wd } = await api.get(`/whatsapp/${whatsappId}`);
-        const all = td.templates || [];
-        const allowed = wd.allowedTemplates;
-        setAvailableTemplates(allowed?.length ? all.filter(t => allowed.includes(t.id)) : all);
-      } catch(e) { toastError(e); } finally { setLoadingTemplates(false); }
-    })();
-  }, [whatsappId, whatsapps]);
+    loadOfficialTemplates(whatsappId);
+  }, [whatsappId, whatsapps, loadOfficialTemplates]);
 
   // Carregar pastas/arquivos da biblioteca quando o dialog abrir
   useEffect(() => {
@@ -610,6 +788,59 @@ const CampaignForm = () => {
     try { setLoading(true); const { data } = await api.get("/users/available"); setOptions(data || []); }
     catch(e) { if (e?.response?.status !== 403) toastError(e); }
     finally { setLoading(false); }
+  };
+
+  const buildCampaignDeliveryEstimate = (values) => {
+    const selectedListIds = getSelectedContactListIds(values);
+    const totalContacts = selectedListIds.reduce((sum, listId) => {
+      const list = (contactLists || []).find(item => Number(item?.id) === Number(listId));
+      const rawCount = list?.contactsCount ?? list?.dataValues?.contactsCount ?? list?.contacts?.length ?? 0;
+      const contactsCount = Number(rawCount);
+      return sum + (Number.isFinite(contactsCount) ? contactsCount : 0);
+    }, 0);
+
+    const poolIds = dispatchStrategy === "round_robin" && Array.isArray(allowedWhatsappIds) && allowedWhatsappIds.length > 0
+      ? allowedWhatsappIds
+      : (whatsappId ? [whatsappId] : []);
+
+    const selectedConnections = Array.from(new Set(poolIds.map(id => Number(id)).filter(Number.isFinite)))
+      .map(id => (whatsapps || []).find(item => Number(item?.id) === id))
+      .filter(Boolean);
+
+    const aggregateCaps = selectedConnections.reduce((acc, connection) => {
+      const caps = getConnectionEstimateCaps(connection, campaignSettings);
+      acc.hourlyRate += caps.hourlyRate;
+      acc.dailyRate += caps.dailyRate;
+      return acc;
+    }, { hourlyRate: 0, dailyRate: 0 });
+
+    let estimatedDurationSeconds = 0;
+    let remainingContacts = totalContacts;
+
+    if (aggregateCaps.hourlyRate > 0 && totalContacts > 0) {
+      if (aggregateCaps.dailyRate > 0 && aggregateCaps.dailyRate < aggregateCaps.hourlyRate * 24) {
+        while (remainingContacts > 0) {
+          const contactsToday = Math.min(remainingContacts, aggregateCaps.dailyRate);
+          const secondsToday = (contactsToday / aggregateCaps.hourlyRate) * 3600;
+          estimatedDurationSeconds += secondsToday;
+          remainingContacts -= contactsToday;
+
+          if (remainingContacts > 0) {
+            estimatedDurationSeconds += Math.max(0, 86400 - secondsToday);
+          }
+        }
+      } else {
+        estimatedDurationSeconds = (totalContacts / aggregateCaps.hourlyRate) * 3600;
+      }
+    }
+
+    return {
+      totalContacts,
+      connectionCount: selectedConnections.length,
+      hourlyRate: aggregateCaps.hourlyRate,
+      estimatedDurationSeconds,
+      hasTagFilter: values?.tagListId && values.tagListId !== "Nenhuma",
+    };
   };
 
   // ─── Handlers ───
@@ -954,10 +1185,10 @@ const CampaignForm = () => {
                              </FormControl>
                            </Grid>
 
-                           {/* Linha 2: Fila (Queue) | Usuários */}
+                           {/* Linha 2: Fila (Departamento) | Usuários */}
                            <Grid item xs={12} md={6}>
                              <Box display="flex" alignItems="center" mb={1} gap={0.5}>
-                               <label className={classes.label} style={{ marginBottom: 0 }}>Fila (Queue)</label>
+                               <label className={classes.label} style={{ marginBottom: 0 }}>Fila (Departamento)</label>
                                <Tooltip title="Para qual setor o ticket será direcionado caso o cliente responda."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
                              </Box>
                              <FormControl variant="outlined" fullWidth error={errors.queueId && touched.queueId} className={classes.formField}>
@@ -1132,57 +1363,87 @@ const CampaignForm = () => {
                       </Paper>
                     </Grid>
                     <Grid item xs={12} md={5}>
-                      <Paper className={classes.sideCard}>
-                        <Typography variant="h6" style={{ fontWeight: 700, marginBottom: 16 }}>📊 Resumo da Estratégia</Typography>
-                        
-                        <Box mb={2}>
-                          <Typography variant="caption" color="textSecondary">CAMPANHA</Typography>
-                          <Typography variant="body2" style={{ fontWeight: 600 }}>{values.name || "N/A"}</Typography>
-                        </Box>
+                      {(() => {
+                        const selectedListIds = getSelectedContactListIds(values);
+                        const selectedListNames = contactLists
+                          .filter(c => selectedListIds.includes(Number(c?.id)))
+                          .map(c => c.name);
+                        const deliveryEstimate = buildCampaignDeliveryEstimate(values);
+                        const frequencyLabel = deliveryEstimate.hourlyRate > 0
+                          ? `~${Math.max(1, Math.round(deliveryEstimate.hourlyRate))} msg/h`
+                          : "Defina uma conexão";
+                        const estimateDetail = deliveryEstimate.totalContacts > 0 && deliveryEstimate.hourlyRate > 0
+                          ? `${deliveryEstimate.totalContacts} contato(s) • conclusão em ~${formatEstimatedDuration(deliveryEstimate.estimatedDurationSeconds)}`
+                          : (selectedListIds.length > 0
+                            ? `${deliveryEstimate.totalContacts} contato(s) na(s) lista(s)`
+                            : "Selecione uma lista para estimar");
 
-                        <Box mb={2}>
-                          <Typography variant="caption" color="textSecondary">PÚBLICO ALVO</Typography>
-                          <Typography variant="body2" style={{ fontWeight: 600 }}>
-                            {values.contactListIds?.length > 0 
-                              ? contactLists.filter(c => values.contactListIds.includes(c.id)).map(c => c.name).join(", ")
-                              : "Nenhuma lista selecionada"}
-                          </Typography>
-                          {values.tagListId !== "Nenhuma" && <Typography variant="caption" style={{ display: 'block', marginTop: 2, color: '#0369a1' }}>🎯 Filtro de Tag: {tagLists.find(t => t.id === values.tagListId)?.name}</Typography>}
-                        </Box>
+                        return (
+                          <Paper className={classes.sideCard}>
+                            <Typography variant="h6" style={{ fontWeight: 700, marginBottom: 16 }}>📊 Resumo da Estratégia</Typography>
+                            
+                            <Box mb={2}>
+                              <Typography variant="caption" color="textSecondary">CAMPANHA</Typography>
+                              <Typography variant="body2" style={{ fontWeight: 600 }}>{values.name || "N/A"}</Typography>
+                            </Box>
 
-                        <Box mb={2}>
-                          <Typography variant="caption" color="textSecondary">CONEXÃO PRINCIPAL</Typography>
-                          <Typography variant="body2" style={{ fontWeight: 600 }}>{whatsapps.find(w => w.id === whatsappId)?.name || "Nenhuma"}</Typography>
-                        </Box>
+                            <Box mb={2}>
+                              <Typography variant="caption" color="textSecondary">PÚBLICO ALVO</Typography>
+                              <Typography variant="body2" style={{ fontWeight: 600 }}>
+                                {selectedListNames.length > 0 ? selectedListNames.join(", ") : "Nenhuma lista selecionada"}
+                              </Typography>
+                              {values.tagListId !== "Nenhuma" && <Typography variant="caption" style={{ display: 'block', marginTop: 2, color: '#0369a1' }}>🎯 Filtro de Tag: {tagLists.find(t => t.id === values.tagListId)?.name}</Typography>}
+                            </Box>
 
-                        <Box mb={2}>
-                          <Typography variant="caption" color="textSecondary">RODÍZIO (POOL)</Typography>
-                          <Typography variant="body2" style={{ fontWeight: 600 }}>{dispatchStrategy === "single" ? "📱 Conexão Única" : `🎯 ${allowedWhatsappIds.length} conexões selecionadas`}</Typography>
-                        </Box>
+                            <Box mb={2}>
+                              <Typography variant="caption" color="textSecondary">CONEXÃO PRINCIPAL</Typography>
+                              <Typography variant="body2" style={{ fontWeight: 600 }}>{whatsapps.find(w => w.id === whatsappId)?.name || "Nenhuma"}</Typography>
+                            </Box>
 
-                        <Box mb={2}>
-                          <Typography variant="caption" color="textSecondary">ATENDIMENTO</Typography>
-                          <Typography variant="body2" style={{ fontWeight: 600 }}>
-                            {values.openTicket === "enabled" ? "✅ Abre Ticket" : "❌ Apenas Mensagem"} 
-                            {values.statusTicket && ` (${values.statusTicket.toUpperCase()})`}
-                          </Typography>
-                          <Typography variant="caption">{selectedQueue ? `Fila: ${queues.find(q => q.id === selectedQueue)?.name}` : "Sem fila definida"}</Typography>
-                        </Box>
+                            <Box mb={2}>
+                              <Typography variant="caption" color="textSecondary">RODÍZIO (POOL)</Typography>
+                              <Typography variant="body2" style={{ fontWeight: 600 }}>
+                                {dispatchStrategy === "single"
+                                  ? "📱 Conexão Única"
+                                  : `🎯 ${deliveryEstimate.connectionCount || allowedWhatsappIds.length} conexões selecionadas`}
+                              </Typography>
+                            </Box>
 
-                        <Divider style={{ margin: "16px 0" }} />
+                            <Box mb={2}>
+                              <Typography variant="caption" color="textSecondary">ATENDIMENTO</Typography>
+                              <Typography variant="body2" style={{ fontWeight: 600 }}>
+                                {values.openTicket === "enabled" ? "✅ Abre Ticket" : "❌ Apenas Mensagem"} 
+                                {values.statusTicket && ` (${values.statusTicket.toUpperCase()})`}
+                              </Typography>
+                              <Typography variant="caption">{selectedQueue ? `Fila: ${queues.find(q => q.id === selectedQueue)?.name}` : "Sem fila definida"}</Typography>
+                            </Box>
 
-                        <Box display="flex" justifyContent="space-between" mb={1}>
-                          <Typography variant="caption" color="textSecondary">AGENDAMENTO</Typography>
-                          <Typography variant="body2" style={{ fontWeight: 600, color: values.scheduledAt ? "#f97316" : "#005c53" }}>
-                            {values.scheduledAt ? moment(values.scheduledAt).format("DD/MM [às] HH:mm") : "Imediato"}
-                          </Typography>
-                        </Box>
+                            <Divider style={{ margin: "16px 0" }} />
 
-                        <Box display="flex" justifyContent="space-between" mb={1}>
-                          <Typography variant="caption" color="textSecondary">FREQUÊNCIA ESTIMA.</Typography>
-                          <Typography variant="body2" style={{ fontWeight: 600 }}>~80 msg/h</Typography>
-                        </Box>
-                      </Paper>
+                            <Box display="flex" justifyContent="space-between" mb={1}>
+                              <Typography variant="caption" color="textSecondary">AGENDAMENTO</Typography>
+                              <Typography variant="body2" style={{ fontWeight: 600, color: values.scheduledAt ? "#f97316" : "#005c53" }}>
+                                {values.scheduledAt ? moment(values.scheduledAt).format("DD/MM [às] HH:mm") : "Imediato"}
+                              </Typography>
+                            </Box>
+
+                            <Box display="flex" justifyContent="space-between" mb={0.5}>
+                              <Typography variant="caption" color="textSecondary">FREQUÊNCIA ESTIMA.</Typography>
+                              <Typography variant="body2" style={{ fontWeight: 600 }}>{frequencyLabel}</Typography>
+                            </Box>
+
+                            <Typography variant="caption" style={{ display: "block", color: "#475569" }}>
+                              {estimateDetail}
+                            </Typography>
+
+                            {deliveryEstimate.hasTagFilter && (
+                              <Typography variant="caption" style={{ display: "block", marginTop: 4, color: "#0369a1" }}>
+                                A estimativa usa o volume bruto das listas. O filtro de tag pode reduzir esse total.
+                              </Typography>
+                            )}
+                          </Paper>
+                        );
+                      })()}
                     </Grid>
                    </>)}
 
@@ -1195,6 +1456,7 @@ const CampaignForm = () => {
                          {/* Templates Meta (API Oficial) - MOVED HERE */}
                          {(() => {
                            const selectedWhatsapp = whatsapps.find(w => w.id === whatsappId);
+                           const metaTemplatesManagerUrl = META_TEMPLATE_MANAGER_URL;
                            return selectedWhatsapp?.channelType === "official" ? (
                              <Box mb={3} p={2.5} style={{ backgroundColor: "#eff6ff", borderRadius: 16, border: "1px solid #bfdbfe" }}>
                                <Box display="flex" alignItems="center" mb={1} gap={1}>
@@ -1222,6 +1484,51 @@ const CampaignForm = () => {
                                    </Select>
                                    {loadingTemplates && <FormHelperText>Carregando templates...</FormHelperText>}
                                  </FormControl>
+                               </Box>
+
+                               <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" style={{ gap: 8 }}>
+                                 <Button
+                                   size="small"
+                                   variant="outlined"
+                                   color="primary"
+                                   startIcon={<OpenInNewIcon fontSize="small" />}
+                                   onClick={() => window.open(metaTemplatesManagerUrl, "_blank", "noopener,noreferrer")}
+                                 >
+                                   Criar template no Meta
+                                 </Button>
+
+                                 <Tooltip title="Recarregar apenas a lista de templates">
+                                   <span>
+                                     <IconButton
+                                       size="small"
+                                       color="primary"
+                                       onClick={async () => {
+                                         const refreshedTemplates = await loadOfficialTemplates(whatsappId, { showSuccessToast: true });
+
+                                         if (!selectedTemplate) {
+                                           return;
+                                         }
+
+                                         const updatedTemplate = refreshedTemplates.find(template => template.id === selectedTemplate.id);
+
+                                         if (updatedTemplate) {
+                                           setSelectedTemplate(updatedTemplate);
+                                           return;
+                                         }
+
+                                         setSelectedTemplate(null);
+                                         setMetaTemplateVariables({});
+                                         setFieldValue("metaTemplateName", null);
+                                         setFieldValue("metaTemplateLanguage", null);
+                                         setFieldValue("metaTemplateVariables", {});
+                                         toast.info("O template selecionado não está mais disponível na lista atual.");
+                                       }}
+                                       disabled={loadingTemplates || !whatsappId}
+                                     >
+                                       {loadingTemplates ? <CircularProgress size={18} /> : <RefreshIcon fontSize="small" />}
+                                     </IconButton>
+                                   </span>
+                                 </Tooltip>
                                </Box>
 
                                {selectedTemplate && (
