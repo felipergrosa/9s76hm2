@@ -977,6 +977,10 @@ const CampaignForm = () => {
               console.error("Error parsing contactListIds", e);
             }
           }
+          // Fallback: se tem contactListId mas nao tem contactListIds, preencher contactListIds
+          if (!prev.contactListIds && data?.contactListId) {
+            prev.contactListIds = [data.contactListId];
+          }
           
           if (data?.metaTemplateVariables) { try { setMetaTemplateVariables(typeof data.metaTemplateVariables === 'string' ? JSON.parse(data.metaTemplateVariables) : data.metaTemplateVariables || {}); } catch(e){ setMetaTemplateVariables({}); } }
           if (data?.allowedWhatsappIds) { try { const p = typeof data.allowedWhatsappIds === 'string' ? JSON.parse(data.allowedWhatsappIds) : data.allowedWhatsappIds; if (Array.isArray(p)) setAllowedWhatsappIds(p); } catch(e){} }
@@ -1162,11 +1166,14 @@ const CampaignForm = () => {
       const userId = selectedUsers.length === 1 ? selectedUsers[0].id : null;
       // Convert contactListIds to JSON string if it's an array
       const contactListIds = Array.isArray(values.contactListIds) ? JSON.stringify(values.contactListIds) : values.contactListIds;
+      // Preencher contactListId com o primeiro ID de contactListIds para compatibilidade com backend
+      const firstListId = Array.isArray(values.contactListIds) && values.contactListIds.length > 0 ? values.contactListIds[0] : null;
+      const contactListId = firstListId || values.contactListId || null;
       // Process tagListId: "Nenhuma" → null, string → number
       const tagListId = values.tagListId === "Nenhuma" ? null : (values.tagListId ? Number(values.tagListId) : null);
       const negativeTagIds = parseStoredIdArray(values.negativeTagListIds);
       const negativeTagListIds = negativeTagIds.length > 0 ? JSON.stringify(negativeTagIds) : null;
-      const dv = { ...processed, whatsappId, userId, userIds, contactListIds, queueId: selectedQueue || null, dispatchStrategy, allowedWhatsappIds, metaTemplateVariables, tagListId, negativeTagListIds };
+      const dv = { ...processed, whatsappId, userId, userIds, contactListIds, contactListId, queueId: selectedQueue || null, dispatchStrategy, allowedWhatsappIds, metaTemplateVariables, tagListId, negativeTagListIds };
       if (campaignId) { await api.put(`/campaigns/${campaignId}`, dv); if (attachment) { const fd = new FormData(); fd.append("file", attachment); await api.post(`/campaigns/${campaignId}/media-upload`, fd); } }
       else { const { data } = await api.post("/campaigns", dv); if (attachment) { const fd = new FormData(); fd.append("file", attachment); await api.post(`/campaigns/${data.id}/media-upload`, fd); } }
       toast.success(i18n.t("campaigns.toasts.success"));
@@ -1184,11 +1191,14 @@ const CampaignForm = () => {
       const userIds = selectedUsers.length > 0 ? JSON.stringify(selectedUsers.map(u => u.id)) : null;
       // Convert contactListIds to JSON string if it's an array
       const contactListIds = Array.isArray(values.contactListIds) ? JSON.stringify(values.contactListIds) : values.contactListIds;
+      // Preencher contactListId com o primeiro ID de contactListIds para compatibilidade com backend
+      const firstListId = Array.isArray(values.contactListIds) && values.contactListIds.length > 0 ? values.contactListIds[0] : null;
+      const contactListId = firstListId || values.contactListId || null;
       // Process tagListId: "Nenhuma" → null, string → number
       const tagListId = values.tagListId === "Nenhuma" ? null : (values.tagListId ? Number(values.tagListId) : null);
       const negativeTagIds = parseStoredIdArray(values.negativeTagListIds);
       const negativeTagListIds = negativeTagIds.length > 0 ? JSON.stringify(negativeTagIds) : null;
-      const dv = { ...processed, whatsappId, userId: selectedUsers.length === 1 ? selectedUsers[0].id : null, userIds, contactListIds, queueId: selectedQueue || null, dispatchStrategy, allowedWhatsappIds, metaTemplateVariables, tagListId, negativeTagListIds };
+      const dv = { ...processed, whatsappId, userId: selectedUsers.length === 1 ? selectedUsers[0].id : null, userIds, contactListIds, contactListId, queueId: selectedQueue || null, dispatchStrategy, allowedWhatsappIds, metaTemplateVariables, tagListId, negativeTagListIds };
       if (campaignId) { await api.put(`/campaigns/${campaignId}`, dv); } else { const { data } = await api.post("/campaigns", dv); setCampaignId(data.id); }
       toast.success(hasSched ? "Campanha programada!" : "Rascunho salvo!");
       handleClose();

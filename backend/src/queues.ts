@@ -602,7 +602,8 @@ async function handleVerifyCampaigns(job) {
     const campaigns: { id: number; scheduledAt: string }[] =
       await sequelize.query(
         `SELECT id, "scheduledAt" FROM "Campaigns" c
-        WHERE "scheduledAt" BETWEEN NOW() AND NOW() + INTERVAL '3 hour' AND status = 'PROGRAMADA'`,
+        WHERE status = 'PROGRAMADA'
+        AND ("scheduledAt" <= NOW() OR "scheduledAt" BETWEEN NOW() AND NOW() + INTERVAL '3 hour')`,
         { type: QueryTypes.SELECT }
       );
 
@@ -617,9 +618,10 @@ async function handleVerifyCampaigns(job) {
 
           const now = moment();
           const scheduledAt = moment(campaign.scheduledAt);
-          const delay = scheduledAt.diff(now, "milliseconds");
+          // Se o horario ja passou, inicia imediatamente (delay = 0)
+          const delay = Math.max(0, scheduledAt.diff(now, "milliseconds"));
           logger.info(
-            `Campanha enviada para a fila de processamento: Campanha=${campaign.id}, Delay Inicial=${delay}`
+            `Campanha enviada para a fila de processamento: Campanha=${campaign.id}, Delay Inicial=${delay}${delay === 0 ? ' (inicio imediato - horario ja passou)' : ''}`
           );
 
           return campaignQueue.add(

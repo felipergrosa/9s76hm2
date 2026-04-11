@@ -340,6 +340,27 @@ const Campaigns = () => {
     }
   };
 
+  const getContactListName = (campaign) => {
+    // Verifica se tem múltiplas listas (contactListIds)
+    if (campaign.contactListIds) {
+      try {
+        const listIds = JSON.parse(campaign.contactListIds);
+        if (Array.isArray(listIds) && listIds.length > 0) {
+          return `${listIds.length} lista(s) selecionada(s)`;
+        }
+      } catch {
+        // Se não conseguiu parsear, ignora
+      }
+    }
+
+    // Verifica lista única (contactListId)
+    if (campaign.contactListId) {
+      return campaign.contactList?.name || "Lista #" + campaign.contactListId;
+    }
+
+    return "Não definida";
+  };
+
   const cancelCampaign = async (campaign) => {
     try {
       await api.post(`/campaigns/${campaign.id}/cancel`);
@@ -452,7 +473,7 @@ const Campaigns = () => {
                   <div className={classes.cardMeta}>
                     <div>
                       <div className={classes.metaLabel}>{i18n.t("campaigns.table.contactList")}</div>
-                      <div className={classes.metaValue}>{campaign.contactListId ? campaign.contactList?.name || "Não definida" : "Não definida"}</div>
+                      <div className={classes.metaValue}>{getContactListName(campaign)}</div>
                     </div>
                     <div>
                       <div className={classes.metaLabel}>{i18n.t("campaigns.table.whatsapp")}</div>
@@ -580,9 +601,7 @@ const Campaigns = () => {
                             {formatStatus(campaign.status)}
                           </TableCell>
                           <TableCell align="center">
-                            {campaign.contactListId
-                              ? campaign.contactList?.name || "Não definida"
-                              : "Não definida"}
+                            {getContactListName(campaign)}
                           </TableCell>
                           <TableCell align="center">
                             {campaign.whatsappId
