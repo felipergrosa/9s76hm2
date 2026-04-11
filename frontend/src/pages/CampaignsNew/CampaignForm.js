@@ -1455,18 +1455,29 @@ const CampaignForm = () => {
                          </Grid>
 
                          <Grid container spacing={2} style={{ marginTop: 24 }}>
-                           <Grid item xs={12} md={6}>
-                             <Box display="flex" alignItems="center" mb={1} gap={0.5}>
-                               <label className={classes.label} style={{ marginBottom: 0 }}>Tags positivas (incluir)</label>
-                               <Tooltip title="Envia APENAS para contatos das listas que possuam esta tag. Se ficar como Nenhuma, todos os contatos das listas entram no público."><InfoOutlinedIcon style={{ fontSize: 16, color: "#64748b", cursor: "pointer" }} /></Tooltip>
-                             </Box>
-                             <FormControl variant="outlined" fullWidth className={classes.formField}>
-                               <Select name="tagListId" value={values.tagListId||"Nenhuma"} onChange={e => setFieldValue("tagListId", e.target.value)} disabled={!campaignEditable}>
-                                 <MenuItem value="Nenhuma">Nenhuma</MenuItem>
-                                 {tagLists.map(t => <MenuItem key={t.id} value={String(t.id)}>{t.name}</MenuItem>)}
-                               </Select>
-                             </FormControl>
-                           </Grid>
+                           {/* Verifica se ha lista de contatos selecionada */}
+                          {(() => {
+                            const hasContactList = (Array.isArray(values.contactListIds) && values.contactListIds.length > 0) || values.contactListId;
+                            return (
+                              <Grid item xs={12} md={6}>
+                                <Box display="flex" alignItems="center" mb={1} gap={0.5}>
+                                  <label className={classes.label} style={{ marginBottom: 0, color: hasContactList ? "#9ca3af" : undefined }}>Tags positivas (incluir)</label>
+                                  <Tooltip title={hasContactList ? "Desabilitado: quando selecionada uma Lista de Contatos, a Tag positiva fica inativa pois ambas fazem a mesma função de inclusão. Use apenas a Lista ou apenas a Tag positiva (mas não ambas)." : "Envia APENAS para contatos que possuam esta tag. Use quando não houver Lista de Contatos selecionada."}><InfoOutlinedIcon style={{ fontSize: 16, color: hasContactList ? "#9ca3af" : "#64748b", cursor: "pointer" }} /></Tooltip>
+                                </Box>
+                                <FormControl variant="outlined" fullWidth className={classes.formField}>
+                                  <Select name="tagListId" value={values.tagListId||"Nenhuma"} onChange={e => setFieldValue("tagListId", e.target.value)} disabled={!campaignEditable || hasContactList}>
+                                    <MenuItem value="Nenhuma">Nenhuma</MenuItem>
+                                    {tagLists.map(t => <MenuItem key={t.id} value={String(t.id)}>{t.name}</MenuItem>)}
+                                  </Select>
+                                  {hasContactList && (
+                                    <Typography variant="caption" style={{ color: "#9ca3af", marginTop: 4, display: "block" }}>
+                                      Inativo: Lista de Contatos já selecionada
+                                    </Typography>
+                                  )}
+                                </FormControl>
+                              </Grid>
+                            );
+                          })()}
 
                            <Grid item xs={12} md={6}>
                              <Box display="flex" alignItems="center" mb={1} gap={0.5}>
@@ -1495,13 +1506,13 @@ const CampaignForm = () => {
                          </Grid>
 
                          <Box className={classes.tagExplainGrid}>
-                           <Box className={classes.tagExplainPositive}>
+                           <Box className={classes.tagExplainPositive} style={{ opacity: ((Array.isArray(values.contactListIds) && values.contactListIds.length > 0) || values.contactListId) ? 0.5 : 1 }}>
                              <Typography variant="caption" style={{ fontWeight: 700 }}>Tags positivas</Typography>
-                             <Typography variant="body2">Limitam o público: só entra quem estiver nas listas selecionadas e também possuir a tag escolhida.</Typography>
+                             <Typography variant="body2">{((Array.isArray(values.contactListIds) && values.contactListIds.length > 0) || values.contactListId) ? "Inativo quando há Lista de Contatos: ambos fazem inclusão. Use a Lista OU a Tag positiva, não ambos." : "Inclui contatos: só entra quem possuir esta tag (use quando não houver Lista de Contatos)."}</Typography>
                            </Box>
                            <Box className={classes.tagExplainNegative}>
                              <Typography variant="caption" style={{ fontWeight: 700 }}>Tags negativas</Typography>
-                             <Typography variant="body2">Removem contatos do público: se o contato tiver qualquer tag negativa selecionada, a campanha não será enviada para ele.</Typography>
+                             <Typography variant="body2">Sempre ativa - Remove contatos: se o contato tiver qualquer tag negativa selecionada, a campanha não será enviada para ele (funciona com Lista ou Tag positiva).</Typography>
                            </Box>
                          </Box>
 

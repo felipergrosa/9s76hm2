@@ -788,9 +788,18 @@ function getContactListItemCanonicalNumber(item: any): string | null {
 }
 
 async function applyCampaignTagFilters(contacts: ContactListItem[], campaign: any): Promise<ContactListItem[]> {
+  // CORREÇÃO: Se há lista de contatos selecionada, ignora tag positiva (fazem o mesmo trabalho)
+  // Tags negativas sempre funcionam (exclusão)
+  const hasContactList = campaign?.contactListId || campaign?.contactListIds;
   const positiveTagId = Number(campaign?.tagListId);
-  const hasPositiveTag = Number.isFinite(positiveTagId) && positiveTagId > 0;
+  const hasPositiveTagRaw = Number.isFinite(positiveTagId) && positiveTagId > 0;
+  const hasPositiveTag = hasPositiveTagRaw && !hasContactList; // Ignora tag positiva se há lista
   const negativeTagIds = parseCampaignTagIds(campaign?.negativeTagListIds);
+  
+  if (hasContactList && hasPositiveTagRaw) {
+    logger.info(`[ProcessCampaign] Campanha ${campaign.id} | Tag positiva ${positiveTagId} ignorada: Lista de Contatos já selecionada`);
+  }
+  
   const selectedTagIds = Array.from(new Set([
     ...(hasPositiveTag ? [positiveTagId] : []),
     ...negativeTagIds
@@ -865,7 +874,7 @@ async function applyCampaignTagFilters(contacts: ContactListItem[], campaign: an
   });
 
   logger.info(
-    `[ProcessCampaign] Campanha ${campaign.id} | Tag positiva: ${hasPositiveTag ? positiveTagId : "-"} | Tags negativas: ${negativeTagIds.join(",") || "-"} | Após filtros: ${filteredContacts.length}/${contacts.length}`
+    `[ProcessCampaign] Campanha ${campaign.id} | Tag positiva: ${hasContactList && hasPositiveTagRaw ? "ignorada (lista selecionada)" : (hasPositiveTag ? positiveTagId : "-")} | Tags negativas: ${negativeTagIds.join(",") || "-"} | Após filtros: ${filteredContacts.length}/${contacts.length}`
   );
 
   return filteredContacts;
@@ -1505,16 +1514,22 @@ function resetBackoffOnSuccess(whatsappId: number) {
 async function verifyAndFinalizeCampaign(campaign) {
   const companyId = campaign.companyId;
   const campaignId = campaign.id;
-  const contactListId = campaign.contactListId;
 
-  // Busca o total de contatos da lista se não estiver mais na memória (jobs serializados)
-  let totalContacts = 0;
-  if (campaign.contactList && isArray(campaign.contactList.contacts)) {
-    totalContacts = campaign.contactList.contacts.length;
-  } else {
-    totalContacts = await ContactListItem.count({
-      where: { contactListId }
-    });
+  // Suporta múltiplas listas (contactListIds) com fallback para contactListId (para fallback de contagem)
+  let listIds: number[] = [];
+  if (campaign.contactListIds) {
+    try {
+      const parsed = typeof campaign.contactListIds === "string"
+        ? JSON.parse(campaign.contactListIds)
+        : campaign.contactListIds;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        listIds = parsed.map((v: any) => Number(v)).filter((v: number) => !isNaN(v));
+      }
+    } catch { }
+  }
+  // Fallback para lista única
+  if (listIds.length === 0 && campaign.contactListId) {
+    listIds = [campaign.contactListId];
   }
 
   // Finalizar quando TODOS os registros estiverem em estado terminal.
@@ -1528,7 +1543,16 @@ async function verifyAndFinalizeCampaign(campaign) {
     }
   });
 
-  if (totalContacts > 0 && totalContacts === terminalCount) {
+  // CORREÇÃO: Usar contagem de CampaignShipping (contatos após filtros de tags)
+  // ao invés de ContactListItem (total bruto da lista)
+  const totalToSend = await CampaignShipping.count({
+    where: { campaignId }
+  });
+
+  logger.info(`[verifyAndFinalizeCampaign] Campanha=${campaignId} | Total a enviar: ${totalToSend} | Terminal: ${terminalCount}`);
+
+  if (totalToSend > 0 && totalToSend === terminalCount) {
+    logger.info(`[verifyAndFinalizeCampaign] Finalizando campanha ${campaignId} - todos ${totalToSend} contatos processados`);
     if (typeof campaign.update === "function") {
       await campaign.update({ status: "FINALIZADA", completedAt: moment() });
     } else {
@@ -1538,6 +1562,24 @@ async function verifyAndFinalizeCampaign(campaign) {
       );
       campaign.status = "FINALIZADA";
       campaign.completedAt = moment();
+    }
+  } else if (totalToSend === 0) {
+    // Fallback: se não há registros em CampaignShipping, verifica se a lista tem contatos
+    const listTotal = listIds.length > 0 ? await ContactListItem.count({ where: { contactListId: listIds } }) : 0;
+    logger.warn(`[verifyAndFinalizeCampaign] Campanha ${campaignId} - nenhum registro em CampaignShipping. Lista tem ${listTotal} contatos (possivelmente todos filtrados por tags).`);
+    // Se a lista tem contatos mas nenhum foi pra CampaignShipping = todos filtrados
+    if (listTotal > 0) {
+      logger.info(`[verifyAndFinalizeCampaign] Finalizando campanha ${campaignId} - todos ${listTotal} contatos foram filtrados por tags`);
+      if (typeof campaign.update === "function") {
+        await campaign.update({ status: "FINALIZADA", completedAt: moment() });
+      } else {
+        await Campaign.update(
+          { status: "FINALIZADA", completedAt: moment() },
+          { where: { id: campaignId } }
+      );
+        campaign.status = "FINALIZADA";
+        campaign.completedAt = moment();
+      }
     }
   }
 
