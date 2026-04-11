@@ -206,7 +206,7 @@ const CampaignDetailedReport = () => {
   const history = useHistory();
   const { campaignId } = useParams();
   const { datetimeToClient } = useDate();
-  const { user } = useContext(AuthContext);
+  const { user, socket } = useContext(AuthContext);
 
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState(null);
@@ -218,6 +218,30 @@ const CampaignDetailedReport = () => {
     fetchReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId, statusFilter, searchParam, pageNumber]);
+
+  // Atualizacao realtime via socket quando campanha e atualizada
+  useEffect(() => {
+    if (!user?.companyId || !campaignId || !socket) return;
+
+    const companyId = user.companyId;
+    const eventName = `company-${companyId}-campaign`;
+
+    const handleCampaignUpdate = (data) => {
+      // Verifica se o evento e para esta campanha especifica
+      if (data?.record?.id === Number(campaignId) || data?.record?.id === parseInt(campaignId)) {
+        console.log('[DETAILED REPORT] Atualizacao realtime recebida via socket:', data);
+        // Atualiza o relatório para refletir mudanças em tempo real
+        fetchReport();
+      }
+    };
+
+    socket.on(eventName, handleCampaignUpdate);
+
+    return () => {
+      socket.off(eventName, handleCampaignUpdate);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.companyId, campaignId, socket]);
 
   const fetchReport = async () => {
     setLoading(true);
@@ -319,21 +343,57 @@ const CampaignDetailedReport = () => {
   // Cálculos de tempo
   const calculateElapsedTime = () => {
     if (!campaign.scheduledAt) return "N/A";
+
     const start = new Date(campaign.scheduledAt);
-    const end = campaign.completedAt ? new Date(campaign.completedAt) : new Date();
+    const now = new Date();
+
+    // Se a campanha ainda nao comecou (agendada para o futuro)
+    if (start > now) {
+      return "Aguardando início";
+    }
+
+    const end = campaign.completedAt ? new Date(campaign.completedAt) : now;
     const diffMs = end - start;
+
+    // Garante que nao retorne valor negativo
+    if (diffMs < 0) {
+      return "0h 0min";
+    }
+
     const hours = Math.floor(diffMs / 3600000);
     const minutes = Math.floor((diffMs % 3600000) / 60000);
     return `${hours}h ${minutes}min`;
   };
 
   const calculateEstimatedTime = () => {
-    if (summary.delivered === 0 || !campaign.scheduledAt) return "Calculando...";
+    if (!campaign.scheduledAt) return "Calculando...";
+
     const start = new Date(campaign.scheduledAt);
     const now = new Date();
+
+    // Se a campanha ainda nao comecou
+    if (start > now) {
+      return "Aguardando início";
+    }
+
+    // Se nao entregou nenhuma ainda, calcula baseado no tempo decorrido
+    if (summary.delivered === 0) {
+      // Se ja passou mais de 5 minutos e nao entregou nada, pode estar com problema
+      const elapsedMs = now - start;
+      if (elapsedMs > 300000) { // 5 minutos
+        return "Iniciando...";
+      }
+      return "Calculando...";
+    }
+
     const elapsedMs = now - start;
     const rate = summary.delivered / (elapsedMs / 1000); // msgs por segundo
     const remaining = summary.total - summary.delivered;
+
+    if (remaining <= 0) {
+      return "Finalizado";
+    }
+
     const estimatedSeconds = remaining / rate;
     const hours = Math.floor(estimatedSeconds / 3600);
     const minutes = Math.floor((estimatedSeconds % 3600) / 60);
@@ -342,9 +402,22 @@ const CampaignDetailedReport = () => {
 
   const calculateSendingRate = () => {
     if (!campaign.scheduledAt || summary.delivered === 0) return "0";
+
     const start = new Date(campaign.scheduledAt);
     const now = new Date();
+
+    // Se a campanha ainda nao comecou
+    if (start > now) {
+      return "0";
+    }
+
     const elapsedMinutes = (now - start) / 60000;
+
+    // Evita divisao por zero ou valores muito pequenos
+    if (elapsedMinutes < 0.1) {
+      return "0";
+    }
+
     const rate = summary.delivered / elapsedMinutes;
     return rate.toFixed(1);
   };
